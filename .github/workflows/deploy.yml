@@ -1,0 +1,91 @@
+name: Build, Test & Publish NuGet Package
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    name: Build and test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Setup .NET 8 SDK
+        uses: actions/setup-dotnet@v2
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build solution
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Install coverage tools
+        run: dotnet tool install --global dotnet-reportgenerator-globaltool
+
+      - name: Run tests and collect coverage
+        run: |
+          dotnet test --no-build --configuration Release \
+            --collect:"XPlat Code Coverage"
+
+      - name: Enforce coverage threshold
+        run: |
+          reportgenerator \
+            -reports:**/coverage.cobertura.xml \
+            -targetdir:coverage-report \
+            -reporttypes:HtmlSummary
+
+          COVERAGE=$(grep -oPm1 "(?<=line-rate=\")[^\"]+" **/coverage.cobertura.xml | awk '{print $1 * 100}')
+          echo "Coverage is $COVERAGE%"
+          REQUIRED=80
+          if (( $(echo "$COVERAGE < $REQUIRED" | bc -l) )); then
+            echo "❌ Code coverage $COVERAGE% is below required $REQUIRED% threshold"
+            exit 1
+          else
+            echo "✅ Code coverage $COVERAGE% meets threshold"
+          fi
+
+      - name: Upload coverage report (PR only)
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-report
+          path: coverage-report
+
+  publish:
+    name: Publish NuGet Package
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v2
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore and build
+        run: |
+          dotnet restore
+          dotnet build --configuration Release
+
+      - name: Pack NuGet package
+        run: |
+          dotnet pack --configuration Release --no-build --output ./nupkg
+
+      - name: Publish to NuGet
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          dotnet nuget push ./nupkg/*.nupkg \
+            --source https://api.nuget.org/v3/index.json \
+            --api-key $NUGET_API_KEY
