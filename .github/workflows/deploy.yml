@@ -44,7 +44,7 @@ jobs:
             -reports:TestResults/**/coverage.cobertura.xml \
             -targetdir:coverage-report \
             -reporttypes:HtmlSummary \
-            -assemblyfilters:-pengdows.crud.testbed
+            -assemblyfilters:-pengdows.crud.testbed,-pengdows.crud.fakeDb,-pengdows.crud.Tests,-pengdows.crud.abstractions
 
       - name: Enforce coverage threshold
         run: |
