@@ -106,8 +106,6 @@ Instead, it helps you write **real SQL** that's:
 
 ## 📚 Documentation
 
-See the full documentation at:  
-📖 **[https://pengdows.miraheze.org/wiki/Main_Page](https://pengdows.miraheze.org/wiki/Main_Page)**
 
 Topics include:
 
