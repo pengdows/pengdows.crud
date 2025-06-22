@@ -32,8 +32,5 @@
     <ItemGroup>
         <InternalsVisibleTo Include="pengdows.crud.Tests" />
     </ItemGroup>
-    <ItemGroup>
-        <PackageReference Include="coverlet.collector" Version="3.2.0" />
-    </ItemGroup>
 
 </Project>

@@ -32,4 +32,9 @@
         <Folder Include="Mocks\" />
     </ItemGroup>
 
+    <ItemGroup>
+        <PackageReference Include="coverlet.collector" Version="3.2.0" />
+    </ItemGroup>
+
+
 </Project>
