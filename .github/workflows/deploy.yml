@@ -43,7 +43,8 @@ jobs:
           reportgenerator \
             -reports:TestResults/**/coverage.cobertura.xml \
             -targetdir:coverage-report \
-            -reporttypes:HtmlSummary
+            -reporttypes:HtmlSummary \
+            -assemblyfilters:-pengdows.crud.testbed
 
       - name: Enforce coverage threshold
         run: |
