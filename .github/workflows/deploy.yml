@@ -45,6 +45,8 @@ jobs:
             -targetdir:coverage-report \
             -reporttypes:HtmlSummary \
             -assemblyfilters:+pengdows.crud.*,-pengdows.crud.testbed
+          
+          grep -oPm1 "(?<=<assembly name=\")[^\"]+" TestResults/**/coverage.cobertura.xml | sort | uniq
         
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
