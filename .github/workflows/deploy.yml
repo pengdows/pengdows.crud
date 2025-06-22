@@ -62,7 +62,7 @@ jobs:
           reportgenerator \
             -reports:TestResults/**/coverage.cobertura.xml \
             -targetdir:coverage-report \
-            -reporttypes:HtmlSummary
+            -reporttypes:Html
 
           coverage_file=$(find . -name "coverage.cobertura.xml" | head -n 1)
 
