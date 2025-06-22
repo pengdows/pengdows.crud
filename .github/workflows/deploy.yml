@@ -44,24 +44,41 @@ jobs:
             -reports:TestResults/**/coverage.cobertura.xml \
             -targetdir:coverage-report \
             -reporttypes:HtmlSummary
-    
+
       - name: Enforce coverage threshold
         run: |
+          set -euo pipefail
+
           reportgenerator \
-            -reports:**/coverage.cobertura.xml \
+            -reports:TestResults/**/coverage.cobertura.xml \
             -targetdir:coverage-report \
             -reporttypes:HtmlSummary
 
-          COVERAGE=$(grep -oPm1 "(?<=line-rate=\")[^\"]+" **/coverage.cobertura.xml | awk '{print $1 * 100}')
-          echo "Coverage is $COVERAGE%"
-          REQUIRED=80
-          if (( $(echo "$COVERAGE < $REQUIRED" | bc -l) )); then
-            echo "❌ Code coverage $COVERAGE% is below required $REQUIRED% threshold"
+          coverage_file=$(find . -name "coverage.cobertura.xml" | head -n 1)
+
+          if [[ ! -f "$coverage_file" ]]; then
+            echo "❌ Coverage file not found!"
             exit 1
-          else
-            echo "✅ Code coverage $COVERAGE% meets threshold"
           fi
 
+          line_rate=$(grep -oPm1 '(?<=line-rate=")[^"]+' "$coverage_file")
+          if [[ -z "$line_rate" ]]; then
+            echo "❌ Could not extract line-rate from coverage file"
+            exit 1
+          fi
+
+          coverage_percent=$(awk "BEGIN { print $line_rate * 100 }")
+          echo "📊 Coverage: $coverage_percent%"
+
+          required=80
+          too_low=$(awk "BEGIN { print ($coverage_percent < $required) ? 1 : 0 }")
+          if [[ "$too_low" -eq 1 ]]; then
+            echo "❌ Code coverage $coverage_percent% is below required $required%"
+            exit 1
+          else
+            echo "✅ Code coverage $coverage_percent% meets threshold"
+          fi
+      
       - name: Upload coverage report (PR only)
         if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v4
