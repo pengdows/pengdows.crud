@@ -1,0 +1,17 @@
+bin/
+obj/
+/packages/
+riderModule.iml
+/_ReSharper.Caches/
+*.zip
+*DotSettings.user
+
+# IDE directories
+.vs/
+.idea/
+
+# User specific files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
