@@ -45,6 +45,12 @@ jobs:
             -targetdir:coverage-report \
             -reporttypes:HtmlSummary \
             -assemblyfilters:+pengdows.crud.*,-pengdows.crud.testbed
+        
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage-report
 
       - name: Enforce coverage threshold
         run: |
