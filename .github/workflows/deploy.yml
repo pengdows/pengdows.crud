@@ -58,42 +58,46 @@ jobs:
       - name: Enforce visual coverage from HTML report
         run: |
           set -euo pipefail
-          
+  
           html_file=$(find coverage-report -name "index.html" | head -n 1)
           
           if [[ ! -f "$html_file" ]]; then
-            echo "❌ index.html not found!"
-            exit 1
+          echo "❌ index.html not found!"
+          exit 1
           fi
           
-          # Extract lines like: "Lines covered: 234 of 315"
-          coverage_line=$(grep -Eo 'Lines covered: [0-9]+ of [0-9]+' "$html_file" | head -n 1)
+          echo "🕵️ Dumping coverage-related lines from index.html:"
+          grep -i coverage "$html_file" || true
+          
+          # Grab any "123 of 456" pattern
+          coverage_line=$(grep -Eo '[0-9]+ of [0-9]+' "$html_file" | head -n 1)
           
           if [[ -z "$coverage_line" ]]; then
-            echo "❌ Could not extract line coverage info"
-            exit 1
+          echo "❌ Could not extract line coverage info"
+          exit 1
           fi
           
-          covered=$(echo "$coverage_line" | grep -Eo '[0-9]+' | sed -n 1p)
-          total=$(echo "$coverage_line" | grep -Eo '[0-9]+' | sed -n 2p)
+          covered=$(echo "$coverage_line" | cut -d' ' -f1)
+          total=$(echo "$coverage_line" | cut -d' ' -f3)
           
           if [[ -z "$covered" || -z "$total" ]]; then
-            echo "❌ Could not parse covered or total line count"
-            exit 1
+          echo "❌ Could not parse covered or total line count"
+          exit 1
           fi
           
           coverage_percent=$(awk "BEGIN { printf \"%.2f\", ($covered / $total) * 100 }")
-          echo "📊 Visual Coverage (from index.html): $coverage_percent%"
+        echo "📊 Visual Coverage (from index.html): $coverage_percent%"
           
           required=80
-          too_low=$(awk "BEGIN { print ($coverage_percent < $required) ? 1 : 0 }")
+        too_low=$(awk "BEGIN { print ($coverage_percent < $required) ? 1 : 0 }")
           if [[ "$too_low" -eq 1 ]]; then
-            echo "❌ Visual code coverage $coverage_percent% is below required $required%"
-            exit 1
+          echo "❌ Visual code coverage $coverage_percent% is below required $required%"
+          exit 1
           else
-            echo "✅ Visual code coverage $coverage_percent% meets threshold"
+          echo "✅ Visual code coverage $coverage_percent% meets threshold"
           fi
-      
+
+
       - name: Upload coverage report (PR only)
         if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v4
