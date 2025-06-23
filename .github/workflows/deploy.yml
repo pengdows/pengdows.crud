@@ -1,0 +1,136 @@
+name: Build, Test & Publish NuGet Package
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    name: Build and test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Setup .NET 8 SDK
+        uses: actions/setup-dotnet@v2
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build solution
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Install coverage tools
+        run: dotnet tool install --global dotnet-reportgenerator-globaltool
+
+      - name: Run tests and collect coverage
+        run: |
+          dotnet test --no-build --configuration Release \
+            --collect:"XPlat Code Coverage" \
+            --results-directory ./TestResults \
+            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Exclude="[pengdows.crud.fakeDb]*"
+          
+      - name: Generate coverage report
+        run: |
+          reportgenerator \
+            -reports:TestResults/**/coverage.cobertura.xml \
+            -targetdir:coverage-report \
+            -reporttypes:HtmlSummary \
+            -assemblyfilters:+pengdows.crud.*,-pengdows.crud.testbed,-pengdows.crud.fakeDb
+          
+          grep -oPm1 "(?<=<assembly name=\")[^\"]+" TestResults/**/coverage.cobertura.xml | sort | uniq
+        
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage-report
+
+      - name: Enforce visual coverage from HTML report
+        run: |
+          set -euo pipefail
+  
+          html_file=$(find coverage-report -name "index.html" | head -n 1)
+          
+          if [[ ! -f "$html_file" ]]; then
+          echo "❌ index.html not found!"
+          exit 1
+          fi
+          
+          echo "🕵️ Dumping coverage-related lines from index.html:"
+          grep -i coverage "$html_file" || true
+          
+          # Grab any "123 of 456" pattern
+          coverage_line=$(grep -Eo '[0-9]+ of [0-9]+' "$html_file" | head -n 1)
+          
+          if [[ -z "$coverage_line" ]]; then
+          echo "❌ Could not extract line coverage info"
+          exit 1
+          fi
+          
+          covered=$(echo "$coverage_line" | cut -d' ' -f1)
+          total=$(echo "$coverage_line" | cut -d' ' -f3)
+          
+          if [[ -z "$covered" || -z "$total" ]]; then
+          echo "❌ Could not parse covered or total line count"
+          exit 1
+          fi
+          
+          coverage_percent=$(awk "BEGIN { printf \"%.2f\", ($covered / $total) * 100 }")
+          echo "📊 Visual Coverage (from index.html): $coverage_percent%"
+          
+          required=79
+          too_low=$(awk "BEGIN { print ($coverage_percent < $required) ? 1 : 0 }")
+          if [[ "$too_low" -eq 1 ]]; then
+          echo "❌ Visual code coverage $coverage_percent% is below required $required%"
+          exit 1
+          else
+          echo "✅ Visual code coverage $coverage_percent% meets threshold"
+          fi
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-${{ github.run_id }}-${{ github.job }}
+          path: coverage-report/
+  
+  publish:
+    name: Publish NuGet Package
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v2
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore and build
+        run: |
+          dotnet restore
+          dotnet build --configuration Release
+
+      - name: Pack NuGet package
+        run: |
+          dotnet pack --configuration Release --no-build --output ./nupkg
+
+      - name: Publish to NuGet
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          dotnet nuget push ./nupkg/*.nupkg \
+            --source https://api.nuget.org/v3/index.json \
+            --api-key $NUGET_API_KEY
