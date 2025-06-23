@@ -20,40 +20,22 @@ public class EntityHelper<TEntity, TRowID> :
     // Cache for compiled property setters
     private static readonly ConcurrentDictionary<PropertyInfo, Action<object, object?>> _propertySetters = new();
     private readonly IAuditValueResolver? _auditValueResolver;
-    private readonly IDatabaseContext _context;
+    private IDatabaseContext _context;
 
-    private readonly IColumnInfo? _idColumn;
+    private IColumnInfo? _idColumn;
 
     // private readonly IServiceProvider _serviceProvider;
-    private readonly ITableInfo _tableInfo;
-    private readonly Type? _userFieldType = null;
+    private ITableInfo _tableInfo;
+    private Type? _userFieldType = null;
 
-    private readonly IColumnInfo? _versionColumn;
+    private IColumnInfo? _versionColumn;
 
     public EntityHelper(IDatabaseContext databaseContext,
         EnumParseFailureMode enumParseBehavior = EnumParseFailureMode.Throw
     )
     {
         _auditValueResolver = null;
-        _context = databaseContext;
-        _tableInfo = _context.TypeMapRegistry.GetTableInfo<TEntity>() ??
-                     throw new InvalidOperationException($"Type {typeof(TEntity).FullName} is not a table.");
-        var propertyInfoPropertyType = _tableInfo.Columns
-            .Values
-            .FirstOrDefault(c =>
-                c.PropertyInfo.GetCustomAttribute<CreatedByAttribute>() != null ||
-                c.PropertyInfo.GetCustomAttribute<LastUpdatedByAttribute>() != null
-            )?.PropertyInfo.PropertyType;
-        if (propertyInfoPropertyType != null) _userFieldType = propertyInfoPropertyType;
-
-        WrappedTableName = (!string.IsNullOrEmpty(_tableInfo.Schema)
-                               ? WrapObjectName(_tableInfo.Schema) +
-                                 _context.CompositeIdentifierSeparator
-                               : "")
-                           + WrapObjectName(_tableInfo.Name);
-        _idColumn = _tableInfo.Columns.Values.FirstOrDefault(itm => itm.IsId);
-        _versionColumn = _tableInfo.Columns.Values.FirstOrDefault(itm => itm.IsVersion);
-        EnumParseBehavior = enumParseBehavior;
+        Initialize(databaseContext, enumParseBehavior);
     }
 
     [Obsolete("Use the constructor without IServiceProvider instead")]
@@ -63,15 +45,22 @@ public class EntityHelper<TEntity, TRowID> :
     )
     {
         _auditValueResolver = auditValueResolver;
+        Initialize(databaseContext, enumParseBehavior);
+    }
+
+    private void Initialize(IDatabaseContext databaseContext, EnumParseFailureMode enumParseBehavior)
+    {
         _context = databaseContext;
         _tableInfo = _context.TypeMapRegistry.GetTableInfo<TEntity>() ??
                      throw new InvalidOperationException($"Type {typeof(TEntity).FullName} is not a table.");
+
         var propertyInfoPropertyType = _tableInfo.Columns
             .Values
             .FirstOrDefault(c =>
                 c.PropertyInfo.GetCustomAttribute<CreatedByAttribute>() != null ||
                 c.PropertyInfo.GetCustomAttribute<LastUpdatedByAttribute>() != null
             )?.PropertyInfo.PropertyType;
+
         if (propertyInfoPropertyType != null) _userFieldType = propertyInfoPropertyType;
 
         WrappedTableName = (!string.IsNullOrEmpty(_tableInfo.Schema)
@@ -79,12 +68,13 @@ public class EntityHelper<TEntity, TRowID> :
                                  _context.CompositeIdentifierSeparator
                                : "")
                            + WrapObjectName(_tableInfo.Name);
+
         _idColumn = _tableInfo.Columns.Values.FirstOrDefault(itm => itm.IsId);
         _versionColumn = _tableInfo.Columns.Values.FirstOrDefault(itm => itm.IsVersion);
         EnumParseBehavior = enumParseBehavior;
     }
 
-    public string WrappedTableName { get; }
+    public string WrappedTableName { get; set; }
 
     public EnumParseFailureMode EnumParseBehavior { get; set; }
 
@@ -338,77 +328,89 @@ public class EntityHelper<TEntity, TRowID> :
 
     public void BuildWhereByPrimaryKey(IReadOnlyCollection<TEntity>? listOfObjects, ISqlContainer sc, string alias = "")
     {
-        if (Utils.IsNullOrEmpty(listOfObjects) || sc == null)
-            throw new ArgumentException("List of objects cannot be null or empty.");
+        ValidateWhereInputs(listOfObjects, sc);
 
-        var listOfPrimaryKeys = _tableInfo.Columns.Values.Where(o => o.IsPrimaryKey).ToList();
-        if (listOfPrimaryKeys.Count < 1) throw new Exception($"No primary keys found for type {typeof(TEntity).Name}");
+        var keys = GetPrimaryKeys();
+        CheckParameterLimit(sc, listOfObjects!.Count * keys.Count);
 
-        // Calculate total parameter count to avoid exceeding DB limits
-        var pc = sc.ParameterCount;
-        var numberOfParametersToBeAdded = listOfObjects?.Count * listOfPrimaryKeys.Count;
-        if ((pc + numberOfParametersToBeAdded) > _context.MaxParameterLimit)
-            throw new TooManyParametersException("Too many parameters", _context.MaxParameterLimit);
-
+        var parameters = new List<DbParameter>();
+        var wrappedAlias = BuildAliasPrefix(alias);
         var sb = new StringBuilder();
-        var pp = new List<DbParameter>();
+        var index = 0;
 
-        // Wrap alias if provided
-        var wrappedAlias = string.IsNullOrWhiteSpace(alias)
-            ? ""
-            : WrapObjectName(alias) + _context.CompositeIdentifierSeparator;
-
-        // Construct WHERE clause as series of (pk1 = val AND pk2 = val) OR (...)...
-        var i = 0;
-        foreach (var entity in listOfObjects)
+        foreach (var entity in listOfObjects!)
         {
-            if (i > 0) sb.Append(" OR ");
-
-            sb.Append("(");
-
-            for (var j = 0; j < listOfPrimaryKeys.Count; j++)
-            {
-                if (j > 0) sb.Append(" AND ");
-
-                var pk = listOfPrimaryKeys[j];
-                var value = pk.MakeParameterValueFromField(entity);
-
-                // Create parameter with unique and valid name auto-generated by context
-                var parameter = _context.CreateDbParameter(pk.DbType, value);
-
-                sb.Append(wrappedAlias);
-                sb.Append(WrapObjectName(pk.Name));
-
-                if (Utils.IsNullOrDbNull(value))
-                {
-                    sb.Append(" IS NULL");
-                }
-                else
-                {
-                    sb.Append(" = ");
-                    sb.Append(MakeParameterName(parameter));
-                    pp.Add(parameter);
-                }
-            }
-
-            sb.Append(")");
-            i++;
+            if (index++ > 0) sb.Append(" OR ");
+            sb.Append(BuildPrimaryKeyClause(entity, keys, wrappedAlias, parameters));
         }
 
-        if (sb.Length < 1) return;
+        if (sb.Length == 0) return;
 
-        // Add all generated parameters to the container
-        sc.AddParameters(pp);
+        sc.AddParameters(parameters);
+        AppendWherePrefix(sc);
+        sc.Query.Append(sb);
+    }
 
-        // Determine how to append WHERE/AND clause
+    private void ValidateWhereInputs(IReadOnlyCollection<TEntity>? listOfObjects, ISqlContainer sc)
+    {
+        if (Utils.IsNullOrEmpty(listOfObjects) || sc == null)
+            throw new ArgumentException("List of objects cannot be null or empty.");
+    }
+
+    private List<IColumnInfo> GetPrimaryKeys()
+    {
+        var keys = _tableInfo.Columns.Values.Where(o => o.IsPrimaryKey).ToList();
+        if (keys.Count < 1) throw new Exception($"No primary keys found for type {typeof(TEntity).Name}");
+        return keys;
+    }
+
+    private void CheckParameterLimit(ISqlContainer sc, int? toAdd)
+    {
+        var count = sc.ParameterCount + (toAdd ?? 0);
+        if (count > _context.MaxParameterLimit)
+            throw new TooManyParametersException("Too many parameters", _context.MaxParameterLimit);
+    }
+
+    private static string BuildAliasPrefix(string alias) =>
+        string.IsNullOrWhiteSpace(alias) ? string.Empty : alias + ".";
+
+    private string BuildPrimaryKeyClause(TEntity entity, IReadOnlyList<IColumnInfo> keys, string alias, List<DbParameter> parameters)
+    {
+        var clause = new StringBuilder("(");
+        for (var i = 0; i < keys.Count; i++)
+        {
+            if (i > 0) clause.Append(" AND ");
+
+            var pk = keys[i];
+            var value = pk.MakeParameterValueFromField(entity);
+            var parameter = _context.CreateDbParameter(pk.DbType, value);
+
+            clause.Append(alias);
+            clause.Append(WrapObjectName(pk.Name));
+
+            if (Utils.IsNullOrDbNull(value))
+            {
+                clause.Append(" IS NULL");
+            }
+            else
+            {
+                clause.Append(" = ");
+                clause.Append(MakeParameterName(parameter));
+                parameters.Add(parameter);
+            }
+        }
+
+        clause.Append(')');
+        return clause.ToString();
+    }
+
+    private void AppendWherePrefix(ISqlContainer sc)
+    {
         var query = sc.Query.ToString();
         if (!query.Contains("WHERE ", StringComparison.OrdinalIgnoreCase))
             sc.Query.Append("\n WHERE ");
         else
             sc.Query.Append("\n AND ");
-
-        // Final WHERE clause with grouped filters
-        sc.Query.Append(sb);
     }
 
 
@@ -425,55 +427,15 @@ public class EntityHelper<TEntity, TRowID> :
             throw new ArgumentNullException(nameof(objectToUpdate));
 
         context ??= _context;
-        var setClause = new StringBuilder();
-        var parameters = new List<DbParameter>();
         SetAuditFields(objectToUpdate, true);
         var sc = context.CreateSqlContainer();
-        var original = null as TEntity;
 
-        if (loadOriginal)
-        {
-            original = await RetrieveOneAsync(objectToUpdate);
-            if (original == null)
-                throw new InvalidOperationException("Original record not found for update.");
-        }
+        var original = loadOriginal ? await LoadOriginalAsync(objectToUpdate) : null;
+        if (loadOriginal && original == null)
+            throw new InvalidOperationException("Original record not found for update.");
 
-        foreach (var column in _tableInfo.Columns.Values)
-        {
-            if (column.IsId
-                || column.IsVersion || column.IsNonUpdateable
-                || column.IsCreatedBy
-                || column.IsCreatedOn)
-                //Skip columns that should never be directly updated
-                //the version column, rowId and columns we have marked 
-                //as non-updateable, also of course we should NEVER update "created" columns
-                continue;
-
-            var newValue = column.MakeParameterValueFromField(objectToUpdate);
-            var originalValue = loadOriginal ? column.MakeParameterValueFromField(original) : null;
-
-            if (loadOriginal && Equals(newValue, originalValue))
-                // Skip unchanged values if original is loaded.
-                continue;
-
-            if (setClause.Length > 0) setClause.Append(", ");
-
-            if (newValue == null)
-            {
-                setClause.Append($"{WrapObjectName(column.Name)} = NULL");
-            }
-            else
-            {
-                var param = context.CreateDbParameter(column.DbType, newValue);
-                parameters.Add(param);
-                setClause.Append($"{WrapObjectName(column.Name)} = {MakeParameterName(param)}");
-            }
-        }
-
-        if (_versionColumn != null)
-            //this should be updated to wrap other patterns.
-            setClause.Append(
-                $", {WrapObjectName(_versionColumn.Name)} = {WrapObjectName(_versionColumn.Name)} + 1");
+        var (setClause, parameters) = BuildSetClause(objectToUpdate, original, context);
+        if (_versionColumn != null) IncrementVersion(setClause);
 
         if (setClause.Length == 0)
             throw new InvalidOperationException("No changes detected for update.");
@@ -493,21 +455,69 @@ public class EntityHelper<TEntity, TRowID> :
         if (_versionColumn != null)
         {
             var versionValue = _versionColumn.MakeParameterValueFromField(objectToUpdate);
-            if (versionValue == null)
-            {
-                sc.Query.Append(" AND ").Append(WrapObjectName(_versionColumn.Name)).Append(" IS NULL");
-            }
-            else
-            {
-                var pVersion = context.CreateDbParameter(_versionColumn.DbType, versionValue);
-                sc.Query.Append(" AND ").Append(WrapObjectName(_versionColumn.Name))
-                    .Append($" = {MakeParameterName(pVersion)}");
-                parameters.Add(pVersion);
-            }
+            AppendVersionCondition(sc, versionValue, context, parameters);
         }
 
         sc.AddParameters(parameters);
         return sc;
+    }
+
+    private async Task<TEntity?> LoadOriginalAsync(TEntity objectToUpdate)
+    {
+        return await RetrieveOneAsync(objectToUpdate);
+    }
+
+    private (StringBuilder clause, List<DbParameter> parameters) BuildSetClause(TEntity updated, TEntity? original, IDatabaseContext context)
+    {
+        var clause = new StringBuilder();
+        var parameters = new List<DbParameter>();
+
+        foreach (var column in _tableInfo.Columns.Values)
+        {
+            if (column.IsId || column.IsVersion || column.IsNonUpdateable || column.IsCreatedBy || column.IsCreatedOn)
+                continue;
+
+            var newValue = column.MakeParameterValueFromField(updated);
+            var originalValue = original != null ? column.MakeParameterValueFromField(original) : null;
+
+            if (original != null && Equals(newValue, originalValue))
+                continue;
+
+            if (clause.Length > 0) clause.Append(", ");
+
+            if (newValue == null)
+            {
+                clause.Append($"{WrapObjectName(column.Name)} = NULL");
+            }
+            else
+            {
+                var param = context.CreateDbParameter(column.DbType, newValue);
+                parameters.Add(param);
+                clause.Append($"{WrapObjectName(column.Name)} = {MakeParameterName(param)}");
+            }
+        }
+
+        return (clause, parameters);
+    }
+
+    private void IncrementVersion(StringBuilder setClause)
+    {
+        setClause.Append($", {WrapObjectName(_versionColumn!.Name)} = {WrapObjectName(_versionColumn.Name)} + 1");
+    }
+
+    private void AppendVersionCondition(ISqlContainer sc, object? versionValue, IDatabaseContext context, List<DbParameter> parameters)
+    {
+        if (versionValue == null)
+        {
+            sc.Query.Append(" AND ").Append(WrapObjectName(_versionColumn!.Name)).Append(" IS NULL");
+        }
+        else
+        {
+            var pVersion = context.CreateDbParameter(_versionColumn!.DbType, versionValue);
+            sc.Query.Append(" AND ").Append(WrapObjectName(_versionColumn.Name))
+                .Append($" = {MakeParameterName(pVersion)}");
+            parameters.Add(pVersion);
+        }
     }
 
 
