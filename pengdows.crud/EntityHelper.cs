@@ -20,15 +20,15 @@ public class EntityHelper<TEntity, TRowID> :
     // Cache for compiled property setters
     private static readonly ConcurrentDictionary<PropertyInfo, Action<object, object?>> _propertySetters = new();
     private readonly IAuditValueResolver? _auditValueResolver;
-    private readonly IDatabaseContext _context;
+    private IDatabaseContext _context;
 
-    private readonly IColumnInfo? _idColumn;
+    private IColumnInfo? _idColumn;
 
     // private readonly IServiceProvider _serviceProvider;
-    private readonly ITableInfo _tableInfo;
-    private readonly Type? _userFieldType = null;
+    private ITableInfo _tableInfo;
+    private Type? _userFieldType = null;
 
-    private readonly IColumnInfo? _versionColumn;
+    private IColumnInfo? _versionColumn;
 
     public EntityHelper(IDatabaseContext databaseContext,
         EnumParseFailureMode enumParseBehavior = EnumParseFailureMode.Throw
@@ -74,7 +74,7 @@ public class EntityHelper<TEntity, TRowID> :
         EnumParseBehavior = enumParseBehavior;
     }
 
-    public string WrappedTableName { get; }
+    public string WrappedTableName { get; set; }
 
     public EnumParseFailureMode EnumParseBehavior { get; set; }
 
