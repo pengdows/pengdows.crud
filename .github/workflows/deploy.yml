@@ -97,13 +97,12 @@ jobs:
           echo "✅ Visual code coverage $coverage_percent% meets threshold"
           fi
 
-      - name: Upload coverage report (PR only)
-        if: github.event_name == 'pull_request'
+      - name: Upload coverage report
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-report
-          path: coverage-report
-
+          name: coverage-report-${{ github.run_id }}-${{ github.job }}
+          path: coverage-report/
+  
   publish:
     name: Publish NuGet Package
     runs-on: ubuntu-latest
