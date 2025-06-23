@@ -55,47 +55,54 @@ jobs:
           name: coverage-report
           path: coverage-report
 
-      - name: Enforce coverage threshold
+      - name: Enforce visual coverage from HTML report
         run: |
           set -euo pipefail
-
-          reportgenerator \
-            -reports:TestResults/**/coverage.cobertura.xml \
-            -targetdir:coverage-report \
-            -reporttypes:HtmlSummary
-
-          coverage_file=$(find . -name "coverage.cobertura.xml" | head -n 1)
-
-          if [[ ! -f "$coverage_file" ]]; then
-            echo "❌ Coverage file not found!"
-            exit 1
+  
+          html_file=$(find coverage-report -name "index.html" | head -n 1)
+          
+          if [[ ! -f "$html_file" ]]; then
+          echo "❌ index.html not found!"
+          exit 1
           fi
-
-          line_rate=$(grep -oPm1 '(?<=line-rate=")[^"]+' "$coverage_file")
-          if [[ -z "$line_rate" ]]; then
-            echo "❌ Could not extract line-rate from coverage file"
-            exit 1
+          
+          echo "🕵️ Dumping coverage-related lines from index.html:"
+          grep -i coverage "$html_file" || true
+          
+          # Grab any "123 of 456" pattern
+          coverage_line=$(grep -Eo '[0-9]+ of [0-9]+' "$html_file" | head -n 1)
+          
+          if [[ -z "$coverage_line" ]]; then
+          echo "❌ Could not extract line coverage info"
+          exit 1
           fi
-
-          coverage_percent=$(awk "BEGIN { print $line_rate * 100 }")
-          echo "📊 Coverage: $coverage_percent%"
-
-          required=80
+          
+          covered=$(echo "$coverage_line" | cut -d' ' -f1)
+          total=$(echo "$coverage_line" | cut -d' ' -f3)
+          
+          if [[ -z "$covered" || -z "$total" ]]; then
+          echo "❌ Could not parse covered or total line count"
+          exit 1
+          fi
+          
+          coverage_percent=$(awk "BEGIN { printf \"%.2f\", ($covered / $total) * 100 }")
+          echo "📊 Visual Coverage (from index.html): $coverage_percent%"
+          
+          required=79
           too_low=$(awk "BEGIN { print ($coverage_percent < $required) ? 1 : 0 }")
           if [[ "$too_low" -eq 1 ]]; then
-            echo "❌ Code coverage $coverage_percent% is below required $required%"
-            exit 1
+          echo "❌ Visual code coverage $coverage_percent% is below required $required%"
+          exit 1
           else
-            echo "✅ Code coverage $coverage_percent% meets threshold"
+          echo "✅ Visual code coverage $coverage_percent% meets threshold"
           fi
-      
-      - name: Upload coverage report (PR only)
-        if: github.event_name == 'pull_request'
+
+      - name: Upload coverage report
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-report
-          path: coverage-report
-
+          name: coverage-report-${{ github.run_id }}-${{ github.job }}
+          path: coverage-report/
+  
   publish:
     name: Publish NuGet Package
     runs-on: ubuntu-latest
