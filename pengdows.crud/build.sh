@@ -7,7 +7,7 @@ set -e
 #VERSION="${BUILD_DATE}.${BUILD_NUM}"
 # Version format: 1.0.<epoch-seconds>
 EPOCH=$(date +%s)
-VERSION="1.0.${EPOCH}.1"
+VERSION="1.0.${EPOCH}.0"
 
 echo "Building pengdows.crud version $VERSION"
 
@@ -16,4 +16,5 @@ sed -i "s|<Version>.*</Version>|<Version>$VERSION</Version>|" pengdows.crud.cspr
 
 # Build and pack
 dotnet pack -c Release
+dotnet nuget push ./bin/Debug/pengdows.crud.1.0.${EPOCH}.nupkg --api-key $(cat ~/token.txt) --source https://api.nuget.org/v3/index.json
 
