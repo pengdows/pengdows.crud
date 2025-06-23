@@ -45,7 +45,7 @@ jobs:
             -reports:TestResults/**/coverage.cobertura.xml \
             -targetdir:coverage-report \
             -reporttypes:HtmlSummary \
-            -assemblyfilters:+pengdows.crud
+            -assemblyfilters:+pengdows.crud.*,-pengdows.crud.testbed,-pengdows.crud.fakeDb
           
           grep -oPm1 "(?<=<assembly name=\")[^\"]+" TestResults/**/coverage.cobertura.xml | sort | uniq
         
