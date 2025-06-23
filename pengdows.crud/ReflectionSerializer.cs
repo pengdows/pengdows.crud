@@ -51,6 +51,12 @@ public static class ReflectionSerializer
     private static object? Deserialize(Type targetType, object? data)
     {
         if (data == null) return null;
+        var underlying = Nullable.GetUnderlyingType(targetType);
+        if (underlying != null)
+        {
+            // handle Nullable<T> by delegating to the underlying type
+            return Deserialize(underlying, data);
+        }
         if (IsSimpleType(targetType))
         {
             return Convert.ChangeType(data, Nullable.GetUnderlyingType(targetType) ?? targetType);
