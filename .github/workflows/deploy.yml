@@ -31,23 +31,24 @@ jobs:
 
       - name: Install coverage tools
         run: dotnet tool install --global dotnet-reportgenerator-globaltool
-
+    
       - name: Run tests and collect coverage
         run: |
           dotnet test --no-build --configuration Release \
             --collect:"XPlat Code Coverage" \
             --results-directory ./TestResults \
             -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Include="[pengdows.crud]*"
-          
+    
       - name: Generate coverage report
         run: |
           reportgenerator \
             -reports:TestResults/**/coverage.cobertura.xml \
             -targetdir:coverage-report \
             -reporttypes:HtmlSummary \
-            -assemblyfilters:+pengdows.crud.*,-pengdows.crud.testbed,-pengdows.crud.fakeDb
+            -assemblyfilters:+pengdows.crud
           
           grep -oPm1 "(?<=<assembly name=\")[^\"]+" TestResults/**/coverage.cobertura.xml | sort | uniq
+
         
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
