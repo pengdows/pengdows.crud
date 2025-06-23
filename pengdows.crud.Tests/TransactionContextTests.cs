@@ -32,9 +32,9 @@ public class TransactionContextTests
     }
 
     [Theory]
-    [InlineData(SupportedDatabase.CockroachDb, IsolationLevel.Serializable)]
-    [InlineData(SupportedDatabase.Sqlite, IsolationLevel.Serializable)]
-    public void Constructor_SetsIsolationLevel_Correctly(SupportedDatabase supportedDatabase, IsolationLevel isolationLevel)
+    [InlineData(SupportedDatabase.CockroachDb)]
+    [InlineData(SupportedDatabase.Sqlite)]
+    public void Constructor_SetsIsolationLevel_Correctly(SupportedDatabase supportedDatabase)
     {
         var tx = CreateContext(supportedDatabase).BeginTransaction(IsolationLevel.ReadUncommitted);
         if (tx.IsolationLevel < IsolationLevel.Chaos)
