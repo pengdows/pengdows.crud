@@ -124,14 +124,12 @@ jobs:
           dotnet restore
           dotnet build --configuration Release
 
-      - name: Pack NuGet package
+      - name: Prepare API key
         run: |
-          dotnet pack --configuration Release --no-build --output ./nupkg
+          echo "${{ secrets.NUGET_API_KEY }}" > ~/token.txt
 
-      - name: Publish to NuGet
-        env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+      - name: Run build script
         run: |
-          dotnet nuget push ./nupkg/*.nupkg \
-            --source https://api.nuget.org/v3/index.json \
-            --api-key $NUGET_API_KEY
+          cd pengdows.crud
+          chmod +x build.sh
+          ./build.sh
