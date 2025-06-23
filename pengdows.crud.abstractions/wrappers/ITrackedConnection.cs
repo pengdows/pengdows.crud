@@ -2,6 +2,7 @@
 
 using System.Data;
 using pengdows.crud.threading;
+#pragma warning disable CS0108, CS0114
 
 #endregion
 
@@ -9,7 +10,7 @@ namespace pengdows.crud.wrappers;
 
 public interface ITrackedConnection : IDbConnection
 {
-    string ConnectionString { get; set; }
+    string ConnectionString { get; set; }  
     int ConnectionTimeout { get; }
     string Database { get; }
     ConnectionState State { get; }

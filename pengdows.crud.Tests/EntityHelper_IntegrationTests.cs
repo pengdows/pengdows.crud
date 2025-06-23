@@ -196,7 +196,7 @@ public class EntityHelper_IntegrationTests : SqlLiteContextTestBase
         var retrieve = entityHelper.BuildBaseRetrieve("a");
         var x = await entityHelper.LoadListAsync(retrieve);
         var foundList = x.FindAll(itm => itm.Name == s);
-        Assert.Equal(foundList.Count, 1);
+        Assert.Equal(1, foundList.Count);
         var found = foundList.First();
         Assert.True(found.Name == tmp.Name);
         entityHelper.BuildDelete(found.Id);
