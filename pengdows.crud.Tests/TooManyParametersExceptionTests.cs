@@ -1,5 +1,6 @@
 #region
 
+using System.Threading.Tasks;
 using pengdows.crud.exceptions;
 using Xunit;
 
@@ -23,7 +24,7 @@ public class TooManyParametersExceptionTests
     }
 
     [Fact]
-    public async void CanBeThrownAndCaught()
+    public async Task CanBeThrownAndCaught()
     {
         // Arrange
         var message = "Too Many parameters for this database were found";
