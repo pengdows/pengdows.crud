@@ -37,7 +37,7 @@ jobs:
           dotnet test --no-build --configuration Release \
             --collect:"XPlat Code Coverage" \
             --results-directory ./TestResults \
-            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Exclude="[pengdows.crud.fakeDb]*"
+            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Include="[pengdows.crud]*"
           
       - name: Generate coverage report
         run: |
