@@ -86,17 +86,16 @@ jobs:
           fi
           
           coverage_percent=$(awk "BEGIN { printf \"%.2f\", ($covered / $total) * 100 }")
-        echo "📊 Visual Coverage (from index.html): $coverage_percent%"
+          echo "📊 Visual Coverage (from index.html): $coverage_percent%"
           
           required=80
-        too_low=$(awk "BEGIN { print ($coverage_percent < $required) ? 1 : 0 }")
+          too_low=$(awk "BEGIN { print ($coverage_percent < $required) ? 1 : 0 }")
           if [[ "$too_low" -eq 1 ]]; then
           echo "❌ Visual code coverage $coverage_percent% is below required $required%"
           exit 1
           else
           echo "✅ Visual code coverage $coverage_percent% meets threshold"
           fi
-
 
       - name: Upload coverage report (PR only)
         if: github.event_name == 'pull_request'
