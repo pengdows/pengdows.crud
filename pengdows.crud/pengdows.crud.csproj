@@ -15,8 +15,7 @@
         <RepositoryType>git</RepositoryType>
     </PropertyGroup>
     <ItemGroup>
-        <PackageReference Remove="Nerdbank.GitVersioning" />
-        <PackageReference Include="coverlet.collector" Version="6.0.4">
+       <PackageReference Include="coverlet.collector" Version="6.0.4">
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
           <PrivateAssets>all</PrivateAssets>
         </PackageReference>
