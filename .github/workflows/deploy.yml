@@ -124,12 +124,8 @@ jobs:
           dotnet restore
           dotnet build --configuration Release
 
-      - name: Prepare API key
-        run: |
-          echo "${{ secrets.NUGET_API_KEY }}" > ~/token.txt
-
       - name: Run build script
         run: |
           cd pengdows.crud
-          chmod +x build.sh
-          ./build.sh
+          chmod +x build.sh 
+          ./build.sh ${{ secrets.NUGET_API_KEY }}
