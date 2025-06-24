@@ -20,8 +20,6 @@ git commit -m "Release $VERSION" --allow-empty
 dotnet pack -c Release
 dotnet nuget push ./bin/Release/pengdows.crud.1.0.${EPOCH}.nupkg --api-key $(cat ~/token.txt) --source https://api.nuget.org/v3/index.json
 
-# Tag the commit with the version and push the tag
+# Tag the commit with the version
 git tag -a "v$VERSION" -m "Release $VERSION"
-git push origin HEAD
-git push origin "v$VERSION"
 
