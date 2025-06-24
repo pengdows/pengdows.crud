@@ -23,4 +23,5 @@ git reset --hard
 
 # Tag the commit with the version
 git tag -a "v$VERSION" -m "Release $VERSION"
+git push origin "v$VERSION"
 
