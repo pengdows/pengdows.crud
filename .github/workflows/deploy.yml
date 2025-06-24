@@ -123,7 +123,12 @@ jobs:
         run: |
           dotnet restore
           dotnet build --configuration Release
-
+      
+      - name: Configure git identity
+        run: |
+          git config user.email "actions@github.com"
+         git config user.name "GitHub Actions"   
+      
       - name: Run build script
         run: |
           cd pengdows.crud
