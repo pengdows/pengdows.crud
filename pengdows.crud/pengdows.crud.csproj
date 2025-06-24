@@ -25,6 +25,9 @@
         <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="9.0.6" />
     </ItemGroup>
     <ItemGroup>
+        <None Include="README.md" Pack="true" PackagePath="" />
+    </ItemGroup>
+    <ItemGroup>
         <ProjectReference Include="..\pengdows.crud.abstractions\pengdows.crud.abstractions.csproj" />
     </ItemGroup>
     <ItemGroup>
