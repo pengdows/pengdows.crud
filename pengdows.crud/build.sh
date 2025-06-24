@@ -16,5 +16,11 @@ sed -i "s|<Version>.*</Version>|<Version>$VERSION</Version>|" pengdows.crud.cspr
 
 # Build and pack
 dotnet pack -c Release
-dotnet nuget push ./bin/Release/pengdows.crud.1.0.${EPOCH}.nupkg --api-key $(cat ~/token.txt) --source https://api.nuget.org/v3/index.json
+dotnet nuget push ./bin/Release/pengdows.crud.${VERSION}.nupkg --api-key $(cat ~/token.txt) --source https://api.nuget.org/v3/index.json
+
+# Roll back project changes after building
+git reset --hard
+
+# Tag the commit with the version
+git tag -a "v$VERSION" -m "Release $VERSION"
 
