@@ -8,7 +8,7 @@ set -e
 # Version format: 1.0.<epoch-seconds>
 EPOCH=$(date +%s)
 VERSION="1.0.${EPOCH}.0"
-VERSION1="1.0.${EPOCH}"
+VERSION2="1.0.${EPOCH}"
 echo "Building pengdows.crud version $VERSION"
 
 # Update the .csproj with the new version
