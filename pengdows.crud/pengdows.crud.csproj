@@ -9,7 +9,7 @@
         <Authors>Pengdows</Authors>
         <PackageTags>crud,nuget</PackageTags>
         <RepositoryUrl>https://github.com/pengdows/pengdows.crud</RepositoryUrl>
-        <PackageReadmeFile>../README.md</PackageReadmeFile>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageProjectUrl>https://github.com/pengdows/pengdows.crud/wiki</PackageProjectUrl>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
