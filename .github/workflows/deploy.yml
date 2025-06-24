@@ -127,7 +127,7 @@ jobs:
       - name: Configure git identity
         run: |
           git config user.email "actions@github.com"
-         git config user.name "GitHub Actions"   
+          git config user.name "GitHub Actions"   
       
       - name: Run build script
         run: |
