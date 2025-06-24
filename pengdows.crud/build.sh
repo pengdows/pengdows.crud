@@ -19,7 +19,7 @@ dotnet pack -c Release
 dotnet nuget push ./bin/Release/pengdows.crud.${VERSION}.nupkg --api-key $(cat ~/token.txt) --source https://api.nuget.org/v3/index.json
 
 # Roll back project changes after building
-git checkout -- pengdows.crud.csproj
+git reset --hard
 
 # Tag the commit with the version
 git tag -a "v$VERSION" -m "Release $VERSION"
