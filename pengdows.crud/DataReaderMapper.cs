@@ -18,7 +18,11 @@ public static class DataReaderMapper
     {
         ArgumentNullException.ThrowIfNull(reader);
         var rdr = reader as DbDataReader;
-
+        if (reader is not DbDataReader test)
+        {
+            throw new ArgumentException("reader must be DbDataReader", nameof(reader));
+        }
+        
         var result = new List<T>();
         var type = typeof(T);
 
