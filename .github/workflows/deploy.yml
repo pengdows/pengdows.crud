@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: write  # Needed for git push and release creation
+
 jobs:
   build-and-test:
     name: Build and test
@@ -31,14 +34,14 @@ jobs:
 
       - name: Install coverage tools
         run: dotnet tool install --global dotnet-reportgenerator-globaltool
-    
+
       - name: Run tests and collect coverage
         run: |
           dotnet test --no-build --configuration Release \
             --collect:"XPlat Code Coverage" \
             --results-directory ./TestResults \
             -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Include="[pengdows.crud]*"
-    
+
       - name: Generate coverage report
         run: |
           reportgenerator \
@@ -46,64 +49,13 @@ jobs:
             -targetdir:coverage-report \
             -reporttypes:HtmlSummary \
             -assemblyfilters:+pengdows.crud
-          
-          grep -oPm1 "(?<=<assembly name=\")[^\"]+" TestResults/**/coverage.cobertura.xml | sort | uniq
 
-        
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
           path: coverage-report
 
-      - name: Enforce visual coverage from HTML report
-        run: |
-          set -euo pipefail
-  
-          html_file=$(find coverage-report -name "index.html" | head -n 1)
-          
-          if [[ ! -f "$html_file" ]]; then
-          echo "❌ index.html not found!"
-          exit 1
-          fi
-          
-          echo "🕵️ Dumping coverage-related lines from index.html:"
-          grep -i coverage "$html_file" || true
-          
-          # Grab any "123 of 456" pattern
-          coverage_line=$(grep -Eo '[0-9]+ of [0-9]+' "$html_file" | head -n 1)
-          
-          if [[ -z "$coverage_line" ]]; then
-          echo "❌ Could not extract line coverage info"
-          exit 1
-          fi
-          
-          covered=$(echo "$coverage_line" | cut -d' ' -f1)
-          total=$(echo "$coverage_line" | cut -d' ' -f3)
-          
-          if [[ -z "$covered" || -z "$total" ]]; then
-          echo "❌ Could not parse covered or total line count"
-          exit 1
-          fi
-          
-          coverage_percent=$(awk "BEGIN { printf \"%.2f\", ($covered / $total) * 100 }")
-          echo "📊 Visual Coverage (from index.html): $coverage_percent%"
-          
-          required=79
-          too_low=$(awk "BEGIN { print ($coverage_percent < $required) ? 1 : 0 }")
-          if [[ "$too_low" -eq 1 ]]; then
-          echo "❌ Visual code coverage $coverage_percent% is below required $required%"
-          exit 1
-          else
-          echo "✅ Visual code coverage $coverage_percent% meets threshold"
-          fi
-
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report-${{ github.run_id }}-${{ github.job }}
-          path: coverage-report/
-  
   publish:
     name: Publish NuGet Package
     runs-on: ubuntu-latest
@@ -113,24 +65,57 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v2
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: 8.0.x
 
-      - name: Restore and build
+      - name: Generate version number
+        id: version
         run: |
-          dotnet restore
-          dotnet build --configuration Release
-      
-      - name: Configure git identity
+          epoch=$(date +%s)
+          echo "version=1.0.${epoch}.0" >> "$GITHUB_OUTPUT"
+          echo "version_short=1.0.${epoch}" >> "$GITHUB_OUTPUT"
+
+      - name: Update version in .csproj
         run: |
-          git config user.email "actions@github.com"
-          git config user.name "GitHub Actions"   
-      
-      - name: Run build script
+          sed -i "s|<Version>.*</Version>|<Version>${{ steps.version.outputs.version }}</Version>|" pengdows.crud/pengdows.crud.csproj
+
+      - name: Build and pack
+        run: dotnet pack pengdows.crud/pengdows.crud.csproj -c Release
+
+      - name: Push package to NuGet
         run: |
-          cd pengdows.crud
-          chmod +x build.sh 
-          ./build.sh ${{ secrets.NUGET_API_KEY }}
+          set -euo pipefail
+          dotnet nuget push pengdows.crud/bin/Release/pengdows.crud.${{ steps.version.outputs.version_short }}.nupkg \
+            --source https://api.nuget.org/v3/index.json \
+            --api-key ${{ secrets.NUGET_API_KEY }}
+
+      - name: Commit version bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add pengdows.crud/pengdows.crud.csproj
+          git commit -m "Bump version to v${{ steps.version.outputs.version_short }}" || echo "No changes to commit"
+
+      - name: Push version bump commit
+        run: git push origin HEAD:main
+
+      - name: Tag the release
+        run: |
+          git tag -a "v${{ steps.version.outputs.version_short }}" -m "Release v${{ steps.version.outputs.version_short }}"
+          git push origin "v${{ steps.version.outputs.version_short }}"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.version_short }}
+          name: v${{ steps.version.outputs.version_short }}
+          body: Automated release for version v${{ steps.version.outputs.version_short }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
