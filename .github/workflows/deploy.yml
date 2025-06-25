@@ -86,7 +86,9 @@ jobs:
           sed -i "s|<Version>.*</Version>|<Version>${{ steps.version.outputs.version }}</Version>|" pengdows.crud/pengdows.crud.csproj
 
       - name: Build and pack
-        run: dotnet pack pengdows.crud/pengdows.crud.csproj -c Release
+        run: |
+          dotnet build pengdows.crud/pengdows.crud.csproj -c Release
+          dotnet pack pengdows.crud/pengdows.crud.csproj -c Release --no-build
 
       - name: Push package to NuGet
         run: |
