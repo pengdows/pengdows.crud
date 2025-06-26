@@ -85,6 +85,8 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
         {
             _loggerFactory = loggerFactory ?? NullLoggerFactory.Instance;
             _logger = _loggerFactory.CreateLogger<IDatabaseContext>();
+            TypeCoercionHelper.Logger =
+                _loggerFactory.CreateLogger(nameof(TypeCoercionHelper));
             ReadWriteMode = configuration.ReadWriteMode;
             TypeMapRegistry = new TypeMapRegistry();
             ConnectionMode = configuration.DbMode;
