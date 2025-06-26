@@ -3,6 +3,8 @@
 using System.Data;
 using System.Data.Common;
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.enums;
 using pengdows.crud.wrappers;
 
@@ -61,15 +63,19 @@ public class DataSourceInformation : IDataSourceInformation
         { SupportedDatabase.Oracle, ":" }
     };
 
-    private DataSourceInformation()
+    private readonly ILogger<DataSourceInformation> _logger;
+
+    private DataSourceInformation(ILoggerFactory? loggerFactory = null)
     {
+        loggerFactory ??= NullLoggerFactory.Instance;
+        _logger = loggerFactory.CreateLogger<DataSourceInformation>();
         ParameterNamePatternRegex = DefaultNameRegex;
         QuotePrefix = "\"";
         QuoteSuffix = "\"";
     }
 
-    public DataSourceInformation(DbConnection conn)
-        : this()
+    public DataSourceInformation(DbConnection conn, ILoggerFactory? loggerFactory = null)
+        : this(loggerFactory)
     {
         if (conn == null) throw new ArgumentNullException(nameof(conn));
 
@@ -157,19 +163,19 @@ public class DataSourceInformation : IDataSourceInformation
         _ => false
     };
 
-    public static DataSourceInformation Create(ITrackedConnection connection)
+    public static DataSourceInformation Create(ITrackedConnection connection, ILoggerFactory? loggerFactory = null)
     {
-        return CreateAsync(connection).GetAwaiter().GetResult();
+        return CreateAsync(connection, loggerFactory).GetAwaiter().GetResult();
     }
 
-    public static Task<DataSourceInformation> CreateAsync(ITrackedConnection connection)
+    public static Task<DataSourceInformation> CreateAsync(ITrackedConnection connection, ILoggerFactory? loggerFactory = null)
     {
-        return CreateInternalAsync(connection);
+        return CreateInternalAsync(connection, loggerFactory);
     }
 
-    private static async Task<DataSourceInformation> CreateInternalAsync(ITrackedConnection connection)
+    private static async Task<DataSourceInformation> CreateInternalAsync(ITrackedConnection connection, ILoggerFactory? loggerFactory)
     {
-        var info = new DataSourceInformation();
+        var info = new DataSourceInformation(loggerFactory);
         await info.InitializeInternalAsync(connection).ConfigureAwait(false);
         return info;
     }
@@ -181,7 +187,7 @@ public class DataSourceInformation : IDataSourceInformation
 
     private async Task InitializeInternalAsync(ITrackedConnection connection)
     {
-        var schema = await GetSchemaAsync(connection).ConfigureAwait(false);
+        var schema = await GetSchemaAsync(connection, _logger).ConfigureAwait(false);
         var rawName = schema.Rows[0].Field<string>("DataSourceProductName") ?? string.Empty;
 
         var initial = InferDatabaseProduct(rawName);
@@ -189,7 +195,7 @@ public class DataSourceInformation : IDataSourceInformation
 
         var version = string.IsNullOrEmpty(versionSql)
             ? "Unknown Version"
-            : await GetVersionAsync(connection, versionSql).ConfigureAwait(false);
+            : await GetVersionAsync(connection, versionSql, _logger).ConfigureAwait(false);
 
         DatabaseProductVersion = version;
         DatabaseProductName = version;
@@ -213,9 +219,12 @@ public class DataSourceInformation : IDataSourceInformation
         PrepareStatements = false;
     }
 
-    private static async Task<string> GetVersionAsync(ITrackedConnection connection, string versionSql)
+    private static async Task<string> GetVersionAsync(
+        ITrackedConnection connection,
+        string versionSql,
+        ILogger<DataSourceInformation> logger)
     {
-        var result = await ExecuteScalarViaReaderAsync(connection, versionSql).ConfigureAwait(false);
+        var result = await ExecuteScalarViaReaderAsync(connection, versionSql, logger).ConfigureAwait(false);
         return result?.ToString() ?? "Unknown Version";
     }
 
@@ -245,21 +254,27 @@ public class DataSourceInformation : IDataSourceInformation
         return table;
     }
 
-    private static async Task<DataTable> GetSchemaAsync(ITrackedConnection connection)
+    private static async Task<DataTable> GetSchemaAsync(
+        ITrackedConnection connection,
+        ILogger<DataSourceInformation> logger)
     {
-        if (await IsSqliteAsync(connection).ConfigureAwait(false)) return ReadSqliteSchema();
+        if (await IsSqliteAsync(connection, logger).ConfigureAwait(false)) return ReadSqliteSchema();
 
         return connection.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
     }
 
-    private static async Task<object?> ExecuteScalarViaReaderAsync(ITrackedConnection connection, string sql)
+    private static async Task<object?> ExecuteScalarViaReaderAsync(
+        ITrackedConnection connection,
+        string sql,
+        ILogger<DataSourceInformation> logger)
     {
         try
         {
             await using var cmd = (DbCommand)connection.CreateCommand();
             cmd.CommandText = sql;
             await using var reader = await cmd
-                .ExecuteReaderAsync(CommandBehavior.SingleRow | CommandBehavior.SingleResult).ConfigureAwait(false);
+                .ExecuteReaderAsync(CommandBehavior.SingleRow | CommandBehavior.SingleResult)
+                .ConfigureAwait(false);
 
             if (await reader.ReadAsync().ConfigureAwait(false)) return reader.GetValue(0);
 
@@ -267,16 +282,18 @@ public class DataSourceInformation : IDataSourceInformation
         }
         catch (Exception ex)
         {
-            Console.WriteLine(ex.Message);
+            logger.LogError(ex, ex.Message);
             throw;
         }
     }
 
-    private static async Task<bool> IsSqliteAsync(ITrackedConnection connection)
+    private static async Task<bool> IsSqliteAsync(
+        ITrackedConnection connection,
+        ILogger<DataSourceInformation> logger)
     {
         try
         {
-            var result = await ExecuteScalarViaReaderAsync(connection, "SELECT sqlite_version()")
+            var result = await ExecuteScalarViaReaderAsync(connection, "SELECT sqlite_version()", logger)
                 .ConfigureAwait(false);
             return result != null;
         }

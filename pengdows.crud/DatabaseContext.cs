@@ -20,6 +20,7 @@ namespace pengdows.crud;
 public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 {
     private readonly DbProviderFactory _factory;
+    private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<IDatabaseContext> _logger;
     private bool _applyConnectionSessionSettings;
     private ITrackedConnection? _connection = null;
@@ -82,8 +83,10 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     {
         try
         {
-            loggerFactory = loggerFactory ?? NullLoggerFactory.Instance;
-            _logger = loggerFactory?.CreateLogger<IDatabaseContext>() ?? NullLogger<IDatabaseContext>.Instance;
+            _loggerFactory = loggerFactory ?? NullLoggerFactory.Instance;
+            _logger = _loggerFactory.CreateLogger<IDatabaseContext>();
+            TypeCoercionHelper.Logger =
+                _loggerFactory.CreateLogger(nameof(TypeCoercionHelper));
             ReadWriteMode = configuration.ReadWriteMode;
             TypeMapRegistry = new TypeMapRegistry();
             ConnectionMode = configuration.DbMode;
@@ -477,7 +480,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
                 throw new ConnectionFailedException(ex.Message);
             }
 
-            _dataSourceInfo = DataSourceInformation.Create(conn);
+            _dataSourceInfo = DataSourceInformation.Create(conn, _loggerFactory);
             SetupConnectionSessionSettingsForProvider(conn);
             Name = _dataSourceInfo.DatabaseProductName;
             if (_dataSourceInfo.Product == SupportedDatabase.Sqlite)
@@ -505,7 +508,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
             _isolationResolver ??= new IsolationResolver(Product, RCSIEnabled);
         }
         catch(Exception ex){
-            Console.WriteLine(ex.Message);
+            _logger.LogError(ex, ex.Message);
             throw;
         }
         finally
