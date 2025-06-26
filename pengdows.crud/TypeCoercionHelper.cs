@@ -12,12 +12,12 @@ namespace pengdows.crud;
 
 public static class TypeCoercionHelper
 {
-    private static ILogger<TypeCoercionHelper> _logger = NullLogger<TypeCoercionHelper>.Instance;
+    private static ILogger _logger = NullLogger.Instance;
 
-    public static ILogger<TypeCoercionHelper> Logger
+    public static ILogger Logger
     {
         get => _logger;
-        set => _logger = value ?? NullLogger<TypeCoercionHelper>.Instance;
+        set => _logger = value ?? NullLogger.Instance;
     }
     public static object? Coerce(
         object? value,
