@@ -124,3 +124,12 @@ Topics include:
 
 ```bash
 dotnet add package pengdows.crud
+```
+
+```csharp
+using System.Data.SqlClient;
+using pengdows.crud;
+
+var db = new DatabaseContext("your-connection-string", SqlClientFactory.Instance);
+var helper = new EntityHelper<MyEntity, long>(db);
+```
