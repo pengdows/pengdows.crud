@@ -2,6 +2,8 @@
 
 using System.Globalization;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.enums;
 
 #endregion
@@ -10,6 +12,13 @@ namespace pengdows.crud;
 
 public static class TypeCoercionHelper
 {
+    private static ILogger<TypeCoercionHelper> _logger = NullLogger<TypeCoercionHelper>.Instance;
+
+    public static ILogger<TypeCoercionHelper> Logger
+    {
+        get => _logger;
+        set => _logger = value ?? NullLogger<TypeCoercionHelper>.Instance;
+    }
     public static object? Coerce(
         object? value,
         Type dbFieldType,
@@ -34,7 +43,10 @@ public static class TypeCoercionHelper
                     throw new ArgumentException($"Cannot convert value '{value}' to enum {columnInfo.EnumType}.");
 
                 case EnumParseFailureMode.SetNullAndLog:
-                    Console.WriteLine($"Cannot convert '{value}' to non-nullable enum {columnInfo.EnumType}.");
+                    Logger.LogWarning(
+                        "Cannot convert '{Value}' to non-nullable enum {EnumType}.",
+                        value,
+                        columnInfo.EnumType);
                     return null;
                 // if (Nullable.GetUnderlyingType(targetType) == columnInfo.EnumType)
                 //     return null;

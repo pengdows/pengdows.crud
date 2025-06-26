@@ -6,6 +6,7 @@ using System.Data;
 using System.Linq;
 using pengdows.crud.enums;
 using pengdows.crud.FakeDb;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 #endregion
@@ -70,7 +71,7 @@ public class DataSourceInformationTests
         var conn = new FakeTrackedConnection(x, schema, scalars);
 
         // Act
-        var info = DataSourceInformation.Create(conn);
+        var info = DataSourceInformation.Create(conn, NullLoggerFactory.Instance);
 
         // Assert: product detection
         //Assert.Equal(db, info.Product);
