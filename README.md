@@ -127,7 +127,10 @@ Topics include:
 
 ```bash
 dotnet add package pengdows.crud
+dotnet add package pengdows.crud.abstractions
 ```
+
+`pengdows.crud.abstractions` contains the shared interfaces used for dependency injection and unit testing.
 
 ```csharp
 using System.Data.SqlClient;
