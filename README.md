@@ -128,9 +128,11 @@ Topics include:
 ```bash
 dotnet add package pengdows.crud
 dotnet add package pengdows.crud.abstractions
+dotnet add package pengdows.crud.fakeDb
 ```
 
 `pengdows.crud.abstractions` contains the shared interfaces used for dependency injection and unit testing.
+`pengdows.crud.fakeDb` provides an in-memory fake database for integration tests.
 
 ```csharp
 using System.Data.SqlClient;
