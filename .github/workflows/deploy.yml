@@ -81,20 +81,14 @@ jobs:
           echo "version=1.0.${epoch}.0" >> "$GITHUB_OUTPUT"
           echo "version_short=1.0.${epoch}" >> "$GITHUB_OUTPUT"
 
-      - name: Update version in .csproj
-        run: |
-          sed -i "s|<Version>.*</Version>|<Version>${{ steps.version.outputs.version }}</Version>|" pengdows.crud/pengdows.crud.csproj
-          sed -i "s|<Version>.*</Version>|<Version>${{ steps.version.outputs.version }}</Version>|" pengdows.crud.abstractions/pengdows.crud.abstractions.csproj
-          sed -i "s|<Version>.*</Version>|<Version>${{ steps.version.outputs.version }}</Version>|" pengdows.crud.fakeDb/pengdows.crud.fakeDb.csproj
+      - name: Build
+        run: dotnet build pengdows.crud/pengdows.crud.csproj -c Release
 
-      - name: Build and pack
+      - name: Pack with custom version
         run: |
-          dotnet build pengdows.crud/pengdows.crud.csproj -c Release
-          dotnet pack pengdows.crud/pengdows.crud.csproj -c Release --no-build
-          dotnet build pengdows.crud.abstractions/pengdows.crud.abstractions.csproj -c Release
-          dotnet pack pengdows.crud.abstractions/pengdows.crud.abstractions.csproj -c Release --no-build
-          dotnet build pengdows.crud.fakeDb/pengdows.crud.fakeDb.csproj -c Release
-          dotnet pack pengdows.crud.fakeDb/pengdows.crud.fakeDb.csproj -c Release --no-build
+          dotnet pack pengdows.crud/pengdows.crud.csproj -c Release \
+            --no-build \
+            -p:PackageVersion=${{ steps.version.outputs.version }}
 
       - name: Push package to NuGet
         run: |
