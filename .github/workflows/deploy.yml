@@ -81,14 +81,6 @@ jobs:
           echo "version=1.0.${epoch}.0" >> "$GITHUB_OUTPUT"
           echo "version_short=1.0.${epoch}" >> "$GITHUB_OUTPUT"
 
-#      - name: Update version in .csproj
-#        run: |
-#          sed -i "s|<Version>.*</Version>|<Version>${{ steps.version.outputs.version }}</Version>|" pengdows.crud/pengdows.crud.csproj
-
-#      - name: Build and pack
-#        run: |
-#          dotnet build pengdows.crud/pengdows.crud.csproj -c Release
-#          dotnet pack pengdows.crud/pengdows.crud.csproj -c Release --no-build
       - name: Build
         run: dotnet build pengdows.crud/pengdows.crud.csproj -c Release
 
@@ -98,11 +90,16 @@ jobs:
             --no-build \
             -p:PackageVersion=${{ steps.version.outputs.version }}
 
-
       - name: Push package to NuGet
         run: |
           set -euo pipefail
           dotnet nuget push pengdows.crud/bin/Release/pengdows.crud.${{ steps.version.outputs.version_short }}.nupkg \
+            --source https://api.nuget.org/v3/index.json \
+            --api-key ${{ secrets.NUGET_API_KEY }}
+          dotnet nuget push pengdows.crud.abstractions/bin/Release/pengdows.crud.abstractions.${{ steps.version.outputs.version_short }}.nupkg \
+            --source https://api.nuget.org/v3/index.json \
+            --api-key ${{ secrets.NUGET_API_KEY }}
+          dotnet nuget push pengdows.crud.fakeDb/bin/Release/pengdows.crud.fakeDb.${{ steps.version.outputs.version_short }}.nupkg \
             --source https://api.nuget.org/v3/index.json \
             --api-key ${{ secrets.NUGET_API_KEY }}
 
@@ -110,7 +107,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add pengdows.crud/pengdows.crud.csproj
+          git add pengdows.crud/pengdows.crud.csproj pengdows.crud.abstractions/pengdows.crud.abstractions.csproj pengdows.crud.fakeDb/pengdows.crud.fakeDb.csproj
           git commit -m "Bump version to v${{ steps.version.outputs.version_short }}" || echo "No changes to commit"
 
       - name: Push version bump commit
