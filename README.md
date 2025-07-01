@@ -141,3 +141,13 @@ using pengdows.crud;
 var db = new DatabaseContext("your-connection-string", SqlClientFactory.Instance);
 var helper = new EntityHelper<MyEntity, long>(db);
 ```
+
+### Releasing packages
+
+Use the provided `build.sh` script to build, pack, and publish all NuGet packages.
+
+```bash
+./build.sh YOUR_NUGET_API_KEY
+```
+
+The script updates version numbers, pushes the packages to NuGet, and tags the release in Git.
