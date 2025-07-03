@@ -95,7 +95,16 @@ jobs:
           dotnet pack pengdows.crud/pengdows.crud.csproj -c Release \
             --no-build \
             -p:PackageVersion=${{ steps.version.outputs.version }}
-
+      - name: Debug API Key
+        run: |
+          if [ -z "$NUGET_API_KEY" ]; then
+            echo "NUGET_API_KEY is empty!"
+            exit 1
+          else
+            echo "NUGET_API_KEY is set and length is ${#NUGET_API_KEY}"
+          fi
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
       - name: Push package to NuGet
         run: |
           set -euo pipefail
