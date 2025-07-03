@@ -23,7 +23,7 @@ public class ValidateRowIdTypeTests : SqlLiteContextTestBase
     [InlineData(typeof(Guid?))]
     public void Constructor_SupportedTypes_DoesNotThrow(Type idType)
     {
-        var helperType = typeof(EntityHelper<SimpleEntity,>).MakeGenericType(idType);
+        var helperType = typeof(EntityHelper<,>).MakeGenericType(typeof(SimpleEntity), idType);
         var helper = Activator.CreateInstance(helperType, Context);
         Assert.NotNull(helper);
     }
