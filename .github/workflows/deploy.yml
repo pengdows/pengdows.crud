@@ -82,11 +82,17 @@ jobs:
           echo "version_short=1.0.${epoch}" >> "$GITHUB_OUTPUT"
 
       - name: Build
-        run: dotnet build pengdows.crud/pengdows.crud.csproj -c Release
+        run: dotnet build pengdows.crud.sln -c Release
 
       - name: Pack with custom version
         run: |
           dotnet pack pengdows.crud/pengdows.crud.csproj -c Release \
+            --no-build \
+            -p:PackageVersion=${{ steps.version.outputs.version }}
+          dotnet pack pengdows.crud.abstractions/pengdows.crud.abstractions.csproj -c Release \
+            --no-build \
+            -p:PackageVersion=${{ steps.version.outputs.version }}
+          dotnet pack pengdows.crud.fakeDb/pengdows.crud.fakeDb.csproj -c Release \
             --no-build \
             -p:PackageVersion=${{ steps.version.outputs.version }}
 
