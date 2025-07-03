@@ -38,6 +38,6 @@ public class BuildWhereNullIdTests : SqlLiteContextTestBase
     [Fact]
     public void BuildRetrieve_WithNullId_Throws()
     {
-        Assert.Throws<ArgumentException>(() => helper.BuildRetrieve(new int?[] { null }));
+        Assert.Throws<ArgumentException>(() => helper.BuildRetrieve(new int?[] { null }, string.Empty));
     }
 }
