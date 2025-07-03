@@ -113,7 +113,12 @@ public class EntityHelper<TEntity, TRowID> :
         return obj;
     }
 
-
+    public async Task<bool> CreateAsync(TEntity entity, IDatabaseContext context)
+    {
+        var sc = BuildCreate(entity, context);
+        return await sc.ExecuteNonQueryAsync() == 1;
+    }
+    
     public ISqlContainer BuildCreate(TEntity objectToCreate, IDatabaseContext? context = null)
     {
         if (objectToCreate == null)
