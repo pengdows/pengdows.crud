@@ -86,26 +86,26 @@ jobs:
 
       - name: Pack with custom version
         run: |
-          dotnet pack pengdows.crud/pengdows.crud.csproj -c Release \
-            --no-build \
-            -p:PackageVersion=${{ steps.version.outputs.version }}
           dotnet pack pengdows.crud.abstractions/pengdows.crud.abstractions.csproj -c Release \
             --no-build \
             -p:PackageVersion=${{ steps.version.outputs.version }}
           dotnet pack pengdows.crud.fakeDb/pengdows.crud.fakeDb.csproj -c Release \
             --no-build \
             -p:PackageVersion=${{ steps.version.outputs.version }}
+          dotnet pack pengdows.crud/pengdows.crud.csproj -c Release \
+            --no-build \
+            -p:PackageVersion=${{ steps.version.outputs.version }}
 
       - name: Push package to NuGet
         run: |
           set -euo pipefail
-          dotnet nuget push pengdows.crud/bin/Release/pengdows.crud.${{ steps.version.outputs.version_short }}.nupkg \
-            --source https://api.nuget.org/v3/index.json \
-            --api-key ${{ secrets.NUGET_API_KEY }}
           dotnet nuget push pengdows.crud.abstractions/bin/Release/pengdows.crud.abstractions.${{ steps.version.outputs.version_short }}.nupkg \
             --source https://api.nuget.org/v3/index.json \
             --api-key ${{ secrets.NUGET_API_KEY }}
           dotnet nuget push pengdows.crud.fakeDb/bin/Release/pengdows.crud.fakeDb.${{ steps.version.outputs.version_short }}.nupkg \
+            --source https://api.nuget.org/v3/index.json \
+            --api-key ${{ secrets.NUGET_API_KEY }}
+          dotnet nuget push pengdows.crud/bin/Release/pengdows.crud.${{ steps.version.outputs.version_short }}.nupkg \
             --source https://api.nuget.org/v3/index.json \
             --api-key ${{ secrets.NUGET_API_KEY }}
 
