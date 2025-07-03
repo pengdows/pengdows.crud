@@ -4,6 +4,8 @@
         <TargetFrameworks>net8.0</TargetFrameworks>
         <IsPackable>false</IsPackable>
         <Nullable>enable</Nullable>
+        <AssemblyVersion>1.0.0.0</AssemblyVersion>
+        <FileVersion>1.0.0.0</FileVersion>
     </PropertyGroup>
 
     <PropertyGroup>
