@@ -127,14 +127,17 @@ Topics include:
 
 ```bash
 dotnet add package pengdows.crud
+dotnet add package pengdows.crud.abstractions
 ```
 
+  
 If you only need the core interfaces for custom implementations, reference the
 `pengdows.crud.abstractions` package:
 
 ```bash
 dotnet add package pengdows.crud.abstractions
 ```
+
 
 ```csharp
 using System.Data.SqlClient;
