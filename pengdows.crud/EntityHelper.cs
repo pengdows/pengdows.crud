@@ -455,10 +455,11 @@ public class EntityHelper<TEntity, TRowID> :
             throw new InvalidOperationException("Original record not found for update.");
 
         var (setClause, parameters) = BuildSetClause(objectToUpdate, original, context);
-        if (_versionColumn != null) IncrementVersion(setClause);
 
         if (setClause.Length == 0)
             throw new InvalidOperationException("No changes detected for update.");
+
+        if (_versionColumn != null) IncrementVersion(setClause);
 
         var pId = context.CreateDbParameter(_idColumn!.DbType,
             _idColumn.PropertyInfo.GetValue(objectToUpdate)!);
