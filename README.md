@@ -21,6 +21,7 @@
 ## ✅ Key Features
 
 - `EntityHelper<TEntity, TRowID>`: automatic CRUD with custom SQL injection points.
+- `TRowID` must be a primitive integer type, `Guid`, or `string` (nullable forms are allowed, but retrieval by ID requires a non-null value).
 - Full support for:
   - Enums
   - JSON

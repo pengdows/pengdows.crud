@@ -5,6 +5,7 @@ using System.Data.Common;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
+using System;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;
@@ -19,6 +20,11 @@ public class EntityHelper<TEntity, TRowID> :
 {
     // Cache for compiled property setters
     private static readonly ConcurrentDictionary<PropertyInfo, Action<object, object?>> _propertySetters = new();
+
+    static EntityHelper()
+    {
+        ValidateRowIdType();
+    }
     private readonly IAuditValueResolver? _auditValueResolver;
     private IDatabaseContext _context;
 
@@ -228,6 +234,12 @@ public class EntityHelper<TEntity, TRowID> :
         return sc;
     }
 
+    public async Task<int> DeleteAsync(TRowID id, IDatabaseContext? context = null)
+    {
+        var sc = BuildDelete(id, context);
+        return await sc.ExecuteNonQueryAsync();
+    }
+
 
     public Action<object, object?> GetOrCreateSetter(PropertyInfo prop)
     {
@@ -292,6 +304,9 @@ public class EntityHelper<TEntity, TRowID> :
 
         var wrappedColumnName = wrappedAlias +
                                 WrapObjectName(_idColumn.Name);
+
+        if (listOfIds != null && listOfIds.Any(id => Utils.IsNullOrDbNull(id)))
+            throw new ArgumentException("IDs cannot be null", nameof(listOfIds));
         BuildWhere(
             wrappedColumnName,
             listOfIds,
@@ -440,10 +455,11 @@ public class EntityHelper<TEntity, TRowID> :
             throw new InvalidOperationException("Original record not found for update.");
 
         var (setClause, parameters) = BuildSetClause(objectToUpdate, original, context);
-        if (_versionColumn != null) IncrementVersion(setClause);
 
         if (setClause.Length == 0)
             throw new InvalidOperationException("No changes detected for update.");
+
+        if (_versionColumn != null) IncrementVersion(setClause);
 
         var pId = context.CreateDbParameter(_idColumn!.DbType,
             _idColumn.PropertyInfo.GetValue(objectToUpdate)!);
@@ -465,6 +481,40 @@ public class EntityHelper<TEntity, TRowID> :
 
         sc.AddParameters(parameters);
         return sc;
+    }
+
+    public Task<int> UpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null)
+    {
+        var ctx = context ?? _context;
+        return UpdateAsync(objectToUpdate, _versionColumn != null, ctx);
+    }
+
+    public async Task<int> UpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context = null)
+    {
+        try
+        {
+            var sc = await BuildUpdateAsync(objectToUpdate, loadOriginal, context);
+            return await sc.ExecuteNonQueryAsync();
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("No changes detected for update."))
+        {
+            return 0;
+        }
+    }
+
+    public async Task<int> UpsertAsync(TEntity entity, IDatabaseContext? context = null)
+    {
+        if (entity == null) throw new ArgumentNullException(nameof(entity));
+
+        context ??= _context;
+
+        var idValue = _idColumn!.PropertyInfo.GetValue(entity);
+        if (IsDefaultId(idValue))
+        {
+            return await CreateAsync(entity, context) ? 1 : 0;
+        }
+
+        return await UpdateAsync(entity, context);
     }
 
     private async Task<TEntity?> LoadOriginalAsync(TEntity objectToUpdate)
@@ -599,5 +649,56 @@ public class EntityHelper<TEntity, TRowID> :
     private string WrapObjectName(string objectName)
     {
         return _context.WrapObjectName(objectName);
+    }
+
+    private static bool IsDefaultId(object? value)
+    {
+        if (Utils.IsNullOrDbNull(value))
+            return true;
+
+        var type = typeof(TRowID);
+        var underlying = Nullable.GetUnderlyingType(type) ?? type;
+
+        if (underlying == typeof(string))
+            return value as string == string.Empty;
+
+        if (underlying == typeof(Guid))
+            return value is Guid g && g == Guid.Empty;
+
+        if (Utils.IsZeroNumeric(value!))
+            return true;
+
+        return EqualityComparer<TRowID>.Default.Equals((TRowID)value!, default!);
+    }
+
+    private static void ValidateRowIdType()
+    {
+        var type = typeof(TRowID);
+        var underlying = Nullable.GetUnderlyingType(type) ?? type;
+
+        bool isValid = underlying == typeof(string) || underlying == typeof(Guid);
+        if (!isValid)
+        {
+            switch (Type.GetTypeCode(underlying))
+            {
+                case TypeCode.Byte:
+                case TypeCode.SByte:
+                case TypeCode.Int16:
+                case TypeCode.UInt16:
+                case TypeCode.Int32:
+                case TypeCode.UInt32:
+                case TypeCode.Int64:
+                case TypeCode.UInt64:
+                    isValid = true;
+                    break;
+                default:
+                    isValid = false;
+                    break;
+            }
+        }
+
+        if (!isValid)
+            throw new NotSupportedException(
+                $"TRowID type '{type.FullName}' is not supported. Use string, Guid, or integer types.");
     }
 }
