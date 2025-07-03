@@ -31,6 +31,12 @@ public interface IEntityHelper<TEntity, TRowID> where TEntity : class, new()
     ISqlContainer BuildCreate(TEntity objectToCreate, IDatabaseContext? context = null);
 
     /// <summary>
+    /// Executes a SQL INSERT for the given object.
+    /// Returns true when exactly one row was affected.
+    /// </summary>
+    Task<bool> CreateAsync(TEntity entity, IDatabaseContext context);
+
+    /// <summary>
     /// Returns a SELECT clause with no WHERE clause, aliased.
     /// </summary>
     ISqlContainer BuildBaseRetrieve(string alias, IDatabaseContext? context = null);
@@ -71,6 +77,28 @@ public interface IEntityHelper<TEntity, TRowID> where TEntity : class, new()
     /// Builds a DELETE by primary key.
     /// </summary>
     ISqlContainer BuildDelete(TRowID id, IDatabaseContext? context = null);
+
+    /// <summary>
+    /// Executes a DELETE for the given primary key and returns the number of affected rows.
+    /// </summary>
+    Task<int> DeleteAsync(TRowID id, IDatabaseContext? context = null);
+
+    /// <summary>
+    /// Executes an UPDATE for the given object and returns the number of affected rows.
+    /// Returns 0 when no changes are detected.
+    /// </summary>
+    Task<int> UpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null);
+
+    /// <summary>
+    /// Executes an UPDATE for the given object, optionally reloading the original,
+    /// and returns the number of affected rows. Returns 0 when no changes are detected.
+    /// </summary>
+    Task<int> UpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context = null);
+
+    /// <summary>
+    /// Inserts the entity if the ID is null or default, otherwise updates it. Returns the affected row count.
+    /// </summary>
+    Task<int> UpsertAsync(TEntity entity, IDatabaseContext? context = null);
 
     /// <summary>
     /// Loads a single object from the database using primary key values.
