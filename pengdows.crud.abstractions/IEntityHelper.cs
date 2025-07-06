@@ -84,6 +84,16 @@ public interface IEntityHelper<TEntity, TRowID> where TEntity : class, new()
     Task<int> DeleteAsync(TRowID id, IDatabaseContext? context = null);
 
     /// <summary>
+    /// Loads all entities matching the provided IDs.
+    /// </summary>
+    Task<List<TEntity>> RetrieveAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null);
+
+    /// <summary>
+    /// Executes a DELETE for all provided IDs and returns the number of affected rows.
+    /// </summary>
+    Task<int> DeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null);
+
+    /// <summary>
     /// Executes an UPDATE for the given object and returns the number of affected rows.
     /// Returns 0 when no changes are detected.
     /// </summary>
@@ -104,6 +114,11 @@ public interface IEntityHelper<TEntity, TRowID> where TEntity : class, new()
     /// Loads a single object from the database using primary key values.
     /// </summary>
     Task<TEntity?> RetrieveOneAsync(TEntity objectToRetrieve, IDatabaseContext? context = null);
+
+    /// <summary>
+    /// Loads a single object from the database using the row ID.
+    /// </summary>
+    Task<TEntity?> RetrieveOneAsync(TRowID id, IDatabaseContext? context = null);
 
     /// <summary>
     /// Loads a single object using a custom SQL container.
