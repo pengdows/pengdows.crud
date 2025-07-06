@@ -295,6 +295,14 @@ public class EntityHelper<TEntity, TRowID> :
         return LoadSingleAsync(sc);
     }
 
+    public Task<TEntity?> RetrieveOneAsync(TRowID id, IDatabaseContext? context = null)
+    {
+        var ctx = context ?? _context;
+        var list = new List<TRowID> { id };
+        var sc = BuildRetrieve(list, ctx);
+        return LoadSingleAsync(sc);
+    }
+
     public async Task<TEntity?> LoadSingleAsync(ISqlContainer sc)
     {
         await using var reader = await sc.ExecuteReaderAsync().ConfigureAwait(false);

@@ -116,6 +116,11 @@ public interface IEntityHelper<TEntity, TRowID> where TEntity : class, new()
     Task<TEntity?> RetrieveOneAsync(TEntity objectToRetrieve, IDatabaseContext? context = null);
 
     /// <summary>
+    /// Loads a single object from the database using the row ID.
+    /// </summary>
+    Task<TEntity?> RetrieveOneAsync(TRowID id, IDatabaseContext? context = null);
+
+    /// <summary>
     /// Loads a single object using a custom SQL container.
     /// </summary>
     Task<TEntity?> LoadSingleAsync(ISqlContainer sc);

@@ -77,6 +77,20 @@ public class UpdateDeleteAsyncTests : SqlLiteContextTestBase
         Assert.Equal(ids.Count, affected);
     }
 
+    [Fact]
+    public async Task RetrieveOneAsync_ById_ReturnsRow()
+    {
+        await BuildTestTable();
+        var entity = new TestEntity { Name = Guid.NewGuid().ToString() };
+        await helper.CreateAsync(entity, Context);
+
+        var loaded = (await helper.LoadListAsync(helper.BuildBaseRetrieve("a"))).First();
+        var result = await helper.RetrieveOneAsync(loaded.Id);
+
+        Assert.NotNull(result);
+        Assert.Equal(loaded.Id, result!.Id);
+    }
+
     private async Task BuildTestTable()
     {
         var qp = Context.QuotePrefix;
