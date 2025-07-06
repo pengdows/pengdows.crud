@@ -240,6 +240,32 @@ public class EntityHelper<TEntity, TRowID> :
         return await sc.ExecuteNonQueryAsync();
     }
 
+    public async Task<List<TEntity>> RetrieveAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null)
+    {
+        if (ids == null) throw new ArgumentNullException(nameof(ids));
+
+        var list = ids.Distinct().ToList();
+        if (list.Count == 0) return new List<TEntity>();
+
+        var ctx = context ?? _context;
+        var sc = BuildRetrieve(list, ctx);
+        return await LoadListAsync(sc);
+    }
+
+    public async Task<int> DeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null)
+    {
+        if (ids == null) throw new ArgumentNullException(nameof(ids));
+
+        var list = ids.Distinct().ToList();
+        if (list.Count == 0) return 0;
+
+        var ctx = context ?? _context;
+        var sc = ctx.CreateSqlContainer();
+        sc.Query.Append("DELETE FROM ").Append(WrappedTableName);
+        BuildWhere(WrapObjectName(_idColumn!.Name), list, sc);
+        return await sc.ExecuteNonQueryAsync();
+    }
+
 
     public Action<object, object?> GetOrCreateSetter(PropertyInfo prop)
     {

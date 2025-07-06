@@ -49,6 +49,34 @@ public class UpdateDeleteAsyncTests : SqlLiteContextTestBase
         Assert.Equal(1, affected);
     }
 
+    [Fact]
+    public async Task RetrieveAsync_ReturnsRows()
+    {
+        await BuildTestTable();
+        var e1 = new TestEntity { Name = Guid.NewGuid().ToString() };
+        var e2 = new TestEntity { Name = Guid.NewGuid().ToString() };
+        await helper.CreateAsync(e1, Context);
+        await helper.CreateAsync(e2, Context);
+
+        var ids = (await helper.LoadListAsync(helper.BuildBaseRetrieve("a"))).Select(x => x.Id).ToList();
+        var result = await helper.RetrieveAsync(ids);
+        Assert.Equal(ids.Count, result.Count);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_List_RemovesRows()
+    {
+        await BuildTestTable();
+        var e1 = new TestEntity { Name = Guid.NewGuid().ToString() };
+        var e2 = new TestEntity { Name = Guid.NewGuid().ToString() };
+        await helper.CreateAsync(e1, Context);
+        await helper.CreateAsync(e2, Context);
+
+        var ids = (await helper.LoadListAsync(helper.BuildBaseRetrieve("a"))).Select(x => x.Id).ToList();
+        var affected = await helper.DeleteAsync(ids);
+        Assert.Equal(ids.Count, affected);
+    }
+
     private async Task BuildTestTable()
     {
         var qp = Context.QuotePrefix;
