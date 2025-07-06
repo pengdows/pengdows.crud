@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
+using System.Reflection;
 using pengdows.crud.enums;
 using pengdows.crud.FakeDb;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -127,5 +128,36 @@ public class DataSourceInformationTests
         // Assert: named parameters flags
         Assert.Equal(db != SupportedDatabase.Unknown, info.SupportsNamedParameters);
         Assert.Equal(expectedRequiresStoredProcParameterNameMatch, info.RequiresStoredProcParameterNameMatch);
+    }
+
+    [Theory]
+    [MemberData(nameof(DataSourceTestData.AllDatabases), MemberType = typeof(DataSourceTestData))]
+    public void GetDatabaseVersion_Returns_Version(SupportedDatabase db, DataTable schema, Dictionary<string, object> scalars)
+    {
+        var factory = new FakeDbFactory(db.ToString());
+        var connection = factory.CreateConnection();
+        connection.ConnectionString = $"Data Source=test;EmulatedProduct={db}";
+        var tracked = new FakeTrackedConnection(connection, schema, scalars);
+
+        var info = DataSourceInformation.Create(tracked, NullLoggerFactory.Instance);
+
+        var result = info.GetDatabaseVersion(tracked);
+        Assert.Equal("42", result);
+    }
+
+    [Fact]
+    public void GetDatabaseVersion_UnknownProduct_ReturnsUnknown()
+    {
+        var factory = new FakeDbFactory(SupportedDatabase.SqlServer);
+        var connection = factory.CreateConnection();
+        connection.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}";
+        var tracked = new FakeTrackedConnection(connection, DataSourceInformation.BuildEmptySchema("test", "1", "@", "@{0}", 64, "@w+", "@w+", true), new Dictionary<string, object>());
+        var info = DataSourceInformation.Create(tracked, NullLoggerFactory.Instance);
+
+        var prop = typeof(DataSourceInformation).GetProperty("Product", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+        prop!.SetValue(info, SupportedDatabase.Unknown);
+
+        var result = info.GetDatabaseVersion(tracked);
+        Assert.Equal("Unknown Database Version", result);
     }
 }
