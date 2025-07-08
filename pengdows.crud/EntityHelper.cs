@@ -290,8 +290,8 @@ public class EntityHelper<TEntity, TRowID> :
     public Task<TEntity?> RetrieveOneAsync(TEntity objectToRetrieve, IDatabaseContext? context = null)
     {
         var ctx = context ?? _context;
-        var id = (TRowID)_idColumn.PropertyInfo.GetValue(objectToRetrieve);
-        var list = new List<TRowID>() { id };
+        //var id = (TRowID)_idColumn.PropertyInfo.GetValue(objectToRetrieve);
+        var list = new List<TEntity>() { objectToRetrieve };
         var sc = BuildRetrieve(list, null, ctx);
         return LoadSingleAsync(sc);
     }
