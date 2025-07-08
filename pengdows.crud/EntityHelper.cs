@@ -290,8 +290,8 @@ public class EntityHelper<TEntity, TRowID> :
     public Task<TEntity?> RetrieveOneAsync(TEntity objectToRetrieve, IDatabaseContext? context = null)
     {
         var ctx = context ?? _context;
-        var id = (TRowID)_idColumn.PropertyInfo.GetValue(objectToRetrieve);
-        var list = new List<TRowID>() { id };
+        //var id = (TRowID)_idColumn.PropertyInfo.GetValue(objectToRetrieve);
+        var list = new List<TEntity>() { objectToRetrieve };
         var sc = BuildRetrieve(list, null, ctx);
         return LoadSingleAsync(sc);
     }
@@ -554,7 +554,11 @@ public class EntityHelper<TEntity, TRowID> :
 
     private async Task<TEntity?> LoadOriginalAsync(TEntity objectToUpdate)
     {
-        return await RetrieveOneAsync(objectToUpdate);
+        var idValue = _idColumn!.PropertyInfo.GetValue(objectToUpdate);
+        if (IsDefaultId(idValue))
+            return null;
+
+        return await RetrieveOneAsync((TRowID)idValue!);
     }
 
     private (StringBuilder clause, List<DbParameter> parameters) BuildSetClause(TEntity updated, TEntity? original, IDatabaseContext context)
