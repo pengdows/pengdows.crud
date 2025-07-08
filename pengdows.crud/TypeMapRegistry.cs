@@ -32,14 +32,19 @@ public class TypeMapRegistry : ITypeMapRegistry
                 var colAttr = prop.GetCustomAttribute<ColumnAttribute>();
                 if (colAttr != null)
                 {
+                    var idAttr = prop.GetCustomAttribute<IdAttribute>();
+                    var hasNonInsertable =
+                        prop.GetCustomAttribute<NonInsertableAttribute>() != null ||
+                        (idAttr != null && !idAttr.Writable);
                     var ci = new ColumnInfo
                     {
                         Name = colAttr.Name,
                         PropertyInfo = prop,
                         DbType = colAttr.Type,
-                        IsNonUpdateable = prop.GetCustomAttribute<NonUpdateableAttribute>() != null,
-                        IsId = prop.GetCustomAttribute<IdAttribute>() != null,
-                        IsIdIsWritable = prop.GetCustomAttribute<IdAttribute>()?.Writable ?? true,
+                        IsNonUpdateable = prop.GetCustomAttribute<NonUpdateableAttribute>() != null || idAttr != null,
+                        IsNonInsertable = hasNonInsertable,
+                        IsId = idAttr != null,
+                        IsIdIsWritable = hasNonInsertable ? false : idAttr?.Writable ?? true,
                         IsEnum = prop.GetCustomAttribute<EnumColumnAttribute>() != null,
                         EnumType = prop.GetCustomAttribute<EnumColumnAttribute>()?.EnumType,
                         IsJsonType = prop.GetCustomAttribute<JsonAttribute>() != null,

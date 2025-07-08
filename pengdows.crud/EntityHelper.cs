@@ -139,6 +139,7 @@ public class EntityHelper<TEntity, TRowID> :
         SetAuditFields(objectToCreate, false);
         foreach (var column in _tableInfo.Columns.Values)
         {
+            if (column.IsNonInsertable) continue;
             if (column.IsId && !column.IsIdIsWritable) continue;
 
             var value = column.MakeParameterValueFromField(objectToCreate);
@@ -649,7 +650,14 @@ public class EntityHelper<TEntity, TRowID> :
 
     private void SetAuditFields(TEntity obj, bool updateOnly)
     {
-        if (_userFieldType == null || obj == null || _auditValueResolver == null)
+        if (obj == null || _auditValueResolver == null)
+            return;
+
+        // Skip resolving audit values when no audit columns are present
+        if (_tableInfo.CreatedBy == null &&
+            _tableInfo.CreatedOn == null &&
+            _tableInfo.LastUpdatedBy == null &&
+            _tableInfo.LastUpdatedOn == null)
             return;
 
         var auditValues = _auditValueResolver.Resolve();
