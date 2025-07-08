@@ -1,5 +1,6 @@
 #region
 
+using System;
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics;
@@ -16,6 +17,7 @@ public class TrackedConnection : ITrackedConnection, IAsyncDisposable
 {
     private readonly DbConnection _connection;
     private readonly bool _isSharedConnection;
+    private readonly Func<ILockerAsync> _lockFactory;
     private readonly ILogger<TrackedConnection> _logger;
     private readonly string _name;
     private readonly Action<DbConnection>? _onDispose;
@@ -46,6 +48,11 @@ public class TrackedConnection : ITrackedConnection, IAsyncDisposable
         {
             _isSharedConnection = true;
             _semaphoreSlim = new SemaphoreSlim(1, 1);
+            _lockFactory = () => new RealAsyncLocker(_semaphoreSlim);
+        }
+        else
+        {
+            _lockFactory = () => NoOpAsyncLocker.Instance;
         }
 
         if (_onStateChange != null) _connection.StateChange += _onStateChange;
@@ -99,7 +106,7 @@ public class TrackedConnection : ITrackedConnection, IAsyncDisposable
 
     public ILockerAsync GetLock()
     {
-        return _isSharedConnection ? new RealAsyncLocker(_semaphoreSlim) : NoOpAsyncLocker.Instance;
+        return _lockFactory();
     }
 
     public DataTable GetSchema()
