@@ -16,6 +16,7 @@ public class ColumnInfo : IColumnInfo
     public bool IsId { get; init; } = false;
     public DbType DbType { get; set; }
     public bool IsNonUpdateable { get; set; }
+    public bool IsNonInsertable { get; set; }
     public bool IsEnum { get; set; }
     public bool IsJsonType { get; set; }
     public JsonSerializerOptions JsonSerializerOptions { get; set; } = JsonSerializerOptions.Default;

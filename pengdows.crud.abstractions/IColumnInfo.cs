@@ -15,6 +15,7 @@ public interface IColumnInfo
     bool IsId { get; init; }
     DbType DbType { get; set; }
     bool IsNonUpdateable { get; set; }
+    bool IsNonInsertable { get; set; }
     bool IsEnum { get; set; }
     Type? EnumType { get; set; }
     bool IsJsonType { get; set; }
@@ -26,5 +27,4 @@ public interface IColumnInfo
     bool IsCreatedOn { get; set; }
     bool IsLastUpdatedBy { get; set; }
     bool IsLastUpdatedOn { get; set; }
-    object? MakeParameterValueFromField<T>(T objectToCreate);
-}
+    object? MakeParameterValueFromField<T>(T objectToCreate);}

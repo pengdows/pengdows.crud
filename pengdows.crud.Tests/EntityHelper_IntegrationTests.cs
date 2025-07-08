@@ -108,6 +108,41 @@ public class EntityHelper_IntegrationTests : SqlLiteContextTestBase
     }
 
     [Fact]
+    public void BuildCreate_SkipsNonInsertableId()
+    {
+        var typeMap = new TypeMapRegistry();
+        typeMap.Register<NonInsertableIdEntity>();
+
+        var helper = new EntityHelper<NonInsertableIdEntity, int>(Context, new StubAuditValueResolver("fred"));
+
+        var entity = new NonInsertableIdEntity { Id = 1, Name = "Hello" };
+
+        var container = helper.BuildCreate(entity);
+        var sql = container.Query.ToString();
+
+        var columnId = Context.WrapObjectName("Id");
+        var columnName = Context.WrapObjectName("Name");
+        Assert.DoesNotContain(columnId, sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(columnName, sql, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void BuildCreate_SetsAuditOnFields_WhenNoUserFields()
+    {
+        var typeMap = new TypeMapRegistry();
+        typeMap.Register<AuditOnOnlyEntity>();
+
+        var helper = new EntityHelper<AuditOnOnlyEntity, int>(Context, new StubAuditValueResolver("fred"));
+
+        var entity = new AuditOnOnlyEntity { Name = "Hello" };
+
+        helper.BuildCreate(entity);
+
+        Assert.NotEqual(default, entity.CreatedOn);
+        Assert.NotEqual(default, entity.LastUpdatedOn);
+    }
+
+    [Fact]
     public async Task TryUpdateVersionWithLoadOriginal()
     {
         await BuildTestTable();
