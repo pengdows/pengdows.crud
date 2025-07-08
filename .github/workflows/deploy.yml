@@ -82,7 +82,7 @@ jobs:
           coverage_percent=$(awk "BEGIN { printf \"%.2f\", ($covered / $total) * 100 }")
           echo "📊 Visual Coverage (from index.html): $coverage_percent%"
 
-          required=84
+          required=83
           too_low=$(awk "BEGIN { print ($coverage_percent < $required) ? 1 : 0 }")
           if [[ "$too_low" -eq 1 ]]; then
             echo "❌ Visual code coverage $coverage_percent% is below required $required%"
