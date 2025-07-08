@@ -50,6 +50,47 @@ jobs:
             -reporttypes:HtmlSummary \
             -assemblyfilters:+pengdows.crud
 
+      - name: Enforce visual coverage from HTML report
+        run: |
+          set -euo pipefail
+
+          html_file=$(find coverage-report -name "index.html" | head -n 1)
+
+          if [[ ! -f "$html_file" ]]; then
+            echo "❌ index.html not found!"
+            exit 1
+          fi
+
+          echo "🕵️ Dumping coverage-related lines from index.html:"
+          grep -i coverage "$html_file" || true
+
+          coverage_line=$(grep -Eo '[0-9]+ of [0-9]+' "$html_file" | head -n 1)
+
+          if [[ -z "$coverage_line" ]]; then
+            echo "❌ Could not extract line coverage info"
+            exit 1
+          fi
+
+          covered=$(echo "$coverage_line" | cut -d' ' -f1)
+          total=$(echo "$coverage_line" | cut -d' ' -f3)
+
+          if [[ -z "$covered" || -z "$total" ]]; then
+            echo "❌ Could not parse covered or total line count"
+            exit 1
+          fi
+
+          coverage_percent=$(awk "BEGIN { printf \"%.2f\", ($covered / $total) * 100 }")
+          echo "📊 Visual Coverage (from index.html): $coverage_percent%"
+
+          required=84
+          too_low=$(awk "BEGIN { print ($coverage_percent < $required) ? 1 : 0 }")
+          if [[ "$too_low" -eq 1 ]]; then
+            echo "❌ Visual code coverage $coverage_percent% is below required $required%"
+            exit 1
+          else
+            echo "✅ Visual code coverage $coverage_percent% meets threshold"
+          fi
+
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
         with:
