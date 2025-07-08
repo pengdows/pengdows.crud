@@ -131,7 +131,7 @@ public class TrackedReaderTests
     [Fact]
     public async Task ReadAsync_DisposesAfterLastRow()
     {
-        var reader = new Mock<fakeDbDataReader>();
+        var reader = new Mock<FakeDbDataReader>();
         reader.SetupSequence(r => r.ReadAsync(CancellationToken.None))
             .ReturnsAsync(true)
             .ReturnsAsync(false);
@@ -166,7 +166,8 @@ public class TrackedReaderTests
         var result = tracked.NextResult();
 
         Assert.False(result);
-        reader.Verify(r => r.NextResult(), Times.Never);    }
+        reader.Verify(r => r.NextResult(), Times.Never);
+    }
 
     [Fact]
     public async Task DisposeAsync_ClosesConnection_WhenShouldCloseTrue()
@@ -239,7 +240,7 @@ public class TrackedReaderTests
             ["Date"] = new DateTime(2025, 1, 1)
         };
 
-        using var reader = new fakeDbDataReader(new[] { row });
+        using var reader = new FakeDbDataReader(new[] { row });
         reader.Read();
 
         var tracked = new TrackedReader(reader, Mock.Of<ITrackedConnection>(), Mock.Of<IAsyncDisposable>(), false);
