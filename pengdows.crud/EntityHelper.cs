@@ -554,7 +554,11 @@ public class EntityHelper<TEntity, TRowID> :
 
     private async Task<TEntity?> LoadOriginalAsync(TEntity objectToUpdate)
     {
-        return await RetrieveOneAsync(objectToUpdate);
+        var idValue = _idColumn!.PropertyInfo.GetValue(objectToUpdate);
+        if (IsDefaultId(idValue))
+            return null;
+
+        return await RetrieveOneAsync((TRowID)idValue!);
     }
 
     private (StringBuilder clause, List<DbParameter> parameters) BuildSetClause(TEntity updated, TEntity? original, IDatabaseContext context)
