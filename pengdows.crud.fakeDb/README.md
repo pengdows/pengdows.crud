@@ -16,5 +16,19 @@ var context = new DatabaseContext(
     factory);
 ```
 
-You can also instantiate `FakeDbConnection` or `FakeDbDataReader` directly if you need lower-level control for wrappers and utility classes.
+You can also use the fake provider without `DatabaseContext`. Create a `FakeDbConnection`
+directly and work with it using normal ADO.NET APIs:
+
+```csharp
+using pengdows.crud.FakeDb;
+
+using var connection = new FakeDbConnection("Data Source=ignored;EmulatedProduct=Sqlite");
+await connection.OpenAsync();
+using var command = connection.CreateCommand();
+command.CommandText = "SELECT 1";
+using var reader = await command.ExecuteReaderAsync();
+```
+
+This makes `pengdows.crud.fakeDb` handy for testing any code that relies on
+`DbConnection` or `DbDataReader` without spinning up a real database.
 
