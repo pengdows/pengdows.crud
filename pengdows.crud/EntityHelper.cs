@@ -137,6 +137,19 @@ public class EntityHelper<TEntity, TRowID> :
 
         var sc = ctx.CreateSqlContainer();
         SetAuditFields(objectToCreate, false);
+
+        // Initialize version to 1 if a version column is present and no value has been set
+        if (_versionColumn != null)
+        {
+            var currentValue = _versionColumn.PropertyInfo.GetValue(objectToCreate);
+            if (currentValue == null || Utils.IsZeroNumeric(currentValue))
+            {
+                var targetType = Nullable.GetUnderlyingType(_versionColumn.PropertyInfo.PropertyType) ??
+                                 _versionColumn.PropertyInfo.PropertyType;
+                var one = Convert.ChangeType(1, targetType);
+                _versionColumn.PropertyInfo.SetValue(objectToCreate, one);
+            }
+        }
         foreach (var column in _tableInfo.Columns.Values)
         {
             if (column.IsNonInsertable) continue;
