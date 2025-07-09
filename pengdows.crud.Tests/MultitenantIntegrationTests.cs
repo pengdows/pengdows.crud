@@ -19,31 +19,31 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-[Table(Name = "Users")]
+[Table("Users")]
 public class User
 {
     [Id]
     public int Id { get; set; }
 
-    [Column(Type = DbType.String)]
+    [Column("Name", DbType.String)]
     public string Name { get; set; } = string.Empty;
 
-    [Column(Type = DbType.DateTime)]
+    [Column("CreatedOn", DbType.DateTime)]
     [CreatedOn]
     public DateTime CreatedOn { get; set; }
 
-    [Column(Type = DbType.DateTime)]
+    [Column("LastUpdatedOn", DbType.DateTime)]
     [LastUpdatedOn]
     public DateTime? LastUpdatedOn { get; set; }
 
-    [Column(Type = DbType.Int32)]
+    [Column("Version", DbType.Int32)]
     [Version]
     public int Version { get; set; }
 }
 
-public class AuditValueResolver : IAuditValueResolver
+public class TestAuditValueResolver : IAuditValueResolver
 {
-    public AuditValues Resolve() => new AuditValues { UserId = "system", UtcNow = DateTime.UtcNow };
+    public IAuditValues Resolve() => new AuditValues { UserId = "system", UtcNow = DateTime.UtcNow };
 }
 
 public class MultitenantIntegrationTests
@@ -118,7 +118,7 @@ public class MultitenantIntegrationTests
                 using var transaction = context.BeginTransaction(IsolationProfile.Default);
                 try
                 {
-                    var helper = new EntityHelper<User, int>(context, new AuditValueResolver());
+                    var helper = new EntityHelper<User, int>(context, new TestAuditValueResolver());
                     await PerformCrud(helper, transaction);
                     transaction.Commit();
                 }
