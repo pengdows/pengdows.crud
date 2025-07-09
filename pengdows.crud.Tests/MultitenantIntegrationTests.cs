@@ -94,7 +94,9 @@ public class MultitenantIntegrationTests
             var createSc = helper.BuildCreate(user);
             await createSc.ExecuteNonQueryAsync();
             var id = dbType == SupportedDatabase.Sqlite
-                ? (int)(await new SqlContainer(transaction).AppendQuery("SELECT last_insert_rowid()").ExecuteScalarAsync())
+                ? (int)(await new SqlContainer(transaction)
+                    .AppendQuery("SELECT last_insert_rowid()")
+                    .ExecuteScalarAsync<int>())
                 : user.Id;
 
             var retrieveSc = helper.BuildRetrieve(new[] { id });
@@ -115,7 +117,7 @@ public class MultitenantIntegrationTests
         {
             tasks[i] = Task.Run(async () =>
             {
-                using var transaction = context.BeginTransaction(IsolationProfile.Default);
+                using var transaction = context.BeginTransaction(IsolationProfile.SafeNonBlockingReads);
                 try
                 {
                     var helper = new EntityHelper<User, int>(context, new TestAuditValueResolver());
@@ -132,8 +134,9 @@ public class MultitenantIntegrationTests
 
         await Task.WhenAll(tasks);
 
-        var countSc = new SqlContainer(context).AppendQuery("SELECT COUNT(*) FROM Users");
-        var count = await countSc.ExecuteScalarAsync();
+        var countSc = new SqlContainer(context)
+            .AppendQuery("SELECT COUNT(*) FROM Users");
+        var count = await countSc.ExecuteScalarAsync<long>();
         Assert.Equal(0L, count);
     }
 }
