@@ -22,6 +22,7 @@ namespace pengdows.crud.Tests;
 public class User
 {
     [Id]
+    [Column("Id", DbType.Int32)]
     public int Id { get; set; }
 
     [Column("Name", DbType.String)]
