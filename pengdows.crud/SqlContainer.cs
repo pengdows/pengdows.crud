@@ -5,6 +5,7 @@ using System.Data.Common;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Linq;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
@@ -241,7 +242,13 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
         OpenConnection(conn);
         var cmd = CreateCommand(conn);
         cmd.CommandType = CommandType.Text;
-        _logger.LogInformation(Query.ToString());
+        _logger.LogInformation("Executing SQL: {Sql}", Query.ToString());
+        if (_parameters.Count > 0 && _logger.IsEnabled(LogLevel.Debug))
+        {
+            var paramDump = string.Join(", ",
+                _parameters.Values.Select(p => $"{p.ParameterName}={p.Value ?? "NULL"}"));
+            _logger.LogDebug("Parameters: {Parameters}", paramDump);
+        }
         cmd.CommandText = (commandType == CommandType.StoredProcedure)
             ? WrapForStoredProc(executionType)
             : Query.ToString();
