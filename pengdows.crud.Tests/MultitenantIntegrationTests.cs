@@ -6,14 +6,9 @@ using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using pengdows.crud;
 using pengdows.crud.attributes;
-using pengdows.crud.configuration;
 using pengdows.crud.enums;
-using pengdows.crud.isolation;
 using pengdows.crud.tenant;
-using pengdows.crud.wrappers;
 using Xunit;
 
 namespace pengdows.crud.Tests;

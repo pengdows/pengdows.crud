@@ -1,6 +1,7 @@
 #region
 
 using System.Collections;
+using System.Data;
 using System.Data.Common;
 
 #endregion
@@ -176,4 +177,5 @@ public class FakeDbDataReader : DbDataReader
 
     public override void Close()
     {
-    }}
+    }
+}
