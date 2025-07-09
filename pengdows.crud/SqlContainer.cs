@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Linq;
 using pengdows.crud.collections;
 using pengdows.crud.connection;
 using pengdows.crud.dialects;
@@ -549,9 +550,21 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         await OpenConnectionAsync(conn, cancellationToken).ConfigureAwait(false);
         var cmd = CreateCommand(conn);
         cmd.CommandType = CommandType.Text;
+<<<<<<< HEAD
         // Compute command text once to avoid double ToString() and guard logging
         var cmdText = (commandType == CommandType.StoredProcedure)
             ? WrapForStoredProc(executionType, includeParameters: true)
+=======
+        _logger.LogInformation("Executing SQL: {Sql}", Query.ToString());
+        if (_parameters.Count > 0 && _logger.IsEnabled(LogLevel.Debug))
+        {
+            var paramDump = string.Join(", ",
+                _parameters.Values.Select(p => $"{p.ParameterName}={p.Value ?? "NULL"}"));
+            _logger.LogDebug("Parameters: {Parameters}", paramDump);
+        }
+        cmd.CommandText = (commandType == CommandType.StoredProcedure)
+            ? WrapForStoredProc(executionType)
+>>>>>>> d1920c5 (Add tests for SafeAsyncDisposableBase)
             : Query.ToString();
         if (_logger.IsEnabled(LogLevel.Information))
         {

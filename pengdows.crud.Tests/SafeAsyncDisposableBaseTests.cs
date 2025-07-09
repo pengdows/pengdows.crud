@@ -94,7 +94,6 @@ public class SafeAsyncDisposableBaseTests
         public int ManagedCount { get; private set; }
         protected override void DisposeManaged() => ManagedCount++;
     }
-
     [Fact]
     public void Dispose_OnlyOnce()
     {
