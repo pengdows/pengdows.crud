@@ -84,19 +84,19 @@ public class MultitenantIntegrationTests
     public async Task MultitenantCrud_ConcurrentOperations(string tenant, SupportedDatabase dbType)
     {
         var context = _tenantRegistry.GetContext(tenant);
-        await new SqlContainer(context)
-            .AppendQuery($"CREATE TABLE Users (Id INTEGER PRIMARY KEY{(dbType == SupportedDatabase.Sqlite ? " AUTOINCREMENT" : string.Empty)}, Name VARCHAR(50), CreatedOn DATETIME, LastUpdatedOn DATETIME, Version INTEGER)")
-            .ExecuteNonQueryAsync();
+        var tableSc = new SqlContainer(context);
+        tableSc.Query.Append($"CREATE TABLE Users (Id INTEGER PRIMARY KEY{(dbType == SupportedDatabase.Sqlite ? " AUTOINCREMENT" : string.Empty)}, Name VARCHAR(50), CreatedOn DATETIME, LastUpdatedOn DATETIME, Version INTEGER)");
+        await tableSc.ExecuteNonQueryAsync();
 
         async Task PerformCrud(EntityHelper<User, int> helper, ITransactionContext transaction)
         {
             var user = new User { Name = $"User_{tenant}_{Guid.NewGuid()}" };
             var createSc = helper.BuildCreate(user);
             await createSc.ExecuteNonQueryAsync();
+            var idSc = new SqlContainer(transaction);
+            idSc.Query.Append("SELECT last_insert_rowid()");
             var id = dbType == SupportedDatabase.Sqlite
-                ? (int)(await new SqlContainer(transaction)
-                    .AppendQuery("SELECT last_insert_rowid()")
-                    .ExecuteScalarAsync<int>())
+                ? (int)await idSc.ExecuteScalarAsync<int>()
                 : user.Id;
 
             var retrieveSc = helper.BuildRetrieve(new[] { id });
@@ -134,8 +134,8 @@ public class MultitenantIntegrationTests
 
         await Task.WhenAll(tasks);
 
-        var countSc = new SqlContainer(context)
-            .AppendQuery("SELECT COUNT(*) FROM Users");
+        var countSc = new SqlContainer(context);
+        countSc.Query.Append("SELECT COUNT(*) FROM Users");
         var count = await countSc.ExecuteScalarAsync<long>();
         Assert.Equal(0L, count);
     }
