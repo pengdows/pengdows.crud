@@ -99,7 +99,7 @@ public class MultitenantIntegrationTests
                 ? (int)await idSc.ExecuteScalarAsync<int>()
                 : user.Id;
 
-            var retrieveSc = helper.BuildRetrieve(new[] { id });
+            var retrieveSc = helper.BuildRetrieve(new[] { id }, context: context);
             var retrievedUser = await helper.LoadSingleAsync(retrieveSc);
             Assert.Equal(user.Name, retrievedUser.Name);
             Assert.Equal(1, retrievedUser.Version);
