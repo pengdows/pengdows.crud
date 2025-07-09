@@ -163,6 +163,11 @@ public class FakeDbDataReader : DbDataReader
         return (string)GetValue(i);
     }
 
+    public override DataTable? GetSchemaTable()
+    {
+        return null;
+    }
+
     // Remaining members can throw or return defaults
     public override IEnumerator GetEnumerator()
     {
@@ -171,5 +176,4 @@ public class FakeDbDataReader : DbDataReader
 
     public override void Close()
     {
-    }
-}
+    }}
