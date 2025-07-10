@@ -28,7 +28,8 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
         }
         set
         {
-            if (_emulatedProduct == null || _emulatedProduct == SupportedDatabase.Unknown) _emulatedProduct = value;
+            if (_emulatedProduct == null || _emulatedProduct == SupportedDatabase.Unknown)
+                _emulatedProduct = value;
         }
     }
 

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
@@ -16,10 +17,10 @@ namespace pengdows.crud.Tests;
 [Table("Users")]
 public class User
 {
-    [Id]
+    [Id(false)]
     [Column("Id", DbType.Int32)]
     public int Id { get; set; }
-
+    [PrimaryKey]
     [Column("Name", DbType.String)]
     public string Name { get; set; } = string.Empty;
 
@@ -73,23 +74,23 @@ public class MultitenantIntegrationTests
         const string tenant = "TenantA";
         var context = _tenantRegistry.GetContext(tenant);
         var dbType = SupportedDatabase.Sqlite;
-        var tableSc = new SqlContainer(context);
-        tableSc.Query.Append($"CREATE TABLE Users (Id INTEGER PRIMARY KEY AUTOINCREMENT, Name VARCHAR(50), CreatedOn DATETIME, LastUpdatedOn DATETIME, Version INTEGER)");
+        var auditValueResolver = new TestAuditValueResolver();
+        var tableSc = context.CreateSqlContainer();
+        tableSc.Query.AppendFormat(@"CREATE TABLE {0}Users{1} 
+                            ({0}Id{1} INTEGER PRIMARY KEY AUTOINCREMENT, 
+                            {0}Name{1} VARCHAR(50), 
+                            {0}CreatedOn{1} DATETIME, 
+                            {0}LastUpdatedOn{1} DATETIME,
+                            {0}Version{1} INTEGER)", context.QuotePrefix, context.QuoteSuffix);
         await tableSc.ExecuteNonQueryAsync();
 
-        async Task PerformCrud(EntityHelper<User, int> helper, ITransactionContext transaction)
+        async Task PerformCrud(IEntityHelper<User, int> helper, ITransactionContext transaction)
         {
             var user = new User { Name = $"User_{tenant}_{Guid.NewGuid()}" };
             var createSc = helper.BuildCreate(user);
             await createSc.ExecuteNonQueryAsync();
-            var idSc = new SqlContainer(transaction);
-            idSc.Query.Append("SELECT last_insert_rowid()");
-            var id = dbType == SupportedDatabase.Sqlite
-                ? (int)await idSc.ExecuteScalarAsync<int>()
-                : user.Id;
-
-            var retrieveSc = helper.BuildRetrieve(new[] { id }, context: context);
-            var retrievedUser = await helper.LoadSingleAsync(retrieveSc);
+            var retrievedUser = await helper.RetrieveOneAsync(user, transaction);
+            
             Assert.Equal(user.Name, retrievedUser.Name);
             Assert.Equal(1, retrievedUser.Version);
 
@@ -97,17 +98,17 @@ public class MultitenantIntegrationTests
             var updateSc = await helper.BuildUpdateAsync(retrievedUser, true);
             await updateSc.ExecuteNonQueryAsync();
 
-            var deleteSc = helper.BuildDelete(id);
+            var deleteSc = helper.BuildDelete(retrievedUser.Id);
             await deleteSc.ExecuteNonQueryAsync();
         }
 
-        using var transaction = context.BeginTransaction(IsolationProfile.SafeNonBlockingReads);
-        var helper = new EntityHelper<User, int>(context, new TestAuditValueResolver());
+        await using var transaction = context.BeginTransaction(IsolationProfile.SafeNonBlockingReads);
+        var helper = new EntityHelper<User, int>(context, auditValueResolver);
         await PerformCrud(helper, transaction);
         transaction.Commit();
 
-        var countSc = new SqlContainer(context);
-        countSc.Query.Append("SELECT COUNT(*) FROM Users");
+        var countSc = context.CreateSqlContainer();
+        countSc.Query.AppendFormat("SELECT COUNT(*) FROM {0}Users{1}", context.QuotePrefix, context.QuoteSuffix);
         var count = await countSc.ExecuteScalarAsync<long>();
         Assert.Equal(0L, count);
     }
