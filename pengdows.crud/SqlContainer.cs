@@ -20,7 +20,6 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
 
     private readonly ILogger<ISqlContainer> _logger;
     private readonly Dictionary<string, DbParameter> _parameters = new();
-    private bool _disposed;
 
     internal SqlContainer(IDatabaseContext context, string? query = "", ILogger<ISqlContainer>? logger = null)
     {
@@ -36,7 +35,10 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
 
     public void AddParameter(DbParameter parameter)
     {
-        if (parameter == null) return;
+        if (parameter == null)
+        {
+            return;
+        }
 
         if (string.IsNullOrEmpty(parameter.ParameterName)) parameter.ParameterName = GenerateRandomName();
 
@@ -228,8 +230,12 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
     public void AddParameters(IEnumerable<DbParameter> list)
     {
         if (list != null)
+        {
             foreach (var p in list.OfType<DbParameter>())
+            {
                 AddParameter(p);
+            }
+        }
     }
 
 
