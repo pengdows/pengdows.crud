@@ -1,9 +1,7 @@
 #region
 
-using System;
 using System.Data;
 using System.Data.Common;
-using System.IO;
 using pengdows.crud.enums;
 
 #endregion
@@ -28,7 +26,8 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
         }
         set
         {
-            if (_emulatedProduct == null || _emulatedProduct == SupportedDatabase.Unknown) _emulatedProduct = value;
+            if (_emulatedProduct == null || _emulatedProduct == SupportedDatabase.Unknown)
+                _emulatedProduct = value;
         }
     }
 

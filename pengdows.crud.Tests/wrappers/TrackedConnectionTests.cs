@@ -1,4 +1,5 @@
 #region
+using System.Data;
 using System.Threading.Tasks;
 using pengdows.crud.FakeDb;
 using pengdows.crud.threading;
@@ -64,5 +65,49 @@ public class TrackedConnectionTests
 
         Assert.Equal(1, count);
         Assert.True(tracked.WasOpened);
+    }
+
+    [Fact]
+    public async Task OpenAsync_InvokesOnFirstOpen_OnlyOnce()
+    {
+        using var conn = new FakeDbConnection();
+        var count = 0;
+        using var tracked = new TrackedConnection(conn, onFirstOpen: _ => count++);
+
+        await tracked.OpenAsync();
+        await tracked.OpenAsync();
+
+        Assert.Equal(1, count);
+        Assert.True(tracked.WasOpened);
+    }
+
+    [Fact]
+    public void Dispose_ClosesConnection_Once()
+    {
+        using var conn = new FakeDbConnection();
+        var disposeCount = 0;
+        var tracked = new TrackedConnection(conn, onDispose: _ => disposeCount++);
+
+        tracked.Open();
+        tracked.Dispose();
+        tracked.Dispose();
+
+        Assert.Equal(ConnectionState.Closed, conn.State);
+        Assert.Equal(1, disposeCount);
+    }
+
+    [Fact]
+    public async Task DisposeAsync_ClosesConnection_Once()
+    {
+        using var conn = new FakeDbConnection();
+        var disposeCount = 0;
+        await using var tracked = new TrackedConnection(conn, onDispose: _ => disposeCount++);
+
+        await tracked.OpenAsync();
+        await tracked.DisposeAsync();
+        await tracked.DisposeAsync();
+
+        Assert.Equal(ConnectionState.Closed, conn.State);
+        Assert.Equal(1, disposeCount);
     }
 }

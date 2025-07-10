@@ -1,6 +1,7 @@
 #region
 
 using System.Collections;
+using System.Data;
 using System.Data.Common;
 
 #endregion
@@ -161,6 +162,11 @@ public class FakeDbDataReader : DbDataReader
     public override string GetString(int i)
     {
         return (string)GetValue(i);
+    }
+
+    public override DataTable? GetSchemaTable()
+    {
+        return null;
     }
 
     // Remaining members can throw or return defaults

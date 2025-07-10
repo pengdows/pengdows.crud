@@ -20,6 +20,11 @@
         <RepositoryType>git</RepositoryType>
         <WarningsAsErrors>true</WarningsAsErrors>
     </PropertyGroup>
+    <PropertyGroup Condition=" '$(SNK_PATH)' != '' ">
+        <SignAssembly>true</SignAssembly>
+        <PublicSign>true</PublicSign>
+        <AssemblyOriginatorKeyFile>$(SNK_PATH)</AssemblyOriginatorKeyFile>
+    </PropertyGroup>
 
     <ItemGroup>
         <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.5"/>

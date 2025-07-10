@@ -3,7 +3,9 @@
 using System;
 using System.Data;
 using System.Threading.Tasks;
+using Moq;
 using pengdows.crud.enums;
+using pengdows.crud.FakeDb;
 using Xunit;
 
 #endregion
@@ -159,4 +161,47 @@ public class SqlContainerTests : SqlLiteContextTestBase
         Assert.False(await reader.ReadAsync());
         AssertProperNumberOfConnectionsForMode();
     }
-}
+
+    [Fact]
+    public void WrapObjectName_DelegatesToContext()
+    {
+        var mock = new Mock<IDatabaseContext>();
+        mock.Setup(c => c.WrapObjectName("foo")).Returns("\"foo\"");
+
+        var container = new SqlContainer(mock.Object);
+
+        var result = container.WrapObjectName("foo");
+
+        Assert.Equal("\"foo\"", result);
+        mock.Verify(c => c.WrapObjectName("foo"), Times.Once);
+    }
+
+    [Fact]
+    public void Dispose_ClearsQueryAndParameters()
+    {
+        var container = new SqlContainer(new Mock<IDatabaseContext>().Object);
+        var param = new FakeDbParameter { ParameterName = "p", DbType = DbType.Int32, Value = 1 };
+        container.AddParameter(param);
+        container.Query.Append("SELECT 1");
+
+        container.Dispose();
+
+        Assert.True(container.IsDisposed);
+        Assert.Equal(0, container.ParameterCount);
+        Assert.Equal(string.Empty, container.Query.ToString());
+    }
+
+    [Fact]
+    public async Task DisposeAsync_ClearsQueryAndParameters()
+    {
+        var container = new SqlContainer(new Mock<IDatabaseContext>().Object);
+        var param = new FakeDbParameter { ParameterName = "p", DbType = DbType.Int32, Value = 1 };
+        container.AddParameter(param);
+        container.Query.Append("SELECT 1");
+
+        await container.DisposeAsync();
+
+        Assert.True(container.IsDisposed);
+        Assert.Equal(0, container.ParameterCount);
+        Assert.Equal(string.Empty, container.Query.ToString());
+    }}
