@@ -162,6 +162,25 @@ public class DbProviderLoaderTests
         Assert.Throws<InvalidOperationException>(() => loader.LoadAndRegisterProviders(new ServiceCollection()));
     }
 
+    [Fact]
+    public void LoadAndRegisterProviders_MissingProviderName_Throws()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["DatabaseProviders:missing:AssemblyName"] = "Microsoft.Data.Sqlite"
+            })
+            .Build();
+
+        var logger = new Mock<ILogger<DbProviderLoader>>();
+        var loader = new DbProviderLoader(config, logger.Object);
+
+        // ensure assembly load doesn't hide missing provider
+        _ = SqliteFactory.Instance;
+
+        Assert.Throws<InvalidOperationException>(() => loader.LoadAndRegisterProviders(new ServiceCollection()));
+    }
+
     private class PropertyFactory : DbProviderFactory
     {
         private PropertyFactory()
