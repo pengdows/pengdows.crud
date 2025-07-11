@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Data;
+using System.Data.Common;
 using pengdows.crud;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
@@ -42,18 +43,41 @@ public class CheckForSqlServerSettingsTests
     private static void SetSessionSettings(DatabaseContext ctx, string value)
         => GetSettingsField().SetValue(ctx, value);
 
-    private sealed class UserOptionsCommand : FakeDbCommand
+    private sealed class UserOptionsCommand : DbCommand
     {
+        private readonly DbConnection _connection;
         private readonly FakeDbDataReader _reader;
 
         public UserOptionsCommand(DbConnection connection, FakeDbDataReader reader)
-            : base(connection)
         {
+            _connection = connection;
             _reader = reader;
         }
 
-        protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior)
-            => _reader;
+        public override string CommandText { get; set; }
+        public override int CommandTimeout { get; set; }
+        public override CommandType CommandType { get; set; }
+        public override bool DesignTimeVisible { get; set; }
+        public override UpdateRowSource UpdatedRowSource { get; set; }
+
+        protected override DbConnection DbConnection
+        {
+            get => _connection;
+            set { }
+        }
+
+        protected override DbParameterCollection DbParameterCollection { get; } = new FakeParameterCollection();
+
+        protected override DbTransaction DbTransaction { get; set; }
+
+        public override void Cancel() { }
+        public override int ExecuteNonQuery() => 0;
+        public override object ExecuteScalar() => null;
+        public override void Prepare() { }
+
+        protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) => _reader;
+
+        protected override DbParameter CreateDbParameter() => new FakeDbParameter();
     }
 
     private sealed class UserOptionsConnection : FakeDbConnection
