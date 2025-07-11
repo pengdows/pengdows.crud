@@ -32,7 +32,7 @@ public class DbProviderLoader : IDbProviderLoader
         {
             var providerKey = kvp.Key;
 
-            if (string.IsNullOrEmpty(providerKey))
+            if (string.IsNullOrEmpty(kvp.Value.ProviderName))
                 throw new InvalidOperationException($"ProviderName is missing for provider '{providerKey}'.");
 
             _logger.LogInformation("Loading DbProviderFactory for provider '{ProviderKey}'", providerKey);
