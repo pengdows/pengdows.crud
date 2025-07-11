@@ -1,0 +1,5136 @@
+﻿{
+  "DotCoverVersion": "2025.1.4",
+  "Kind": "SolutionRoot",
+  "CoveredStatements": 1626,
+  "TotalStatements": 1842,
+  "CoveragePercent": 88,
+  "Children": [
+    {
+      "Kind": "Project",
+      "Name": "pengdows.crud",
+      "CoveredStatements": 1626,
+      "TotalStatements": 1842,
+      "CoveragePercent": 88,
+      "Children": [
+        {
+          "Kind": "Namespace",
+          "Name": "pengdows.crud",
+          "CoveredStatements": 1626,
+          "TotalStatements": 1842,
+          "CoveragePercent": 88,
+          "Children": [
+            {
+              "Kind": "Namespace",
+              "Name": "attributes",
+              "CoveredStatements": 25,
+              "TotalStatements": 32,
+              "CoveragePercent": 78,
+              "Children": [
+                {
+                  "Kind": "Type",
+                  "Name": "ColumnAttribute",
+                  "CoveredStatements": 6,
+                  "TotalStatements": 6,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "Constructor",
+                      "Name": "ColumnAttribute(string,DbType)",
+                      "CoveredStatements": 4,
+                      "TotalStatements": 4,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "AutoProperty",
+                      "Name": "Name:string",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100,
+                      "Children": [
+                        {
+                          "Kind": "PropertyGetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    },
+                    {
+                      "Kind": "AutoProperty",
+                      "Name": "Type:DbType",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100,
+                      "Children": [
+                        {
+                          "Kind": "PropertyGetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Type",
+                  "Name": "CreatedByAttribute",
+                  "CoveredStatements": 0,
+                  "TotalStatements": 0,
+                  "CoveragePercent": 0
+                },
+                {
+                  "Kind": "Type",
+                  "Name": "CreatedOnAttribute",
+                  "CoveredStatements": 0,
+                  "TotalStatements": 0,
+                  "CoveragePercent": 0
+                },
+                {
+                  "Kind": "Type",
+                  "Name": "EnumColumnAttribute",
+                  "CoveredStatements": 5,
+                  "TotalStatements": 6,
+                  "CoveragePercent": 83,
+                  "Children": [
+                    {
+                      "Kind": "Constructor",
+                      "Name": "EnumColumnAttribute(Type)",
+                      "CoveredStatements": 4,
+                      "TotalStatements": 5,
+                      "CoveragePercent": 80
+                    },
+                    {
+                      "Kind": "AutoProperty",
+                      "Name": "EnumType:Type",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100,
+                      "Children": [
+                        {
+                          "Kind": "PropertyGetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Type",
+                  "Name": "IdAttribute",
+                  "CoveredStatements": 4,
+                  "TotalStatements": 4,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "Constructor",
+                      "Name": "IdAttribute(bool)",
+                      "CoveredStatements": 3,
+                      "TotalStatements": 3,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "AutoProperty",
+                      "Name": "Writable:bool",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100,
+                      "Children": [
+                        {
+                          "Kind": "PropertyGetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Type",
+                  "Name": "JsonAttribute",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 3,
+                  "CoveragePercent": 33,
+                  "Children": [
+                    {
+                      "Kind": "Constructor",
+                      "Name": "JsonAttribute()",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "AutoProperty",
+                      "Name": "SerializerOptions:JsonSerializerOptions",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 2,
+                      "CoveragePercent": 0,
+                      "Children": [
+                        {
+                          "Kind": "PropertyGetter",
+                          "CoveredStatements": 0,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 0
+                        },
+                        {
+                          "Kind": "PropertySetter",
+                          "CoveredStatements": 0,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 0
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Type",
+                  "Name": "LastUpdatedByAttribute",
+                  "CoveredStatements": 0,
+                  "TotalStatements": 0,
+                  "CoveragePercent": 0
+                },
+                {
+                  "Kind": "Type",
+                  "Name": "LastUpdatedOnAttribute",
+                  "CoveredStatements": 0,
+                  "TotalStatements": 0,
+                  "CoveragePercent": 0
+                },
+                {
+                  "Kind": "Type",
+                  "Name": "NonInsertableAttribute",
+                  "CoveredStatements": 0,
+                  "TotalStatements": 0,
+                  "CoveragePercent": 0
+                },
+                {
+                  "Kind": "Type",
+                  "Name": "NonUpdateableAttribute",
+                  "CoveredStatements": 0,
+                  "TotalStatements": 0,
+                  "CoveragePercent": 0
+                },
+                {
+                  "Kind": "Type",
+                  "Name": "PrimaryKeyAttribute",
+                  "CoveredStatements": 3,
+                  "TotalStatements": 7,
+                  "CoveragePercent": 43,
+                  "Children": [
+                    {
+                      "Kind": "Constructor",
+                      "Name": "PrimaryKeyAttribute(int)",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 3,
+                      "CoveragePercent": 0
+                    },
+                    {
+                      "Kind": "Constructor",
+                      "Name": "PrimaryKeyAttribute()",
+                      "CoveredStatements": 3,
+                      "TotalStatements": 3,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "AutoProperty",
+                      "Name": "Order:int",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 0,
+                      "Children": [
+                        {
+                          "Kind": "PropertyGetter",
+                          "CoveredStatements": 0,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 0
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Type",
+                  "Name": "TableAttribute",
+                  "CoveredStatements": 6,
+                  "TotalStatements": 6,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "Constructor",
+                      "Name": "TableAttribute(string,string)",
+                      "CoveredStatements": 4,
+                      "TotalStatements": 4,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "AutoProperty",
+                      "Name": "Name:string",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100,
+                      "Children": [
+                        {
+                          "Kind": "PropertyGetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    },
+                    {
+                      "Kind": "AutoProperty",
+                      "Name": "Schema:string",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100,
+                      "Children": [
+                        {
+                          "Kind": "PropertyGetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Type",
+                  "Name": "VersionAttribute",
+                  "CoveredStatements": 0,
+                  "TotalStatements": 0,
+                  "CoveragePercent": 0
+                }
+              ]
+            },
+            {
+              "Kind": "Namespace",
+              "Name": "configuration",
+              "CoveredStatements": 78,
+              "TotalStatements": 93,
+              "CoveragePercent": 84,
+              "Children": [
+                {
+                  "Kind": "Type",
+                  "Name": "DatabaseContextConfiguration",
+                  "CoveredStatements": 9,
+                  "TotalStatements": 9,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "Constructor",
+                      "Name": "DatabaseContextConfiguration()",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "AutoProperty",
+                      "Name": "ConnectionString:string",
+                      "CoveredStatements": 2,
+                      "TotalStatements": 2,
+                      "CoveragePercent": 100,
+                      "Children": [
+                        {
+                          "Kind": "PropertyGetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        },
+                        {
+                          "Kind": "PropertySetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    },
+                    {
+                      "Kind": "AutoProperty",
+                      "Name": "DbMode:DbMode",
+                      "CoveredStatements": 2,
+                      "TotalStatements": 2,
+                      "CoveragePercent": 100,
+                      "Children": [
+                        {
+                          "Kind": "PropertyGetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        },
+                        {
+                          "Kind": "PropertySetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    },
+                    {
+                      "Kind": "AutoProperty",
+                      "Name": "ProviderName:string",
+                      "CoveredStatements": 2,
+                      "TotalStatements": 2,
+                      "CoveragePercent": 100,
+                      "Children": [
+                        {
+                          "Kind": "PropertyGetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        },
+                        {
+                          "Kind": "PropertySetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    },
+                    {
+                      "Kind": "AutoProperty",
+                      "Name": "ReadWriteMode:ReadWriteMode",
+                      "CoveredStatements": 2,
+                      "TotalStatements": 2,
+                      "CoveragePercent": 100,
+                      "Children": [
+                        {
+                          "Kind": "PropertyGetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        },
+                        {
+                          "Kind": "PropertySetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Type",
+                  "Name": "DatabaseProviderConfig",
+                  "CoveredStatements": 12,
+                  "TotalStatements": 12,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "Constructor",
+                      "Name": "DatabaseProviderConfig()",
+                      "CoveredStatements": 4,
+                      "TotalStatements": 4,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "AutoProperty",
+                      "Name": "AssemblyName:string",
+                      "CoveredStatements": 2,
+                      "TotalStatements": 2,
+                      "CoveragePercent": 100,
+                      "Children": [
+                        {
+                          "Kind": "PropertyGetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        },
+                        {
+                          "Kind": "PropertySetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    },
+                    {
+                      "Kind": "AutoProperty",
+                      "Name": "AssemblyPath:string",
+                      "CoveredStatements": 2,
+                      "TotalStatements": 2,
+                      "CoveragePercent": 100,
+                      "Children": [
+                        {
+                          "Kind": "PropertyGetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        },
+                        {
+                          "Kind": "PropertySetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    },
+                    {
+                      "Kind": "AutoProperty",
+                      "Name": "FactoryType:string",
+                      "CoveredStatements": 2,
+                      "TotalStatements": 2,
+                      "CoveragePercent": 100,
+                      "Children": [
+                        {
+                          "Kind": "PropertyGetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        },
+                        {
+                          "Kind": "PropertySetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    },
+                    {
+                      "Kind": "AutoProperty",
+                      "Name": "ProviderName:string",
+                      "CoveredStatements": 2,
+                      "TotalStatements": 2,
+                      "CoveragePercent": 100,
+                      "Children": [
+                        {
+                          "Kind": "PropertyGetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        },
+                        {
+                          "Kind": "PropertySetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Type",
+                  "Name": "DbProviderLoader",
+                  "CoveredStatements": 57,
+                  "TotalStatements": 72,
+                  "CoveragePercent": 79,
+                  "Children": [
+                    {
+                      "Kind": "Constructor",
+                      "Name": "DbProviderLoader(IConfiguration,ILogger<DbProviderLoader>)",
+                      "CoveredStatements": 4,
+                      "TotalStatements": 4,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Constructor",
+                      "Name": "DbProviderLoader()",
+                      "CoveredStatements": 2,
+                      "TotalStatements": 2,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "LoadAndRegisterProviders(IServiceCollection):void",
+                      "CoveredStatements": 15,
+                      "TotalStatements": 18,
+                      "CoveragePercent": 83
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "LoadProviderFactory(string,DatabaseProviderConfig):DbProviderFactory",
+                      "CoveredStatements": 36,
+                      "TotalStatements": 48,
+                      "CoveragePercent": 75
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "Kind": "Namespace",
+              "Name": "exceptions",
+              "CoveredStatements": 13,
+              "TotalStatements": 15,
+              "CoveragePercent": 87,
+              "Children": [
+                {
+                  "Kind": "Type",
+                  "Name": "ConnectionFailedException",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "Constructor",
+                      "Name": "ConnectionFailedException(string)",
+                      "CoveredStatements": 2,
+                      "TotalStatements": 2,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Type",
+                  "Name": "InvalidValueException",
+                  "CoveredStatements": 0,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 0,
+                  "Children": [
+                    {
+                      "Kind": "Constructor",
+                      "Name": "InvalidValueException(string)",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 2,
+                      "CoveragePercent": 0
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Type",
+                  "Name": "NoColumnsFoundException",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "Constructor",
+                      "Name": "NoColumnsFoundException(string)",
+                      "CoveredStatements": 2,
+                      "TotalStatements": 2,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Type",
+                  "Name": "PrimaryKeyOnRowIdColumn",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "Constructor",
+                      "Name": "PrimaryKeyOnRowIdColumn(string)",
+                      "CoveredStatements": 2,
+                      "TotalStatements": 2,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Type",
+                  "Name": "TooManyColumns",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "Constructor",
+                      "Name": "TooManyColumns(string)",
+                      "CoveredStatements": 2,
+                      "TotalStatements": 2,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Type",
+                  "Name": "TooManyParametersException",
+                  "CoveredStatements": 5,
+                  "TotalStatements": 5,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "Constructor",
+                      "Name": "TooManyParametersException(string,int)",
+                      "CoveredStatements": 3,
+                      "TotalStatements": 3,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "AutoProperty",
+                      "Name": "MaxAllowed:int",
+                      "CoveredStatements": 2,
+                      "TotalStatements": 2,
+                      "CoveragePercent": 100,
+                      "Children": [
+                        {
+                          "Kind": "PropertyGetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        },
+                        {
+                          "Kind": "PropertySetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "Kind": "Namespace",
+              "Name": "infrastructure",
+              "CoveredStatements": 20,
+              "TotalStatements": 24,
+              "CoveragePercent": 83,
+              "Children": [
+                {
+                  "Kind": "Type",
+                  "Name": "SafeAsyncDisposableBase",
+                  "CoveredStatements": 20,
+                  "TotalStatements": 24,
+                  "CoveragePercent": 83,
+                  "Children": [
+                    {
+                      "Kind": "Property",
+                      "Name": "IsDisposed:bool",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100,
+                      "Children": [
+                        {
+                          "Kind": "PropertyGetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "Dispose():void",
+                      "CoveredStatements": 7,
+                      "TotalStatements": 9,
+                      "CoveragePercent": 78
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "DisposeAsync():ValueTask",
+                      "CoveredStatements": 7,
+                      "TotalStatements": 9,
+                      "CoveragePercent": 78,
+                      "Children": [
+                        {
+                          "Kind": "InternalCompiledMethod",
+                          "Name": "MoveNext():void",
+                          "CoveredStatements": 7,
+                          "TotalStatements": 9,
+                          "CoveragePercent": 78
+                        }
+                      ]
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "DisposeManaged():void",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "DisposeManagedAsync():ValueTask",
+                      "CoveredStatements": 3,
+                      "TotalStatements": 3,
+                      "CoveragePercent": 100,
+                      "Children": [
+                        {
+                          "Kind": "InternalCompiledMethod",
+                          "Name": "MoveNext():void",
+                          "CoveredStatements": 3,
+                          "TotalStatements": 3,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "DisposeUnmanaged():void",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "Kind": "Namespace",
+              "Name": "isolation",
+              "CoveredStatements": 28,
+              "TotalStatements": 35,
+              "CoveragePercent": 80,
+              "Children": [
+                {
+                  "Kind": "Type",
+                  "Name": "IsolationLevelSupport",
+                  "CoveredStatements": 0,
+                  "TotalStatements": 6,
+                  "CoveragePercent": 0,
+                  "Children": [
+                    {
+                      "Kind": "Constructor",
+                      "Name": "IsolationLevelSupport()",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 0
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "Validate(SupportedDatabase,IsolationLevel):void",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 5,
+                      "CoveragePercent": 0
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Type",
+                  "Name": "IsolationResolver",
+                  "CoveredStatements": 28,
+                  "TotalStatements": 29,
+                  "CoveragePercent": 97,
+                  "Children": [
+                    {
+                      "Kind": "Constructor",
+                      "Name": "IsolationResolver(SupportedDatabase,bool)",
+                      "CoveredStatements": 6,
+                      "TotalStatements": 6,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "BuildProfileMapping(SupportedDatabase,bool):Dictionary<IsolationProfile,IsolationLevel>",
+                      "CoveredStatements": 9,
+                      "TotalStatements": 10,
+                      "CoveragePercent": 90
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "BuildSupportedIsolationLevels(SupportedDatabase,bool):HashSet<IsolationLevel>",
+                      "CoveredStatements": 3,
+                      "TotalStatements": 3,
+                      "CoveragePercent": 100,
+                      "Children": [
+                        {
+                          "Kind": "OwnCoverage",
+                          "CoveredStatements": 2,
+                          "TotalStatements": 2,
+                          "CoveragePercent": 100
+                        },
+                        {
+                          "Kind": "AnonymousMethod",
+                          "Name": "(IsolationLevel):bool",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "GetSupportedLevels():IReadOnlySet<IsolationLevel>",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "Resolve(IsolationProfile):IsolationLevel",
+                      "CoveredStatements": 6,
+                      "TotalStatements": 6,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "Validate(IsolationLevel):void",
+                      "CoveredStatements": 3,
+                      "TotalStatements": 3,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "Kind": "Namespace",
+              "Name": "tenant",
+              "CoveredStatements": 53,
+              "TotalStatements": 56,
+              "CoveragePercent": 95,
+              "Children": [
+                {
+                  "Kind": "Type",
+                  "Name": "MultiTenantOptions",
+                  "CoveredStatements": 3,
+                  "TotalStatements": 3,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "Constructor",
+                      "Name": "MultiTenantOptions()",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "AutoProperty",
+                      "Name": "Tenants:List<TenantConfiguration>",
+                      "CoveredStatements": 2,
+                      "TotalStatements": 2,
+                      "CoveragePercent": 100,
+                      "Children": [
+                        {
+                          "Kind": "PropertyGetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        },
+                        {
+                          "Kind": "PropertyInitOnlySetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Type",
+                  "Name": "TenantConfiguration",
+                  "CoveredStatements": 6,
+                  "TotalStatements": 6,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "Constructor",
+                      "Name": "TenantConfiguration()",
+                      "CoveredStatements": 2,
+                      "TotalStatements": 2,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "AutoProperty",
+                      "Name": "DatabaseContextConfiguration:DatabaseContextConfiguration",
+                      "CoveredStatements": 2,
+                      "TotalStatements": 2,
+                      "CoveragePercent": 100,
+                      "Children": [
+                        {
+                          "Kind": "PropertyGetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        },
+                        {
+                          "Kind": "PropertySetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    },
+                    {
+                      "Kind": "AutoProperty",
+                      "Name": "Name:string",
+                      "CoveredStatements": 2,
+                      "TotalStatements": 2,
+                      "CoveragePercent": 100,
+                      "Children": [
+                        {
+                          "Kind": "PropertyGetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        },
+                        {
+                          "Kind": "PropertySetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Type",
+                  "Name": "TenantConnectionResolver",
+                  "CoveredStatements": 25,
+                  "TotalStatements": 26,
+                  "CoveragePercent": 96,
+                  "Children": [
+                    {
+                      "Kind": "Constructor",
+                      "Name": "TenantConnectionResolver()",
+                      "CoveredStatements": 2,
+                      "TotalStatements": 2,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "AutoProperty",
+                      "Name": "Instance:ITenantConnectionResolver",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100,
+                      "Children": [
+                        {
+                          "Kind": "PropertyGetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "GetDatabaseContextConfiguration(string):IDatabaseContextConfiguration",
+                      "CoveredStatements": 5,
+                      "TotalStatements": 5,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "Register(string,DatabaseContextConfiguration):void",
+                      "CoveredStatements": 6,
+                      "TotalStatements": 6,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "Register(IEnumerable<TenantConfiguration>):void",
+                      "CoveredStatements": 7,
+                      "TotalStatements": 8,
+                      "CoveragePercent": 88
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "Register(MultiTenantOptions):void",
+                      "CoveredStatements": 4,
+                      "TotalStatements": 4,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Type",
+                  "Name": "TenantContextRegistry",
+                  "CoveredStatements": 10,
+                  "TotalStatements": 10,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "Constructor",
+                      "Name": "TenantContextRegistry(IServiceProvider,ITenantConnectionResolver,ILoggerFactory)",
+                      "CoveredStatements": 6,
+                      "TotalStatements": 6,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "CreateDatabaseContext(string):IDatabaseContext",
+                      "CoveredStatements": 3,
+                      "TotalStatements": 3,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "GetContext(string):IDatabaseContext",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Type",
+                  "Name": "TenantServiceCollectionExtensions",
+                  "CoveredStatements": 9,
+                  "TotalStatements": 11,
+                  "CoveragePercent": 82,
+                  "Children": [
+                    {
+                      "Kind": "Method",
+                      "Name": "AddMultiTenancy(IServiceCollection,IConfiguration):IServiceCollection",
+                      "CoveredStatements": 9,
+                      "TotalStatements": 11,
+                      "CoveragePercent": 82
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "Kind": "Namespace",
+              "Name": "threading",
+              "CoveredStatements": 15,
+              "TotalStatements": 16,
+              "CoveragePercent": 94,
+              "Children": [
+                {
+                  "Kind": "Type",
+                  "Name": "NoOpAsyncLocker",
+                  "CoveredStatements": 5,
+                  "TotalStatements": 5,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "Constructor",
+                      "Name": "NoOpAsyncLocker()",
+                      "CoveredStatements": 2,
+                      "TotalStatements": 2,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Constructor",
+                      "Name": "NoOpAsyncLocker()",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "DisposeAsync():ValueTask",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "LockAsync():Task",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Type",
+                  "Name": "RealAsyncLocker",
+                  "CoveredStatements": 10,
+                  "TotalStatements": 11,
+                  "CoveragePercent": 91,
+                  "Children": [
+                    {
+                      "Kind": "Constructor",
+                      "Name": "RealAsyncLocker(SemaphoreSlim)",
+                      "CoveredStatements": 3,
+                      "TotalStatements": 3,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "DisposeAsync():ValueTask",
+                      "CoveredStatements": 4,
+                      "TotalStatements": 5,
+                      "CoveragePercent": 80
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "LockAsync():Task",
+                      "CoveredStatements": 3,
+                      "TotalStatements": 3,
+                      "CoveragePercent": 100,
+                      "Children": [
+                        {
+                          "Kind": "InternalCompiledMethod",
+                          "Name": "MoveNext():void",
+                          "CoveredStatements": 3,
+                          "TotalStatements": 3,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "Kind": "Namespace",
+              "Name": "wrappers",
+              "CoveredStatements": 122,
+              "TotalStatements": 142,
+              "CoveragePercent": 86,
+              "Children": [
+                {
+                  "Kind": "Type",
+                  "Name": "TrackedConnection",
+                  "CoveredStatements": 70,
+                  "TotalStatements": 80,
+                  "CoveragePercent": 88,
+                  "Children": [
+                    {
+                      "Kind": "Constructor",
+                      "Name": "TrackedConnection(DbConnection,StateChangeEventHandler,Action<DbConnection>,Action<DbConnection>,ILogger<TrackedConnection>,bool)",
+                      "CoveredStatements": 17,
+                      "TotalStatements": 17,
+                      "CoveragePercent": 100,
+                      "Children": [
+                        {
+                          "Kind": "OwnCoverage",
+                          "CoveredStatements": 15,
+                          "TotalStatements": 15,
+                          "CoveragePercent": 100
+                        },
+                        {
+                          "Kind": "AnonymousMethod",
+                          "Name": "():ILockerAsync",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        },
+                        {
+                          "Kind": "AnonymousMethod",
+                          "Name": "():ILockerAsync",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    },
+                    {
+                      "Kind": "Property",
+                      "Name": "ConnectionString:string",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 2,
+                      "CoveragePercent": 50,
+                      "Children": [
+                        {
+                          "Kind": "PropertyGetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        },
+                        {
+                          "Kind": "PropertySetter",
+                          "CoveredStatements": 0,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 0
+                        }
+                      ]
+                    },
+                    {
+                      "Kind": "Property",
+                      "Name": "ConnectionTimeout:int",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 0,
+                      "Children": [
+                        {
+                          "Kind": "PropertyGetter",
+                          "CoveredStatements": 0,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 0
+                        }
+                      ]
+                    },
+                    {
+                      "Kind": "Property",
+                      "Name": "Database:string",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 0,
+                      "Children": [
+                        {
+                          "Kind": "PropertyGetter",
+                          "CoveredStatements": 0,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 0
+                        }
+                      ]
+                    },
+                    {
+                      "Kind": "Property",
+                      "Name": "DataSource:string",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 0,
+                      "Children": [
+                        {
+                          "Kind": "PropertyGetter",
+                          "CoveredStatements": 0,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 0
+                        }
+                      ]
+                    },
+                    {
+                      "Kind": "Property",
+                      "Name": "ServerVersion:string",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 0,
+                      "Children": [
+                        {
+                          "Kind": "PropertyGetter",
+                          "CoveredStatements": 0,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 0
+                        }
+                      ]
+                    },
+                    {
+                      "Kind": "Property",
+                      "Name": "State:ConnectionState",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100,
+                      "Children": [
+                        {
+                          "Kind": "PropertyGetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    },
+                    {
+                      "Kind": "Property",
+                      "Name": "WasOpened:bool",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100,
+                      "Children": [
+                        {
+                          "Kind": "PropertyGetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "BeginTransaction():IDbTransaction",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 0
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "BeginTransaction(IsolationLevel):IDbTransaction",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "ChangeDatabase(string):void",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 0
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "Close():void",
+                      "CoveredStatements": 2,
+                      "TotalStatements": 2,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "CreateCommand():IDbCommand",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "Dispose():void",
+                      "CoveredStatements": 11,
+                      "TotalStatements": 14,
+                      "CoveragePercent": 79
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "DisposeAsync():ValueTask",
+                      "CoveredStatements": 14,
+                      "TotalStatements": 14,
+                      "CoveragePercent": 100,
+                      "Children": [
+                        {
+                          "Kind": "InternalCompiledMethod",
+                          "Name": "MoveNext():void",
+                          "CoveredStatements": 14,
+                          "TotalStatements": 14,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "GetLock():ILockerAsync",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "GetSchema():DataTable",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "GetSchema(string):DataTable",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "Open():void",
+                      "CoveredStatements": 8,
+                      "TotalStatements": 8,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "OpenAsync(CancellationToken):Task",
+                      "CoveredStatements": 7,
+                      "TotalStatements": 7,
+                      "CoveragePercent": 100,
+                      "Children": [
+                        {
+                          "Kind": "InternalCompiledMethod",
+                          "Name": "MoveNext():void",
+                          "CoveredStatements": 7,
+                          "TotalStatements": 7,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "TriggerFirstOpen():void",
+                      "CoveredStatements": 3,
+                      "TotalStatements": 3,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Type",
+                  "Name": "TrackedReader",
+                  "CoveredStatements": 52,
+                  "TotalStatements": 62,
+                  "CoveragePercent": 84,
+                  "Children": [
+                    {
+                      "Kind": "Constructor",
+                      "Name": "TrackedReader(DbDataReader,ITrackedConnection,IAsyncDisposable,bool)",
+                      "CoveredStatements": 6,
+                      "TotalStatements": 6,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Property",
+                      "Name": "Depth:int",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100,
+                      "Children": [
+                        {
+                          "Kind": "PropertyGetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    },
+                    {
+                      "Kind": "Property",
+                      "Name": "FieldCount:int",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100,
+                      "Children": [
+                        {
+                          "Kind": "PropertyGetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    },
+                    {
+                      "Kind": "Property",
+                      "Name": "IsClosed:bool",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100,
+                      "Children": [
+                        {
+                          "Kind": "PropertyGetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    },
+                    {
+                      "Kind": "Property",
+                      "Name": "RecordsAffected:int",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100,
+                      "Children": [
+                        {
+                          "Kind": "PropertyGetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    },
+                    {
+                      "Kind": "Indexer",
+                      "Name": "[int]:object",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100,
+                      "Children": [
+                        {
+                          "Kind": "PropertyGetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    },
+                    {
+                      "Kind": "Indexer",
+                      "Name": "[string]:object",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100,
+                      "Children": [
+                        {
+                          "Kind": "PropertyGetter",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "Close():void",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 2,
+                      "CoveragePercent": 0
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "Dispose():void",
+                      "CoveredStatements": 6,
+                      "TotalStatements": 6,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "DisposeAsync():ValueTask",
+                      "CoveredStatements": 6,
+                      "TotalStatements": 6,
+                      "CoveragePercent": 100,
+                      "Children": [
+                        {
+                          "Kind": "InternalCompiledMethod",
+                          "Name": "MoveNext():void",
+                          "CoveredStatements": 6,
+                          "TotalStatements": 6,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "GetBoolean(int):bool",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "GetByte(int):byte",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "GetBytes(int,long,byte[],int,int):long",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 0
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "GetChar(int):char",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "GetChars(int,long,char[],int,int):long",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 0
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "GetData(int):IDataReader",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 0
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "GetDataTypeName(int):string",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 0
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "GetDateTime(int):DateTime",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "GetDecimal(int):Decimal",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "GetDouble(int):double",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "GetFieldType(int):Type",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "GetFloat(int):float",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "GetGuid(int):Guid",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "GetInt16(int):short",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "GetInt32(int):int",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "GetInt64(int):long",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "GetName(int):string",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "GetOrdinal(string):int",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "GetSchemaTable():DataTable",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "GetString(int):string",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "GetValue(int):object",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "GetValues(object[]):int",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 0
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "IsDBNull(int):bool",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "NextResult():bool",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "Read():bool",
+                      "CoveredStatements": 4,
+                      "TotalStatements": 7,
+                      "CoveragePercent": 57
+                    },
+                    {
+                      "Kind": "Method",
+                      "Name": "ReadAsync():Task<bool>",
+                      "CoveredStatements": 5,
+                      "TotalStatements": 5,
+                      "CoveragePercent": 100,
+                      "Children": [
+                        {
+                          "Kind": "InternalCompiledMethod",
+                          "Name": "MoveNext():void",
+                          "CoveredStatements": 5,
+                          "TotalStatements": 5,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "Kind": "Type",
+              "Name": "AuditValueResolver",
+              "CoveredStatements": 0,
+              "TotalStatements": 0,
+              "CoveragePercent": 0
+            },
+            {
+              "Kind": "Type",
+              "Name": "AuditValues",
+              "CoveredStatements": 6,
+              "TotalStatements": 6,
+              "CoveragePercent": 100,
+              "Children": [
+                {
+                  "Kind": "Constructor",
+                  "Name": "AuditValues()",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "UserId:object",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertyInitOnlySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "UtcNow:DateTime",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "As<T>():T",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100
+                }
+              ]
+            },
+            {
+              "Kind": "Type",
+              "Name": "ColumnInfo",
+              "CoveredStatements": 40,
+              "TotalStatements": 42,
+              "CoveragePercent": 95,
+              "Children": [
+                {
+                  "Kind": "Constructor",
+                  "Name": "ColumnInfo()",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "DbType:DbType",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "EnumType:Type",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "IsCreatedBy:bool",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "IsCreatedOn:bool",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "IsEnum:bool",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 50,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 0
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "IsId:bool",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertyInitOnlySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "IsIdIsWritable:bool",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "IsJsonType:bool",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "IsLastUpdatedBy:bool",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "IsLastUpdatedOn:bool",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "IsNonInsertable:bool",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "IsNonUpdateable:bool",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "IsPrimaryKey:bool",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "IsVersion:bool",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "JsonSerializerOptions:JsonSerializerOptions",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "Name:string",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertyInitOnlySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "PropertyInfo:PropertyInfo",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertyInitOnlySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "MakeParameterValueFromField<T>(T):object",
+                  "CoveredStatements": 6,
+                  "TotalStatements": 7,
+                  "CoveragePercent": 86
+                }
+              ]
+            },
+            {
+              "Kind": "Type",
+              "Name": "DatabaseContext",
+              "CoveredStatements": 223,
+              "TotalStatements": 253,
+              "CoveragePercent": 88,
+              "Children": [
+                {
+                  "Kind": "Constructor",
+                  "Name": "DatabaseContext(string,string,ITypeMapRegistry,DbMode,ReadWriteMode,ILoggerFactory)",
+                  "CoveredStatements": 0,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 0
+                },
+                {
+                  "Kind": "Constructor",
+                  "Name": "DatabaseContext(string,DbProviderFactory,ITypeMapRegistry,DbMode,ReadWriteMode,ILoggerFactory)",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Constructor",
+                  "Name": "DatabaseContext(IDatabaseContextConfiguration,DbProviderFactory,ILoggerFactory)",
+                  "CoveredStatements": 13,
+                  "TotalStatements": 16,
+                  "CoveragePercent": 81
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "CompositeIdentifierSeparator:string",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "Connection:ITrackedConnection",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "ConnectionMode:DbMode",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "ConnectionString:string",
+                  "CoveredStatements": 4,
+                  "TotalStatements": 5,
+                  "CoveragePercent": 80,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 3,
+                      "TotalStatements": 4,
+                      "CoveragePercent": 75
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "DataSourceInfo:IDataSourceInformation",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "IsReadOnlyConnection:bool",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "MaxNumberOfConnections:long",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "MaxParameterLimit:int",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "Name:string",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "NumberOfOpenConnections:long",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "ProcWrappingStyle:ProcWrappingStyle",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "Product:SupportedDatabase",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "QuotePrefix:string",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "QuoteSuffix:string",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "RCSIEnabled:bool",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "ReadWriteMode:ReadWriteMode",
+                  "CoveredStatements": 0,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 0,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 0
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "SessionSettingsPreamble:string",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "TypeMapRegistry:ITypeMapRegistry",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "ApplyConnectionSessionSettings(IDbConnection):void",
+                  "CoveredStatements": 7,
+                  "TotalStatements": 11,
+                  "CoveragePercent": 64
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "AssertIsReadConnection():void",
+                  "CoveredStatements": 3,
+                  "TotalStatements": 3,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "AssertIsWriteConnection():void",
+                  "CoveredStatements": 3,
+                  "TotalStatements": 3,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "BeginTransaction(Nullable<IsolationLevel>):ITransactionContext",
+                  "CoveredStatements": 4,
+                  "TotalStatements": 6,
+                  "CoveragePercent": 67
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "BeginTransaction(IsolationProfile):ITransactionContext",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "CheckForSqlServerSettings(ITrackedConnection):void",
+                  "CoveredStatements": 21,
+                  "TotalStatements": 21,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "OwnCoverage",
+                      "CoveredStatements": 19,
+                      "TotalStatements": 19,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "AnonymousMethod",
+                      "Name": "(KeyValuePair<string,string>):string",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "AnonymousMethod",
+                      "Name": "(KeyValuePair<string,string>):string",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "CloseAndDisposeConnection(ITrackedConnection):void",
+                  "CoveredStatements": 8,
+                  "TotalStatements": 16,
+                  "CoveragePercent": 50
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "CloseAndDisposeConnectionAsync(ITrackedConnection):ValueTask",
+                  "CoveredStatements": 5,
+                  "TotalStatements": 7,
+                  "CoveragePercent": 71,
+                  "Children": [
+                    {
+                      "Kind": "InternalCompiledMethod",
+                      "Name": "MoveNext():void",
+                      "CoveredStatements": 5,
+                      "TotalStatements": 7,
+                      "CoveragePercent": 71
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "CompareResults(Dictionary<string,string>,Dictionary<string,string>):StringBuilder",
+                  "CoveredStatements": 10,
+                  "TotalStatements": 10,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "CreateDbParameter<T>(string,DbType,T):DbParameter",
+                  "CoveredStatements": 10,
+                  "TotalStatements": 10,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "CreateDbParameter<T>(DbType,T):DbParameter",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "CreateSqlContainer(string):ISqlContainer",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "DisposeManaged():void",
+                  "CoveredStatements": 4,
+                  "TotalStatements": 4,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "FactoryCreateConnection(string,bool):ITrackedConnection",
+                  "CoveredStatements": 16,
+                  "TotalStatements": 16,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "OwnCoverage",
+                      "CoveredStatements": 5,
+                      "TotalStatements": 5,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "AnonymousMethod",
+                      "Name": "(object,StateChangeEventArgs):void",
+                      "CoveredStatements": 9,
+                      "TotalStatements": 9,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "AnonymousMethod",
+                      "Name": "(DbConnection):void",
+                      "CoveredStatements": 2,
+                      "TotalStatements": 2,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "GenerateRandomName(int,int):string",
+                  "CoveredStatements": 10,
+                  "TotalStatements": 10,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "GetConnection(ExecutionType,bool):ITrackedConnection",
+                  "CoveredStatements": 4,
+                  "TotalStatements": 5,
+                  "CoveragePercent": 80
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "GetFactoryConnectionStringBuilder(string):DbConnectionStringBuilder",
+                  "CoveredStatements": 3,
+                  "TotalStatements": 3,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "GetLock():ILockerAsync",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "GetSingleConnection():ITrackedConnection",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "GetSingleWriterConnection(ExecutionType,bool):ITrackedConnection",
+                  "CoveredStatements": 3,
+                  "TotalStatements": 3,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "GetStandardConnection(bool):ITrackedConnection",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "InitializeInternals(IDatabaseContextConfiguration):void",
+                  "CoveredStatements": 27,
+                  "TotalStatements": 31,
+                  "CoveragePercent": 87
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "MakeParameterName(DbParameter):string",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "MakeParameterName(string):string",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "SanitizeConnectionString(string):void",
+                  "CoveredStatements": 5,
+                  "TotalStatements": 5,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "SetupConnectionSessionSettingsForProvider(ITrackedConnection):void",
+                  "CoveredStatements": 13,
+                  "TotalStatements": 14,
+                  "CoveragePercent": 93
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "UpdateMaxConnectionCount(long):void",
+                  "CoveredStatements": 5,
+                  "TotalStatements": 5,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "WrapObjectName(string):string",
+                  "CoveredStatements": 15,
+                  "TotalStatements": 16,
+                  "CoveragePercent": 94
+                }
+              ]
+            },
+            {
+              "Kind": "Type",
+              "Name": "DataReaderMapper",
+              "CoveredStatements": 30,
+              "TotalStatements": 32,
+              "CoveragePercent": 94,
+              "Children": [
+                {
+                  "Kind": "Method",
+                  "Name": "LoadObjectsFromDataReaderAsync<T>(IDataReader,CancellationToken):Task<List<T>>",
+                  "CoveredStatements": 30,
+                  "TotalStatements": 32,
+                  "CoveragePercent": 94,
+                  "Children": [
+                    {
+                      "Kind": "InternalCompiledMethod",
+                      "Name": "MoveNext():void",
+                      "CoveredStatements": 30,
+                      "TotalStatements": 32,
+                      "CoveragePercent": 94,
+                      "Children": [
+                        {
+                          "Kind": "OwnCoverage",
+                          "CoveredStatements": 29,
+                          "TotalStatements": 31,
+                          "CoveragePercent": 94
+                        },
+                        {
+                          "Kind": "AnonymousMethod",
+                          "Name": "(PropertyInfo):string",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "Kind": "Type",
+              "Name": "DataSourceInformation",
+              "CoveredStatements": 167,
+              "TotalStatements": 194,
+              "CoveragePercent": 86,
+              "Children": [
+                {
+                  "Kind": "Constructor",
+                  "Name": "DataSourceInformation(ILoggerFactory)",
+                  "CoveredStatements": 8,
+                  "TotalStatements": 8,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Constructor",
+                  "Name": "DataSourceInformation(DbConnection,ILoggerFactory)",
+                  "CoveredStatements": 7,
+                  "TotalStatements": 8,
+                  "CoveragePercent": 88
+                },
+                {
+                  "Kind": "Constructor",
+                  "Name": "DataSourceInformation()",
+                  "CoveredStatements": 5,
+                  "TotalStatements": 5,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "CompositeIdentifierSeparator:string",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 50,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 0
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "DatabaseProductName:string",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "DatabaseProductVersion:string",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 50,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 0
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "MaxParameterLimit:int",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "ParameterMarker:string",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "ParameterMarkerPattern:string",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 50,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 0
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "ParameterNameMaxLength:int",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 50,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 0
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "ParameterNamePatternRegex:Regex",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 50,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 0
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "PrepareStatements:bool",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "ProcWrappingStyle:ProcWrappingStyle",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "Product:SupportedDatabase",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "QuotePrefix:string",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "QuoteSuffix:string",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "RequiresStoredProcParameterNameMatch:bool",
+                  "CoveredStatements": 5,
+                  "TotalStatements": 5,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 5,
+                      "TotalStatements": 5,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "SupportsInsertOnConflict:bool",
+                  "CoveredStatements": 7,
+                  "TotalStatements": 7,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 7,
+                      "TotalStatements": 7,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "SupportsMerge:bool",
+                  "CoveredStatements": 5,
+                  "TotalStatements": 5,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 5,
+                      "TotalStatements": 5,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "SupportsNamedParameters:bool",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "ApplySchema(DataTable):void",
+                  "CoveredStatements": 9,
+                  "TotalStatements": 9,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "BuildEmptySchema(string,string,string,string,int,string,string,bool):DataTable",
+                  "CoveredStatements": 11,
+                  "TotalStatements": 11,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "Create(ITrackedConnection,ILoggerFactory):DataSourceInformation",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "CreateAsync(ITrackedConnection,ILoggerFactory):Task<DataSourceInformation>",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "CreateInternalAsync(ITrackedConnection,ILoggerFactory):Task<DataSourceInformation>",
+                  "CoveredStatements": 4,
+                  "TotalStatements": 4,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "InternalCompiledMethod",
+                      "Name": "MoveNext():void",
+                      "CoveredStatements": 4,
+                      "TotalStatements": 4,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "ExecuteScalarViaReaderAsync(ITrackedConnection,string,ILogger<DataSourceInformation>):Task<object>",
+                  "CoveredStatements": 7,
+                  "TotalStatements": 11,
+                  "CoveragePercent": 64,
+                  "Children": [
+                    {
+                      "Kind": "InternalCompiledMethod",
+                      "Name": "MoveNext():void",
+                      "CoveredStatements": 7,
+                      "TotalStatements": 11,
+                      "CoveragePercent": 64
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "GetDatabaseVersion(ITrackedConnection):string",
+                  "CoveredStatements": 17,
+                  "TotalStatements": 19,
+                  "CoveragePercent": 89
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "GetField<T>(DataRow,string,T):T",
+                  "CoveredStatements": 4,
+                  "TotalStatements": 4,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "GetSchema(ITrackedConnection):DataTable",
+                  "CoveredStatements": 0,
+                  "TotalStatements": 3,
+                  "CoveragePercent": 0
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "GetSchemaAsync(ITrackedConnection,ILogger<DataSourceInformation>):Task<DataTable>",
+                  "CoveredStatements": 4,
+                  "TotalStatements": 4,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "InternalCompiledMethod",
+                      "Name": "MoveNext():void",
+                      "CoveredStatements": 4,
+                      "TotalStatements": 4,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "GetVersionAsync(ITrackedConnection,string,ILogger<DataSourceInformation>):Task<string>",
+                  "CoveredStatements": 3,
+                  "TotalStatements": 3,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "InternalCompiledMethod",
+                      "Name": "MoveNext():void",
+                      "CoveredStatements": 3,
+                      "TotalStatements": 3,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "InferDatabaseProduct(string):SupportedDatabase",
+                  "CoveredStatements": 17,
+                  "TotalStatements": 20,
+                  "CoveragePercent": 85
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "InitializeInternalAsync(ITrackedConnection):Task",
+                  "CoveredStatements": 18,
+                  "TotalStatements": 18,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "InternalCompiledMethod",
+                      "Name": "MoveNext():void",
+                      "CoveredStatements": 18,
+                      "TotalStatements": 18,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "InitializeSync(ITrackedConnection):void",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "IsSqliteAsync(ITrackedConnection,ILogger<DataSourceInformation>):Task<bool>",
+                  "CoveredStatements": 3,
+                  "TotalStatements": 5,
+                  "CoveragePercent": 60,
+                  "Children": [
+                    {
+                      "Kind": "InternalCompiledMethod",
+                      "Name": "MoveNext():void",
+                      "CoveredStatements": 3,
+                      "TotalStatements": 5,
+                      "CoveragePercent": 60
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "IsSqliteSync(ITrackedConnection):bool",
+                  "CoveredStatements": 0,
+                  "TotalStatements": 7,
+                  "CoveragePercent": 0
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "ReadSqliteSchema():DataTable",
+                  "CoveredStatements": 6,
+                  "TotalStatements": 6,
+                  "CoveragePercent": 100
+                }
+              ]
+            },
+            {
+              "Kind": "Type",
+              "Name": "EntityHelper<TEntity,TRowID>",
+              "CoveredStatements": 343,
+              "TotalStatements": 380,
+              "CoveragePercent": 90,
+              "Children": [
+                {
+                  "Kind": "Constructor",
+                  "Name": "EntityHelper()",
+                  "CoveredStatements": 4,
+                  "TotalStatements": 4,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Constructor",
+                  "Name": "EntityHelper(IDatabaseContext,EnumParseFailureMode)",
+                  "CoveredStatements": 4,
+                  "TotalStatements": 4,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Constructor",
+                  "Name": "EntityHelper(IDatabaseContext,IAuditValueResolver,EnumParseFailureMode)",
+                  "CoveredStatements": 4,
+                  "TotalStatements": 4,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "EnumParseBehavior:EnumParseFailureMode",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 50,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 0
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "Logger:ILogger",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 50,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 0
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "WrappedTableName:string",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "AppendVersionCondition(ISqlContainer,object,IDatabaseContext,List<DbParameter>):void",
+                  "CoveredStatements": 5,
+                  "TotalStatements": 6,
+                  "CoveragePercent": 83
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "AppendWherePrefix(ISqlContainer):void",
+                  "CoveredStatements": 3,
+                  "TotalStatements": 5,
+                  "CoveragePercent": 60
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "BuildAliasPrefix(string):string",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "BuildBaseRetrieve(string,IDatabaseContext):ISqlContainer",
+                  "CoveredStatements": 13,
+                  "TotalStatements": 13,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "OwnCoverage",
+                      "CoveredStatements": 12,
+                      "TotalStatements": 12,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "AnonymousMethod",
+                      "Name": "(IColumnInfo):string",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "BuildCreate(TEntity,IDatabaseContext):ISqlContainer",
+                  "CoveredStatements": 32,
+                  "TotalStatements": 34,
+                  "CoveragePercent": 94
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "BuildDelete(TRowID,IDatabaseContext):ISqlContainer",
+                  "CoveredStatements": 11,
+                  "TotalStatements": 13,
+                  "CoveragePercent": 85
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "BuildPrimaryKeyClause(TEntity,IReadOnlyList<IColumnInfo>,string,List<DbParameter>):string",
+                  "CoveredStatements": 16,
+                  "TotalStatements": 18,
+                  "CoveragePercent": 89
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "BuildRetrieve(IReadOnlyCollection<TRowID>,string,IDatabaseContext):ISqlContainer",
+                  "CoveredStatements": 10,
+                  "TotalStatements": 11,
+                  "CoveragePercent": 91,
+                  "Children": [
+                    {
+                      "Kind": "OwnCoverage",
+                      "CoveredStatements": 9,
+                      "TotalStatements": 10,
+                      "CoveragePercent": 90
+                    },
+                    {
+                      "Kind": "AnonymousMethod",
+                      "Name": "(TRowID):bool",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "BuildRetrieve(IReadOnlyCollection<TEntity>,string,IDatabaseContext):ISqlContainer",
+                  "CoveredStatements": 7,
+                  "TotalStatements": 8,
+                  "CoveragePercent": 88
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "BuildRetrieve(IReadOnlyCollection<TRowID>,IDatabaseContext):ISqlContainer",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "BuildRetrieve(IReadOnlyCollection<TEntity>,IDatabaseContext):ISqlContainer",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "BuildSetClause(TEntity,TEntity,IDatabaseContext):ValueTuple<StringBuilder,List<DbParameter>>",
+                  "CoveredStatements": 16,
+                  "TotalStatements": 17,
+                  "CoveragePercent": 94
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "BuildUpdateAsync(TEntity,IDatabaseContext):Task<ISqlContainer>",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "BuildUpdateAsync(TEntity,bool,IDatabaseContext):Task<ISqlContainer>",
+                  "CoveredStatements": 21,
+                  "TotalStatements": 23,
+                  "CoveragePercent": 91,
+                  "Children": [
+                    {
+                      "Kind": "InternalCompiledMethod",
+                      "Name": "MoveNext():void",
+                      "CoveredStatements": 21,
+                      "TotalStatements": 23,
+                      "CoveragePercent": 91
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "BuildWhere(string,IEnumerable<TRowID>,ISqlContainer):ISqlContainer",
+                  "CoveredStatements": 25,
+                  "TotalStatements": 26,
+                  "CoveragePercent": 96,
+                  "Children": [
+                    {
+                      "Kind": "OwnCoverage",
+                      "CoveredStatements": 24,
+                      "TotalStatements": 25,
+                      "CoveragePercent": 96
+                    },
+                    {
+                      "Kind": "AnonymousMethod",
+                      "Name": "(TRowID):bool",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "BuildWhereByPrimaryKey(IReadOnlyCollection<TEntity>,ISqlContainer,string):void",
+                  "CoveredStatements": 17,
+                  "TotalStatements": 19,
+                  "CoveragePercent": 89
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "CheckParameterLimit(ISqlContainer,Nullable<int>):void",
+                  "CoveredStatements": 3,
+                  "TotalStatements": 4,
+                  "CoveragePercent": 75
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "CreateAsync(TEntity,IDatabaseContext):Task<bool>",
+                  "CoveredStatements": 3,
+                  "TotalStatements": 3,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "InternalCompiledMethod",
+                      "Name": "MoveNext():void",
+                      "CoveredStatements": 3,
+                      "TotalStatements": 3,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "DeleteAsync(TRowID,IDatabaseContext):Task<int>",
+                  "CoveredStatements": 3,
+                  "TotalStatements": 3,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "InternalCompiledMethod",
+                      "Name": "MoveNext():void",
+                      "CoveredStatements": 3,
+                      "TotalStatements": 3,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "DeleteAsync(IEnumerable<TRowID>,IDatabaseContext):Task<int>",
+                  "CoveredStatements": 9,
+                  "TotalStatements": 11,
+                  "CoveragePercent": 82,
+                  "Children": [
+                    {
+                      "Kind": "InternalCompiledMethod",
+                      "Name": "MoveNext():void",
+                      "CoveredStatements": 9,
+                      "TotalStatements": 11,
+                      "CoveragePercent": 82
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "GetOrCreateSetter(PropertyInfo):Action<object,object>",
+                  "CoveredStatements": 9,
+                  "TotalStatements": 9,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "OwnCoverage",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "AnonymousMethod",
+                      "Name": "(PropertyInfo):Action<object,object>",
+                      "CoveredStatements": 8,
+                      "TotalStatements": 8,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "GetPrimaryKeys():List<IColumnInfo>",
+                  "CoveredStatements": 4,
+                  "TotalStatements": 5,
+                  "CoveragePercent": 80,
+                  "Children": [
+                    {
+                      "Kind": "OwnCoverage",
+                      "CoveredStatements": 3,
+                      "TotalStatements": 4,
+                      "CoveragePercent": 75
+                    },
+                    {
+                      "Kind": "AnonymousMethod",
+                      "Name": "(IColumnInfo):bool",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "IncrementVersion(StringBuilder):void",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "Initialize(IDatabaseContext,EnumParseFailureMode):void",
+                  "CoveredStatements": 15,
+                  "TotalStatements": 15,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "OwnCoverage",
+                      "CoveredStatements": 12,
+                      "TotalStatements": 12,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "AnonymousMethod",
+                      "Name": "(IColumnInfo):bool",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "AnonymousMethod",
+                      "Name": "(IColumnInfo):bool",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "AnonymousMethod",
+                      "Name": "(IColumnInfo):bool",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "IsDefaultId(object):bool",
+                  "CoveredStatements": 8,
+                  "TotalStatements": 11,
+                  "CoveragePercent": 73
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "LoadListAsync(ISqlContainer):Task<List<TEntity>>",
+                  "CoveredStatements": 8,
+                  "TotalStatements": 8,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "InternalCompiledMethod",
+                      "Name": "MoveNext():void",
+                      "CoveredStatements": 8,
+                      "TotalStatements": 8,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "LoadOriginalAsync(TEntity):Task<TEntity>",
+                  "CoveredStatements": 4,
+                  "TotalStatements": 5,
+                  "CoveragePercent": 80,
+                  "Children": [
+                    {
+                      "Kind": "InternalCompiledMethod",
+                      "Name": "MoveNext():void",
+                      "CoveredStatements": 4,
+                      "TotalStatements": 5,
+                      "CoveragePercent": 80
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "LoadSingleAsync(ISqlContainer):Task<TEntity>",
+                  "CoveredStatements": 5,
+                  "TotalStatements": 5,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "InternalCompiledMethod",
+                      "Name": "MoveNext():void",
+                      "CoveredStatements": 5,
+                      "TotalStatements": 5,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "MakeParameterName(DbParameter):string",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "MapReaderToObject(ITrackedReader):TEntity",
+                  "CoveredStatements": 13,
+                  "TotalStatements": 15,
+                  "CoveragePercent": 87
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "RetrieveAsync(IEnumerable<TRowID>,IDatabaseContext):Task<List<TEntity>>",
+                  "CoveredStatements": 7,
+                  "TotalStatements": 9,
+                  "CoveragePercent": 78,
+                  "Children": [
+                    {
+                      "Kind": "InternalCompiledMethod",
+                      "Name": "MoveNext():void",
+                      "CoveredStatements": 7,
+                      "TotalStatements": 9,
+                      "CoveragePercent": 78
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "RetrieveOneAsync(TEntity,IDatabaseContext):Task<TEntity>",
+                  "CoveredStatements": 4,
+                  "TotalStatements": 4,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "RetrieveOneAsync(TRowID,IDatabaseContext):Task<TEntity>",
+                  "CoveredStatements": 4,
+                  "TotalStatements": 4,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "SetAuditFields(TEntity,bool):void",
+                  "CoveredStatements": 16,
+                  "TotalStatements": 20,
+                  "CoveragePercent": 80
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "UpdateAsync(TEntity,IDatabaseContext):Task<int>",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "UpdateAsync(TEntity,bool,IDatabaseContext):Task<int>",
+                  "CoveredStatements": 5,
+                  "TotalStatements": 5,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "InternalCompiledMethod",
+                      "Name": "MoveNext():void",
+                      "CoveredStatements": 5,
+                      "TotalStatements": 5,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "UpsertAsync(TEntity,IDatabaseContext):Task<int>",
+                  "CoveredStatements": 7,
+                  "TotalStatements": 8,
+                  "CoveragePercent": 88,
+                  "Children": [
+                    {
+                      "Kind": "InternalCompiledMethod",
+                      "Name": "MoveNext():void",
+                      "CoveredStatements": 7,
+                      "TotalStatements": 8,
+                      "CoveragePercent": 88
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "ValidateRowIdType():void",
+                  "CoveredStatements": 11,
+                  "TotalStatements": 11,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "ValidateWhereInputs(IReadOnlyCollection<TEntity>,ISqlContainer):void",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 3,
+                  "CoveragePercent": 67
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "WrapObjectName(string):string",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100
+                }
+              ]
+            },
+            {
+              "Kind": "Type",
+              "Name": "EphemeralSecureString",
+              "CoveredStatements": 57,
+              "TotalStatements": 58,
+              "CoveragePercent": 98,
+              "Children": [
+                {
+                  "Kind": "Constructor",
+                  "Name": "EphemeralSecureString(string)",
+                  "CoveredStatements": 12,
+                  "TotalStatements": 13,
+                  "CoveragePercent": 92
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "ClearPlainText(object):void",
+                  "CoveredStatements": 8,
+                  "TotalStatements": 8,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "DecryptBytes(byte[],byte[],byte[]):byte[]",
+                  "CoveredStatements": 8,
+                  "TotalStatements": 8,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "Dispose():void",
+                  "CoveredStatements": 6,
+                  "TotalStatements": 6,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "EncryptStringToBytes(string,byte[],byte[],Encoding):byte[]",
+                  "CoveredStatements": 11,
+                  "TotalStatements": 11,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "Reveal():string",
+                  "CoveredStatements": 9,
+                  "TotalStatements": 9,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "WithRevealed(Action<string>):void",
+                  "CoveredStatements": 3,
+                  "TotalStatements": 3,
+                  "CoveragePercent": 100
+                }
+              ]
+            },
+            {
+              "Kind": "Type",
+              "Name": "ReflectionSerializer",
+              "CoveredStatements": 66,
+              "TotalStatements": 74,
+              "CoveragePercent": 89,
+              "Children": [
+                {
+                  "Kind": "Method",
+                  "Name": "Deserialize<T>(object):T",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "Deserialize(Type,object):object",
+                  "CoveredStatements": 34,
+                  "TotalStatements": 40,
+                  "CoveragePercent": 85
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "IsSimpleType(Type):bool",
+                  "CoveredStatements": 4,
+                  "TotalStatements": 4,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "Serialize(object):object",
+                  "CoveredStatements": 27,
+                  "TotalStatements": 29,
+                  "CoveragePercent": 93
+                }
+              ]
+            },
+            {
+              "Kind": "Type",
+              "Name": "SqlContainer",
+              "CoveredStatements": 123,
+              "TotalStatements": 141,
+              "CoveragePercent": 87,
+              "Children": [
+                {
+                  "Kind": "Constructor",
+                  "Name": "SqlContainer(IDatabaseContext,string,ILogger<ISqlContainer>)",
+                  "CoveredStatements": 6,
+                  "TotalStatements": 6,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "CompositeIdentifierSeparator:string",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "ParameterCount:int",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "Query:StringBuilder",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "QuotePrefix:string",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "QuoteSuffix:string",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "AddParameter(DbParameter):void",
+                  "CoveredStatements": 4,
+                  "TotalStatements": 6,
+                  "CoveragePercent": 67
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "AddParameters(IEnumerable<DbParameter>):void",
+                  "CoveredStatements": 6,
+                  "TotalStatements": 6,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "AddParameterWithValue<T>(DbType,T):DbParameter",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 3,
+                  "CoveragePercent": 67
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "AddParameterWithValue<T>(string,DbType,T):DbParameter",
+                  "CoveredStatements": 4,
+                  "TotalStatements": 4,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "Cleanup(DbCommand,ITrackedConnection,ExecutionType):void",
+                  "CoveredStatements": 13,
+                  "TotalStatements": 13,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "Clear():void",
+                  "CoveredStatements": 3,
+                  "TotalStatements": 3,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "CreateCommand(ITrackedConnection):DbCommand",
+                  "CoveredStatements": 4,
+                  "TotalStatements": 4,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "DisposeManaged():void",
+                  "CoveredStatements": 3,
+                  "TotalStatements": 3,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "ExecuteNonQueryAsync(CommandType):Task<int>",
+                  "CoveredStatements": 13,
+                  "TotalStatements": 14,
+                  "CoveragePercent": 93,
+                  "Children": [
+                    {
+                      "Kind": "InternalCompiledMethod",
+                      "Name": "MoveNext():void",
+                      "CoveredStatements": 13,
+                      "TotalStatements": 14,
+                      "CoveragePercent": 93
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "ExecuteReaderAsync(CommandType):Task<ITrackedReader>",
+                  "CoveredStatements": 16,
+                  "TotalStatements": 17,
+                  "CoveragePercent": 94,
+                  "Children": [
+                    {
+                      "Kind": "InternalCompiledMethod",
+                      "Name": "MoveNext():void",
+                      "CoveredStatements": 16,
+                      "TotalStatements": 17,
+                      "CoveragePercent": 94
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "ExecuteScalarAsync<T>(CommandType):Task<T>",
+                  "CoveredStatements": 8,
+                  "TotalStatements": 8,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "InternalCompiledMethod",
+                      "Name": "MoveNext():void",
+                      "CoveredStatements": 8,
+                      "TotalStatements": 8,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "GenerateRandomName():string",
+                  "CoveredStatements": 3,
+                  "TotalStatements": 3,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "MakeParameterName(DbParameter):string",
+                  "CoveredStatements": 0,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 0
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "OpenConnection(ITrackedConnection):void",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 3,
+                  "CoveragePercent": 67
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "PrepareCommand(ITrackedConnection,CommandType,ExecutionType):DbCommand",
+                  "CoveredStatements": 15,
+                  "TotalStatements": 22,
+                  "CoveragePercent": 68,
+                  "Children": [
+                    {
+                      "Kind": "OwnCoverage",
+                      "CoveredStatements": 15,
+                      "TotalStatements": 21,
+                      "CoveragePercent": 71
+                    },
+                    {
+                      "Kind": "AnonymousMethod",
+                      "Name": "(DbParameter):string",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 0
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "WrapForStoredProc(ExecutionType,bool):string",
+                  "CoveredStatements": 15,
+                  "TotalStatements": 19,
+                  "CoveragePercent": 79,
+                  "Children": [
+                    {
+                      "Kind": "OwnCoverage",
+                      "CoveredStatements": 11,
+                      "TotalStatements": 13,
+                      "CoveragePercent": 85
+                    },
+                    {
+                      "Kind": "LocalFunction",
+                      "Name": "BuildProcedureArguments():string",
+                      "CoveredStatements": 4,
+                      "TotalStatements": 6,
+                      "CoveragePercent": 67,
+                      "Children": [
+                        {
+                          "Kind": "OwnCoverage",
+                          "CoveredStatements": 3,
+                          "TotalStatements": 5,
+                          "CoveragePercent": 60
+                        },
+                        {
+                          "Kind": "AnonymousMethod",
+                          "Name": "(DbParameter):string",
+                          "CoveredStatements": 1,
+                          "TotalStatements": 1,
+                          "CoveragePercent": 100
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "WrapObjectName(string):string",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100
+                }
+              ]
+            },
+            {
+              "Kind": "Type",
+              "Name": "SqlContainerExtensions",
+              "CoveredStatements": 2,
+              "TotalStatements": 2,
+              "CoveragePercent": 100,
+              "Children": [
+                {
+                  "Kind": "Method",
+                  "Name": "AppendQuery(ISqlContainer,string):ISqlContainer",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100
+                }
+              ]
+            },
+            {
+              "Kind": "Type",
+              "Name": "StubAuditValueResolver",
+              "CoveredStatements": 4,
+              "TotalStatements": 4,
+              "CoveragePercent": 100,
+              "Children": [
+                {
+                  "Kind": "Constructor",
+                  "Name": "StubAuditValueResolver(object)",
+                  "CoveredStatements": 3,
+                  "TotalStatements": 3,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "Resolve():IAuditValues",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100
+                }
+              ]
+            },
+            {
+              "Kind": "Type",
+              "Name": "TableInfo",
+              "CoveredStatements": 18,
+              "TotalStatements": 18,
+              "CoveragePercent": 100,
+              "Children": [
+                {
+                  "Kind": "Constructor",
+                  "Name": "TableInfo()",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "Columns:Dictionary<string,IColumnInfo>",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "CreatedBy:IColumnInfo",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "CreatedOn:IColumnInfo",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "Id:IColumnInfo",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "LastUpdatedBy:IColumnInfo",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "LastUpdatedOn:IColumnInfo",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "Name:string",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "Schema:string",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "Version:IColumnInfo",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "Kind": "Type",
+              "Name": "TransactionContext",
+              "CoveredStatements": 100,
+              "TotalStatements": 126,
+              "CoveragePercent": 79,
+              "Children": [
+                {
+                  "Kind": "Constructor",
+                  "Name": "TransactionContext(IDatabaseContext,IsolationLevel,Nullable<ExecutionType>,ILogger<TransactionContext>)",
+                  "CoveredStatements": 13,
+                  "TotalStatements": 14,
+                  "CoveragePercent": 93
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "CompositeIdentifierSeparator:string",
+                  "CoveredStatements": 0,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 0,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 0
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "ConnectionMode:DbMode",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "DataSourceInfo:IDataSourceInformation",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "IsCompleted:bool",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "IsolationLevel:IsolationLevel",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "IsReadOnlyConnection:bool",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "MaxNumberOfConnections:long",
+                  "CoveredStatements": 0,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 0,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 0
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "MaxParameterLimit:int",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "NumberOfOpenConnections:long",
+                  "CoveredStatements": 0,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 0,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 0
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "ProcWrappingStyle:ProcWrappingStyle",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "Product:SupportedDatabase",
+                  "CoveredStatements": 0,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 0,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 0
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "QuotePrefix:string",
+                  "CoveredStatements": 0,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 0,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 0
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "QuoteSuffix:string",
+                  "CoveredStatements": 0,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 0,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 0
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "RCSIEnabled:bool",
+                  "CoveredStatements": 0,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 0,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 0
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "SessionSettingsPreamble:string",
+                  "CoveredStatements": 0,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 0,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 0
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "Transaction:IDbTransaction",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "AutoProperty",
+                  "Name": "TransactionId:Guid",
+                  "CoveredStatements": 0,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 0,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 0
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "TypeMapRegistry:ITypeMapRegistry",
+                  "CoveredStatements": 0,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 0,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 0,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 0
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "WasCommitted:bool",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "WasRolledBack:bool",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "AssertIsReadConnection():void",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "AssertIsWriteConnection():void",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "BeginTransaction(IsolationProfile):ITransactionContext",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "BeginTransaction(Nullable<IsolationLevel>):ITransactionContext",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "CloseAndDisposeConnection(ITrackedConnection):void",
+                  "CoveredStatements": 0,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 0
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "Commit():void",
+                  "CoveredStatements": 12,
+                  "TotalStatements": 12,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "CreateDbParameter<T>(string,DbType,T):DbParameter",
+                  "CoveredStatements": 0,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 0
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "CreateDbParameter<T>(DbType,T):DbParameter",
+                  "CoveredStatements": 0,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 0
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "CreateSqlContainer(string):ISqlContainer",
+                  "CoveredStatements": 3,
+                  "TotalStatements": 3,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "DisposeManaged():void",
+                  "CoveredStatements": 15,
+                  "TotalStatements": 20,
+                  "CoveragePercent": 75
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "DisposeManagedAsync():ValueTask",
+                  "CoveredStatements": 17,
+                  "TotalStatements": 23,
+                  "CoveragePercent": 74,
+                  "Children": [
+                    {
+                      "Kind": "InternalCompiledMethod",
+                      "Name": "MoveNext():void",
+                      "CoveredStatements": 17,
+                      "TotalStatements": 23,
+                      "CoveragePercent": 74
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "EnsureConnectionIsOpen():void",
+                  "CoveredStatements": 3,
+                  "TotalStatements": 3,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "GenerateRandomName(int,int):string",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "GetConnection(ExecutionType,bool):ITrackedConnection",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "GetLock():ILockerAsync",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "MakeParameterName(string):string",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "MakeParameterName(DbParameter):string",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "Rollback():void",
+                  "CoveredStatements": 12,
+                  "TotalStatements": 12,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "ThrowIfDisposed():void",
+                  "CoveredStatements": 3,
+                  "TotalStatements": 3,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "WrapObjectName(string):string",
+                  "CoveredStatements": 0,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 0
+                }
+              ]
+            },
+            {
+              "Kind": "Type",
+              "Name": "TypeCoercionHelper",
+              "CoveredStatements": 35,
+              "TotalStatements": 39,
+              "CoveragePercent": 90,
+              "Children": [
+                {
+                  "Kind": "Constructor",
+                  "Name": "TypeCoercionHelper()",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Property",
+                  "Name": "Logger:ILogger",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
+                  "Children": [
+                    {
+                      "Kind": "PropertyGetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "Coerce(object,Type,IColumnInfo,EnumParseFailureMode):object",
+                  "CoveredStatements": 14,
+                  "TotalStatements": 17,
+                  "CoveragePercent": 82
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "Coerce(object,Type,Type):object",
+                  "CoveredStatements": 5,
+                  "TotalStatements": 5,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "CoerceCore(object,Type,Type):object",
+                  "CoveredStatements": 13,
+                  "TotalStatements": 14,
+                  "CoveragePercent": 93
+                }
+              ]
+            },
+            {
+              "Kind": "Type",
+              "Name": "TypeMapRegistry",
+              "CoveredStatements": 37,
+              "TotalStatements": 37,
+              "CoveragePercent": 100,
+              "Children": [
+                {
+                  "Kind": "Constructor",
+                  "Name": "TypeMapRegistry()",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "GetTableInfo<T>():ITableInfo",
+                  "CoveredStatements": 34,
+                  "TotalStatements": 34,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "Register<T>():void",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100
+                }
+              ]
+            },
+            {
+              "Kind": "Type",
+              "Name": "Utils",
+              "CoveredStatements": 21,
+              "TotalStatements": 23,
+              "CoveragePercent": 91,
+              "Children": [
+                {
+                  "Kind": "Method",
+                  "Name": "IsNullOrDbNull(object):bool",
+                  "CoveredStatements": 1,
+                  "TotalStatements": 1,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "IsNullOrEmpty<T>(IEnumerable<T>):bool",
+                  "CoveredStatements": 7,
+                  "TotalStatements": 9,
+                  "CoveragePercent": 78
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "IsZeroNumeric(object):bool",
+                  "CoveredStatements": 13,
+                  "TotalStatements": 13,
+                  "CoveragePercent": 100
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

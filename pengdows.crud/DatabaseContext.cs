@@ -101,7 +101,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
         }
     }
 
-    public ReadWriteMode ReadWriteMode { get; }
+    public ReadWriteMode ReadWriteMode { get; set; }
 
     public string Name { get; set; }
 
@@ -462,12 +462,12 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     {
         var connectionString = config.ConnectionString;
         var mode = config.DbMode;
-        var readWriteMode = config.ReadWriteMode;
+        ReadWriteMode = config.ReadWriteMode;
         ITrackedConnection conn = null;
         try
         {
-            _isReadConnection = (readWriteMode & ReadWriteMode.ReadOnly) == ReadWriteMode.ReadOnly;
-            _isWriteConnection = (readWriteMode & ReadWriteMode.WriteOnly) == ReadWriteMode.WriteOnly;
+            _isReadConnection = (ReadWriteMode & ReadWriteMode.ReadOnly) == ReadWriteMode.ReadOnly;
+            _isWriteConnection = (ReadWriteMode & ReadWriteMode.WriteOnly) == ReadWriteMode.WriteOnly;
             // this connection will be set as our single connection for any DbMode != DbMode.Standard
             // so we set it to shared.
             conn = FactoryCreateConnection(connectionString, true);
