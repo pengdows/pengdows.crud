@@ -6,6 +6,8 @@ using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
 using System;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;
@@ -20,6 +22,14 @@ public class EntityHelper<TEntity, TRowID> :
 {
     // Cache for compiled property setters
     private static readonly ConcurrentDictionary<PropertyInfo, Action<object, object?>> _propertySetters = new();
+
+    private static ILogger _logger = NullLogger.Instance;
+
+    public static ILogger Logger
+    {
+        get => _logger;
+        set => _logger = value ?? NullLogger.Instance;
+    }
 
     static EntityHelper()
     {
@@ -77,6 +87,15 @@ public class EntityHelper<TEntity, TRowID> :
 
         _idColumn = _tableInfo.Columns.Values.FirstOrDefault(itm => itm.IsId);
         _versionColumn = _tableInfo.Columns.Values.FirstOrDefault(itm => itm.IsVersion);
+
+        if (_auditValueResolver == null &&
+            (_tableInfo.CreatedBy != null ||
+             _tableInfo.LastUpdatedBy != null))
+        {
+            Logger.LogWarning(
+                "Audit user columns detected for {EntityType} but no IAuditValueResolver provided. Database defaults will be used for those columns.",
+                typeof(TEntity).Name);
+        }
         EnumParseBehavior = enumParseBehavior;
     }
 
@@ -162,10 +181,10 @@ public class EntityHelper<TEntity, TRowID> :
 
             var value = column.MakeParameterValueFromField(objectToCreate);
 
-            // If no audit resolver is provided and the value is null for an audit column,
+            // If no audit resolver is provided and the value is null for a user audit column,
             // skip including this column so database defaults will apply.
             if (_auditValueResolver == null &&
-                (column.IsCreatedBy || column.IsCreatedOn || column.IsLastUpdatedBy || column.IsLastUpdatedOn) &&
+                (column.IsCreatedBy || column.IsLastUpdatedBy) &&
                 Utils.IsNullOrDbNull(value))
                 continue;
 
@@ -672,7 +691,7 @@ public class EntityHelper<TEntity, TRowID> :
 
     private void SetAuditFields(TEntity obj, bool updateOnly)
     {
-        if (obj == null || _auditValueResolver == null)
+        if (obj == null)
             return;
 
         // Skip resolving audit values when no audit columns are present
@@ -682,17 +701,27 @@ public class EntityHelper<TEntity, TRowID> :
             _tableInfo.LastUpdatedOn == null)
             return;
 
-        var auditValues = _auditValueResolver.Resolve();
-        if (auditValues == null) return;
+        var auditValues = _auditValueResolver?.Resolve();
 
-        // Always update last-modified
-        _tableInfo.LastUpdatedBy?.PropertyInfo?.SetValue(obj, auditValues.UserId);
-        _tableInfo.LastUpdatedOn?.PropertyInfo?.SetValue(obj, auditValues.UtcNow);
+        var utcNow = auditValues?.UtcNow ?? DateTime.UtcNow;
+
+        // Always update last-modified timestamp
+        _tableInfo.LastUpdatedOn?.PropertyInfo?.SetValue(obj, utcNow);
+        // If resolver is provided, also set user id
+        if (auditValues != null)
+            _tableInfo.LastUpdatedBy?.PropertyInfo?.SetValue(obj, auditValues.UserId);
 
         if (updateOnly) return;
 
         // Only set Created fields if they are null or default
-        if (_tableInfo.CreatedBy?.PropertyInfo != null)
+        if (_tableInfo.CreatedOn?.PropertyInfo != null)
+        {
+            var currentValue = _tableInfo.CreatedOn.PropertyInfo.GetValue(obj) as DateTime?;
+            if (currentValue == null || currentValue == default(DateTime))
+                _tableInfo.CreatedOn.PropertyInfo.SetValue(obj, utcNow);
+        }
+
+        if (auditValues != null && _tableInfo.CreatedBy?.PropertyInfo != null)
         {
             var currentValue = _tableInfo.CreatedBy.PropertyInfo.GetValue(obj);
             if (currentValue == null
@@ -700,13 +729,6 @@ public class EntityHelper<TEntity, TRowID> :
                 || Utils.IsZeroNumeric(currentValue)
                 || (currentValue is Guid guid && guid == Guid.Empty))
                 _tableInfo.CreatedBy.PropertyInfo.SetValue(obj, auditValues.UserId);
-        }
-
-        if (_tableInfo.CreatedOn?.PropertyInfo != null)
-        {
-            var currentValue = _tableInfo.CreatedOn.PropertyInfo.GetValue(obj) as DateTime?;
-            if (currentValue == null || currentValue == default(DateTime))
-                _tableInfo.CreatedOn.PropertyInfo.SetValue(obj, auditValues.UtcNow);
         }
     }
 
