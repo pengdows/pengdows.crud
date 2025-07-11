@@ -35,8 +35,10 @@ public class UpdateDeleteAsyncTests : SqlLiteContextTestBase
         var e = new TestEntity { Name = Guid.NewGuid().ToString() };
         await helper.CreateAsync(e, Context);
         var loaded = (await helper.LoadListAsync(helper.BuildBaseRetrieve("a"))).First();
+        var originalUpdated = loaded.LastUpdatedOn;
         var count = await helper.UpdateAsync(loaded);
         Assert.Equal(0, count);
+        Assert.Equal(originalUpdated, loaded.LastUpdatedOn);
     }
 
     [Fact]

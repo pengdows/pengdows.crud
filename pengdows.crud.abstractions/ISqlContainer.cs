@@ -19,6 +19,9 @@ public interface ISqlContainer : ISafeAsyncDisposableBase
 {
     StringBuilder Query { get; }
     int ParameterCount { get; }
+    string QuotePrefix { get; }
+    string QuoteSuffix { get; }
+    string CompositeIdentifierSeparator { get; }
     void AddParameter(DbParameter parameter);
     DbParameter AddParameterWithValue<T>(DbType type, T value);
     DbParameter AddParameterWithValue<T>(string? name, DbType type, T value);

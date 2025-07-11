@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Moq;
 using pengdows.crud.enums;
 using pengdows.crud.FakeDb;
+using pengdows.crud;
 using Xunit;
 
 #endregion
@@ -204,4 +205,25 @@ public class SqlContainerTests : SqlLiteContextTestBase
         Assert.True(container.IsDisposed);
         Assert.Equal(0, container.ParameterCount);
         Assert.Equal(string.Empty, container.Query.ToString());
-    }}
+    }
+
+    [Fact]
+    public void AppendQuery_AppendsSqlAndReturnsContainer()
+    {
+        var container = Context.CreateSqlContainer();
+        var result = container.AppendQuery("SELECT 1");
+
+        Assert.Same(container, result);
+        Assert.Equal("SELECT 1", container.Query.ToString());
+    }
+
+    [Fact]
+    public void QuoteProperties_ExposeUnderlyingContextValues()
+    {
+        var container = Context.CreateSqlContainer();
+
+        Assert.Equal(Context.QuotePrefix, container.QuotePrefix);
+        Assert.Equal(Context.QuoteSuffix, container.QuoteSuffix);
+        Assert.Equal(Context.CompositeIdentifierSeparator, container.CompositeIdentifierSeparator);
+    }
+}

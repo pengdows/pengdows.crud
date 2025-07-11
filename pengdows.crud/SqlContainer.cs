@@ -32,6 +32,12 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
 
     public int ParameterCount => _parameters.Count;
 
+    public string QuotePrefix => _context.QuotePrefix;
+
+    public string QuoteSuffix => _context.QuoteSuffix;
+
+    public string CompositeIdentifierSeparator => _context.CompositeIdentifierSeparator;
+
 
     public void AddParameter(DbParameter parameter)
     {
