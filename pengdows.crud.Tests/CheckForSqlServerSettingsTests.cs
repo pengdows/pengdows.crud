@@ -43,6 +43,13 @@ public class CheckForSqlServerSettingsTests
     private static void SetSessionSettings(DatabaseContext ctx, string value)
         => GetSettingsField().SetValue(ctx, value);
 
+    private static void ForceSqlServer(DatabaseContext ctx)
+    {
+        var prop = typeof(DataSourceInformation)
+            .GetProperty("DatabaseProductName", BindingFlags.Instance | BindingFlags.Public)!;
+        prop.SetValue(ctx.DataSourceInfo, "Microsoft SQL Server");
+    }
+
     private sealed class UserOptionsCommand : DbCommand
     {
         private readonly DbConnection _connection;
@@ -96,7 +103,11 @@ public class CheckForSqlServerSettingsTests
 
     private static ITrackedConnection BuildConnection(IEnumerable<Dictionary<string, object>> rows)
     {
-        var inner = new UserOptionsConnection(rows);
+        var inner = new UserOptionsConnection(rows)
+        {
+            ConnectionString = $"Data Source=:memory:;EmulatedProduct={SupportedDatabase.SqlServer}"
+        };
+        inner.Open();
         return new TrackedConnection(inner);
     }
 
@@ -105,6 +116,7 @@ public class CheckForSqlServerSettingsTests
     {
         using var ctx = CreateContext();
         SetSessionSettings(ctx, string.Empty);
+        ForceSqlServer(ctx);
 
         var rows = new[]
         {
@@ -128,11 +140,12 @@ public class CheckForSqlServerSettingsTests
     {
         using var ctx = CreateContext();
         SetSessionSettings(ctx, string.Empty);
+        ForceSqlServer(ctx);
 
         var rows = new[]
         {
-            new Dictionary<string, object> { { "a", "ANSI_NULLS" }, { "b", "SET" } },
-            new Dictionary<string, object> { { "a", "ANSI_PADDING" }, { "b", "SET" } },
+            new Dictionary<string, object> { { "a", "ANSI_NULLS" }, { "b", "OFF" } },
+            new Dictionary<string, object> { { "a", "ANSI_PADDING" }, { "b", "OFF" } },
             new Dictionary<string, object> { { "a", "ANSI_WARNINGS" }, { "b", "OFF" } },
             new Dictionary<string, object> { { "a", "ARITHABORT" }, { "b", "OFF" } },
             new Dictionary<string, object> { { "a", "CONCAT_NULL_YIELDS_NULL" }, { "b", "OFF" } },
@@ -146,6 +159,8 @@ public class CheckForSqlServerSettingsTests
         var nl = Environment.NewLine;
         var expected =
             $"SET NOCOUNT ON;{nl}" +
+            $"SET ANSI_NULLS ON{nl}" +
+            $"SET ANSI_PADDING ON{nl}" +
             $"SET ANSI_WARNINGS ON{nl}" +
             $"SET ARITHABORT ON{nl}" +
             $"SET CONCAT_NULL_YIELDS_NULL ON{nl}" +
