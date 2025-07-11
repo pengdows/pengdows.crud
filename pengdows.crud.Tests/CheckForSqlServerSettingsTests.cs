@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Data;
-using Moq;
 using pengdows.crud;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
@@ -43,16 +42,38 @@ public class CheckForSqlServerSettingsTests
     private static void SetSessionSettings(DatabaseContext ctx, string value)
         => GetSettingsField().SetValue(ctx, value);
 
+    private sealed class UserOptionsCommand : FakeDbCommand
+    {
+        private readonly FakeDbDataReader _reader;
+
+        public UserOptionsCommand(DbConnection connection, FakeDbDataReader reader)
+            : base(connection)
+        {
+            _reader = reader;
+        }
+
+        protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior)
+            => _reader;
+    }
+
+    private sealed class UserOptionsConnection : FakeDbConnection
+    {
+        private readonly FakeDbDataReader _reader;
+
+        public UserOptionsConnection(IEnumerable<Dictionary<string, object>> rows)
+        {
+            EmulatedProduct = SupportedDatabase.SqlServer;
+            _reader = new FakeDbDataReader(rows);
+        }
+
+        protected override DbCommand CreateDbCommand()
+            => new UserOptionsCommand(this, _reader);
+    }
+
     private static ITrackedConnection BuildConnection(IEnumerable<Dictionary<string, object>> rows)
     {
-        var reader = new FakeDbDataReader(rows);
-        var command = new Mock<IDbCommand>();
-        command.SetupProperty(c => c.CommandText);
-        command.Setup(c => c.ExecuteReader()).Returns(reader);
-
-        var conn = new Mock<ITrackedConnection>();
-        conn.Setup(c => c.CreateCommand()).Returns(command.Object);
-        return conn.Object;
+        var inner = new UserOptionsConnection(rows);
+        return new TrackedConnection(inner);
     }
 
     [Fact]
@@ -89,7 +110,10 @@ public class CheckForSqlServerSettingsTests
             new Dictionary<string, object> { { "a", "ANSI_NULLS" }, { "b", "SET" } },
             new Dictionary<string, object> { { "a", "ANSI_PADDING" }, { "b", "SET" } },
             new Dictionary<string, object> { { "a", "ANSI_WARNINGS" }, { "b", "OFF" } },
-            new Dictionary<string, object> { { "a", "ARITHABORT" }, { "b", "SET" } }
+            new Dictionary<string, object> { { "a", "ARITHABORT" }, { "b", "OFF" } },
+            new Dictionary<string, object> { { "a", "CONCAT_NULL_YIELDS_NULL" }, { "b", "OFF" } },
+            new Dictionary<string, object> { { "a", "QUOTED_IDENTIFIER" }, { "b", "OFF" } },
+            new Dictionary<string, object> { { "a", "NUMERIC_ROUNDABORT" }, { "b", "SET" } }
         };
 
         var conn = BuildConnection(rows);
@@ -99,8 +123,10 @@ public class CheckForSqlServerSettingsTests
         var expected =
             $"SET NOCOUNT ON;{nl}" +
             $"SET ANSI_WARNINGS ON{nl}" +
+            $"SET ARITHABORT ON{nl}" +
             $"SET CONCAT_NULL_YIELDS_NULL ON{nl}" +
-            $"SET QUOTED_IDENTIFIER ON;{nl}" +
+            $"SET QUOTED_IDENTIFIER ON{nl}" +
+            $"SET NUMERIC_ROUNDABORT OFF;{nl}" +
             $"SET NOCOUNT OFF;{nl}";
 
         Assert.Equal(expected, GetSessionSettings(ctx));
