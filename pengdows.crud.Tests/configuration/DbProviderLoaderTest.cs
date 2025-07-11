@@ -3,6 +3,8 @@
 using System;
 using System.Collections.Generic;
 using System.Data.Common;
+using System.IO;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -88,6 +90,93 @@ public class DbProviderLoaderTests
 
         var logger = new Mock<ILogger<DbProviderLoader>>();
         var loader = new DbProviderLoader(config, logger.Object);
+
+        Assert.Throws<InvalidOperationException>(() => loader.LoadAndRegisterProviders(new ServiceCollection()));
+    }
+
+    [Fact]
+    public void LoadAndRegisterProviders_RegistersUsingAssemblyPath()
+    {
+        var assemblyPath = Path.GetFileName(typeof(PropertyFactory).Assembly.Location);
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["DatabaseProviders:path:ProviderName"] = "Test.PathProvider",
+                ["DatabaseProviders:path:FactoryType"] = typeof(PropertyFactory).FullName,
+                ["DatabaseProviders:path:AssemblyPath"] = assemblyPath
+            })
+            .Build();
+
+        var logger = new Mock<ILogger<DbProviderLoader>>();
+        var loader = new DbProviderLoader(config, logger.Object);
+        var services = new ServiceCollection();
+
+        loader.LoadAndRegisterProviders(services);
+
+        var provider = services.BuildServiceProvider();
+        var factory = provider.GetRequiredKeyedService<DbProviderFactory>("path");
+
+        Assert.Same(PropertyFactory.Instance, factory);
+        Assert.Same(PropertyFactory.Instance, DbProviderFactories.GetFactory("Test.PathProvider"));
+    }
+
+    [Fact]
+    public void LoadAndRegisterProviders_FallbackToDbProviderFactories()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["DatabaseProviders:sqlite:ProviderName"] = "Microsoft.Data.Sqlite"
+            })
+            .Build();
+
+        var logger = new Mock<ILogger<DbProviderLoader>>();
+        var loader = new DbProviderLoader(config, logger.Object);
+        var services = new ServiceCollection();
+
+        // Register the provider with DbProviderFactories so fallback succeeds
+        DbProviderFactories.RegisterFactory("Microsoft.Data.Sqlite", SqliteFactory.Instance);
+
+        loader.LoadAndRegisterProviders(services);
+
+        var provider = services.BuildServiceProvider();
+        var factory = provider.GetRequiredKeyedService<DbProviderFactory>("sqlite");
+
+        Assert.Same(SqliteFactory.Instance, factory);
+        Assert.Same(SqliteFactory.Instance, DbProviderFactories.GetFactory("Microsoft.Data.Sqlite"));
+    }
+
+    [Fact]
+    public void LoadAndRegisterProviders_InvalidProviderName_Throws()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["DatabaseProviders:invalid:ProviderName"] = "Unknown.Provider"
+            })
+            .Build();
+
+        var logger = new Mock<ILogger<DbProviderLoader>>();
+        var loader = new DbProviderLoader(config, logger.Object);
+
+        Assert.Throws<InvalidOperationException>(() => loader.LoadAndRegisterProviders(new ServiceCollection()));
+    }
+
+    [Fact]
+    public void LoadAndRegisterProviders_MissingProviderName_Throws()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["DatabaseProviders:missing:AssemblyName"] = "Microsoft.Data.Sqlite"
+            })
+            .Build();
+
+        var logger = new Mock<ILogger<DbProviderLoader>>();
+        var loader = new DbProviderLoader(config, logger.Object);
+
+        // ensure assembly load doesn't hide missing provider
+        _ = SqliteFactory.Instance;
 
         Assert.Throws<InvalidOperationException>(() => loader.LoadAndRegisterProviders(new ServiceCollection()));
     }
