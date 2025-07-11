@@ -519,17 +519,21 @@ public class EntityHelper<TEntity, TRowID> :
             throw new ArgumentNullException(nameof(objectToUpdate));
 
         context ??= _context;
-        SetAuditFields(objectToUpdate, true);
         var sc = context.CreateSqlContainer();
 
         var original = loadOriginal ? await LoadOriginalAsync(objectToUpdate) : null;
         if (loadOriginal && original == null)
             throw new InvalidOperationException("Original record not found for update.");
 
-        var (setClause, parameters) = BuildSetClause(objectToUpdate, original, context);
-
-        if (setClause.Length == 0)
+        // Determine if any non-audit fields have changed before modifying audit values
+        var (preClause, _) = BuildSetClause(objectToUpdate, original, context);
+        if (preClause.Length == 0)
             throw new InvalidOperationException("No changes detected for update.");
+
+        // Apply audit field changes now that we know an update is required
+        SetAuditFields(objectToUpdate, true);
+
+        var (setClause, parameters) = BuildSetClause(objectToUpdate, original, context);
 
         if (_versionColumn != null) IncrementVersion(setClause);
 
