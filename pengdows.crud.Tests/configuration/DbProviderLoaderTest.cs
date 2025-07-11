@@ -134,6 +134,9 @@ public class DbProviderLoaderTests
         var loader = new DbProviderLoader(config, logger.Object);
         var services = new ServiceCollection();
 
+        // Ensure the assembly is loaded so the provider self-registers
+        _ = SqliteFactory.Instance;
+
         loader.LoadAndRegisterProviders(services);
 
         var provider = services.BuildServiceProvider();
