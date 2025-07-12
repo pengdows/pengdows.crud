@@ -8,6 +8,7 @@ using System.Linq;
 using System.Reflection;
 using pengdows.crud.enums;
 using pengdows.crud.FakeDb;
+using Moq;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -161,66 +162,34 @@ public class DataSourceInformationTests
         var result = info.GetDatabaseVersion(tracked);
         Assert.Equal("Unknown Database Version", result);
     }
-    private class SqliteVersionCommand : DbCommand
+    private static ITrackedConnection BuildSqliteConnectionMock()
     {
-        public SqliteVersionCommand(DbConnection connection)
-        {
-            DbConnection = connection;
-        }
+        var reader = new Mock<DbDataReader>();
+        reader.Setup(r => r.Read()).Returns(true);
+        reader.Setup(r => r.ReadAsync(It.IsAny<CancellationToken>())).ReturnsAsync(true);
 
-        public override string CommandText { get; set; } = string.Empty;
-        public override int CommandTimeout { get; set; }
-        public override CommandType CommandType { get; set; }
-        public override bool DesignTimeVisible { get; set; }
-        public override UpdateRowSource UpdatedRowSource { get; set; }
+        var command = new Mock<DbCommand>();
+        command.SetupProperty(c => c.CommandText);
+        command.Setup(c => c.ExecuteReader(It.IsAny<CommandBehavior>())).Returns(reader.Object);
+        command.Setup(c => c.ExecuteReaderAsync(It.IsAny<CommandBehavior>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(reader.Object);
+        command.Setup(c => c.ExecuteScalar()).Returns("3.0");
+        command.Setup(c => c.ExecuteScalarAsync(It.IsAny<CancellationToken>())).ReturnsAsync("3.0");
 
-        protected override DbConnection DbConnection { get; set; }
-        protected override DbTransaction? DbTransaction { get; set; }
-        protected override DbParameterCollection DbParameterCollection { get; } = new FakeParameterCollection();
+        var conn = new Mock<ITrackedConnection>();
+        conn.SetupAllProperties();
+        conn.Setup(c => c.CreateCommand()).Returns(command.Object);
+        conn.Setup(c => c.GetSchema(DbMetaDataCollectionNames.DataSourceInformation))
+            .Returns(new DataTable());
 
-        public override void Cancel() { }
-        public override void Prepare() { }
-
-        public override int ExecuteNonQuery() => 1;
-
-        public override object ExecuteScalar()
-        {
-            if (CommandText == "SELECT sqlite_version()")
-                return "3.0";
-            return 42;
-        }
-
-        protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior)
-        {
-            if (CommandText == "SELECT sqlite_version()")
-            {
-                return new FakeDbDataReader(new[] { new Dictionary<string, object> { { "v", "3.0" } } });
-            }
-            return new FakeDbDataReader();
-        }
-
-        public override Task<int> ExecuteNonQueryAsync(CancellationToken cancellationToken) => Task.FromResult(ExecuteNonQuery());
-        public override Task<object> ExecuteScalarAsync(CancellationToken cancellationToken) => Task.FromResult(ExecuteScalar());
-        protected override Task<DbDataReader> ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken) => Task.FromResult(ExecuteDbDataReader(behavior));
-        public override Task PrepareAsync(CancellationToken cancellationToken) { Prepare(); return Task.CompletedTask; }
-
-        protected override DbParameter CreateDbParameter() => new FakeDbParameter();
-    }
-
-    private class SqliteVersionConnection : FakeDbConnection
-    {
-        protected override DbCommand CreateDbCommand()
-        {
-            return new SqliteVersionCommand(this);
-        }
+        conn.Object.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}";
+        return conn.Object;
     }
 
     [Fact]
     public void GetSchema_UsesEmbeddedForSqlite()
     {
-        var conn = new SqliteVersionConnection();
-        conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}";
-        using var tracked = new TrackedConnection(conn);
+        var tracked = BuildSqliteConnectionMock();
         var info = DataSourceInformation.Create(tracked, NullLoggerFactory.Instance);
 
         var schema = info.GetSchema(tracked);
