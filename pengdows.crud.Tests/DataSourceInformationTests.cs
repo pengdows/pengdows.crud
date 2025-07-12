@@ -161,17 +161,50 @@ public class DataSourceInformationTests
         var result = info.GetDatabaseVersion(tracked);
         Assert.Equal("Unknown Database Version", result);
     }
-    private class SqliteVersionCommand : FakeDbCommand
+    private class SqliteVersionCommand : DbCommand
     {
-        public SqliteVersionCommand(DbConnection connection) : base(connection) { }
+        public SqliteVersionCommand(DbConnection connection)
+        {
+            DbConnection = connection;
+        }
+
+        public override string CommandText { get; set; } = string.Empty;
+        public override int CommandTimeout { get; set; }
+        public override CommandType CommandType { get; set; }
+        public override bool DesignTimeVisible { get; set; }
+        public override UpdateRowSource UpdatedRowSource { get; set; }
+
+        protected override DbConnection DbConnection { get; set; }
+        protected override DbTransaction? DbTransaction { get; set; }
+        protected override DbParameterCollection DbParameterCollection { get; } = new FakeParameterCollection();
+
+        public override void Cancel() { }
+        public override void Prepare() { }
+
+        public override int ExecuteNonQuery() => 1;
+
+        public override object ExecuteScalar()
+        {
+            if (CommandText == "SELECT sqlite_version()")
+                return "3.0";
+            return 42;
+        }
+
         protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior)
         {
             if (CommandText == "SELECT sqlite_version()")
             {
-                return new FakeDbDataReader(new[] { new Dictionary<string, object>{{"v","3.0"}} });
+                return new FakeDbDataReader(new[] { new Dictionary<string, object> { { "v", "3.0" } } });
             }
-            return base.ExecuteDbDataReader(behavior);
+            return new FakeDbDataReader();
         }
+
+        public override Task<int> ExecuteNonQueryAsync(CancellationToken cancellationToken) => Task.FromResult(ExecuteNonQuery());
+        public override Task<object> ExecuteScalarAsync(CancellationToken cancellationToken) => Task.FromResult(ExecuteScalar());
+        protected override Task<DbDataReader> ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken) => Task.FromResult(ExecuteDbDataReader(behavior));
+        public override Task PrepareAsync(CancellationToken cancellationToken) { Prepare(); return Task.CompletedTask; }
+
+        protected override DbParameter CreateDbParameter() => new FakeDbParameter();
     }
 
     private class SqliteVersionConnection : FakeDbConnection
