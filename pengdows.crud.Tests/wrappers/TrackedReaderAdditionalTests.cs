@@ -15,7 +15,7 @@ public class TrackedReaderAdditionalTests
         var reader = new Mock<DbDataReader>();
         var bytes = new byte[4];
         var chars = new char[3];
-        var dataReader = new Mock<IDataReader>().Object;
+        var dataReader = new Mock<DbDataReader>().Object;
         reader.Setup(r => r.GetBytes(1, 2, bytes, 3, 4)).Returns(7);
         reader.Setup(r => r.GetChars(1, 2, chars, 3, 4)).Returns(8);
         reader.Setup(r => r.GetData(1)).Returns(dataReader);
