@@ -41,18 +41,29 @@ public sealed class FakeDbCommand : DbCommand
     {
     }
 
+    private FakeDbConnection? FakeConnection => Connection as FakeDbConnection;
+
     public override int ExecuteNonQuery()
     {
+        var conn = FakeConnection;
+        if (conn != null && conn.NonQueryResults.Count > 0)
+            return conn.NonQueryResults.Dequeue();
         return 1;
     }
 
     public override object ExecuteScalar()
     {
+        var conn = FakeConnection;
+        if (conn != null && conn.ScalarResults.Count > 0)
+            return conn.ScalarResults.Dequeue();
         return 42;
     }
 
     protected override DbDataReader ExecuteDbDataReader(CommandBehavior _)
     {
+        var conn = FakeConnection;
+        if (conn != null && conn.ReaderResults.Count > 0)
+            return new FakeDbDataReader(conn.ReaderResults.Dequeue());
         return new FakeDbDataReader();
     }
 

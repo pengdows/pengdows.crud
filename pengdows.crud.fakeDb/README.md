@@ -32,3 +32,20 @@ using var reader = await command.ExecuteReaderAsync();
 This makes `pengdows.crud.fakeDb` handy for testing any code that relies on
 `DbConnection` or `DbDataReader` without spinning up a real database.
 
+### Preloading Results
+
+`FakeDbConnection` can queue up results that will be returned the next time a
+command is executed. This allows tests to simulate query responses:
+
+```csharp
+var conn = new FakeDbConnection("Data Source=:memory:;EmulatedProduct=Sqlite");
+conn.EnqueueScalarResult(5);
+conn.EnqueueReaderResult(new[] { new Dictionary<string, object>{{"Name", "Jane"}} });
+conn.Open();
+using var cmd = conn.CreateCommand();
+var value = (int)cmd.ExecuteScalar(); // returns 5
+using var reader = cmd.ExecuteReader();
+reader.Read();
+var name = reader.GetString(0); // "Jane"
+```
+
