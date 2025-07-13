@@ -1,4 +1,5 @@
 using System.Data;
+using System.Data.Common;
 using Moq;
 using pengdows.crud;
 using pengdows.crud.FakeDb;
