@@ -1,5 +1,6 @@
 #region
 
+using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using pengdows.crud.enums;
@@ -16,6 +17,25 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
     private ConnectionState _state = ConnectionState.Closed;
     public override string DataSource => "FakeSource";
     public override string ServerVersion => "1.0";
+
+    internal readonly Queue<IEnumerable<Dictionary<string, object>>> ReaderResults = new();
+    internal readonly Queue<object?> ScalarResults = new();
+    internal readonly Queue<int> NonQueryResults = new();
+
+    public void EnqueueReaderResult(IEnumerable<Dictionary<string, object>> rows)
+    {
+        ReaderResults.Enqueue(rows);
+    }
+
+    public void EnqueueScalarResult(object? value)
+    {
+        ScalarResults.Enqueue(value);
+    }
+
+    public void EnqueueNonQueryResult(int value)
+    {
+        NonQueryResults.Enqueue(value);
+    }
 
     public SupportedDatabase EmulatedProduct
     {
