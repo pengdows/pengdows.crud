@@ -1,22 +1,22 @@
 ﻿{
   "DotCoverVersion": "2025.1.4",
   "Kind": "SolutionRoot",
-  "CoveredStatements": 1626,
-  "TotalStatements": 1842,
+  "CoveredStatements": 1628,
+  "TotalStatements": 1843,
   "CoveragePercent": 88,
   "Children": [
     {
       "Kind": "Project",
       "Name": "pengdows.crud",
-      "CoveredStatements": 1626,
-      "TotalStatements": 1842,
+      "CoveredStatements": 1628,
+      "TotalStatements": 1843,
       "CoveragePercent": 88,
       "Children": [
         {
           "Kind": "Namespace",
           "Name": "pengdows.crud",
-          "CoveredStatements": 1626,
-          "TotalStatements": 1842,
+          "CoveredStatements": 1628,
+          "TotalStatements": 1843,
           "CoveragePercent": 88,
           "Children": [
             {
@@ -2205,9 +2205,9 @@
             {
               "Kind": "Type",
               "Name": "DatabaseContext",
-              "CoveredStatements": 223,
-              "TotalStatements": 253,
-              "CoveragePercent": 88,
+              "CoveredStatements": 225,
+              "TotalStatements": 254,
+              "CoveragePercent": 89,
               "Children": [
                 {
                   "Kind": "Constructor",
@@ -2482,15 +2482,21 @@
                 {
                   "Kind": "AutoProperty",
                   "Name": "ReadWriteMode:ReadWriteMode",
-                  "CoveredStatements": 0,
-                  "TotalStatements": 1,
-                  "CoveragePercent": 0,
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100,
                   "Children": [
                     {
                       "Kind": "PropertyGetter",
-                      "CoveredStatements": 0,
+                      "CoveredStatements": 1,
                       "TotalStatements": 1,
-                      "CoveragePercent": 0
+                      "CoveragePercent": 100
+                    },
+                    {
+                      "Kind": "PropertySetter",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
                     }
                   ]
                 },
