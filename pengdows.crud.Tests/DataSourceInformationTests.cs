@@ -6,10 +6,12 @@ using System.Data;
 using System.Data.Common;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 using pengdows.crud.enums;
 using pengdows.crud.FakeDb;
 using Moq;
 using Microsoft.Extensions.Logging.Abstractions;
+using pengdows.crud.wrappers;
 using Xunit;
 
 #endregion
