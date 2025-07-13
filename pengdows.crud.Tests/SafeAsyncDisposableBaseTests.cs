@@ -58,4 +58,32 @@ public class SafeAsyncDisposableBaseTests
         Assert.Equal(1, d.ManagedAsyncCount);
         Assert.Equal(1, d.UnmanagedCount);
     }
+
+    [Fact]
+    public async Task DisposeAsync_AfterDispose_NoAdditionalCalls()
+    {
+        var d = new TestDisposable();
+
+        d.Dispose();
+        await d.DisposeAsync();
+
+        Assert.True(d.IsDisposed);
+        Assert.Equal(1, d.ManagedCount);
+        Assert.Equal(0, d.ManagedAsyncCount);
+        Assert.Equal(1, d.UnmanagedCount);
+    }
+
+    [Fact]
+    public async Task Dispose_AfterDisposeAsync_NoAdditionalCalls()
+    {
+        var d = new TestDisposable();
+
+        await d.DisposeAsync();
+        d.Dispose();
+
+        Assert.True(d.IsDisposed);
+        Assert.Equal(0, d.ManagedCount);
+        Assert.Equal(1, d.ManagedAsyncCount);
+        Assert.Equal(1, d.UnmanagedCount);
+    }
 }

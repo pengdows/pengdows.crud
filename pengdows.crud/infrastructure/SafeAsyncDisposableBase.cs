@@ -1,10 +1,6 @@
-#region
-
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-
-#endregion
 
 namespace pengdows.crud.infrastructure;
 
@@ -52,10 +48,10 @@ public abstract class SafeAsyncDisposableBase : ISafeAsyncDisposableBase
     {
     }
 
-    protected virtual async ValueTask DisposeManagedAsync()
+    protected virtual ValueTask DisposeManagedAsync()
     {
         DisposeManaged();
-        await Task.CompletedTask;
+        return ValueTask.CompletedTask;
     }
 
     protected virtual void DisposeUnmanaged()

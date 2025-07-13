@@ -3,11 +3,15 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Data.Common;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 using pengdows.crud.enums;
 using pengdows.crud.FakeDb;
+using Moq;
 using Microsoft.Extensions.Logging.Abstractions;
+using pengdows.crud.wrappers;
 using Xunit;
 
 #endregion
@@ -159,5 +163,74 @@ public class DataSourceInformationTests
 
         var result = info.GetDatabaseVersion(tracked);
         Assert.Equal("Unknown Database Version", result);
+    }
+    private static ITrackedConnection BuildSqliteConnectionMock()
+    {
+        var reader = new Mock<DbDataReader>();
+        reader.Setup(r => r.Read()).Returns(true);
+        reader.Setup(r => r.ReadAsync(It.IsAny<CancellationToken>())).ReturnsAsync(true);
+
+        var command = new Mock<DbCommand>();
+        command.SetupProperty(c => c.CommandText);
+        command.Setup(c => c.ExecuteReader(It.IsAny<CommandBehavior>())).Returns(reader.Object);
+        command.Setup(c => c.ExecuteReaderAsync(It.IsAny<CommandBehavior>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(reader.Object);
+        command.Setup(c => c.ExecuteScalar()).Returns("3.0");
+        command.Setup(c => c.ExecuteScalarAsync(It.IsAny<CancellationToken>())).ReturnsAsync("3.0");
+
+        var conn = new Mock<ITrackedConnection>();
+        conn.SetupAllProperties();
+        conn.Setup(c => c.CreateCommand()).Returns(command.Object);
+        conn.Setup(c => c.GetSchema(DbMetaDataCollectionNames.DataSourceInformation))
+            .Returns(new DataTable());
+
+        conn.Object.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}";
+        return conn.Object;
+    }
+
+    [Fact]
+    public void GetSchema_UsesEmbeddedForSqlite()
+    {
+        var tracked = BuildSqliteConnectionMock();
+        var info = DataSourceInformation.Create(tracked, NullLoggerFactory.Instance);
+
+        var schema = info.GetSchema(tracked);
+        Assert.Equal("SQLite", schema.Rows[0].Field<string>("DataSourceProductName"));
+        Assert.Equal("@{0}", schema.Rows[0].Field<string>("ParameterMarkerFormat"));
+    }
+
+    [Fact]
+    public void GetSchema_NonSqlite_UsesConnectionSchema()
+    {
+        var factory = new FakeDbFactory(SupportedDatabase.SqlServer);
+        var conn = factory.CreateConnection();
+        conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}";
+        using var tracked = new TrackedConnection(conn);
+        var info = DataSourceInformation.Create(tracked, NullLoggerFactory.Instance);
+
+        var schema = info.GetSchema(tracked);
+        Assert.Contains("SQL Server", schema.Rows[0].Field<string>("DataSourceProductName"));
+        Assert.Equal("{0}", schema.Rows[0].Field<string>("ParameterMarkerFormat"));
+    }
+
+    [Theory]
+    [InlineData("SQL Server 2019", SupportedDatabase.SqlServer)]
+    [InlineData("MariaDB 10.3", SupportedDatabase.MariaDb)]
+    [InlineData("MySQL 8.0", SupportedDatabase.MySql)]
+    [InlineData("Npgsql", SupportedDatabase.PostgreSql)]
+    [InlineData("PostgreSQL 14", SupportedDatabase.PostgreSql)]
+    [InlineData("Oracle Database", SupportedDatabase.Oracle)]
+    [InlineData("SQLite", SupportedDatabase.Sqlite)]
+    [InlineData("Firebird", SupportedDatabase.Firebird)]
+    [InlineData("Something Else", SupportedDatabase.Unknown)]
+    [InlineData(null, SupportedDatabase.Unknown)]
+    public void InferDatabaseProduct_ReturnsExpected(string name, SupportedDatabase expected)
+    {
+        var method = typeof(DataSourceInformation).GetMethod(
+            "InferDatabaseProduct",
+            BindingFlags.NonPublic | BindingFlags.Static)!;
+
+        var result = (SupportedDatabase)method.Invoke(null, new object?[] { name })!;
+        Assert.Equal(expected, result);
     }
 }
