@@ -2,7 +2,7 @@
 [![NuGet](https://img.shields.io/nuget/v/pengdows.crud.svg)](https://www.nuget.org/packages/pengdows.threading)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Build](https://github.com/pengdows/pengdows.crud/actions/workflows/deploy.yml/badge.svg)](https://github.com/pengdows/pengdows.crud/actions)
-[![Coverage](https://img.shields.io/badge/coverage-unknown-lightgrey.svg)](https://github.com/pengdows/pengdows.crud/actions)
+[![Coverage](https://codecov.io/gh/pengdows/pengdows.crud/branch/main/graph/badge.svg)](https://codecov.io/gh/pengdows/pengdows.crud)
 
 **pengdows.crud** is a SQL-first, strongly-typed, testable data access layer for .NET. It’s built for developers who want **full control** over SQL, **predictable behavior** across databases, and **no ORM magic**.
 

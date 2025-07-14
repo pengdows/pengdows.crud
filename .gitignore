@@ -16,3 +16,7 @@ riderModule.iml
 *.userosscache
 *.sln.docstates
 *.snk
+
+# Coverage
+TestResults/
+coverage-report/
