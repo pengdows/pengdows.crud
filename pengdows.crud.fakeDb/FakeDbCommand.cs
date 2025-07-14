@@ -33,6 +33,8 @@ public sealed class FakeDbCommand : DbCommand
 
     protected override DbTransaction? DbTransaction { get; set; }
 
+    private FakeDbConnection? FakeConnection => Connection as FakeDbConnection;
+
     public override void Cancel()
     {
     }
@@ -41,13 +43,14 @@ public sealed class FakeDbCommand : DbCommand
     {
     }
 
-    private FakeDbConnection? FakeConnection => Connection as FakeDbConnection;
-
     public override int ExecuteNonQuery()
     {
         var conn = FakeConnection;
         if (conn != null && conn.NonQueryResults.Count > 0)
+        {
             return conn.NonQueryResults.Dequeue();
+        }
+
         return 1;
     }
 
@@ -55,7 +58,10 @@ public sealed class FakeDbCommand : DbCommand
     {
         var conn = FakeConnection;
         if (conn != null && conn.ScalarResults.Count > 0)
+        {
             return conn.ScalarResults.Dequeue();
+        }
+
         return 42;
     }
 
@@ -63,7 +69,10 @@ public sealed class FakeDbCommand : DbCommand
     {
         var conn = FakeConnection;
         if (conn != null && conn.ReaderResults.Count > 0)
+        {
             return new FakeDbDataReader(conn.ReaderResults.Dequeue());
+        }
+
         return new FakeDbDataReader();
     }
 

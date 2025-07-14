@@ -71,7 +71,10 @@ public class FakeParameterCollection : DbParameterCollection
     protected override DbParameter GetParameter(string parameterName)
     {
         var list = _params.Where(p => p.ParameterName == parameterName).ToList();
-        if (list.Count < 1) throw new IndexOutOfRangeException(parameterName);
+        if (list.Count < 1)
+        {
+            throw new IndexOutOfRangeException(parameterName);
+        }
 
         return list[0];
     }

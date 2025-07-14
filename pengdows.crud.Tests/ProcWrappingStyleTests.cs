@@ -42,10 +42,16 @@ public class ProcWrappingStyleTests
 
     private SqlContainer SetupParameterWrapTest()
     {
-        if (_dbContext == null) _dbContext = new DatabaseContext("DataSource=:memory:", SqliteFactory.Instance);
+        if (_dbContext == null)
+        {
+            _dbContext = new DatabaseContext("DataSource=:memory:", SqliteFactory.Instance);
+        }
 
         var sc = _dbContext.CreateSqlContainer("dbo.Sqltest") as SqlContainer;
-        for (var i = 0; i < 10; i++) sc.AddParameterWithValue($"p{i}", DbType.Int32, i);
+        for (var i = 0; i < 10; i++)
+        {
+            sc.AddParameterWithValue($"p{i}", DbType.Int32, i);
+        }
 
         return sc;
     }

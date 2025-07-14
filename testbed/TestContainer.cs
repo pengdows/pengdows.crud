@@ -33,6 +33,17 @@ public abstract class TestContainer : ITestContainer
     public abstract Task StartAsync();
     public abstract Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services);
 
+    public async ValueTask DisposeAsync()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
+            return;
+        }
+
+        await DisposeAsyncCore();
+        GC.SuppressFinalize(this);
+    }
+
     protected async Task WaitForDbToStart(DbProviderFactory instance, string connectionString, IContainer container,
         int numberOfSecondsToWait = 60)
     {
@@ -42,7 +53,7 @@ public abstract class TestContainer : ITestContainer
         var timeout = TimeSpan.FromSeconds(numberOfSecondsToWait);
         var startTime = DateTime.UtcNow;
 
-        var lastError = String.Empty;
+        var lastError = string.Empty;
         while (DateTime.UtcNow - startTime < timeout)
         {
             await using var connection = instance.CreateConnection();
@@ -64,11 +75,15 @@ public abstract class TestContainer : ITestContainer
                 try
                 {
                     if (csb is not FbConnectionStringBuilder orig)
+                    {
                         throw new InvalidOperationException("Connection string builder is not valid.");
+                    }
 
                     var db = orig.Database;
                     if (string.IsNullOrWhiteSpace(db))
+                    {
                         throw new InvalidOperationException("Database path is not specified.");
+                    }
 
                     var csbTemp = new FbConnectionStringBuilder
                     {
@@ -102,7 +117,10 @@ public abstract class TestContainer : ITestContainer
             catch (Exception ex)
             {
                 var currentError = ex.Message;
-                if (currentError != lastError) Console.WriteLine(currentError);
+                if (currentError != lastError)
+                {
+                    Console.WriteLine(currentError);
+                }
 
                 lastError = currentError;
                 await Task.Delay(1000);
@@ -110,14 +128,6 @@ public abstract class TestContainer : ITestContainer
         }
 
         throw new TimeoutException($"Could not connect after {numberOfSecondsToWait}s.");
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
-
-        await DisposeAsyncCore();
-        GC.SuppressFinalize(this);
     }
 
     protected virtual ValueTask DisposeAsyncCore()

@@ -1,7 +1,11 @@
+#region
+
 using System.Data;
 using System.Reflection;
 using pengdows.crud.attributes;
 using Xunit;
+
+#endregion
 
 namespace pengdows.crud.Tests;
 
@@ -14,14 +18,14 @@ public class TestTableTests
         Assert.NotNull(attr);
         Assert.Equal("test_table", attr.Name);
     }
-    
+
     [Fact]
     public void IdProperty_ShouldHave_IdAndColumnAttributes()
     {
         var prop = typeof(TestTable).GetProperty("Id");
 
         Assert.NotNull(prop.GetCustomAttribute<IdAttribute>());
-    
+
         var columnAttr = prop.GetCustomAttribute<ColumnAttribute>();
         Assert.NotNull(columnAttr);
         Assert.Equal("id", columnAttr.Name);
@@ -58,6 +62,4 @@ public class TestTableTests
         var prop = typeof(TestTable).GetProperty("NonUpdateableColumn");
         Assert.NotNull(prop.GetCustomAttribute<NonUpdateableAttribute>());
     }
-
-
 }

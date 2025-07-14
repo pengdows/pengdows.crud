@@ -3,7 +3,6 @@
 using System.Data;
 using System.Data.Common;
 using System.Reflection;
-using System.Threading;
 
 #endregion
 
@@ -22,7 +21,7 @@ public static class DataReaderMapper
         {
             throw new ArgumentException("reader must be DbDataReader", nameof(reader));
         }
-        
+
         var result = new List<T>();
         var type = typeof(T);
 
@@ -34,7 +33,10 @@ public static class DataReaderMapper
         for (var i = 0; i < reader.FieldCount; i++)
         {
             var name = reader.GetName(i);
-            if (props.TryGetValue(name, out var prop)) propertyMap.Add((i, prop));
+            if (props.TryGetValue(name, out var prop))
+            {
+                propertyMap.Add((i, prop));
+            }
         }
 
         while (await rdr.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -44,7 +46,10 @@ public static class DataReaderMapper
             foreach (var (ordinal, prop) in propertyMap)
             {
                 if (await rdr.IsDBNullAsync((int)ordinal, (CancellationToken)cancellationToken)
-                        .ConfigureAwait(false)) continue;
+                        .ConfigureAwait(false))
+                {
+                    continue;
+                }
 
                 try
                 {

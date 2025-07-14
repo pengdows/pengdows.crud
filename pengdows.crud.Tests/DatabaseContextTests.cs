@@ -145,9 +145,13 @@ public class DatabaseContextTests
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
         var preamble = context.SessionSettingsPreamble;
         if (expectSettings)
+        {
             Assert.False(string.IsNullOrWhiteSpace(preamble));
+        }
         else
+        {
             Assert.True(string.IsNullOrWhiteSpace(preamble));
+        }
     }
 
     [Fact]

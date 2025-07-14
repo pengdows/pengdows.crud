@@ -57,29 +57,48 @@ public class TypeMapRegistry : ITypeMapRegistry
                         IsLastUpdatedBy = prop.GetCustomAttribute<LastUpdatedByAttribute>() != null,
                         IsLastUpdatedOn = prop.GetCustomAttribute<LastUpdatedOnAttribute>() != null
                     };
-                    if (ci.IsLastUpdatedBy) tableInfo.LastUpdatedBy = ci;
+                    if (ci.IsLastUpdatedBy)
+                    {
+                        tableInfo.LastUpdatedBy = ci;
+                    }
 
-                    if (ci.IsLastUpdatedOn) tableInfo.LastUpdatedOn = ci;
+                    if (ci.IsLastUpdatedOn)
+                    {
+                        tableInfo.LastUpdatedOn = ci;
+                    }
 
-                    if (ci.IsCreatedBy) tableInfo.CreatedBy = ci;
+                    if (ci.IsCreatedBy)
+                    {
+                        tableInfo.CreatedBy = ci;
+                    }
 
-                    if (ci.IsCreatedOn) tableInfo.CreatedOn = ci;
+                    if (ci.IsCreatedOn)
+                    {
+                        tableInfo.CreatedOn = ci;
+                    }
 
                     tableInfo.Columns[colAttr.Name] = ci;
                     if (ci.IsId)
                     {
                         if (tableInfo.Id != null)
+                        {
                             throw new TooManyColumns("Only one id is allowed.");
+                        }
 
                         tableInfo.Id = ci;
                         if (ci.IsPrimaryKey)
+                        {
                             throw new PrimaryKeyOnRowIdColumn(
                                 "Not allowed to have primary key attribute on id column.");
+                        }
                     }
 
                     if (ci.IsVersion)
                     {
-                        if (tableInfo.Version != null) throw new TooManyColumns("Only one version is allowed.");
+                        if (tableInfo.Version != null)
+                        {
+                            throw new TooManyColumns("Only one version is allowed.");
+                        }
 
                         tableInfo.Version = ci;
                     }
@@ -90,7 +109,10 @@ public class TypeMapRegistry : ITypeMapRegistry
         }
 
         if (tableInfo.Columns.Count == 0)
+        {
             throw new NoColumnsFoundException("This POCO entity has no properties, marked as columns.");
+        }
+
         return tableInfo;
     }
 

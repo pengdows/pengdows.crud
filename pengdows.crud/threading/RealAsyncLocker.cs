@@ -23,7 +23,10 @@ internal sealed class RealAsyncLocker : ILockerAsync
         //Console.WriteLine("Disposing real-async-locker");
         if (Interlocked.Exchange(ref _disposed, 1) == 0)
         {
-            if (!_locked) throw new InvalidOperationException("Lock has not been acquired.");
+            if (!_locked)
+            {
+                throw new InvalidOperationException("Lock has not been acquired.");
+            }
 
             _semaphore.Release();
         }

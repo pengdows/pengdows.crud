@@ -1,24 +1,33 @@
+#region
+
 using System;
 using System.Collections.Generic;
-using System.Reflection;
 using System.Data;
 using System.Data.Common;
-using pengdows.crud;
+using System.Reflection;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.FakeDb;
 using pengdows.crud.wrappers;
 using Xunit;
 
+#endregion
+
 namespace pengdows.crud.Tests;
 
 public class CheckForSqlServerSettingsTests
 {
     private static MethodInfo GetMethod()
-        => typeof(DatabaseContext).GetMethod("CheckForSqlServerSettings", BindingFlags.Instance | BindingFlags.NonPublic)!;
+    {
+        return typeof(DatabaseContext).GetMethod("CheckForSqlServerSettings",
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+    }
 
     private static FieldInfo GetSettingsField()
-        => typeof(DatabaseContext).GetField("_connectionSessionSettings", BindingFlags.Instance | BindingFlags.NonPublic)!;
+    {
+        return typeof(DatabaseContext).GetField("_connectionSessionSettings",
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+    }
 
     private static DatabaseContext CreateContext()
     {
@@ -38,67 +47,20 @@ public class CheckForSqlServerSettingsTests
     }
 
     private static string GetSessionSettings(DatabaseContext ctx)
-        => (string)GetSettingsField().GetValue(ctx)!;
+    {
+        return (string)GetSettingsField().GetValue(ctx)!;
+    }
 
     private static void SetSessionSettings(DatabaseContext ctx, string value)
-        => GetSettingsField().SetValue(ctx, value);
+    {
+        GetSettingsField().SetValue(ctx, value);
+    }
 
     private static void ForceSqlServer(DatabaseContext ctx)
     {
         var prop = typeof(DataSourceInformation)
             .GetProperty("DatabaseProductName", BindingFlags.Instance | BindingFlags.Public)!;
         prop.SetValue(ctx.DataSourceInfo, "Microsoft SQL Server");
-    }
-
-    private sealed class UserOptionsCommand : DbCommand
-    {
-        private readonly DbConnection _connection;
-        private readonly FakeDbDataReader _reader;
-
-        public UserOptionsCommand(DbConnection connection, FakeDbDataReader reader)
-        {
-            _connection = connection;
-            _reader = reader;
-        }
-
-        public override string CommandText { get; set; }
-        public override int CommandTimeout { get; set; }
-        public override CommandType CommandType { get; set; }
-        public override bool DesignTimeVisible { get; set; }
-        public override UpdateRowSource UpdatedRowSource { get; set; }
-
-        protected override DbConnection DbConnection
-        {
-            get => _connection;
-            set { }
-        }
-
-        protected override DbParameterCollection DbParameterCollection { get; } = new FakeParameterCollection();
-
-        protected override DbTransaction DbTransaction { get; set; }
-
-        public override void Cancel() { }
-        public override int ExecuteNonQuery() => 0;
-        public override object ExecuteScalar() => null;
-        public override void Prepare() { }
-
-        protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) => _reader;
-
-        protected override DbParameter CreateDbParameter() => new FakeDbParameter();
-    }
-
-    private sealed class UserOptionsConnection : FakeDbConnection
-    {
-        private readonly FakeDbDataReader _reader;
-
-        public UserOptionsConnection(IEnumerable<Dictionary<string, object>> rows)
-        {
-            EmulatedProduct = SupportedDatabase.SqlServer;
-            _reader = new FakeDbDataReader(rows);
-        }
-
-        protected override DbCommand CreateDbCommand()
-            => new UserOptionsCommand(this, _reader);
     }
 
     private static ITrackedConnection BuildConnection(IEnumerable<Dictionary<string, object>> rows)
@@ -169,5 +131,77 @@ public class CheckForSqlServerSettingsTests
             $"SET NOCOUNT OFF;{nl}";
 
         Assert.Equal(expected, GetSessionSettings(ctx));
+    }
+
+    private sealed class UserOptionsCommand : DbCommand
+    {
+        private readonly DbConnection _connection;
+        private readonly FakeDbDataReader _reader;
+
+        public UserOptionsCommand(DbConnection connection, FakeDbDataReader reader)
+        {
+            _connection = connection;
+            _reader = reader;
+        }
+
+        public override string CommandText { get; set; }
+        public override int CommandTimeout { get; set; }
+        public override CommandType CommandType { get; set; }
+        public override bool DesignTimeVisible { get; set; }
+        public override UpdateRowSource UpdatedRowSource { get; set; }
+
+        protected override DbConnection DbConnection
+        {
+            get => _connection;
+            set { }
+        }
+
+        protected override DbParameterCollection DbParameterCollection { get; } = new FakeParameterCollection();
+
+        protected override DbTransaction DbTransaction { get; set; }
+
+        public override void Cancel()
+        {
+        }
+
+        public override int ExecuteNonQuery()
+        {
+            return 0;
+        }
+
+        public override object ExecuteScalar()
+        {
+            return null;
+        }
+
+        public override void Prepare()
+        {
+        }
+
+        protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior)
+        {
+            return _reader;
+        }
+
+        protected override DbParameter CreateDbParameter()
+        {
+            return new FakeDbParameter();
+        }
+    }
+
+    private sealed class UserOptionsConnection : FakeDbConnection
+    {
+        private readonly FakeDbDataReader _reader;
+
+        public UserOptionsConnection(IEnumerable<Dictionary<string, object>> rows)
+        {
+            EmulatedProduct = SupportedDatabase.SqlServer;
+            _reader = new FakeDbDataReader(rows);
+        }
+
+        protected override DbCommand CreateDbCommand()
+        {
+            return new UserOptionsCommand(this, _reader);
+        }
     }
 }

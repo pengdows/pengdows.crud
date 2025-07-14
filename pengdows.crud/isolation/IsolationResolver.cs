@@ -25,12 +25,16 @@ public sealed class IsolationResolver : IIsolationResolver
     public IsolationLevel Resolve(IsolationProfile profile)
     {
         if (!_profileMap.TryGetValue(profile, out var level))
+        {
             throw new NotSupportedException($"Profile {profile} not supported for {_product}");
+        }
 
         if (!_rcsi && _product == SupportedDatabase.PostgreSql &&
             profile == IsolationProfile.SafeNonBlockingReads && level == IsolationLevel.ReadCommitted)
+        {
             throw new InvalidOperationException(
                 $"Tenant {_product} does not have RCSI enabled. Profile {profile} maps to blocking isolation level.");
+        }
 
         Validate(level);
         return level;
@@ -39,7 +43,9 @@ public sealed class IsolationResolver : IIsolationResolver
     public void Validate(IsolationLevel level)
     {
         if (!_supportedLevels.Contains(level))
+        {
             throw new InvalidOperationException($"Isolation level {level} not supported by {_product} (RCSI: {_rcsi})");
+        }
     }
 
     public IReadOnlySet<IsolationLevel> GetSupportedLevels()
@@ -114,7 +120,7 @@ public sealed class IsolationResolver : IIsolationResolver
     {
         return db switch
         {
-            SupportedDatabase.SqlServer => new()
+            SupportedDatabase.SqlServer => new Dictionary<IsolationProfile, IsolationLevel>
             {
                 [IsolationProfile.SafeNonBlockingReads] = rcsi
                     ? IsolationLevel.ReadCommitted
@@ -123,44 +129,44 @@ public sealed class IsolationResolver : IIsolationResolver
                 [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted
             },
 
-            SupportedDatabase.PostgreSql => new()
+            SupportedDatabase.PostgreSql => new Dictionary<IsolationProfile, IsolationLevel>
             {
                 [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
                 [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
                 [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted
             },
 
-            SupportedDatabase.CockroachDb => new()
+            SupportedDatabase.CockroachDb => new Dictionary<IsolationProfile, IsolationLevel>
             {
                 [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.Serializable,
                 [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable
             },
-            SupportedDatabase.Sqlite => new()
+            SupportedDatabase.Sqlite => new Dictionary<IsolationProfile, IsolationLevel>
             {
                 [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
                 [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable
             },
-            SupportedDatabase.Firebird => new()
+            SupportedDatabase.Firebird => new Dictionary<IsolationProfile, IsolationLevel>
             {
                 [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.Snapshot,
                 [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable
             },
 
-            SupportedDatabase.MySql => new()
+            SupportedDatabase.MySql => new Dictionary<IsolationProfile, IsolationLevel>
             {
                 [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
                 [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
                 [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted
             },
 
-            SupportedDatabase.MariaDb => new()
+            SupportedDatabase.MariaDb => new Dictionary<IsolationProfile, IsolationLevel>
             {
                 [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
                 [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
                 [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted
             },
 
-            SupportedDatabase.Oracle => new()
+            SupportedDatabase.Oracle => new Dictionary<IsolationProfile, IsolationLevel>
             {
                 [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
                 [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable

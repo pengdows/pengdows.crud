@@ -10,31 +10,16 @@ namespace pengdows.crud.FakeDb;
 
 public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsyncDisposable
 {
+    internal readonly Queue<int> NonQueryResults = new();
+
+    internal readonly Queue<IEnumerable<Dictionary<string, object>>> ReaderResults = new();
+    internal readonly Queue<object?> ScalarResults = new();
     private string _connectionString = string.Empty;
     private SupportedDatabase? _emulatedProduct;
     private DataTable? _schemaTable;
     private ConnectionState _state = ConnectionState.Closed;
     public override string DataSource => "FakeSource";
     public override string ServerVersion => "1.0";
-
-    internal readonly Queue<IEnumerable<Dictionary<string, object>>> ReaderResults = new();
-    internal readonly Queue<object?> ScalarResults = new();
-    internal readonly Queue<int> NonQueryResults = new();
-
-    public void EnqueueReaderResult(IEnumerable<Dictionary<string, object>> rows)
-    {
-        ReaderResults.Enqueue(rows);
-    }
-
-    public void EnqueueScalarResult(object? value)
-    {
-        ScalarResults.Enqueue(value);
-    }
-
-    public void EnqueueNonQueryResult(int value)
-    {
-        NonQueryResults.Enqueue(value);
-    }
 
     public SupportedDatabase EmulatedProduct
     {
@@ -46,8 +31,16 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
         set
         {
             if (_emulatedProduct == null || _emulatedProduct == SupportedDatabase.Unknown)
+            {
                 _emulatedProduct = value;
+            }
         }
+    }
+
+    public override async ValueTask DisposeAsync()
+    {
+        CloseAsync();
+        await base.DisposeAsync();
     }
 
     public override string ConnectionString
@@ -82,16 +75,25 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
         throw new NotSupportedException();
     }
 
+    public void EnqueueReaderResult(IEnumerable<Dictionary<string, object>> rows)
+    {
+        ReaderResults.Enqueue(rows);
+    }
+
+    public void EnqueueScalarResult(object? value)
+    {
+        ScalarResults.Enqueue(value);
+    }
+
+    public void EnqueueNonQueryResult(int value)
+    {
+        NonQueryResults.Enqueue(value);
+    }
+
     protected override void Dispose(bool disposing)
     {
         Close();
         base.Dispose(disposing);
-    }
-
-    public override async ValueTask DisposeAsync()
-    {
-        CloseAsync();
-        await base.DisposeAsync();
     }
 
     public override async Task CloseAsync()
@@ -110,11 +112,15 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
         {
             var builder = new DbConnectionStringBuilder { ConnectionString = connStr };
             if (!builder.TryGetValue("EmulatedProduct", out var raw))
+            {
                 EmulatedProduct = SupportedDatabase.Unknown;
+            }
             else
+            {
                 EmulatedProduct = Enum.TryParse<SupportedDatabase>(raw.ToString(), true, out var result)
                     ? result
                     : throw new ArgumentException($"Invalid EmulatedProduct: {raw}");
+            }
         }
 
         return EmulatedProduct;
@@ -122,7 +128,10 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
 
     private void RaiseStateChangedEvent(ConnectionState originalState)
     {
-        if (_state != originalState) OnStateChange(new StateChangeEventArgs(originalState, _state));
+        if (_state != originalState)
+        {
+            OnStateChange(new StateChangeEventArgs(originalState, _state));
+        }
     }
 
     protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel)
@@ -137,10 +146,15 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
 
     public override DataTable GetSchema()
     {
-        if (_schemaTable != null) return _schemaTable;
+        if (_schemaTable != null)
+        {
+            return _schemaTable;
+        }
 
         if (_emulatedProduct is null or SupportedDatabase.Unknown)
+        {
             throw new InvalidOperationException("EmulatedProduct must be configured via connection string.");
+        }
 
         var resourceName = $"pengdows.crud.fakeDb.xml.{_emulatedProduct}.schema.xml";
 
@@ -156,10 +170,15 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
 
     public override DataTable GetSchema(string meta)
     {
-        if (_schemaTable != null) return _schemaTable;
+        if (_schemaTable != null)
+        {
+            return _schemaTable;
+        }
 
         if (_emulatedProduct is null or SupportedDatabase.Unknown)
+        {
             throw new InvalidOperationException("EmulatedProduct must be configured via connection string.");
+        }
 
         var resourceName = $"pengdows.crud.fakeDb.xml.{_emulatedProduct}.schema.xml";
 

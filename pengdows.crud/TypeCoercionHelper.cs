@@ -19,23 +19,32 @@ public static class TypeCoercionHelper
         get => _logger;
         set => _logger = value ?? NullLogger.Instance;
     }
+
     public static object? Coerce(
         object? value,
         Type dbFieldType,
         IColumnInfo columnInfo,
         EnumParseFailureMode parseMode = EnumParseFailureMode.Throw)
     {
-        if (Utils.IsNullOrDbNull(value)) return null;
+        if (Utils.IsNullOrDbNull(value))
+        {
+            return null;
+        }
 
         var targetType = columnInfo?.PropertyInfo?.PropertyType;
 
         if (dbFieldType == targetType)
+        {
             return value;
+        }
+
         // Enum coercion
         if (columnInfo?.EnumType != null)
         {
             if (Enum.TryParse(columnInfo.EnumType, value.ToString(), true, out var result))
+            {
                 return result;
+            }
 
             switch (parseMode)
             {
@@ -62,7 +71,10 @@ public static class TypeCoercionHelper
         if (columnInfo.IsJsonType)
         {
             if (value is string json && !string.IsNullOrWhiteSpace(json))
+            {
                 return JsonSerializer.Deserialize(json, targetType, columnInfo.JsonSerializerOptions);
+            }
+
             throw new ArgumentException($"Cannot deserialize JSON value '{value}' to type {targetType}.");
         }
 
@@ -74,10 +86,15 @@ public static class TypeCoercionHelper
         Type sourceType,
         Type targetType)
     {
-        if (Utils.IsNullOrDbNull(value)) return null;
+        if (Utils.IsNullOrDbNull(value))
+        {
+            return null;
+        }
 
         if (sourceType == targetType)
+        {
             return value;
+        }
 
         return CoerceCore(value, sourceType, targetType);
     }
@@ -88,13 +105,19 @@ public static class TypeCoercionHelper
         if (targetType == typeof(Guid))
         {
             if (value is string guidStr && Guid.TryParse(guidStr, out var guid))
+            {
                 return guid;
+            }
+
             if (value is byte[] bytes && bytes.Length == 16)
+            {
                 return new Guid(bytes);
+            }
         }
 
         // DateTime from string
         if (sourceType == typeof(string) && targetType == typeof(DateTime) && value is string s)
+        {
             try
             {
                 return DateTime.Parse(s, CultureInfo.InvariantCulture,
@@ -104,6 +127,7 @@ public static class TypeCoercionHelper
             {
                 throw new InvalidCastException($"Cannot convert value '{value}' to type '{targetType}'.", ex);
             }
+        }
 
         try
         {

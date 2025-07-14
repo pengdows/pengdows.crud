@@ -17,7 +17,9 @@ using testbed.Cockroach;
 #endregion
 
 foreach (var (assembly, type, factory) in DbProviderFactoryFinder.FindAllFactories())
+{
     Console.WriteLine($"Found: {type} in {assembly}");
+}
 
 var builder = Host.CreateApplicationBuilder(args);
 builder.Services.AddScoped<IAuditValueResolver, StringAuditContextProvider>();
@@ -101,7 +103,7 @@ async Task WaitForDbToStart(DbProviderFactory instance, string connectionString,
     var timeout = TimeSpan.FromSeconds(numberOfSecondsToWait);
     var startTime = DateTime.UtcNow;
 
-    var lastError = String.Empty;
+    var lastError = string.Empty;
     while (DateTime.UtcNow - startTime < timeout)
     {
         await using var connection = instance.CreateConnection();
@@ -123,11 +125,15 @@ async Task WaitForDbToStart(DbProviderFactory instance, string connectionString,
             try
             {
                 if (csb is not FbConnectionStringBuilder orig)
+                {
                     throw new InvalidOperationException("Connection string builder is not valid.");
+                }
 
                 var db = orig.Database;
                 if (string.IsNullOrWhiteSpace(db))
+                {
                     throw new InvalidOperationException("Database path is not specified.");
+                }
 
                 var csbTemp = new FbConnectionStringBuilder
                 {
@@ -161,7 +167,10 @@ async Task WaitForDbToStart(DbProviderFactory instance, string connectionString,
         catch (Exception ex)
         {
             var currentError = ex.Message;
-            if (currentError != lastError) Console.WriteLine(currentError);
+            if (currentError != lastError)
+            {
+                Console.WriteLine(currentError);
+            }
 
             lastError = currentError;
             await Task.Delay(1000);

@@ -1,9 +1,9 @@
 #region
+
 using System;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Text;
-using pengdows.crud;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.FakeDb;
@@ -15,7 +15,8 @@ namespace pengdows.crud.Tests;
 
 public class CompareResultsTests
 {
-    private static StringBuilder Invoke(DatabaseContext ctx, Dictionary<string, string> expected, Dictionary<string, string> recorded)
+    private static StringBuilder Invoke(DatabaseContext ctx, Dictionary<string, string> expected,
+        Dictionary<string, string> recorded)
     {
         var mi = typeof(DatabaseContext).GetMethod("CompareResults", BindingFlags.Instance | BindingFlags.NonPublic)!;
         return (StringBuilder)mi.Invoke(ctx, new object[] { expected, recorded })!;

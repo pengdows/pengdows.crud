@@ -1,5 +1,9 @@
+#region
+
 using System.Collections.Concurrent;
 using pengdows.crud.configuration;
+
+#endregion
 
 namespace pengdows.crud.tenant;
 

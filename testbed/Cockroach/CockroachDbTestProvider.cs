@@ -13,7 +13,7 @@ public class CockroachDbTestProvider : TestProvider
     public CockroachDbTestProvider(IDatabaseContext context, IServiceProvider serviceProvider) : base(context,
         serviceProvider)
     {
-        this._context = context;
+        _context = context;
     }
 
     public override async Task CreateTable()

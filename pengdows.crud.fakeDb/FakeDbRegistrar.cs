@@ -26,6 +26,8 @@ public class FakeDbRegistrar
     public void RegisterAll(Dictionary<string, string> providerFactories)
     {
         foreach (var kvp in providerFactories)
+        {
             DbProviderFactories.RegisterFactory(kvp.Key, new FakeDbFactory(kvp.Value));
+        }
     }
 }

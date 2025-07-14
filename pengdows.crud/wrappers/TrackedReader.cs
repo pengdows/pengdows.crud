@@ -31,7 +31,10 @@ public class TrackedReader : ITrackedReader
         if (Interlocked.CompareExchange(ref _disposed, 1, 0) == 0)
         {
             _reader.Dispose();
-            if (_shouldCloseConnection) _connection.Close();
+            if (_shouldCloseConnection)
+            {
+                _connection.Close();
+            }
 
             _connectionLocker.DisposeAsync().AsTask().GetAwaiter().GetResult();
         }
@@ -181,7 +184,10 @@ public class TrackedReader : ITrackedReader
         if (Interlocked.CompareExchange(ref _disposed, 1, 0) == 0)
         {
             await _reader.DisposeAsync();
-            if (_shouldCloseConnection) _connection.Close();
+            if (_shouldCloseConnection)
+            {
+                _connection.Close();
+            }
 
             await _connectionLocker.DisposeAsync();
         }
@@ -189,7 +195,10 @@ public class TrackedReader : ITrackedReader
 
     public async Task<bool> ReadAsync()
     {
-        if (await _reader.ReadAsync().ConfigureAwait(false)) return true;
+        if (await _reader.ReadAsync().ConfigureAwait(false))
+        {
+            return true;
+        }
 
         await DisposeAsync().ConfigureAwait(false); // Auto-dispose when done reading
         return false;

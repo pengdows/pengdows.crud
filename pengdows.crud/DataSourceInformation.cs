@@ -77,10 +77,16 @@ public class DataSourceInformation : IDataSourceInformation
     public DataSourceInformation(DbConnection conn, ILoggerFactory? loggerFactory = null)
         : this(loggerFactory)
     {
-        if (conn == null) throw new ArgumentNullException(nameof(conn));
+        if (conn == null)
+        {
+            throw new ArgumentNullException(nameof(conn));
+        }
 
         var tracked = (conn as ITrackedConnection) ?? new TrackedConnection(conn);
-        if (tracked.State != ConnectionState.Open) tracked.Open();
+        if (tracked.State != ConnectionState.Open)
+        {
+            tracked.Open();
+        }
 
         InitializeSync(tracked);
     }
@@ -117,7 +123,10 @@ public class DataSourceInformation : IDataSourceInformation
                 _ => string.Empty
             };
 
-            if (string.IsNullOrWhiteSpace(versionQuery)) return "Unknown Database Version";
+            if (string.IsNullOrWhiteSpace(versionQuery))
+            {
+                return "Unknown Database Version";
+            }
 
             using var cmd = connection.CreateCommand();
             cmd.CommandText = versionQuery;
@@ -132,7 +141,10 @@ public class DataSourceInformation : IDataSourceInformation
 
     public DataTable GetSchema(ITrackedConnection connection)
     {
-        if (IsSqliteSync(connection)) return ReadSqliteSchema();
+        if (IsSqliteSync(connection))
+        {
+            return ReadSqliteSchema();
+        }
 
         return connection.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
     }
@@ -168,12 +180,14 @@ public class DataSourceInformation : IDataSourceInformation
         return CreateAsync(connection, loggerFactory).GetAwaiter().GetResult();
     }
 
-    public static Task<DataSourceInformation> CreateAsync(ITrackedConnection connection, ILoggerFactory? loggerFactory = null)
+    public static Task<DataSourceInformation> CreateAsync(ITrackedConnection connection,
+        ILoggerFactory? loggerFactory = null)
     {
         return CreateInternalAsync(connection, loggerFactory);
     }
 
-    private static async Task<DataSourceInformation> CreateInternalAsync(ITrackedConnection connection, ILoggerFactory? loggerFactory)
+    private static async Task<DataSourceInformation> CreateInternalAsync(ITrackedConnection connection,
+        ILoggerFactory? loggerFactory)
     {
         var info = new DataSourceInformation(loggerFactory);
         await info.InitializeInternalAsync(connection).ConfigureAwait(false);
@@ -258,7 +272,10 @@ public class DataSourceInformation : IDataSourceInformation
         ITrackedConnection connection,
         ILogger<DataSourceInformation> logger)
     {
-        if (await IsSqliteAsync(connection, logger).ConfigureAwait(false)) return ReadSqliteSchema();
+        if (await IsSqliteAsync(connection, logger).ConfigureAwait(false))
+        {
+            return ReadSqliteSchema();
+        }
 
         return connection.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
     }
@@ -276,7 +293,10 @@ public class DataSourceInformation : IDataSourceInformation
                 .ExecuteReaderAsync(CommandBehavior.SingleRow | CommandBehavior.SingleResult)
                 .ConfigureAwait(false);
 
-            if (await reader.ReadAsync().ConfigureAwait(false)) return reader.GetValue(0);
+            if (await reader.ReadAsync().ConfigureAwait(false))
+            {
+                return reader.GetValue(0);
+            }
 
             return null;
         }
@@ -357,15 +377,50 @@ public class DataSourceInformation : IDataSourceInformation
     {
         var lower = name?.ToLowerInvariant() ?? string.Empty;
 
-        if (lower.Contains("sql server")) return SupportedDatabase.SqlServer;
-        if (lower.Contains("mariadb")) return SupportedDatabase.MariaDb;
-        if (lower.Contains("mysql")) return SupportedDatabase.MySql;
-        if (lower.Contains("cockroach")) return SupportedDatabase.CockroachDb;
-        if (lower.Contains("npgsql")) return SupportedDatabase.PostgreSql;
-        if (lower.Contains("postgres")) return SupportedDatabase.PostgreSql;
-        if (lower.Contains("oracle")) return SupportedDatabase.Oracle;
-        if (lower.Contains("sqlite")) return SupportedDatabase.Sqlite;
-        if (lower.Contains("firebird")) return SupportedDatabase.Firebird;
+        if (lower.Contains("sql server"))
+        {
+            return SupportedDatabase.SqlServer;
+        }
+
+        if (lower.Contains("mariadb"))
+        {
+            return SupportedDatabase.MariaDb;
+        }
+
+        if (lower.Contains("mysql"))
+        {
+            return SupportedDatabase.MySql;
+        }
+
+        if (lower.Contains("cockroach"))
+        {
+            return SupportedDatabase.CockroachDb;
+        }
+
+        if (lower.Contains("npgsql"))
+        {
+            return SupportedDatabase.PostgreSql;
+        }
+
+        if (lower.Contains("postgres"))
+        {
+            return SupportedDatabase.PostgreSql;
+        }
+
+        if (lower.Contains("oracle"))
+        {
+            return SupportedDatabase.Oracle;
+        }
+
+        if (lower.Contains("sqlite"))
+        {
+            return SupportedDatabase.Sqlite;
+        }
+
+        if (lower.Contains("firebird"))
+        {
+            return SupportedDatabase.Firebird;
+        }
 
         return SupportedDatabase.Unknown;
     }

@@ -20,8 +20,8 @@ namespace pengdows.crud;
 public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 {
     private readonly DbProviderFactory _factory;
-    private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<IDatabaseContext> _logger;
+    private readonly ILoggerFactory _loggerFactory;
     private bool _applyConnectionSessionSettings;
     private ITrackedConnection? _connection = null;
 
@@ -112,7 +112,9 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
         {
             //don't let it change
             if (!string.IsNullOrWhiteSpace(_connectionString) || string.IsNullOrWhiteSpace(value))
+            {
                 throw new ArgumentException($"Connection string reset attempted.");
+            }
 
             _connectionString = value;
         }
@@ -147,14 +149,20 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
         var qp = QuotePrefix;
         var qs = QuoteSuffix;
         var tmp = name?.Replace(qp, string.Empty)?.Replace(qs, string.Empty);
-        if (string.IsNullOrEmpty(tmp)) return string.Empty;
+        if (string.IsNullOrEmpty(tmp))
+        {
+            return string.Empty;
+        }
 
         var ss = tmp.Split(CompositeIdentifierSeparator);
 
         var sb = new StringBuilder();
         foreach (var s in ss)
         {
-            if (sb.Length > 0) sb.Append(CompositeIdentifierSeparator);
+            if (sb.Length > 0)
+            {
+                sb.Append(CompositeIdentifierSeparator);
+            }
 
             sb.Append(qp);
             sb.Append(s);
@@ -167,12 +175,17 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 
     public ITransactionContext BeginTransaction(IsolationLevel? isolationLevel = null)
     {
-        if (!_isWriteConnection && isolationLevel is null) isolationLevel = IsolationLevel.RepeatableRead;
+        if (!_isWriteConnection && isolationLevel is null)
+        {
+            isolationLevel = IsolationLevel.RepeatableRead;
+        }
 
         isolationLevel ??= IsolationLevel.ReadCommitted;
 
         if (!_isWriteConnection && isolationLevel != IsolationLevel.RepeatableRead)
+        {
             throw new InvalidOperationException("Read-only transactions must use 'RepeatableRead'.");
+        }
 
         return new TransactionContext(this, isolationLevel.Value);
     }
@@ -195,13 +208,19 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     {
         var p = _factory.CreateParameter() ?? throw new InvalidOperationException("Failed to create parameter.");
 
-        if (string.IsNullOrWhiteSpace(name)) name = GenerateRandomName();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            name = GenerateRandomName();
+        }
 
         var valueIsNull = Utils.IsNullOrDbNull(value);
         p.ParameterName = name;
         p.DbType = type;
         p.Value = valueIsNull ? DBNull.Value : value;
-        if (!valueIsNull && p.DbType == DbType.String && value is string s) p.Size = Math.Max(s.Length, 1);
+        if (!valueIsNull && p.DbType == DbType.String && value is string s)
+        {
+            p.Size = Math.Max(s.Length, 1);
+        }
 
         return p;
     }
@@ -234,7 +253,10 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
         var anyOtherMax = validChars.Length;
 
         buffer[0] = validChars[Random.Shared.Next(firstCharMax)];
-        for (var i = 1; i < len; i++) buffer[i] = validChars[Random.Shared.Next(anyOtherMax)];
+        for (var i = 1; i < len; i++)
+        {
+            buffer[i] = validChars[Random.Shared.Next(anyOtherMax)];
+        }
 
         return new string(buffer);
     }
@@ -247,18 +269,27 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 
     public void AssertIsReadConnection()
     {
-        if (!_isReadConnection) throw new InvalidOperationException("The connection is not read connection.");
+        if (!_isReadConnection)
+        {
+            throw new InvalidOperationException("The connection is not read connection.");
+        }
     }
 
     public void AssertIsWriteConnection()
     {
-        if (!_isWriteConnection) throw new InvalidOperationException("The connection is not write connection.");
+        if (!_isWriteConnection)
+        {
+            throw new InvalidOperationException("The connection is not write connection.");
+        }
     }
 
 
     public void CloseAndDisposeConnection(ITrackedConnection? connection)
     {
-        if (connection == null) return;
+        if (connection == null)
+        {
+            return;
+        }
 
         _logger.LogInformation($"Connection mode is: {ConnectionMode}");
         switch (ConnectionMode)
@@ -349,8 +380,8 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
                         break;
                 }
             },
-            onFirstOpen: ApplyConnectionSessionSettings,
-            onDispose: conn => { _logger.LogDebug("Connection disposed."); },
+            ApplyConnectionSessionSettings,
+            conn => { _logger.LogDebug("Connection disposed."); },
             null,
             isSharedConnection
         );
@@ -376,7 +407,9 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
         {
             previous = Interlocked.Read(ref _maxNumberOfOpenConnections);
             if (current <= previous)
+            {
                 return; // no update needed
+            }
 
             // try to update only if no one else has changed it
         } while (Interlocked.CompareExchange(
@@ -388,14 +421,20 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     public async ValueTask CloseAndDisposeConnectionAsync(ITrackedConnection? connection)
     {
         if (connection == null)
+        {
             return;
+        }
 
         _logger.LogInformation($"Async Closing Connection in mode: {ConnectionMode}");
 
         if (connection is IAsyncDisposable asyncConnection)
+        {
             await asyncConnection.DisposeAsync().ConfigureAwait(false);
+        }
         else
+        {
             connection.Dispose();
+        }
     }
 
     private void CheckForSqlServerSettings(ITrackedConnection conn)
@@ -404,7 +443,10 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
             _dataSourceInfo.DatabaseProductName.StartsWith("Microsoft SQL Server", StringComparison.OrdinalIgnoreCase)
             && !_dataSourceInfo.DatabaseProductName.Contains("Compact", StringComparison.OrdinalIgnoreCase);
 
-        if (!_isSqlServer) return;
+        if (!_isSqlServer)
+        {
+            return;
+        }
 
         var settings = new Dictionary<string, string>
         {
@@ -426,7 +468,10 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
         while (reader.Read())
         {
             var key = reader.GetString(0).ToUpperInvariant();
-            if (settings.ContainsKey(key)) currentSettings[key] = reader.GetString(1) == "SET" ? "ON" : "OFF";
+            if (settings.ContainsKey(key))
+            {
+                currentSettings[key] = reader.GetString(1) == "SET" ? "ON" : "OFF";
+            }
         }
 
         var sb = CompareResults(settings, currentSettings);
@@ -449,7 +494,10 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
             recorded.TryGetValue(expectedKvp.Key, out var result);
             if (result != expectedKvp.Value)
             {
-                if (sb.Length > 0) sb.AppendLine();
+                if (sb.Length > 0)
+                {
+                    sb.AppendLine();
+                }
 
                 sb.Append($"SET {expectedKvp.Key} {expectedKvp.Value}");
             }
@@ -488,7 +536,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
                 // Determine correct mode based on connection string
                 // ":memory:" needs a persistent connection to avoid data loss
                 // file-based SQLite requires a single writer to avoid lock conflicts
-                var csb = GetFactoryConnectionStringBuilder(String.Empty);
+                var csb = GetFactoryConnectionStringBuilder(string.Empty);
                 var ds = csb["Data Source"] as string;
                 ConnectionMode = ":memory:" == ds
                     ? DbMode.SingleConnection
@@ -505,9 +553,11 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
                 ApplyConnectionSessionSettings(conn);
                 _connection = conn;
             }
+
             _isolationResolver ??= new IsolationResolver(Product, RCSIEnabled);
         }
-        catch(Exception ex){
+        catch (Exception ex)
+        {
             _logger.LogError(ex, ex.Message);
             throw;
         }
@@ -516,7 +566,9 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
             _isolationResolver ??= new IsolationResolver(Product, RCSIEnabled);
             if (mode == DbMode.Standard)
                 //if it is standard mode, we can close it.
+            {
                 conn?.Dispose();
+            }
         }
     }
 
@@ -587,6 +639,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     {
         _logger.LogInformation("Applying connection session settings");
         if (_applyConnectionSessionSettings)
+        {
             try
             {
                 using var cmd = connection.CreateCommand();
@@ -598,6 +651,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
                 _logger.LogError("Error setting session settings:" + ex.Message);
                 _applyConnectionSessionSettings = false;
             }
+        }
     }
 
     private ITrackedConnection GetStandardConnection(bool isShared = false)
@@ -614,7 +668,10 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 
     private ITrackedConnection GetSingleWriterConnection(ExecutionType type, bool isShared = false)
     {
-        if (ExecutionType.Read == type) return GetStandardConnection(isShared);
+        if (ExecutionType.Read == type)
+        {
+            return GetStandardConnection(isShared);
+        }
 
         return GetSingleConnection();
     }
