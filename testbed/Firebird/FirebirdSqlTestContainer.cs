@@ -79,7 +79,9 @@ public class FirebirdSqlTestContainer : TestContainer
     public override async Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)
     {
         if (_connectionString is null)
+        {
             throw new InvalidOperationException("Container not started yet.");
+        }
 
         return new DatabaseContext(_connectionString, _factory,
             services.GetRequiredService<ITypeMapRegistry>());

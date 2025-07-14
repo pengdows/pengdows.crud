@@ -14,7 +14,7 @@ public class TestProvider : IAsyncTestProvider
     public TestProvider(IDatabaseContext databaseContext, IServiceProvider serviceProvider)
     {
         _context = databaseContext; //serviceProvider.GetService<IAuditValueResolver>()
-        _helper = new EntityHelper<TestTable, long>(databaseContext, auditValueResolver: new StubAuditValueResolver("system"));
+        _helper = new EntityHelper<TestTable, long>(databaseContext, new StubAuditValueResolver("system"));
     }
 
 
@@ -176,6 +176,9 @@ CREATE TABLE {0}test_table{1} (
         var ctx = db ?? _context;
         var sc = _helper.BuildDelete(t.Id, ctx);
         var count = await sc.ExecuteNonQueryAsync();
-        if (count != 1) throw new Exception("Delete failed");
+        if (count != 1)
+        {
+            throw new Exception("Delete failed");
+        }
     }
 }

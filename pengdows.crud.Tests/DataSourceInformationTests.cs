@@ -3,13 +3,11 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Data.Common;
 using System.Linq;
 using System.Reflection;
-using System.Threading;
+using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.enums;
 using pengdows.crud.FakeDb;
-using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.wrappers;
 using Xunit;
 
@@ -23,7 +21,10 @@ public static class DataSourceTestData
     {
         foreach (SupportedDatabase db in Enum.GetValues(typeof(SupportedDatabase)))
         {
-            if (db == SupportedDatabase.Unknown) continue;
+            if (db == SupportedDatabase.Unknown)
+            {
+                continue;
+            }
 
             var schema = DataSourceInformation.BuildEmptySchema(
                 db.ToString(),
@@ -135,7 +136,8 @@ public class DataSourceInformationTests
 
     [Theory]
     [MemberData(nameof(DataSourceTestData.AllDatabases), MemberType = typeof(DataSourceTestData))]
-    public void GetDatabaseVersion_Returns_Version(SupportedDatabase db, DataTable schema, Dictionary<string, object> scalars)
+    public void GetDatabaseVersion_Returns_Version(SupportedDatabase db, DataTable schema,
+        Dictionary<string, object> scalars)
     {
         var factory = new FakeDbFactory(db.ToString());
         var connection = factory.CreateConnection();
@@ -154,15 +156,19 @@ public class DataSourceInformationTests
         var factory = new FakeDbFactory(SupportedDatabase.SqlServer);
         var connection = factory.CreateConnection();
         connection.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}";
-        var tracked = new FakeTrackedConnection(connection, DataSourceInformation.BuildEmptySchema("test", "1", "@", "@{0}", 64, "@w+", "@w+", true), new Dictionary<string, object>());
+        var tracked = new FakeTrackedConnection(connection,
+            DataSourceInformation.BuildEmptySchema("test", "1", "@", "@{0}", 64, "@w+", "@w+", true),
+            new Dictionary<string, object>());
         var info = DataSourceInformation.Create(tracked, NullLoggerFactory.Instance);
 
-        var prop = typeof(DataSourceInformation).GetProperty("Product", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+        var prop = typeof(DataSourceInformation).GetProperty("Product",
+            BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
         prop!.SetValue(info, SupportedDatabase.Unknown);
 
         var result = info.GetDatabaseVersion(tracked);
         Assert.Equal("Unknown Database Version", result);
     }
+
     private static ITrackedConnection BuildSqliteConnectionMock()
     {
         var factory = new FakeDbFactory(SupportedDatabase.Sqlite);

@@ -1,9 +1,13 @@
+#region
+
 using System;
 using System.Collections.Generic;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.tenant;
 using Xunit;
+
+#endregion
 
 namespace pengdows.crud.Tests.tenant;
 
@@ -134,7 +138,7 @@ public class TenantConnectionResolverTests
         {
             Tenants = new List<TenantConfiguration>
             {
-                new TenantConfiguration
+                new()
                 {
                     Name = "opts-a",
                     DatabaseContextConfiguration = new DatabaseContextConfiguration
@@ -144,7 +148,7 @@ public class TenantConnectionResolverTests
                         ReadWriteMode = ReadWriteMode.ReadWrite
                     }
                 },
-                new TenantConfiguration
+                new()
                 {
                     Name = "opts-b",
                     DatabaseContextConfiguration = new DatabaseContextConfiguration
@@ -159,14 +163,17 @@ public class TenantConnectionResolverTests
 
         TenantConnectionResolver.Register(options);
 
-        Assert.Equal("Server=OptA;", TenantConnectionResolver.Instance.GetDatabaseContextConfiguration("opts-a").ConnectionString);
-        Assert.Equal("Server=OptB;", TenantConnectionResolver.Instance.GetDatabaseContextConfiguration("opts-b").ConnectionString);
+        Assert.Equal("Server=OptA;",
+            TenantConnectionResolver.Instance.GetDatabaseContextConfiguration("opts-a").ConnectionString);
+        Assert.Equal("Server=OptB;",
+            TenantConnectionResolver.Instance.GetDatabaseContextConfiguration("opts-b").ConnectionString);
     }
 
     [Fact]
     public void Register_NullOptions_ShouldThrow()
     {
-        var ex = Assert.Throws<ArgumentNullException>(() => TenantConnectionResolver.Register((MultiTenantOptions)null!));
+        var ex =
+            Assert.Throws<ArgumentNullException>(() => TenantConnectionResolver.Register((MultiTenantOptions)null!));
         Assert.Equal("options", ex.ParamName);
     }
 

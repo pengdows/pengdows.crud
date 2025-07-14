@@ -161,12 +161,14 @@ public class TrackedReaderTests
         var reader = new Mock<DbDataReader>();
         reader.Setup(r => r.NextResult()).Throws<InvalidOperationException>();
 
-        var tracked = new TrackedReader(reader.Object, Mock.Of<ITrackedConnection>(), Mock.Of<IAsyncDisposable>(), false);
+        var tracked = new TrackedReader(reader.Object, Mock.Of<ITrackedConnection>(), Mock.Of<IAsyncDisposable>(),
+            false);
 
         var result = tracked.NextResult();
 
         Assert.False(result);
-        reader.Verify(r => r.NextResult(), Times.Never);    }
+        reader.Verify(r => r.NextResult(), Times.Never);
+    }
 
     [Fact]
     public async Task DisposeAsync_ClosesConnection_WhenShouldCloseTrue()

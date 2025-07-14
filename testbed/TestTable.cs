@@ -17,8 +17,7 @@ public class TestTable
     [EnumColumn(typeof(NameEnum))]
     public NameEnum? Name { get; set; }
 
-    [Column("description", DbType.String)]
-    public string? Description { get; set; }
+    [Column("description", DbType.String)] public string? Description { get; set; }
 
     [CreatedOn]
     [Column("created_at", DbType.DateTime)]

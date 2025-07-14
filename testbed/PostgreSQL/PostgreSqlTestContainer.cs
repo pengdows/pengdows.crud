@@ -33,7 +33,7 @@ public class PostgreSqlTestContainer : TestContainer
 
     public override async Task StartAsync()
     {
-         var hostPort = _container.GetMappedPublicPort(_port);
+        var hostPort = _container.GetMappedPublicPort(_port);
         _connectionString =
             $@"Host=localhost;Port={hostPort};Username={_username};Password={_password};Database={_database};Pooling=true;Minimum Pool Size=1;Maximum Pool Size=20;Timeout=15;CommandTimeout=30;";
         await WaitForDbToStart(NpgsqlFactory.Instance, _connectionString, _container);
@@ -42,7 +42,9 @@ public class PostgreSqlTestContainer : TestContainer
     public override async Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)
     {
         if (_connectionString is null)
+        {
             throw new InvalidOperationException("Container not started yet.");
+        }
 
         return new DatabaseContext(_connectionString, NpgsqlFactory.Instance,
             services.GetRequiredService<ITypeMapRegistry>());
@@ -50,6 +52,6 @@ public class PostgreSqlTestContainer : TestContainer
 
     public async ValueTask DisposeAsync()
     {
-          await _container.DisposeAsync();
+        await _container.DisposeAsync();
     }
 }

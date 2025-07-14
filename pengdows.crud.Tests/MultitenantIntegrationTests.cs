@@ -1,8 +1,9 @@
+#region
+
 using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
-using System.Diagnostics;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
@@ -12,6 +13,8 @@ using pengdows.crud.enums;
 using pengdows.crud.tenant;
 using Xunit;
 
+#endregion
+
 namespace pengdows.crud.Tests;
 
 [Table("Users")]
@@ -20,6 +23,7 @@ public class User
     [Id(false)]
     [Column("Id", DbType.Int32)]
     public int Id { get; set; }
+
     [PrimaryKey]
     [Column("Name", DbType.String)]
     public string Name { get; set; } = string.Empty;
@@ -39,7 +43,10 @@ public class User
 
 public class TestAuditValueResolver : IAuditValueResolver
 {
-    public IAuditValues Resolve() => new AuditValues { UserId = "system", UtcNow = DateTime.UtcNow };
+    public IAuditValues Resolve()
+    {
+        return new AuditValues { UserId = "system", UtcNow = DateTime.UtcNow };
+    }
 }
 
 public class MultitenantIntegrationTests
@@ -55,9 +62,11 @@ public class MultitenantIntegrationTests
             {
                 ["MultiTenant:Tenants:0:Name"] = "TenantA",
                 ["MultiTenant:Tenants:0:DatabaseContextConfiguration:ConnectionString"] = "Data Source=:memory:",
-                ["MultiTenant:Tenants:0:DatabaseContextConfiguration:ProviderName"] = SupportedDatabase.Sqlite.ToString(),
+                ["MultiTenant:Tenants:0:DatabaseContextConfiguration:ProviderName"] =
+                    SupportedDatabase.Sqlite.ToString(),
                 ["MultiTenant:Tenants:0:DatabaseContextConfiguration:DbMode"] = DbMode.SingleConnection.ToString(),
-                ["MultiTenant:Tenants:0:DatabaseContextConfiguration:ReadWriteMode"] = ReadWriteMode.ReadWrite.ToString(),
+                ["MultiTenant:Tenants:0:DatabaseContextConfiguration:ReadWriteMode"] =
+                    ReadWriteMode.ReadWrite.ToString()
             })
             .Build();
 
@@ -90,7 +99,7 @@ public class MultitenantIntegrationTests
             var createSc = helper.BuildCreate(user);
             await createSc.ExecuteNonQueryAsync();
             var retrievedUser = await helper.RetrieveOneAsync(user, transaction);
-            
+
             Assert.Equal(user.Name, retrievedUser.Name);
             Assert.Equal(1, retrievedUser.Version);
 

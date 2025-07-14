@@ -49,16 +49,22 @@ public class UtilsTests
     {
         var nestedType = containerType.GetNestedType(nestedClassName, BindingFlags.NonPublic | BindingFlags.Public);
         if (nestedType == null)
+        {
             throw new ArgumentException($"Nested class '{nestedClassName}' not found in '{containerType.Name}'.");
+        }
 
         var propInfo = nestedType.GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance);
         if (propInfo == null)
+        {
             throw new ArgumentException($"Property '{propertyName}' not found in '{nestedClassName}'.");
+        }
 
         var attr = propInfo.GetCustomAttribute<TAttribute>();
         if (attr == null)
+        {
             throw new ArgumentException(
                 $"Attribute '{typeof(TAttribute).Name}' not found on property '{propertyName}'.");
+        }
 
         return attr;
     }

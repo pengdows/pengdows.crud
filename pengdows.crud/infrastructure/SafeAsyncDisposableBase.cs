@@ -1,7 +1,3 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
-
 namespace pengdows.crud.infrastructure;
 
 public abstract class SafeAsyncDisposableBase : ISafeAsyncDisposableBase
@@ -12,7 +8,10 @@ public abstract class SafeAsyncDisposableBase : ISafeAsyncDisposableBase
 
     public void Dispose()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
+            return;
+        }
 
         try
         {
@@ -29,7 +28,10 @@ public abstract class SafeAsyncDisposableBase : ISafeAsyncDisposableBase
 
     public async ValueTask DisposeAsync()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
+            return;
+        }
 
         try
         {

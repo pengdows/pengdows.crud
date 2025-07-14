@@ -39,9 +39,14 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
         executionType ??= IsReadOnlyConnection ? ExecutionType.Read : ExecutionType.Write;
 
         if (IsReadOnlyConnection && executionType != ExecutionType.Read)
+        {
             throw new NotSupportedException("DatabaseContext is read only");
+        }
 
-        if (_context.Product == SupportedDatabase.CockroachDb) isolationLevel = IsolationLevel.Serializable;
+        if (_context.Product == SupportedDatabase.CockroachDb)
+        {
+            isolationLevel = IsolationLevel.Serializable;
+        }
 
         //var executionType = GetExecutionAndSetIsolationTypes(ref isolationLevel);
         // IsolationLevel = isolationLevel;
@@ -116,7 +121,9 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
     public ISqlContainer CreateSqlContainer(string? query = null)
     {
         if (IsCompleted)
+        {
             throw new InvalidOperationException("Cannot create a SQL container because the transaction is completed.");
+        }
 
         return new SqlContainer(this, query);
     }
@@ -195,7 +202,9 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
         try
         {
             if (Interlocked.Exchange(ref _completedState, 1) != 0)
+            {
                 throw new InvalidOperationException("Transaction already completed.");
+            }
 
             _transaction.Commit();
             _committed = true;
@@ -216,7 +225,9 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
         try
         {
             if (Interlocked.Exchange(ref _completedState, 1) != 0)
+            {
                 throw new InvalidOperationException("Transaction already completed.");
+            }
 
             _transaction.Rollback();
             _rolledBack = true;
@@ -232,9 +243,12 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
     protected override void DisposeManaged()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
             return;
+        }
 
         if (Interlocked.CompareExchange(ref _completedState, 0, 0) == 0)
+        {
             try
             {
                 _semaphoreSlim.Wait();
@@ -242,7 +256,9 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
                 try
                 {
                     if (Interlocked.Exchange(ref _completedState, 1) != 0)
+                    {
                         throw new InvalidOperationException("Transaction already completed.");
+                    }
 
                     _transaction.Rollback();
                     _rolledBack = true;
@@ -258,16 +274,23 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
             {
                 _logger.LogError(ex, "Rollback failed during Dispose.");
             }
+        }
 
-        if (Interlocked.Exchange(ref _semaphoreDisposed, 1) == 0) _semaphoreSlim.Dispose();
+        if (Interlocked.Exchange(ref _semaphoreDisposed, 1) == 0)
+        {
+            _semaphoreSlim.Dispose();
+        }
     }
 
     protected override async ValueTask DisposeManagedAsync()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
             return;
+        }
 
         if (Interlocked.CompareExchange(ref _completedState, 0, 0) == 0)
+        {
             try
             {
                 _semaphoreSlim.Wait();
@@ -275,7 +298,9 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
                 try
                 {
                     if (Interlocked.Exchange(ref _completedState, 1) != 0)
+                    {
                         throw new InvalidOperationException("Transaction already completed.");
+                    }
 
                     _transaction.Rollback();
                     _rolledBack = true;
@@ -291,25 +316,38 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
             {
                 _logger.LogError(ex, "Async rollback failed during DisposeAsync.");
             }
+        }
 
         if (_transaction is IAsyncDisposable asyncTx)
+        {
             await asyncTx.DisposeAsync().ConfigureAwait(false);
+        }
         else
+        {
             _transaction.Dispose();
+        }
 
         await _context.CloseAndDisposeConnectionAsync(_connection).ConfigureAwait(false);
 
-        if (Interlocked.Exchange(ref _semaphoreDisposed, 1) == 0) _semaphoreSlim.Dispose();
+        if (Interlocked.Exchange(ref _semaphoreDisposed, 1) == 0)
+        {
+            _semaphoreSlim.Dispose();
+        }
     }
 
     private void EnsureConnectionIsOpen()
     {
-        if (_connection.State != ConnectionState.Open) _connection.Open();
+        if (_connection.State != ConnectionState.Open)
+        {
+            _connection.Open();
+        }
     }
 
     private void ThrowIfDisposed()
     {
         if (Interlocked.Read(ref _disposed) != 0)
+        {
             throw new ObjectDisposedException(nameof(TransactionContext));
+        }
     }
 }

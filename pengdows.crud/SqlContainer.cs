@@ -5,7 +5,6 @@ using System.Data.Common;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using System.Linq;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
@@ -46,14 +45,20 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
             return;
         }
 
-        if (string.IsNullOrEmpty(parameter.ParameterName)) parameter.ParameterName = GenerateRandomName();
+        if (string.IsNullOrEmpty(parameter.ParameterName))
+        {
+            parameter.ParameterName = GenerateRandomName();
+        }
 
         _parameters.Add(parameter.ParameterName, parameter);
     }
 
     public DbParameter AddParameterWithValue<T>(DbType type, T value)
     {
-        if (value is DbParameter) throw new ArgumentException("Parameter type can't be DbParameter.");
+        if (value is DbParameter)
+        {
+            throw new ArgumentException("Parameter type can't be DbParameter.");
+        }
 
         return AddParameterWithValue(null, type, value);
     }
@@ -71,8 +76,10 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
     {
         var cmd = conn.CreateCommand();
         if (_context is TransactionContext transactionContext)
+        {
             cmd.Transaction = (transactionContext.Transaction as DbTransaction)
                               ?? throw new InvalidOperationException("Transaction is not a transaction");
+        }
 
         return (cmd as DbCommand)
                ?? throw new InvalidOperationException("Command is not a DbCommand");
@@ -89,7 +96,9 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
         var procName = Query.ToString().Trim();
 
         if (string.IsNullOrWhiteSpace(procName))
+        {
             throw new InvalidOperationException("Procedure name is missing from the query.");
+        }
 
         var args = includeParameters ? BuildProcedureArguments() : string.Empty;
 
@@ -121,12 +130,16 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
         string BuildProcedureArguments()
         {
             if (_parameters.Count == 0)
+            {
                 return string.Empty;
+            }
 
             // Named parameter support check
             if (_context.SupportsNamedParameters)
                 // Trust that dev has set correct names
+            {
                 return string.Join(", ", _parameters.Values.Select(p => _context.MakeParameterName(p)));
+            }
 
             // Positional binding (e.g., SQLite, MySQL)
             return string.Join(", ", Enumerable.Repeat("?", _parameters.Count));
@@ -142,15 +155,6 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
     public string MakeParameterName(DbParameter parameter)
     {
         return _context.MakeParameterName(parameter);
-    }
-
-    private string GenerateRandomName()
-    {
-        while (true)
-        {
-            var name = _context.GenerateRandomName();
-            if (!_parameters.ContainsKey(name)) return name;
-        }
     }
 
     public async Task<int> ExecuteNonQueryAsync(CommandType commandType = CommandType.Text)
@@ -244,12 +248,30 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
         }
     }
 
+    private string GenerateRandomName()
+    {
+        while (true)
+        {
+            var name = _context.GenerateRandomName();
+            if (!_parameters.ContainsKey(name))
+            {
+                return name;
+            }
+        }
+    }
+
 
     private DbCommand PrepareCommand(ITrackedConnection conn, CommandType commandType, ExecutionType executionType)
     {
-        if (commandType == CommandType.TableDirect) throw new NotSupportedException("TableDirect isn't supported.");
+        if (commandType == CommandType.TableDirect)
+        {
+            throw new NotSupportedException("TableDirect isn't supported.");
+        }
 
-        if (Query.Length == 0) throw new InvalidOperationException("SQL query is empty.");
+        if (Query.Length == 0)
+        {
+            throw new InvalidOperationException("SQL query is empty.");
+        }
 
         OpenConnection(conn);
         var cmd = CreateCommand(conn);
@@ -261,28 +283,41 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
                 _parameters.Values.Select(p => $"{p.ParameterName}={p.Value ?? "NULL"}"));
             _logger.LogDebug("Parameters: {Parameters}", paramDump);
         }
+
         cmd.CommandText = (commandType == CommandType.StoredProcedure)
             ? WrapForStoredProc(executionType)
             : Query.ToString();
         if (_parameters.Count > _context.MaxParameterLimit)
+        {
             throw new InvalidOperationException(
                 $"Query exceeds the maximum parameter limit of {_context.MaxParameterLimit} for {_context.DatabaseProductName}.");
+        }
 
-        foreach (var param in _parameters.Values) cmd.Parameters.Add(param);
+        foreach (var param in _parameters.Values)
+        {
+            cmd.Parameters.Add(param);
+        }
 
-        if (_context.PrepareStatements) cmd.Prepare();
+        if (_context.PrepareStatements)
+        {
+            cmd.Prepare();
+        }
 
         return cmd;
     }
 
     private void OpenConnection(ITrackedConnection conn)
     {
-        if (conn.State != ConnectionState.Open) conn.Open();
+        if (conn.State != ConnectionState.Open)
+        {
+            conn.Open();
+        }
     }
 
     private void Cleanup(DbCommand? cmd, ITrackedConnection? conn, ExecutionType executionType)
     {
         if (cmd != null)
+        {
             try
             {
                 cmd.Parameters?.Clear();
@@ -294,12 +329,18 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
                 _logger.LogWarning($"Command disposal failed: {ex.Message}");
                 // We're intentionally not retrying here anymore — disposal failure is generally harmless in this case
             }
+        }
 
         // Don't dispose read connections — they are left open until the reader disposes
         if (executionType == ExecutionType.Read)
+        {
             return;
+        }
 
-        if (_context is not TransactionContext && conn is not null) _context.CloseAndDisposeConnection(conn);
+        if (_context is not TransactionContext && conn is not null)
+        {
+            _context.CloseAndDisposeConnection(conn);
+        }
     }
 
     protected override void DisposeManaged()

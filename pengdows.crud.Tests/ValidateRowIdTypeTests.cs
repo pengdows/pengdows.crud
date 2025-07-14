@@ -1,8 +1,10 @@
 #region
+
 using System;
 using System.Data;
 using pengdows.crud.attributes;
 using Xunit;
+
 #endregion
 
 namespace pengdows.crud.Tests;
@@ -38,8 +40,6 @@ public class ValidateRowIdTypeTests : SqlLiteContextTestBase
     [Table("Simple")]
     private class SimpleEntity
     {
-        [Id]
-        [Column("Id", DbType.Int32)]
-        public int Id { get; set; }
+        [Id] [Column("Id", DbType.Int32)] public int Id { get; set; }
     }
 }

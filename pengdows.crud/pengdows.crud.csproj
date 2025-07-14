@@ -24,24 +24,24 @@
         <AssemblyOriginatorKeyFile>$(SNK_PATH)</AssemblyOriginatorKeyFile>
     </PropertyGroup>
     <ItemGroup>
-       <PackageReference Include="coverlet.collector" Version="6.0.4">
-          <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-          <PrivateAssets>all</PrivateAssets>
+        <PackageReference Include="coverlet.collector" Version="6.0.4">
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+            <PrivateAssets>all</PrivateAssets>
         </PackageReference>
-        <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.6" />
-        <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="9.0.6" />
+        <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.6"/>
+        <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="9.0.6"/>
     </ItemGroup>
     <ItemGroup>
-        <None Include="README.md" Pack="true" PackagePath="" />
+        <None Include="README.md" Pack="true" PackagePath=""/>
     </ItemGroup>
     <ItemGroup>
-        <ProjectReference Include="..\pengdows.crud.abstractions\pengdows.crud.abstractions.csproj" />
+        <ProjectReference Include="..\pengdows.crud.abstractions\pengdows.crud.abstractions.csproj"/>
     </ItemGroup>
     <ItemGroup>
-        <EmbeddedResource Include="xml\Sqlite.schema.xml" />
+        <EmbeddedResource Include="xml\Sqlite.schema.xml"/>
     </ItemGroup>
     <ItemGroup>
-        <InternalsVisibleTo Include="pengdows.crud.Tests" />
+        <InternalsVisibleTo Include="pengdows.crud.Tests"/>
     </ItemGroup>
 
 </Project>

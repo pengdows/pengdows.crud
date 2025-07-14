@@ -1,7 +1,5 @@
 #region
 
-using System;
-using System.Threading.Tasks;
 using AdoNetCore.AseClient;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
@@ -49,22 +47,12 @@ public class SybaseTestContainer : TestContainer, ITestContainer
         _connectionString = $"DataSource=localhost;Port={hostPort};Database={Database};Uid={Username};Pwd={Password};";
     }
 
-    private static async Task CreateTestDatabase(string masterCs)
-    {
-        await using var conn = AseClientFactory.Instance.CreateConnection();
-        conn.ConnectionString = masterCs;
-        await conn.OpenAsync();
-
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText = $"IF NOT EXISTS (SELECT name FROM sysdatabases WHERE name = '{Database}') " +
-                          $"CREATE DATABASE {Database}";
-        await cmd.ExecuteNonQueryAsync();
-    }
-
     public override Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)
     {
         if (_connectionString is null)
+        {
             throw new InvalidOperationException("Container not started.");
+        }
 
         return Task.FromResult<IDatabaseContext>(
             new DatabaseContext(
@@ -76,5 +64,17 @@ public class SybaseTestContainer : TestContainer, ITestContainer
     public async ValueTask DisposeAsync()
     {
         await _container.DisposeAsync();
+    }
+
+    private static async Task CreateTestDatabase(string masterCs)
+    {
+        await using var conn = AseClientFactory.Instance.CreateConnection();
+        conn.ConnectionString = masterCs;
+        await conn.OpenAsync();
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = $"IF NOT EXISTS (SELECT name FROM sysdatabases WHERE name = '{Database}') " +
+                          $"CREATE DATABASE {Database}";
+        await cmd.ExecuteNonQueryAsync();
     }
 }

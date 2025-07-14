@@ -1,5 +1,9 @@
+#region
+
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+
+#endregion
 
 namespace pengdows.crud.tenant;
 

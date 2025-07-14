@@ -9,11 +9,6 @@ namespace testbed;
 public class StringAuditContextProvider
     : IAuditValueResolver
 {
-    public string GetCurrentUserIdentifier()
-    {
-        return "testuser";
-    }
-
     public IAuditValues Resolve()
     {
         var x = new AuditValues
@@ -21,5 +16,10 @@ public class StringAuditContextProvider
             UserId = GetCurrentUserIdentifier()
         };
         return x;
+    }
+
+    public string GetCurrentUserIdentifier()
+    {
+        return "testuser";
     }
 }

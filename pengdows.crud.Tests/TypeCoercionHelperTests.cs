@@ -133,6 +133,18 @@ public class TypeCoercionHelperTests
             TypeCoercionHelper.Coerce("hello", typeof(string), typeof(int)));
     }
 
+    [Fact]
+    public void Coerce_InvalidEnumString_SetDefaultValue_ReturnsDefault()
+    {
+        var column = new ColumnInfo
+        {
+            EnumType = typeof(TestEnum),
+            PropertyInfo = typeof(EnumHolder).GetProperty("Value")
+        };
+        var result = TypeCoercionHelper.Coerce("Invalid", typeof(string), column, EnumParseFailureMode.SetDefaultValue);
+        Assert.Equal(TestEnum.One, result);
+    }
+
     private enum TestEnum
     {
         One,
@@ -148,5 +160,10 @@ public class TypeCoercionHelperTests
     private class CustomObject
     {
         public string Name { get; set; } = string.Empty;
+    }
+
+    private class EnumHolder
+    {
+        public TestEnum Value { get; set; }
     }
 }

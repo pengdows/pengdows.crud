@@ -22,7 +22,10 @@ public sealed class EphemeralSecureString : IEphemeralSecureString, IDisposable
 
     public EphemeralSecureString(string input)
     {
-        if (input == null) throw new ArgumentNullException(nameof(input));
+        if (input == null)
+        {
+            throw new ArgumentNullException(nameof(input));
+        }
 
         _encoding = Encoding.UTF8;
 
@@ -37,11 +40,17 @@ public sealed class EphemeralSecureString : IEphemeralSecureString, IDisposable
 
     public string Reveal()
     {
-        if (Interlocked.Read(ref _disposed) == 1) throw new ObjectDisposedException(nameof(EphemeralSecureString));
+        if (Interlocked.Read(ref _disposed) == 1)
+        {
+            throw new ObjectDisposedException(nameof(EphemeralSecureString));
+        }
 
         lock (_lock)
         {
-            if (_cachedPlainBytes == null) _cachedPlainBytes = DecryptBytes(_cipherText, _key, _iv);
+            if (_cachedPlainBytes == null)
+            {
+                _cachedPlainBytes = DecryptBytes(_cipherText, _key, _iv);
+            }
 
             _timer?.Dispose();
             _timer = new Timer(ClearPlainText, null, TTL_MS, Timeout.Infinite);

@@ -1,38 +1,38 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
- 
-  <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <PackageId>pengdows.crud.fakeDb</PackageId>
-    <Version>1.0.0.0</Version>
-    <AssemblyVersion>1.0.0.0</AssemblyVersion>
-    <FileVersion>1.0.0.0</FileVersion>
-    <Description>Fake ADO.NET provider used for testing pengdows.crud.</Description>
-    <Authors>Pengdows</Authors>
-    <PackageTags>crud,nuget,fake</PackageTags>
-    <RepositoryUrl>https://github.com/pengdows/pengdows.crud</RepositoryUrl>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageProjectUrl>https://github.com/pengdows/pengdows.crud/wiki</PackageProjectUrl>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <RepositoryType>git</RepositoryType>
-    <WarningsAsErrors>true</WarningsAsErrors>
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(SNK_PATH)' != '' ">
-    <SignAssembly>true</SignAssembly>
-    <PublicSign>true</PublicSign>
-    <AssemblyOriginatorKeyFile>$(SNK_PATH)</AssemblyOriginatorKeyFile>
-  </PropertyGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\pengdows.crud.abstractions\pengdows.crud.abstractions.csproj"/>
-  </ItemGroup>
-  <ItemGroup>
-    <EmbeddedResource Include="xml\*.schema.xml"/>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="README.md" Pack="true" PackagePath="" />
-  </ItemGroup>
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <PackageId>pengdows.crud.fakeDb</PackageId>
+        <Version>1.0.0.0</Version>
+        <AssemblyVersion>1.0.0.0</AssemblyVersion>
+        <FileVersion>1.0.0.0</FileVersion>
+        <Description>Fake ADO.NET provider used for testing pengdows.crud.</Description>
+        <Authors>Pengdows</Authors>
+        <PackageTags>crud,nuget,fake</PackageTags>
+        <RepositoryUrl>https://github.com/pengdows/pengdows.crud</RepositoryUrl>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageProjectUrl>https://github.com/pengdows/pengdows.crud/wiki</PackageProjectUrl>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <RepositoryType>git</RepositoryType>
+        <WarningsAsErrors>true</WarningsAsErrors>
+    </PropertyGroup>
+    <PropertyGroup Condition=" '$(SNK_PATH)' != '' ">
+        <SignAssembly>true</SignAssembly>
+        <PublicSign>true</PublicSign>
+        <AssemblyOriginatorKeyFile>$(SNK_PATH)</AssemblyOriginatorKeyFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\pengdows.crud.abstractions\pengdows.crud.abstractions.csproj"/>
+    </ItemGroup>
+    <ItemGroup>
+        <EmbeddedResource Include="xml\*.schema.xml"/>
+    </ItemGroup>
+    <ItemGroup>
+        <None Include="README.md" Pack="true" PackagePath=""/>
+    </ItemGroup>
 </Project>

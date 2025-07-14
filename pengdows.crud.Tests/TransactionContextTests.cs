@@ -9,7 +9,6 @@ using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.FakeDb;
 using pengdows.crud.threading;
-using pengdows.crud.wrappers;
 using Xunit;
 
 #endregion
@@ -94,7 +93,8 @@ public class TransactionContextTests
     [MemberData(nameof(AllSupportedProviders))]
     public void Commit_MarksAsCommitted(SupportedDatabase product)
     {
-        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", new FakeDbFactory(product.ToString()));
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}",
+            new FakeDbFactory(product.ToString()));
         var tx = context.BeginTransaction();
         tx.Commit();
 
@@ -106,7 +106,8 @@ public class TransactionContextTests
     [MemberData(nameof(AllSupportedProviders))]
     public void Rollback_MarksAsRolledBack(SupportedDatabase product)
     {
-        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", new FakeDbFactory(product.ToString()));
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}",
+            new FakeDbFactory(product.ToString()));
         using var tx = context.BeginTransaction();
 
         tx.Rollback();
@@ -119,7 +120,8 @@ public class TransactionContextTests
     [MemberData(nameof(AllSupportedProviders))]
     public async Task DisposeAsync_RollsBackUncommittedTransaction(SupportedDatabase product)
     {
-        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", new FakeDbFactory(product.ToString()));
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}",
+            new FakeDbFactory(product.ToString()));
         await using var tx = context.BeginTransaction();
 
         await tx.DisposeAsync();
@@ -131,7 +133,8 @@ public class TransactionContextTests
     [MemberData(nameof(AllSupportedProviders))]
     public void CreateSqlContainer_AfterCompletion_Throws(SupportedDatabase product)
     {
-        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", new FakeDbFactory(product.ToString()));
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}",
+            new FakeDbFactory(product.ToString()));
         using var tx = context.BeginTransaction();
 
         tx.Rollback();
@@ -143,7 +146,8 @@ public class TransactionContextTests
     [MemberData(nameof(AllSupportedProviders))]
     public void GenerateRandomName_StartsWithLetter(SupportedDatabase product)
     {
-        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", new FakeDbFactory(product.ToString()));
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}",
+            new FakeDbFactory(product.ToString()));
         using var tx = context.BeginTransaction();
         var name = tx.GenerateRandomName(10);
 
@@ -154,7 +158,8 @@ public class TransactionContextTests
     [MemberData(nameof(AllSupportedProviders))]
     public void NestedTransactionsFail(SupportedDatabase product)
     {
-        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", new FakeDbFactory(product.ToString()));
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}",
+            new FakeDbFactory(product.ToString()));
         using var tx = context.BeginTransaction();
         var name = tx.GenerateRandomName(10);
 

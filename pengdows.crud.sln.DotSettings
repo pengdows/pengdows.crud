@@ -674,5 +674,14 @@
             x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002ERider_002EBackend_002EFeatures_002EDebugger_002EActions_002ECSharp_002ECSharpRunToCursorContextAction/@EntryIndexedValue">False</s:Boolean>
     <s:Boolean
             x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002ERider_002EBackend_002EFeatures_002EDebugger_002EActions_002ECSharp_002ECSharpSmartStepIntoContextAction/@EntryIndexedValue">False</s:Boolean>
+    <s:String x:Key="/Default/CodeStyle/CodeFormatting/CSharpCodeStyle/BRACES_FOR_FOR/@EntryValue">Required</s:String>
+    <s:String
+            x:Key="/Default/CodeStyle/CodeFormatting/CSharpCodeStyle/BRACES_FOR_FOREACH/@EntryValue">Required</s:String>
+    <s:String
+            x:Key="/Default/CodeStyle/CodeFormatting/CSharpCodeStyle/BRACES_FOR_IFELSE/@EntryValue">Required</s:String>
+    <s:String x:Key="/Default/CodeStyle/CodeFormatting/CSharpCodeStyle/BRACES_FOR_WHILE/@EntryValue">Required</s:String>
+    <s:Boolean x:Key="/Default/CodeStyle/CodeFormatting/CSharpCodeStyle/BRACES_REDUNDANT/@EntryValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeStyle/CodeFormatting/CSharpFormat/ALLOW_COMMENT_AFTER_LBRACE/@EntryValue">True</s:Boolean>
     <s:Boolean x:Key="/Default/UserDictionary/Words/=pengdows/@EntryIndexedValue">True</s:Boolean>
     <s:Boolean x:Key="/Default/UserDictionary/Words/=postgre/@EntryIndexedValue">True</s:Boolean></wpf:ResourceDictionary>

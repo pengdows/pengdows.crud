@@ -27,4 +27,5 @@ public interface IColumnInfo
     bool IsCreatedOn { get; set; }
     bool IsLastUpdatedBy { get; set; }
     bool IsLastUpdatedOn { get; set; }
-    object? MakeParameterValueFromField<T>(T objectToCreate);}
+    object? MakeParameterValueFromField<T>(T objectToCreate);
+}
