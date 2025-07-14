@@ -37,4 +37,19 @@ public class TrackedReaderAdditionalTests
 
         reader.Verify(r => r.Close(), Times.Once);
     }
+
+    [Fact]
+    public void GetData_ReturnsReaderFromUnderlyingReader()
+    {
+        var innerReader = new Mock<IDataReader>();
+        var reader = new Mock<DbDataReader>();
+        reader.Setup(r => r.GetData(2)).Returns(innerReader.Object);
+
+        var tracked = new TrackedReader(reader.Object, Mock.Of<ITrackedConnection>(), Mock.Of<IAsyncDisposable>(), false);
+
+        var result = tracked.GetData(2);
+
+        Assert.Same(innerReader.Object, result);
+        reader.Verify(r => r.GetData(2), Times.Once);
+    }
 }
