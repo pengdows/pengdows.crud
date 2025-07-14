@@ -97,6 +97,7 @@ jobs:
         with:
           files: TestResults/**/coverage.cobertura.xml
           fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
