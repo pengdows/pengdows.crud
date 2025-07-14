@@ -40,7 +40,8 @@ jobs:
           dotnet test --no-build --configuration Release \
             --collect:"XPlat Code Coverage" \
             --results-directory ./TestResults \
-            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Include="[pengdows.crud]*"
+            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Include="[pengdows.crud]*" \
+            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Exclude="[pengdows.crud.Tests]*;[pengdows.crud.abstractions]*;[pengdows.crud.fakeDb]*;[testbed]*"
 
       - name: Generate coverage report
         run: |
@@ -90,6 +91,12 @@ jobs:
           else
             echo "✅ Visual code coverage $coverage_percent% meets threshold"
           fi
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: TestResults/**/coverage.cobertura.xml
+          fail_ci_if_error: true
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
