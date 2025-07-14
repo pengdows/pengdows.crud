@@ -39,7 +39,10 @@ public class TrackedReader : ITrackedReader
 
     public bool Read()
     {
-        if (_reader.Read()) return true;
+        if (_reader.Read())
+        {
+            return true;
+        }
 
         try
         {

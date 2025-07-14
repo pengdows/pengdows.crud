@@ -166,7 +166,8 @@ public class TrackedReaderTests
         var result = tracked.NextResult();
 
         Assert.False(result);
-        reader.Verify(r => r.NextResult(), Times.Never);    }
+        reader.Verify(r => r.NextResult(), Times.Never);
+    }
 
     [Fact]
     public async Task DisposeAsync_ClosesConnection_WhenShouldCloseTrue()

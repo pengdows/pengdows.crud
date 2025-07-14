@@ -1,7 +1,10 @@
+using System;
 using System.Data.Common;
 using Microsoft.Data.Sqlite;
 using Moq;
 using pengdows.crud;
+using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.FakeDb;
 using pengdows.crud.wrappers;
 using Xunit;
