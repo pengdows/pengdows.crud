@@ -74,6 +74,34 @@ public class DataReaderMapperTests
     }
 
     [Fact]
+    public async Task LoadObjectsFromDataReaderAsync_SwallowsMappingErrors()
+    {
+        var reader = new FakeDbDataReader(new[]
+        {
+            new Dictionary<string, object>
+            {
+                ["Name"] = "John",
+                ["Age"] = "not-a-number",
+                ["IsActive"] = true
+            }
+        });
+
+        var result = await DataReaderMapper.LoadObjectsFromDataReaderAsync<SampleEntity>(reader);
+
+        Assert.Single(result);
+        Assert.Equal("John", result[0].Name);
+        Assert.Equal(0, result[0].Age); // default due to conversion failure
+        Assert.True(result[0].IsActive);
+    }
+
+    [Fact]
+    public async Task LoadObjectsFromDataReaderAsync_NullReader_Throws()
+    {
+        await Assert.ThrowsAsync<ArgumentNullException>(async () =>
+            await DataReaderMapper.LoadObjectsFromDataReaderAsync<SampleEntity>(null!));
+    }
+
+    [Fact]
     public async Task LoadObjectsFromDataReaderAsync_ThrowsForNonDbDataReader()
     {
         var reader = new NonDbDataReader();
