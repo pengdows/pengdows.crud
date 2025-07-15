@@ -9,6 +9,8 @@ using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.FakeDb;
 using pengdows.crud.threading;
+using Microsoft.Extensions.Logging;
+using Moq;
 using Xunit;
 
 #endregion
@@ -231,5 +233,113 @@ public class TransactionContextTests
 
         Assert.Equal(context.ProcWrappingStyle, tx.ProcWrappingStyle);
         Assert.Throws<NotImplementedException>(() => tx.ProcWrappingStyle = ProcWrappingStyle.Call);
+    }
+
+    [Fact]
+    public void Dispose_RollbackThrows_LogsError()
+    {
+        var logger = new Mock<ILogger<TransactionContext>>();
+        var factory = new FailingFactory(true);
+        var config = new DatabaseContextConfiguration
+        {
+            DbMode = DbMode.SingleWriter,
+            ProviderName = SupportedDatabase.Sqlite.ToString(),
+            ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}"
+        };
+        var context = new DatabaseContext(config, factory);
+
+        var tx = new TransactionContext(context, IsolationLevel.ReadCommitted, ExecutionType.Write, logger.Object);
+        tx.Dispose();
+
+        logger.Verify(l => l.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.IsAny<It.IsAnyType>(),
+                It.IsAny<Exception>(),
+                (Func<It.IsAnyType, Exception, string>)It.IsAny<object>()),
+            Times.Once);
+        Assert.True(tx.IsCompleted);
+    }
+
+    [Fact]
+    public async Task DisposeAsync_RollbackThrows_LogsError()
+    {
+        var logger = new Mock<ILogger<TransactionContext>>();
+        var factory = new FailingFactory(true);
+        var config = new DatabaseContextConfiguration
+        {
+            DbMode = DbMode.SingleWriter,
+            ProviderName = SupportedDatabase.Sqlite.ToString(),
+            ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}"
+        };
+        var context = new DatabaseContext(config, factory);
+
+        var tx = new TransactionContext(context, IsolationLevel.ReadCommitted, ExecutionType.Write, logger.Object);
+        await tx.DisposeAsync();
+
+        logger.Verify(l => l.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.IsAny<It.IsAnyType>(),
+                It.IsAny<Exception>(),
+                (Func<It.IsAnyType, Exception, string>)It.IsAny<object>()),
+            Times.Once);
+        Assert.True(tx.IsCompleted);
+    }
+
+    private sealed class FailingFactory : DbProviderFactory
+    {
+        private readonly bool _failRollback;
+
+        public FailingFactory(bool failRollback)
+        {
+            _failRollback = failRollback;
+        }
+
+        public override DbCommand CreateCommand() => new FakeDbCommand();
+
+        public override DbConnection CreateConnection()
+        {
+            var conn = new FailingConnection(_failRollback);
+            conn.EmulatedProduct = SupportedDatabase.Sqlite;
+            return conn;
+        }
+
+        public override DbParameter CreateParameter() => new FakeDbParameter();
+    }
+
+    private sealed class FailingConnection : FakeDbConnection
+    {
+        private readonly bool _failRollback;
+
+        public FailingConnection(bool failRollback)
+        {
+            _failRollback = failRollback;
+        }
+
+        protected override DbTransaction BeginDbTransaction(IsolationLevel level)
+        {
+            return new FailingTransaction(this, level, _failRollback);
+        }
+    }
+
+    private sealed class FailingTransaction : FakeDbTransaction
+    {
+        private readonly bool _fail;
+
+        public FailingTransaction(FakeDbConnection connection, IsolationLevel level, bool fail) : base(connection, level)
+        {
+            _fail = fail;
+        }
+
+        public override void Rollback()
+        {
+            if (_fail)
+            {
+                throw new InvalidOperationException("fail");
+            }
+
+            base.Rollback();
+        }
     }
 }
