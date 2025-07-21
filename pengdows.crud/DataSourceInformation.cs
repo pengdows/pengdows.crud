@@ -142,6 +142,7 @@ public class DataSourceInformation : IDataSourceInformation
         SupportedDatabase.SqlServer => true,
         SupportedDatabase.Oracle => true,
         SupportedDatabase.Firebird => true,
+        SupportedDatabase.PostgreSql => GetMajorVersion() > 14,
         _ => false
     };
 
@@ -380,5 +381,29 @@ public class DataSourceInformation : IDataSourceInformation
         {
             return defaultValue;
         }
+    }
+
+    public int? GetMajorVersion()
+    {
+        var version = ParseVersion(DatabaseProductVersion);
+        return version?.Major;
+    }
+
+    public int? GetPostgreSqlMajorVersion()
+    {
+        if (Product != SupportedDatabase.PostgreSql) return null;
+
+        return GetMajorVersion();
+    }
+
+    private static Version? ParseVersion(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return null;
+
+        var match = Regex.Match(input, "(?<ver>\\d+(?:\\.\\d+)*)");
+        if (match.Success && Version.TryParse(match.Groups["ver"].Value, out var v))
+            return v;
+
+        return null;
     }
 }

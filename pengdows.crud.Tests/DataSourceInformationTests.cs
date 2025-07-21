@@ -49,9 +49,15 @@ public static class DataSourceTestData
                 _ => string.Empty
             };
 
+            var versionString = db switch
+            {
+                SupportedDatabase.PostgreSql => "PostgreSQL 15.0",
+                _ => $"{db} v1.2.3"
+            };
+
             var scalars = new Dictionary<string, object>
             {
-                [versionSql] = $"{db} v1.2.3"
+                [versionSql] = versionString
             };
 
             yield return new object[] { db, schema, scalars };
@@ -91,10 +97,15 @@ public class DataSourceInformationTests
         };
         Assert.Equal(expectedMarker, info.ParameterMarker);
 
+        // Assert: major version parsing
+        var expectedMajor = db == SupportedDatabase.PostgreSql ? 15 : 1;
+        Assert.Equal(expectedMajor, info.GetMajorVersion());
+
         // Assert: merge support
         var canMerge = db == SupportedDatabase.SqlServer
                        || db == SupportedDatabase.Oracle
-                       || db == SupportedDatabase.Firebird;
+                       || db == SupportedDatabase.Firebird
+                       || (db == SupportedDatabase.PostgreSql && info.GetMajorVersion() > 14);
         Assert.Equal(canMerge, info.SupportsMerge);
 
         // Assert: insert-on-conflict support
