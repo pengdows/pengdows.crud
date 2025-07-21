@@ -1,30 +1,30 @@
 ﻿{
   "DotCoverVersion": "2025.1.4",
   "Kind": "SolutionRoot",
-  "CoveredStatements": 1667,
-  "TotalStatements": 1842,
-  "CoveragePercent": 90,
+  "CoveredStatements": 1739,
+  "TotalStatements": 1992,
+  "CoveragePercent": 87,
   "Children": [
     {
       "Kind": "Project",
       "Name": "pengdows.crud",
-      "CoveredStatements": 1667,
-      "TotalStatements": 1842,
-      "CoveragePercent": 90,
+      "CoveredStatements": 1739,
+      "TotalStatements": 1992,
+      "CoveragePercent": 87,
       "Children": [
         {
           "Kind": "Namespace",
           "Name": "pengdows.crud",
-          "CoveredStatements": 1667,
-          "TotalStatements": 1842,
-          "CoveragePercent": 90,
+          "CoveredStatements": 1739,
+          "TotalStatements": 1992,
+          "CoveragePercent": 87,
           "Children": [
             {
               "Kind": "Namespace",
               "Name": "attributes",
-              "CoveredStatements": 30,
+              "CoveredStatements": 25,
               "TotalStatements": 32,
-              "CoveragePercent": 94,
+              "CoveragePercent": 78,
               "Children": [
                 {
                   "Kind": "Type",
@@ -89,16 +89,16 @@
                 {
                   "Kind": "Type",
                   "Name": "EnumColumnAttribute",
-                  "CoveredStatements": 6,
+                  "CoveredStatements": 5,
                   "TotalStatements": 6,
-                  "CoveragePercent": 100,
+                  "CoveragePercent": 83,
                   "Children": [
                     {
                       "Kind": "Constructor",
                       "Name": "EnumColumnAttribute(Type)",
-                      "CoveredStatements": 5,
+                      "CoveredStatements": 4,
                       "TotalStatements": 5,
-                      "CoveragePercent": 100
+                      "CoveragePercent": 80
                     },
                     {
                       "Kind": "AutoProperty",
@@ -216,16 +216,16 @@
                 {
                   "Kind": "Type",
                   "Name": "PrimaryKeyAttribute",
-                  "CoveredStatements": 7,
+                  "CoveredStatements": 3,
                   "TotalStatements": 7,
-                  "CoveragePercent": 100,
+                  "CoveragePercent": 43,
                   "Children": [
                     {
                       "Kind": "Constructor",
                       "Name": "PrimaryKeyAttribute(int)",
-                      "CoveredStatements": 3,
+                      "CoveredStatements": 0,
                       "TotalStatements": 3,
-                      "CoveragePercent": 100
+                      "CoveragePercent": 0
                     },
                     {
                       "Kind": "Constructor",
@@ -237,15 +237,15 @@
                     {
                       "Kind": "AutoProperty",
                       "Name": "Order:int",
-                      "CoveredStatements": 1,
+                      "CoveredStatements": 0,
                       "TotalStatements": 1,
-                      "CoveragePercent": 100,
+                      "CoveragePercent": 0,
                       "Children": [
                         {
                           "Kind": "PropertyGetter",
-                          "CoveredStatements": 1,
+                          "CoveredStatements": 0,
                           "TotalStatements": 1,
-                          "CoveragePercent": 100
+                          "CoveragePercent": 0
                         }
                       ]
                     }
@@ -555,9 +555,9 @@
             {
               "Kind": "Namespace",
               "Name": "exceptions",
-              "CoveredStatements": 15,
+              "CoveredStatements": 13,
               "TotalStatements": 15,
-              "CoveragePercent": 100,
+              "CoveragePercent": 87,
               "Children": [
                 {
                   "Kind": "Type",
@@ -578,16 +578,16 @@
                 {
                   "Kind": "Type",
                   "Name": "InvalidValueException",
-                  "CoveredStatements": 2,
+                  "CoveredStatements": 0,
                   "TotalStatements": 2,
-                  "CoveragePercent": 100,
+                  "CoveragePercent": 0,
                   "Children": [
                     {
                       "Kind": "Constructor",
                       "Name": "InvalidValueException(string)",
-                      "CoveredStatements": 2,
+                      "CoveredStatements": 0,
                       "TotalStatements": 2,
-                      "CoveragePercent": 100
+                      "CoveragePercent": 0
                     }
                   ]
                 },
@@ -856,9 +856,9 @@
             {
               "Kind": "Namespace",
               "Name": "tenant",
-              "CoveredStatements": 55,
+              "CoveredStatements": 53,
               "TotalStatements": 56,
-              "CoveragePercent": 98,
+              "CoveragePercent": 95,
               "Children": [
                 {
                   "Kind": "Type",
@@ -1047,16 +1047,16 @@
                 {
                   "Kind": "Type",
                   "Name": "TenantServiceCollectionExtensions",
-                  "CoveredStatements": 11,
+                  "CoveredStatements": 9,
                   "TotalStatements": 11,
-                  "CoveragePercent": 100,
+                  "CoveragePercent": 82,
                   "Children": [
                     {
                       "Kind": "Method",
                       "Name": "AddMultiTenancy(IServiceCollection,IConfiguration):IServiceCollection",
-                      "CoveredStatements": 11,
+                      "CoveredStatements": 9,
                       "TotalStatements": 11,
-                      "CoveragePercent": 100
+                      "CoveragePercent": 82
                     }
                   ]
                 }
@@ -2815,9 +2815,9 @@
             {
               "Kind": "Type",
               "Name": "DataSourceInformation",
-              "CoveredStatements": 182,
-              "TotalStatements": 194,
-              "CoveragePercent": 94,
+              "CoveredStatements": 192,
+              "TotalStatements": 206,
+              "CoveragePercent": 93,
               "Children": [
                 {
                   "Kind": "Constructor",
@@ -2885,15 +2885,15 @@
                 {
                   "Kind": "AutoProperty",
                   "Name": "DatabaseProductVersion:string",
-                  "CoveredStatements": 1,
+                  "CoveredStatements": 2,
                   "TotalStatements": 2,
-                  "CoveragePercent": 50,
+                  "CoveragePercent": 100,
                   "Children": [
                     {
                       "Kind": "PropertyGetter",
-                      "CoveredStatements": 0,
+                      "CoveredStatements": 1,
                       "TotalStatements": 1,
-                      "CoveragePercent": 0
+                      "CoveragePercent": 100
                     },
                     {
                       "Kind": "PropertySetter",
@@ -3146,14 +3146,14 @@
                 {
                   "Kind": "Property",
                   "Name": "SupportsMerge:bool",
-                  "CoveredStatements": 5,
-                  "TotalStatements": 5,
+                  "CoveredStatements": 6,
+                  "TotalStatements": 6,
                   "CoveragePercent": 100,
                   "Children": [
                     {
                       "Kind": "PropertyGetter",
-                      "CoveredStatements": 5,
-                      "TotalStatements": 5,
+                      "CoveredStatements": 6,
+                      "TotalStatements": 6,
                       "CoveragePercent": 100
                     }
                   ]
@@ -3255,6 +3255,20 @@
                 },
                 {
                   "Kind": "Method",
+                  "Name": "GetMajorVersion():Nullable<int>",
+                  "CoveredStatements": 2,
+                  "TotalStatements": 2,
+                  "CoveragePercent": 100
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "GetPostgreSqlMajorVersion():Nullable<int>",
+                  "CoveredStatements": 0,
+                  "TotalStatements": 3,
+                  "CoveragePercent": 0
+                },
+                {
+                  "Kind": "Method",
                   "Name": "GetSchema(ITrackedConnection):DataTable",
                   "CoveredStatements": 3,
                   "TotalStatements": 3,
@@ -3295,9 +3309,9 @@
                 {
                   "Kind": "Method",
                   "Name": "InferDatabaseProduct(string):SupportedDatabase",
-                  "CoveredStatements": 19,
+                  "CoveredStatements": 20,
                   "TotalStatements": 20,
-                  "CoveragePercent": 95
+                  "CoveragePercent": 100
                 },
                 {
                   "Kind": "Method",
@@ -3347,6 +3361,13 @@
                 },
                 {
                   "Kind": "Method",
+                  "Name": "ParseVersion(string):Version",
+                  "CoveredStatements": 5,
+                  "TotalStatements": 6,
+                  "CoveragePercent": 83
+                },
+                {
+                  "Kind": "Method",
                   "Name": "ReadSqliteSchema():DataTable",
                   "CoveredStatements": 6,
                   "TotalStatements": 6,
@@ -3357,9 +3378,9 @@
             {
               "Kind": "Type",
               "Name": "EntityHelper<TEntity,TRowID>",
-              "CoveredStatements": 345,
-              "TotalStatements": 380,
-              "CoveragePercent": 91,
+              "CoveredStatements": 417,
+              "TotalStatements": 518,
+              "CoveragePercent": 81,
               "Children": [
                 {
                   "Kind": "Constructor",
@@ -3581,6 +3602,49 @@
                       "CoveragePercent": 91
                     }
                   ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "BuildUpsert(TEntity,IDatabaseContext):ISqlContainer",
+                  "CoveredStatements": 7,
+                  "TotalStatements": 12,
+                  "CoveragePercent": 58
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "BuildUpsertMerge(TEntity,IDatabaseContext):ISqlContainer",
+                  "CoveredStatements": 32,
+                  "TotalStatements": 40,
+                  "CoveragePercent": 80,
+                  "Children": [
+                    {
+                      "Kind": "OwnCoverage",
+                      "CoveredStatements": 31,
+                      "TotalStatements": 39,
+                      "CoveragePercent": 79
+                    },
+                    {
+                      "Kind": "AnonymousMethod",
+                      "Name": "(string):string",
+                      "CoveredStatements": 1,
+                      "TotalStatements": 1,
+                      "CoveragePercent": 100
+                    }
+                  ]
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "BuildUpsertOnConflict(TEntity,IDatabaseContext):ISqlContainer",
+                  "CoveredStatements": 29,
+                  "TotalStatements": 37,
+                  "CoveragePercent": 78
+                },
+                {
+                  "Kind": "Method",
+                  "Name": "BuildUpsertOnDuplicate(TEntity,IDatabaseContext):ISqlContainer",
+                  "CoveredStatements": 0,
+                  "TotalStatements": 37,
+                  "CoveragePercent": 0
                 },
                 {
                   "Kind": "Method",
@@ -3818,9 +3882,9 @@
                 {
                   "Kind": "Method",
                   "Name": "MapReaderToObject(ITrackedReader):TEntity",
-                  "CoveredStatements": 15,
+                  "CoveredStatements": 13,
                   "TotalStatements": 15,
-                  "CoveragePercent": 100
+                  "CoveragePercent": 87
                 },
                 {
                   "Kind": "Method",
@@ -3861,6 +3925,13 @@
                 },
                 {
                   "Kind": "Method",
+                  "Name": "TryParseMajorVersion(string,out int):bool",
+                  "CoveredStatements": 5,
+                  "TotalStatements": 7,
+                  "CoveragePercent": 71
+                },
+                {
+                  "Kind": "Method",
                   "Name": "UpdateAsync(TEntity,IDatabaseContext):Task<int>",
                   "CoveredStatements": 2,
                   "TotalStatements": 2,
@@ -3885,16 +3956,16 @@
                 {
                   "Kind": "Method",
                   "Name": "UpsertAsync(TEntity,IDatabaseContext):Task<int>",
-                  "CoveredStatements": 7,
-                  "TotalStatements": 8,
-                  "CoveragePercent": 88,
+                  "CoveredStatements": 8,
+                  "TotalStatements": 13,
+                  "CoveragePercent": 62,
                   "Children": [
                     {
                       "Kind": "InternalCompiledMethod",
                       "Name": "MoveNext():void",
-                      "CoveredStatements": 7,
-                      "TotalStatements": 8,
-                      "CoveragePercent": 88
+                      "CoveredStatements": 8,
+                      "TotalStatements": 13,
+                      "CoveragePercent": 62
                     }
                   ]
                 },
@@ -5010,9 +5081,9 @@
             {
               "Kind": "Type",
               "Name": "TypeCoercionHelper",
-              "CoveredStatements": 36,
+              "CoveredStatements": 35,
               "TotalStatements": 39,
-              "CoveragePercent": 92,
+              "CoveragePercent": 90,
               "Children": [
                 {
                   "Kind": "Constructor",
@@ -5045,9 +5116,9 @@
                 {
                   "Kind": "Method",
                   "Name": "Coerce(object,Type,IColumnInfo,EnumParseFailureMode):object",
-                  "CoveredStatements": 15,
+                  "CoveredStatements": 14,
                   "TotalStatements": 17,
-                  "CoveragePercent": 88
+                  "CoveragePercent": 82
                 },
                 {
                   "Kind": "Method",
