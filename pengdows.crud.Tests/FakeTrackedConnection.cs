@@ -31,13 +31,19 @@ public class FakeTrackedConnection : TrackedConnection, ITrackedConnection
             var value = scalars.Values.First();
             var isSqlite = scalars.Keys.Any(k => k.Equals("SELECT sqlite_version()", StringComparison.OrdinalIgnoreCase));
 
-            // Result for IsSqliteAsync check
+            // First reader result is consumed by IsSqliteAsync. Queue an empty
+            // result for non-SQLite databases so the actual version query result
+            // remains intact.
             if (isSqlite)
             {
                 fake.EnqueueReaderResult(new[]
                 {
                     new Dictionary<string, object> { { "version", value } }
                 });
+            }
+            else
+            {
+                fake.EnqueueReaderResult(Array.Empty<Dictionary<string, object>>());
             }
 
             // Result for version query

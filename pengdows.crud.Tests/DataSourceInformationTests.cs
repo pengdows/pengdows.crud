@@ -169,7 +169,8 @@ public class DataSourceInformationTests
         var info = DataSourceInformation.Create(tracked, NullLoggerFactory.Instance);
 
         var result = info.GetDatabaseVersion(tracked);
-        Assert.Equal("42", result);
+        var expected = scalars.Values.First().ToString();
+        Assert.Equal(expected, result);
     }
 
     [Fact]
