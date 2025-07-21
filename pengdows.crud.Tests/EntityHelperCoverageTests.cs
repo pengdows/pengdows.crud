@@ -13,8 +13,7 @@ public class EntityHelperCoverageTests
     {
         var factory = new FakeDbFactory(SupportedDatabase.MySql);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.MySql}", factory);
-        TypeMap.Register<TestEntity>();
-        var helper = new EntityHelper<TestEntity, int>(context);
+           var helper = new EntityHelper<TestEntity, int>(context);
         var entity = new TestEntity { Id = 1, Name = "foo" };
         var sc = helper.BuildUpsert(entity);
         var sql = sc.Query.ToString();
@@ -29,7 +28,6 @@ public class EntityHelperCoverageTests
         var info = (DataSourceInformation)context.DataSourceInfo;
         var prop = typeof(DataSourceInformation).GetProperty("DatabaseProductVersion", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
         prop!.SetValue(info, "PostgreSQL 14.0");
-        TypeMap.Register<SampleEntity>();
         var helper = new EntityHelper<SampleEntity, int>(context);
         var entity = new SampleEntity { Id = 1, MaxValue = 5, modeColumn = DbMode.Standard };
         var sc = helper.BuildUpsert(entity);
