@@ -9,11 +9,39 @@ using pengdows.crud.wrappers;
 
 namespace pengdows.crud.Tests;
 
-public class FakeTrackedConnection : TrackedConnection
+/// <summary>
+/// Test wrapper that allows pre-configuring schema and scalar results for
+/// <see cref="DataSourceInformation"/> tests.
+/// </summary>
+public class FakeTrackedConnection : TrackedConnection, ITrackedConnection
 {
-    public FakeTrackedConnection(DbConnection connection, DataTable schema, Dictionary<string, object> scalars) :
-        base(connection)
+    private readonly DataTable _schema;
+
+    public FakeTrackedConnection(
+        DbConnection connection,
+        DataTable schema,
+        Dictionary<string, object> scalars) : base(connection)
     {
-        //   throw new NotImplementedException();
+        _schema = schema;
+
+        // Preload results for version queries
+        if (connection is pengdows.crud.FakeDb.FakeDbConnection fake)
+        {
+            foreach (var value in scalars.Values)
+            {
+                // First for ExecuteReader based calls
+                fake.EnqueueReaderResult(new[]
+                {
+                    new Dictionary<string, object> { { "version", value } }
+                });
+
+                // Then for ExecuteScalar based calls
+                fake.EnqueueScalarResult(value);
+            }
+        }
     }
+
+    DataTable ITrackedConnection.GetSchema(string dataSourceInformation) => _schema;
+
+    DataTable ITrackedConnection.GetSchema() => _schema;
 }
