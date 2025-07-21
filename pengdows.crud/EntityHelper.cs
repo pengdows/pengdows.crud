@@ -5,6 +5,7 @@ using System.Data.Common;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
+using System.Text.RegularExpressions;
 using System;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -585,12 +586,47 @@ public class EntityHelper<TEntity, TRowID> :
         context ??= _context;
 
         var idValue = _idColumn!.PropertyInfo.GetValue(entity);
+
         if (IsDefaultId(idValue))
-        {
             return await CreateAsync(entity, context) ? 1 : 0;
+
+        if (_idColumn.IsIdIsWritable)
+        {
+            try
+            {
+                var sc = BuildUpsert(entity, context);
+                return await sc.ExecuteNonQueryAsync();
+            }
+            catch (NotSupportedException)
+            {
+                // fall back to update
+            }
         }
 
         return await UpdateAsync(entity, context);
+    }
+
+    public ISqlContainer BuildUpsert(TEntity entity, IDatabaseContext? context = null)
+    {
+        if (entity == null) throw new ArgumentNullException(nameof(entity));
+
+        context ??= _context;
+
+        if (context.Product == SupportedDatabase.PostgreSql)
+        {
+            if (TryParseMajorVersion(context.DataSourceInfo.DatabaseProductVersion, out var major) && major > 14)
+                return BuildUpsertMerge(entity, context);
+
+            return BuildUpsertOnConflict(entity, context);
+        }
+
+        return context.Product switch
+        {
+            SupportedDatabase.CockroachDb or SupportedDatabase.Sqlite => BuildUpsertOnConflict(entity, context),
+            SupportedDatabase.MySql or SupportedDatabase.MariaDb => BuildUpsertOnDuplicate(entity, context),
+            SupportedDatabase.SqlServer => BuildUpsertMerge(entity, context),
+            _ => throw new NotSupportedException($"Upsert not supported for {context.Product}")
+        };
     }
 
     private async Task<TEntity?> LoadOriginalAsync(TEntity objectToUpdate)
@@ -653,6 +689,227 @@ public class EntityHelper<TEntity, TRowID> :
                 .Append($" = {MakeParameterName(pVersion)}");
             parameters.Add(pVersion);
         }
+    }
+
+    private ISqlContainer BuildUpsertOnConflict(TEntity entity, IDatabaseContext context)
+    {
+        SetAuditFields(entity, false);
+        if (_versionColumn != null)
+        {
+            var current = _versionColumn.PropertyInfo.GetValue(entity);
+            if (current == null || Utils.IsZeroNumeric(current))
+            {
+                var target = Nullable.GetUnderlyingType(_versionColumn.PropertyInfo.PropertyType) ??
+                             _versionColumn.PropertyInfo.PropertyType;
+                if (Utils.IsZeroNumeric(Convert.ChangeType(0, target)))
+                {
+                    var one = Convert.ChangeType(1, target);
+                    _versionColumn.PropertyInfo.SetValue(entity, one);
+                }
+            }
+        }
+
+        var columns = new List<string>();
+        var values = new List<string>();
+        var parameters = new List<DbParameter>();
+
+        foreach (var column in _tableInfo.Columns.Values)
+        {
+            if (column.IsNonInsertable) continue;
+            if (column.IsId && !column.IsIdIsWritable) continue;
+
+            var value = column.MakeParameterValueFromField(entity);
+
+            columns.Add(WrapObjectName(column.Name));
+            if (Utils.IsNullOrDbNull(value))
+            {
+                values.Add("NULL");
+            }
+            else
+            {
+                var p = context.CreateDbParameter(column.DbType, value);
+                parameters.Add(p);
+                values.Add(MakeParameterName(p));
+            }
+        }
+
+        var updateSet = new StringBuilder();
+        foreach (var column in _tableInfo.Columns.Values)
+        {
+            if (column.IsId || column.IsVersion || column.IsNonUpdateable || column.IsCreatedBy || column.IsCreatedOn)
+                continue;
+
+            if (updateSet.Length > 0) updateSet.Append(", ");
+            updateSet.Append($"{WrapObjectName(column.Name)} = EXCLUDED.{WrapObjectName(column.Name)}");
+        }
+
+        if (_versionColumn != null)
+            updateSet.Append($", {WrapObjectName(_versionColumn.Name)} = {WrapObjectName(_versionColumn.Name)} + 1");
+
+        var sc = context.CreateSqlContainer();
+        sc.Query.Append("INSERT INTO ")
+            .Append(WrappedTableName)
+            .Append(" (")
+            .Append(string.Join(", ", columns))
+            .Append(") VALUES (")
+            .Append(string.Join(", ", values))
+            .Append(") ON CONFLICT (")
+            .Append(WrapObjectName(_idColumn!.Name))
+            .Append(") DO UPDATE SET ")
+            .Append(updateSet);
+
+        sc.AddParameters(parameters);
+        return sc;
+    }
+
+    private ISqlContainer BuildUpsertOnDuplicate(TEntity entity, IDatabaseContext context)
+    {
+        SetAuditFields(entity, false);
+        if (_versionColumn != null)
+        {
+            var current = _versionColumn.PropertyInfo.GetValue(entity);
+            if (current == null || Utils.IsZeroNumeric(current))
+            {
+                var target = Nullable.GetUnderlyingType(_versionColumn.PropertyInfo.PropertyType) ??
+                             _versionColumn.PropertyInfo.PropertyType;
+                if (Utils.IsZeroNumeric(Convert.ChangeType(0, target)))
+                {
+                    var one = Convert.ChangeType(1, target);
+                    _versionColumn.PropertyInfo.SetValue(entity, one);
+                }
+            }
+        }
+
+        var columns = new List<string>();
+        var values = new List<string>();
+        var parameters = new List<DbParameter>();
+
+        foreach (var column in _tableInfo.Columns.Values)
+        {
+            if (column.IsNonInsertable) continue;
+            if (column.IsId && !column.IsIdIsWritable) continue;
+
+            var value = column.MakeParameterValueFromField(entity);
+
+            columns.Add(WrapObjectName(column.Name));
+            if (Utils.IsNullOrDbNull(value))
+            {
+                values.Add("NULL");
+            }
+            else
+            {
+                var p = context.CreateDbParameter(column.DbType, value);
+                parameters.Add(p);
+                values.Add(MakeParameterName(p));
+            }
+        }
+
+        var updateSet = new StringBuilder();
+        foreach (var column in _tableInfo.Columns.Values)
+        {
+            if (column.IsId || column.IsVersion || column.IsNonUpdateable || column.IsCreatedBy || column.IsCreatedOn)
+                continue;
+
+            if (updateSet.Length > 0) updateSet.Append(", ");
+            updateSet.Append($"{WrapObjectName(column.Name)} = VALUES({WrapObjectName(column.Name)})");
+        }
+
+        if (_versionColumn != null)
+            updateSet.Append($", {WrapObjectName(_versionColumn.Name)} = {WrapObjectName(_versionColumn.Name)} + 1");
+
+        var sc = context.CreateSqlContainer();
+        sc.Query.Append("INSERT INTO ")
+            .Append(WrappedTableName)
+            .Append(" (")
+            .Append(string.Join(", ", columns))
+            .Append(") VALUES (")
+            .Append(string.Join(", ", values))
+            .Append(") ON DUPLICATE KEY UPDATE ")
+            .Append(updateSet);
+
+        sc.AddParameters(parameters);
+        return sc;
+    }
+
+    private ISqlContainer BuildUpsertMerge(TEntity entity, IDatabaseContext context)
+    {
+        SetAuditFields(entity, false);
+        if (_versionColumn != null)
+        {
+            var current = _versionColumn.PropertyInfo.GetValue(entity);
+            if (current == null || Utils.IsZeroNumeric(current))
+            {
+                var target = Nullable.GetUnderlyingType(_versionColumn.PropertyInfo.PropertyType) ??
+                             _versionColumn.PropertyInfo.PropertyType;
+                if (Utils.IsZeroNumeric(Convert.ChangeType(0, target)))
+                {
+                    var one = Convert.ChangeType(1, target);
+                    _versionColumn.PropertyInfo.SetValue(entity, one);
+                }
+            }
+        }
+
+        var srcColumns = new List<string>();
+        var insertColumns = new List<string>();
+        var values = new List<string>();
+        var parameters = new List<DbParameter>();
+
+        foreach (var column in _tableInfo.Columns.Values)
+        {
+            var value = column.MakeParameterValueFromField(entity);
+            string placeholder;
+            if (Utils.IsNullOrDbNull(value))
+            {
+                placeholder = "NULL";
+            }
+            else
+            {
+                var p = context.CreateDbParameter(column.DbType, value);
+                parameters.Add(p);
+                placeholder = MakeParameterName(p);
+            }
+
+            srcColumns.Add(WrapObjectName(column.Name));
+            values.Add(placeholder);
+            if (!column.IsNonInsertable && (!column.IsId || column.IsIdIsWritable))
+                insertColumns.Add(WrapObjectName(column.Name));
+        }
+
+        var updateSet = new StringBuilder();
+        foreach (var column in _tableInfo.Columns.Values)
+        {
+            if (column.IsId || column.IsVersion || column.IsNonUpdateable || column.IsCreatedBy || column.IsCreatedOn)
+                continue;
+
+            if (updateSet.Length > 0) updateSet.Append(", ");
+            updateSet.Append($"t.{WrapObjectName(column.Name)} = s.{WrapObjectName(column.Name)}");
+        }
+
+        if (_versionColumn != null)
+            updateSet.Append($", t.{WrapObjectName(_versionColumn.Name)} = t.{WrapObjectName(_versionColumn.Name)} + 1");
+
+        var sc = context.CreateSqlContainer();
+        sc.Query.Append("MERGE INTO ")
+            .Append(WrappedTableName)
+            .Append(" AS t USING (VALUES (")
+            .Append(string.Join(", ", values))
+            .Append(")")
+            .Append(" AS s (")
+            .Append(string.Join(", ", srcColumns))
+            .Append(") ON t.")
+            .Append(WrapObjectName(_idColumn!.Name))
+            .Append(" = s.")
+            .Append(WrapObjectName(_idColumn.Name))
+            .Append(" WHEN MATCHED THEN UPDATE SET ")
+            .Append(updateSet)
+            .Append(" WHEN NOT MATCHED THEN INSERT (")
+            .Append(string.Join(", ", insertColumns))
+            .Append(") VALUES (")
+            .Append(string.Join(", ", insertColumns.Select(c => "s." + c)))
+            .Append(");");
+
+        sc.AddParameters(parameters);
+        return sc;
     }
 
 
@@ -759,6 +1016,16 @@ public class EntityHelper<TEntity, TRowID> :
             return true;
 
         return EqualityComparer<TRowID>.Default.Equals((TRowID)value!, default!);
+    }
+
+    private static bool TryParseMajorVersion(string version, out int major)
+    {
+        major = 0;
+        if (string.IsNullOrWhiteSpace(version)) return false;
+
+        var match = Regex.Match(version, "(\d+)");
+        if (!match.Success) return false;
+        return int.TryParse(match.Groups[1].Value, out major);
     }
 
     private static void ValidateRowIdType()

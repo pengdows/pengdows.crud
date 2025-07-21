@@ -106,6 +106,11 @@ public interface IEntityHelper<TEntity, TRowID> where TEntity : class, new()
     Task<int> UpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context = null);
 
     /// <summary>
+    /// Builds a provider-specific UPSERT statement.
+    /// </summary>
+    ISqlContainer BuildUpsert(TEntity entity, IDatabaseContext? context = null);
+
+    /// <summary>
     /// Inserts the entity if the ID is null or default, otherwise updates it. Returns the affected row count.
     /// </summary>
     Task<int> UpsertAsync(TEntity entity, IDatabaseContext? context = null);
