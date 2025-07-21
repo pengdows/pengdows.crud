@@ -25,8 +25,21 @@ public static class DataSourceTestData
         {
             if (db == SupportedDatabase.Unknown) continue;
 
+            var productName = db switch
+            {
+                SupportedDatabase.SqlServer => "SQL Server",
+                SupportedDatabase.MySql => "MySQL",
+                SupportedDatabase.MariaDb => "MariaDB",
+                SupportedDatabase.PostgreSql => "PostgreSQL",
+                SupportedDatabase.CockroachDb => "CockroachDB",
+                SupportedDatabase.Sqlite => "SQLite",
+                SupportedDatabase.Firebird => "Firebird",
+                SupportedDatabase.Oracle => "Oracle Database",
+                _ => db.ToString()
+            };
+
             var schema = DataSourceInformation.BuildEmptySchema(
-                db.ToString(),
+                productName,
                 "1.2.3",
                 db == SupportedDatabase.Sqlite ? "@p[0-9]+" : "@[0-9]+",
                 "@{0}",
@@ -49,9 +62,15 @@ public static class DataSourceTestData
                 _ => string.Empty
             };
 
+            var versionString = db switch
+            {
+                SupportedDatabase.PostgreSql => "PostgreSQL 15.0",
+                _ => $"{db} v1.2.3"
+            };
+
             var scalars = new Dictionary<string, object>
             {
-                [versionSql] = $"{db} v1.2.3"
+                [versionSql] = versionString
             };
 
             yield return new object[] { db, schema, scalars };
@@ -91,10 +110,15 @@ public class DataSourceInformationTests
         };
         Assert.Equal(expectedMarker, info.ParameterMarker);
 
+        // Assert: major version parsing
+        var expectedMajor = db == SupportedDatabase.PostgreSql ? 15 : 1;
+        Assert.Equal(expectedMajor, info.GetMajorVersion());
+
         // Assert: merge support
         var canMerge = db == SupportedDatabase.SqlServer
                        || db == SupportedDatabase.Oracle
-                       || db == SupportedDatabase.Firebird;
+                       || db == SupportedDatabase.Firebird
+                       || (db == SupportedDatabase.PostgreSql && info.GetMajorVersion() > 14);
         Assert.Equal(canMerge, info.SupportsMerge);
 
         // Assert: insert-on-conflict support
@@ -145,7 +169,8 @@ public class DataSourceInformationTests
         var info = DataSourceInformation.Create(tracked, NullLoggerFactory.Instance);
 
         var result = info.GetDatabaseVersion(tracked);
-        Assert.Equal("42", result);
+        var expected = scalars.Values.First().ToString();
+        Assert.Equal(expected, result);
     }
 
     [Fact]

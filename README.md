@@ -33,6 +33,8 @@
 - Connection lifecycle modes: `New`, `Shared`, `KeepAlive`.
 - **Scoped transactions** via `TransactionContext`.
 - Works cleanly with DI and ADO.NET—**no leaky abstractions**.
+- Automatic database version detection for feature gating.
+- MERGE statements supported on SQL Server, Oracle, Firebird, and PostgreSQL 15+.
 
 ---
 
