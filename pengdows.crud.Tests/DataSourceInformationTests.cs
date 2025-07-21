@@ -25,8 +25,21 @@ public static class DataSourceTestData
         {
             if (db == SupportedDatabase.Unknown) continue;
 
+            var productName = db switch
+            {
+                SupportedDatabase.SqlServer => "SQL Server",
+                SupportedDatabase.MySql => "MySQL",
+                SupportedDatabase.MariaDb => "MariaDB",
+                SupportedDatabase.PostgreSql => "PostgreSQL",
+                SupportedDatabase.CockroachDb => "CockroachDB",
+                SupportedDatabase.Sqlite => "SQLite",
+                SupportedDatabase.Firebird => "Firebird",
+                SupportedDatabase.Oracle => "Oracle Database",
+                _ => db.ToString()
+            };
+
             var schema = DataSourceInformation.BuildEmptySchema(
-                db.ToString(),
+                productName,
                 "1.2.3",
                 db == SupportedDatabase.Sqlite ? "@p[0-9]+" : "@[0-9]+",
                 "@{0}",
@@ -156,7 +169,8 @@ public class DataSourceInformationTests
         var info = DataSourceInformation.Create(tracked, NullLoggerFactory.Instance);
 
         var result = info.GetDatabaseVersion(tracked);
-        Assert.Equal("42", result);
+        var expected = scalars.Values.First().ToString();
+        Assert.Equal(expected, result);
     }
 
     [Fact]
