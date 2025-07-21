@@ -1021,10 +1021,16 @@ public class EntityHelper<TEntity, TRowID> :
     private static bool TryParseMajorVersion(string version, out int major)
     {
         major = 0;
-        if (string.IsNullOrWhiteSpace(version)) return false;
+        if (string.IsNullOrWhiteSpace(version))
+        {
+            return false;
+        }
 
-        var match = Regex.Match(version, "(\d+)");
-        if (!match.Success) return false;
+        var match = Regex.Match(version, "(\\d+)");
+        if (!match.Success)
+        {
+            return false;
+        }
         return int.TryParse(match.Groups[1].Value, out major);
     }
 
