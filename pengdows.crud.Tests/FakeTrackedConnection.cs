@@ -1,8 +1,10 @@
 #region
 
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Linq;
 using pengdows.crud.wrappers;
 
 #endregion
@@ -24,20 +26,28 @@ public class FakeTrackedConnection : TrackedConnection, ITrackedConnection
     {
         _schema = schema;
 
-        // Preload results for version queries
-        if (connection is pengdows.crud.FakeDb.FakeDbConnection fake)
+        if (connection is pengdows.crud.FakeDb.FakeDbConnection fake && scalars.Count > 0)
         {
-            foreach (var value in scalars.Values)
+            var value = scalars.Values.First();
+            var isSqlite = scalars.Keys.Any(k => k.Equals("SELECT sqlite_version()", StringComparison.OrdinalIgnoreCase));
+
+            // Result for IsSqliteAsync check
+            if (isSqlite)
             {
-                // First for ExecuteReader based calls
                 fake.EnqueueReaderResult(new[]
                 {
                     new Dictionary<string, object> { { "version", value } }
                 });
-
-                // Then for ExecuteScalar based calls
-                fake.EnqueueScalarResult(value);
             }
+
+            // Result for version query
+            fake.EnqueueReaderResult(new[]
+            {
+                new Dictionary<string, object> { { "version", value } }
+            });
+
+            // Result for ExecuteScalar based calls
+            fake.EnqueueScalarResult(value);
         }
     }
 
