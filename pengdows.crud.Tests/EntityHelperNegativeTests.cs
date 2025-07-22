@@ -38,8 +38,8 @@ public class EntityHelperNegativeTests : SqlLiteContextTestBase
     [Fact]
     public async Task BuildUpdateAsync_NoChanges_Throws()
     {
-        var e = new TestEntity { Name = Guid.NewGuid().ToString() };
-        await helper.CreateAsync(e, Context);
+        var newEntity = new TestEntity { Name = Guid.NewGuid().ToString() };
+        await helper.CreateAsync(newEntity, Context);
         var loaded = (await helper.LoadListAsync(helper.BuildBaseRetrieve("a")))[0];
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await helper.BuildUpdateAsync(loaded, true));
