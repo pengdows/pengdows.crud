@@ -30,6 +30,7 @@ public class EntityHelperNegativeTests : SqlLiteContextTestBase
     [Fact]
     public async Task BuildUpdateAsync_LoadOriginal_NotFound_Throws()
     {
+        await BuildTestTable();
         var entity = new TestEntity { Id = 123, Name = "missing" };
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await helper.BuildUpdateAsync(entity, true));
@@ -38,6 +39,7 @@ public class EntityHelperNegativeTests : SqlLiteContextTestBase
     [Fact]
     public async Task BuildUpdateAsync_NoChanges_Throws()
     {
+        await BuildTestTable();
         var newEntity = new TestEntity { Name = Guid.NewGuid().ToString() };
         await helper.CreateAsync(newEntity, Context);
         var loaded = (await helper.LoadListAsync(helper.BuildBaseRetrieve("a")))[0];
@@ -81,12 +83,32 @@ public class EntityHelperNegativeTests : SqlLiteContextTestBase
     [Fact]
     public void BuildUpsert_UnsupportedDatabase_Throws()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.Unknown);
-        var context = new DatabaseContext("Data Source=test;EmulatedProduct=Unknown", factory);
+        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
+        var context = new DatabaseContext("Data Source=:memory:;EmulatedProduct=Sqlite", factory);
         TypeMap.Register<TestEntity>();
         var localHelper = new EntityHelper<TestEntity, int>(context);
+
+        var prop = typeof(DataSourceInformation).GetProperty("Product", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)!;
+        prop.SetValue(context.DataSourceInfo, SupportedDatabase.Unknown);
+
         var entity = new TestEntity { Id = 1, Name = "foo" };
 
         Assert.Throws<NotSupportedException>(() => localHelper.BuildUpsert(entity));
+    }
+
+    private async Task BuildTestTable()
+    {
+        var qp = Context.QuotePrefix;
+        var qs = Context.QuoteSuffix;
+        var sql = string.Format(
+            @"CREATE TABLE IF NOT EXISTS {0}Test{1} ({0}Id{1} INTEGER PRIMARY KEY,
+{0}Name{1} TEXT UNIQUE NOT NULL,
+    {0}CreatedBy{1} TEXT NOT NULL DEFAULT 'system',
+    {0}CreatedOn{1} TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    {0}LastUpdatedBy{1} TEXT NOT NULL DEFAULT 'system',
+    {0}LastUpdatedOn{1} TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+{0}Version{1} INTEGER NOT NULL DEFAULT 0)", qp, qs);
+        var container = Context.CreateSqlContainer(sql);
+        await container.ExecuteNonQueryAsync();
     }
 }
