@@ -188,4 +188,69 @@ public class DbProviderLoaderTests
 
         public static PropertyFactory Instance { get; } = new();
     }
+
+    private class NoInstanceFactory : DbProviderFactory
+    {
+    }
+
+    private class NullInstanceFactory : DbProviderFactory
+    {
+        public static DbProviderFactory? Instance => null;
+    }
+
+    [Fact]
+    public void LoadAndRegisterProviders_MissingInstanceProperty_Throws()
+    {
+        var assemblyName = typeof(NoInstanceFactory).Assembly.GetName().Name!;
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["DatabaseProviders:noinst:ProviderName"] = "Test.NoInstance",
+                ["DatabaseProviders:noinst:FactoryType"] = typeof(NoInstanceFactory).FullName,
+                ["DatabaseProviders:noinst:AssemblyName"] = assemblyName
+            })
+            .Build();
+
+        var logger = new Mock<ILogger<DbProviderLoader>>();
+        var loader = new DbProviderLoader(config, logger.Object);
+
+        Assert.Throws<InvalidOperationException>(() => loader.LoadAndRegisterProviders(new ServiceCollection()));
+    }
+
+    [Fact]
+    public void LoadAndRegisterProviders_NullInstanceProperty_Throws()
+    {
+        var assemblyName = typeof(NullInstanceFactory).Assembly.GetName().Name!;
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["DatabaseProviders:nullinst:ProviderName"] = "Test.NullInstance",
+                ["DatabaseProviders:nullinst:FactoryType"] = typeof(NullInstanceFactory).FullName,
+                ["DatabaseProviders:nullinst:AssemblyName"] = assemblyName
+            })
+            .Build();
+
+        var logger = new Mock<ILogger<DbProviderLoader>>();
+        var loader = new DbProviderLoader(config, logger.Object);
+
+        Assert.Throws<InvalidOperationException>(() => loader.LoadAndRegisterProviders(new ServiceCollection()));
+    }
+
+    [Fact]
+    public void LoadAndRegisterProviders_BadAssemblyName_Throws()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["DatabaseProviders:badname:ProviderName"] = "Bad.Name",
+                ["DatabaseProviders:badname:FactoryType"] = "Bad.Factory",
+                ["DatabaseProviders:badname:AssemblyName"] = "Non.Existent.Assembly"
+            })
+            .Build();
+
+        var logger = new Mock<ILogger<DbProviderLoader>>();
+        var loader = new DbProviderLoader(config, logger.Object);
+
+        Assert.Throws<InvalidOperationException>(() => loader.LoadAndRegisterProviders(new ServiceCollection()));
+    }
 }
