@@ -13,6 +13,7 @@ using pengdows.crud.isolation;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
 using pengdows.crud.strategies;
+using System.Threading.Tasks;
 
 #endregion
 
@@ -250,37 +251,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 
     public void CloseAndDisposeConnection(ITrackedConnection? connection)
     {
-        if (connection == null) return;
-
-        _logger.LogInformation($"Connection mode is: {ConnectionMode}");
-        switch (ConnectionMode)
-        {
-            case DbMode.SingleConnection:
-            case DbMode.SingleWriter:
-            case DbMode.KeepAlive:
-                if (_connection != connection)
-                {
-                    //never close our single write connection
-                    _logger.LogInformation("Not our single connection, closing");
-                    connection.Dispose();
-                }
-
-                break;
-            case DbMode.Standard:
-                _logger.LogInformation("Closing a standard connection");
-                try
-                {
-                    connection.Dispose();
-                }
-                catch
-                {
-                    _logger.LogInformation("Connection closed");
-                }
-
-                break;
-            default:
-                throw new NotSupportedException("Unsupported connection mode.");
-        }
+        _connectionStrategy.ReleaseConnection(connection);
     }
 
     public string MakeParameterName(DbParameter dbParameter)
@@ -385,15 +356,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 
     public async ValueTask CloseAndDisposeConnectionAsync(ITrackedConnection? connection)
     {
-        if (connection == null)
-            return;
-
-        _logger.LogInformation($"Async Closing Connection in mode: {ConnectionMode}");
-
-        if (connection is IAsyncDisposable asyncConnection)
-            await asyncConnection.DisposeAsync().ConfigureAwait(false);
-        else
-            connection.Dispose();
+        await _connectionStrategy.ReleaseConnectionAsync(connection).ConfigureAwait(false);
     }
 
     private void CheckForSqlServerSettings(ITrackedConnection conn)
@@ -607,6 +570,8 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 
         return GetSingleConnection();
     }
+
+    internal ITrackedConnection? PersistentConnection => _connection;
 
     internal void SetPersistentConnection(ITrackedConnection? connection)
     {

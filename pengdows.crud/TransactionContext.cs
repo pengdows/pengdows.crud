@@ -168,7 +168,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
 
     public void CloseAndDisposeConnection(ITrackedConnection? conn)
     {
-        //throw new NotImplementedException();
+        _context.CloseAndDisposeConnection(conn);
     }
 
     public string MakeParameterName(DbParameter dbParameter)

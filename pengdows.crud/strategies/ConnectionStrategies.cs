@@ -2,6 +2,8 @@ namespace pengdows.crud.strategies;
 
 using pengdows.crud.enums;
 using pengdows.crud.wrappers;
+using System;
+using System.Threading.Tasks;
 
 internal class StandardConnectionStrategy : IConnectionStrategy
 {
@@ -21,6 +23,20 @@ internal class StandardConnectionStrategy : IConnectionStrategy
     {
         connection?.Dispose();
     }
+
+    public virtual void ReleaseConnection(ITrackedConnection? connection)
+    {
+        connection?.Dispose();
+    }
+
+    public virtual ValueTask ReleaseConnectionAsync(ITrackedConnection? connection)
+    {
+        if (connection is IAsyncDisposable asyncDisposable)
+            return asyncDisposable.DisposeAsync();
+
+        connection?.Dispose();
+        return ValueTask.CompletedTask;
+    }
 }
 
 internal class KeepAliveConnectionStrategy : StandardConnectionStrategy
@@ -34,6 +50,29 @@ internal class KeepAliveConnectionStrategy : StandardConnectionStrategy
         if (connection != null)
             _context.ApplyConnectionSessionSettings(connection);
         _context.SetPersistentConnection(connection);
+    }
+
+    public override void ReleaseConnection(ITrackedConnection? connection)
+    {
+        if (connection == null)
+            return;
+
+        if (ReferenceEquals(connection, _context.PersistentConnection))
+            return; // keep-alive connection stays open
+
+        connection.Dispose();
+    }
+
+    public override ValueTask ReleaseConnectionAsync(ITrackedConnection? connection)
+    {
+        if (connection == null || ReferenceEquals(connection, _context.PersistentConnection))
+            return ValueTask.CompletedTask;
+
+        if (connection is IAsyncDisposable asyncDisposable)
+            return asyncDisposable.DisposeAsync();
+
+        connection.Dispose();
+        return ValueTask.CompletedTask;
     }
 }
 
@@ -57,6 +96,27 @@ internal class SingleConnectionStrategy : IConnectionStrategy
             _context.ApplyConnectionSessionSettings(connection);
         _context.SetPersistentConnection(connection);
     }
+
+    public void ReleaseConnection(ITrackedConnection? connection)
+    {
+        // persistent connection is reused, so never dispose it here
+        if (connection == null || ReferenceEquals(connection, _context.PersistentConnection))
+            return;
+
+        connection.Dispose();
+    }
+
+    public ValueTask ReleaseConnectionAsync(ITrackedConnection? connection)
+    {
+        if (connection == null || ReferenceEquals(connection, _context.PersistentConnection))
+            return ValueTask.CompletedTask;
+
+        if (connection is IAsyncDisposable asyncDisposable)
+            return asyncDisposable.DisposeAsync();
+
+        connection.Dispose();
+        return ValueTask.CompletedTask;
+    }
 }
 
 internal class SingleWriterConnectionStrategy : IConnectionStrategy
@@ -78,6 +138,26 @@ internal class SingleWriterConnectionStrategy : IConnectionStrategy
         if (connection != null)
             _context.ApplyConnectionSessionSettings(connection);
         _context.SetPersistentConnection(connection);
+    }
+
+    public void ReleaseConnection(ITrackedConnection? connection)
+    {
+        if (connection == null || ReferenceEquals(connection, _context.PersistentConnection))
+            return;
+
+        connection.Dispose();
+    }
+
+    public ValueTask ReleaseConnectionAsync(ITrackedConnection? connection)
+    {
+        if (connection == null || ReferenceEquals(connection, _context.PersistentConnection))
+            return ValueTask.CompletedTask;
+
+        if (connection is IAsyncDisposable asyncDisposable)
+            return asyncDisposable.DisposeAsync();
+
+        connection.Dispose();
+        return ValueTask.CompletedTask;
     }
 }
 
