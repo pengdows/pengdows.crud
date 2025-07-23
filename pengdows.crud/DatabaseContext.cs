@@ -12,6 +12,7 @@ using pengdows.crud.infrastructure;
 using pengdows.crud.isolation;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
+using pengdows.crud.strategies;
 
 #endregion
 
@@ -22,6 +23,8 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     private readonly DbProviderFactory _factory;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<IDatabaseContext> _logger;
+    private strategies.IConnectionStrategy _connectionStrategy = null!;
+    private strategies.IProcWrappingStrategy _procWrappingStrategy = null!;
     private bool _applyConnectionSessionSettings;
     private ITrackedConnection? _connection = null;
 
@@ -209,18 +212,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 
     public ITrackedConnection GetConnection(ExecutionType executionType, bool isShared = false)
     {
-        switch (ConnectionMode)
-        {
-            case DbMode.Standard:
-            case DbMode.KeepAlive:
-                return GetStandardConnection(isShared);
-            case DbMode.SingleWriter:
-                return GetSingleWriterConnection(executionType);
-            case DbMode.SingleConnection:
-                return GetSingleConnection();
-            default:
-                throw new InvalidOperationException("Invalid connection mode.");
-        }
+        return _connectionStrategy.GetConnection(executionType, isShared);
     }
 
 
@@ -307,8 +299,14 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     public ProcWrappingStyle ProcWrappingStyle
     {
         get => _dataSourceInfo.ProcWrappingStyle;
-        set => _dataSourceInfo.ProcWrappingStyle = value;
+        set
+        {
+            _dataSourceInfo.ProcWrappingStyle = value;
+            _procWrappingStrategy = ProcWrappingStrategyFactory.Create(value);
+        }
     }
+
+    internal IProcWrappingStrategy ProcWrappingStrategy => _procWrappingStrategy;
 
     public int MaxParameterLimit => _dataSourceInfo.MaxParameterLimit;
 
@@ -320,7 +318,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 
     public string QuoteSuffix => DataSourceInfo.QuoteSuffix;
 
-    private ITrackedConnection FactoryCreateConnection(string? connectionString = null, bool isSharedConnection = false)
+    internal ITrackedConnection FactoryCreateConnection(string? connectionString = null, bool isSharedConnection = false)
     {
         SanitizeConnectionString(connectionString);
 
@@ -496,15 +494,6 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
                 mode = ConnectionMode;
             }
 
-            if (mode != DbMode.Standard)
-            {
-                //
-                //Interlocked.Increment(ref _connectionCount);
-                // if the mode is anything but standard
-                // we store it as our minimal connection
-                ApplyConnectionSessionSettings(conn);
-                _connection = conn;
-            }
             _isolationResolver ??= new IsolationResolver(Product, RCSIEnabled);
         }
         catch(Exception ex){
@@ -514,9 +503,9 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
         finally
         {
             _isolationResolver ??= new IsolationResolver(Product, RCSIEnabled);
-            if (mode == DbMode.Standard)
-                //if it is standard mode, we can close it.
-                conn?.Dispose();
+            _connectionStrategy = ConnectionStrategyFactory.Create(this, ConnectionMode);
+            _procWrappingStrategy = ProcWrappingStrategyFactory.Create(ProcWrappingStyle);
+            _connectionStrategy.PostInitialize(conn);
         }
     }
 
@@ -583,7 +572,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     }
 
 
-    private void ApplyConnectionSessionSettings(IDbConnection connection)
+    internal void ApplyConnectionSessionSettings(IDbConnection connection)
     {
         _logger.LogInformation("Applying connection session settings");
         if (_applyConnectionSessionSettings)
@@ -600,23 +589,28 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
             }
     }
 
-    private ITrackedConnection GetStandardConnection(bool isShared = false)
+    internal ITrackedConnection GetStandardConnection(bool isShared = false)
     {
         var conn = FactoryCreateConnection(null, isShared);
         return conn;
     }
 
 
-    private ITrackedConnection GetSingleConnection()
+    internal ITrackedConnection GetSingleConnection()
     {
         return Connection;
     }
 
-    private ITrackedConnection GetSingleWriterConnection(ExecutionType type, bool isShared = false)
+    internal ITrackedConnection GetSingleWriterConnection(ExecutionType type, bool isShared = false)
     {
         if (ExecutionType.Read == type) return GetStandardConnection(isShared);
 
         return GetSingleConnection();
+    }
+
+    internal void SetPersistentConnection(ITrackedConnection? connection)
+    {
+        _connection = connection;
     }
     //
     // private int _disposed; // 0=false, 1=true

@@ -93,31 +93,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
 
         var args = includeParameters ? BuildProcedureArguments() : string.Empty;
 
-        return _context.ProcWrappingStyle switch
-        {
-            ProcWrappingStyle.PostgreSQL when executionType == ExecutionType.Read
-                => $"SELECT * FROM {procName}({args})",
-
-            ProcWrappingStyle.PostgreSQL
-                => $"CALL {procName}({args})",
-
-            ProcWrappingStyle.Oracle
-                => $"BEGIN\n\t{procName}{(string.IsNullOrEmpty(args) ? string.Empty : $"({args})")};\nEND;",
-
-            ProcWrappingStyle.Exec
-                => string.IsNullOrWhiteSpace(args)
-                    ? $"EXEC {procName}"
-                    : $"EXEC {procName} {args}",
-
-            ProcWrappingStyle.Call
-                => $"CALL {procName}({args})",
-
-            ProcWrappingStyle.ExecuteProcedure
-                => $"EXECUTE PROCEDURE {procName}({args})",
-
-            _ => throw new NotSupportedException("Stored procedures are not supported by this database.")
-        };
-
+        return _context.ProcWrappingStrategy.Wrap(procName, executionType, args);
+    }
         string BuildProcedureArguments()
         {
             if (_parameters.Count == 0)
