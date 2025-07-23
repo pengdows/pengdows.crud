@@ -94,7 +94,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
         var args = includeParameters ? BuildProcedureArguments() : string.Empty;
 
         return _context.ProcWrappingStrategy.Wrap(procName, executionType, args);
-    }
+
         string BuildProcedureArguments()
         {
             if (_parameters.Count == 0)
@@ -108,6 +108,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
             // Positional binding (e.g., SQLite, MySQL)
             return string.Join(", ", Enumerable.Repeat("?", _parameters.Count));
         }
+    }
     }
 
 
