@@ -11,4 +11,9 @@ public interface ITableInfo
     IColumnInfo LastUpdatedOn { get; set; }
     IColumnInfo CreatedOn { get; set; }
     IColumnInfo CreatedBy { get; set; }
+
+    /// <summary>
+    /// Indicates whether any audit-related columns are configured for the table.
+    /// </summary>
+    bool HasAuditColumns { get; set; }
 }
