@@ -43,6 +43,7 @@ public class EntityHelper<TEntity, TRowID> :
 
     // private readonly IServiceProvider _serviceProvider;
     private ITableInfo _tableInfo;
+    private bool _hasAuditColumns;
     private Type? _userFieldType = null;
 
     private IColumnInfo? _versionColumn;
@@ -70,6 +71,7 @@ public class EntityHelper<TEntity, TRowID> :
         _context = databaseContext;
         _tableInfo = _context.TypeMapRegistry.GetTableInfo<TEntity>() ??
                      throw new InvalidOperationException($"Type {typeof(TEntity).FullName} is not a table.");
+        _hasAuditColumns = _tableInfo.HasAuditColumns;
 
         var propertyInfoPropertyType = _tableInfo.Columns
             .Values
@@ -956,10 +958,7 @@ public class EntityHelper<TEntity, TRowID> :
             return;
 
         // Skip resolving audit values when no audit columns are present
-        if (_tableInfo.CreatedBy == null &&
-            _tableInfo.CreatedOn == null &&
-            _tableInfo.LastUpdatedBy == null &&
-            _tableInfo.LastUpdatedOn == null)
+        if (!_hasAuditColumns)
             return;
 
         var auditValues = _auditValueResolver?.Resolve();

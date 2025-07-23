@@ -60,6 +60,28 @@ public class TypeMapRegistryTests
         Assert.Contains("does not have a TableAttribute", ex.Message);
     }
 
+    [Fact]
+    public void GetTableInfo_SetsHasAuditColumns_WhenPresent()
+    {
+        var registry = new TypeMapRegistry();
+        registry.Register<AuditOnOnlyEntity>();
+
+        var info = registry.GetTableInfo<AuditOnOnlyEntity>();
+
+        Assert.True(info.HasAuditColumns);
+    }
+
+    [Fact]
+    public void GetTableInfo_SetsHasAuditColumnsFalse_WhenAbsent()
+    {
+        var registry = new TypeMapRegistry();
+        registry.Register<MyEntity>();
+
+        var info = registry.GetTableInfo<MyEntity>();
+
+        Assert.False(info.HasAuditColumns);
+    }
+
     [Table("MultipleVersions")]
     private class MultipleVersions
     {
