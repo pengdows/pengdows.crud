@@ -509,14 +509,14 @@ public class EntityHelper<TEntity, TRowID> :
 
         // Determine if any non-audit fields have changed before modifying audit values
         var template = _cachedSqlTemplates.Value;
-        var (preClause, _) = BuildSetClause(objectToUpdate, original, context, template);
+        var (preClause, _) = BuildSetClause(objectToUpdate, original, context);
         if (preClause.Length == 0)
             throw new InvalidOperationException("No changes detected for update.");
 
         // Apply audit field changes now that we know an update is required
         SetAuditFields(objectToUpdate, true);
 
-        var (setClause, parameters) = BuildSetClause(objectToUpdate, original, context, template);
+        var (setClause, parameters) = BuildSetClause(objectToUpdate, original, context);
 
         if (_versionColumn != null) IncrementVersion(setClause);
 
@@ -530,7 +530,11 @@ public class EntityHelper<TEntity, TRowID> :
         if (_versionColumn != null)
         {
             var versionValue = _versionColumn.MakeParameterValueFromField(objectToUpdate);
-            AppendVersionCondition(sc, versionValue, context, parameters);
+            var versionParam = AppendVersionCondition(sc, versionValue, context);
+            if (versionParam != null)
+            {
+                parameters.Add(versionParam);
+            }
         }
 
         sc.AddParameters(parameters);
@@ -615,10 +619,11 @@ public class EntityHelper<TEntity, TRowID> :
         return await RetrieveOneAsync((TRowID)idValue!);
     }
 
-    private (StringBuilder clause, List<DbParameter> parameters) BuildSetClause(TEntity updated, TEntity? original, IDatabaseContext context, CachedSqlTemplates template)
+    private (StringBuilder clause, List<DbParameter> parameters) BuildSetClause(TEntity updated, TEntity? original, IDatabaseContext context)
     {
         var clause = new StringBuilder();
         var parameters = new List<DbParameter>();
+        var template = _cachedSqlTemplates.Value;
 
         for (var i = 0; i < template.UpdateColumns.Count; i++)
         {
@@ -656,19 +661,18 @@ public class EntityHelper<TEntity, TRowID> :
         setClause.Append($", {WrapObjectName(_versionColumn!.Name)} = {WrapObjectName(_versionColumn.Name)} + 1");
     }
 
-    private void AppendVersionCondition(ISqlContainer sc, object? versionValue, IDatabaseContext context, List<DbParameter> parameters)
+    private DbParameter? AppendVersionCondition(ISqlContainer sc, object? versionValue, IDatabaseContext context)
     {
         if (versionValue == null)
         {
             sc.Query.Append(" AND ").Append(WrapObjectName(_versionColumn!.Name)).Append(" IS NULL");
+            return null;
         }
-        else
-        {
-            var pVersion = context.CreateDbParameter(_versionColumn!.DbType, versionValue);
-            sc.Query.Append(" AND ").Append(WrapObjectName(_versionColumn.Name))
-                .Append($" = {MakeParameterName(pVersion)}");
-            parameters.Add(pVersion);
-        }
+
+        var pVersion = context.CreateDbParameter(_versionColumn!.DbType, versionValue);
+        sc.Query.Append(" AND ").Append(WrapObjectName(_versionColumn.Name))
+            .Append($" = {MakeParameterName(pVersion)}");
+        return pVersion;
     }
 
     private ISqlContainer BuildUpsertOnConflict(TEntity entity, IDatabaseContext context)
