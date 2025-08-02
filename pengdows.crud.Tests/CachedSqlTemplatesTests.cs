@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Data.Common;
 using System.Reflection;
 using System.Threading.Tasks;
 using Xunit;
@@ -27,6 +29,25 @@ public class CachedSqlTemplatesTests : SqlLiteContextTestBase
         var template2 = valueProp.GetValue(lazy2);
 
         Assert.Same(template1, template2);
+    }
+
+    [Fact]
+    public void BuildCreate_UsesPredictableParameterNames()
+    {
+        TypeMap.Register<TestEntity>();
+        var helper = new EntityHelper<TestEntity, int>(Context);
+        var entity = new TestEntity { Name = "foo" };
+
+        var sc = helper.BuildCreate(entity);
+
+        var sql = sc.Query.ToString();
+        Assert.Contains("@p0", sql);
+        Assert.Contains("@p1", sql);
+
+        var field = typeof(SqlContainer).GetField("_parameters", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var parameters = (Dictionary<string, DbParameter>)field.GetValue(sc)!;
+        Assert.Contains("p0", parameters.Keys);
+        Assert.Contains("p1", parameters.Keys);
     }
 
     [Fact]

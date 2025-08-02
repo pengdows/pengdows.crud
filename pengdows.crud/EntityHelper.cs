@@ -30,6 +30,7 @@ public class EntityHelper<TEntity, TRowID> :
     {
         public string InsertSql = null!;
         public List<IColumnInfo> InsertColumns = null!;
+        public List<string> InsertParameterNames = null!;
         public string DeleteSql = null!;
         public string UpdateSql = null!;
         public List<IColumnInfo> UpdateColumns = null!;
@@ -182,37 +183,36 @@ public class EntityHelper<TEntity, TRowID> :
         }
 
         var template = _cachedSqlTemplates.Value;
-        var parameters = new List<DbParameter>();
+        var columns = new List<string>();
+        var placeholders = new List<string>();
 
         for (var i = 0; i < template.InsertColumns.Count; i++)
         {
             var column = template.InsertColumns[i];
             var value = column.MakeParameterValueFromField(entity);
 
-            if (_auditValueResolver == null && (column.IsCreatedBy || column.IsLastUpdatedBy) && Utils.IsNullOrDbNull(value))
+            if (_auditValueResolver == null &&
+                (column.IsCreatedBy || column.IsLastUpdatedBy) &&
+                Utils.IsNullOrDbNull(value))
             {
                 continue;
             }
 
-            var param = ctx.CreateDbParameter(column.DbType, value);
-            parameters.Add(param);
-        }
-
-        var paramNames = new List<string>();
-        for (var i = 0; i < parameters.Count; i++)
-        {
-            paramNames.Add(MakeParameterName(parameters[i]));
+            var paramName = template.InsertParameterNames[i];
+            var param = ctx.CreateDbParameter(paramName, column.DbType, value);
+            sc.AddParameter(param);
+            columns.Add(WrapObjectName(column.Name));
+            placeholders.Add(ctx.MakeParameterName(param));
         }
 
         sc.Query.Append("INSERT INTO ")
             .Append(WrappedTableName)
             .Append(" (")
-            .Append(string.Join(", ", template.InsertColumns.Select(c => WrapObjectName(c.Name))))
+            .Append(string.Join(", ", columns))
             .Append(") VALUES (")
-            .Append(string.Join(", ", paramNames))
+            .Append(string.Join(", ", placeholders))
             .Append(")");
 
-        sc.AddParameters(parameters);
         return sc;
     }
 
@@ -1035,10 +1035,13 @@ public class EntityHelper<TEntity, TRowID> :
             wrappedCols.Add(QuoteWrap(insertColumns[i].Name));
         }
 
+        var paramNames = new List<string>();
         var valuePlaceholders = new List<string>();
         for (var i = 0; i < insertColumns.Count; i++)
         {
-            valuePlaceholders.Add($"@p{i}");
+            var name = $"p{i}";
+            paramNames.Add(name);
+            valuePlaceholders.Add($"@{name}");
         }
 
         var insertSql = $"INSERT INTO {BuildWrappedTableName(typeMap)} ({string.Join(", ", wrappedCols)}) VALUES ({string.Join(", ", valuePlaceholders)})";
@@ -1055,6 +1058,7 @@ public class EntityHelper<TEntity, TRowID> :
         {
             InsertSql = insertSql,
             InsertColumns = insertColumns,
+            InsertParameterNames = paramNames,
             DeleteSql = deleteSql,
             UpdateSql = updateSql,
             UpdateColumns = updateColumns
