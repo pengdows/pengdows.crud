@@ -17,5 +17,6 @@ public class IDataSourceInformationTests
         var info = new DataSourceInformation(conn, NullLoggerFactory.Instance);
         Assert.False(string.IsNullOrWhiteSpace(info.CompositeIdentifierSeparator));
         Assert.False(string.IsNullOrWhiteSpace(info.ParameterMarker));
+        Assert.True(info.MaxOutputParameters >= 0);
     }
 }

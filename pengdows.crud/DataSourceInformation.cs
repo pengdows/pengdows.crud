@@ -40,6 +40,18 @@ public class DataSourceInformation : IDataSourceInformation
         { SupportedDatabase.Firebird, 1499 }
     };
 
+    private static readonly Dictionary<SupportedDatabase, int> MaxOutputParameterLimits = new()
+    {
+        { SupportedDatabase.SqlServer, 1024 },
+        { SupportedDatabase.MySql, 65535 },
+        { SupportedDatabase.MariaDb, 65535 },
+        { SupportedDatabase.PostgreSql, 100 },
+        { SupportedDatabase.CockroachDb, 100 },
+        { SupportedDatabase.Oracle, 1024 },
+        { SupportedDatabase.Sqlite, 0 },
+        { SupportedDatabase.Firebird, 1499 }
+    };
+
     private static readonly Dictionary<SupportedDatabase, ProcWrappingStyle> ProcWrapStyles = new()
     {
         { SupportedDatabase.SqlServer, ProcWrappingStyle.Exec },
@@ -98,6 +110,7 @@ public class DataSourceInformation : IDataSourceInformation
     public bool PrepareStatements { get; private set; }
     public ProcWrappingStyle ProcWrappingStyle { get; set; }
     public int MaxParameterLimit { get; private set; }
+    public int MaxOutputParameters { get; private set; }
     public string CompositeIdentifierSeparator { get; private set; } = ".";
 
     public string GetDatabaseVersion(ITrackedConnection connection)
@@ -240,6 +253,7 @@ public class DataSourceInformation : IDataSourceInformation
         SupportsNamedParameters |= ParameterMarker != "?";
         ProcWrappingStyle = ProcWrapStyles.GetValueOrDefault(Product, ProcWrappingStyle.None);
         MaxParameterLimit = MaxParameterLimits.GetValueOrDefault(Product, 999);
+        MaxOutputParameters = MaxOutputParameterLimits.GetValueOrDefault(Product, 0);
     }
 
     private static DataTable ReadSqliteSchema()
