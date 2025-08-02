@@ -221,4 +221,27 @@ public class DatabaseContextTests
         var name = context.MakeParameterName("foo");
         Assert.StartsWith(context.DataSourceInfo.ParameterMarker, name);
     }
+
+    [Theory]
+    [InlineData("@foo")]
+    [InlineData(":foo")]
+    [InlineData("?foo")]
+    public void MakeParameterName_ReturnsAlreadyPrefixedName(string existing)
+    {
+        var product = SupportedDatabase.Sqlite;
+        var factory = new FakeDbFactory(product);
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
+        var name = context.MakeParameterName(existing);
+        Assert.Equal(existing, name);
+    }
+
+    [Fact]
+    public void MakeParameterName_NoNamedParameters_ReturnsQuestionMark()
+    {
+        var product = SupportedDatabase.Unknown;
+        var factory = new FakeDbFactory(product);
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
+        Assert.Equal("?", context.MakeParameterName("foo"));
+        Assert.Equal("?", context.MakeParameterName("@foo"));
+    }
 }

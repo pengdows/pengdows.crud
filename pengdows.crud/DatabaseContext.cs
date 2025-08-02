@@ -298,9 +298,24 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 
     public string MakeParameterName(string parameterName)
     {
-        return !_dataSourceInfo.SupportsNamedParameters
-            ? "?"
-            : $"{_dataSourceInfo.ParameterMarker}{parameterName}";
+        if (!_dataSourceInfo.SupportsNamedParameters)
+        {
+            return "?";
+        }
+
+        if (!string.IsNullOrEmpty(parameterName))
+        {
+            var first = parameterName[0];
+            switch (first)
+            {
+                case '?':
+                case ':':
+                case '@':
+                    return parameterName;
+            }
+        }
+
+        return _dataSourceInfo.ParameterMarker + parameterName;
     }
 
 
