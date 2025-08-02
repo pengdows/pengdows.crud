@@ -12,7 +12,14 @@ namespace pengdows.crud;
 
 public class TypeMapRegistry : ITypeMapRegistry
 {
+    public static TypeMapRegistry StaticInstance { get; private set; } = new();
+
     private readonly ConcurrentDictionary<Type, TableInfo> _typeMap = new();
+
+    public TypeMapRegistry()
+    {
+        StaticInstance = this;
+    }
 
     public ITableInfo GetTableInfo<T>()
     {
