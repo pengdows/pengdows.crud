@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;
 using pengdows.crud.FakeDb;
+using pengdows.crud.attributes;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -94,6 +95,27 @@ public class EntityHelperNegativeTests : SqlLiteContextTestBase
         var entity = new TestEntity { Id = 1, Name = "foo" };
 
         Assert.Throws<NotSupportedException>(() => localHelper.BuildUpsert(entity));
+    }
+
+    [Fact]
+    public void BuildCreate_NullEntity_Throws()
+    {
+        Assert.Throws<ArgumentNullException>(() => helper.BuildCreate(null!));
+    }
+
+    [Fact]
+    public void BuildDelete_NoIdColumn_Throws()
+    {
+        TypeMap.Register<EntityWithoutId>();
+        var local = new EntityHelper<EntityWithoutId, int>(Context);
+        Assert.Throws<InvalidOperationException>(() => local.BuildDelete(1));
+    }
+
+    [Table("NoIdTable")]
+    private class EntityWithoutId
+    {
+        [Column("Name", DbType.String)]
+        public string Name { get; set; } = string.Empty;
     }
 
     private async Task BuildTestTable()
