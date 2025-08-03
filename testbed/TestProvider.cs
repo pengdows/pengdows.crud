@@ -36,6 +36,8 @@ public class TestProvider : IAsyncTestProvider
             await DeletedRow(obj);
             Console.WriteLine("Running Transaction rows");
             await TestTransactions();
+            Console.WriteLine("Running stored procedure return value test");
+            await TestStoredProcReturnValue();
         }
         catch (Exception ex)
         {
@@ -177,5 +179,45 @@ CREATE TABLE {0}test_table{1} (
         var sc = _helper.BuildDelete(t.Id, ctx);
         var count = await sc.ExecuteNonQueryAsync();
         if (count != 1) throw new Exception("Delete failed");
+    }
+
+    private async Task TestStoredProcReturnValue()
+    {
+        var sc = _context.CreateSqlContainer();
+        switch (_context.Product)
+        {
+            case DatabaseProduct.SqlServer:
+                sc.Query.Append(
+                    "CREATE OR ALTER PROCEDURE dbo.ReturnFive AS BEGIN RETURN 5 END");
+                await sc.ExecuteNonQueryAsync();
+
+                sc.Query.Clear();
+                sc.Query.Append("dbo.ReturnFive");
+                var wrapped = sc.WrapForStoredProc(ExecutionType.Read, captureReturn: true);
+                sc.Query.Clear();
+                sc.Query.Append(wrapped);
+                var value = await sc.ExecuteScalarAsync<int>();
+                if (value != 5)
+                    throw new Exception($"Expected return value 5 but got {value}");
+
+                sc.Query.Clear();
+                sc.Query.Append("DROP PROCEDURE dbo.ReturnFive");
+                await sc.ExecuteNonQueryAsync();
+                break;
+
+            default:
+                sc.Query.Append("dummy_proc");
+                try
+                {
+                    sc.WrapForStoredProc(ExecutionType.Read, captureReturn: true);
+                    throw new Exception("Expected NotSupportedException for captureReturn");
+                }
+                catch (NotSupportedException)
+                {
+                    // Expected path
+                }
+
+                break;
+        }
     }
 }
