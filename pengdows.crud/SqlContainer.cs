@@ -20,6 +20,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
 
     private readonly ILogger<ISqlContainer> _logger;
     private readonly Dictionary<string, DbParameter> _parameters = new();
+    private int _outputParameterCount;
 
     internal SqlContainer(IDatabaseContext context, string? query = "", ILogger<ISqlContainer>? logger = null)
     {
@@ -46,7 +47,30 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
             return;
         }
 
-        if (string.IsNullOrEmpty(parameter.ParameterName)) parameter.ParameterName = GenerateRandomName();
+        if (string.IsNullOrEmpty(parameter.ParameterName))
+        {
+            parameter.ParameterName = GenerateRandomName();
+        }
+
+        var isOutput = parameter.Direction switch
+        {
+            ParameterDirection.Output => true,
+            ParameterDirection.InputOutput => true,
+            ParameterDirection.ReturnValue => true,
+            _ => false
+        };
+
+        if (isOutput)
+        {
+            var next = _outputParameterCount + 1;
+            if (next > _context.MaxOutputParameters)
+            {
+                throw new InvalidOperationException(
+                    $"Query exceeds the maximum output parameter limit of {_context.MaxOutputParameters} for {_context.DatabaseProductName}.");
+            }
+
+            _outputParameterCount = next;
+        }
 
         _parameters.Add(parameter.ParameterName, parameter);
     }
@@ -62,7 +86,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
     {
         name ??= GenerateRandomName();
         var parameter = _context.CreateDbParameter(name, type, value);
-        _parameters.Add(name, parameter);
+        AddParameter(parameter);
         return parameter;
     }
 
@@ -82,6 +106,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
     {
         Query.Clear();
         _parameters.Clear();
+        _outputParameterCount = 0;
     }
 
     public string WrapForStoredProc(ExecutionType executionType, bool includeParameters = true)
@@ -308,5 +333,6 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
 
         _parameters.Clear();
         Query.Clear();
+        _outputParameterCount = 0;
     }
 }

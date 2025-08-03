@@ -103,6 +103,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
     public bool IsReadOnlyConnection => _context.IsReadOnlyConnection;
     public bool RCSIEnabled => _context.RCSIEnabled;
     public int MaxParameterLimit => _context.MaxParameterLimit;
+    public int MaxOutputParameters => _context.MaxOutputParameters;
     public DbMode ConnectionMode => DbMode.SingleConnection;
     public ITypeMapRegistry TypeMapRegistry => _context.TypeMapRegistry;
     public IDataSourceInformation DataSourceInfo => _context.DataSourceInfo;
