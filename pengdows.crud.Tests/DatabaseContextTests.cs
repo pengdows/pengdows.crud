@@ -286,4 +286,14 @@ public class DatabaseContextTests
 
         Assert.Equal("?", context.MakeParameterName(param));
     }
+
+    [Fact]
+    public void MaxOutputParameters_ExposedViaContext()
+    {
+        var product = SupportedDatabase.SqlServer;
+        var factory = new FakeDbFactory(product);
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
+
+        Assert.Equal(context.DataSourceInfo.MaxOutputParameters, context.MaxOutputParameters);
+    }
 }

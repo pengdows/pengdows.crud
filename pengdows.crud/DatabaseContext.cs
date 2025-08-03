@@ -346,6 +346,8 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 
     public int MaxParameterLimit => _dataSourceInfo.MaxParameterLimit;
 
+    public int MaxOutputParameters => _dataSourceInfo.MaxOutputParameters;
+
     public long MaxNumberOfConnections => Interlocked.Read(ref _maxNumberOfOpenConnections);
 
     public long NumberOfOpenConnections => Interlocked.Read(ref _connectionCount);

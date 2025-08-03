@@ -3,6 +3,7 @@
 using System;
 using System.Data;
 using System.Threading.Tasks;
+using System.Reflection;
 using Moq;
 using pengdows.crud.enums;
 using pengdows.crud.FakeDb;
@@ -225,5 +226,42 @@ public class SqlContainerTests : SqlLiteContextTestBase
         Assert.Equal(Context.QuotePrefix, container.QuotePrefix);
         Assert.Equal(Context.QuoteSuffix, container.QuoteSuffix);
         Assert.Equal(Context.CompositeIdentifierSeparator, container.CompositeIdentifierSeparator);
+    }
+
+    [Fact]
+    public void AddParameter_OutputWithinLimit_Succeeds()
+    {
+        var info = (DataSourceInformation)Context.DataSourceInfo;
+        var prop = typeof(DataSourceInformation).GetProperty("MaxOutputParameters", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+        var original = info.MaxOutputParameters;
+        prop!.SetValue(info, 1);
+
+        var container = Context.CreateSqlContainer();
+        var param = new FakeDbParameter { ParameterName = "p0", DbType = DbType.Int32, Direction = ParameterDirection.Output };
+
+        container.AddParameter(param);
+
+        Assert.Equal(1, container.ParameterCount);
+
+        prop.SetValue(info, original);
+    }
+
+    [Fact]
+    public void AddParameter_OutputExceedsLimit_Throws()
+    {
+        var info = (DataSourceInformation)Context.DataSourceInfo;
+        var prop = typeof(DataSourceInformation).GetProperty("MaxOutputParameters", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+        var original = info.MaxOutputParameters;
+        prop!.SetValue(info, 1);
+
+        var container = Context.CreateSqlContainer();
+        var p1 = new FakeDbParameter { ParameterName = "p0", DbType = DbType.Int32, Direction = ParameterDirection.Output };
+        container.AddParameter(p1);
+
+        var p2 = new FakeDbParameter { ParameterName = "p1", DbType = DbType.Int32, Direction = ParameterDirection.Output };
+
+        Assert.Throws<InvalidOperationException>(() => container.AddParameter(p2));
+
+        prop.SetValue(info, original);
     }
 }
