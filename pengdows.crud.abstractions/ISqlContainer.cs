@@ -114,8 +114,9 @@ public interface ISqlContainer : ISafeAsyncDisposableBase
     /// </summary>
     /// <param name="executionType">The procedure execution type.</param>
     /// <param name="includeParameters">Whether to include parameters in the wrapper.</param>
+    /// <param name="captureReturn">Whether to capture a return value.</param>
     /// <returns>The wrapped command text.</returns>
-    string WrapForStoredProc(ExecutionType executionType, bool includeParameters = true);
+    string WrapForStoredProc(ExecutionType executionType, bool includeParameters = true, bool captureReturn = false);
 
     /// <summary>
     /// Wraps an object name using the current quoting rules.
