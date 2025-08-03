@@ -181,6 +181,21 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
         }
     }
 
+    public string WrapForCreateWithReturn(bool includeParameters = true)
+    {
+        return WrapForStoredProc(ExecutionType.Write, includeParameters, captureReturn: true);
+    }
+
+    public string WrapForUpdateWithReturn(bool includeParameters = true)
+    {
+        return WrapForStoredProc(ExecutionType.Write, includeParameters, captureReturn: true);
+    }
+
+    public string WrapForDeleteWithReturn(bool includeParameters = true)
+    {
+        return WrapForStoredProc(ExecutionType.Write, includeParameters, captureReturn: true);
+    }
+
 
     public string WrapObjectName(string objectName)
     {

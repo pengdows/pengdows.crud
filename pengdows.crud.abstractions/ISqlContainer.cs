@@ -119,6 +119,27 @@ public interface ISqlContainer : ISafeAsyncDisposableBase
     string WrapForStoredProc(ExecutionType executionType, bool includeParameters = true, bool captureReturn = false);
 
     /// <summary>
+    /// Wraps the query for execution as a CREATE-like stored procedure and captures a return value.
+    /// </summary>
+    /// <param name="includeParameters">Whether to include parameters in the wrapper.</param>
+    /// <returns>The wrapped command text.</returns>
+    string WrapForCreateWithReturn(bool includeParameters = true);
+
+    /// <summary>
+    /// Wraps the query for execution as an UPDATE-like stored procedure and captures a return value.
+    /// </summary>
+    /// <param name="includeParameters">Whether to include parameters in the wrapper.</param>
+    /// <returns>The wrapped command text.</returns>
+    string WrapForUpdateWithReturn(bool includeParameters = true);
+
+    /// <summary>
+    /// Wraps the query for execution as a DELETE-like stored procedure and captures a return value.
+    /// </summary>
+    /// <param name="includeParameters">Whether to include parameters in the wrapper.</param>
+    /// <returns>The wrapped command text.</returns>
+    string WrapForDeleteWithReturn(bool includeParameters = true);
+
+    /// <summary>
     /// Wraps an object name using the current quoting rules.
     /// </summary>
     /// <param name="objectName">The name to wrap.</param>
