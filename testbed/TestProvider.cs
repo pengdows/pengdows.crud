@@ -1,6 +1,7 @@
 #region
 
 using pengdows.crud;
+using pengdows.crud.enums;
 
 #endregion
 
@@ -178,7 +179,10 @@ CREATE TABLE {0}test_table{1} (
         var ctx = db ?? _context;
         var sc = _helper.BuildDelete(t.Id, ctx);
         var count = await sc.ExecuteNonQueryAsync();
-        if (count != 1) throw new Exception("Delete failed");
+        if (count != 1)
+        {
+            throw new Exception("Delete failed");
+        }
     }
 
     private async Task TestStoredProcReturnValue()
@@ -186,7 +190,7 @@ CREATE TABLE {0}test_table{1} (
         var sc = _context.CreateSqlContainer();
         switch (_context.Product)
         {
-            case DatabaseProduct.SqlServer:
+            case SupportedDatabase.SqlServer:
                 sc.Query.Append(
                     "CREATE OR ALTER PROCEDURE dbo.ReturnFive AS BEGIN RETURN 5 END");
                 await sc.ExecuteNonQueryAsync();
