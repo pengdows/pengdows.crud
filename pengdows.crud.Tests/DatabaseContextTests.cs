@@ -233,7 +233,8 @@ public class DatabaseContextTests
         var factory = new FakeDbFactory(product);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
         var name = context.MakeParameterName("foo");
-        Assert.StartsWith(context.DataSourceInfo.ParameterMarker, name);
+        var expected = context.DataSourceInfo.ParameterMarker + "foo";
+        Assert.Equal(expected, name);
     }
 
     [Theory]

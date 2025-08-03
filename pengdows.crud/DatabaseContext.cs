@@ -35,6 +35,8 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     private bool _isWriteConnection = true;
     private long _maxNumberOfOpenConnections;
 
+    private static readonly char[] _parameterPrefixes = { '@', '?', ':' };
+
     [Obsolete("Use the constructor that takes DatabaseContextConfiguration instead.")]
     public DatabaseContext(
         string connectionString,
@@ -319,6 +321,16 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 
     private static string StripParameterPrefixes(string name)
     {
+        if (string.IsNullOrEmpty(name))
+        {
+            return string.Empty;
+        }
+
+        if (name.IndexOfAny(_parameterPrefixes) == -1)
+        {
+            return name;
+        }
+
         return name
             .Replace("@", string.Empty)
             .Replace("?", string.Empty)
