@@ -55,7 +55,8 @@ public interface ISqlContainer : ISafeAsyncDisposableBase
     /// <param name="type">Database type of the parameter.</param>
     /// <param name="value">The value to assign.</param>
     /// <returns>The created parameter.</returns>
-    DbParameter AddParameterWithValue<T>(DbType type, T value);
+    DbParameter AddParameterWithValue<T>(DbType type, T value,
+        ParameterDirection direction = ParameterDirection.Input);
 
     /// <summary>
     /// Adds a named parameter by type and value.
@@ -65,7 +66,8 @@ public interface ISqlContainer : ISafeAsyncDisposableBase
     /// <param name="type">Database type of the parameter.</param>
     /// <param name="value">The value to assign.</param>
     /// <returns>The created parameter.</returns>
-    DbParameter AddParameterWithValue<T>(string? name, DbType type, T value);
+    DbParameter AddParameterWithValue<T>(string? name, DbType type, T value,
+        ParameterDirection direction = ParameterDirection.Input);
 
     /// <summary>
     /// Executes the current query as a non-query command.

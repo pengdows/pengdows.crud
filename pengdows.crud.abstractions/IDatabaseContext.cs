@@ -118,12 +118,14 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// <summary>
     /// Creates a named DbParameter.
     /// </summary>
-    DbParameter CreateDbParameter<T>(string? name, DbType type, T value);
+    DbParameter CreateDbParameter<T>(string? name, DbType type, T value,
+        ParameterDirection direction = ParameterDirection.Input);
 
     /// <summary>
     /// Creates a positional DbParameter (no name specified).
     /// </summary>
-    DbParameter CreateDbParameter<T>(DbType type, T value);
+    DbParameter CreateDbParameter<T>(DbType type, T value,
+        ParameterDirection direction = ParameterDirection.Input);
 
     /// <summary>
     /// Returns a tracked connection for the given execution type.

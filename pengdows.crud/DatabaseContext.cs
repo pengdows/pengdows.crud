@@ -193,7 +193,8 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
         return new SqlContainer(this, query);
     }
 
-    public DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
+    public DbParameter CreateDbParameter<T>(string? name, DbType type, T value,
+        ParameterDirection direction = ParameterDirection.Input)
     {
         var p = _factory.CreateParameter() ?? throw new InvalidOperationException("Failed to create parameter.");
 
@@ -215,6 +216,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
             p.Size = Math.Max(s.Length, 1);
         }
 
+        p.Direction = direction;
         return p;
     }
 
@@ -252,9 +254,10 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     }
 
 
-    public DbParameter CreateDbParameter<T>(DbType type, T value)
+    public DbParameter CreateDbParameter<T>(DbType type, T value,
+        ParameterDirection direction = ParameterDirection.Input)
     {
-        return CreateDbParameter(null, type, value);
+        return CreateDbParameter(null, type, value, direction);
     }
 
     public void AssertIsReadConnection()

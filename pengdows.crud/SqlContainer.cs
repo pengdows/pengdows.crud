@@ -75,17 +75,22 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
         _parameters.Add(parameter.ParameterName, parameter);
     }
 
-    public DbParameter AddParameterWithValue<T>(DbType type, T value)
+    public DbParameter AddParameterWithValue<T>(DbType type, T value,
+        ParameterDirection direction = ParameterDirection.Input)
     {
-        if (value is DbParameter) throw new ArgumentException("Parameter type can't be DbParameter.");
+        if (value is DbParameter)
+        {
+            throw new ArgumentException("Parameter type can't be DbParameter.");
+        }
 
-        return AddParameterWithValue(null, type, value);
+        return AddParameterWithValue(null, type, value, direction);
     }
 
-    public DbParameter AddParameterWithValue<T>(string? name, DbType type, T value)
+    public DbParameter AddParameterWithValue<T>(string? name, DbType type, T value,
+        ParameterDirection direction = ParameterDirection.Input)
     {
         name ??= GenerateRandomName();
-        var parameter = _context.CreateDbParameter(name, type, value);
+        var parameter = _context.CreateDbParameter(name, type, value, direction);
         AddParameter(parameter);
         return parameter;
     }

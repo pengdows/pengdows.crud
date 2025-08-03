@@ -63,6 +63,24 @@ public class SqlContainerTests : SqlLiteContextTestBase
     }
 
     [Fact]
+    public void AddParameterWithValue_SetsDirection()
+    {
+        var container = Context.CreateSqlContainer();
+        var param = container.AddParameterWithValue("p1", DbType.Int32, 1, ParameterDirection.Output);
+
+        Assert.Equal(ParameterDirection.Output, param.Direction);
+    }
+
+    [Fact]
+    public void AddParameterWithValue_DefaultsDirectionToInput()
+    {
+        var container = Context.CreateSqlContainer();
+        var param = container.AddParameterWithValue("p1", DbType.Int32, 1);
+
+        Assert.Equal(ParameterDirection.Input, param.Direction);
+    }
+
+    [Fact]
     public async Task ExecuteNonQueryAsync_InsertsData()
     {
         var qp = Context.QuotePrefix;
