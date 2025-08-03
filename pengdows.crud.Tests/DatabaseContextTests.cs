@@ -88,6 +88,20 @@ public class DatabaseContextTests
     }
 
     [Theory]
+    [InlineData("@foo", "foo")]
+    [InlineData(":bar", "bar")]
+    [InlineData("?baz", "baz")]
+    public void CreateDbParameter_RemovesPrefixesFromName(string input, string expected)
+    {
+        var product = SupportedDatabase.Sqlite;
+        var factory = new FakeDbFactory(product);
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
+        var result = context.CreateDbParameter(input, DbType.String, "v");
+
+        Assert.Equal(expected, result.ParameterName);
+    }
+
+    [Theory]
     [MemberData(nameof(AllSupportedProviders))]
     public async Task CloseAndDisposeConnectionAsync_WithAsyncDisposable_DisposesCorrectly(SupportedDatabase product)
     {
@@ -226,13 +240,15 @@ public class DatabaseContextTests
     [InlineData("@foo")]
     [InlineData(":foo")]
     [InlineData("?foo")]
-    public void MakeParameterName_ReturnsAlreadyPrefixedName(string existing)
+    [InlineData("@:foo?")]
+    public void MakeParameterName_StripsExistingPrefixes(string input)
     {
         var product = SupportedDatabase.Sqlite;
         var factory = new FakeDbFactory(product);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
-        var name = context.MakeParameterName(existing);
-        Assert.Equal(existing, name);
+        var name = context.MakeParameterName(input);
+        var expected = context.DataSourceInfo.ParameterMarker + "foo";
+        Assert.Equal(expected, name);
     }
 
     [Fact]
@@ -243,5 +259,30 @@ public class DatabaseContextTests
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
         Assert.Equal("?", context.MakeParameterName("foo"));
         Assert.Equal("?", context.MakeParameterName("@foo"));
+        Assert.Equal("?", context.MakeParameterName(":foo"));
+    }
+
+    [Fact]
+    public void MakeParameterName_DbParameter_StripsPrefixes()
+    {
+        var product = SupportedDatabase.Sqlite;
+        var factory = new FakeDbFactory(product);
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
+        var param = new FakeDbParameter { ParameterName = ":foo", DbType = DbType.String, Value = "x" };
+
+        var name = context.MakeParameterName(param);
+
+        Assert.Equal(context.DataSourceInfo.ParameterMarker + "foo", name);
+    }
+
+    [Fact]
+    public void MakeParameterName_DbParameter_NoNamedParameters_ReturnsQuestionMark()
+    {
+        var product = SupportedDatabase.Unknown;
+        var factory = new FakeDbFactory(product);
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
+        var param = new FakeDbParameter { ParameterName = "@foo", DbType = DbType.String, Value = "x" };
+
+        Assert.Equal("?", context.MakeParameterName(param));
     }
 }

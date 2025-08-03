@@ -195,13 +195,23 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     {
         var p = _factory.CreateParameter() ?? throw new InvalidOperationException("Failed to create parameter.");
 
-        if (string.IsNullOrWhiteSpace(name)) name = GenerateRandomName();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            name = GenerateRandomName();
+        }
+        else
+        {
+            name = StripParameterPrefixes(name);
+        }
 
         var valueIsNull = Utils.IsNullOrDbNull(value);
         p.ParameterName = name;
         p.DbType = type;
         p.Value = valueIsNull ? DBNull.Value : value;
-        if (!valueIsNull && p.DbType == DbType.String && value is string s) p.Size = Math.Max(s.Length, 1);
+        if (!valueIsNull && p.DbType == DbType.String && value is string s)
+        {
+            p.Size = Math.Max(s.Length, 1);
+        }
 
         return p;
     }
@@ -303,19 +313,16 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
             return "?";
         }
 
-        if (!string.IsNullOrEmpty(parameterName))
-        {
-            var first = parameterName[0];
-            switch (first)
-            {
-                case '?':
-                case ':':
-                case '@':
-                    return parameterName;
-            }
-        }
+        var sanitized = StripParameterPrefixes(parameterName ?? string.Empty);
+        return _dataSourceInfo.ParameterMarker + sanitized;
+    }
 
-        return _dataSourceInfo.ParameterMarker + parameterName;
+    private static string StripParameterPrefixes(string name)
+    {
+        return name
+            .Replace("@", string.Empty)
+            .Replace("?", string.Empty)
+            .Replace(":", string.Empty);
     }
 
 
