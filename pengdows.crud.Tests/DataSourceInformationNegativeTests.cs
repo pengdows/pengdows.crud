@@ -97,4 +97,19 @@ public class DataSourceInformationNegativeTests
         using var tracked = new TrackedConnection(conn);
         Assert.True(InvokeIsSqliteSync(tracked));
     }
+
+    [Fact]
+    public void MaxOutputParameters_UnknownProduct_DefaultsToZero()
+    {
+        var schema = DataSourceInformation.BuildEmptySchema(
+            "UnknownDb", "1", "@", "@{0}", 64, "@\\w+", "@\\w+", true);
+        var factory = new FakeDbFactory(SupportedDatabase.SqlServer);
+        var conn = factory.CreateConnection();
+        conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Unknown}";
+        using var tracked = new FakeTrackedConnection(conn, schema, new Dictionary<string, object>());
+
+        var info = DataSourceInformation.Create(tracked, NullLoggerFactory.Instance);
+
+        Assert.Equal(0, info.MaxOutputParameters);
+    }
 }

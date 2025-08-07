@@ -35,6 +35,8 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     private bool _isWriteConnection = true;
     private long _maxNumberOfOpenConnections;
 
+    private static readonly char[] _parameterPrefixes = { '@', '?', ':' };
+
     [Obsolete("Use the constructor that takes DatabaseContextConfiguration instead.")]
     public DatabaseContext(
         string connectionString,
@@ -179,30 +181,48 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 
     public ITransactionContext BeginTransaction(IsolationProfile isolationProfile)
     {
+        if (_isolationResolver == null)
+        {
+            throw new NotSupportedException("Isolation profiles not supported for unknown database.");
+        }
+
         return new TransactionContext(this, _isolationResolver.Resolve(isolationProfile));
     }
 
 
     public string CompositeIdentifierSeparator => _dataSourceInfo.CompositeIdentifierSeparator;
-    public SupportedDatabase Product => _dataSourceInfo.Product;
+
+    public SupportedDatabase Product => _dataSourceInfo?.Product ?? SupportedDatabase.Unknown;
 
     public ISqlContainer CreateSqlContainer(string? query = null)
     {
         return new SqlContainer(this, query);
     }
 
-    public DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
+    public DbParameter CreateDbParameter<T>(string? name, DbType type, T value,
+        ParameterDirection direction = ParameterDirection.Input)
     {
         var p = _factory.CreateParameter() ?? throw new InvalidOperationException("Failed to create parameter.");
 
-        if (string.IsNullOrWhiteSpace(name)) name = GenerateRandomName();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            name = GenerateRandomName();
+        }
+        else
+        {
+            name = StripParameterPrefixes(name);
+        }
 
         var valueIsNull = Utils.IsNullOrDbNull(value);
         p.ParameterName = name;
         p.DbType = type;
         p.Value = valueIsNull ? DBNull.Value : value;
-        if (!valueIsNull && p.DbType == DbType.String && value is string s) p.Size = Math.Max(s.Length, 1);
+        if (!valueIsNull && p.DbType == DbType.String && value is string s)
+        {
+            p.Size = Math.Max(s.Length, 1);
+        }
 
+        p.Direction = direction;
         return p;
     }
 
@@ -240,9 +260,10 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     }
 
 
-    public DbParameter CreateDbParameter<T>(DbType type, T value)
+    public DbParameter CreateDbParameter<T>(DbType type, T value,
+        ParameterDirection direction = ParameterDirection.Input)
     {
-        return CreateDbParameter(null, type, value);
+        return CreateDbParameter(null, type, value, direction);
     }
 
     public void AssertIsReadConnection()
@@ -298,9 +319,31 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 
     public string MakeParameterName(string parameterName)
     {
-        return !_dataSourceInfo.SupportsNamedParameters
-            ? "?"
-            : $"{_dataSourceInfo.ParameterMarker}{parameterName}";
+        if (!_dataSourceInfo.SupportsNamedParameters)
+        {
+            return "?";
+        }
+
+        var sanitized = StripParameterPrefixes(parameterName ?? string.Empty);
+        return _dataSourceInfo.ParameterMarker + sanitized;
+    }
+
+    private static string StripParameterPrefixes(string name)
+    {
+        if (string.IsNullOrEmpty(name))
+        {
+            return string.Empty;
+        }
+
+        if (name.IndexOfAny(_parameterPrefixes) == -1)
+        {
+            return name;
+        }
+
+        return name
+            .Replace("@", string.Empty)
+            .Replace("?", string.Empty)
+            .Replace(":", string.Empty);
     }
 
 
@@ -311,6 +354,8 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     }
 
     public int MaxParameterLimit => _dataSourceInfo.MaxParameterLimit;
+
+    public int MaxOutputParameters => _dataSourceInfo.MaxOutputParameters;
 
     public long MaxNumberOfConnections => Interlocked.Read(ref _maxNumberOfOpenConnections);
 
@@ -505,7 +550,11 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
                 ApplyConnectionSessionSettings(conn);
                 _connection = conn;
             }
-            _isolationResolver ??= new IsolationResolver(Product, RCSIEnabled);
+
+            if (Product != SupportedDatabase.Unknown)
+            {
+                _isolationResolver ??= new IsolationResolver(Product, RCSIEnabled);
+            }
         }
         catch(Exception ex){
             _logger.LogError(ex, ex.Message);
@@ -513,10 +562,16 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
         }
         finally
         {
-            _isolationResolver ??= new IsolationResolver(Product, RCSIEnabled);
+            if (Product != SupportedDatabase.Unknown)
+            {
+                _isolationResolver ??= new IsolationResolver(Product, RCSIEnabled);
+            }
+
             if (mode == DbMode.Standard)
+            {
                 //if it is standard mode, we can close it.
                 conn?.Dispose();
+            }
         }
     }
 
@@ -618,63 +673,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 
         return GetSingleConnection();
     }
-    //
-    // private int _disposed; // 0=false, 1=true
-    //
-    //
-    // public void Dispose()
-    // {
-    //     Dispose(disposing: true);
-    // }
-    //
-    // public async ValueTask DisposeAsync()
-    // {
-    //     await DisposeAsyncCore().ConfigureAwait(false);
-    //     Dispose(disposing: false); // Finalizer path for unmanaged cleanup (if any)
-    // }
-    //
-    // protected virtual async ValueTask DisposeAsyncCore()
-    // {
-    //     if (Interlocked.Exchange(ref _disposed, 1) != 0)
-    //         return; // Already disposed
-    //
-    //     if (_connection is IAsyncDisposable asyncDisposable)
-    //     {
-    //         await asyncDisposable.DisposeAsync().ConfigureAwait(false);
-    //     }
-    //     else
-    //     {
-    //         _connection?.Dispose();
-    //     }
-    //
-    //     _connection = null;
-    // }
-    //
-    //
-    // protected virtual void Dispose(bool disposing)
-    // {
-    //     if (Interlocked.Exchange(ref _disposed, 1) != 0)
-    //         return; // Already disposed
-    //
-    //     if (disposing)
-    //     {
-    //         try
-    //         {
-    //             _connection?.Dispose();
-    //         }
-    //         catch
-    //         {
-    //             // Optional: log or suppress
-    //         }
-    //         finally
-    //         {
-    //             _connection = null;
-    //             GC.SuppressFinalize(this); // Suppress only here
-    //         }
-    //     }
-    //
-    //     // unmanaged cleanup if needed (none currently)
-    // }
+   
 
     protected override void DisposeManaged()
     {

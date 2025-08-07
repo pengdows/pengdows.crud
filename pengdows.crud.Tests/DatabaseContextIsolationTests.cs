@@ -45,4 +45,13 @@ public class DatabaseContextIsolationTests
             new FakeDbFactory(SupportedDatabase.CockroachDb.ToString()));
         Assert.Throws<NotSupportedException>(() => context.BeginTransaction(IsolationProfile.FastWithRisks));
     }
+
+    [Fact]
+    public void BeginTransaction_UnknownProduct_Throws()
+    {
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.Unknown}",
+            new FakeDbFactory(SupportedDatabase.Unknown.ToString()));
+
+        Assert.Throws<NotSupportedException>(() => context.BeginTransaction(IsolationProfile.StrictConsistency));
+    }
 }

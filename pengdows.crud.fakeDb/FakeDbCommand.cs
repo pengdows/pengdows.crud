@@ -2,6 +2,7 @@
 
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 
 #endregion
 
@@ -18,14 +19,17 @@ public sealed class FakeDbCommand : DbCommand
     {
     }
 
+    [AllowNull]
     public override string CommandText { get; set; }
     public override int CommandTimeout { get; set; }
     public override CommandType CommandType { get; set; }
     public override bool DesignTimeVisible { get; set; }
     public override UpdateRowSource UpdatedRowSource { get; set; }
 
+    [AllowNull]
     public new DbConnection Connection { get; set; }
     protected override DbConnection? DbConnection { get; set; }
+    [AllowNull]
     public new DbTransaction Transaction { get; set; }
 
     protected override DbParameterCollection DbParameterCollection
@@ -47,7 +51,10 @@ public sealed class FakeDbCommand : DbCommand
     {
         var conn = FakeConnection;
         if (conn != null && conn.NonQueryResults.Count > 0)
+        {
             return conn.NonQueryResults.Dequeue();
+        }
+
         return 1;
     }
 
@@ -55,7 +62,10 @@ public sealed class FakeDbCommand : DbCommand
     {
         var conn = FakeConnection;
         if (conn != null && conn.ScalarResults.Count > 0)
+        {
             return conn.ScalarResults.Dequeue();
+        }
+
         return 42;
     }
 
@@ -63,7 +73,10 @@ public sealed class FakeDbCommand : DbCommand
     {
         var conn = FakeConnection;
         if (conn != null && conn.ReaderResults.Count > 0)
+        {
             return new FakeDbDataReader(conn.ReaderResults.Dequeue());
+        }
+
         return new FakeDbDataReader();
     }
 
@@ -73,7 +86,7 @@ public sealed class FakeDbCommand : DbCommand
         return Task.FromResult(ExecuteNonQuery());
     }
 
-    public override Task<object> ExecuteScalarAsync(CancellationToken ct)
+    public override Task<object?> ExecuteScalarAsync(CancellationToken ct)
     {
         return Task.FromResult(ExecuteScalar());
     }
