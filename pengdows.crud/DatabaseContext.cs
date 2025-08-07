@@ -181,12 +181,17 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 
     public ITransactionContext BeginTransaction(IsolationProfile isolationProfile)
     {
+        if (_isolationResolver == null)
+        {
+            throw new NotSupportedException("Isolation profiles not supported for unknown database.");
+        }
+
         return new TransactionContext(this, _isolationResolver.Resolve(isolationProfile));
     }
 
 
     public string CompositeIdentifierSeparator => _dataSourceInfo.CompositeIdentifierSeparator;
-    public SupportedDatabase Product => _dataSourceInfo.Product;
+    public SupportedDatabase Product => _dataSourceInfo?.Product ?? SupportedDatabase.Unknown;
 
     public ISqlContainer CreateSqlContainer(string? query = null)
     {
@@ -544,7 +549,11 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
                 ApplyConnectionSessionSettings(conn);
                 _connection = conn;
             }
-            _isolationResolver ??= new IsolationResolver(Product, RCSIEnabled);
+
+            if (Product != SupportedDatabase.Unknown)
+            {
+                _isolationResolver ??= new IsolationResolver(Product, RCSIEnabled);
+            }
         }
         catch(Exception ex){
             _logger.LogError(ex, ex.Message);
@@ -552,10 +561,16 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
         }
         finally
         {
-            _isolationResolver ??= new IsolationResolver(Product, RCSIEnabled);
+            if (Product != SupportedDatabase.Unknown)
+            {
+                _isolationResolver ??= new IsolationResolver(Product, RCSIEnabled);
+            }
+
             if (mode == DbMode.Standard)
+            {
                 //if it is standard mode, we can close it.
                 conn?.Dispose();
+            }
         }
     }
 
