@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using pengdows.crud.enums;
+using pengdows.crud;
 
 #endregion
 
@@ -138,10 +139,29 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
 
     public override DataTable GetSchema()
     {
-        if (_schemaTable != null) return _schemaTable;
+        if (_schemaTable != null)
+        {
+            return _schemaTable;
+        }
 
-        if (_emulatedProduct is null or SupportedDatabase.Unknown)
+        if (_emulatedProduct is null)
+        {
             throw new InvalidOperationException("EmulatedProduct must be configured via connection string.");
+        }
+
+        if (_emulatedProduct == SupportedDatabase.Unknown)
+        {
+            _schemaTable = DataSourceInformation.BuildEmptySchema(
+                "UnknownDb",
+                "1",
+                string.Empty,
+                string.Empty,
+                0,
+                string.Empty,
+                string.Empty,
+                false);
+            return _schemaTable;
+        }
 
         var resourceName = $"pengdows.crud.fakeDb.xml.{_emulatedProduct}.schema.xml";
 
@@ -157,10 +177,29 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
 
     public override DataTable GetSchema(string meta)
     {
-        if (_schemaTable != null) return _schemaTable;
+        if (_schemaTable != null)
+        {
+            return _schemaTable;
+        }
 
-        if (_emulatedProduct is null or SupportedDatabase.Unknown)
+        if (_emulatedProduct is null)
+        {
             throw new InvalidOperationException("EmulatedProduct must be configured via connection string.");
+        }
+
+        if (_emulatedProduct == SupportedDatabase.Unknown)
+        {
+            _schemaTable = DataSourceInformation.BuildEmptySchema(
+                "UnknownDb",
+                "1",
+                string.Empty,
+                string.Empty,
+                0,
+                string.Empty,
+                string.Empty,
+                false);
+            return _schemaTable;
+        }
 
         var resourceName = $"pengdows.crud.fakeDb.xml.{_emulatedProduct}.schema.xml";
 
