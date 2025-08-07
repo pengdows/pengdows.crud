@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Runtime.Serialization;
 using Moq;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
@@ -307,5 +308,23 @@ public class DatabaseContextTests
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
 
         Assert.Equal(context.DataSourceInfo.MaxOutputParameters, context.MaxOutputParameters);
+    }
+
+    [Fact]
+    public void Product_WhenInitialized_ReturnsProvidedProduct()
+    {
+        var product = SupportedDatabase.SqlServer;
+        var factory = new FakeDbFactory(product);
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
+
+        Assert.Equal(product, context.Product);
+    }
+
+    [Fact]
+    public void Product_WithoutDataSourceInfo_ReturnsUnknown()
+    {
+        var context = (DatabaseContext)FormatterServices.GetUninitializedObject(typeof(DatabaseContext));
+
+        Assert.Equal(SupportedDatabase.Unknown, context.Product);
     }
 }
