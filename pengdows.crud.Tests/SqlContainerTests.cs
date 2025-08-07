@@ -63,12 +63,21 @@ public class SqlContainerTests : SqlLiteContextTestBase
     }
 
     [Fact]
-    public void AddParameterWithValue_SetsDirection()
+    public void AddParameterWithValue_UnsupportedDirectionThrows()
     {
         var container = Context.CreateSqlContainer();
-        var param = container.AddParameterWithValue("p1", DbType.Int32, 1, ParameterDirection.Output);
 
-        Assert.Equal(ParameterDirection.Output, param.Direction);
+        Assert.Throws<ArgumentException>(() =>
+            container.AddParameterWithValue("p1", DbType.Int32, 1, ParameterDirection.Output));
+    }
+
+    [Fact]
+    public void AddParameterWithValue_SetsExplicitInputDirection()
+    {
+        var container = Context.CreateSqlContainer();
+        var param = container.AddParameterWithValue("p1", DbType.Int32, 1, ParameterDirection.Input);
+
+        Assert.Equal(ParameterDirection.Input, param.Direction);
     }
 
     [Fact]
