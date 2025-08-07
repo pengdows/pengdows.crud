@@ -60,13 +60,13 @@ public class CachedSqlTemplatesTests : SqlLiteContextTestBase
         var entity1 = new TestEntity { Id = 1, Name = "one" };
         var entity2 = new TestEntity { Id = 1, Name = "two" };
 
-        await helper1.BuildUpdateAsync(entity1);
+        await helper1.BuildUpdateAsync(entity1, false);
         var field = typeof(EntityHelper<TestEntity, int>).GetField("_cachedSqlTemplates", BindingFlags.Static | BindingFlags.NonPublic)!;
         var lazy = field.GetValue(null)!;
         var valueProp = lazy.GetType().GetProperty("Value")!;
         var template1 = valueProp.GetValue(lazy);
 
-        await helper2.BuildUpdateAsync(entity2);
+        await helper2.BuildUpdateAsync(entity2, false);
         var template2 = valueProp.GetValue(lazy);
 
         Assert.Same(template1, template2);
