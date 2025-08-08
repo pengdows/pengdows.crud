@@ -2,6 +2,8 @@
 
 using System.Data;
 using System.Data.Common;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.enums;
@@ -25,9 +27,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
     private bool _committed;
 
     private int _completedState; // 0 = not completed, 1 = committed or rolled back
-    private long _disposed;
     private bool _rolledBack;
-    private int _semaphoreDisposed;
 
     internal TransactionContext(IDatabaseContext context,
         IsolationLevel isolationLevel = IsolationLevel.Unspecified,
@@ -110,6 +110,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
 
     public ILockerAsync GetLock()
     {
+        ThrowIfDisposed();
         return new RealAsyncLocker(_semaphoreSlim);
     }
 
@@ -168,7 +169,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
 
     public void CloseAndDisposeConnection(ITrackedConnection? conn)
     {
-        //throw new NotImplementedException();
+        _context.CloseAndDisposeConnection(conn);
     }
 
     public string MakeParameterName(DbParameter dbParameter)
@@ -176,10 +177,12 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
         return _context.MakeParameterName(dbParameter);
     }
 
-    public ProcWrappingStyle ProcWrappingStyle
+    public ProcWrappingStyle ProcWrappingStyle => _context.ProcWrappingStyle;
+
+    ProcWrappingStyle IDatabaseContext.ProcWrappingStyle
     {
         get => _context.ProcWrappingStyle;
-        set => throw new NotImplementedException();
+        set => _context.ProcWrappingStyle = value;
     }
 
     public ITransactionContext BeginTransaction(IsolationLevel? isolationLevel = null)
@@ -190,126 +193,132 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
     public void Commit()
     {
         ThrowIfDisposed();
-        _semaphoreSlim.Wait();
-
-        try
-        {
-            if (Interlocked.Exchange(ref _completedState, 1) != 0)
-                throw new InvalidOperationException("Transaction already completed.");
-
-            _transaction.Commit();
-            _committed = true;
-        }
-        finally
-        {
-            Interlocked.Exchange(ref _completedState, 1);
-            _context.CloseAndDisposeConnection(_connection);
-            _semaphoreSlim.Release();
-        }
+        CompleteTransaction(t => t.Commit(), true);
     }
 
     public void Rollback()
     {
         ThrowIfDisposed();
-        _semaphoreSlim.Wait();
-
-        try
-        {
-            if (Interlocked.Exchange(ref _completedState, 1) != 0)
-                throw new InvalidOperationException("Transaction already completed.");
-
-            _transaction.Rollback();
-            _rolledBack = true;
-        }
-        finally
-        {
-            Interlocked.Exchange(ref _completedState, 1);
-            _context.CloseAndDisposeConnection(_connection);
-            _semaphoreSlim.Release();
-        }
+        CompleteTransaction(t => t.Rollback(), false);
     }
 
     protected override void DisposeManaged()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0)
-            return;
-
-        if (Interlocked.CompareExchange(ref _completedState, 0, 0) == 0)
+        if (!IsCompleted)
+        {
             try
             {
-                _semaphoreSlim.Wait();
-
-                try
-                {
-                    if (Interlocked.Exchange(ref _completedState, 1) != 0)
-                        throw new InvalidOperationException("Transaction already completed.");
-
-                    _transaction.Rollback();
-                    _rolledBack = true;
-                }
-                finally
-                {
-                    Interlocked.Exchange(ref _completedState, 1);
-                    _context.CloseAndDisposeConnection(_connection);
-                    _semaphoreSlim.Release();
-                }
+                CompleteTransaction(t => t.Rollback(), false, false);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Rollback failed during Dispose.");
             }
+        }
 
-        if (Interlocked.Exchange(ref _semaphoreDisposed, 1) == 0) _semaphoreSlim.Dispose();
+        _semaphoreSlim.Dispose();
     }
 
     protected override async ValueTask DisposeManagedAsync()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0)
-            return;
-
-        if (Interlocked.CompareExchange(ref _completedState, 0, 0) == 0)
+        if (!IsCompleted)
+        {
             try
             {
-                _semaphoreSlim.Wait();
-
-                try
-                {
-                    if (Interlocked.Exchange(ref _completedState, 1) != 0)
-                        throw new InvalidOperationException("Transaction already completed.");
-
-                    _transaction.Rollback();
-                    _rolledBack = true;
-                }
-                finally
-                {
-                    Interlocked.Exchange(ref _completedState, 1);
-                    _context.CloseAndDisposeConnection(_connection);
-                    _semaphoreSlim.Release();
-                }
+                await CompleteTransactionAsync(t => t.Rollback(), false, false).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Async rollback failed during DisposeAsync.");
             }
+        }
 
-        if (_transaction is IAsyncDisposable asyncTx)
-            await asyncTx.DisposeAsync().ConfigureAwait(false);
-        else
-            _transaction.Dispose();
-
-        await _context.CloseAndDisposeConnectionAsync(_connection).ConfigureAwait(false);
-
-        if (Interlocked.Exchange(ref _semaphoreDisposed, 1) == 0) _semaphoreSlim.Dispose();
+        _semaphoreSlim.Dispose();
     }
 
     private void EnsureConnectionIsOpen()
     {
-        if (_connection.State != ConnectionState.Open) _connection.Open();
+        if (_connection.State != ConnectionState.Open)
+        {
+            _connection.Open();
+        }
     }
 
-    private void ThrowIfDisposed()
+    private void CompleteTransaction(Action<IDbTransaction> action, bool markCommitted, bool throwIfAlreadyCompleted = true)
     {
-        if (Interlocked.Read(ref _disposed) != 0)
-            throw new ObjectDisposedException(nameof(TransactionContext));
+        _semaphoreSlim.Wait();
+        try
+        {
+            if (Interlocked.Exchange(ref _completedState, 1) != 0)
+            {
+                if (throwIfAlreadyCompleted)
+                {
+                    throw new InvalidOperationException("Transaction already completed.");
+                }
+
+                return;
+            }
+
+            action(_transaction);
+
+            if (markCommitted)
+            {
+                _committed = true;
+            }
+            else
+            {
+                _rolledBack = true;
+            }
+
+            _transaction.Dispose();
+            _context.CloseAndDisposeConnection(_connection);
+        }
+        finally
+        {
+            _semaphoreSlim.Release();
+        }
+    }
+
+    private async ValueTask CompleteTransactionAsync(Action<IDbTransaction> action, bool markCommitted, bool throwIfAlreadyCompleted = true)
+    {
+        await _semaphoreSlim.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (Interlocked.Exchange(ref _completedState, 1) != 0)
+            {
+                if (throwIfAlreadyCompleted)
+                {
+                    throw new InvalidOperationException("Transaction already completed.");
+                }
+
+                return;
+            }
+
+            action(_transaction);
+
+            if (markCommitted)
+            {
+                _committed = true;
+            }
+            else
+            {
+                _rolledBack = true;
+            }
+
+            if (_transaction is IAsyncDisposable asyncTx)
+            {
+                await asyncTx.DisposeAsync().ConfigureAwait(false);
+            }
+            else
+            {
+                _transaction.Dispose();
+            }
+
+            await _context.CloseAndDisposeConnectionAsync(_connection).ConfigureAwait(false);
+        }
+        finally
+        {
+            _semaphoreSlim.Release();
+        }
     }
 }

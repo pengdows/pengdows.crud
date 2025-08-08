@@ -208,6 +208,15 @@ public class TransactionContextTests
     }
 
     [Fact]
+    public void GetLock_AfterDispose_Throws()
+    {
+        var tx = CreateContext(SupportedDatabase.Sqlite).BeginTransaction();
+        tx.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => tx.GetLock());
+    }
+
+    [Fact]
     public void MakeParameterName_ForwardsToContext()
     {
         var context = (DatabaseContext)CreateContext(SupportedDatabase.PostgreSql);
@@ -219,12 +228,14 @@ public class TransactionContextTests
     }
 
     [Fact]
-    public void ProcWrappingStyle_GetMatchesContext_SetterThrows()
+    public void ProcWrappingStyle_GetMatchesContext()
     {
         var context = (DatabaseContext)CreateContext(SupportedDatabase.Sqlite);
         using var tx = context.BeginTransaction();
 
         Assert.Equal(context.ProcWrappingStyle, tx.ProcWrappingStyle);
-        Assert.Throws<NotImplementedException>(() => tx.ProcWrappingStyle = ProcWrappingStyle.Call);
+
+        ((IDatabaseContext)tx).ProcWrappingStyle = ProcWrappingStyle.Call;
+        Assert.Equal(ProcWrappingStyle.Call, context.ProcWrappingStyle);
     }
 }

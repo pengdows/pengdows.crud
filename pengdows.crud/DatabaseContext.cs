@@ -22,6 +22,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     private readonly DbProviderFactory _factory;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<IDatabaseContext> _logger;
+    private readonly IConnectionStrategy _connectionStrategy;
     private bool _applyConnectionSessionSettings;
     private ITrackedConnection? _connection = null;
 
@@ -93,6 +94,15 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
             _factory = factory ?? throw new NullReferenceException(nameof(factory));
 
             InitializeInternals(configuration);
+            var connFactory = () => FactoryCreateConnection(null, false);
+            _connectionStrategy = ConnectionMode switch
+            {
+                DbMode.Standard => new StandardConnectionStrategy(connFactory),
+                DbMode.SingleConnection => new SingleConnectionStrategy(_connection!),
+                DbMode.SingleWriter => new SingleWriterConnectionStrategy(_connection!, connFactory),
+                DbMode.KeepAlive => new KeepAliveConnectionStrategy(connFactory),
+                _ => throw new InvalidOperationException("Invalid connection mode."),
+            };
         }
         catch (Exception e)
         {
@@ -117,11 +127,6 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
             _connectionString = value;
         }
     }
-
-
-    private ITrackedConnection Connection => _connection ??
-                                             throw new ObjectDisposedException(
-                                                 "attempt to use single connection from the wrong mode.");
 
 
     public bool IsReadOnlyConnection => _isReadConnection && !_isWriteConnection;
@@ -209,18 +214,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 
     public ITrackedConnection GetConnection(ExecutionType executionType, bool isShared = false)
     {
-        switch (ConnectionMode)
-        {
-            case DbMode.Standard:
-            case DbMode.KeepAlive:
-                return GetStandardConnection(isShared);
-            case DbMode.SingleWriter:
-                return GetSingleWriterConnection(executionType);
-            case DbMode.SingleConnection:
-                return GetSingleConnection();
-            default:
-                throw new InvalidOperationException("Invalid connection mode.");
-        }
+        return _connectionStrategy.GetConnection(executionType, isShared);
     }
 
 
@@ -258,37 +252,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 
     public void CloseAndDisposeConnection(ITrackedConnection? connection)
     {
-        if (connection == null) return;
-
-        _logger.LogInformation($"Connection mode is: {ConnectionMode}");
-        switch (ConnectionMode)
-        {
-            case DbMode.SingleConnection:
-            case DbMode.SingleWriter:
-            case DbMode.KeepAlive:
-                if (_connection != connection)
-                {
-                    //never close our single write connection
-                    _logger.LogInformation("Not our single connection, closing");
-                    connection.Dispose();
-                }
-
-                break;
-            case DbMode.Standard:
-                _logger.LogInformation("Closing a standard connection");
-                try
-                {
-                    connection.Dispose();
-                }
-                catch
-                {
-                    _logger.LogInformation("Connection closed");
-                }
-
-                break;
-            default:
-                throw new NotSupportedException("Unsupported connection mode.");
-        }
+        _connectionStrategy.CloseAndDisposeConnection(connection);
     }
 
     public string MakeParameterName(DbParameter dbParameter)
@@ -385,17 +349,9 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
                      previous) != previous);
     }
 
-    public async ValueTask CloseAndDisposeConnectionAsync(ITrackedConnection? connection)
+    public ValueTask CloseAndDisposeConnectionAsync(ITrackedConnection? connection)
     {
-        if (connection == null)
-            return;
-
-        _logger.LogInformation($"Async Closing Connection in mode: {ConnectionMode}");
-
-        if (connection is IAsyncDisposable asyncConnection)
-            await asyncConnection.DisposeAsync().ConfigureAwait(false);
-        else
-            connection.Dispose();
+        return _connectionStrategy.CloseAndDisposeConnectionAsync(connection);
     }
 
     private void CheckForSqlServerSettings(ITrackedConnection conn)
@@ -600,81 +556,6 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
             }
     }
 
-    private ITrackedConnection GetStandardConnection(bool isShared = false)
-    {
-        var conn = FactoryCreateConnection(null, isShared);
-        return conn;
-    }
-
-
-    private ITrackedConnection GetSingleConnection()
-    {
-        return Connection;
-    }
-
-    private ITrackedConnection GetSingleWriterConnection(ExecutionType type, bool isShared = false)
-    {
-        if (ExecutionType.Read == type) return GetStandardConnection(isShared);
-
-        return GetSingleConnection();
-    }
-    //
-    // private int _disposed; // 0=false, 1=true
-    //
-    //
-    // public void Dispose()
-    // {
-    //     Dispose(disposing: true);
-    // }
-    //
-    // public async ValueTask DisposeAsync()
-    // {
-    //     await DisposeAsyncCore().ConfigureAwait(false);
-    //     Dispose(disposing: false); // Finalizer path for unmanaged cleanup (if any)
-    // }
-    //
-    // protected virtual async ValueTask DisposeAsyncCore()
-    // {
-    //     if (Interlocked.Exchange(ref _disposed, 1) != 0)
-    //         return; // Already disposed
-    //
-    //     if (_connection is IAsyncDisposable asyncDisposable)
-    //     {
-    //         await asyncDisposable.DisposeAsync().ConfigureAwait(false);
-    //     }
-    //     else
-    //     {
-    //         _connection?.Dispose();
-    //     }
-    //
-    //     _connection = null;
-    // }
-    //
-    //
-    // protected virtual void Dispose(bool disposing)
-    // {
-    //     if (Interlocked.Exchange(ref _disposed, 1) != 0)
-    //         return; // Already disposed
-    //
-    //     if (disposing)
-    //     {
-    //         try
-    //         {
-    //             _connection?.Dispose();
-    //         }
-    //         catch
-    //         {
-    //             // Optional: log or suppress
-    //         }
-    //         finally
-    //         {
-    //             _connection = null;
-    //             GC.SuppressFinalize(this); // Suppress only here
-    //         }
-    //     }
-    //
-    //     // unmanaged cleanup if needed (none currently)
-    // }
 
     protected override void DisposeManaged()
     {
