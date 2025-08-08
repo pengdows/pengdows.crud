@@ -219,6 +219,25 @@ public class TransactionContextTests
     }
 
     [Fact]
+    public void GetLock_AfterCompletion_Throws()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        using var tx = context.BeginTransaction();
+        tx.Commit();
+        Assert.Throws<InvalidOperationException>(() => tx.GetLock());
+    }
+
+    [Fact]
+    public void ReleaseConnection_IgnoresTransactionConnection()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        using var tx = context.BeginTransaction();
+        var conn = tx.GetConnection(ExecutionType.Write);
+        tx.ReleaseConnection(conn);
+        Assert.Equal(ConnectionState.Open, conn.State);
+    }
+
+    [Fact]
     public void MakeParameterName_ForwardsToContext()
     {
         var context = (DatabaseContext)CreateContext(SupportedDatabase.PostgreSql);

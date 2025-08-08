@@ -81,6 +81,11 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
     public ILockerAsync GetLock()
     {
         ThrowIfDisposed();
+        if (IsCompleted)
+        {
+            throw new InvalidOperationException("Transaction already completed.");
+        }
+
         return new RealAsyncLocker(_semaphoreSlim);
     }
 
@@ -166,12 +171,32 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
     public void ReleaseConnection(ITrackedConnection? conn)
     {
         ThrowIfDisposed();
+        if (conn is null)
+        {
+            return;
+        }
+
+        if (ReferenceEquals(conn, _connection))
+        {
+            return;
+        }
+
         _context.ConnectionStrategy.ReleaseConnection(conn);
     }
 
     public ValueTask ReleaseConnectionAsync(ITrackedConnection? conn)
     {
         ThrowIfDisposed();
+        if (conn is null)
+        {
+            return ValueTask.CompletedTask;
+        }
+
+        if (ReferenceEquals(conn, _connection))
+        {
+            return ValueTask.CompletedTask;
+        }
+
         return _context.ConnectionStrategy.ReleaseConnectionAsync(conn);
     }
 

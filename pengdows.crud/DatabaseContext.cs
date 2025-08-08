@@ -170,21 +170,46 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     }
 
 
-    public ITransactionContext BeginTransaction(IsolationLevel? isolationLevel = null)
+    public ITransactionContext BeginTransaction(
+        IsolationLevel? isolationLevel = null,
+        ExecutionType executionType = ExecutionType.Write)
     {
-        if (!_isWriteConnection && isolationLevel is null) isolationLevel = IsolationLevel.RepeatableRead;
+        if (executionType == ExecutionType.Read)
+        {
+            if (!_isReadConnection)
+            {
+                throw new InvalidOperationException("Context is not readable.");
+            }
 
-        isolationLevel ??= IsolationLevel.ReadCommitted;
+            if (isolationLevel is null)
+            {
+                isolationLevel = IsolationLevel.RepeatableRead;
+            }
 
-        if (!_isWriteConnection && isolationLevel != IsolationLevel.RepeatableRead)
-            throw new InvalidOperationException("Read-only transactions must use 'RepeatableRead'.");
+            if (isolationLevel != IsolationLevel.RepeatableRead)
+            {
+                throw new InvalidOperationException("Read-only transactions must use 'RepeatableRead'.");
+            }
+        }
+        else
+        {
+            if (!_isWriteConnection)
+            {
+                throw new InvalidOperationException("Context is read-only.");
+            }
 
-        return new TransactionContext(this, isolationLevel.Value);
+            isolationLevel ??= IsolationLevel.ReadCommitted;
+        }
+
+        return new TransactionContext(this, isolationLevel.Value, executionType);
     }
 
-    public ITransactionContext BeginTransaction(IsolationProfile isolationProfile)
+    public ITransactionContext BeginTransaction(
+        IsolationProfile isolationProfile,
+        ExecutionType executionType = ExecutionType.Write)
     {
-        return new TransactionContext(this, _isolationResolver.Resolve(isolationProfile));
+        var level = _isolationResolver.Resolve(isolationProfile);
+        return BeginTransaction(level, executionType);
     }
 
 

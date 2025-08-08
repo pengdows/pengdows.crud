@@ -141,12 +141,16 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// Begins a transaction using the native ADO.NET IsolationLevel.
     /// Not portable across all providers.
     /// </summary>
-    ITransactionContext BeginTransaction(IsolationLevel? isolationLevel = null);
+    ITransactionContext BeginTransaction(
+        IsolationLevel? isolationLevel = null,
+        ExecutionType executionType = ExecutionType.Write);
 
     /// <summary>
     /// Begins a transaction using a portable IsolationProfile abstraction.
     /// </summary>
-    ITransactionContext BeginTransaction(IsolationProfile isolationProfile);
+    ITransactionContext BeginTransaction(
+        IsolationProfile isolationProfile,
+        ExecutionType executionType = ExecutionType.Write);
 
     /// <summary>
     /// Returns a randomly generated, collision-safe parameter/alias name.

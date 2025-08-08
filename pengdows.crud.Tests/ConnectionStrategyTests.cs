@@ -92,6 +92,39 @@ public class ConnectionStrategyTests
     }
 
     [Fact]
+    public async Task SingleConnectionStrategy_ReleaseConnectionAsync_DoesNotDispose()
+    {
+        var mock = new Mock<ITrackedConnection>();
+        mock.As<IAsyncDisposable>().Setup(d => d.DisposeAsync()).Returns(ValueTask.CompletedTask);
+        var strategy = new SingleConnectionStrategy(mock.Object);
+        await strategy.ReleaseConnectionAsync(mock.Object);
+        mock.As<IAsyncDisposable>().Verify(d => d.DisposeAsync(), Times.Never);
+        mock.Verify(c => c.Dispose(), Times.Never);
+    }
+
+    [Fact]
+    public async Task SingleWriterStrategy_ReleaseConnectionAsync_ReadDisposes()
+    {
+        var writer = new Mock<ITrackedConnection>();
+        var reader = new Mock<ITrackedConnection>();
+        reader.As<IAsyncDisposable>().Setup(d => d.DisposeAsync()).Returns(ValueTask.CompletedTask).Verifiable();
+        var strategy = new SingleWriterConnectionStrategy(writer.Object, () => reader.Object);
+        await strategy.ReleaseConnectionAsync(reader.Object);
+        reader.As<IAsyncDisposable>().Verify(d => d.DisposeAsync(), Times.Once);
+    }
+
+    [Fact]
+    public async Task SingleWriterStrategy_ReleaseConnectionAsync_WriterDoesNotDispose()
+    {
+        var writer = new Mock<ITrackedConnection>();
+        writer.As<IAsyncDisposable>().Setup(d => d.DisposeAsync()).Returns(ValueTask.CompletedTask);
+        var strategy = new SingleWriterConnectionStrategy(writer.Object, () => new Mock<ITrackedConnection>().Object);
+        await strategy.ReleaseConnectionAsync(writer.Object);
+        writer.As<IAsyncDisposable>().Verify(d => d.DisposeAsync(), Times.Never);
+        writer.Verify(c => c.Dispose(), Times.Never);
+    }
+
+    [Fact]
     public void KeepAliveStrategy_DisposesConnection()
     {
         var mock = new Mock<ITrackedConnection>();

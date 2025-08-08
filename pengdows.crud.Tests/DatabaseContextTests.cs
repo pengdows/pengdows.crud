@@ -189,6 +189,53 @@ public class DatabaseContextTests
     }
 
     [Fact]
+    public void BeginTransaction_ReadOnly_InvalidIsolation_Throws()
+    {
+        var product = SupportedDatabase.Sqlite;
+        var factory = new FakeDbFactory(product);
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
+        Assert.Throws<InvalidOperationException>(
+            () => context.BeginTransaction(IsolationLevel.ReadCommitted, ExecutionType.Read));
+    }
+
+    [Fact]
+    public void BeginTransaction_WriteOnReadOnlyContext_Throws()
+    {
+        var product = SupportedDatabase.Sqlite;
+        var factory = new FakeDbFactory(product);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = $"Data Source=test;EmulatedProduct={product}",
+            ProviderName = product.ToString(),
+            ReadWriteMode = ReadWriteMode.ReadOnly
+        };
+        var context = new DatabaseContext(config, factory);
+        Assert.Throws<NotSupportedException>(() => context.BeginTransaction(executionType: ExecutionType.Write));
+    }
+
+    [Fact]
+    public void BeginTransaction_ReadOnly_SingleWriter_DisposesEphemeralConnection()
+    {
+        var product = SupportedDatabase.Sqlite;
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = $"Data Source=:memory:;EmulatedProduct={product}",
+            ProviderName = product.ToString(),
+            DbMode = DbMode.SingleWriter
+        };
+        var factory = new FakeDbFactory(product);
+        var context = new DatabaseContext(config, factory);
+        Assert.Equal(0, context.NumberOfOpenConnections);
+
+        using (context.BeginTransaction(executionType: ExecutionType.Read))
+        {
+            Assert.Equal(1, context.NumberOfOpenConnections);
+        }
+
+        Assert.Equal(0, context.NumberOfOpenConnections);
+    }
+
+    [Fact]
     public void MaxNumberOfConnections_TracksPeakUsage()
     {
         var product = SupportedDatabase.SqlServer;
