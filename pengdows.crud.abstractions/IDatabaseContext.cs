@@ -49,6 +49,11 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     int MaxParameterLimit { get; }
 
     /// <summary>
+    /// The hard limit of output parameters this provider supports per statement.
+    /// </summary>
+    int MaxOutputParameters { get; }
+
+    /// <summary>
     /// Current number of open connections. Usually 0 for DbMode.Standard, 1 otherwise.
     /// </summary>
     long NumberOfOpenConnections { get; }

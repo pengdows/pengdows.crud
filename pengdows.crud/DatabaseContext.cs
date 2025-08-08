@@ -36,6 +36,8 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     private bool _isWriteConnection = true;
     private long _maxNumberOfOpenConnections;
 
+    private static readonly char[] _parameterPrefixes = { '@', '?', ':' };
+
     [Obsolete("Use the constructor that takes DatabaseContextConfiguration instead.")]
     public DatabaseContext(
         string connectionString,
@@ -226,13 +228,23 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     {
         var p = _factory.CreateParameter() ?? throw new InvalidOperationException("Failed to create parameter.");
 
-        if (string.IsNullOrWhiteSpace(name)) name = GenerateRandomName();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            name = GenerateRandomName();
+        }
+        else
+        {
+            name = StripParameterPrefixes(name);
+        }
 
         var valueIsNull = Utils.IsNullOrDbNull(value);
         p.ParameterName = name;
         p.DbType = type;
         p.Value = valueIsNull ? DBNull.Value : value;
-        if (!valueIsNull && p.DbType == DbType.String && value is string s) p.Size = Math.Max(s.Length, 1);
+        if (!valueIsNull && p.DbType == DbType.String && value is string s)
+        {
+            p.Size = Math.Max(s.Length, 1);
+        }
 
         return p;
     }
@@ -287,9 +299,31 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 
     public string MakeParameterName(string parameterName)
     {
-        return !_dataSourceInfo.SupportsNamedParameters
-            ? "?"
-            : $"{_dataSourceInfo.ParameterMarker}{parameterName}";
+        if (!_dataSourceInfo.SupportsNamedParameters)
+        {
+            return "?";
+        }
+
+        var sanitized = StripParameterPrefixes(parameterName ?? string.Empty);
+        return _dataSourceInfo.ParameterMarker + sanitized;
+    }
+
+    private static string StripParameterPrefixes(string name)
+    {
+        if (string.IsNullOrEmpty(name))
+        {
+            return string.Empty;
+        }
+
+        if (name.IndexOfAny(_parameterPrefixes) == -1)
+        {
+            return name;
+        }
+
+        return name
+            .Replace("@", string.Empty)
+            .Replace("?", string.Empty)
+            .Replace(":", string.Empty);
     }
 
 
@@ -300,6 +334,8 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     }
 
     public int MaxParameterLimit => _dataSourceInfo.MaxParameterLimit;
+
+    public int MaxOutputParameters => _dataSourceInfo.MaxOutputParameters;
 
     public long MaxNumberOfConnections => Interlocked.Read(ref _maxNumberOfOpenConnections);
 
