@@ -10,7 +10,7 @@
         <AssemblyVersion>1.0.0.0</AssemblyVersion>
         <FileVersion>1.0.0.0</FileVersion>
         <Description>Interfaces and abstractions for the pengdows.crud library.</Description> 
-        <Authors>Pengdow</Authors>
+        <Authors>Pengdows</Authors>
         <PackageTags>crud,nuget</PackageTags>
         <RepositoryUrl>https://github.com/pengdows/pengdows.crud</RepositoryUrl>
         <PackageReadmeFile>README.md</PackageReadmeFile>
