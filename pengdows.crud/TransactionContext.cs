@@ -16,35 +16,35 @@ namespace pengdows.crud;
 public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
 {
     private readonly ITrackedConnection _connection;
-    private readonly DatabaseContext _context;
+    private readonly IDatabaseContext _context;
     private readonly ILogger<TransactionContext> _logger;
-
     private readonly SemaphoreSlim _semaphoreSlim;
     private readonly IDbTransaction _transaction;
 
-    private bool _committed;
+    private volatile bool _committed;
+    private volatile bool _rolledBack;
+    private int _completedState;
 
-    private int _completedState; // 0 = not completed, 1 = committed or rolled back
-    private long _disposed;
-    private bool _rolledBack;
-    private int _semaphoreDisposed;
-
-    internal TransactionContext(IDatabaseContext context,
+    internal TransactionContext(
+        IDatabaseContext context,
         IsolationLevel isolationLevel = IsolationLevel.Unspecified,
         ExecutionType? executionType = null,
         ILogger<TransactionContext>? logger = null)
     {
         _logger = logger ?? new NullLogger<TransactionContext>();
-        _context = context as DatabaseContext ?? throw new ArgumentNullException(nameof(context));
-        executionType ??= IsReadOnlyConnection ? ExecutionType.Read : ExecutionType.Write;
+        _context = context ?? throw new ArgumentNullException(nameof(context));
 
-        if (IsReadOnlyConnection && executionType != ExecutionType.Read)
-            throw new NotSupportedException("DatabaseContext is read only");
+        executionType ??= _context.IsReadOnlyConnection ? ExecutionType.Read : ExecutionType.Write;
 
-        if (_context.Product == SupportedDatabase.CockroachDb) isolationLevel = IsolationLevel.Serializable;
+        if (_context.IsReadOnlyConnection && executionType != ExecutionType.Read)
+        {
+            throw new NotSupportedException("DatabaseContext is read-only");
+        }
 
-        //var executionType = GetExecutionAndSetIsolationTypes(ref isolationLevel);
-        // IsolationLevel = isolationLevel;
+        if (_context.Product == SupportedDatabase.CockroachDb)
+        {
+            isolationLevel = IsolationLevel.Serializable;
+        }
 
         _connection = _context.GetConnection(executionType.Value, true);
         EnsureConnectionIsOpen();
@@ -54,46 +54,13 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
     }
 
     public Guid TransactionId { get; } = Guid.NewGuid();
-
     internal IDbTransaction Transaction => _transaction;
 
     public bool WasCommitted => _completedState == 1 && _committed;
     public bool WasRolledBack => _completedState == 1 && _rolledBack;
-
     public bool IsCompleted => Interlocked.CompareExchange(ref _completedState, 0, 0) != 0;
-
-    // private ExecutionType GetExecutionAndSetIsolationTypes(ref IsolationLevel isolationLevel)
-    // {
-    //     var executionType = ExecutionType.Write;
-    //     switch (_context.ReadWriteMode)
-    //     {
-    //         case ReadWriteMode.ReadWrite:
-    //         case ReadWriteMode.WriteOnly:
-    //             //leave the default "write" selection
-    //             if (isolationLevel < IsolationLevel.ReadCommitted)
-    //             {
-    //                 isolationLevel = IsolationLevel.ReadCommitted;
-    //             }
-    //
-    //             break;
-    //         case ReadWriteMode.ReadOnly:
-    //             executionType = ExecutionType.Read;
-    //             if (isolationLevel < IsolationLevel.RepeatableRead)
-    //             {
-    //                 isolationLevel = IsolationLevel.RepeatableRead;
-    //             }
-    //
-    //             break;
-    //         default:
-    //             throw new ArgumentOutOfRangeException();
-    //     }
-    //
-    //     return executionType;
-    // }
-
     public IsolationLevel IsolationLevel => _transaction.IsolationLevel;
 
-    // Delegated context properties
     public long NumberOfOpenConnections => _context.NumberOfOpenConnections;
     public string QuotePrefix => _context.QuotePrefix;
     public string QuoteSuffix => _context.QuoteSuffix;
@@ -110,18 +77,26 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
 
     public ILockerAsync GetLock()
     {
+        ThrowIfDisposed();
+        if (IsCompleted)
+        {
+            throw new InvalidOperationException("Transaction already completed.");
+        }
+
         return new RealAsyncLocker(_semaphoreSlim);
     }
 
     public ISqlContainer CreateSqlContainer(string? query = null)
     {
         if (IsCompleted)
+        {
             throw new InvalidOperationException("Cannot create a SQL container because the transaction is completed.");
+        }
 
         return new SqlContainer(this, query);
     }
 
-    public DbParameter CreateDbParameter<T>(string name, DbType type, T value)
+    public DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
         return _context.CreateDbParameter(name, type, value);
     }
@@ -139,11 +114,6 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
     public string WrapObjectName(string name)
     {
         return _context.WrapObjectName(name);
-    }
-
-    public ITransactionContext BeginTransaction(IsolationProfile isolationProfile)
-    {
-        throw new InvalidOperationException("Cannot begin a nested transaction from TransactionContext.");
     }
 
     public string GenerateRandomName(int length = 5, int parameterNameMaxLength = 30)
@@ -166,150 +136,207 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
         return _context.MakeParameterName(parameterName);
     }
 
-    public void CloseAndDisposeConnection(ITrackedConnection? conn)
-    {
-        //throw new NotImplementedException();
-    }
-
     public string MakeParameterName(DbParameter dbParameter)
     {
         return _context.MakeParameterName(dbParameter);
     }
 
-    public ProcWrappingStyle ProcWrappingStyle
+    public ProcWrappingStyle ProcWrappingStyle => _context.ProcWrappingStyle;
+
+    ProcWrappingStyle IDatabaseContext.ProcWrappingStyle
     {
         get => _context.ProcWrappingStyle;
-        set => throw new NotImplementedException();
+        set
+        {
+            ThrowIfDisposed();
+            _context.ProcWrappingStyle = value;
+        }
     }
 
-    public ITransactionContext BeginTransaction(IsolationLevel? isolationLevel = null)
+    ITransactionContext IDatabaseContext.BeginTransaction(IsolationProfile isolationProfile, ExecutionType executionType)
     {
         throw new InvalidOperationException("Cannot begin a nested transaction from TransactionContext.");
+    }
+
+    ITransactionContext IDatabaseContext.BeginTransaction(IsolationLevel? isolationLevel, ExecutionType executionType)
+    {
+        throw new InvalidOperationException("Cannot begin a nested transaction from TransactionContext.");
+    }
+
+    public void CloseAndDisposeConnection(ITrackedConnection? conn)
+    {
+        ThrowIfDisposed();
+        if (conn is null)
+        {
+            return;
+        }
+
+        if (ReferenceEquals(conn, _connection))
+        {
+            return;
+        }
+
+        _context.CloseAndDisposeConnection(conn);
+    }
+
+    public ValueTask CloseAndDisposeConnectionAsync(ITrackedConnection? conn)
+    {
+        ThrowIfDisposed();
+        if (conn is null)
+        {
+            return ValueTask.CompletedTask;
+        }
+
+        if (ReferenceEquals(conn, _connection))
+        {
+            return ValueTask.CompletedTask;
+        }
+
+        return _context.CloseAndDisposeConnectionAsync(conn);
     }
 
     public void Commit()
     {
         ThrowIfDisposed();
-        _semaphoreSlim.Wait();
-
-        try
-        {
-            if (Interlocked.Exchange(ref _completedState, 1) != 0)
-                throw new InvalidOperationException("Transaction already completed.");
-
-            _transaction.Commit();
-            _committed = true;
-        }
-        finally
-        {
-            Interlocked.Exchange(ref _completedState, 1);
-            _context.CloseAndDisposeConnection(_connection);
-            _semaphoreSlim.Release();
-        }
+        CompleteTransactionWithWait(() => _transaction.Commit(), true);
     }
 
     public void Rollback()
     {
         ThrowIfDisposed();
-        _semaphoreSlim.Wait();
+        CompleteTransactionWithWait(() => _transaction.Rollback(), false);
+    }
 
+    private void CompleteTransactionWithWait(Action action, bool markCommitted)
+    {
+        _semaphoreSlim.Wait();
         try
         {
-            if (Interlocked.Exchange(ref _completedState, 1) != 0)
-                throw new InvalidOperationException("Transaction already completed.");
-
-            _transaction.Rollback();
-            _rolledBack = true;
+            CompleteTransaction(action, markCommitted);
         }
         finally
         {
-            Interlocked.Exchange(ref _completedState, 1);
-            _context.CloseAndDisposeConnection(_connection);
             _semaphoreSlim.Release();
         }
     }
 
+    private async Task CompleteTransactionWithWaitAsync(Func<Task> action, bool markCommitted)
+    {
+        await _semaphoreSlim.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await CompleteTransactionAsync(action, markCommitted).ConfigureAwait(false);
+        }
+        finally
+        {
+            _semaphoreSlim.Release();
+        }
+    }
+
+    private void CompleteTransaction(Action action, bool markCommitted)
+    {
+        if (Interlocked.Exchange(ref _completedState, 1) != 0)
+        {
+            throw new InvalidOperationException("Transaction already completed.");
+        }
+
+        action();
+
+        if (markCommitted)
+        {
+            _committed = true;
+        }
+        else
+        {
+            _rolledBack = true;
+        }
+
+        _context.CloseAndDisposeConnection(_connection);
+    }
+
+    private async Task CompleteTransactionAsync(Func<Task> action, bool markCommitted)
+    {
+        if (Interlocked.Exchange(ref _completedState, 1) != 0)
+        {
+            throw new InvalidOperationException("Transaction already completed.");
+        }
+
+        await action().ConfigureAwait(false);
+
+        if (markCommitted)
+        {
+            _committed = true;
+        }
+        else
+        {
+            _rolledBack = true;
+        }
+
+        await _context.CloseAndDisposeConnectionAsync(_connection).ConfigureAwait(false);
+    }
+
+    private Task RollbackAsync()
+    {
+        return CompleteTransactionWithWaitAsync(() =>
+        {
+            _transaction.Rollback();
+            return Task.CompletedTask;
+        }, false);
+    }
+
     protected override void DisposeManaged()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0)
-            return;
-
-        if (Interlocked.CompareExchange(ref _completedState, 0, 0) == 0)
+        if (!IsCompleted)
+        {
             try
             {
-                _semaphoreSlim.Wait();
-
-                try
-                {
-                    if (Interlocked.Exchange(ref _completedState, 1) != 0)
-                        throw new InvalidOperationException("Transaction already completed.");
-
-                    _transaction.Rollback();
-                    _rolledBack = true;
-                }
-                finally
-                {
-                    Interlocked.Exchange(ref _completedState, 1);
-                    _context.CloseAndDisposeConnection(_connection);
-                    _semaphoreSlim.Release();
-                }
+                CompleteTransactionWithWait(() => _transaction.Rollback(), false);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Rollback failed during Dispose.");
             }
+        }
 
-        if (Interlocked.Exchange(ref _semaphoreDisposed, 1) == 0) _semaphoreSlim.Dispose();
+        _transaction.Dispose();
+        _semaphoreSlim.Dispose();
     }
 
     protected override async ValueTask DisposeManagedAsync()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0)
-            return;
-
-        if (Interlocked.CompareExchange(ref _completedState, 0, 0) == 0)
+        if (!IsCompleted)
+        {
             try
             {
-                _semaphoreSlim.Wait();
-
-                try
+                await CompleteTransactionWithWaitAsync(() =>
                 {
-                    if (Interlocked.Exchange(ref _completedState, 1) != 0)
-                        throw new InvalidOperationException("Transaction already completed.");
-
                     _transaction.Rollback();
-                    _rolledBack = true;
-                }
-                finally
-                {
-                    Interlocked.Exchange(ref _completedState, 1);
-                    _context.CloseAndDisposeConnection(_connection);
-                    _semaphoreSlim.Release();
-                }
+                    return Task.CompletedTask;
+                }, false).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Async rollback failed during DisposeAsync.");
+                _logger.LogError(ex, "Rollback failed during DisposeAsync.");
             }
+        }
 
         if (_transaction is IAsyncDisposable asyncTx)
+        {
             await asyncTx.DisposeAsync().ConfigureAwait(false);
+        }
         else
+        {
             _transaction.Dispose();
+        }
 
-        await _context.CloseAndDisposeConnectionAsync(_connection).ConfigureAwait(false);
-
-        if (Interlocked.Exchange(ref _semaphoreDisposed, 1) == 0) _semaphoreSlim.Dispose();
+        _semaphoreSlim.Dispose();
     }
 
     private void EnsureConnectionIsOpen()
     {
-        if (_connection.State != ConnectionState.Open) _connection.Open();
-    }
-
-    private void ThrowIfDisposed()
-    {
-        if (Interlocked.Read(ref _disposed) != 0)
-            throw new ObjectDisposedException(nameof(TransactionContext));
+        if (_connection.State != ConnectionState.Open)
+        {
+            _connection.Open();
+        }
     }
 }

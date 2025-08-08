@@ -5,7 +5,6 @@ using System.Data.Common;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using System.Linq;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
@@ -297,9 +296,14 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
 
         // Don't dispose read connections — they are left open until the reader disposes
         if (executionType == ExecutionType.Read)
+        {
             return;
+        }
 
-        if (_context is not TransactionContext && conn is not null) _context.CloseAndDisposeConnection(conn);
+        if (_context is not TransactionContext && conn is not null)
+        {
+            _context.CloseAndDisposeConnection(conn);
+        }
     }
 
     protected override void DisposeManaged()

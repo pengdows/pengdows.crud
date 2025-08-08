@@ -135,12 +135,16 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// Begins a transaction using the native ADO.NET IsolationLevel.
     /// Not portable across all providers.
     /// </summary>
-    ITransactionContext BeginTransaction(IsolationLevel? isolationLevel = null);
+    ITransactionContext BeginTransaction(
+        IsolationLevel? isolationLevel = null,
+        ExecutionType executionType = ExecutionType.Write);
 
     /// <summary>
     /// Begins a transaction using a portable IsolationProfile abstraction.
     /// </summary>
-    ITransactionContext BeginTransaction(IsolationProfile isolationProfile);
+    ITransactionContext BeginTransaction(
+        IsolationProfile isolationProfile,
+        ExecutionType executionType = ExecutionType.Write);
 
     /// <summary>
     /// Returns a randomly generated, collision-safe parameter/alias name.
@@ -168,7 +172,12 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     string MakeParameterName(string parameterName);
 
     /// <summary>
-    /// Releases a tracked connection manually (if needed).
+    /// Returns a connection to the strategy, disposing it if necessary.
     /// </summary>
     void CloseAndDisposeConnection(ITrackedConnection? conn);
+
+    /// <summary>
+    /// Returns a connection to the strategy asynchronously, disposing it if necessary.
+    /// </summary>
+    ValueTask CloseAndDisposeConnectionAsync(ITrackedConnection? conn);
 }

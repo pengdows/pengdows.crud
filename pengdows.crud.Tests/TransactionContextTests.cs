@@ -8,8 +8,10 @@ using System.Threading.Tasks;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.FakeDb;
+using pengdows.crud.connection;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
+using pengdows.crud.infrastructure;
 using Xunit;
 
 #endregion
@@ -158,7 +160,7 @@ public class TransactionContextTests
         using var tx = context.BeginTransaction();
         var name = tx.GenerateRandomName(10);
 
-        Assert.Throws<InvalidOperationException>(() => tx.BeginTransaction(null));
+        Assert.Throws<InvalidOperationException>(() => ((IDatabaseContext)tx).BeginTransaction(null));
         Assert.True(char.IsLetter(name[0]));
     }
 
@@ -166,7 +168,7 @@ public class TransactionContextTests
     public void BeginTransaction_WithIsolationProfile_Throws()
     {
         using var tx = CreateContext(SupportedDatabase.Sqlite).BeginTransaction();
-        Assert.Throws<InvalidOperationException>(() => tx.BeginTransaction(IsolationProfile.FastWithRisks));
+        Assert.Throws<InvalidOperationException>(() => ((IDatabaseContext)tx).BeginTransaction(IsolationProfile.FastWithRisks));
     }
 
     [Fact]
@@ -208,6 +210,61 @@ public class TransactionContextTests
     }
 
     [Fact]
+    public void GetLock_AfterDispose_Throws()
+    {
+        var tx = CreateContext(SupportedDatabase.Sqlite).BeginTransaction();
+        tx.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => tx.GetLock());
+    }
+
+    [Fact]
+    public void GetLock_AfterCompletion_Throws()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        using var tx = context.BeginTransaction();
+        tx.Commit();
+        Assert.Throws<InvalidOperationException>(() => tx.GetLock());
+    }
+
+    [Fact]
+    public void CloseAndDisposeConnection_IgnoresTransactionConnection()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        using var tx = context.BeginTransaction();
+        var conn = tx.GetConnection(ExecutionType.Write);
+        tx.CloseAndDisposeConnection(conn);
+        Assert.Equal(ConnectionState.Open, conn.State);
+    }
+
+    [Fact]
+    public void CloseAndDisposeConnection_Null_DoesNothing()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        using var tx = context.BeginTransaction();
+        tx.CloseAndDisposeConnection(null);
+    }
+
+    [Fact]
+    public async Task CloseAndDisposeConnectionAsync_Null_DoesNothing()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        await using var tx = context.BeginTransaction();
+        await tx.CloseAndDisposeConnectionAsync(null);
+    }
+
+    [Fact]
+    public async Task CloseAndDisposeConnectionAsync_DisposesExternalConnection()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        var extra = context.GetConnection(ExecutionType.Read);
+        extra.Open();
+        await using var tx = context.BeginTransaction();
+        await tx.CloseAndDisposeConnectionAsync(extra);
+        Assert.Equal(ConnectionState.Closed, extra.State);
+    }
+
+    [Fact]
     public void MakeParameterName_ForwardsToContext()
     {
         var context = (DatabaseContext)CreateContext(SupportedDatabase.PostgreSql);
@@ -219,12 +276,153 @@ public class TransactionContextTests
     }
 
     [Fact]
-    public void ProcWrappingStyle_GetMatchesContext_SetterThrows()
+    public void ProcWrappingStyle_GetMatchesContext()
     {
         var context = (DatabaseContext)CreateContext(SupportedDatabase.Sqlite);
         using var tx = context.BeginTransaction();
 
         Assert.Equal(context.ProcWrappingStyle, tx.ProcWrappingStyle);
-        Assert.Throws<NotImplementedException>(() => tx.ProcWrappingStyle = ProcWrappingStyle.Call);
+
+        ((IDatabaseContext)tx).ProcWrappingStyle = ProcWrappingStyle.Call;
+        Assert.Equal(ProcWrappingStyle.Call, tx.ProcWrappingStyle);
+
+        tx.Dispose();
+        Assert.Throws<ObjectDisposedException>(() => ((IDatabaseContext)tx).ProcWrappingStyle = ProcWrappingStyle.Call);
+    }
+
+    [Fact]
+    public void Commit_RaceOnlyOneSucceeds()
+    {
+        var context = (DatabaseContext)CreateContext(SupportedDatabase.Sqlite);
+
+        var strategy = new CountingConnectionStrategy();
+        ReplaceStrategy(context, strategy);
+
+        using var tx = context.BeginTransaction();
+
+        Exception? e1 = null;
+        Exception? e2 = null;
+
+        var t1 = Task.Run(() =>
+        {
+            try
+            {
+                tx.Commit();
+            }
+            catch (Exception ex)
+            {
+                e1 = ex;
+            }
+        });
+
+        var t2 = Task.Run(() =>
+        {
+            try
+            {
+                tx.Commit();
+            }
+            catch (Exception ex)
+            {
+                e2 = ex;
+            }
+        });
+
+        Task.WaitAll(t1, t2);
+
+        Assert.True((e1 is null) ^ (e2 is null));
+        Assert.IsType<InvalidOperationException>(e1 ?? e2!);
+        Assert.Equal(1, strategy.ReleaseCount);
+    }
+
+    [Fact]
+    public void CommitAndRollback_RaceOnlyOneSucceeds()
+    {
+        var context = (DatabaseContext)CreateContext(SupportedDatabase.Sqlite);
+
+        var strategy = new CountingConnectionStrategy();
+        ReplaceStrategy(context, strategy);
+
+        using var tx = context.BeginTransaction();
+
+        Exception? e1 = null;
+        Exception? e2 = null;
+
+        var t1 = Task.Run(() =>
+        {
+            try
+            {
+                tx.Commit();
+            }
+            catch (Exception ex)
+            {
+                e1 = ex;
+            }
+        });
+
+        var t2 = Task.Run(() =>
+        {
+            try
+            {
+                tx.Rollback();
+            }
+            catch (Exception ex)
+            {
+                e2 = ex;
+            }
+        });
+
+        Task.WaitAll(t1, t2);
+
+        Assert.True((e1 is null) ^ (e2 is null));
+        Assert.IsType<InvalidOperationException>(e1 ?? e2!);
+        Assert.Equal(1, strategy.ReleaseCount);
+    }
+
+    private static void ReplaceStrategy(DatabaseContext context, IConnectionStrategy strategy)
+    {
+        var field = typeof(DatabaseContext).GetField("_connectionStrategy", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        field!.SetValue(context, strategy);
+    }
+
+    private sealed class CountingConnectionStrategy : SafeAsyncDisposableBase, IConnectionStrategy
+    {
+        private readonly ITrackedConnection _conn;
+        public int ReleaseCount { get; private set; }
+
+        public CountingConnectionStrategy()
+        {
+            var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
+            _conn = new TrackedConnection(factory.CreateConnection());
+        }
+
+        public ITrackedConnection GetConnection(ExecutionType executionType, bool isShared = false)
+        {
+            return _conn;
+        }
+
+        public void ReleaseConnection(ITrackedConnection? connection)
+        {
+            if (connection != null)
+            {
+                ReleaseCount++;
+                connection.Dispose();
+            }
+        }
+
+        public async ValueTask ReleaseConnectionAsync(ITrackedConnection? connection)
+        {
+            if (connection != null)
+            {
+                ReleaseCount++;
+                if (connection is IAsyncDisposable ad)
+                {
+                    await ad.DisposeAsync();
+                }
+                else
+                {
+                    connection.Dispose();
+                }
+            }
+        }
     }
 }

@@ -102,6 +102,22 @@ public class DatabaseContextTests
         mockTracked.As<IAsyncDisposable>().Verify(d => d.DisposeAsync(), Times.Once);
     }
 
+    [Fact]
+    public async Task CloseAndDisposeConnectionAsync_Null_DoesNothing()
+    {
+        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory);
+        await context.CloseAndDisposeConnectionAsync(null);
+    }
+
+    [Fact]
+    public void CloseAndDisposeConnection_Null_DoesNothing()
+    {
+        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory);
+        context.CloseAndDisposeConnection(null);
+    }
+
     [Theory]
     [MemberData(nameof(AllSupportedProviders))]
     public void AssertIsWriteConnection_WhenFalse_Throws(SupportedDatabase product)
@@ -186,6 +202,53 @@ public class DatabaseContextTests
         Assert.Equal(ConnectionState.Open, conn.State);
         context.Dispose();
         Assert.Equal(0, context.NumberOfOpenConnections);
+    }
+
+    [Fact]
+    public void BeginTransaction_ReadOnly_InvalidIsolation_Throws()
+    {
+        var product = SupportedDatabase.Sqlite;
+        var factory = new FakeDbFactory(product);
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
+        Assert.Throws<InvalidOperationException>(
+            () => context.BeginTransaction(IsolationLevel.ReadCommitted, ExecutionType.Read));
+    }
+
+    [Fact]
+    public void BeginTransaction_WriteOnReadOnlyContext_Throws()
+    {
+        var product = SupportedDatabase.Sqlite;
+        var factory = new FakeDbFactory(product);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = $"Data Source=test;EmulatedProduct={product}",
+            ProviderName = product.ToString(),
+            ReadWriteMode = ReadWriteMode.ReadOnly
+        };
+        var context = new DatabaseContext(config, factory);
+        Assert.Throws<NotSupportedException>(() => context.BeginTransaction(executionType: ExecutionType.Write));
+    }
+
+    [Fact]
+    public void BeginTransaction_ReadOnly_SingleWriter_DisposesEphemeralConnection()
+    {
+        var product = SupportedDatabase.Sqlite;
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = $"Data Source=:memory:;EmulatedProduct={product}",
+            ProviderName = product.ToString(),
+            DbMode = DbMode.SingleWriter
+        };
+        var factory = new FakeDbFactory(product);
+        var context = new DatabaseContext(config, factory);
+        Assert.Equal(1, context.NumberOfOpenConnections);
+
+        using (context.BeginTransaction(executionType: ExecutionType.Read))
+        {
+            Assert.Equal(1, context.NumberOfOpenConnections);
+        }
+
+        Assert.Equal(1, context.NumberOfOpenConnections);
     }
 
     [Fact]

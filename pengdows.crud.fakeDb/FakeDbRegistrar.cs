@@ -1,10 +1,6 @@
-#region
-
 using System.Data.Common;
 
-#endregion
-
-namespace pengdows.crud.FakeDb.pengdows.crud.enums;
+namespace pengdows.crud.FakeDb;
 
 public class FakeDbRegistrar
 {
@@ -25,7 +21,14 @@ public class FakeDbRegistrar
 
     public void RegisterAll(Dictionary<string, string> providerFactories)
     {
+        if (providerFactories == null)
+        {
+            throw new ArgumentNullException(nameof(providerFactories));
+        }
+
         foreach (var kvp in providerFactories)
+        {
             DbProviderFactories.RegisterFactory(kvp.Key, new FakeDbFactory(kvp.Value));
+        }
     }
 }

@@ -1,4 +1,5 @@
 #region
+using System;
 using System.Threading.Tasks;
 using pengdows.crud.infrastructure;
 using Xunit;
@@ -28,6 +29,46 @@ public class SafeAsyncDisposableBaseTests
         protected override void DisposeUnmanaged()
         {
             UnmanagedCount++;
+        }
+    }
+
+    private sealed class SyncThrowsDisposable : SafeAsyncDisposableBase
+    {
+        protected override void DisposeManaged()
+        {
+            throw new InvalidOperationException("sync");
+        }
+
+        protected override void DisposeUnmanaged()
+        {
+            throw new InvalidOperationException("sync");
+        }
+    }
+
+    private sealed class AsyncThrowsDisposable : SafeAsyncDisposableBase
+    {
+        protected override async ValueTask DisposeManagedAsync()
+        {
+            await Task.Yield();
+            throw new InvalidOperationException("async");
+        }
+    }
+
+    private sealed class ThrowIfDisposedDisposable : SafeAsyncDisposableBase
+    {
+        public void Use()
+        {
+            ThrowIfDisposed();
+        }
+    }
+
+    private sealed class SyncOnlyDisposable : SafeAsyncDisposableBase
+    {
+        public int ManagedCount { get; private set; }
+
+        protected override void DisposeManaged()
+        {
+            ManagedCount++;
         }
     }
 
@@ -86,4 +127,45 @@ public class SafeAsyncDisposableBaseTests
         Assert.Equal(1, d.ManagedAsyncCount);
         Assert.Equal(1, d.UnmanagedCount);
     }
+
+    [Fact]
+    public void Dispose_SwallowsExceptions()
+    {
+        var d = new SyncThrowsDisposable();
+
+        d.Dispose();
+
+        Assert.True(d.IsDisposed);
+    }
+
+    [Fact]
+    public async Task DisposeAsync_PropagatesExceptions()
+    {
+        var d = new AsyncThrowsDisposable();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await d.DisposeAsync());
+        Assert.True(d.IsDisposed);
+    }
+
+    [Fact]
+    public void ThrowIfDisposed_ThrowsAfterDispose()
+    {
+        var d = new ThrowIfDisposedDisposable();
+
+        d.Use();
+        d.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => d.Use());
+    }
+
+    [Fact]
+    public async Task DisposeAsync_BridgesToSync()
+    {
+        var d = new SyncOnlyDisposable();
+
+        await d.DisposeAsync();
+
+        Assert.Equal(1, d.ManagedCount);
+    }
 }
+

@@ -6,6 +6,10 @@ using System.Data;
 
 namespace pengdows.crud;
 
+/// <summary>
+/// Represents an active database transaction. Nested transactions are not supported; calling
+/// <see cref="IDatabaseContext.BeginTransaction"/> on an existing transaction will throw.
+/// </summary>
 public interface ITransactionContext : IDatabaseContext
 {
     bool WasCommitted { get; }

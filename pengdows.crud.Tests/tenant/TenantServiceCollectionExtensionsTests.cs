@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using pengdows.crud.configuration;
 using pengdows.crud.tenant;
 using Xunit;
 
