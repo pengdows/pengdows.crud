@@ -49,4 +49,16 @@ public class FakeDbRegistrarTests
         var registrar = new FakeDbRegistrar(FakeDbFactory.Instance);
         Assert.Throws<ArgumentNullException>(() => registrar.RegisterAll(null!));
     }
+
+    [Fact]
+    public void RegisterAll_InvalidProvider_Throws()
+    {
+        var registrar = new FakeDbRegistrar(FakeDbFactory.Instance);
+        var providers = new Dictionary<string, string>
+        {
+            { Guid.NewGuid().ToString(), "InvalidDb" }
+        };
+
+        Assert.Throws<ArgumentException>(() => registrar.RegisterAll(providers));
+    }
 }

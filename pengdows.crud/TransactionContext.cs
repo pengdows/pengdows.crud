@@ -293,7 +293,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
         {
             try
             {
-                Rollback();
+                CompleteTransactionWithWait(() => _transaction.Rollback(), false);
             }
             catch (Exception ex)
             {
@@ -311,7 +311,11 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
         {
             try
             {
-                await RollbackAsync().ConfigureAwait(false);
+                await CompleteTransactionWithWaitAsync(() =>
+                {
+                    _transaction.Rollback();
+                    return Task.CompletedTask;
+                }, false).ConfigureAwait(false);
             }
             catch (Exception ex)
             {

@@ -1,5 +1,6 @@
 #region
 
+using System;
 using System.Data.Common;
 using pengdows.crud.enums;
 
@@ -19,7 +20,14 @@ public sealed class FakeDbFactory : DbProviderFactory
 
     public FakeDbFactory(string pretendToBe)
     {
-        _pretendToBe = Enum.Parse<SupportedDatabase>(pretendToBe);
+        if (!Enum.TryParse<SupportedDatabase>(pretendToBe, true, out _pretendToBe))
+        {
+            _pretendToBe = pretendToBe switch
+            {
+                "Postgres" => SupportedDatabase.PostgreSql,
+                _ => throw new ArgumentException($"Requested value '{pretendToBe}' was not found.", nameof(pretendToBe))
+            };
+        }
     }
 
     public FakeDbFactory(SupportedDatabase pretendToBe)

@@ -197,7 +197,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
         {
             if (!_isWriteConnection)
             {
-                throw new InvalidOperationException("Context is read-only.");
+                throw new NotSupportedException("Context is read-only.");
             }
 
             isolationLevel ??= IsolationLevel.ReadCommitted;
