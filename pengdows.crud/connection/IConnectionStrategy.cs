@@ -5,7 +5,7 @@ using pengdows.crud.wrappers;
 
 namespace pengdows.crud.connection;
 
-public interface IConnectionStrategy : ISafeAsyncDisposableBase
+internal interface IConnectionStrategy : ISafeAsyncDisposableBase
 {
     ITrackedConnection GetConnection(ExecutionType executionType, bool isShared = false);
     void ReleaseConnection(ITrackedConnection? connection);

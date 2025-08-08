@@ -141,7 +141,6 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 
     public DbMode ConnectionMode { get; private set; }
 
-    public IConnectionStrategy ConnectionStrategy => _connectionStrategy;
 
     public ITypeMapRegistry TypeMapRegistry { get; }
 
