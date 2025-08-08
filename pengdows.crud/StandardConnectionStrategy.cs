@@ -1,9 +1,11 @@
 using System;
 using System.Threading.Tasks;
+using pengdows.crud.enums;
+using pengdows.crud.wrappers;
 
 namespace pengdows.crud;
 
-internal sealed class StandardConnectionStrategy : IConnectionStrategy
+internal class StandardConnectionStrategy : IConnectionStrategy
 {
     private readonly Func<ITrackedConnection> _factory;
 
