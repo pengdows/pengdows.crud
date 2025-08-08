@@ -11,6 +11,7 @@ using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
+using pengdows.crud.connection;
 
 #endregion
 
@@ -74,6 +75,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
     public bool RCSIEnabled => _context.RCSIEnabled;
     public int MaxParameterLimit => _context.MaxParameterLimit;
     public DbMode ConnectionMode => DbMode.SingleConnection;
+    public IConnectionStrategy ConnectionStrategy => _context.ConnectionStrategy;
     public ITypeMapRegistry TypeMapRegistry => _context.TypeMapRegistry;
     public IDataSourceInformation DataSourceInfo => _context.DataSourceInfo;
     public string SessionSettingsPreamble => _context.SessionSettingsPreamble;

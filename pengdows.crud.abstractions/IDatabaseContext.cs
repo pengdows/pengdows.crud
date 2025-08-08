@@ -7,6 +7,7 @@ using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
+using pengdows.crud.connection;
 
 #endregion
 
@@ -53,6 +54,11 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// Current number of open connections. Usually 0 for DbMode.Standard, 1 otherwise.
     /// </summary>
     long NumberOfOpenConnections { get; }
+
+    /// <summary>
+    /// Strategy responsible for supplying and releasing connections.
+    /// </summary>
+    IConnectionStrategy ConnectionStrategy { get; }
 
     /// <summary>
     /// Character or string that prefixes quoted identifiers (e.g., ", `, [).
