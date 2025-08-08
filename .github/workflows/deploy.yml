@@ -40,8 +40,8 @@ jobs:
           dotnet test --no-build --configuration Release \
             --collect:"XPlat Code Coverage" \
             --results-directory ./TestResults \
-            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Include="[pengdows.crud]*" \
-            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Exclude="[pengdows.crud.Tests]*;[pengdows.crud.abstractions]*;[pengdows.crud.fakeDb]*;[testbed]*"
+            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Include="[pengdow.crud]*" \
+            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Exclude="[pengdow.crud.Tests]*;[pengdow.crud.abstractions]*;[pengdow.crud.fakeDb]*;[testbed]*"
 
       - name: Generate coverage report
         run: |
@@ -49,7 +49,7 @@ jobs:
             -reports:TestResults/**/coverage.cobertura.xml \
             -targetdir:coverage-report \
             -reporttypes:HtmlSummary \
-            -assemblyfilters:+pengdows.crud
+            -assemblyfilters:+pengdow.crud
 
       - name: Enforce visual coverage from HTML report
         run: |
@@ -131,17 +131,17 @@ jobs:
           echo "version_short=1.0.${epoch}" >> "$GITHUB_OUTPUT"
 
       - name: Build
-        run: dotnet build pengdows.crud.sln -c Release
+        run: dotnet build pengdow.crud.sln -c Release
 
       - name: Pack with custom version
         run: |
-          dotnet pack pengdows.crud.abstractions/pengdows.crud.abstractions.csproj -c Release \
+          dotnet pack pengdow.crud.abstractions/pengdow.crud.abstractions.csproj -c Release \
             --no-build \
             -p:PackageVersion=${{ steps.version.outputs.version }}
-          dotnet pack pengdows.crud.fakeDb/pengdows.crud.fakeDb.csproj -c Release \
+          dotnet pack pengdow.crud.fakeDb/pengdow.crud.fakeDb.csproj -c Release \
             --no-build \
             -p:PackageVersion=${{ steps.version.outputs.version }}
-          dotnet pack pengdows.crud/pengdows.crud.csproj -c Release \
+          dotnet pack pengdow.crud/pengdow.crud.csproj -c Release \
             --no-build \
             -p:PackageVersion=${{ steps.version.outputs.version }}
       - name: Debug API Key
@@ -157,13 +157,13 @@ jobs:
       - name: Push package to NuGet
         run: |
           set -euo pipefail
-          dotnet nuget push pengdows.crud.abstractions/bin/Release/pengdows.crud.abstractions.${{ steps.version.outputs.version_short }}.nupkg \
+          dotnet nuget push pengdow.crud.abstractions/bin/Release/pengdow.crud.abstractions.${{ steps.version.outputs.version_short }}.nupkg \
             --source https://api.nuget.org/v3/index.json \
             --api-key "$NUGET_API_KEY"
-          dotnet nuget push pengdows.crud.fakeDb/bin/Release/pengdows.crud.fakeDb.${{ steps.version.outputs.version_short }}.nupkg \
+          dotnet nuget push pengdow.crud.fakeDb/bin/Release/pengdow.crud.fakeDb.${{ steps.version.outputs.version_short }}.nupkg \
             --source https://api.nuget.org/v3/index.json \
             --api-key "$NUGET_API_KEY"
-          dotnet nuget push pengdows.crud/bin/Release/pengdows.crud.${{ steps.version.outputs.version_short }}.nupkg \
+          dotnet nuget push pengdow.crud/bin/Release/pengdow.crud.${{ steps.version.outputs.version_short }}.nupkg \
             --source https://api.nuget.org/v3/index.json \
             --api-key "$NUGET_API_KEY"
         env:
@@ -173,7 +173,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add pengdows.crud/pengdows.crud.csproj pengdows.crud.abstractions/pengdows.crud.abstractions.csproj pengdows.crud.fakeDb/pengdows.crud.fakeDb.csproj
+          git add pengdow.crud/pengdow.crud.csproj pengdow.crud.abstractions/pengdow.crud.abstractions.csproj pengdow.crud.fakeDb/pengdow.crud.fakeDb.csproj
           git commit -m "Bump version to v${{ steps.version.outputs.version_short }}" || echo "No changes to commit"
 
       - name: Push version bump commit

@@ -4,7 +4,7 @@ using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using Microsoft.Extensions.DependencyInjection;
 using MySql.Data.MySqlClient;
-using pengdows.crud;
+using pengdow.crud;
 
 #endregion
 

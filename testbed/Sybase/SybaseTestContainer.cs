@@ -6,7 +6,7 @@ using AdoNetCore.AseClient;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using Microsoft.Extensions.DependencyInjection;
-using pengdows.crud;
+using pengdow.crud;
 
 #endregion
 

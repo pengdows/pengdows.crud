@@ -7,14 +7,14 @@
   "Children": [
     {
       "Kind": "Project",
-      "Name": "pengdows.crud",
+      "Name": "pengdow.crud",
       "CoveredStatements": 1800,
       "TotalStatements": 1992,
       "CoveragePercent": 90,
       "Children": [
         {
           "Kind": "Namespace",
-          "Name": "pengdows.crud",
+          "Name": "pengdow.crud",
           "CoveredStatements": 1800,
           "TotalStatements": 1992,
           "CoveragePercent": 90,
@@ -5202,14 +5202,14 @@
     },
     {
       "Kind": "Project",
-      "Name": "pengdows.crud.abstractions",
+      "Name": "pengdow.crud.abstractions",
       "CoveredStatements": 2,
       "TotalStatements": 4,
       "CoveragePercent": 50,
       "Children": [
         {
           "Kind": "Namespace",
-          "Name": "pengdows.crud",
+          "Name": "pengdow.crud",
           "CoveredStatements": 2,
           "TotalStatements": 4,
           "CoveragePercent": 50,
@@ -5290,14 +5290,14 @@
     },
     {
       "Kind": "Project",
-      "Name": "pengdows.crud.Tests",
+      "Name": "pengdow.crud.Tests",
       "CoveredStatements": 2200,
       "TotalStatements": 2361,
       "CoveragePercent": 93,
       "Children": [
         {
           "Kind": "Namespace",
-          "Name": "pengdows.crud.Tests",
+          "Name": "pengdow.crud.Tests",
           "CoveredStatements": 2200,
           "TotalStatements": 2361,
           "CoveragePercent": 93,
@@ -9809,14 +9809,14 @@
                 },
                 {
                   "Kind": "Method",
-                  "Name": "pengdows.crud.wrappers.ITrackedConnection.GetSchema(string):DataTable",
+                  "Name": "pengdow.crud.wrappers.ITrackedConnection.GetSchema(string):DataTable",
                   "CoveredStatements": 1,
                   "TotalStatements": 1,
                   "CoveragePercent": 100
                 },
                 {
                   "Kind": "Method",
-                  "Name": "pengdows.crud.wrappers.ITrackedConnection.GetSchema():DataTable",
+                  "Name": "pengdow.crud.wrappers.ITrackedConnection.GetSchema():DataTable",
                   "CoveredStatements": 0,
                   "TotalStatements": 1,
                   "CoveragePercent": 0
