@@ -239,6 +239,33 @@ public class TransactionContextTests
     }
 
     [Fact]
+    public void CloseAndDisposeConnection_Null_DoesNothing()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        using var tx = context.BeginTransaction();
+        tx.CloseAndDisposeConnection(null);
+    }
+
+    [Fact]
+    public async Task CloseAndDisposeConnectionAsync_Null_DoesNothing()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        await using var tx = context.BeginTransaction();
+        await tx.CloseAndDisposeConnectionAsync(null);
+    }
+
+    [Fact]
+    public async Task CloseAndDisposeConnectionAsync_DisposesExternalConnection()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        var extra = context.GetConnection(ExecutionType.Read);
+        extra.Open();
+        await using var tx = context.BeginTransaction();
+        await tx.CloseAndDisposeConnectionAsync(extra);
+        Assert.Equal(ConnectionState.Closed, extra.State);
+    }
+
+    [Fact]
     public void MakeParameterName_ForwardsToContext()
     {
         var context = (DatabaseContext)CreateContext(SupportedDatabase.PostgreSql);

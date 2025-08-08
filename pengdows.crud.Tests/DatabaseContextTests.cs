@@ -102,6 +102,22 @@ public class DatabaseContextTests
         mockTracked.As<IAsyncDisposable>().Verify(d => d.DisposeAsync(), Times.Once);
     }
 
+    [Fact]
+    public async Task CloseAndDisposeConnectionAsync_Null_DoesNothing()
+    {
+        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory);
+        await context.CloseAndDisposeConnectionAsync(null);
+    }
+
+    [Fact]
+    public void CloseAndDisposeConnection_Null_DoesNothing()
+    {
+        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory);
+        context.CloseAndDisposeConnection(null);
+    }
+
     [Theory]
     [MemberData(nameof(AllSupportedProviders))]
     public void AssertIsWriteConnection_WhenFalse_Throws(SupportedDatabase product)

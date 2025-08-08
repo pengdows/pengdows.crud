@@ -162,5 +162,58 @@ public class ConnectionStrategyTests
         await strategy.DisposeAsync();
         writer.As<IAsyncDisposable>().Verify(d => d.DisposeAsync(), Times.Once);
     }
+
+    [Fact]
+    public async Task StandardStrategy_ReleaseConnectionAsync_DisposesAsyncDisposable()
+    {
+        var mock = new Mock<ITrackedConnection>();
+        mock.As<IAsyncDisposable>().Setup(d => d.DisposeAsync()).Returns(ValueTask.CompletedTask).Verifiable();
+        var strategy = new StandardConnectionStrategy(() => mock.Object);
+        await strategy.ReleaseConnectionAsync(mock.Object);
+        mock.As<IAsyncDisposable>().Verify(d => d.DisposeAsync(), Times.Once);
+    }
+
+    [Fact]
+    public async Task StandardStrategy_ReleaseConnectionAsync_DisposesSyncConnection()
+    {
+        var mock = new Mock<ITrackedConnection>();
+        var strategy = new StandardConnectionStrategy(() => mock.Object);
+        await strategy.ReleaseConnectionAsync(mock.Object);
+        mock.Verify(c => c.Dispose(), Times.Once);
+    }
+
+    [Fact]
+    public async Task StandardStrategy_ReleaseConnectionAsync_Null_DoesNothing()
+    {
+        var strategy = new StandardConnectionStrategy(() => new Mock<ITrackedConnection>().Object);
+        await strategy.ReleaseConnectionAsync(null);
+    }
+
+    [Fact]
+    public void SingleWriterStrategy_ReleaseConnection_Null_DoesNothing()
+    {
+        var writer = new Mock<ITrackedConnection>();
+        var strategy = new SingleWriterConnectionStrategy(writer.Object, () => new Mock<ITrackedConnection>().Object);
+        strategy.ReleaseConnection(null);
+    }
+
+    [Fact]
+    public async Task SingleWriterStrategy_ReleaseConnectionAsync_Null_DoesNothing()
+    {
+        var writer = new Mock<ITrackedConnection>();
+        var strategy = new SingleWriterConnectionStrategy(writer.Object, () => new Mock<ITrackedConnection>().Object);
+        await strategy.ReleaseConnectionAsync(null);
+    }
+
+    [Fact]
+    public async Task SingleConnectionStrategy_DisposeAsync_DisposesUnderlyingConnectionAsync()
+    {
+        var mock = new Mock<ITrackedConnection>();
+        mock.As<IAsyncDisposable>().Setup(d => d.DisposeAsync()).Returns(ValueTask.CompletedTask).Verifiable();
+        var strategy = new SingleConnectionStrategy(mock.Object);
+        await strategy.DisposeAsync();
+        await strategy.DisposeAsync();
+        mock.As<IAsyncDisposable>().Verify(d => d.DisposeAsync(), Times.Once);
+    }
 }
 
