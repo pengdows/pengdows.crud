@@ -1,7 +1,7 @@
 using System;
 using pengdows.crud.wrappers;
 
-namespace pengdows.crud;
+namespace pengdows.crud.connection;
 
 internal sealed class KeepAliveConnectionStrategy : StandardConnectionStrategy
 {

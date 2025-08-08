@@ -7,6 +7,7 @@ using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
+using pengdows.crud.connection;
 
 #endregion
 

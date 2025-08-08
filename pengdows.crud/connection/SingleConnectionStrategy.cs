@@ -3,7 +3,7 @@ using pengdows.crud.enums;
 using pengdows.crud.wrappers;
 using pengdows.crud.infrastructure;
 
-namespace pengdows.crud;
+namespace pengdows.crud.connection;
 
 internal sealed class SingleConnectionStrategy : SafeAsyncDisposableBase, IConnectionStrategy
 {

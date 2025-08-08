@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.FakeDb;
+using pengdows.crud.connection;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
 using pengdows.crud;

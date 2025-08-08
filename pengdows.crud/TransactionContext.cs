@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.enums;
+using pengdows.crud.connection;
 using pengdows.crud.infrastructure;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;

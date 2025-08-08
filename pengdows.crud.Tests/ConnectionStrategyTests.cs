@@ -1,6 +1,7 @@
 using System.Threading.Tasks;
 using Moq;
 using pengdows.crud.enums;
+using pengdows.crud.connection;
 using pengdows.crud.wrappers;
 using Xunit;
 
