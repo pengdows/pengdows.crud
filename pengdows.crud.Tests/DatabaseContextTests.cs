@@ -241,14 +241,14 @@ public class DatabaseContextTests
         };
         var factory = new FakeDbFactory(product);
         var context = new DatabaseContext(config, factory);
-        Assert.Equal(0, context.NumberOfOpenConnections);
+        Assert.Equal(1, context.NumberOfOpenConnections);
 
         using (context.BeginTransaction(executionType: ExecutionType.Read))
         {
-            Assert.Equal(1, context.NumberOfOpenConnections);
+            Assert.Equal(2, context.NumberOfOpenConnections);
         }
 
-        Assert.Equal(0, context.NumberOfOpenConnections);
+        Assert.Equal(1, context.NumberOfOpenConnections);
     }
 
     [Fact]
