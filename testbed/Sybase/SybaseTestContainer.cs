@@ -1,7 +1,5 @@
 #region
 
-using System;
-using System.Threading.Tasks;
 using AdoNetCore.AseClient;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;

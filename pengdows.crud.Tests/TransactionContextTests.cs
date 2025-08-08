@@ -11,7 +11,6 @@ using pengdows.crud.FakeDb;
 using pengdows.crud.connection;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
-using pengdows.crud;
 using pengdows.crud.infrastructure;
 using Xunit;
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data.Common;
+using pengdows.crud.enums;
 using pengdows.crud.FakeDb;
 using Xunit;
 
@@ -32,8 +33,8 @@ public class FakeDbRegistrarTests
         var registrar = new FakeDbRegistrar(FakeDbFactory.Instance);
         var providers = new Dictionary<string, string>
         {
-            { Guid.NewGuid().ToString(), "SqlServer" },
-            { Guid.NewGuid().ToString(), "Postgres" }
+            { Guid.NewGuid().ToString(), SupportedDatabase.SqlServer.ToString() },
+            { Guid.NewGuid().ToString(), SupportedDatabase.PostgreSql.ToString() } 
         };
         registrar.RegisterAll(providers);
         foreach (var key in providers.Keys)

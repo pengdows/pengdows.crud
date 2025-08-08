@@ -245,7 +245,7 @@ public class DatabaseContextTests
 
         using (context.BeginTransaction(executionType: ExecutionType.Read))
         {
-            Assert.Equal(2, context.NumberOfOpenConnections);
+            Assert.Equal(1, context.NumberOfOpenConnections);
         }
 
         Assert.Equal(1, context.NumberOfOpenConnections);
