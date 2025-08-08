@@ -2,6 +2,7 @@
 
 using System.Data;
 using System.Data.Common;
+using System.Threading.Tasks;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.threading;
@@ -101,6 +102,11 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     bool RCSIEnabled { get; }
 
     /// <summary>
+    /// Strategy responsible for connection acquisition and release.
+    /// </summary>
+    IConnectionStrategy ConnectionStrategy { get; }
+
+    /// <summary>
     /// Returns an async-compatible lock for this context instance.
     /// </summary>
     ILockerAsync GetLock();
@@ -170,5 +176,10 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// <summary>
     /// Releases a tracked connection manually (if needed).
     /// </summary>
-    void CloseAndDisposeConnection(ITrackedConnection? conn);
+    void ReleaseConnection(ITrackedConnection? conn);
+
+    /// <summary>
+    /// Releases a tracked connection asynchronously.
+    /// </summary>
+    ValueTask ReleaseConnectionAsync(ITrackedConnection? conn);
 }

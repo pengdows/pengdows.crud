@@ -26,7 +26,7 @@ internal sealed class SingleWriterConnectionStrategy : SafeAsyncDisposableBase, 
         };
     }
 
-    public void CloseAndDisposeConnection(ITrackedConnection? connection)
+    public void ReleaseConnection(ITrackedConnection? connection)
     {
         if (connection != null)
         {
@@ -37,7 +37,7 @@ internal sealed class SingleWriterConnectionStrategy : SafeAsyncDisposableBase, 
         }
     }
 
-    public async ValueTask CloseAndDisposeConnectionAsync(ITrackedConnection? connection)
+    public async ValueTask ReleaseConnectionAsync(ITrackedConnection? connection)
     {
         if (connection != null && !ReferenceEquals(connection, _writerConnection))
         {

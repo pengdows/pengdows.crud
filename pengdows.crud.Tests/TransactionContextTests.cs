@@ -235,7 +235,6 @@ public class TransactionContextTests
 
         Assert.Equal(context.ProcWrappingStyle, tx.ProcWrappingStyle);
 
-        ((IDatabaseContext)tx).ProcWrappingStyle = ProcWrappingStyle.Call;
-        Assert.Equal(ProcWrappingStyle.Call, context.ProcWrappingStyle);
+        Assert.Throws<NotImplementedException>(() => ((IDatabaseContext)tx).ProcWrappingStyle = ProcWrappingStyle.Call);
     }
 }

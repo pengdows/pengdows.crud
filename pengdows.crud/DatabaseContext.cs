@@ -217,6 +217,8 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
         return _connectionStrategy.GetConnection(executionType, isShared);
     }
 
+    public IConnectionStrategy ConnectionStrategy => _connectionStrategy;
+
 
     public string GenerateRandomName(int length = 5, int parameterNameMaxLength = 30)
     {
@@ -250,9 +252,9 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     }
 
 
-    public void CloseAndDisposeConnection(ITrackedConnection? connection)
+    public void ReleaseConnection(ITrackedConnection? connection)
     {
-        _connectionStrategy.CloseAndDisposeConnection(connection);
+        _connectionStrategy.ReleaseConnection(connection);
     }
 
     public string MakeParameterName(DbParameter dbParameter)
@@ -349,9 +351,9 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
                      previous) != previous);
     }
 
-    public ValueTask CloseAndDisposeConnectionAsync(ITrackedConnection? connection)
+    public ValueTask ReleaseConnectionAsync(ITrackedConnection? connection)
     {
-        return _connectionStrategy.CloseAndDisposeConnectionAsync(connection);
+        return _connectionStrategy.ReleaseConnectionAsync(connection);
     }
 
     private void CheckForSqlServerSettings(ITrackedConnection conn)

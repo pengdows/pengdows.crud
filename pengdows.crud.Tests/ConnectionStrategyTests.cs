@@ -23,7 +23,7 @@ public class ConnectionStrategyTests
         var c1 = strategy.GetConnection(ExecutionType.Read);
         var c2 = strategy.GetConnection(ExecutionType.Write);
         Assert.NotSame(c1, c2);
-        strategy.CloseAndDisposeConnection(c1);
+        strategy.ReleaseConnection(c1);
         Assert.Equal(1, disposeCount);
     }
 
@@ -31,7 +31,7 @@ public class ConnectionStrategyTests
     public void StandardStrategy_CloseNull_DoesNothing()
     {
         var strategy = new StandardConnectionStrategy(() => new Mock<ITrackedConnection>().Object);
-        strategy.CloseAndDisposeConnection(null);
+        strategy.ReleaseConnection(null);
     }
 
     [Fact]
@@ -49,7 +49,7 @@ public class ConnectionStrategyTests
     {
         var mock = new Mock<ITrackedConnection>();
         var strategy = new SingleConnectionStrategy(mock.Object);
-        strategy.CloseAndDisposeConnection(mock.Object);
+        strategy.ReleaseConnection(mock.Object);
         mock.Verify(c => c.Dispose(), Times.Never);
     }
 
@@ -77,7 +77,7 @@ public class ConnectionStrategyTests
     {
         var writer = new Mock<ITrackedConnection>();
         var strategy = new SingleWriterConnectionStrategy(writer.Object, () => new Mock<ITrackedConnection>().Object);
-        strategy.CloseAndDisposeConnection(writer.Object);
+        strategy.ReleaseConnection(writer.Object);
         writer.Verify(c => c.Dispose(), Times.Never);
     }
 
@@ -87,7 +87,7 @@ public class ConnectionStrategyTests
         var writer = new Mock<ITrackedConnection>();
         var reader = new Mock<ITrackedConnection>();
         var strategy = new SingleWriterConnectionStrategy(writer.Object, () => reader.Object);
-        strategy.CloseAndDisposeConnection(reader.Object);
+        strategy.ReleaseConnection(reader.Object);
         reader.Verify(c => c.Dispose(), Times.Once);
     }
 
@@ -97,7 +97,7 @@ public class ConnectionStrategyTests
         var mock = new Mock<ITrackedConnection>();
         var strategy = new KeepAliveConnectionStrategy(() => mock.Object);
         var conn = strategy.GetConnection(ExecutionType.Read);
-        strategy.CloseAndDisposeConnection(conn);
+        strategy.ReleaseConnection(conn);
         mock.Verify(c => c.Dispose(), Times.Once);
     }
 
@@ -105,7 +105,7 @@ public class ConnectionStrategyTests
     public void KeepAliveStrategy_CloseNull_DoesNothing()
     {
         var strategy = new KeepAliveConnectionStrategy(() => new Mock<ITrackedConnection>().Object);
-        strategy.CloseAndDisposeConnection(null);
+        strategy.ReleaseConnection(null);
     }
 
     [Fact]

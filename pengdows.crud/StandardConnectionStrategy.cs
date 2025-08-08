@@ -20,7 +20,7 @@ internal class StandardConnectionStrategy : SafeAsyncDisposableBase, IConnection
         return _factory();
     }
 
-    public void CloseAndDisposeConnection(ITrackedConnection? connection)
+    public void ReleaseConnection(ITrackedConnection? connection)
     {
         if (connection != null)
         {
@@ -28,7 +28,7 @@ internal class StandardConnectionStrategy : SafeAsyncDisposableBase, IConnection
         }
     }
 
-    public ValueTask CloseAndDisposeConnectionAsync(ITrackedConnection? connection)
+    public ValueTask ReleaseConnectionAsync(ITrackedConnection? connection)
     {
         if (connection is IAsyncDisposable asyncDisposable)
         {

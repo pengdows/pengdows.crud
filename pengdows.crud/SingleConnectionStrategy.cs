@@ -19,12 +19,12 @@ internal sealed class SingleConnectionStrategy : SafeAsyncDisposableBase, IConne
         return _connection;
     }
 
-    public void CloseAndDisposeConnection(ITrackedConnection? connection)
+    public void ReleaseConnection(ITrackedConnection? connection)
     {
         // no-op
     }
 
-    public ValueTask CloseAndDisposeConnectionAsync(ITrackedConnection? connection)
+    public ValueTask ReleaseConnectionAsync(ITrackedConnection? connection)
     {
         return ValueTask.CompletedTask;
     }
