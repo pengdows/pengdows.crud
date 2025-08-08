@@ -243,9 +243,6 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
         return _connectionStrategy.GetConnection(executionType, isShared);
     }
 
-    public IConnectionStrategy ConnectionStrategy => _connectionStrategy;
-
-
     public string GenerateRandomName(int length = 5, int parameterNameMaxLength = 30)
     {
         var validChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_".ToCharArray();
@@ -278,7 +275,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     }
 
 
-    public void ReleaseConnection(ITrackedConnection? connection)
+    public void CloseAndDisposeConnection(ITrackedConnection? connection)
     {
         _connectionStrategy.ReleaseConnection(connection);
     }
@@ -377,7 +374,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
                      previous) != previous);
     }
 
-    public ValueTask ReleaseConnectionAsync(ITrackedConnection? connection)
+    public ValueTask CloseAndDisposeConnectionAsync(ITrackedConnection? connection)
     {
         return _connectionStrategy.ReleaseConnectionAsync(connection);
     }

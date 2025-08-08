@@ -89,7 +89,7 @@ public class DatabaseContextTests
 
     [Theory]
     [MemberData(nameof(AllSupportedProviders))]
-    public async Task ReleaseConnectionAsync_WithAsyncDisposable_DisposesCorrectly(SupportedDatabase product)
+    public async Task CloseAndDisposeConnectionAsync_WithAsyncDisposable_DisposesCorrectly(SupportedDatabase product)
     {
         var mockTracked = new Mock<ITrackedConnection>();
         mockTracked.As<IAsyncDisposable>().Setup(d => d.DisposeAsync())
@@ -97,7 +97,7 @@ public class DatabaseContextTests
 
         var factory = new FakeDbFactory(product);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
-        await context.ConnectionStrategy.ReleaseConnectionAsync(mockTracked.Object);
+        await context.CloseAndDisposeConnectionAsync(mockTracked.Object);
 
         mockTracked.As<IAsyncDisposable>().Verify(d => d.DisposeAsync(), Times.Once);
     }
@@ -151,7 +151,7 @@ public class DatabaseContextTests
     }
 
     [Fact]
-    public void ReleaseConnection_StandardMode_ClosesConnection()
+    public void CloseAndDisposeConnection_StandardMode_ClosesConnection()
     {
         var product = SupportedDatabase.SqlServer;
         var factory = new FakeDbFactory(product);
@@ -161,12 +161,12 @@ public class DatabaseContextTests
         var conn = context.GetConnection(ExecutionType.Read);
         conn.Open();
         Assert.Equal(1, context.NumberOfOpenConnections);
-        context.ConnectionStrategy.ReleaseConnection(conn);
+        context.CloseAndDisposeConnection(conn);
         Assert.Equal(0, context.NumberOfOpenConnections);
     }
 
     [Fact]
-    public void ReleaseConnection_SingleConnectionMode_KeepsOpen()
+    public void CloseAndDisposeConnection_SingleConnectionMode_KeepsOpen()
     {
         var product = SupportedDatabase.Sqlite;
         var config = new DatabaseContextConfiguration
@@ -181,7 +181,7 @@ public class DatabaseContextTests
         var conn = context.GetConnection(ExecutionType.Read);
         Assert.Equal(ConnectionState.Open, conn.State);
         var before = context.NumberOfOpenConnections;
-        context.ConnectionStrategy.ReleaseConnection(conn);
+        context.CloseAndDisposeConnection(conn);
         Assert.Equal(before, context.NumberOfOpenConnections);
         Assert.Equal(ConnectionState.Open, conn.State);
         context.Dispose();
@@ -246,8 +246,8 @@ public class DatabaseContextTests
         c1.Open();
         c2.Open();
         Assert.Equal(2, context.MaxNumberOfConnections);
-        context.ConnectionStrategy.ReleaseConnection(c1);
-        context.ConnectionStrategy.ReleaseConnection(c2);
+        context.CloseAndDisposeConnection(c1);
+        context.CloseAndDisposeConnection(c2);
         Assert.Equal(2, context.MaxNumberOfConnections);
     }
 

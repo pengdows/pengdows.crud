@@ -229,12 +229,12 @@ public class TransactionContextTests
     }
 
     [Fact]
-    public void ReleaseConnection_IgnoresTransactionConnection()
+    public void CloseAndDisposeConnection_IgnoresTransactionConnection()
     {
         var context = CreateContext(SupportedDatabase.Sqlite);
         using var tx = context.BeginTransaction();
         var conn = tx.GetConnection(ExecutionType.Write);
-        tx.ReleaseConnection(conn);
+        tx.CloseAndDisposeConnection(conn);
         Assert.Equal(ConnectionState.Open, conn.State);
     }
 
@@ -262,26 +262,6 @@ public class TransactionContextTests
 
         tx.Dispose();
         Assert.Throws<ObjectDisposedException>(() => ((IDatabaseContext)tx).ProcWrappingStyle = ProcWrappingStyle.Call);
-    }
-
-    [Fact]
-    public void ConnectionStrategy_DelegatesToContext()
-    {
-        var context = (DatabaseContext)CreateContext(SupportedDatabase.Sqlite);
-        using var tx = context.BeginTransaction();
-
-        Assert.Same(context.ConnectionStrategy, ((IDatabaseContext)tx).ConnectionStrategy);
-    }
-
-    [Fact]
-    public void ConnectionStrategy_AfterDispose_Throws()
-    {
-        var context = (DatabaseContext)CreateContext(SupportedDatabase.Sqlite);
-        var tx = context.BeginTransaction();
-
-        tx.Dispose();
-
-        Assert.Throws<ObjectDisposedException>(() => ((IDatabaseContext)tx).ConnectionStrategy);
     }
 
     [Fact]

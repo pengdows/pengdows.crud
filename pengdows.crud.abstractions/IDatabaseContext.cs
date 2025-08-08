@@ -7,7 +7,6 @@ using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
-using pengdows.crud.connection;
 
 #endregion
 
@@ -103,11 +102,6 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     bool RCSIEnabled { get; }
 
     /// <summary>
-    /// Strategy responsible for connection acquisition and release.
-    /// </summary>
-    IConnectionStrategy ConnectionStrategy { get; }
-
-    /// <summary>
     /// Returns an async-compatible lock for this context instance.
     /// </summary>
     ILockerAsync GetLock();
@@ -179,12 +173,12 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     string MakeParameterName(string parameterName);
 
     /// <summary>
-    /// Releases a tracked connection manually (if needed).
+    /// Returns a connection to the strategy, disposing it if necessary.
     /// </summary>
-    void ReleaseConnection(ITrackedConnection? conn);
+    void CloseAndDisposeConnection(ITrackedConnection? conn);
 
     /// <summary>
-    /// Releases a tracked connection asynchronously.
+    /// Returns a connection to the strategy asynchronously, disposing it if necessary.
     /// </summary>
-    ValueTask ReleaseConnectionAsync(ITrackedConnection? conn);
+    ValueTask CloseAndDisposeConnectionAsync(ITrackedConnection? conn);
 }

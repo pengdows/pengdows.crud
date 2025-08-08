@@ -298,9 +298,14 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
 
         // Don't dispose read connections — they are left open until the reader disposes
         if (executionType == ExecutionType.Read)
+        {
             return;
+        }
 
-        if (_context is not TransactionContext && conn is not null) _context.ConnectionStrategy.ReleaseConnection(conn);
+        if (_context is not TransactionContext && conn is not null)
+        {
+            _context.CloseAndDisposeConnection(conn);
+        }
     }
 
     protected override void DisposeManaged()

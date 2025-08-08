@@ -8,7 +8,6 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.enums;
-using pengdows.crud.connection;
 using pengdows.crud.infrastructure;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
@@ -50,7 +49,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
             isolationLevel = IsolationLevel.Serializable;
         }
 
-        _connection = _context.ConnectionStrategy.GetConnection(executionType.Value, shared: true);
+        _connection = _context.GetConnection(executionType.Value, true);
         EnsureConnectionIsOpen();
         _semaphoreSlim = new SemaphoreSlim(1, 1);
 
@@ -78,15 +77,6 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
     public ITypeMapRegistry TypeMapRegistry => _context.TypeMapRegistry;
     public IDataSourceInformation DataSourceInfo => _context.DataSourceInfo;
     public string SessionSettingsPreamble => _context.SessionSettingsPreamble;
-
-    public IConnectionStrategy ConnectionStrategy
-    {
-        get
-        {
-            ThrowIfDisposed();
-            return _context.ConnectionStrategy;
-        }
-    }
 
     public ILockerAsync GetLock()
     {
@@ -176,7 +166,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
         throw new InvalidOperationException("Cannot begin a nested transaction from TransactionContext.");
     }
 
-    public void ReleaseConnection(ITrackedConnection? conn)
+    public void CloseAndDisposeConnection(ITrackedConnection? conn)
     {
         ThrowIfDisposed();
         if (conn is null)
@@ -189,10 +179,10 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
             return;
         }
 
-        _context.ConnectionStrategy.ReleaseConnection(conn);
+        _context.CloseAndDisposeConnection(conn);
     }
 
-    public ValueTask ReleaseConnectionAsync(ITrackedConnection? conn)
+    public ValueTask CloseAndDisposeConnectionAsync(ITrackedConnection? conn)
     {
         ThrowIfDisposed();
         if (conn is null)
@@ -205,7 +195,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
             return ValueTask.CompletedTask;
         }
 
-        return _context.ConnectionStrategy.ReleaseConnectionAsync(conn);
+        return _context.CloseAndDisposeConnectionAsync(conn);
     }
 
     public void Commit()
@@ -264,7 +254,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
             _rolledBack = true;
         }
 
-        _context.ConnectionStrategy.ReleaseConnection(_connection);
+        _context.CloseAndDisposeConnection(_connection);
     }
 
     private async Task CompleteTransactionAsync(Func<Task> action, bool markCommitted)
@@ -285,7 +275,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
             _rolledBack = true;
         }
 
-        await _context.ConnectionStrategy.ReleaseConnectionAsync(_connection).ConfigureAwait(false);
+        await _context.CloseAndDisposeConnectionAsync(_connection).ConfigureAwait(false);
     }
 
     private Task RollbackAsync()
