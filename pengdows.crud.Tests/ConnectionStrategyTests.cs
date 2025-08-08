@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using Moq;
 using pengdows.crud.enums;
 using pengdows.crud.wrappers;
@@ -105,6 +106,27 @@ public class ConnectionStrategyTests
     {
         var strategy = new KeepAliveConnectionStrategy(() => new Mock<ITrackedConnection>().Object);
         strategy.CloseAndDisposeConnection(null);
+    }
+
+    [Fact]
+    public void SingleConnectionStrategy_Dispose_DisposesUnderlyingConnection()
+    {
+        var mock = new Mock<ITrackedConnection>();
+        var strategy = new SingleConnectionStrategy(mock.Object);
+        strategy.Dispose();
+        strategy.Dispose();
+        mock.Verify(c => c.Dispose(), Times.Once);
+    }
+
+    [Fact]
+    public async Task SingleWriterStrategy_DisposeAsync_DisposesWriterConnectionOnce()
+    {
+        var writer = new Mock<ITrackedConnection>();
+        writer.As<IAsyncDisposable>().Setup(d => d.DisposeAsync()).Returns(ValueTask.CompletedTask).Verifiable();
+        var strategy = new SingleWriterConnectionStrategy(writer.Object, () => new Mock<ITrackedConnection>().Object);
+        await strategy.DisposeAsync();
+        await strategy.DisposeAsync();
+        writer.As<IAsyncDisposable>().Verify(d => d.DisposeAsync(), Times.Once);
     }
 }
 

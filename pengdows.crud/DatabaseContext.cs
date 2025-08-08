@@ -3,6 +3,7 @@
 using System.Data;
 using System.Data.Common;
 using System.Text;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
@@ -24,7 +25,6 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     private readonly ILogger<IDatabaseContext> _logger;
     private readonly IConnectionStrategy _connectionStrategy;
     private bool _applyConnectionSessionSettings;
-    private ITrackedConnection? _connection = null;
 
     private long _connectionCount;
     private string _connectionSessionSettings;
@@ -93,13 +93,13 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
             ConnectionMode = configuration.DbMode;
             _factory = factory ?? throw new NullReferenceException(nameof(factory));
 
-            InitializeInternals(configuration);
+            var initialConnection = InitializeInternals(configuration);
             var connFactory = () => FactoryCreateConnection(null, false);
             _connectionStrategy = ConnectionMode switch
             {
                 DbMode.Standard => new StandardConnectionStrategy(connFactory),
-                DbMode.SingleConnection => new SingleConnectionStrategy(_connection!),
-                DbMode.SingleWriter => new SingleWriterConnectionStrategy(_connection!, connFactory),
+                DbMode.SingleConnection => new SingleConnectionStrategy(initialConnection!),
+                DbMode.SingleWriter => new SingleWriterConnectionStrategy(initialConnection!, connFactory),
                 DbMode.KeepAlive => new KeepAliveConnectionStrategy(connFactory),
                 _ => throw new InvalidOperationException("Invalid connection mode."),
             };
@@ -414,12 +414,12 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
         return sb;
     }
 
-    private void InitializeInternals(IDatabaseContextConfiguration config)
+    private ITrackedConnection? InitializeInternals(IDatabaseContextConfiguration config)
     {
         var connectionString = config.ConnectionString;
         var mode = config.DbMode;
         ReadWriteMode = config.ReadWriteMode;
-        ITrackedConnection conn = null;
+        ITrackedConnection? conn = null;
         try
         {
             _isReadConnection = (ReadWriteMode & ReadWriteMode.ReadOnly) == ReadWriteMode.ReadOnly;
@@ -459,7 +459,6 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
                 // if the mode is anything but standard
                 // we store it as our minimal connection
                 ApplyConnectionSessionSettings(conn);
-                _connection = conn;
             }
             _isolationResolver ??= new IsolationResolver(Product, RCSIEnabled);
         }
@@ -471,9 +470,14 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
         {
             _isolationResolver ??= new IsolationResolver(Product, RCSIEnabled);
             if (mode == DbMode.Standard)
+            {
                 //if it is standard mode, we can close it.
                 conn?.Dispose();
+                conn = null;
+            }
         }
+
+        return conn;
     }
 
     private DbConnectionStringBuilder GetFactoryConnectionStringBuilder(string connectionString)
@@ -559,8 +563,13 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 
     protected override void DisposeManaged()
     {
-        _connection?.Dispose();
-        _connection = null;
+        _connectionStrategy.Dispose();
         base.DisposeManaged();
+    }
+
+    protected override async ValueTask DisposeManagedAsync()
+    {
+        await _connectionStrategy.DisposeAsync().ConfigureAwait(false);
+        await base.DisposeManagedAsync().ConfigureAwait(false);
     }
 }

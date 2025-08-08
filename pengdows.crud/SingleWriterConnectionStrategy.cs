@@ -2,10 +2,11 @@ using System;
 using System.Threading.Tasks;
 using pengdows.crud.enums;
 using pengdows.crud.wrappers;
+using pengdows.crud.infrastructure;
 
 namespace pengdows.crud;
 
-internal sealed class SingleWriterConnectionStrategy : IConnectionStrategy
+internal sealed class SingleWriterConnectionStrategy : SafeAsyncDisposableBase, IConnectionStrategy
 {
     private readonly ITrackedConnection _writerConnection;
     private readonly Func<ITrackedConnection> _factory;
@@ -49,6 +50,22 @@ internal sealed class SingleWriterConnectionStrategy : IConnectionStrategy
                 connection.Dispose();
             }
         }
+    }
+
+    protected override void DisposeManaged()
+    {
+        _writerConnection.Dispose();
+    }
+
+    protected override async ValueTask DisposeManagedAsync()
+    {
+        if (_writerConnection is IAsyncDisposable asyncDisposable)
+        {
+            await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+            return;
+        }
+
+        _writerConnection.Dispose();
     }
 }
 

@@ -2,10 +2,11 @@ using System;
 using System.Threading.Tasks;
 using pengdows.crud.enums;
 using pengdows.crud.wrappers;
+using pengdows.crud.infrastructure;
 
 namespace pengdows.crud;
 
-internal class StandardConnectionStrategy : IConnectionStrategy
+internal class StandardConnectionStrategy : SafeAsyncDisposableBase, IConnectionStrategy
 {
     private readonly Func<ITrackedConnection> _factory;
 
