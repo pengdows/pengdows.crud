@@ -1,16 +1,16 @@
-# pengdow.crud
-[![NuGet](https://img.shields.io/nuget/v/pengdow.crud.svg)](https://www.nuget.org/packages/pengdow.threading)
+# pengdows.crud
+[![NuGet](https://img.shields.io/nuget/v/pengdows.crud.svg)](https://www.nuget.org/packages/pengdows.threading)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Build](https://github.com/pengdow/pengdow.crud/actions/workflows/deploy.yml/badge.svg)](https://github.com/pengdow/pengdow.crud/actions)
-[![Coverage](https://codecov.io/gh/pengdow/pengdow.crud/branch/main/graph/badge.svg)](https://codecov.io/gh/pengdow/pengdow.crud)
+[![Build](https://github.com/pengdows/pengdows.crud/actions/workflows/deploy.yml/badge.svg)](https://github.com/pengdows/pengdows.crud/actions)
+[![Coverage](https://codecov.io/gh/pengdows/pengdows.crud/branch/main/graph/badge.svg)](https://codecov.io/gh/pengdows/pengdows.crud)
 
-**pengdow.crud** is a SQL-first, strongly-typed, testable data access layer for .NET. It’s built for developers who want **full control** over SQL, **predictable behavior** across databases, and **no ORM magic**.
+**pengdows.crud** is a SQL-first, strongly-typed, testable data access layer for .NET. It’s built for developers who want **full control** over SQL, **predictable behavior** across databases, and **no ORM magic**.
 
 > No LINQ. No tracking. No surprises.
 
 ---
 
-## 🔍 Why pengdow.crud?
+## 🔍 Why pengdows.crud?
 
 - Built by a dev who actually **writes SQL**, understands **ACID**, and doesn’t want ORMs rewriting queries behind their back.
 - Works **across databases** using consistent, standards-compliant behavior.
@@ -70,7 +70,7 @@ Want support? Ask the vendor to ship a **real** ADO.NET provider.
 
 ## 🚫 Not an ORM — On Purpose
 
-`pengdow.crud` doesn't:
+`pengdows.crud` doesn't:
 - Track entities
 - Auto-generate complex queries
 - Obfuscate SQL
@@ -95,7 +95,7 @@ Instead, it helps you write **real SQL** that's:
 
 ## 🔬 Tool Comparison
 
-| Feature                     | pengdow.crud | Raw ADO.NET | Dapper | EF Core | NHibernate |
+| Feature                     | pengdows.crud | Raw ADO.NET | Dapper | EF Core | NHibernate |
 |----------------------------|---------------|-------------|--------|---------|------------|
 | Provider-Agnostic SQL      | ✅            | ⚠️ Manual   | ⚠️     | ⚠️     | ⚠️         |
 | Safe Parameterization      | ✅            | ❌ Risky    | ⚠️     | ✅     | ✅         |
@@ -130,29 +130,29 @@ Topics include:
 ## 🛠️ Getting Started
 
 ```bash
-dotnet add package pengdow.crud
-dotnet add package pengdow.crud.abstractions
+dotnet add package pengdows.crud
+dotnet add package pengdows.crud.abstractions
 ```
 
   
 If you only need the core interfaces for custom implementations, reference the
-`pengdow.crud.abstractions` package:
+`pengdows.crud.abstractions` package:
 
 ```bash
-dotnet add package pengdow.crud.abstractions
+dotnet add package pengdows.crud.abstractions
 ```
 
 
 ```csharp
 using System.Data.SqlClient;
-using pengdow.crud;
+using pengdows.crud;
 
 var db = new DatabaseContext("your-connection-string", SqlClientFactory.Instance);
 var helper = new EntityHelper<MyEntity, long>(db);
 ```
 
-For integration tests without a real database, use the `pengdow.crud.fakeDb` package:
+For integration tests without a real database, use the `pengdows.crud.fakeDb` package:
 
 ```bash
-dotnet add package pengdow.crud.fakeDb
+dotnet add package pengdows.crud.fakeDb
 ```

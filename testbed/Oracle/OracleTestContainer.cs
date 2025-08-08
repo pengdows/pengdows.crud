@@ -3,7 +3,7 @@
 using DotNet.Testcontainers.Builders;
 using Microsoft.Extensions.DependencyInjection;
 using Oracle.ManagedDataAccess.Client;
-using pengdow.crud;
+using pengdows.crud;
 using IContainer = DotNet.Testcontainers.Containers.IContainer;
 
 #endregion

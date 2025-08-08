@@ -5,7 +5,7 @@ using AdoNetCore.AseClient;
 using DotNet.Testcontainers.Containers;
 using FirebirdSql.Data.FirebirdClient;
 using Oracle.ManagedDataAccess.Client;
-using pengdow.crud;
+using pengdows.crud;
 
 #endregion
 

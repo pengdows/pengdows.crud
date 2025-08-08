@@ -1,0 +1,1025 @@
+﻿<wpf:ResourceDictionary xml:space="preserve" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                        xmlns:s="clr-namespace:System;assembly=mscorlib"
+                        xmlns:ss="urn:shemas-jetbrains-com:settings-storage-xaml"
+                        xmlns:wpf="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+	<s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EFeatures_002ENavigation_002ELanguages_002ECSharp_002EContextNavigation_002ECSharpFindNullableWarningSuppressionsAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EFeatures_002ERegExp_002EContextActions_002EFixRegularExpressionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EFeatures_002ERegExp_002EContextActions_002EToPrecompileAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAddAnonymousFieldNameAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAddArgumentNameContextAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAddBracesAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAddDeconstructionPatternComponentNameAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAddExceptionDocCommentAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAddInheritdocAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAddPatternVariableAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAddSecondAccessorAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAddSwitchConditionComponentAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAddSwitchSectionBracesAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAddTupleComponentNameAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAddUsingAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAnnotateDataMembersAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAnnotateEnumMembersAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAnnotateOperationContractsAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAnonymousMethodToLambdaExpressionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAnonymousMethodToLocalFunctionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAnonymousToDeclaredTypeAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAnonymousToNamedMethodAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAnonymousToTupleAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAssertNotNullAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAutoAccessorToExplicitAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAutoPropertyToBackingFieldAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAutoPropertyToFieldKeywordAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EBodyExpressionToStatementAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EBodyStatementToExpressionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECaptureEntityNameFromStringLiteralAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECatchExceptionToCatchAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECatchToCatchExceptionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EChangeModifierAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EChangeOverridableKindAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EChangeSetterKindAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EChangeTypeKindAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECheck_002ECheckArrayIndexValueAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECheck_002ECheckCollectionIndexValueAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECheck_002ECheckDictionaryKeyValueAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECheck_002ECheckSpanIndexValueAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECheck_002ECheckStringBuilderIndexValueAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECheck_002ECheckStringIndexValueAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECheckParameters_002ECheckAll_002EAllStringParameterIsNotNullOrEmptyCheckAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECheckParameters_002ECheckAll_002EAllStringParameterIsNotNullOrWhitespaceCheckAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECheckParameters_002ECheckAll_002ECheckAllParamsNullAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECheckParameters_002ECollectionIsNotEmptyCheckAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECheckParameters_002EEnumParameterIsDefinedCheckAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECheckParameters_002ENumericParameterCheckRangeAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECheckParameters_002EParameterIsValidCheckAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECheckParameters_002EStringParameterIsNotNullOrEmptyCheckAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECheckParameters_002EStringParameterIsNotNullOrWhitespaceCheckAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECheckParamNullAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECheckReferenceNullAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECheckVariableNullAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECollectionInitializerToAddsAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECollectionLengthCheckToListPatternAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EComments_002EDeleteCommentAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EComments_002EUncommentAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECompoundToRegularContextAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EConditionalAccessToExpressionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EConditionalExpressionToAccessAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EConditionalToNormalAccessAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EConfigureNullCheckAssertionPattern/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EConfigureParameterNullCheckPattern/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EConfigureVariableNullCheckPattern/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EConstructorToFactoryAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EConvertStringEscapeSequenceAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EConvertToArrayCreationExpressionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EConvertToBlockScopedNamespaceAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EConvertToCollectionInitializerAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EConvertToDefaultExpressionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EConvertToFileScopedNamespaceAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EConvertToTryFinallyAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EConvertToUsingDeclarationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EConvertToUsingStatementAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECopyDocumentationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECreateDerivedTypeAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECreateMatchingCheckedOperatorAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECreateOverloadAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECSharpInitializeAutoPropertyAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECSharpInitializeFieldAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECSharpInitializeNonPrivateFieldAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EDeconstructingDeclarationToVarSyntaxAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EDeconstructVariableAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EEnableInspection_002EEnableDoWhileBracesStyleAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EEnableInspection_002EEnableFixedBracesStyleAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EEnableInspection_002EEnableForBracesStyleAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EEnableInspection_002EEnableForEachBracesStyleAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EEnableInspection_002EEnableIfBracesStyleAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EEnableInspection_002EEnableLocalFunctionCanBeMadeStaticAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EEnableInspection_002EEnableLockBracesStyleAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EEnableInspection_002EEnableStructMemberCanBeMadeReadOnlyAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EEnableInspection_002EEnableSuppressedNullableAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EEnableInspection_002EEnableUnnecessaryWhiteSpaceAtEndOfLineAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EEnableInspection_002EEnableUsageOfTabProhibitedAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EEnableInspection_002EEnableUsingBracesStyleAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EEnableInspection_002EEnableWhileBracesStyleAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EEncapsulateLazyFieldAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EEqualityOperatorToEqualsAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EEqualityOperatorToReferenceEqualsAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EEqualsToEqualityOperatorAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EExplicitToImplicitMemberAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EFieldKeywordToExplicitFieldAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EFillObjectInitializerAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EForeachToForAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EFormatString_002EAddFormatItemAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EFormatString_002EAddStringInterpolationArgumentAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EFormatString_002EConvertConcatenationToInterpolationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EFormatString_002EPassStringFormatAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EFormatString_002EPassStringInterpolationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EFormatString_002ERemoveFormatItemAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EFormatString_002ESurroundWithFormatAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EFormatString_002EUseFormatStringAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EFormatString_002EUseStringInterpolationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EFromLinqContextAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EGenerateFlagPresenceCheckExtensionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EGenerateTypePatternsAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EIfAndMergeAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EIfNotNullToConditionalAccessAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EIfToGuardClauseAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EIfToNullPropagationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EIfToSwitchExpressionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EIfToSwitchStatementAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EIfToTernaryAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EImplementEventAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EImplementNotifyPropertyChangedAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EImplementOrOverrideMember_002EImplementAbstractMemberAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EImplementOrOverrideMember_002EOverrideMemberAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EImplicitToExplicitMemberAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EImportStaticMembersAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EIncludeIntoObjectPatternAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EInitializeMemberFromConstructorAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EInlineControlTransferStatementAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EInlineInsertToInterpolationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EInlineOutVariableDeclarationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EInlineTemporaryVariableAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EInlineUsingAliasAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EInlineVariableIntoConditionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EInsertAnonymousMethodSignatureAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EInsertLambdaExpressionReturnTypeAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EInsertLambdaExpressionSignatureAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EInsertPragmaWarningDescriptionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EInterpolationToStringFormatAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EInvertIfAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EInvertTernaryConditionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EInvokeAsStaticMethodAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EInvokeEventAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EIterateViaAwaitForeachAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EIterateViaForeachAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EIterator2FunctionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EJoinAttributesAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EJoinDeclarationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EJoinDeconstructionDeclarationsAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EJoinNullCheckWithUsageAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EJoinStringsAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ELambdaExpressionToAnonymousMethodAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ELambdaExpressionToLocalFunctionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ELambdaExpressionToStatementAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ELambdaStatementToExpressionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ELambdaToNamedMethodAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ELiftLocalFunctionClosureToParameterAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ELiveTemplateBasedIterateViaForeachAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ELocalFunctionToNamedMethodAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMarkNullableAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMergeDeconstructedDeclarationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMergeIntoPatternAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMergeSequentialChecksAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMethodGroupToAnonymousMethodAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMethodGroupToLambdaAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMigrateToNullableEnableAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EChangeRawStringAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EComputeConstantValueAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EConvertForEachCallToStatementAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EConvertLiteralToBinAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EConvertLiteralToDecAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EConvertLiteralToHexAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EConvertRegularStringInterpolationToVerbatimAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EConvertRegularStringToVerbatimAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EConvertRegularToRawInterpolatedStringAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EConvertRegularToRawStringAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EConvertStringLiteralToInterpolationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EConvertVerbatimStringInterpolationToRegularAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EConvertVerbatimStringToRegularAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EConvertVerbatimToRawInterpolatedStringAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EConvertVerbatimToRawStringAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EEvaluateExpressionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EFixInvalidStringEscapingAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EFixRegularStringToVerbatimAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EFlipInvocationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EFlipOperatorArgumentsAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EFlipRelationalExpressionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EIntroduceTypeAliasAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EReinterpretStringLiteralAsInterpolationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002ERemoveDigitSeparatorsAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002ESeparateIntegralLiteralDigitsAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002ESeparateRealLiteralDigitsAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002ESurroundWithQuotesAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EToStringLiteralAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EUseTypeAliasAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EWrapTernaryExpressionInInterpolationWithParenthesesAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMoveInitializationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMoveLocalFunctionToTheEndOfAScopeAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMoveToAnotherPartAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMoveToInitializerAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMoveToOuterScopeAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMoveTypeToAnotherFileAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ENegateLogicalExpressionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ENonI18n_002ECSharpUseStringEmptyAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ENonI18n_002EUseEnvironmentNewLineAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ENormalToConditionalAccessAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ENotifyPropertyChangeAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ENullCoalescingAssignmentToIfStatementAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ENullCoalescingToIfStatementAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ENullPropagationToIfStatementAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EObjectInitializerToAssignmentsAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EObjectInitializerToConstructorAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EPartial_002ECreateNewTypePartAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EPartial_002EMakeMethodPartialAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EPartial_002EMergePartialMembersDeclarationsAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EPartial_002EMergePartialTypesDeclarationsAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EQualifyReferenceAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EQualifyStaticMembersAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EQuery_002EQueryToExtensionMethodAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERecursivePatternToAccessExpressionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERefactorings_002EChangeSignatureAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERefactorings_002EConvertToGlobalUsingAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERefactorings_002EConvertToNonGlobalUsingAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERefactorings_002ECopyTypeAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERefactorings_002EExtensionToStaticMethodAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERefactorings_002EExtractMethodAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERefactorings_002EIntroduceParameterAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERefactorings_002EIntroduceVariableAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERefactorings_002EMethodToPropertyAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERefactorings_002EPropertyToMethodAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERefactorings_002ERemoveParamsModifierAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERefactorings_002ESetParamsModifierAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERefactorings_002EStaticMethodToExtensionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERefactorings_002ETransformParametersAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EReferenceEqualsToEqualityOperatorAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERemoveArgumentNameAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERemoveBracesAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERemoveDeconstructionPatternComponentNameAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERemoveParenthesisAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERemoveRegionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERemoveSwitchConditionComponentAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERemoveTupleComponentNameAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERenameFileToMatchTypeNameAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EReplaceLogicalExpressionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EReturnValueAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EReverseAssignmentAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERevertForLoopAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESeparateLocalFunctionsWithJumpStatementAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESetDisposeAnalysisModeAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESimplifyLinqExpressionUseMinByAndMaxByAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESortUsingDirectivesAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESpecifyEnumValuesAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitAndInIfAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitAndInReturnAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitAndPatternAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitAttributesAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitConditionalAccessAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitDeclarationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitDeclarationAndMoveToOuterScopeAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitDeclarationsListAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitFluentApiDivisionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitFluentApiUnchainAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitIntoNestedPatternsAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitListPatternAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitOrInIfAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitOrInReturnAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitOrInSwitchCaseGuardAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitOrPatternAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitRecursivePatternAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitReturnToIfAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitStringAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitTupleAssignmentAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitVarPatternAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EStringBuilderRewriting_002EAppendLineToSeparateAppendAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EStringBuilderRewriting_002ELiteralToStringBuilderAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EStringBuilderRewriting_002EMultilineStringToAppendLineAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EStringBuilderRewriting_002EToStringBuilderConversionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EStringBuilderRewriting_002EToStringBuilderSubstitutionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EStringEqualityToMethodInvocationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EStringToXElement_002EStringToXElementCodeAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESwitchExpressionToIfElseAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESwitchExpressionToStatementAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESwitchExpressionToTernaryAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESwitchStatementToExpressionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESwitchStatementToIfElseAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ETernaryToIfAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ETernaryToSwitchExpressionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EToAutoPropertyAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EToComputedPropertyAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EToDirectCastAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EToExplicitConstructorAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EToExplicitFieldAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EToExplicitParamsArrayAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EToExplicitParamsCollectionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EToExplicitProgramClassAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EToExplicitPropertyAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EToggleSyntaxStyleForNativeNumericAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EToLocalVariableMutationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EToNamedPropertyPatternsAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EToObjectPatternAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EToParamsCollectionExpressionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EToPatternOverConstantValueCheckAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EToSafeCastAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EToTopLevelCodeAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ETypeToVarAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EUseArrayCreationExpressionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EUseAsAndCheckForNullAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EUseCollectionExpressionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EUseConfigureAwaitFalseAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EUseExplicitArrayAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EUseExplicitDiscardDeclarationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EUseExplicitlyTypedNewAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EUseExplicitOrImplicitTupleComponentNameAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EUseExplicitTypeParametersAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EUseImplicitDiscardDeclarationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EUseObjectInitializerAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EUsePositionalDeconstructionPatternAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EUseSeparateDeconstructionDeclarationsAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EUseSpanForStackAllocAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EUseTargetTypedNewAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EVarToTypeAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EQuickFixes_002EEnableNullableWarningFixAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EQuickFixes_002ESetConfigureAwaitAnalysisModeFix/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EQuickFixes_002ESetLanguageLevelAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ERazor_002EContextActions_002EComments_002EDeleteCommentAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EUnitTestFramework_002EFeatures_002ETestLinker_002ECreateTest_002ETemplates_002ECSharp_002ECreateUnitTestContextAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EUnitTesting_002EAnalysis_002EnUnit_002EQuickFixes_002EAddTestCaseAttributeAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002ERider_002EBackend_002EFeatures_002EDebugger_002EActions_002ECSharp_002ECSharpBrowseClassInstancesContextAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002ERider_002EBackend_002EFeatures_002EDebugger_002EActions_002ECSharp_002ECSharpForceRunToCursorContextAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002ERider_002EBackend_002EFeatures_002EDebugger_002EActions_002ECSharp_002ECSharpJumpToStatementContextAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002ERider_002EBackend_002EFeatures_002EDebugger_002EActions_002ECSharp_002ECSharpRunToCursorContextAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean
+            x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002ERider_002EBackend_002EFeatures_002EDebugger_002EActions_002ECSharp_002ECSharpSmartStepIntoContextAction/@EntryIndexedValue">False</s:Boolean>
+<wpf:ResourceDictionary xml:space="preserve" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:s="clr-namespace:System;assembly=mscorlib" xmlns:ss="urn:shemas-jetbrains-com:settings-storage-xaml" xmlns:wpf="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+	<s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EFeatures_002ENavigation_002ELanguages_002ECSharp_002EContextNavigation_002ECSharpFindNullableWarningSuppressionsAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EFeatures_002ERegExp_002EContextActions_002EFixRegularExpressionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EFeatures_002ERegExp_002EContextActions_002EToPrecompileAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAddAnonymousFieldNameAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAddArgumentNameContextAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAddBracesAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAddDeconstructionPatternComponentNameAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAddExceptionDocCommentAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAddInheritdocAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAddPatternVariableAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAddSecondAccessorAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAddSwitchConditionComponentAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAddSwitchSectionBracesAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAddTupleComponentNameAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAddUsingAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAnnotateDataMembersAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAnnotateEnumMembersAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAnnotateOperationContractsAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAnonymousMethodToLambdaExpressionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAnonymousMethodToLocalFunctionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAnonymousToDeclaredTypeAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAnonymousToNamedMethodAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAnonymousToTupleAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAssertNotNullAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAutoAccessorToExplicitAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAutoPropertyToBackingFieldAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EAutoPropertyToFieldKeywordAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EBodyExpressionToStatementAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EBodyStatementToExpressionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECaptureEntityNameFromStringLiteralAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECatchExceptionToCatchAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECatchToCatchExceptionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EChangeModifierAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EChangeOverridableKindAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EChangeSetterKindAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EChangeTypeKindAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECheck_002ECheckArrayIndexValueAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECheck_002ECheckCollectionIndexValueAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECheck_002ECheckDictionaryKeyValueAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECheck_002ECheckSpanIndexValueAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECheck_002ECheckStringBuilderIndexValueAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECheck_002ECheckStringIndexValueAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECheckParameters_002ECheckAll_002EAllStringParameterIsNotNullOrEmptyCheckAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECheckParameters_002ECheckAll_002EAllStringParameterIsNotNullOrWhitespaceCheckAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECheckParameters_002ECheckAll_002ECheckAllParamsNullAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECheckParameters_002ECollectionIsNotEmptyCheckAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECheckParameters_002EEnumParameterIsDefinedCheckAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECheckParameters_002ENumericParameterCheckRangeAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECheckParameters_002EParameterIsValidCheckAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECheckParameters_002EStringParameterIsNotNullOrEmptyCheckAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECheckParameters_002EStringParameterIsNotNullOrWhitespaceCheckAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECheckParamNullAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECheckReferenceNullAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECheckVariableNullAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECollectionInitializerToAddsAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECollectionLengthCheckToListPatternAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EComments_002EDeleteCommentAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EComments_002EUncommentAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECompoundToRegularContextAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EConditionalAccessToExpressionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EConditionalExpressionToAccessAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EConditionalToNormalAccessAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EConfigureNullCheckAssertionPattern/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EConfigureParameterNullCheckPattern/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EConfigureVariableNullCheckPattern/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EConstructorToFactoryAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EConvertStringEscapeSequenceAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EConvertToArrayCreationExpressionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EConvertToBlockScopedNamespaceAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EConvertToCollectionInitializerAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EConvertToDefaultExpressionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EConvertToFileScopedNamespaceAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EConvertToTryFinallyAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EConvertToUsingDeclarationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EConvertToUsingStatementAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECopyDocumentationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECreateDerivedTypeAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECreateMatchingCheckedOperatorAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECreateOverloadAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECSharpInitializeAutoPropertyAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECSharpInitializeFieldAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ECSharpInitializeNonPrivateFieldAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EDeconstructingDeclarationToVarSyntaxAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EDeconstructVariableAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EEnableInspection_002EEnableDoWhileBracesStyleAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EEnableInspection_002EEnableFixedBracesStyleAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EEnableInspection_002EEnableForBracesStyleAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EEnableInspection_002EEnableForEachBracesStyleAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EEnableInspection_002EEnableIfBracesStyleAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EEnableInspection_002EEnableLocalFunctionCanBeMadeStaticAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EEnableInspection_002EEnableLockBracesStyleAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EEnableInspection_002EEnableStructMemberCanBeMadeReadOnlyAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EEnableInspection_002EEnableSuppressedNullableAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EEnableInspection_002EEnableUnnecessaryWhiteSpaceAtEndOfLineAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EEnableInspection_002EEnableUsageOfTabProhibitedAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EEnableInspection_002EEnableUsingBracesStyleAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EEnableInspection_002EEnableWhileBracesStyleAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EEncapsulateLazyFieldAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EEqualityOperatorToEqualsAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EEqualityOperatorToReferenceEqualsAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EEqualsToEqualityOperatorAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EExplicitToImplicitMemberAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EFieldKeywordToExplicitFieldAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EFillObjectInitializerAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EForeachToForAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EFormatString_002EAddFormatItemAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EFormatString_002EAddStringInterpolationArgumentAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EFormatString_002EConvertConcatenationToInterpolationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EFormatString_002EPassStringFormatAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EFormatString_002EPassStringInterpolationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EFormatString_002ERemoveFormatItemAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EFormatString_002ESurroundWithFormatAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EFormatString_002EUseFormatStringAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EFormatString_002EUseStringInterpolationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EFromLinqContextAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EGenerateFlagPresenceCheckExtensionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EGenerateTypePatternsAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EIfAndMergeAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EIfNotNullToConditionalAccessAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EIfToGuardClauseAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EIfToNullPropagationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EIfToSwitchExpressionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EIfToSwitchStatementAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EIfToTernaryAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EImplementEventAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EImplementNotifyPropertyChangedAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EImplementOrOverrideMember_002EImplementAbstractMemberAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EImplementOrOverrideMember_002EOverrideMemberAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EImplicitToExplicitMemberAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EImportStaticMembersAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EIncludeIntoObjectPatternAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EInitializeMemberFromConstructorAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EInlineControlTransferStatementAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EInlineInsertToInterpolationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EInlineOutVariableDeclarationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EInlineTemporaryVariableAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EInlineUsingAliasAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EInlineVariableIntoConditionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EInsertAnonymousMethodSignatureAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EInsertLambdaExpressionReturnTypeAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EInsertLambdaExpressionSignatureAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EInsertPragmaWarningDescriptionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EInterpolationToStringFormatAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EInvertIfAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EInvertTernaryConditionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EInvokeAsStaticMethodAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EInvokeEventAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EIterateViaAwaitForeachAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EIterateViaForeachAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EIterator2FunctionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EJoinAttributesAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EJoinDeclarationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EJoinDeconstructionDeclarationsAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EJoinNullCheckWithUsageAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EJoinStringsAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ELambdaExpressionToAnonymousMethodAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ELambdaExpressionToLocalFunctionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ELambdaExpressionToStatementAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ELambdaStatementToExpressionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ELambdaToNamedMethodAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ELiftLocalFunctionClosureToParameterAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ELiveTemplateBasedIterateViaForeachAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ELocalFunctionToNamedMethodAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMarkNullableAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMergeDeconstructedDeclarationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMergeIntoPatternAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMergeSequentialChecksAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMethodGroupToAnonymousMethodAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMethodGroupToLambdaAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMigrateToNullableEnableAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EChangeRawStringAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EComputeConstantValueAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EConvertForEachCallToStatementAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EConvertLiteralToBinAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EConvertLiteralToDecAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EConvertLiteralToHexAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EConvertRegularStringInterpolationToVerbatimAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EConvertRegularStringToVerbatimAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EConvertRegularToRawInterpolatedStringAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EConvertRegularToRawStringAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EConvertStringLiteralToInterpolationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EConvertVerbatimStringInterpolationToRegularAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EConvertVerbatimStringToRegularAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EConvertVerbatimToRawInterpolatedStringAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EConvertVerbatimToRawStringAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EEvaluateExpressionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EFixInvalidStringEscapingAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EFixRegularStringToVerbatimAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EFlipInvocationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EFlipOperatorArgumentsAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EFlipRelationalExpressionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EIntroduceTypeAliasAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EReinterpretStringLiteralAsInterpolationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002ERemoveDigitSeparatorsAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002ESeparateIntegralLiteralDigitsAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002ESeparateRealLiteralDigitsAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002ESurroundWithQuotesAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EToStringLiteralAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EUseTypeAliasAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMisc_002EWrapTernaryExpressionInInterpolationWithParenthesesAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMoveInitializationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMoveLocalFunctionToTheEndOfAScopeAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMoveToAnotherPartAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMoveToInitializerAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMoveToOuterScopeAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EMoveTypeToAnotherFileAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ENegateLogicalExpressionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ENonI18n_002ECSharpUseStringEmptyAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ENonI18n_002EUseEnvironmentNewLineAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ENormalToConditionalAccessAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ENotifyPropertyChangeAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ENullCoalescingAssignmentToIfStatementAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ENullCoalescingToIfStatementAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ENullPropagationToIfStatementAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EObjectInitializerToAssignmentsAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EObjectInitializerToConstructorAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EPartial_002ECreateNewTypePartAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EPartial_002EMakeMethodPartialAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EPartial_002EMergePartialMembersDeclarationsAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EPartial_002EMergePartialTypesDeclarationsAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EQualifyReferenceAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EQualifyStaticMembersAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EQuery_002EQueryToExtensionMethodAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERecursivePatternToAccessExpressionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERefactorings_002EChangeSignatureAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERefactorings_002EConvertToGlobalUsingAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERefactorings_002EConvertToNonGlobalUsingAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERefactorings_002ECopyTypeAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERefactorings_002EExtensionToStaticMethodAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERefactorings_002EExtractMethodAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERefactorings_002EIntroduceParameterAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERefactorings_002EIntroduceVariableAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERefactorings_002EMethodToPropertyAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERefactorings_002EPropertyToMethodAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERefactorings_002ERemoveParamsModifierAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERefactorings_002ESetParamsModifierAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERefactorings_002EStaticMethodToExtensionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERefactorings_002ETransformParametersAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EReferenceEqualsToEqualityOperatorAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERemoveArgumentNameAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERemoveBracesAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERemoveDeconstructionPatternComponentNameAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERemoveParenthesisAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERemoveRegionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERemoveSwitchConditionComponentAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERemoveTupleComponentNameAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERenameFileToMatchTypeNameAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EReplaceLogicalExpressionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EReturnValueAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EReverseAssignmentAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ERevertForLoopAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESeparateLocalFunctionsWithJumpStatementAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESetDisposeAnalysisModeAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESimplifyLinqExpressionUseMinByAndMaxByAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESortUsingDirectivesAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESpecifyEnumValuesAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitAndInIfAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitAndInReturnAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitAndPatternAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitAttributesAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitConditionalAccessAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitDeclarationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitDeclarationAndMoveToOuterScopeAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitDeclarationsListAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitFluentApiDivisionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitFluentApiUnchainAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitIntoNestedPatternsAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitListPatternAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitOrInIfAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitOrInReturnAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitOrInSwitchCaseGuardAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitOrPatternAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitRecursivePatternAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitReturnToIfAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitStringAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitTupleAssignmentAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESplitVarPatternAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EStringBuilderRewriting_002EAppendLineToSeparateAppendAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EStringBuilderRewriting_002ELiteralToStringBuilderAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EStringBuilderRewriting_002EMultilineStringToAppendLineAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EStringBuilderRewriting_002EToStringBuilderConversionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EStringBuilderRewriting_002EToStringBuilderSubstitutionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EStringEqualityToMethodInvocationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EStringToXElement_002EStringToXElementCodeAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESwitchExpressionToIfElseAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESwitchExpressionToStatementAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESwitchExpressionToTernaryAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESwitchStatementToExpressionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ESwitchStatementToIfElseAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ETernaryToIfAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ETernaryToSwitchExpressionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EToAutoPropertyAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EToComputedPropertyAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EToDirectCastAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EToExplicitConstructorAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EToExplicitFieldAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EToExplicitParamsArrayAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EToExplicitParamsCollectionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EToExplicitProgramClassAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EToExplicitPropertyAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EToggleSyntaxStyleForNativeNumericAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EToLocalVariableMutationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EToNamedPropertyPatternsAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EToObjectPatternAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EToParamsCollectionExpressionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EToPatternOverConstantValueCheckAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EToSafeCastAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EToTopLevelCodeAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002ETypeToVarAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EUseArrayCreationExpressionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EUseAsAndCheckForNullAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EUseCollectionExpressionAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EUseConfigureAwaitFalseAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EUseExplicitArrayAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EUseExplicitDiscardDeclarationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EUseExplicitlyTypedNewAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EUseExplicitOrImplicitTupleComponentNameAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EUseExplicitTypeParametersAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EUseImplicitDiscardDeclarationAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EUseObjectInitializerAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EUsePositionalDeconstructionPatternAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EUseSeparateDeconstructionDeclarationsAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EUseSpanForStackAllocAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EUseTargetTypedNewAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EContextActions_002EVarToTypeAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EQuickFixes_002EEnableNullableWarningFixAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EQuickFixes_002ESetConfigureAwaitAnalysisModeFix/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ECSharp_002EQuickFixes_002ESetLanguageLevelAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EIntentions_002ERazor_002EContextActions_002EComments_002EDeleteCommentAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EUnitTestFramework_002EFeatures_002ETestLinker_002ECreateTest_002ETemplates_002ECSharp_002ECreateUnitTestContextAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002EReSharper_002EUnitTesting_002EAnalysis_002EnUnit_002EQuickFixes_002EAddTestCaseAttributeAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002ERider_002EBackend_002EFeatures_002EDebugger_002EActions_002ECSharp_002ECSharpBrowseClassInstancesContextAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002ERider_002EBackend_002EFeatures_002EDebugger_002EActions_002ECSharp_002ECSharpForceRunToCursorContextAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002ERider_002EBackend_002EFeatures_002EDebugger_002EActions_002ECSharp_002ECSharpJumpToStatementContextAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002ERider_002EBackend_002EFeatures_002EDebugger_002EActions_002ECSharp_002ECSharpRunToCursorContextAction/@EntryIndexedValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeEditing/ContextActionTable/DisabledContextActions/=JetBrains_002ERider_002EBackend_002EFeatures_002EDebugger_002EActions_002ECSharp_002ECSharpSmartStepIntoContextAction/@EntryIndexedValue">False</s:Boolean>
+    <s:String x:Key="/Default/CodeStyle/CodeFormatting/CSharpCodeStyle/BRACES_FOR_FOR/@EntryValue">Required</s:String>
+    <s:String x:Key="/Default/CodeStyle/CodeFormatting/CSharpCodeStyle/BRACES_FOR_FOREACH/@EntryValue">Required</s:String>
+    <s:String x:Key="/Default/CodeStyle/CodeFormatting/CSharpCodeStyle/BRACES_FOR_IFELSE/@EntryValue">Required</s:String>
+    <s:String x:Key="/Default/CodeStyle/CodeFormatting/CSharpCodeStyle/BRACES_FOR_WHILE/@EntryValue">Required</s:String>
+    <s:Boolean x:Key="/Default/CodeStyle/CodeFormatting/CSharpCodeStyle/BRACES_REDUNDANT/@EntryValue">False</s:Boolean>
+    <s:Boolean x:Key="/Default/CodeStyle/CodeFormatting/CSharpFormat/ALLOW_COMMENT_AFTER_LBRACE/@EntryValue">True</s:Boolean>
+	<s:Boolean x:Key="/Default/Environment/SettingsMigration/IsMigratorApplied/=JetBrains_002EReSharper_002EPsi_002ECSharp_002ECodeStyle_002ECSharpKeepExistingMigration/@EntryIndexedValue">True</s:Boolean>
+	<s:Boolean x:Key="/Default/Environment/SettingsMigration/IsMigratorApplied/=JetBrains_002EReSharper_002EPsi_002ECSharp_002ECodeStyle_002ECSharpPlaceEmbeddedOnSameLineMigration/@EntryIndexedValue">True</s:Boolean>
+	<s:Boolean x:Key="/Default/Environment/SettingsMigration/IsMigratorApplied/=JetBrains_002EReSharper_002EPsi_002ECSharp_002ECodeStyle_002ECSharpUseContinuousIndentInsideBracesMigration/@EntryIndexedValue">True</s:Boolean>
+	<s:Boolean x:Key="/Default/Environment/SettingsMigration/IsMigratorApplied/=JetBrains_002EReSharper_002EPsi_002ECSharp_002ECodeStyle_002ESettingsUpgrade_002EMigrateBlankLinesAroundFieldToBlankLinesAroundProperty/@EntryIndexedValue">True</s:Boolean>
+    <s:Boolean x:Key="/Default/UserDictionary/Words/=pengdows/@EntryIndexedValue">True</s:Boolean>
+    <s:Boolean x:Key="/Default/UserDictionary/Words/=postgre/@EntryIndexedValue">True</s:Boolean></wpf:ResourceDictionary>

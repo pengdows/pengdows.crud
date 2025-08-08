@@ -10,7 +10,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Oracle.ManagedDataAccess.Client;
-using pengdow.crud;
+using pengdows.crud;
 using testbed;
 using testbed.Cockroach;
 

@@ -28,7 +28,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\pengdow.crud\pengdow.crud.csproj"/>
+        <ProjectReference Include="..\pengdows.crud\pengdows.crud.csproj"/>
     </ItemGroup>
 
 </Project>

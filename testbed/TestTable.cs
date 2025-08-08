@@ -1,7 +1,7 @@
 #region
 
 using System.Data;
-using pengdow.crud.attributes;
+using pengdows.crud.attributes;
 
 #endregion
 

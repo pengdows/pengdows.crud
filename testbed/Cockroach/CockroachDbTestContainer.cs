@@ -4,7 +4,7 @@ using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
-using pengdow.crud;
+using pengdows.crud;
 
 #endregion
 

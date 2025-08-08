@@ -5,7 +5,7 @@ using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using FirebirdSql.Data.FirebirdClient;
 using Microsoft.Extensions.DependencyInjection;
-using pengdow.crud;
+using pengdows.crud;
 
 #endregion
 

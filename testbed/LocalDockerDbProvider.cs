@@ -4,7 +4,7 @@
 // using MySql.Data.MySqlClient;
 // using Npgsql;
 // using Oracle.ManagedDataAccess.Client;
-// using pengdow.crud;
+// using pengdows.crud;
 //
 // namespace testbed;
 //

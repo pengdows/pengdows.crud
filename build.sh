@@ -16,12 +16,12 @@ update_version() {
   sed -i "s|<Version>.*</Version>|<Version>${VERSION}</Version>|" "$csproj"
 }
 
-update_version pengdow.crud.abstractions/pengdow.crud.abstractions.csproj
-update_version pengdow.crud.fakeDb/pengdow.crud.fakeDb.csproj
-update_version pengdow.crud/pengdow.crud.csproj
+update_version pengdows.crud.abstractions/pengdows.crud.abstractions.csproj
+update_version pengdows.crud.fakeDb/pengdows.crud.fakeDb.csproj
+update_version pengdows.crud/pengdows.crud.csproj
 
 # Build and pack each project
-for proj in pengdow.crud.abstractions pengdow.crud.fakeDb pengdow.crud; do
+for proj in pengdows.crud.abstractions pengdows.crud.fakeDb pengdows.crud; do
   dotnet pack "$proj/$proj.csproj" -c Release
   pkg="${proj}/bin/Release/${proj}.${VERSION_SHORT}.nupkg"
   dotnet nuget push "$pkg" --source https://api.nuget.org/v3/index.json --api-key "$API_KEY"
