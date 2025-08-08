@@ -79,6 +79,15 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
     public IDataSourceInformation DataSourceInfo => _context.DataSourceInfo;
     public string SessionSettingsPreamble => _context.SessionSettingsPreamble;
 
+    public IConnectionStrategy ConnectionStrategy
+    {
+        get
+        {
+            ThrowIfDisposed();
+            return _context.ConnectionStrategy;
+        }
+    }
+
     public ILockerAsync GetLock()
     {
         ThrowIfDisposed();
@@ -100,7 +109,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
         return new SqlContainer(this, query);
     }
 
-    public DbParameter CreateDbParameter<T>(string name, DbType type, T value)
+    public DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
         return _context.CreateDbParameter(name, type, value);
     }
@@ -157,17 +166,15 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
         }
     }
 
-    /// <summary>
-    /// Nested transactions are not supported. Calling this method will always throw.
-    /// </summary>
-    public ITransactionContext BeginTransaction(IsolationProfile isolationProfile) =>
+    ITransactionContext IDatabaseContext.BeginTransaction(IsolationProfile isolationProfile, ExecutionType executionType)
+    {
         throw new InvalidOperationException("Cannot begin a nested transaction from TransactionContext.");
+    }
 
-    /// <summary>
-    /// Nested transactions are not supported. Calling this method will always throw.
-    /// </summary>
-    public ITransactionContext BeginTransaction(IsolationLevel? isolationLevel = null) =>
+    ITransactionContext IDatabaseContext.BeginTransaction(IsolationLevel? isolationLevel, ExecutionType executionType)
+    {
         throw new InvalidOperationException("Cannot begin a nested transaction from TransactionContext.");
+    }
 
     public void ReleaseConnection(ITrackedConnection? conn)
     {

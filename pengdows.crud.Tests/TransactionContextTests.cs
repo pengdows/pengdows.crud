@@ -161,7 +161,7 @@ public class TransactionContextTests
         using var tx = context.BeginTransaction();
         var name = tx.GenerateRandomName(10);
 
-        Assert.Throws<InvalidOperationException>(() => tx.BeginTransaction(null));
+        Assert.Throws<InvalidOperationException>(() => ((IDatabaseContext)tx).BeginTransaction(null));
         Assert.True(char.IsLetter(name[0]));
     }
 
@@ -169,7 +169,7 @@ public class TransactionContextTests
     public void BeginTransaction_WithIsolationProfile_Throws()
     {
         using var tx = CreateContext(SupportedDatabase.Sqlite).BeginTransaction();
-        Assert.Throws<InvalidOperationException>(() => tx.BeginTransaction(IsolationProfile.FastWithRisks));
+        Assert.Throws<InvalidOperationException>(() => ((IDatabaseContext)tx).BeginTransaction(IsolationProfile.FastWithRisks));
     }
 
     [Fact]
@@ -262,6 +262,26 @@ public class TransactionContextTests
 
         tx.Dispose();
         Assert.Throws<ObjectDisposedException>(() => ((IDatabaseContext)tx).ProcWrappingStyle = ProcWrappingStyle.Call);
+    }
+
+    [Fact]
+    public void ConnectionStrategy_DelegatesToContext()
+    {
+        var context = (DatabaseContext)CreateContext(SupportedDatabase.Sqlite);
+        using var tx = context.BeginTransaction();
+
+        Assert.Same(context.ConnectionStrategy, ((IDatabaseContext)tx).ConnectionStrategy);
+    }
+
+    [Fact]
+    public void ConnectionStrategy_AfterDispose_Throws()
+    {
+        var context = (DatabaseContext)CreateContext(SupportedDatabase.Sqlite);
+        var tx = context.BeginTransaction();
+
+        tx.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => ((IDatabaseContext)tx).ConnectionStrategy);
     }
 
     [Fact]
