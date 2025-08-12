@@ -230,10 +230,13 @@ public class EntityHelper<TEntity, TRowID> :
     public ISqlContainer BuildBaseRetrieve(string alias, IDatabaseContext? context = null)
     {
         var wrappedAlias = "";
-        if (!string.IsNullOrWhiteSpace(alias))
-            wrappedAlias = WrapObjectName(alias) +
-                           _context.CompositeIdentifierSeparator;
         var ctx = context ?? _context;
+        if (!string.IsNullOrWhiteSpace(alias))
+        {
+            wrappedAlias = WrapObjectName(alias) +
+                           ctx.CompositeIdentifierSeparator;
+        }
+
         var sc = ctx.CreateSqlContainer();
         var sb = sc.Query;
         sb.Append("SELECT ");
@@ -241,7 +244,10 @@ public class EntityHelper<TEntity, TRowID> :
             wrappedAlias,
             WrapObjectName(col.Name)))));
         sb.Append("\nFROM ").Append(WrappedTableName);
-        if (wrappedAlias.Length > 0) sb.Append($" {wrappedAlias.Substring(0, wrappedAlias.Length - 1)}");
+        if (wrappedAlias.Length > 0)
+        {
+            sb.Append($" {wrappedAlias.Substring(0, wrappedAlias.Length - 1)}");
+        }
 
         return sc;
     }
