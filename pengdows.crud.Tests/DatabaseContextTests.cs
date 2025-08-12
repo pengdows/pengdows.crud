@@ -1,3 +1,4 @@
+
 #region
 
 using System;
@@ -9,6 +10,7 @@ using Moq;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.FakeDb;
+using pengdows.crud.threading;
 using pengdows.crud.wrappers;
 using Xunit;
 
@@ -283,5 +285,30 @@ public class DatabaseContextTests
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
         var name = context.MakeParameterName("foo");
         Assert.StartsWith(context.DataSourceInfo.ParameterMarker, name);
+    }
+
+    [Theory]
+    [InlineData(DbMode.Standard)]
+    [InlineData(DbMode.SingleConnection)]
+    [InlineData(DbMode.SingleWriter)]
+    [InlineData(DbMode.KeepAlive)]
+    public void GetLock_ReturnsNoOpAsyncLocker(DbMode mode)
+    {
+        var product = SupportedDatabase.Sqlite;
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = $"Data Source=test;EmulatedProduct={product}",
+            ProviderName = product.ToString(),
+            DbMode = mode
+        };
+        var factory = new FakeDbFactory(product);
+        using var context = new DatabaseContext(config, factory);
+
+        var first = context.GetLock();
+        var second = context.GetLock();
+
+        Assert.IsType<NoOpAsyncLocker>(first);
+        Assert.IsNotType<RealAsyncLocker>(first);
+        Assert.Same(first, second);
     }
 }

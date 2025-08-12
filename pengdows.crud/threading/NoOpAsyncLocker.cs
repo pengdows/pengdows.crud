@@ -1,3 +1,7 @@
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+
 namespace pengdows.crud.threading;
 
 internal sealed class NoOpAsyncLocker : ILockerAsync
@@ -8,9 +12,14 @@ internal sealed class NoOpAsyncLocker : ILockerAsync
     {
     }
 
-    public Task LockAsync()
+    public Task LockAsync(CancellationToken cancellationToken = default)
     {
         return Task.CompletedTask;
+    }
+
+    public Task<bool> TryLockAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(true);
     }
 
     public ValueTask DisposeAsync()
