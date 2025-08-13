@@ -8,7 +8,7 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace pengdows.crud.FakeDb;
 
-public sealed class FakeDbCommand : DbCommand
+public class FakeDbCommand : DbCommand
 {
     public FakeDbCommand(DbConnection connection)
     {
