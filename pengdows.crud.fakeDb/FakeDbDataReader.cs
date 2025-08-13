@@ -94,7 +94,7 @@ public class FakeDbDataReader : DbDataReader
         return (byte)GetValue(i);
     }
 
-    public override long GetBytes(int i, long o, byte[]? b, int bi, int l)
+    public override long GetBytes(int ordinal, long dataOffset, byte[]? buffer, int bufferOffset, int length)
     {
         throw new NotSupportedException();
     }

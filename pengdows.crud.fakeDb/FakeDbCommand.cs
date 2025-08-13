@@ -2,6 +2,7 @@
 
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 
 #endregion
 
@@ -18,7 +19,8 @@ public sealed class FakeDbCommand : DbCommand
     {
     }
 
-    public override string? CommandText { get; set; }
+    [AllowNull]
+    public override string CommandText { get; set; }
     public override int CommandTimeout { get; set; }
     public override CommandType CommandType { get; set; }
     public override bool DesignTimeVisible { get; set; }
