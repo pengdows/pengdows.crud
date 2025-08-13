@@ -3,6 +3,7 @@
 using System.Data;
 using System.Data.Common;
 using System.Text;
+using System.Threading;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
@@ -35,6 +36,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     private bool _isSqlServer;
     private bool _isWriteConnection = true;
     private long _maxNumberOfOpenConnections;
+    private SemaphoreSlim? _contextLock;
 
     [Obsolete("Use the constructor that takes DatabaseContextConfiguration instead.")]
     public DatabaseContext(
@@ -134,7 +136,14 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 
     public ILockerAsync GetLock()
     {
-        return NoOpAsyncLocker.Instance;
+        ThrowIfDisposed();
+        if (ConnectionMode == DbMode.Standard || ConnectionMode == DbMode.KeepAlive)
+        {
+            return NoOpAsyncLocker.Instance;
+        }
+
+        var semaphore = _contextLock ??= new SemaphoreSlim(1, 1);
+        return new RealAsyncLocker(semaphore, _loggerFactory.CreateLogger<RealAsyncLocker>());
     }
 
 
@@ -479,7 +488,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 
             if (mode != DbMode.Standard)
             {
-                //
+                _contextLock ??= new SemaphoreSlim(1, 1);
                 //Interlocked.Increment(ref _connectionCount);
                 // if the mode is anything but standard
                 // we store it as our minimal connection

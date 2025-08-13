@@ -18,7 +18,7 @@ public sealed class FakeDbCommand : DbCommand
     {
     }
 
-    public override string CommandText { get; set; }
+    public override string? CommandText { get; set; }
     public override int CommandTimeout { get; set; }
     public override CommandType CommandType { get; set; }
     public override bool DesignTimeVisible { get; set; }
@@ -51,7 +51,7 @@ public sealed class FakeDbCommand : DbCommand
         return 1;
     }
 
-    public override object ExecuteScalar()
+    public override object? ExecuteScalar()
     {
         var conn = FakeConnection;
         if (conn != null && conn.ScalarResults.Count > 0)
@@ -73,7 +73,7 @@ public sealed class FakeDbCommand : DbCommand
         return Task.FromResult(ExecuteNonQuery());
     }
 
-    public override Task<object> ExecuteScalarAsync(CancellationToken ct)
+    public override Task<object?> ExecuteScalarAsync(CancellationToken ct)
     {
         return Task.FromResult(ExecuteScalar());
     }

@@ -14,7 +14,7 @@ public class FakeDbDataReader : DbDataReader
     private int _index = -1;
 
     public FakeDbDataReader(
-        IEnumerable<Dictionary<string, object>> rows = null)
+        IEnumerable<Dictionary<string, object>>? rows = null)
     {
         _rows = rows?.ToList() ?? new List<Dictionary<string, object>>();
     }
@@ -94,7 +94,7 @@ public class FakeDbDataReader : DbDataReader
         return (byte)GetValue(i);
     }
 
-    public override long GetBytes(int i, long o, byte[] b, int bi, int l)
+    public override long GetBytes(int i, long o, byte[]? b, int bi, int l)
     {
         throw new NotSupportedException();
     }

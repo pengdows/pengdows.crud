@@ -289,8 +289,6 @@ public class DatabaseContextTests
 
     [Theory]
     [InlineData(DbMode.Standard)]
-    [InlineData(DbMode.SingleConnection)]
-    [InlineData(DbMode.SingleWriter)]
     [InlineData(DbMode.KeepAlive)]
     public void GetLock_ReturnsNoOpAsyncLocker(DbMode mode)
     {
@@ -308,7 +306,29 @@ public class DatabaseContextTests
         var second = context.GetLock();
 
         Assert.IsType<NoOpAsyncLocker>(first);
-        Assert.IsNotType<RealAsyncLocker>(first);
         Assert.Same(first, second);
+    }
+
+    [Theory]
+    [InlineData(DbMode.SingleConnection)]
+    [InlineData(DbMode.SingleWriter)]
+    public void GetLock_ReturnsRealAsyncLocker(DbMode mode)
+    {
+        var product = SupportedDatabase.Sqlite;
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = $"Data Source=test;EmulatedProduct={product}",
+            ProviderName = product.ToString(),
+            DbMode = mode
+        };
+        var factory = new FakeDbFactory(product);
+        using var context = new DatabaseContext(config, factory);
+
+        var first = context.GetLock();
+        var second = context.GetLock();
+
+        Assert.IsType<RealAsyncLocker>(first);
+        Assert.IsType<RealAsyncLocker>(second);
+        Assert.NotSame(first, second);
     }
 }
