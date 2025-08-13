@@ -290,6 +290,8 @@ public class DatabaseContextTests
     [Theory]
     [InlineData(DbMode.Standard)]
     [InlineData(DbMode.KeepAlive)]
+    [InlineData(DbMode.SingleConnection)]
+    [InlineData(DbMode.SingleWriter)]
     public void GetLock_ReturnsNoOpAsyncLocker(DbMode mode)
     {
         var product = SupportedDatabase.Sqlite;
@@ -309,26 +311,20 @@ public class DatabaseContextTests
         Assert.Same(first, second);
     }
 
-    [Theory]
-    [InlineData(DbMode.SingleConnection)]
-    [InlineData(DbMode.SingleWriter)]
-    public void GetLock_ReturnsRealAsyncLocker(DbMode mode)
+    [Fact]
+    public void GetLock_WhenDisposed_Throws()
     {
         var product = SupportedDatabase.Sqlite;
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = $"Data Source=test;EmulatedProduct={product}",
             ProviderName = product.ToString(),
-            DbMode = mode
+            DbMode = DbMode.Standard
         };
         var factory = new FakeDbFactory(product);
-        using var context = new DatabaseContext(config, factory);
+        var context = new DatabaseContext(config, factory);
+        context.Dispose();
 
-        var first = context.GetLock();
-        var second = context.GetLock();
-
-        Assert.IsType<RealAsyncLocker>(first);
-        Assert.IsType<RealAsyncLocker>(second);
-        Assert.NotSame(first, second);
+        Assert.Throws<ObjectDisposedException>(() => context.GetLock());
     }
 }

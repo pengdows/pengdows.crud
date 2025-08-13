@@ -36,7 +36,6 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     private bool _isSqlServer;
     private bool _isWriteConnection = true;
     private long _maxNumberOfOpenConnections;
-    private SemaphoreSlim? _contextLock;
 
     [Obsolete("Use the constructor that takes DatabaseContextConfiguration instead.")]
     public DatabaseContext(
@@ -137,13 +136,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     public ILockerAsync GetLock()
     {
         ThrowIfDisposed();
-        if (ConnectionMode == DbMode.Standard || ConnectionMode == DbMode.KeepAlive)
-        {
-            return NoOpAsyncLocker.Instance;
-        }
-
-        var semaphore = _contextLock ??= new SemaphoreSlim(1, 1);
-        return new RealAsyncLocker(semaphore, _loggerFactory.CreateLogger<RealAsyncLocker>());
+        return NoOpAsyncLocker.Instance;
     }
 
 
