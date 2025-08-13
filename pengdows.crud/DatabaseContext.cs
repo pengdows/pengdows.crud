@@ -479,14 +479,6 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
                 mode = ConnectionMode;
             }
 
-            if (mode != DbMode.Standard)
-            {
-                _contextLock ??= new SemaphoreSlim(1, 1);
-                //Interlocked.Increment(ref _connectionCount);
-                // if the mode is anything but standard
-                // we store it as our minimal connection
-                ApplyConnectionSessionSettings(conn);
-            }
             _isolationResolver ??= new IsolationResolver(Product, RCSIEnabled);
         }
         catch(Exception ex){
