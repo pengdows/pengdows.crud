@@ -3,6 +3,7 @@
 using System.Data;
 using System.Data.Common;
 using System.Text;
+using System.Threading;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
@@ -134,6 +135,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 
     public ILockerAsync GetLock()
     {
+        ThrowIfDisposed();
         return NoOpAsyncLocker.Instance;
     }
 
@@ -463,6 +465,10 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 
             _dataSourceInfo = DataSourceInformation.Create(conn, _loggerFactory);
             SetupConnectionSessionSettingsForProvider(conn);
+            if (mode != DbMode.Standard)
+            {
+                ApplyConnectionSessionSettings(conn);
+            }
             Name = _dataSourceInfo.DatabaseProductName;
             if (_dataSourceInfo.Product == SupportedDatabase.Sqlite)
             {
@@ -477,14 +483,6 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
                 mode = ConnectionMode;
             }
 
-            if (mode != DbMode.Standard)
-            {
-                //
-                //Interlocked.Increment(ref _connectionCount);
-                // if the mode is anything but standard
-                // we store it as our minimal connection
-                ApplyConnectionSessionSettings(conn);
-            }
             _isolationResolver ??= new IsolationResolver(Product, RCSIEnabled);
         }
         catch(Exception ex){
