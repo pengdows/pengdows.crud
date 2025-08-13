@@ -1,14 +1,17 @@
+
 #region
 
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Data.Common;
 using System.Linq;
 using System.Threading.Tasks;
 using Moq;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.FakeDb;
+using pengdows.crud.threading;
 using pengdows.crud.wrappers;
 using Xunit;
 
@@ -283,5 +286,145 @@ public class DatabaseContextTests
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
         var name = context.MakeParameterName("foo");
         Assert.StartsWith(context.DataSourceInfo.ParameterMarker, name);
+    }
+
+    [Theory]
+    [InlineData(DbMode.Standard)]
+    [InlineData(DbMode.KeepAlive)]
+    [InlineData(DbMode.SingleConnection)]
+    [InlineData(DbMode.SingleWriter)]
+    public void GetLock_ReturnsNoOpAsyncLocker(DbMode mode)
+    {
+        var product = SupportedDatabase.Sqlite;
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = $"Data Source=test;EmulatedProduct={product}",
+            ProviderName = product.ToString(),
+            DbMode = mode
+        };
+        var factory = new FakeDbFactory(product);
+        using var context = new DatabaseContext(config, factory);
+
+        var first = context.GetLock();
+        var second = context.GetLock();
+
+        Assert.IsType<NoOpAsyncLocker>(first);
+        Assert.Same(first, second);
+    }
+
+    [Fact]
+    public void GetLock_WhenDisposed_Throws()
+    {
+        var product = SupportedDatabase.Sqlite;
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = $"Data Source=test;EmulatedProduct={product}",
+            ProviderName = product.ToString(),
+            DbMode = DbMode.Standard
+        };
+        var factory = new FakeDbFactory(product);
+        var context = new DatabaseContext(config, factory);
+        context.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => context.GetLock());
+    }
+
+    [Fact]
+    public void StandardConnection_DoesNotApplySessionSettings()
+    {
+        var factory = new RecordingFactory(SupportedDatabase.Sqlite);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test;EmulatedProduct=Sqlite",
+            ProviderName = SupportedDatabase.Sqlite.ToString(),
+            DbMode = DbMode.Standard
+        };
+
+        _ = new DatabaseContext(config, factory);
+
+        Assert.Empty(factory.Connection.ExecutedCommands);
+    }
+
+    [Fact]
+    public void PinnedConnection_AppliesSessionSettings()
+    {
+        var factory = new RecordingFactory(SupportedDatabase.Sqlite);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:;EmulatedProduct=Sqlite",
+            ProviderName = SupportedDatabase.Sqlite.ToString(),
+            DbMode = DbMode.SingleConnection
+        };
+
+        _ = new DatabaseContext(config, factory);
+
+        Assert.Contains("PRAGMA foreign_keys = ON;", factory.Connection.ExecutedCommands);
+    }
+
+    [Fact]
+    public void PinnedConnection_WithoutSessionSettings_DoesNotExecute()
+    {
+        var factory = new RecordingFactory(SupportedDatabase.Firebird);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test;EmulatedProduct=Firebird",
+            ProviderName = SupportedDatabase.Firebird.ToString(),
+            DbMode = DbMode.SingleConnection
+        };
+
+        _ = new DatabaseContext(config, factory);
+
+        Assert.Empty(factory.Connection.ExecutedCommands);
+    }
+
+    private sealed class RecordingFactory : DbProviderFactory
+    {
+        public RecordingConnection Connection { get; }
+
+        public RecordingFactory(SupportedDatabase product)
+        {
+            Connection = new RecordingConnection { EmulatedProduct = product };
+        }
+
+        public override DbConnection CreateConnection()
+        {
+            return Connection;
+        }
+
+        public override DbCommand CreateCommand()
+        {
+            return new FakeDbCommand();
+        }
+
+        public override DbParameter CreateParameter()
+        {
+            return new FakeDbParameter();
+        }
+    }
+
+    private sealed class RecordingConnection : FakeDbConnection
+    {
+        public List<string> ExecutedCommands { get; } = new();
+
+        protected override DbCommand CreateDbCommand()
+        {
+            return new RecordingCommand(this, ExecutedCommands);
+        }
+    }
+
+    private sealed class RecordingCommand : FakeDbCommand
+    {
+        private readonly List<string> _record;
+
+        public RecordingCommand(FakeDbConnection connection, List<string> record) : base(connection)
+        {
+            _record = record;
+        }
+
+        public override int ExecuteNonQuery()
+        {
+            _record.Add(CommandText);
+            return base.ExecuteNonQuery();
+        }
     }
 }

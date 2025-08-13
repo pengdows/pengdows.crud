@@ -2,6 +2,7 @@
 
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 
 #endregion
 
@@ -13,8 +14,11 @@ public class FakeDbParameter : DbParameter, IDbDataParameter
     public override DbType DbType { get; set; }
     public override ParameterDirection Direction { get; set; }
     public override bool IsNullable { get; set; }
+    [AllowNull]
     public override string ParameterName { get; set; }
+    [AllowNull]
     public override string SourceColumn { get; set; }
+    [AllowNull]
     public override object Value { get; set; }
     public override int Size { get; set; }
 

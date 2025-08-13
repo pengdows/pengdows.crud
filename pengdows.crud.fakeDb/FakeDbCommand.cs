@@ -2,12 +2,13 @@
 
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 
 #endregion
 
 namespace pengdows.crud.FakeDb;
 
-public sealed class FakeDbCommand : DbCommand
+public class FakeDbCommand : DbCommand
 {
     public FakeDbCommand(DbConnection connection)
     {
@@ -18,6 +19,7 @@ public sealed class FakeDbCommand : DbCommand
     {
     }
 
+    [AllowNull]
     public override string CommandText { get; set; }
     public override int CommandTimeout { get; set; }
     public override CommandType CommandType { get; set; }
@@ -51,7 +53,7 @@ public sealed class FakeDbCommand : DbCommand
         return 1;
     }
 
-    public override object ExecuteScalar()
+    public override object? ExecuteScalar()
     {
         var conn = FakeConnection;
         if (conn != null && conn.ScalarResults.Count > 0)
@@ -73,7 +75,7 @@ public sealed class FakeDbCommand : DbCommand
         return Task.FromResult(ExecuteNonQuery());
     }
 
-    public override Task<object> ExecuteScalarAsync(CancellationToken ct)
+    public override Task<object?> ExecuteScalarAsync(CancellationToken ct)
     {
         return Task.FromResult(ExecuteScalar());
     }
