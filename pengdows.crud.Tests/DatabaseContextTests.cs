@@ -329,6 +329,22 @@ public class DatabaseContextTests
     }
 
     [Fact]
+    public void StandardConnection_DoesNotApplySessionSettings()
+    {
+        var factory = new RecordingFactory(SupportedDatabase.Sqlite);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test;EmulatedProduct=Sqlite",
+            ProviderName = SupportedDatabase.Sqlite.ToString(),
+            DbMode = DbMode.Standard
+        };
+
+        _ = new DatabaseContext(config, factory);
+
+        Assert.Empty(factory.Connection.ExecutedCommands);
+    }
+
+    [Fact]
     public void PinnedConnection_AppliesSessionSettings()
     {
         var factory = new RecordingFactory(SupportedDatabase.Sqlite);
