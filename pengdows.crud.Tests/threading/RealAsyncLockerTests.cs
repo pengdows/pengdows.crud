@@ -9,6 +9,12 @@ namespace pengdows.crud.Tests.threading;
 public class RealAsyncLockerTests
 {
     [Fact]
+    public void Constructor_NullSemaphore_Throws()
+    {
+        Assert.Throws<ArgumentNullException>(() => new RealAsyncLocker(null!));
+    }
+
+    [Fact]
     public async Task LockAsync_WaitsForRelease()
     {
         var semaphore = new SemaphoreSlim(1, 1);
@@ -30,6 +36,20 @@ public class RealAsyncLockerTests
         await task.ConfigureAwait(false);
         Assert.True(acquired);
         await second.DisposeAsync().ConfigureAwait(false);
+    }
+
+    [Fact]
+    public async Task LockAsync_AlreadyAcquired_Throws()
+    {
+        var semaphore = new SemaphoreSlim(2, 2);
+        var locker = new RealAsyncLocker(semaphore);
+
+        await locker.LockAsync().ConfigureAwait(false);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => locker.LockAsync()).ConfigureAwait(false);
+        Assert.Equal(1, semaphore.CurrentCount);
+
+        await locker.DisposeAsync().ConfigureAwait(false);
+        Assert.Equal(2, semaphore.CurrentCount);
     }
 
     [Fact]
@@ -64,6 +84,21 @@ public class RealAsyncLockerTests
         Assert.False(result);
         await second.DisposeAsync().ConfigureAwait(false);
         await first.DisposeAsync().ConfigureAwait(false);
+    }
+
+    [Fact]
+    public async Task TryLockAsync_AlreadyAcquired_Throws()
+    {
+        var semaphore = new SemaphoreSlim(2, 2);
+        var locker = new RealAsyncLocker(semaphore);
+
+        var first = await locker.TryLockAsync(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
+        Assert.True(first);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => locker.TryLockAsync(TimeSpan.FromSeconds(1))).ConfigureAwait(false);
+        Assert.Equal(1, semaphore.CurrentCount);
+
+        await locker.DisposeAsync().ConfigureAwait(false);
+        Assert.Equal(2, semaphore.CurrentCount);
     }
 
     [Fact]
