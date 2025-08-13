@@ -327,4 +327,87 @@ public class DatabaseContextTests
 
         Assert.Throws<ObjectDisposedException>(() => context.GetLock());
     }
+
+    [Fact]
+    public void PinnedConnection_AppliesSessionSettings()
+    {
+        var factory = new RecordingFactory(SupportedDatabase.Sqlite);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:;EmulatedProduct=Sqlite",
+            ProviderName = SupportedDatabase.Sqlite.ToString(),
+            DbMode = DbMode.SingleConnection
+        };
+
+        _ = new DatabaseContext(config, factory);
+
+        Assert.Contains("PRAGMA foreign_keys = ON;", factory.Connection.ExecutedCommands);
+    }
+
+    [Fact]
+    public void PinnedConnection_WithoutSessionSettings_DoesNotExecute()
+    {
+        var factory = new RecordingFactory(SupportedDatabase.Firebird);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test;EmulatedProduct=Firebird",
+            ProviderName = SupportedDatabase.Firebird.ToString(),
+            DbMode = DbMode.SingleConnection
+        };
+
+        _ = new DatabaseContext(config, factory);
+
+        Assert.Empty(factory.Connection.ExecutedCommands);
+    }
+
+    private sealed class RecordingFactory : DbProviderFactory
+    {
+        public RecordingConnection Connection { get; }
+
+        public RecordingFactory(SupportedDatabase product)
+        {
+            Connection = new RecordingConnection { EmulatedProduct = product };
+        }
+
+        public override DbConnection CreateConnection()
+        {
+            return Connection;
+        }
+
+        public override DbCommand CreateCommand()
+        {
+            return new FakeDbCommand();
+        }
+
+        public override DbParameter CreateParameter()
+        {
+            return new FakeDbParameter();
+        }
+    }
+
+    private sealed class RecordingConnection : FakeDbConnection
+    {
+        public List<string> ExecutedCommands { get; } = new();
+
+        protected override DbCommand CreateDbCommand()
+        {
+            return new RecordingCommand(this, ExecutedCommands);
+        }
+    }
+
+    private sealed class RecordingCommand : FakeDbCommand
+    {
+        private readonly List<string> _record;
+
+        public RecordingCommand(FakeDbConnection connection, List<string> record) : base(connection)
+        {
+            _record = record;
+        }
+
+        public override int ExecuteNonQuery()
+        {
+            _record.Add(CommandText);
+            return base.ExecuteNonQuery();
+        }
+    }
 }

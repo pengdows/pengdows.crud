@@ -465,6 +465,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 
             _dataSourceInfo = DataSourceInformation.Create(conn, _loggerFactory);
             SetupConnectionSessionSettingsForProvider(conn);
+            ApplyConnectionSessionSettings(conn);
             Name = _dataSourceInfo.DatabaseProductName;
             if (_dataSourceInfo.Product == SupportedDatabase.Sqlite)
             {
