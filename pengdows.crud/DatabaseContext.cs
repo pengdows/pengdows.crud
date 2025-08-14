@@ -1,5 +1,6 @@
 #region
 
+using System;
 using System.Data;
 using System.Data.Common;
 using System.Text;
@@ -19,7 +20,7 @@ using pengdows.crud.wrappers;
 
 namespace pengdows.crud;
 
-public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
+public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IContextIdentity, ISqlDialectProvider
 {
     private readonly DbProviderFactory _factory;
     private readonly ILoggerFactory _loggerFactory;
@@ -31,11 +32,14 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     private string _connectionSessionSettings;
     private string _connectionString;
     private DataSourceInformation _dataSourceInfo;
+    private readonly SqlDialect _dialect;
     private IIsolationResolver _isolationResolver;
     private bool _isReadConnection = true;
     private bool _isSqlServer;
     private bool _isWriteConnection = true;
     private long _maxNumberOfOpenConnections;
+
+    public Guid RootId { get; } = Guid.NewGuid();
 
     [Obsolete("Use the constructor that takes DatabaseContextConfiguration instead.")]
     public DatabaseContext(
@@ -95,6 +99,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
             _factory = factory ?? throw new NullReferenceException(nameof(factory));
 
             var initialConnection = InitializeInternals(configuration);
+            _dialect = new SqlDialect(_dataSourceInfo, _factory, GenerateRandomName);
             var connFactory = () => FactoryCreateConnection(null, false);
             _connectionStrategy = ConnectionMode switch
             {
@@ -123,7 +128,9 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
         {
             //don't let it change
             if (!string.IsNullOrWhiteSpace(_connectionString) || string.IsNullOrWhiteSpace(value))
+            {
                 throw new ArgumentException($"Connection string reset attempted.");
+            }
 
             _connectionString = value;
         }
@@ -149,28 +156,6 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 
 
     public string SessionSettingsPreamble => _connectionSessionSettings ?? "";
-
-    public string WrapObjectName(string name)
-    {
-        var qp = QuotePrefix;
-        var qs = QuoteSuffix;
-        var tmp = name?.Replace(qp, string.Empty)?.Replace(qs, string.Empty);
-        if (string.IsNullOrEmpty(tmp)) return string.Empty;
-
-        var ss = tmp.Split(CompositeIdentifierSeparator);
-
-        var sb = new StringBuilder();
-        foreach (var s in ss)
-        {
-            if (sb.Length > 0) sb.Append(CompositeIdentifierSeparator);
-
-            sb.Append(qp);
-            sb.Append(s);
-            sb.Append(qs);
-        }
-
-        return sb.ToString();
-    }
 
 
     public ITransactionContext BeginTransaction(
@@ -204,7 +189,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
             isolationLevel ??= IsolationLevel.ReadCommitted;
         }
 
-        return new TransactionContext(this, isolationLevel.Value, executionType);
+        return new TransactionContext(this, _dialect, isolationLevel.Value, executionType);
     }
 
     public ITransactionContext BeginTransaction(
@@ -216,27 +201,16 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     }
 
 
-    public string CompositeIdentifierSeparator => _dataSourceInfo.CompositeIdentifierSeparator;
     public SupportedDatabase Product => _dataSourceInfo.Product;
 
     public ISqlContainer CreateSqlContainer(string? query = null)
     {
-        return new SqlContainer(this, query);
+        return new SqlContainer(this, _dialect, query);
     }
 
     public DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
-        var p = _factory.CreateParameter() ?? throw new InvalidOperationException("Failed to create parameter.");
-
-        if (string.IsNullOrWhiteSpace(name)) name = GenerateRandomName();
-
-        var valueIsNull = Utils.IsNullOrDbNull(value);
-        p.ParameterName = name;
-        p.DbType = type;
-        p.Value = valueIsNull ? DBNull.Value : value;
-        if (!valueIsNull && p.DbType == DbType.String && value is string s) p.Size = Math.Max(s.Length, 1);
-
-        return p;
+        return _dialect.CreateDbParameter(name, type, value);
     }
 
 
@@ -263,35 +237,29 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 
     public DbParameter CreateDbParameter<T>(DbType type, T value)
     {
-        return CreateDbParameter(null, type, value);
+        return _dialect.CreateDbParameter(type, value);
     }
 
     public void AssertIsReadConnection()
     {
-        if (!_isReadConnection) throw new InvalidOperationException("The connection is not read connection.");
+        if (!_isReadConnection)
+        {
+            throw new InvalidOperationException("The connection is not read connection.");
+        }
     }
 
     public void AssertIsWriteConnection()
     {
-        if (!_isWriteConnection) throw new InvalidOperationException("The connection is not write connection.");
+        if (!_isWriteConnection)
+        {
+            throw new InvalidOperationException("The connection is not write connection.");
+        }
     }
 
 
     public void CloseAndDisposeConnection(ITrackedConnection? connection)
     {
         _connectionStrategy.ReleaseConnection(connection);
-    }
-
-    public string MakeParameterName(DbParameter dbParameter)
-    {
-        return MakeParameterName(dbParameter.ParameterName);
-    }
-
-    public string MakeParameterName(string parameterName)
-    {
-        return !_dataSourceInfo.SupportsNamedParameters
-            ? "?"
-            : $"{_dataSourceInfo.ParameterMarker}{parameterName}";
     }
 
 
@@ -307,9 +275,28 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 
     public long NumberOfOpenConnections => Interlocked.Read(ref _connectionCount);
 
-    public string QuotePrefix => DataSourceInfo.QuotePrefix;
+    public string QuotePrefix => _dialect.QuotePrefix;
 
-    public string QuoteSuffix => DataSourceInfo.QuoteSuffix;
+    public string QuoteSuffix => _dialect.QuoteSuffix;
+
+    public string CompositeIdentifierSeparator => _dialect.CompositeIdentifierSeparator;
+
+    SqlDialect ISqlDialectProvider.Dialect => _dialect;
+
+    public string WrapObjectName(string name)
+    {
+        return _dialect.WrapObjectName(name);
+    }
+
+    public string MakeParameterName(DbParameter dbParameter)
+    {
+        return _dialect.MakeParameterName(dbParameter);
+    }
+
+    public string MakeParameterName(string parameterName)
+    {
+        return _dialect.MakeParameterName(parameterName);
+    }
 
     private ITrackedConnection FactoryCreateConnection(string? connectionString = null, bool isSharedConnection = false)
     {
@@ -387,7 +374,10 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
             _dataSourceInfo.DatabaseProductName.StartsWith("Microsoft SQL Server", StringComparison.OrdinalIgnoreCase)
             && !_dataSourceInfo.DatabaseProductName.Contains("Compact", StringComparison.OrdinalIgnoreCase);
 
-        if (!_isSqlServer) return;
+        if (!_isSqlServer)
+        {
+            return;
+        }
 
         var settings = new Dictionary<string, string>
         {
@@ -432,7 +422,10 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
             recorded.TryGetValue(expectedKvp.Key, out var result);
             if (result != expectedKvp.Value)
             {
-                if (sb.Length > 0) sb.AppendLine();
+                if (sb.Length > 0)
+                {
+                    sb.AppendLine();
+                }
 
                 sb.Append($"SET {expectedKvp.Key} {expectedKvp.Value}");
             }
@@ -550,7 +543,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
                 // has to be done in connection string, not session;
                 break;
 
-            //DB 2 can't be supported under modern .net 
+            //DB 2 can't be supported under modern .net
             //             case SupportedDatabase.Db2:
             //                 _connectionSessionSettings = @"
             //                  SET CURRENT DEGREE = 'ANY';

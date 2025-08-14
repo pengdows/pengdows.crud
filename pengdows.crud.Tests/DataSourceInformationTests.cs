@@ -21,7 +21,10 @@ public static class DataSourceTestData
     {
         foreach (SupportedDatabase db in Enum.GetValues(typeof(SupportedDatabase)))
         {
-            if (db == SupportedDatabase.Unknown) continue;
+            if (db == SupportedDatabase.Unknown)
+            {
+                continue;
+            }
 
             var productName = db switch
             {

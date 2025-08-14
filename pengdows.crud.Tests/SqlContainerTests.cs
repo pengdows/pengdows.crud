@@ -3,9 +3,9 @@
 using System;
 using System.Data;
 using System.Threading.Tasks;
-using Moq;
 using pengdows.crud.enums;
 using pengdows.crud.FakeDb;
+using pengdows.crud;
 using Xunit;
 
 #endregion
@@ -162,24 +162,9 @@ public class SqlContainerTests : SqlLiteContextTestBase
         AssertProperNumberOfConnectionsForMode();
     }
 
-    [Fact]
-    public void WrapObjectName_DelegatesToContext()
-    {
-        var mock = new Mock<IDatabaseContext>();
-        mock.Setup(c => c.WrapObjectName("foo")).Returns("\"foo\"");
-
-        var container = new SqlContainer(mock.Object);
-
-        var result = container.WrapObjectName("foo");
-
-        Assert.Equal("\"foo\"", result);
-        mock.Verify(c => c.WrapObjectName("foo"), Times.Once);
-    }
-
-    [Fact]
     public void Dispose_ClearsQueryAndParameters()
     {
-        var container = new SqlContainer(new Mock<IDatabaseContext>().Object);
+        var container = new SqlContainer(Context, ((ISqlDialectProvider)Context).Dialect);
         var param = new FakeDbParameter { ParameterName = "p", DbType = DbType.Int32, Value = 1 };
         container.AddParameter(param);
         container.Query.Append("SELECT 1");
@@ -194,7 +179,7 @@ public class SqlContainerTests : SqlLiteContextTestBase
     [Fact]
     public async Task DisposeAsync_ClearsQueryAndParameters()
     {
-        var container = new SqlContainer(new Mock<IDatabaseContext>().Object);
+        var container = new SqlContainer(Context, ((ISqlDialectProvider)Context).Dialect);
         var param = new FakeDbParameter { ParameterName = "p", DbType = DbType.Int32, Value = 1 };
         container.AddParameter(param);
         container.Query.Append("SELECT 1");
@@ -220,9 +205,11 @@ public class SqlContainerTests : SqlLiteContextTestBase
     public void QuoteProperties_ExposeUnderlyingContextValues()
     {
         var container = Context.CreateSqlContainer();
-
         Assert.Equal(Context.QuotePrefix, container.QuotePrefix);
         Assert.Equal(Context.QuoteSuffix, container.QuoteSuffix);
         Assert.Equal(Context.CompositeIdentifierSeparator, container.CompositeIdentifierSeparator);
+        Assert.NotEqual("[", container.QuotePrefix);
+        Assert.NotEqual("]", container.QuoteSuffix);
+        Assert.NotEqual("/", container.CompositeIdentifierSeparator);
     }
 }

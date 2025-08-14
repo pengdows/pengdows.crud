@@ -1,5 +1,6 @@
 #region
 
+using System;
 using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
@@ -13,10 +14,11 @@ using pengdows.crud.wrappers;
 
 namespace pengdows.crud;
 
-public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
+public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, IContextIdentity, ISqlDialectProvider
 {
     private readonly ITrackedConnection _connection;
     private readonly IDatabaseContext _context;
+    private readonly SqlDialect _dialect;
     private readonly ILogger<TransactionContext> _logger;
     private readonly SemaphoreSlim _semaphoreSlim;
     private readonly IDbTransaction _transaction;
@@ -25,14 +27,19 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
     private volatile bool _rolledBack;
     private int _completedState;
 
+    public Guid RootId { get; }
+
     internal TransactionContext(
         IDatabaseContext context,
+        SqlDialect dialect,
         IsolationLevel isolationLevel = IsolationLevel.Unspecified,
         ExecutionType? executionType = null,
         ILogger<TransactionContext>? logger = null)
     {
         _logger = logger ?? new NullLogger<TransactionContext>();
         _context = context ?? throw new ArgumentNullException(nameof(context));
+        _dialect = dialect;
+        RootId = ((IContextIdentity)_context).RootId;
 
         executionType ??= _context.IsReadOnlyConnection ? ExecutionType.Read : ExecutionType.Write;
 
@@ -62,9 +69,6 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
     public IsolationLevel IsolationLevel => _transaction.IsolationLevel;
 
     public long NumberOfOpenConnections => _context.NumberOfOpenConnections;
-    public string QuotePrefix => _context.QuotePrefix;
-    public string QuoteSuffix => _context.QuoteSuffix;
-    public string CompositeIdentifierSeparator => _context.CompositeIdentifierSeparator;
     public SupportedDatabase Product => _context.Product;
     public long MaxNumberOfConnections => _context.MaxNumberOfConnections;
     public bool IsReadOnlyConnection => _context.IsReadOnlyConnection;
@@ -93,7 +97,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
             throw new InvalidOperationException("Cannot create a SQL container because the transaction is completed.");
         }
 
-        return new SqlContainer(this, query);
+        return new SqlContainer(this, _dialect, query);
     }
 
     public DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
@@ -111,11 +115,6 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
         return _connection;
     }
 
-    public string WrapObjectName(string name)
-    {
-        return _context.WrapObjectName(name);
-    }
-
     public string GenerateRandomName(int length = 5, int parameterNameMaxLength = 30)
     {
         return _context.GenerateRandomName(length, parameterNameMaxLength);
@@ -131,15 +130,28 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
         _context.AssertIsWriteConnection();
     }
 
-    public string MakeParameterName(string parameterName)
+    public string QuotePrefix => _dialect.QuotePrefix;
+
+    public string QuoteSuffix => _dialect.QuoteSuffix;
+
+    public string CompositeIdentifierSeparator => _dialect.CompositeIdentifierSeparator;
+
+    public string WrapObjectName(string name)
     {
-        return _context.MakeParameterName(parameterName);
+        return _dialect.WrapObjectName(name);
     }
 
     public string MakeParameterName(DbParameter dbParameter)
     {
-        return _context.MakeParameterName(dbParameter);
+        return _dialect.MakeParameterName(dbParameter);
     }
+
+    public string MakeParameterName(string parameterName)
+    {
+        return _dialect.MakeParameterName(parameterName);
+    }
+
+    SqlDialect ISqlDialectProvider.Dialect => _dialect;
 
     public ProcWrappingStyle ProcWrappingStyle => _context.ProcWrappingStyle;
 

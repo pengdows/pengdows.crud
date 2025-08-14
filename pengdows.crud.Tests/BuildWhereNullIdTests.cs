@@ -19,7 +19,8 @@ public class BuildWhereNullIdTests : SqlLiteContextTestBase
     public void BuildWhere_WithNullId_AddsIsNull()
     {
         var sc = Context.CreateSqlContainer();
-        helper.BuildWhere(Context.WrapObjectName("Id"), new int?[] { null }, sc);
+        var wrapped = Context.WrapObjectName("Id");
+        helper.BuildWhere(wrapped, new int?[] { null }, sc);
         var sql = sc.Query.ToString();
         Assert.Contains("IS NULL", sql, StringComparison.OrdinalIgnoreCase);
     }
@@ -28,7 +29,8 @@ public class BuildWhereNullIdTests : SqlLiteContextTestBase
     public void BuildWhere_WithMixedIds_IncludesBoth()
     {
         var sc = Context.CreateSqlContainer();
-        helper.BuildWhere(Context.WrapObjectName("Id"), new int?[] { 1, null, 2 }, sc);
+        var wrapped = Context.WrapObjectName("Id");
+        helper.BuildWhere(wrapped, new int?[] { 1, null, 2 }, sc);
         var sql = sc.Query.ToString();
         Assert.Contains("IN", sql);
         Assert.Contains("IS NULL", sql, StringComparison.OrdinalIgnoreCase);

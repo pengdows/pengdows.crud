@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Data.Common;
 using System.Linq;
 using System.Threading.Tasks;
 using pengdows.crud.configuration;
@@ -152,6 +153,53 @@ public class TransactionContextTests
         Assert.True(char.IsLetter(name[0]));
     }
 
+    [Fact]
+    public void QuoteProperties_DelegateToContext()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        using var tx = context.BeginTransaction();
+        Assert.Equal(context.QuotePrefix, tx.QuotePrefix);
+        Assert.Equal(context.QuoteSuffix, tx.QuoteSuffix);
+        Assert.Equal(context.CompositeIdentifierSeparator, tx.CompositeIdentifierSeparator);
+        Assert.NotEqual("?", tx.QuotePrefix);
+        Assert.NotEqual("?", tx.QuoteSuffix);
+        Assert.NotEqual("?", tx.CompositeIdentifierSeparator);
+    }
+
+    [Fact]
+    public void WrapObjectName_DelegatesToContext()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        using var tx = context.BeginTransaction();
+        var result = tx.WrapObjectName("Test");
+        Assert.Equal(context.WrapObjectName("Test"), result);
+    }
+
+    [Fact]
+    public void WrapObjectName_Null_ReturnsEmpty()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        using var tx = context.BeginTransaction();
+        Assert.Equal(string.Empty, tx.WrapObjectName(null));
+    }
+
+    [Fact]
+    public void MakeParameterName_DelegatesToContext()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        using var tx = context.BeginTransaction();
+        var p = tx.CreateDbParameter("p", DbType.Int32, 1);
+        Assert.Equal(context.MakeParameterName(p), tx.MakeParameterName(p));
+    }
+
+    [Fact]
+    public void MakeParameterName_NullParameter_Throws()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        using var tx = context.BeginTransaction();
+        Assert.Throws<NullReferenceException>(() => tx.MakeParameterName((DbParameter)null!));
+    }
+
     [Theory]
     [MemberData(nameof(AllSupportedProviders))]
     public void NestedTransactionsFail(SupportedDatabase product)
@@ -265,17 +313,6 @@ public class TransactionContextTests
     }
 
     [Fact]
-    public void MakeParameterName_ForwardsToContext()
-    {
-        var context = (DatabaseContext)CreateContext(SupportedDatabase.PostgreSql);
-        using var tx = context.BeginTransaction();
-        var param = context.CreateDbParameter("foo", DbType.Int32, 1);
-
-        Assert.Equal(context.MakeParameterName("foo"), tx.MakeParameterName("foo"));
-        Assert.Equal(context.MakeParameterName(param), tx.MakeParameterName(param));
-    }
-
-    [Fact]
     public void ProcWrappingStyle_GetMatchesContext()
     {
         var context = (DatabaseContext)CreateContext(SupportedDatabase.Sqlite);
@@ -288,6 +325,17 @@ public class TransactionContextTests
 
         tx.Dispose();
         Assert.Throws<ObjectDisposedException>(() => ((IDatabaseContext)tx).ProcWrappingStyle = ProcWrappingStyle.Call);
+    }
+
+    [Fact]
+    public void QuoteProperties_MatchContext()
+    {
+        var context = (DatabaseContext)CreateContext(SupportedDatabase.PostgreSql);
+        using var tx = context.BeginTransaction();
+
+        Assert.Equal(context.QuotePrefix, tx.QuotePrefix);
+        Assert.Equal(context.QuoteSuffix, tx.QuoteSuffix);
+        Assert.Equal(context.CompositeIdentifierSeparator, tx.CompositeIdentifierSeparator);
     }
 
     [Fact]
