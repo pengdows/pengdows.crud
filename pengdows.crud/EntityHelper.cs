@@ -1,6 +1,7 @@
 #region
 
 using System.Collections.Concurrent;
+using System.Data;
 using System.Data.Common;
 using System.Linq;
 using System.Linq.Expressions;
@@ -39,7 +40,7 @@ public class EntityHelper<TEntity, TRowID> :
     }
     private readonly IAuditValueResolver? _auditValueResolver;
     private IDatabaseContext _context;
-    private readonly SqlDialect _dialect;
+    private SqlDialect _dialect;
     private readonly Guid _rootId;
 
     private IColumnInfo? _idColumn;
@@ -1170,19 +1171,16 @@ private ISqlContainer BuildUpsertMerge(TEntity entity, IDatabaseContext context)
         var inList = new StringBuilder();
         var dbType = _idColumn!.DbType;
 
-        foreach (var id in list)
+        foreach (var id in list.Where(id => !hasNull || !Utils.IsNullOrDbNull(id)))
         {
-            if (!hasNull || !Utils.IsNullOrDbNull(id))
+            if (inList.Length > 0)
             {
-                if (inList.Length > 0)
-                {
-                    inList.Append(", ");
-                }
-
-                var parameter = _context.CreateDbParameter(dbType, id);
-                sqlContainer.AddParameter(parameter);
-                inList.Append(_dialect.MakeParameterName(parameter));
+                inList.Append(", ");
             }
+
+            var parameter = _context.CreateDbParameter(dbType, id);
+            sqlContainer.AddParameter(parameter);
+            inList.Append(_dialect.MakeParameterName(parameter));
         }
 
         var predicate = new StringBuilder();

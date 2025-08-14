@@ -12,9 +12,9 @@ internal sealed class SqlDialect
 {
     private readonly IDataSourceInformation _info;
     private readonly DbProviderFactory _factory;
-    private readonly Func<string> _nameGenerator;
+    private readonly Func<int, int, string> _nameGenerator;
 
-    internal SqlDialect(IDataSourceInformation info, DbProviderFactory factory, Func<string> nameGenerator)
+    internal SqlDialect(IDataSourceInformation info, DbProviderFactory factory, Func<int, int, string> nameGenerator)
     {
         _info = info;
         _factory = factory;
@@ -24,6 +24,8 @@ internal sealed class SqlDialect
     internal string QuotePrefix => _info.QuotePrefix;
     internal string QuoteSuffix => _info.QuoteSuffix;
     internal string CompositeIdentifierSeparator => _info.CompositeIdentifierSeparator;
+    
+    internal int ParameterNameMaxLength => _info.ParameterNameMaxLength;
 
     internal string WrapObjectName(string name)
     {
@@ -72,7 +74,7 @@ internal sealed class SqlDialect
         var p = _factory.CreateParameter() ?? throw new InvalidOperationException("Failed to create parameter.");
         if (string.IsNullOrWhiteSpace(name))
         {
-            name = _nameGenerator();
+            name = _nameGenerator(5, ParameterNameMaxLength);
         }
 
         var valueIsNull = Utils.IsNullOrDbNull(value);

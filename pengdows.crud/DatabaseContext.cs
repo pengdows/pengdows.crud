@@ -116,6 +116,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             throw;
         }
     }
+    
 
     public ReadWriteMode ReadWriteMode { get; set; }
 
