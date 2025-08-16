@@ -45,7 +45,7 @@ public class ContextIdentityTests : SqlLiteContextTestBase
     [Fact]
     public void BuildRetrieve_WithoutAlias_DoesNotUseAlias()
     {
-        var list = new List<TestEntity> { new() { Id = 1, Name = "foo" } };
+        var list = (new List<TestEntity> { new() { Id = 1, Name = "foo" } }).AsReadOnly();
         var sc = _helper.BuildRetrieve(list);
         var sql = sc.Query.ToString();
         Assert.DoesNotContain("x.\"Name\"", sql);

@@ -22,7 +22,8 @@ public class SingleIdGuardTests : SqlLiteContextTestBase
     {
         TypeMap.Register<TestEntity>();
         var helper = new EntityHelper<TestEntity, int>(Context);
-        var sc = helper.BuildRetrieve(new List<int> { 1 });
+        IReadOnlyCollection<int>? ids = (new List<int> { 1 }).AsReadOnly();
+        var sc = helper.BuildRetrieve(ids);
         Assert.Contains("WHERE", sc.Query.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 

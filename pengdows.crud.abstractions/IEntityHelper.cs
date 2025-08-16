@@ -44,24 +44,24 @@ public interface IEntityHelper<TEntity, TRowID> where TEntity : class, new()
     /// <summary>
     /// Builds a SQL SELECT for a list of row IDs.
     /// </summary>
-    ISqlContainer BuildRetrieve(IReadOnlyCollection<TRowID>? listOfIds = null, string alias = "a",
+    ISqlContainer BuildRetrieve(IReadOnlyCollection<TRowID>? listOfIds, string alias,
         IDatabaseContext? context = null);
 
     /// <summary>
     /// Builds a SQL SELECT for a list of object identities.
     /// </summary>
-    ISqlContainer BuildRetrieve(IReadOnlyCollection<TEntity>? listOfObjects = null, string alias = "a",
+    ISqlContainer BuildRetrieve(IReadOnlyCollection<TEntity>? listOfObjects, string alias,
         IDatabaseContext? context = null);
 
     /// <summary>
     /// Overload for retrieving by ID without alias.
     /// </summary>
-    ISqlContainer BuildRetrieve(IReadOnlyCollection<TRowID>? listOfIds = null, IDatabaseContext? context = null);
+    ISqlContainer BuildRetrieve(IReadOnlyCollection<TRowID>? listOfIds, IDatabaseContext? context = null);
 
     /// <summary>
     /// Overload for retrieving by objects without alias.
     /// </summary>
-    ISqlContainer BuildRetrieve(IReadOnlyCollection<TEntity>? listOfObjects = null, IDatabaseContext? context = null);
+    ISqlContainer BuildRetrieve(IReadOnlyCollection<TEntity>? listOfObjects, IDatabaseContext? context = null);
 
     /// <summary>
     /// Builds an UPDATE statement asynchronously.
