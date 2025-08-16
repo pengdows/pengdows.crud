@@ -33,6 +33,17 @@ public class EntityHelper_IntegrationTests : SqlLiteContextTestBase
 
 
     [Fact]
+    public void QuoteProperties_DelegateToContext()
+    {
+        Assert.Equal(Context.QuotePrefix, entityHelper.QuotePrefix);
+        Assert.Equal(Context.QuoteSuffix, entityHelper.QuoteSuffix);
+        Assert.Equal(Context.CompositeIdentifierSeparator, entityHelper.CompositeIdentifierSeparator);
+        Assert.NotEqual("?", entityHelper.QuotePrefix);
+        Assert.NotEqual("?", entityHelper.QuoteSuffix);
+        Assert.NotEqual("?", entityHelper.CompositeIdentifierSeparator);
+    }
+
+    [Fact]
     public async Task TryUpdateVersion()
     {
         await BuildTestTable();

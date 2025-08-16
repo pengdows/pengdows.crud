@@ -67,6 +67,29 @@ public class DatabaseContextTests
         Assert.Contains(".", wrapped);
     }
 
+    [Fact]
+    public void WrapObjectName_Null_ReturnsEmpty()
+    {
+        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory);
+        var result = context.WrapObjectName(null);
+        Assert.Equal(string.Empty, result);
+    }
+
+    [Theory]
+    [MemberData(nameof(AllSupportedProviders))]
+    public void QuoteProperties_DelegateToDialect(SupportedDatabase product)
+    {
+        var factory = new FakeDbFactory(product);
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
+        Assert.Equal(context.DataSourceInfo.QuotePrefix, context.QuotePrefix);
+        Assert.Equal(context.DataSourceInfo.QuoteSuffix, context.QuoteSuffix);
+        Assert.Equal(context.DataSourceInfo.CompositeIdentifierSeparator, context.CompositeIdentifierSeparator);
+        Assert.NotEqual("?", context.QuotePrefix);
+        Assert.NotEqual("?", context.QuoteSuffix);
+        Assert.NotEqual("?", context.CompositeIdentifierSeparator);
+    }
+
     [Theory]
     [MemberData(nameof(AllSupportedProviders))]
     public void GenerateRandomName_ValidatesFirstChar(SupportedDatabase product)
@@ -286,6 +309,14 @@ public class DatabaseContextTests
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
         var name = context.MakeParameterName("foo");
         Assert.StartsWith(context.DataSourceInfo.ParameterMarker, name);
+    }
+
+    [Fact]
+    public void MakeParameterName_NullParameter_Throws()
+    {
+        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory);
+        Assert.Throws<NullReferenceException>(() => context.MakeParameterName((DbParameter)null!));
     }
 
     [Theory]
