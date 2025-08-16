@@ -52,8 +52,11 @@ public class SqlDialectTests
     public void CreateDbParameter_SetsProperties()
     {
         var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
-        var info =new DataSourceInformation( DataSourceInformation.BuildEmptySchema("SQLite", "1", "?", "?", 64, "\\w+", "\\w+", true));
-        var dialect = new SqlDialect(info, factory, (lenth, max) => "p");
+        var schema = DataSourceInformation.BuildEmptySchema("SQLite", "1", "?", "?", 64, "\\w+", "\\w+", true);
+        var conn = (FakeDbConnection)factory.CreateConnection();
+        var tracked = new FakeTrackedConnection(conn, schema, new Dictionary<string, object>());
+        var info = DataSourceInformation.Create(tracked);
+        var dialect = new SqlDialect(info, factory, (length, max) => "p");
         var p = dialect.CreateDbParameter("p", DbType.Int32, 1);
         Assert.Equal("p", p.ParameterName);
         Assert.Equal(DbType.Int32, p.DbType);
