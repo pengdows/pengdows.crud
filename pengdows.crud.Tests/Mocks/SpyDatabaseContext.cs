@@ -65,7 +65,10 @@ public sealed class SpyDatabaseContext : IDatabaseContext, IContextIdentity, ISq
 
     public ILockerAsync GetLock() => _inner.GetLock();
 
-    public ISqlContainer CreateSqlContainer(string? query = null) => _inner.CreateSqlContainer(query);
+    public ISqlContainer CreateSqlContainer(string? query = null)
+    {
+        return new SqlContainer(this, ((ISqlDialectProvider)_inner).Dialect, query);
+    }
 
     public DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
