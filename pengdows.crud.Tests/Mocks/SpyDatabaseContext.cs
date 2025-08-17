@@ -10,7 +10,7 @@ using pengdows.crud.wrappers;
 
 namespace pengdows.crud.Tests.Mocks;
 
-public sealed class SpyDatabaseContext : IDatabaseContext, IContextIdentity
+public sealed class SpyDatabaseContext : IDatabaseContext, IContextIdentity, ISqlDialectProvider
 {
     private readonly IDatabaseContext _inner;
 
@@ -102,4 +102,6 @@ public sealed class SpyDatabaseContext : IDatabaseContext, IContextIdentity
     public void Dispose() => _inner.Dispose();
 
     public ValueTask DisposeAsync() => _inner.DisposeAsync();
+
+    SqlDialect ISqlDialectProvider.Dialect => ((ISqlDialectProvider)_inner).Dialect;
 }
