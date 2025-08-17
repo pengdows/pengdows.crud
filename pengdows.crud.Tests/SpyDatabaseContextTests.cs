@@ -1,0 +1,32 @@
+using System;
+using Moq;
+using pengdows.crud;
+using pengdows.crud.Tests.Mocks;
+using Xunit;
+
+namespace pengdows.crud.Tests;
+
+public class SpyDatabaseContextTests : SqlLiteContextTestBase
+{
+    [Fact]
+    public void Dialect_DelegatesToInnerContext()
+    {
+        var spy = new SpyDatabaseContext(Context);
+        var expected = ((ISqlDialectProvider)Context).Dialect;
+        var actual = ((ISqlDialectProvider)spy).Dialect;
+        Assert.Equal(expected, actual);
+    }
+
+    [Fact]
+    public void EntityHelper_WithContextMissingDialectProvider_Throws()
+    {
+        var map = new TypeMapRegistry();
+        map.Register<NullableIdEntity>();
+
+        var mockCtx = new Mock<IDatabaseContext>();
+        mockCtx.SetupGet(c => c.TypeMapRegistry).Returns(map);
+        mockCtx.As<IContextIdentity>().SetupGet(i => i.RootId).Returns(Guid.NewGuid());
+
+        Assert.Throws<InvalidCastException>(() => new EntityHelper<NullableIdEntity, int?>(mockCtx.Object));
+    }
+}
