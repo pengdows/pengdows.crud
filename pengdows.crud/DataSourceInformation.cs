@@ -236,7 +236,16 @@ public class DataSourceInformation : IDataSourceInformation
         ParameterMarkerPattern = GetField<string>(row, "ParameterMarkerPattern", string.Empty);
         ParameterNameMaxLength = GetField<int>(row, "ParameterNameMaxLength", 0);
         SupportsNamedParameters = GetField<bool>(row, "SupportsNamedParameters", false);
-        ParameterMarker = DefaultMarkers.GetValueOrDefault(Product, "?");
+        var markerFormat = GetField<string>(row, "ParameterMarkerFormat", string.Empty);
+        if (!string.IsNullOrWhiteSpace(markerFormat))
+        {
+            ParameterMarker = markerFormat.Replace("{0}", string.Empty);
+        }
+        else
+        {
+            ParameterMarker = DefaultMarkers.GetValueOrDefault(Product, "?");
+        }
+
         SupportsNamedParameters |= ParameterMarker != "?";
         ProcWrappingStyle = ProcWrapStyles.GetValueOrDefault(Product, ProcWrappingStyle.None);
         MaxParameterLimit = MaxParameterLimits.GetValueOrDefault(Product, 999);
