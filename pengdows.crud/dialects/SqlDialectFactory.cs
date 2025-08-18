@@ -1,4 +1,5 @@
 using System;
+using System.Data;
 using System.Data.Common;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -16,35 +17,20 @@ public static class SqlDialectFactory
     public static async Task<SqlDialect> CreateDialectAsync(
         ITrackedConnection connection,
         DbProviderFactory factory,
-         ILoggerFactory loggerFactory)
+        ILoggerFactory loggerFactory)
     {
+        loggerFactory ??= NullLoggerFactory.Instance;
         var logger = loggerFactory.CreateLogger<SqlDialect>();
 
         var inferredType = InferDatabaseTypeFromProvider(factory);
+        if (inferredType == SupportedDatabase.Unknown)
+        {
+            inferredType = await InferDatabaseTypeFromConnectionAsync(connection, logger).ConfigureAwait(false);
+        }
+
         var dialect = CreateDialectForType(inferredType, factory, logger);
-
-        try
-        {
-            var productInfo = await dialect.DetectDatabaseInfoAsync(connection);
-
-            if (productInfo.DatabaseType != inferredType && productInfo.DatabaseType != SupportedDatabase.Unknown)
-            {
-                logger.LogInformation(
-                    "Database type mismatch. Inferred: {Inferred}, Detected: {Detected}. Using detected type.",
-                    inferredType,
-                    productInfo.DatabaseType);
-
-                dialect = CreateDialectForType(productInfo.DatabaseType, factory, logger);
-                await dialect.DetectDatabaseInfoAsync(connection);
-            }
-
-            return dialect;
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to detect database type, falling back to inferred type: {Type}", inferredType);
-            return dialect;
-        }
+        await dialect.DetectDatabaseInfoAsync(connection).ConfigureAwait(false);
+        return dialect;
     }
     public static SqlDialect CreateDialect(
         ITrackedConnection connection,
@@ -94,6 +80,45 @@ public static class SqlDialectFactory
             var name when name.Contains("sqlite") => SupportedDatabase.Sqlite,
             var name when name.Contains("oracle") => SupportedDatabase.Oracle,
             var name when name.Contains("firebird") => SupportedDatabase.Firebird,
+            _ => SupportedDatabase.Unknown
+        };
+    }
+
+    private static async Task<SupportedDatabase> InferDatabaseTypeFromConnectionAsync(
+        ITrackedConnection connection,
+        ILogger logger)
+    {
+        try
+        {
+            var schema = connection.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
+            if (schema.Rows.Count > 0)
+            {
+                var name = schema.Rows[0].Field<string>("DataSourceProductName") ?? string.Empty;
+                return InferDatabaseTypeFromName(name);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Failed to infer database type from connection");
+        }
+
+        return SupportedDatabase.Unknown;
+    }
+
+    private static SupportedDatabase InferDatabaseTypeFromName(string name)
+    {
+        var lower = name?.ToLowerInvariant() ?? string.Empty;
+
+        return lower switch
+        {
+            var n when n.Contains("sql server") => SupportedDatabase.SqlServer,
+            var n when n.Contains("mariadb") => SupportedDatabase.MariaDb,
+            var n when n.Contains("mysql") => SupportedDatabase.MySql,
+            var n when n.Contains("cockroach") => SupportedDatabase.CockroachDb,
+            var n when n.Contains("npgsql") || n.Contains("postgres") => SupportedDatabase.PostgreSql,
+            var n when n.Contains("oracle") => SupportedDatabase.Oracle,
+            var n when n.Contains("sqlite") => SupportedDatabase.Sqlite,
+            var n when n.Contains("firebird") => SupportedDatabase.Firebird,
             _ => SupportedDatabase.Unknown
         };
     }

@@ -26,8 +26,6 @@ public class MySqlDialect : SqlDialect
     public override string QuotePrefix => "`";
     public override string QuoteSuffix => "`";
 
-    public override SqlStandardLevel MaxSupportedStandard => SqlStandardLevel.Sql2011;
-
     public override bool SupportsInsertOnConflict => true;
     public override bool SupportsMerge => false;
     public override bool SupportsJsonTypes => IsInitialized && ProductInfo.ParsedVersion?.Major >= 5;

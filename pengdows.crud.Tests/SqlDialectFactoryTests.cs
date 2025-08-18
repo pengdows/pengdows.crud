@@ -17,7 +17,7 @@ public class SqlDialectFactoryTests
         var dialect = SqlDialectFactory.CreateDialectForType(
             SupportedDatabase.SqlServer,
             factory,
-            NullLoggerFactory.Instance.CreateLogger<SqlDialect>());
+            NullLogger<SqlDialect>.Instance);
         Assert.IsType<SqlServerDialect>(dialect);
     }
 
@@ -29,6 +29,6 @@ public class SqlDialectFactoryTests
             SqlDialectFactory.CreateDialectForType(
                 SupportedDatabase.Firebird,
                 factory,
-                     NullLoggerFactory.Instance.CreateLogger<SqlDialect>()));
+                    NullLogger<SqlDialect>.Instance));
     }
 }

@@ -24,8 +24,6 @@ public class OracleDialect : SqlDialect
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.Oracle;
     public override bool RequiresStoredProcParameterNameMatch => true;
 
-    public override SqlStandardLevel MaxSupportedStandard => SqlStandardLevel.Sql2016;
-
     public override bool SupportsMerge => true;
     public override bool SupportsJsonTypes => IsInitialized && ProductInfo.ParsedVersion?.Major >= 12;
 

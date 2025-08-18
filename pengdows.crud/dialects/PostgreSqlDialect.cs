@@ -24,8 +24,6 @@ public class PostgreSqlDialect : SqlDialect
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.PostgreSQL;
     public override bool RequiresStoredProcParameterNameMatch => true;
 
-    public override SqlStandardLevel MaxSupportedStandard => SqlStandardLevel.Sql2016;
-
     public override bool SupportsInsertOnConflict => true;
     public override bool SupportsMerge => IsInitialized && ProductInfo.ParsedVersion?.Major >= 15;
     public override bool SupportsJsonTypes => IsInitialized && ProductInfo.ParsedVersion?.Major >= 9;

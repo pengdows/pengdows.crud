@@ -14,6 +14,19 @@ namespace pengdows.crud.dialects;
 /// </summary>
 public class SqlServerDialect : SqlDialect
 {
+    private const string DefaultSessionSettings =
+        "SET NOCOUNT ON;\n" +
+        "SET ANSI_NULLS ON;\n" +
+        "SET ANSI_PADDING ON;\n" +
+        "SET ANSI_WARNINGS ON;\n" +
+        "SET ARITHABORT ON;\n" +
+        "SET CONCAT_NULL_YIELDS_NULL ON;\n" +
+        "SET QUOTED_IDENTIFIER ON;\n" +
+        "SET NUMERIC_ROUNDABORT OFF;\n" +
+        "SET NOCOUNT OFF;";
+
+    private string? _sessionSettings;
+
     public SqlServerDialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger)
     {
@@ -26,12 +39,8 @@ public class SqlServerDialect : SqlDialect
     public override int ParameterNameMaxLength => 128;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.Exec;
 
-    // SQL Server uses square brackets for quoting
-    public override string QuotePrefix => "[";
-    public override string QuoteSuffix => "]";
-
-    // SQL Server supports up to SQL:2016 features in recent versions
-    public override SqlStandardLevel MaxSupportedStandard => SqlStandardLevel.Sql2016;
+    public override string QuotePrefix => "\"";
+    public override string QuoteSuffix => "\"";
 
     // Version-specific overrides
     public override bool SupportsMerge => true;
@@ -41,37 +50,34 @@ public class SqlServerDialect : SqlDialect
 
     public override string GetConnectionSessionSettings()
     {
-        return @"SET NOCOUNT ON;
-SET ANSI_NULLS ON;
-SET ANSI_PADDING ON;
-SET ANSI_WARNINGS ON;
-SET ARITHABORT ON;
-SET CONCAT_NULL_YIELDS_NULL ON;
-SET QUOTED_IDENTIFIER ON;
-SET NUMERIC_ROUNDABORT OFF;
-SET NOCOUNT OFF;";
+        return _sessionSettings ?? string.Empty;
     }
 
     public override void ApplyConnectionSettings(IDbConnection connection)
     {
         try
         {
-            var settingsToApply = CheckSqlServerSettings(connection);
-
-            if (!string.IsNullOrEmpty(settingsToApply))
+            if (_sessionSettings == null)
             {
-                Logger.LogDebug("Applying SQL Server session settings: {Settings}", settingsToApply);
+                _sessionSettings = CheckSqlServerSettings(connection);
+            }
+
+            if (!string.IsNullOrEmpty(_sessionSettings))
+            {
+                Logger.LogDebug("Applying SQL Server session settings: {Settings}", _sessionSettings);
                 using var cmd = connection.CreateCommand();
-                cmd.CommandText = settingsToApply;
+                cmd.CommandText = _sessionSettings;
                 cmd.ExecuteNonQuery();
             }
             else
             {
                 Logger.LogDebug("SQL Server session settings are already optimal, no changes needed");
             }
+
         }
         catch (Exception ex)
         {
+            _sessionSettings ??= DefaultSessionSettings;
             Logger.LogError(ex, "Failed to apply SQL Server connection settings");
         }
     }
@@ -138,7 +144,7 @@ SET NOCOUNT OFF;";
         catch (Exception ex)
         {
             Logger.LogWarning(ex, "Failed to check SQL Server session settings, applying default settings");
-            return GetConnectionSessionSettings();
+            return DefaultSessionSettings;
         }
     }
 

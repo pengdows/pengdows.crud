@@ -100,7 +100,27 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             _factory = factory ?? throw new NullReferenceException(nameof(factory));
 
             var initialConnection = InitializeInternals(configuration);
-            _dialect = SqlDialectFactory.CreateDialect(initialConnection,  _factory , loggerFactory);
+            _dialect = SqlDialectFactory.CreateDialect(initialConnection, _factory, loggerFactory);
+            _dataSourceInfo = new DataSourceInformation(_dialect);
+            Name = _dataSourceInfo.DatabaseProductName;
+
+            SetupConnectionSessionSettingsForProvider(initialConnection);
+            if (ConnectionMode != DbMode.Standard)
+            {
+                ApplyConnectionSessionSettings(initialConnection);
+            }
+
+            if (_dataSourceInfo.Product == SupportedDatabase.Sqlite)
+            {
+                var csb = GetFactoryConnectionStringBuilder(string.Empty);
+                var ds = csb["Data Source"] as string;
+                ConnectionMode = ":memory:" == ds
+                    ? DbMode.SingleConnection
+                    : DbMode.SingleWriter;
+            }
+
+            _isolationResolver ??= new IsolationResolver(Product, RCSIEnabled);
+
             var connFactory = () => FactoryCreateConnection(null, false);
             _connectionStrategy = ConnectionMode switch
             {
@@ -110,6 +130,12 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
                 DbMode.KeepAlive => new KeepAliveConnectionStrategy(connFactory),
                 _ => throw new InvalidOperationException("Invalid connection mode."),
             };
+
+            if (ConnectionMode == DbMode.Standard)
+            {
+                initialConnection?.Dispose();
+                initialConnection = null;
+            }
         }
         catch (Exception e)
         {
@@ -429,60 +455,18 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     private ITrackedConnection? InitializeInternals(IDatabaseContextConfiguration config)
     {
         var connectionString = config.ConnectionString;
-        var mode = config.DbMode;
         ReadWriteMode = config.ReadWriteMode;
         ITrackedConnection? conn = null;
         try
         {
             _isReadConnection = (ReadWriteMode & ReadWriteMode.ReadOnly) == ReadWriteMode.ReadOnly;
             _isWriteConnection = (ReadWriteMode & ReadWriteMode.WriteOnly) == ReadWriteMode.WriteOnly;
-            // this connection will be set as our single connection for any DbMode != DbMode.Standard
-            // so we set it to shared.
             conn = FactoryCreateConnection(connectionString, true);
-            try
-            {
-                conn.Open();
-            }
-            catch (Exception ex)
-            {
-                throw new ConnectionFailedException(ex.Message);
-            }
-
-            _dataSourceInfo = DataSourceInformation.Create(conn, _loggerFactory);
-            SetupConnectionSessionSettingsForProvider(conn);
-            if (mode != DbMode.Standard)
-            {
-                ApplyConnectionSessionSettings(conn);
-            }
-            Name = _dataSourceInfo.DatabaseProductName;
-            if (_dataSourceInfo.Product == SupportedDatabase.Sqlite)
-            {
-                // Determine correct mode based on connection string
-                // ":memory:" needs a persistent connection to avoid data loss
-                // file-based SQLite requires a single writer to avoid lock conflicts
-                var csb = GetFactoryConnectionStringBuilder(String.Empty);
-                var ds = csb["Data Source"] as string;
-                ConnectionMode = ":memory:" == ds
-                    ? DbMode.SingleConnection
-                    : DbMode.SingleWriter;
-                mode = ConnectionMode;
-            }
-
-            _isolationResolver ??= new IsolationResolver(Product, RCSIEnabled);
+            conn.Open();
         }
-        catch(Exception ex){
-            _logger.LogError(ex, ex.Message);
-            throw;
-        }
-        finally
+        catch (Exception ex)
         {
-            _isolationResolver ??= new IsolationResolver(Product, RCSIEnabled);
-            if (mode == DbMode.Standard)
-            {
-                //if it is standard mode, we can close it.
-                conn?.Dispose();
-                conn = null;
-            }
+            throw new ConnectionFailedException(ex.Message);
         }
 
         return conn;

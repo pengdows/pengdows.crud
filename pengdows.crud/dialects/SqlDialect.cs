@@ -48,7 +48,8 @@ public abstract class SqlDialect
     /// <summary>
     /// The highest SQL standard level this database/version supports
     /// </summary>
-    public abstract SqlStandardLevel MaxSupportedStandard { get; }
+    public virtual SqlStandardLevel MaxSupportedStandard =>
+        IsInitialized ? ProductInfo.StandardCompliance : SqlStandardLevel.Sql92;
 
     // SQL standard defaults - can be overridden for database-specific behavior
     public virtual string QuotePrefix => "\"";  // SQL-92 standard
@@ -222,7 +223,7 @@ public abstract class SqlDialect
     /// </summary>
     protected virtual SqlStandardLevel DetermineStandardCompliance(Version? version)
     {
-        return MaxSupportedStandard;
+        return SqlStandardLevel.Sql92;
     }
 
     public DatabaseProductInfo DetectDatabaseInfo(ITrackedConnection connection)
@@ -378,10 +379,19 @@ public abstract class SqlDialect
             return null;
         }
 
-        var match = Regex.Match(versionString, @"(?<ver>\d+(?:\.\d+)*)");
-        if (match.Success && Version.TryParse(match.Groups["ver"].Value, out var version))
+        var matches = Regex.Matches(versionString, @"\d+(?:\.\d+)+");
+        if (matches.Count > 0)
         {
-            return version;
+            if (Version.TryParse(matches[^1].Value, out var detailed))
+            {
+                return detailed;
+            }
+        }
+
+        var fallback = Regex.Match(versionString, @"\d+");
+        if (fallback.Success && Version.TryParse(fallback.Value, out var simple))
+        {
+            return simple;
         }
 
         return null;
