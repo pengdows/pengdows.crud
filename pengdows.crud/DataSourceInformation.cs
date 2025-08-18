@@ -87,6 +87,7 @@ public class DataSourceInformation : IDataSourceInformation
 
     public string DatabaseProductName { get; private set; }
     public string DatabaseProductVersion { get; private set; }
+    public Version? ParsedVersion { get; private set; }
     public SupportedDatabase Product { get; private set; }
     public string ParameterMarkerPattern { get; private set; }
     public bool SupportsNamedParameters { get; private set; }
@@ -99,6 +100,7 @@ public class DataSourceInformation : IDataSourceInformation
     public ProcWrappingStyle ProcWrappingStyle { get; set; }
     public int MaxParameterLimit { get; private set; }
     public string CompositeIdentifierSeparator { get; private set; } = ".";
+    public SqlStandardLevel StandardCompliance { get; private set; } = SqlStandardLevel.Sql92;
 
     public string GetDatabaseVersion(ITrackedConnection connection)
     {
@@ -198,8 +200,9 @@ public class DataSourceInformation : IDataSourceInformation
             ? "Unknown Version"
             : await GetVersionAsync(connection, versionSql, _logger).ConfigureAwait(false);
 
+        ParsedVersion = ParseVersion(version);
         DatabaseProductVersion = version;
-        DatabaseProductName = version;
+        DatabaseProductName = rawName;
 
         var final = InferDatabaseProduct(version);
         if (connection.ConnectionString.ToLower().Contains("emulatedproduct="))
@@ -213,6 +216,7 @@ public class DataSourceInformation : IDataSourceInformation
         }
 
         Product = final != SupportedDatabase.Unknown ? final : initial;
+        StandardCompliance = DetermineStandardCompliance(Product, ParsedVersion);
         schema.TableName = ((schema.TableName?.Length < 1) ? Product.ToString() : schema.TableName);
         schema.WriteXml($"{Product}.schema.xml", XmlWriteMode.WriteSchema);
 
@@ -394,7 +398,13 @@ public class DataSourceInformation : IDataSourceInformation
 
     public int? GetMajorVersion()
     {
+        if (ParsedVersion != null)
+        {
+            return ParsedVersion.Major;
+        }
+
         var version = ParseVersion(DatabaseProductVersion);
+        ParsedVersion = version;
         return version?.Major;
     }
 
@@ -407,12 +417,46 @@ public class DataSourceInformation : IDataSourceInformation
 
     private static Version? ParseVersion(string input)
     {
-        if (string.IsNullOrWhiteSpace(input)) return null;
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return null;
+        }
 
         var match = Regex.Match(input, "(?<ver>\\d+(?:\\.\\d+)*)");
         if (match.Success && Version.TryParse(match.Groups["ver"].Value, out var v))
+        {
             return v;
+        }
 
         return null;
+    }
+
+    private static SqlStandardLevel DetermineStandardCompliance(SupportedDatabase product, Version? version)
+    {
+        return product switch
+        {
+            SupportedDatabase.SqlServer => DetermineSqlServerCompliance(version),
+            _ => SqlStandardLevel.Sql92
+        };
+    }
+
+    private static SqlStandardLevel DetermineSqlServerCompliance(Version? version)
+    {
+        if (version == null)
+        {
+            return SqlStandardLevel.Sql2008;
+        }
+
+        return version.Major switch
+        {
+            >= 16 => SqlStandardLevel.Sql2016,
+            >= 15 => SqlStandardLevel.Sql2016,
+            >= 14 => SqlStandardLevel.Sql2016,
+            >= 13 => SqlStandardLevel.Sql2016,
+            >= 12 => SqlStandardLevel.Sql2011,
+            >= 11 => SqlStandardLevel.Sql2008,
+            >= 10 => SqlStandardLevel.Sql2008,
+            _ => SqlStandardLevel.Sql2003
+        };
     }
 }
