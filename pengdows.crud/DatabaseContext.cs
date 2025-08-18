@@ -412,16 +412,25 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         cmd.CommandText = "DBCC USEROPTIONS;";
 
         using var reader = cmd.ExecuteReader();
-        var currentSettings = settings.ToDictionary(kvp => kvp.Key, kvp => "OFF");
+        var currentSettings = settings.ToDictionary(kvp => kvp.Key, _ => "OFF");
+        var anyRows = false;
 
         while (reader.Read())
         {
+            anyRows = true;
             var key = reader.GetString(0).ToUpperInvariant();
-            if (settings.ContainsKey(key)) currentSettings[key] = reader.GetString(1) == "SET" ? "ON" : "OFF";
+            if (settings.ContainsKey(key))
+            {
+                currentSettings[key] = reader.GetString(1) == "SET" ? "ON" : "OFF";
+            }
+        }
+
+        if (!anyRows)
+        {
+            return;
         }
 
         var sb = CompareResults(settings, currentSettings);
-
 
         if (sb.Length > 0)
         {
@@ -484,8 +493,12 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         switch (_dataSourceInfo.Product)
         {
             case SupportedDatabase.SqlServer:
-                //sets up only what is necessary
-                CheckForSqlServerSettings(conn);
+                // sets up only what is necessary
+                if (ConnectionMode != DbMode.SingleConnection)
+                {
+                    CheckForSqlServerSettings(conn);
+                }
+
                 break;
 
             case SupportedDatabase.MySql:
