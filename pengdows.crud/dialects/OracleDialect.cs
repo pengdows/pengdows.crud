@@ -2,6 +2,7 @@ using System;
 using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
+using pengdows.crud.enums;
 
 namespace pengdows.crud.dialects;
 
@@ -10,8 +11,8 @@ namespace pengdows.crud.dialects;
 /// </summary>
 public class OracleDialect : SqlDialect
 {
-    public OracleDialect(DbProviderFactory factory, Func<int, int, string> nameGenerator, ILogger logger)
-        : base(factory, nameGenerator, logger)
+    public OracleDialect(DbProviderFactory factory, ILogger logger)
+        : base(factory, logger)
     {
     }
 

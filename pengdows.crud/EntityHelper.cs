@@ -12,6 +12,7 @@ using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.attributes;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;
 using pengdows.crud.wrappers;

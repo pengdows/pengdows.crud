@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Data;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.FakeDb;
 using Xunit;
@@ -32,7 +33,8 @@ public class SqlDialectTests
         var factory = new FakeDbFactory(SupportedDatabase.PostgreSql);
         var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.PostgreSql}", factory);
         var param = ctx.CreateDbParameter("p", DbType.Int32, 1);
-        Assert.Equal(":p", ctx.MakeParameterName(param));
+        var paramName = ctx.MakeParameterName(param);
+        Assert.Equal(":p", paramName);
     }
 
     [Fact]
@@ -43,7 +45,7 @@ public class SqlDialectTests
         var conn = (FakeDbConnection)factory.CreateConnection();
         var tracked = new FakeTrackedConnection(conn, schema, new Dictionary<string, object>());
         var info = DataSourceInformation.Create(tracked);
-        var dialect = new SqlDialect(info, factory, (length, max) => "p");
+        var dialect = SqlDialectFactory.CreateDialect( tracked, factory);
         var param = new FakeDbParameter { ParameterName = "p", DbType = DbType.Int32, Value = 1 };
         Assert.Equal("?", dialect.MakeParameterName(param));
     }
@@ -56,7 +58,7 @@ public class SqlDialectTests
         var conn = (FakeDbConnection)factory.CreateConnection();
         var tracked = new FakeTrackedConnection(conn, schema, new Dictionary<string, object>());
         var info = DataSourceInformation.Create(tracked);
-        var dialect = new SqlDialect(info, factory, (length, max) => "p");
+        var dialect = SqlDialectFactory.CreateDialect(tracked, factory);
         var p = dialect.CreateDbParameter("p", DbType.Int32, 1);
         Assert.Equal("p", p.ParameterName);
         Assert.Equal(DbType.Int32, p.DbType);

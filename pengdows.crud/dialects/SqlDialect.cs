@@ -17,15 +17,13 @@ namespace pengdows.crud.dialects;
 public abstract class SqlDialect
 {
     protected readonly DbProviderFactory Factory;
-    protected readonly Func<int, int, string> NameGenerator;
     protected readonly ILogger Logger;
 
     private DatabaseProductInfo? _productInfo;
 
-    protected SqlDialect(DbProviderFactory factory, Func<int, int, string> nameGenerator, ILogger logger)
+    protected SqlDialect(DbProviderFactory factory, ILogger logger)
     {
         Factory = factory ?? throw new ArgumentNullException(nameof(factory));
-        NameGenerator = nameGenerator ?? throw new ArgumentNullException(nameof(nameGenerator));
         Logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -147,7 +145,7 @@ public abstract class SqlDialect
 
         if (string.IsNullOrWhiteSpace(name))
         {
-            name = NameGenerator(5, ParameterNameMaxLength);
+            name = GenerateRandomName(5, ParameterNameMaxLength);
         }
 
         var valueIsNull = Utils.IsNullOrDbNull(value);
@@ -392,5 +390,23 @@ public abstract class SqlDialect
     public virtual int? GetMajorVersion(string versionString)
     {
         return ParseVersion(versionString)?.Major;
+    }
+
+    public string GenerateRandomName(int length, int parameterNameMaxLength)
+    {
+        var validChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_".ToCharArray();
+        var len = Math.Min(Math.Max(length, 2), parameterNameMaxLength);
+
+        Span<char> buffer = stackalloc char[len];
+        const int firstCharMax = 52; // a-zA-Z
+        var anyOtherMax = validChars.Length;
+
+        buffer[0] = validChars[Random.Shared.Next(firstCharMax)];
+        for (var i = 1; i < len; i++)
+        {
+            buffer[i] = validChars[Random.Shared.Next(anyOtherMax)];
+        }
+
+        return new string(buffer);
     }
 }

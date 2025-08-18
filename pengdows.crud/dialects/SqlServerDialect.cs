@@ -5,6 +5,7 @@ using System.Data.Common;
 using System.Linq;
 using System.Text;
 using Microsoft.Extensions.Logging;
+using pengdows.crud.enums;
 
 namespace pengdows.crud.dialects;
 
@@ -13,8 +14,8 @@ namespace pengdows.crud.dialects;
 /// </summary>
 public class SqlServerDialect : SqlDialect
 {
-    public SqlServerDialect(DbProviderFactory factory, Func<int, int, string> nameGenerator, ILogger logger)
-        : base(factory, nameGenerator, logger)
+    public SqlServerDialect(DbProviderFactory factory, ILogger logger)
+        : base(factory, logger)
     {
     }
 

@@ -3,6 +3,7 @@ using System.Data;
 using System.Data.Common;
 using System.Threading.Tasks;
 using pengdows.crud;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.threading;

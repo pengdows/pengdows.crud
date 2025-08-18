@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.enums;
 using pengdows.crud.FakeDb;
@@ -33,8 +34,7 @@ public class SqlDialectFeatureTests
         var dialect = SqlDialectFactory.CreateDialectForType(
             SupportedDatabase.SqlServer,
             factory,
-            (length, max) => "p",
-            NullLoggerFactory.Instance.CreateLogger<SqlDialect>());
+                NullLoggerFactory.Instance.CreateLogger<SqlDialect>());
         await dialect.DetectDatabaseInfoAsync(tracked);
         Assert.True(dialect.SupportsJsonTypes);
     }
@@ -62,7 +62,6 @@ public class SqlDialectFeatureTests
         var dialect = SqlDialectFactory.CreateDialectForType(
             SupportedDatabase.SqlServer,
             factory,
-            (length, max) => "p",
             NullLoggerFactory.Instance.CreateLogger<SqlDialect>());
         await dialect.DetectDatabaseInfoAsync(tracked);
         Assert.False(dialect.SupportsJsonTypes);

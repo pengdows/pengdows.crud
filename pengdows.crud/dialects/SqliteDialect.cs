@@ -3,6 +3,8 @@ using System.Data;
 using System.Data.Common;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using pengdows.crud.enums;
+using pengdows.crud.wrappers;
 
 namespace pengdows.crud.dialects;
 
@@ -11,8 +13,8 @@ namespace pengdows.crud.dialects;
 /// </summary>
 public class SqliteDialect : SqlDialect
 {
-    public SqliteDialect(DbProviderFactory factory, Func<int, int, string> nameGenerator, ILogger logger)
-        : base(factory, nameGenerator, logger)
+    public SqliteDialect(DbProviderFactory factory, ILogger logger)
+        : base(factory, logger)
     {
     }
 

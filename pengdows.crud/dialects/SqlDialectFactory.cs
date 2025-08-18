@@ -2,6 +2,7 @@ using System;
 using System.Data.Common;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.enums;
 using pengdows.crud.wrappers;
 
@@ -15,13 +16,12 @@ public static class SqlDialectFactory
     public static async Task<SqlDialect> CreateDialectAsync(
         ITrackedConnection connection,
         DbProviderFactory factory,
-        Func<int, int, string> nameGenerator,
-        ILoggerFactory loggerFactory)
+         ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger<SqlDialect>();
 
         var inferredType = InferDatabaseTypeFromProvider(factory);
-        var dialect = CreateDialectForType(inferredType, factory, nameGenerator, logger);
+        var dialect = CreateDialectForType(inferredType, factory, logger);
 
         try
         {
@@ -34,7 +34,7 @@ public static class SqlDialectFactory
                     inferredType,
                     productInfo.DatabaseType);
 
-                dialect = CreateDialectForType(productInfo.DatabaseType, factory, nameGenerator, logger);
+                dialect = CreateDialectForType(productInfo.DatabaseType, factory, logger);
                 await dialect.DetectDatabaseInfoAsync(connection);
             }
 
@@ -46,31 +46,37 @@ public static class SqlDialectFactory
             return dialect;
         }
     }
+    public static SqlDialect CreateDialect(
+        ITrackedConnection connection,
+        DbProviderFactory factory)
+    {
+        return CreateDialectAsync(connection, factory,  NullLoggerFactory.Instance).GetAwaiter().GetResult();
+    }
+
 
     public static SqlDialect CreateDialect(
         ITrackedConnection connection,
         DbProviderFactory factory,
-        Func<int, int, string> nameGenerator,
-        ILoggerFactory loggerFactory)
+           ILoggerFactory loggerFactory)
     {
-        return CreateDialectAsync(connection, factory, nameGenerator, loggerFactory).GetAwaiter().GetResult();
+        loggerFactory ??= NullLoggerFactory.Instance;
+        return CreateDialectAsync(connection, factory, loggerFactory).GetAwaiter().GetResult();
     }
 
     public static SqlDialect CreateDialectForType(
         SupportedDatabase databaseType,
         DbProviderFactory factory,
-        Func<int, int, string> nameGenerator,
         ILogger logger)
     {
         return databaseType switch
         {
-            SupportedDatabase.SqlServer => new SqlServerDialect(factory, nameGenerator, logger),
-            SupportedDatabase.PostgreSql => new PostgreSqlDialect(factory, nameGenerator, logger),
-            SupportedDatabase.CockroachDb => new PostgreSqlDialect(factory, nameGenerator, logger),
-            SupportedDatabase.MySql => new MySqlDialect(factory, nameGenerator, logger),
-            SupportedDatabase.MariaDb => new MySqlDialect(factory, nameGenerator, logger),
-            SupportedDatabase.Sqlite => new SqliteDialect(factory, nameGenerator, logger),
-            SupportedDatabase.Oracle => new OracleDialect(factory, nameGenerator, logger),
+            SupportedDatabase.SqlServer => new SqlServerDialect(factory, logger),
+            SupportedDatabase.PostgreSql => new PostgreSqlDialect(factory, logger),
+            SupportedDatabase.CockroachDb => new PostgreSqlDialect(factory, logger),
+            SupportedDatabase.MySql => new MySqlDialect(factory, logger),
+            SupportedDatabase.MariaDb => new MySqlDialect(factory, logger),
+            SupportedDatabase.Sqlite => new SqliteDialect(factory, logger),
+            SupportedDatabase.Oracle => new OracleDialect(factory, logger),
             SupportedDatabase.Firebird => throw new NotImplementedException("Firebird dialect not yet implemented"),
             _ => throw new ArgumentException($"Unsupported database type: {databaseType}")
         };

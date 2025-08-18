@@ -11,6 +11,7 @@ using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;
 using pengdows.crud.connection;
+using pengdows.crud.dialects;
 using pengdows.crud.infrastructure;
 using pengdows.crud.isolation;
 using pengdows.crud.threading;
@@ -99,7 +100,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             _factory = factory ?? throw new NullReferenceException(nameof(factory));
 
             var initialConnection = InitializeInternals(configuration);
-            _dialect = new SqlDialect(_dataSourceInfo, _factory, GenerateRandomName);
+            _dialect = SqlDialectFactory.CreateDialect(initialConnection,  _factory , loggerFactory);
             var connFactory = () => FactoryCreateConnection(null, false);
             _connectionStrategy = ConnectionMode switch
             {
@@ -112,7 +113,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         }
         catch (Exception e)
         {
-            _logger.LogError(e.Message);
+            _logger?.LogError(e.Message);
             throw;
         }
     }
@@ -222,17 +223,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
 
     public string GenerateRandomName(int length = 5, int parameterNameMaxLength = 30)
     {
-        var validChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_".ToCharArray();
-        var len = Math.Min(Math.Max(length, 2), parameterNameMaxLength);
-
-        Span<char> buffer = stackalloc char[len];
-        const int firstCharMax = 52; // a-zA-Z
-        var anyOtherMax = validChars.Length;
-
-        buffer[0] = validChars[Random.Shared.Next(firstCharMax)];
-        for (var i = 1; i < len; i++) buffer[i] = validChars[Random.Shared.Next(anyOtherMax)];
-
-        return new string(buffer);
+       return _dialect.GenerateRandomName(length, parameterNameMaxLength);
     }
 
 

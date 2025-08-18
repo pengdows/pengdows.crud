@@ -1,3 +1,5 @@
+using System;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.enums;
 using pengdows.crud.FakeDb;
@@ -15,7 +17,6 @@ public class SqlDialectFactoryTests
         var dialect = SqlDialectFactory.CreateDialectForType(
             SupportedDatabase.SqlServer,
             factory,
-            (length, max) => "p",
             NullLoggerFactory.Instance.CreateLogger<SqlDialect>());
         Assert.IsType<SqlServerDialect>(dialect);
     }
@@ -28,7 +29,6 @@ public class SqlDialectFactoryTests
             SqlDialectFactory.CreateDialectForType(
                 SupportedDatabase.Firebird,
                 factory,
-                (length, max) => "p",
-                NullLoggerFactory.Instance.CreateLogger<SqlDialect>()));
+                     NullLoggerFactory.Instance.CreateLogger<SqlDialect>()));
     }
 }

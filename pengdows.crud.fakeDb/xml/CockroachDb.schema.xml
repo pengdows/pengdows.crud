@@ -53,7 +53,7 @@
         <IdentifierCase>1</IdentifierCase>
         <OrderByColumnsInSelect>false</OrderByColumnsInSelect>
         <ParameterMarkerFormat>{0}</ParameterMarkerFormat>
-        <ParameterMarkerPattern>@[\p{Lo}\p{Lu}\p{Ll}\p{Lm}_@#][\p{Lo}\p{Lu}\p{Ll}\p{Lm}\p{Nd}\uff3f_@#\$]*(?=\s+|$)
+        <ParameterMarkerPattern>:[\p{Lo}\p{Lu}\p{Ll}\p{Lm}_@#][\p{Lo}\p{Lu}\p{Ll}\p{Lm}\p{Nd}\uff3f_@#\$]*(?=\s+|$)
         </ParameterMarkerPattern>
         <ParameterNameMaxLength>63</ParameterNameMaxLength>
         <QuotedIdentifierPattern>"(([^\"]|\"\")*)"</QuotedIdentifierPattern>
