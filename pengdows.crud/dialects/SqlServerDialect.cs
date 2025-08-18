@@ -105,8 +105,19 @@ public class SqlServerDialect : SqlDialect
 
             while (reader.Read())
             {
-                var settingName = reader.GetString(0).ToUpperInvariant();
-                var settingValue = reader.GetString(1);
+                string settingName;
+                string settingValue;
+
+                if (reader.FieldCount == 1)
+                {
+                    settingName = reader.GetName(0).ToUpperInvariant();
+                    settingValue = reader.GetString(0);
+                }
+                else
+                {
+                    settingName = reader.GetString(0).ToUpperInvariant();
+                    settingValue = reader.GetString(1);
+                }
 
                 if (expectedSettings.ContainsKey(settingName))
                 {

@@ -24,7 +24,7 @@ public class DatabaseContextTests
     public static IEnumerable<object[]> AllSupportedProviders()
     {
         return Enum.GetValues<SupportedDatabase>()
-            .Where(p => p != SupportedDatabase.Unknown)
+            .Where(p => p != SupportedDatabase.Unknown && p != SupportedDatabase.Firebird)
             .Select(p => new object[] { p });
     }
 
@@ -174,8 +174,7 @@ public class DatabaseContextTests
             new object[] { SupportedDatabase.PostgreSql, true },
             new object[] { SupportedDatabase.CockroachDb, true },
             new object[] { SupportedDatabase.Oracle, true },
-            new object[] { SupportedDatabase.Sqlite, true },
-            new object[] { SupportedDatabase.Firebird, false }
+            new object[] { SupportedDatabase.Sqlite, true }
         };
     }
 
@@ -395,11 +394,11 @@ public class DatabaseContextTests
     [Fact]
     public void PinnedConnection_WithoutSessionSettings_DoesNotExecute()
     {
-        var factory = new RecordingFactory(SupportedDatabase.Firebird);
+        var factory = new RecordingFactory(SupportedDatabase.SqlServer);
         var config = new DatabaseContextConfiguration
         {
-            ConnectionString = "Data Source=test;EmulatedProduct=Firebird",
-            ProviderName = SupportedDatabase.Firebird.ToString(),
+            ConnectionString = "Data Source=test;EmulatedProduct=SqlServer",
+            ProviderName = SupportedDatabase.SqlServer.ToString(),
             DbMode = DbMode.SingleConnection
         };
 

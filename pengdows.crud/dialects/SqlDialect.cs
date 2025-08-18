@@ -243,15 +243,8 @@ public abstract class SqlDialect
 
             await using var cmd = (DbCommand)connection.CreateCommand();
             cmd.CommandText = versionQuery;
-            await using var reader = await cmd.ExecuteReaderAsync(CommandBehavior.SingleRow | CommandBehavior.SingleResult);
-
-            if (await reader.ReadAsync())
-            {
-                var result = reader.GetValue(0)?.ToString();
-                return result ?? "Unknown Version";
-            }
-
-            return "Unknown Version";
+            var result = await cmd.ExecuteScalarAsync();
+            return result?.ToString() ?? "Unknown Version";
         }
         catch (Exception ex)
         {

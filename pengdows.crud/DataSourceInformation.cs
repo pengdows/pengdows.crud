@@ -89,6 +89,8 @@ public class DataSourceInformation : IDataSourceInformation
         ProcWrappingStyle = dialect.ProcWrappingStyle;
         MaxParameterLimit = dialect.MaxParameterLimit;
         CompositeIdentifierSeparator = dialect.CompositeIdentifierSeparator;
+        QuotePrefix = dialect.QuotePrefix;
+        QuoteSuffix = dialect.QuoteSuffix;
         ParameterMarkerPattern = string.Empty;
     }
 

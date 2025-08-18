@@ -17,7 +17,7 @@ public class PostgreSqlDialect : SqlDialect
     }
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.PostgreSql;
-    public override string ParameterMarker => "$";
+    public override string ParameterMarker => ":";
     public override bool SupportsNamedParameters => true;
     public override int MaxParameterLimit => 65535;
     public override int ParameterNameMaxLength => 63;
