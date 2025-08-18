@@ -101,6 +101,11 @@ public interface IDataSourceInformation
     bool RequiresStoredProcParameterNameMatch { get; }
 
     /// <summary>
+    /// Gets the SQL standard compliance level for the detected database.
+    /// </summary>
+    SqlStandardLevel StandardCompliance { get; }
+
+    /// <summary>
     /// Retrieves the raw database version string from the specified connection.
     /// </summary>
     /// <param name="connection">The connection to query.</param>

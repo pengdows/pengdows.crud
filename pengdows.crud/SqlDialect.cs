@@ -4,6 +4,7 @@ using System;
 using System.Data;
 using System.Data.Common;
 using System.Text;
+using pengdows.crud.enums;
 
 /// <summary>
 /// Provides database-dialect-specific helpers for building SQL.
@@ -26,6 +27,31 @@ internal sealed class SqlDialect
     internal string CompositeIdentifierSeparator => _info.CompositeIdentifierSeparator;
     
     internal int ParameterNameMaxLength => _info.ParameterNameMaxLength;
+    internal SqlStandardLevel StandardCompliance => _info.StandardCompliance;
+
+    internal bool SupportsIntegrityConstraints => StandardCompliance >= SqlStandardLevel.Sql89;
+    internal bool SupportsJoins => StandardCompliance >= SqlStandardLevel.Sql92;
+    internal bool SupportsOuterJoins => StandardCompliance >= SqlStandardLevel.Sql92;
+    internal bool SupportsSubqueries => StandardCompliance >= SqlStandardLevel.Sql92;
+    internal bool SupportsUnion => StandardCompliance >= SqlStandardLevel.Sql92;
+    internal bool SupportsUserDefinedTypes => StandardCompliance >= SqlStandardLevel.Sql99;
+    internal bool SupportsArrayTypes => StandardCompliance >= SqlStandardLevel.Sql99;
+    internal bool SupportsRegularExpressions => StandardCompliance >= SqlStandardLevel.Sql99;
+    internal bool SupportsMerge => StandardCompliance >= SqlStandardLevel.Sql2003;
+    internal bool SupportsXmlTypes => StandardCompliance >= SqlStandardLevel.Sql2003;
+    internal bool SupportsWindowFunctions => StandardCompliance >= SqlStandardLevel.Sql2003;
+    internal bool SupportsCommonTableExpressions => StandardCompliance >= SqlStandardLevel.Sql2003;
+    internal bool SupportsInsteadOfTriggers => StandardCompliance >= SqlStandardLevel.Sql2008;
+    internal bool SupportsTruncateTable => StandardCompliance >= SqlStandardLevel.Sql2008;
+    internal bool SupportsTemporalData => StandardCompliance >= SqlStandardLevel.Sql2011;
+    internal bool SupportsEnhancedWindowFunctions => StandardCompliance >= SqlStandardLevel.Sql2011;
+    internal bool SupportsJsonTypes => StandardCompliance >= SqlStandardLevel.Sql2016;
+    internal bool SupportsRowPatternMatching => StandardCompliance >= SqlStandardLevel.Sql2016;
+    internal bool SupportsMultidimensionalArrays => StandardCompliance >= SqlStandardLevel.Sql2019;
+    internal bool SupportsPropertyGraphQueries => StandardCompliance >= SqlStandardLevel.Sql2023;
+    internal virtual bool SupportsInsertOnConflict => false;
+    internal virtual bool RequiresStoredProcParameterNameMatch => false;
+    internal virtual bool SupportsNamespaces => true;
 
     internal string WrapObjectName(string name)
     {
