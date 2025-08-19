@@ -5,7 +5,6 @@ using System.Data;
 using System.Threading.Tasks;
 using pengdows.crud.enums;
 using pengdows.crud.FakeDb;
-using pengdows.crud;
 using Xunit;
 
 #endregion

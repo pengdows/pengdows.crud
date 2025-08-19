@@ -1,5 +1,3 @@
-using System;
-using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;

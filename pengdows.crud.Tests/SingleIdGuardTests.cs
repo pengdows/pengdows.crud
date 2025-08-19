@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
-using pengdows.crud;
 using pengdows.crud.attributes;
 using Xunit;
 

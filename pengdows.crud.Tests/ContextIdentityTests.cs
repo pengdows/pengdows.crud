@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using Microsoft.Data.Sqlite;
 using Xunit;
-using pengdows.crud;
 
 namespace pengdows.crud.Tests;
 

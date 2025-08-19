@@ -11,12 +11,11 @@ public class DialectPropertyTests
 {
     public static IEnumerable<object[]> DialectData()
     {
-        var factory = new FakeDbFactory();
-        var logger = NullLogger.Instance;
+         var logger = NullLogger.Instance;
 
         yield return new object[]
         {
-            new FirebirdDialect(factory, logger),
+            new FirebirdDialect(new FakeDbFactory(SupportedDatabase.Firebird), logger),
             new DialectProps(
                 SupportedDatabase.Firebird,
                 "@",
@@ -37,7 +36,7 @@ public class DialectPropertyTests
 
         yield return new object[]
         {
-            new MySqlDialect(factory, logger),
+            new MySqlDialect(new FakeDbFactory(SupportedDatabase.MySql), logger),
             new DialectProps(
                 SupportedDatabase.MySql,
                 "@",
@@ -58,7 +57,7 @@ public class DialectPropertyTests
 
         yield return new object[]
         {
-            new OracleDialect(factory, logger),
+            new OracleDialect(new FakeDbFactory(SupportedDatabase.Oracle), logger),
             new DialectProps(
                 SupportedDatabase.Oracle,
                 ":",
@@ -79,7 +78,7 @@ public class DialectPropertyTests
 
         yield return new object[]
         {
-            new PostgreSqlDialect(factory, logger),
+            new PostgreSqlDialect(new FakeDbFactory(SupportedDatabase.PostgreSql), logger),
             new DialectProps(
                 SupportedDatabase.PostgreSql,
                 ":",
@@ -100,7 +99,7 @@ public class DialectPropertyTests
 
         yield return new object[]
         {
-            new SqlServerDialect(factory, logger),
+            new SqlServerDialect(new FakeDbFactory(SupportedDatabase.SqlServer), logger),
             new DialectProps(
                 SupportedDatabase.SqlServer,
                 "@",
@@ -121,7 +120,7 @@ public class DialectPropertyTests
 
         yield return new object[]
         {
-            new SqliteDialect(factory, logger),
+            new SqliteDialect(new FakeDbFactory(SupportedDatabase.Sqlite), logger),
             new DialectProps(
                 SupportedDatabase.Sqlite,
                 "@",
@@ -161,7 +160,7 @@ public class DialectPropertyTests
         Assert.NotEqual(expected.ParameterNameMaxLength + 1, dialect.ParameterNameMaxLength);
 
         Assert.Equal(expected.ProcWrappingStyle, dialect.ProcWrappingStyle);
-        Assert.NotEqual(ProcWrappingStyle.Unknown, dialect.ProcWrappingStyle);
+        Assert.NotEqual(ProcWrappingStyle.None, dialect.ProcWrappingStyle);
 
         Assert.Equal(expected.QuotePrefix, dialect.QuotePrefix);
         Assert.NotEqual(expected.QuotePrefix == "\"" ? "[" : "\"", dialect.QuotePrefix);

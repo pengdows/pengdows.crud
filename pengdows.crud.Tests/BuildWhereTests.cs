@@ -1,7 +1,6 @@
 using System;
 using System.Reflection;
 using Microsoft.Data.Sqlite;
-using pengdows.crud;
 using pengdows.crud.Tests.Mocks;
 using pengdows.crud.exceptions;
 using Xunit;

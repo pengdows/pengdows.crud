@@ -19,7 +19,7 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
 
     internal readonly Queue<IEnumerable<Dictionary<string, object>>> ReaderResults = new();
     internal readonly Queue<object?> ScalarResults = new();
-    internal readonly Queue<int> NonQueryResults = new();
+    public readonly Queue<int> NonQueryResults = new();
 
     public void EnqueueReaderResult(IEnumerable<Dictionary<string, object>> rows)
     {
