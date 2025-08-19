@@ -319,12 +319,8 @@ public class TransactionContextTests
         using var tx = context.BeginTransaction();
 
         Assert.Equal(context.ProcWrappingStyle, tx.ProcWrappingStyle);
-
-        ((IDatabaseContext)tx).ProcWrappingStyle = ProcWrappingStyle.Call;
-        Assert.Equal(ProcWrappingStyle.Call, tx.ProcWrappingStyle);
-
         tx.Dispose();
-        Assert.Throws<ObjectDisposedException>(() => ((IDatabaseContext)tx).ProcWrappingStyle = ProcWrappingStyle.Call);
+        Assert.Equal(context.ProcWrappingStyle, tx.ProcWrappingStyle);
     }
 
     [Fact]

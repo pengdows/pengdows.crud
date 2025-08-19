@@ -55,7 +55,7 @@ public abstract class SqlDialect
     public virtual bool PrepareStatements => false;
 
     // SQL standard parameter name pattern (SQL-92)
-    protected virtual Regex ParameterNamePattern => new("^[a-zA-Z][a-zA-Z0-9_]*$", RegexOptions.Compiled);
+    public virtual Regex ParameterNamePattern => new("^[a-zA-Z][a-zA-Z0-9_]*$", RegexOptions.Compiled);
 
     // Feature support based on SQL standards and database capabilities
     public virtual bool SupportsIntegrityConstraints => MaxSupportedStandard >= SqlStandardLevel.Sql89;
@@ -166,6 +166,11 @@ public abstract class SqlDialect
 
     // Methods for database-specific operations
     public abstract string GetVersionQuery();
+
+    public virtual DataTable GetDataSourceInformationSchema(ITrackedConnection connection)
+    {
+        return connection.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
+    }
 
     public virtual string GetConnectionSessionSettings()
     {

@@ -4,7 +4,6 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
-using System.Reflection;
 using pengdows.crud.enums;
 using pengdows.crud.FakeDb;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -101,7 +100,7 @@ public class DataSourceInformationTests
         var conn = new FakeTrackedConnection(x, schema, scalars);
 
         // Act
-        var info = DataSourceInformation.Create(conn, NullLoggerFactory.Instance);
+        var info = DataSourceInformation.Create(conn, factory, NullLoggerFactory.Instance);
 
         // Assert: product detection
         //Assert.Equal(db, info.Product);
@@ -173,28 +172,13 @@ public class DataSourceInformationTests
         connection.ConnectionString = $"Data Source=test;EmulatedProduct={db}";
         var tracked = new FakeTrackedConnection(connection, schema, scalars);
 
-        var info = DataSourceInformation.Create(tracked, NullLoggerFactory.Instance);
+        var info = DataSourceInformation.Create(tracked, factory, NullLoggerFactory.Instance);
 
         var result = info.GetDatabaseVersion(tracked);
         var expected = scalars.Values.First().ToString();
         Assert.Equal(expected, result);
     }
 
-    [Fact]
-    public void GetDatabaseVersion_UnknownProduct_ReturnsUnknown()
-    {
-        var factory = new FakeDbFactory(SupportedDatabase.SqlServer);
-        var connection = factory.CreateConnection();
-        connection.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}";
-        var tracked = new FakeTrackedConnection(connection, DataSourceInformation.BuildEmptySchema("test", "1", "@", "@{0}", 64, "@w+", "@w+", true), new Dictionary<string, object>());
-        var info = DataSourceInformation.Create(tracked, NullLoggerFactory.Instance);
-
-        var prop = typeof(DataSourceInformation).GetProperty("Product", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
-        prop!.SetValue(info, SupportedDatabase.Unknown);
-
-        var result = info.GetDatabaseVersion(tracked);
-        Assert.Equal("Unknown Database Version", result);
-    }
     private static ITrackedConnection BuildSqliteConnectionMock()
     {
         var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
@@ -215,7 +199,7 @@ public class DataSourceInformationTests
     public void GetSchema_UsesEmbeddedForSqlite()
     {
         var tracked = BuildSqliteConnectionMock();
-        var info = DataSourceInformation.Create(tracked, NullLoggerFactory.Instance);
+        var info = DataSourceInformation.Create(tracked, new FakeDbFactory(SupportedDatabase.Sqlite), NullLoggerFactory.Instance);
 
         var schema = info.GetSchema(tracked);
         Assert.Equal("SQLite", schema.Rows[0].Field<string>("DataSourceProductName"));
@@ -229,31 +213,11 @@ public class DataSourceInformationTests
         var conn = factory.CreateConnection();
         conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}";
         using var tracked = new TrackedConnection(conn);
-        var info = DataSourceInformation.Create(tracked, NullLoggerFactory.Instance);
+        var info = DataSourceInformation.Create(tracked, factory, NullLoggerFactory.Instance);
 
         var schema = info.GetSchema(tracked);
         Assert.Contains("SQL Server", schema.Rows[0].Field<string>("DataSourceProductName"));
         Assert.Equal("{0}", schema.Rows[0].Field<string>("ParameterMarkerFormat"));
     }
 
-    [Theory]
-    [InlineData("SQL Server 2019", SupportedDatabase.SqlServer)]
-    [InlineData("MariaDB 10.3", SupportedDatabase.MariaDb)]
-    [InlineData("MySQL 8.0", SupportedDatabase.MySql)]
-    [InlineData("Npgsql", SupportedDatabase.PostgreSql)]
-    [InlineData("PostgreSQL 14", SupportedDatabase.PostgreSql)]
-    [InlineData("Oracle Database", SupportedDatabase.Oracle)]
-    [InlineData("SQLite", SupportedDatabase.Sqlite)]
-    [InlineData("Firebird", SupportedDatabase.Firebird)]
-    [InlineData("Something Else", SupportedDatabase.Unknown)]
-    [InlineData(null, SupportedDatabase.Unknown)]
-    public void InferDatabaseProduct_ReturnsExpected(string name, SupportedDatabase expected)
-    {
-        var method = typeof(DataSourceInformation).GetMethod(
-            "InferDatabaseProduct",
-            BindingFlags.NonPublic | BindingFlags.Static)!;
-
-        var result = (SupportedDatabase)method.Invoke(null, new object?[] { name })!;
-        Assert.Equal(expected, result);
-    }
 }

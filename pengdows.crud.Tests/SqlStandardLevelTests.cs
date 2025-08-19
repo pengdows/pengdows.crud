@@ -28,7 +28,7 @@ public class SqlStandardLevelTests
         var conn = (FakeDbConnection)factory.CreateConnection();
         conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}";
         var tracked = new FakeTrackedConnection(conn, schema, scalars);
-        var info = DataSourceInformation.Create(tracked);
+        var info = DataSourceInformation.Create(tracked, factory);
         Assert.Equal(SqlStandardLevel.Sql2016, info.StandardCompliance);
     }
 
@@ -52,7 +52,7 @@ public class SqlStandardLevelTests
         var conn = (FakeDbConnection)factory.CreateConnection();
         conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}";
         var tracked = new FakeTrackedConnection(conn, schema, scalars);
-        var info = DataSourceInformation.Create(tracked);
+        var info = DataSourceInformation.Create(tracked, factory);
         Assert.Equal(SqlStandardLevel.Sql2003, info.StandardCompliance);
     }
 }

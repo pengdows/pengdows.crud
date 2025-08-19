@@ -155,15 +155,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
 
     public ProcWrappingStyle ProcWrappingStyle => _context.ProcWrappingStyle;
 
-    ProcWrappingStyle IDatabaseContext.ProcWrappingStyle
-    {
-        get => _context.ProcWrappingStyle;
-        set
-        {
-            ThrowIfDisposed();
-            _context.ProcWrappingStyle = value;
-        }
-    }
+    ProcWrappingStyle IDatabaseContext.ProcWrappingStyle => _context.ProcWrappingStyle;
 
     ITransactionContext IDatabaseContext.BeginTransaction(IsolationProfile isolationProfile, ExecutionType executionType)
     {

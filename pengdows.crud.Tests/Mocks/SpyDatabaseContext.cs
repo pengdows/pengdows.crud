@@ -28,11 +28,7 @@ public sealed class SpyDatabaseContext : IDatabaseContext, IContextIdentity, ISq
 
     public string SessionSettingsPreamble => _inner.SessionSettingsPreamble;
 
-    public ProcWrappingStyle ProcWrappingStyle
-    {
-        get => _inner.ProcWrappingStyle;
-        set => _inner.ProcWrappingStyle = value;
-    }
+    public ProcWrappingStyle ProcWrappingStyle => _inner.ProcWrappingStyle;
 
     public int MaxParameterLimit => _inner.MaxParameterLimit;
 

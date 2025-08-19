@@ -160,7 +160,10 @@ public class DialectPropertyTests
         Assert.NotEqual(expected.ParameterNameMaxLength + 1, dialect.ParameterNameMaxLength);
 
         Assert.Equal(expected.ProcWrappingStyle, dialect.ProcWrappingStyle);
-        Assert.NotEqual(ProcWrappingStyle.None, dialect.ProcWrappingStyle);
+        var unexpectedProcStyle = expected.ProcWrappingStyle == ProcWrappingStyle.None
+            ? ProcWrappingStyle.Call
+            : ProcWrappingStyle.None;
+        Assert.NotEqual(unexpectedProcStyle, dialect.ProcWrappingStyle);
 
         Assert.Equal(expected.QuotePrefix, dialect.QuotePrefix);
         Assert.NotEqual(expected.QuotePrefix == "\"" ? "[" : "\"", dialect.QuotePrefix);

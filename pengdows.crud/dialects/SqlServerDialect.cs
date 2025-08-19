@@ -35,6 +35,8 @@ public class SqlServerDialect : SqlDialect
     public override int MaxParameterLimit => 2100;
     public override int ParameterNameMaxLength => 128;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.Exec;
+    public override SqlStandardLevel MaxSupportedStandard =>
+        IsInitialized ? base.MaxSupportedStandard : DetermineStandardCompliance(null);
 
     public override string QuotePrefix => "\"";
     public override string QuoteSuffix => "\"";
