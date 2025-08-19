@@ -41,7 +41,7 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// <summary>
     /// Stored Procedure wrapping style (CALL vs EXEC vs plain SELECT).
     /// </summary>
-    ProcWrappingStyle ProcWrappingStyle { get; set; }
+    ProcWrappingStyle ProcWrappingStyle { get; }
 
     /// <summary>
     /// The hard limit of parameters this provider supports per statement.

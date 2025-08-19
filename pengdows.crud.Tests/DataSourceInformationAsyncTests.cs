@@ -1,8 +1,6 @@
-using System;
 using System.Collections.Generic;
-using System.Data.Common;
 using System.Data;
-using System.Reflection;
+using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -15,98 +13,55 @@ namespace pengdows.crud.Tests;
 
 public class DataSourceInformationAsyncTests
 {
-    private sealed class ThrowingCommand : DbCommand
+    [Fact]
+    public async Task CreateAsync_ReturnsInformation()
     {
-        private readonly DbConnection _connection;
+        var schema = DataSourceInformation.BuildEmptySchema(
+            "PostgreSQL", "15.2", "@p[0-9]+", "@{0}", 64, "@\\w+", "@\\w+", true);
+        var scalars = new Dictionary<string, object> { ["SELECT version()"] = "PostgreSQL 15.2" };
+        var factory = new FakeDbFactory(SupportedDatabase.PostgreSql);
+        var conn = factory.CreateConnection();
+        conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.PostgreSql}";
+        using var tracked = new FakeTrackedConnection(conn, schema, scalars);
 
-        public ThrowingCommand(DbConnection connection)
-        {
-            _connection = connection;
-        }
-
-        public override string? CommandText { get; set; }
-        public override int CommandTimeout { get; set; }
-        public override CommandType CommandType { get; set; }
-        public override bool DesignTimeVisible { get; set; }
-        public override UpdateRowSource UpdatedRowSource { get; set; }
-
-        protected override DbConnection DbConnection
-        {
-            get => _connection;
-            set { }
-        }
-
-        protected override DbParameterCollection DbParameterCollection { get; } = new FakeParameterCollection();
-        protected override DbTransaction? DbTransaction { get; set; }
-
-        public override void Cancel() { }
-        public override int ExecuteNonQuery() => throw new InvalidOperationException();
-        public override object? ExecuteScalar() => throw new InvalidOperationException();
-        public override void Prepare() { }
-
-        protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) => throw new InvalidOperationException();
-
-        protected override Task<DbDataReader> ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken)
-            => throw new InvalidOperationException();
-
-        protected override DbParameter CreateDbParameter() => new FakeDbParameter();
+        var info = await DataSourceInformation.CreateAsync(tracked, factory, NullLoggerFactory.Instance);
+        Assert.Equal("PostgreSQL", info.DatabaseProductName);
     }
 
     private sealed class ThrowingConnection : FakeDbConnection
     {
         protected override DbCommand CreateDbCommand() => new ThrowingCommand(this);
-    }
-    private static async Task<bool> InvokeIsSqliteAsync(ITrackedConnection conn)
-    {
-        var method = typeof(DataSourceInformation).GetMethod("IsSqliteAsync", BindingFlags.NonPublic | BindingFlags.Static)!;
-        var task = (Task<bool>)method.Invoke(null, new object?[] { conn, NullLogger<DataSourceInformation>.Instance })!;
-        return await task.ConfigureAwait(false);
-    }
 
-    private static async Task<string> InvokeGetVersionAsync(ITrackedConnection conn, string sql)
-    {
-        var method = typeof(DataSourceInformation).GetMethod("GetVersionAsync", BindingFlags.NonPublic | BindingFlags.Static)!;
-        var task = (Task<string>)method.Invoke(null, new object?[] { conn, sql, NullLogger<DataSourceInformation>.Instance })!;
-        return await task.ConfigureAwait(false);
-    }
-
-    [Fact]
-    public async Task IsSqliteAsync_ReturnsTrue_WhenVersionQuerySucceeds()
-    {
-        var conn = new FakeDbConnection();
-        conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}";
-        conn.EnqueueReaderResult(new[] { new Dictionary<string, object> { { "version", "3.0" } } });
-        using var tracked = new TrackedConnection(conn);
-
-        var result = await InvokeIsSqliteAsync(tracked);
-
-        Assert.True(result);
-    }
-
-    [Fact]
-    public async Task IsSqliteAsync_ReturnsFalse_WhenCommandFails()
-    {
-        var conn = new ThrowingConnection
+        private sealed class ThrowingCommand : DbCommand
         {
-            ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}"
-        };
-        using var tracked = new TrackedConnection(conn);
-
-        var result = await InvokeIsSqliteAsync(tracked);
-
-        Assert.False(result);
+            private readonly DbConnection _connection;
+            public ThrowingCommand(DbConnection connection) => _connection = connection;
+            public override string? CommandText { get; set; }
+            public override int CommandTimeout { get; set; }
+            public override CommandType CommandType { get; set; }
+            public override bool DesignTimeVisible { get; set; }
+            public override UpdateRowSource UpdatedRowSource { get; set; }
+            protected override DbConnection DbConnection { get => _connection; set { } }
+            protected override DbParameterCollection DbParameterCollection { get; } = new FakeParameterCollection();
+            protected override DbTransaction? DbTransaction { get; set; }
+            public override void Cancel() { }
+            public override int ExecuteNonQuery() => throw new InvalidOperationException();
+            public override object? ExecuteScalar() => throw new InvalidOperationException();
+            public override void Prepare() { }
+            protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) => throw new InvalidOperationException();
+            protected override Task<DbDataReader> ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken) => throw new InvalidOperationException();
+            protected override DbParameter CreateDbParameter() => new FakeDbParameter();
+        }
     }
 
     [Fact]
-    public async Task GetVersionAsync_ReturnsValue()
+    public async Task CreateAsync_ReturnsErrorVersion_WhenCommandFails()
     {
-        var conn = new FakeDbConnection();
-        conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}";
-        conn.EnqueueReaderResult(new[] { new Dictionary<string, object> { { "version", "9.9" } } });
+        var factory = new FakeDbFactory(SupportedDatabase.SqlServer);
+        var conn = new ThrowingConnection { ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}" };
         using var tracked = new TrackedConnection(conn);
 
-        var result = await InvokeGetVersionAsync(tracked, "SELECT sqlite_version()");
-
-        Assert.Equal("9.9", result);
+        var info = await DataSourceInformation.CreateAsync(tracked, factory, NullLoggerFactory.Instance);
+        Assert.StartsWith("Error retrieving version", info.DatabaseProductVersion);
     }
 }

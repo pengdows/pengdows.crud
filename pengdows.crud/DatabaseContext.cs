@@ -279,11 +279,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     }
 
 
-    public ProcWrappingStyle ProcWrappingStyle
-    {
-        get => _dataSourceInfo.ProcWrappingStyle;
-        set => _dataSourceInfo.ProcWrappingStyle = value;
-    }
+    public ProcWrappingStyle ProcWrappingStyle => _dataSourceInfo.ProcWrappingStyle;
 
     public int MaxParameterLimit => _dataSourceInfo.MaxParameterLimit;
 
@@ -523,11 +519,6 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
 
             case SupportedDatabase.Sqlite:
                 _connectionSessionSettings = "PRAGMA foreign_keys = ON;";
-                break;
-
-            case SupportedDatabase.Firebird:
-                // _connectionSessionSettings = "SET NAMES UTF8;";
-                // has to be done in connection string, not session;
                 break;
 
             //DB 2 can't be supported under modern .net

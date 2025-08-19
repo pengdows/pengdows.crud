@@ -1,5 +1,6 @@
 using System.Data;
 using System.Data.Common;
+using System.IO;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.wrappers;
@@ -35,6 +36,16 @@ public class SqliteDialect : SqlDialect
     public override string GetConnectionSessionSettings()
     {
         return "PRAGMA foreign_keys = ON;";
+    }
+
+    public override DataTable GetDataSourceInformationSchema(ITrackedConnection connection)
+    {
+        var resourceName = $"pengdows.crud.xml.{SupportedDatabase.Sqlite}.schema.xml";
+        using var stream = typeof(SqliteDialect).Assembly.GetManifestResourceStream(resourceName)
+                        ?? throw new FileNotFoundException($"Embedded schema not found: {resourceName}");
+        var table = new DataTable();
+        table.ReadXml(stream);
+        return table;
     }
 
     protected override async Task<string?> GetProductNameAsync(ITrackedConnection connection)

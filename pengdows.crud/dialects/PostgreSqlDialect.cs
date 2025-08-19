@@ -21,6 +21,8 @@ public class PostgreSqlDialect : SqlDialect
     public override int ParameterNameMaxLength => 63;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.PostgreSQL;
     public override bool RequiresStoredProcParameterNameMatch => true;
+    public override SqlStandardLevel MaxSupportedStandard =>
+        IsInitialized ? base.MaxSupportedStandard : DetermineStandardCompliance(null);
 
     public override bool SupportsInsertOnConflict => true;
     public override bool SupportsMerge => IsInitialized && ProductInfo.ParsedVersion?.Major >= 15;
