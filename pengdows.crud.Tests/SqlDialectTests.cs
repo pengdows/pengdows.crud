@@ -1,5 +1,8 @@
 using System.Collections.Generic;
 using System.Data;
+using System.Data.Common;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.FakeDb;
@@ -41,11 +44,8 @@ public class SqlDialectTests
     public void MakeParameterName_NoNamedParameters_ReturnsQuestion()
     {
         var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
-        var schema = DataSourceInformation.BuildEmptySchema("SQLite", "1", "?", "?", 64, "\\w+", "\\w+", false);
-        var conn = (FakeDbConnection)factory.CreateConnection();
-        var tracked = new FakeTrackedConnection(conn, schema, new Dictionary<string, object>());
-        var info = DataSourceInformation.Create(tracked);
-        var dialect = SqlDialectFactory.CreateDialect( tracked, factory);
+        var logger = NullLoggerFactory.Instance.CreateLogger<SqlDialect>();
+        var dialect = new NoNamedParameterDialect(factory, logger);
         var param = new FakeDbParameter { ParameterName = "p", DbType = DbType.Int32, Value = 1 };
         Assert.Equal("?", dialect.MakeParameterName(param));
     }
@@ -63,5 +63,59 @@ public class SqlDialectTests
         Assert.Equal("p", p.ParameterName);
         Assert.Equal(DbType.Int32, p.DbType);
         Assert.Equal(1, p.Value);
+    }
+
+    [Fact]
+    public void ApplyConnectionSettings_WithScript_ExecutesCommand()
+    {
+        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
+        var conn = (FakeDbConnection)factory.CreateConnection();
+        conn.Open();
+        conn.EnqueueNonQueryResult(1);
+        var logger = NullLoggerFactory.Instance.CreateLogger<SqlDialect>();
+        var dialect = new ScriptDialect(factory, logger);
+        dialect.ApplyConnectionSettings(conn);
+        Assert.Empty(conn.NonQueryResults);
+    }
+
+    [Fact]
+    public void ApplyConnectionSettings_NoScript_DoesNotExecute()
+    {
+        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
+        var conn = (FakeDbConnection)factory.CreateConnection();
+        conn.Open();
+        conn.EnqueueNonQueryResult(1);
+        var logger = NullLoggerFactory.Instance.CreateLogger<SqlDialect>();
+        var dialect = new NoNamedParameterDialect(factory, logger);
+        dialect.ApplyConnectionSettings(conn);
+        Assert.Single(conn.NonQueryResults);
+    }
+    private sealed class NoNamedParameterDialect : SqlDialect
+    {
+        public NoNamedParameterDialect(DbProviderFactory factory, ILogger logger) : base(factory, logger) { }
+
+        public override SupportedDatabase DatabaseType => SupportedDatabase.Sqlite;
+        public override string ParameterMarker => "@";
+        public override bool SupportsNamedParameters => false;
+        public override int MaxParameterLimit => 999;
+        public override int ParameterNameMaxLength => 64;
+        public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.None;
+
+        public override string GetVersionQuery() => string.Empty;
+    }
+
+    private sealed class ScriptDialect : SqlDialect
+    {
+        public ScriptDialect(DbProviderFactory factory, ILogger logger) : base(factory, logger) { }
+
+        public override SupportedDatabase DatabaseType => SupportedDatabase.Sqlite;
+        public override string ParameterMarker => "@";
+        public override bool SupportsNamedParameters => true;
+        public override int MaxParameterLimit => 999;
+        public override int ParameterNameMaxLength => 64;
+        public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.None;
+
+        public override string GetVersionQuery() => string.Empty;
+        public override string GetConnectionSessionSettings() => "PRAGMA foreign_keys = ON;";
     }
 }

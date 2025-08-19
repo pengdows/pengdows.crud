@@ -74,6 +74,26 @@ public class DataSourceInformation : IDataSourceInformation
         QuoteSuffix = "\"";
     }
 
+    public DataSourceInformation(pengdows.crud.dialects.SqlDialect dialect)
+        : this(NullLoggerFactory.Instance)
+    {
+        var info = dialect.ProductInfo;
+        DatabaseProductName = info.ProductName;
+        DatabaseProductVersion = info.ProductVersion;
+        ParsedVersion = info.ParsedVersion;
+        Product = info.DatabaseType;
+        StandardCompliance = info.StandardCompliance;
+        ParameterMarker = dialect.ParameterMarker;
+        SupportsNamedParameters = dialect.SupportsNamedParameters;
+        ParameterNameMaxLength = dialect.ParameterNameMaxLength;
+        ProcWrappingStyle = dialect.ProcWrappingStyle;
+        MaxParameterLimit = dialect.MaxParameterLimit;
+        CompositeIdentifierSeparator = dialect.CompositeIdentifierSeparator;
+        QuotePrefix = dialect.QuotePrefix;
+        QuoteSuffix = dialect.QuoteSuffix;
+        ParameterMarkerPattern = string.Empty;
+    }
+
     public DataSourceInformation(DbConnection conn, ILoggerFactory? loggerFactory = null)
         : this(loggerFactory)
     {

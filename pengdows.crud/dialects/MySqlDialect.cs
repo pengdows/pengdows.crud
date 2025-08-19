@@ -26,8 +26,6 @@ public class MySqlDialect : SqlDialect
     public override string QuotePrefix => "`";
     public override string QuoteSuffix => "`";
 
-    public override SqlStandardLevel MaxSupportedStandard => SqlStandardLevel.Sql2011;
-
     public override bool SupportsInsertOnConflict => true;
     public override bool SupportsMerge => false;
     public override bool SupportsJsonTypes => IsInitialized && ProductInfo.ParsedVersion?.Major >= 5;
@@ -39,20 +37,6 @@ public class MySqlDialect : SqlDialect
     public override string GetConnectionSessionSettings()
     {
         return "SET SESSION sql_mode = 'STRICT_ALL_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ENGINE_SUBSTITUTION,ANSI_QUOTES';";
-    }
-
-    public override void ApplyConnectionSettings(IDbConnection connection)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = GetConnectionSessionSettings();
-            cmd.ExecuteNonQuery();
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Failed to apply MySQL connection settings");
-        }
     }
 
     protected override SqlStandardLevel DetermineStandardCompliance(Version? version)

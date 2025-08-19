@@ -39,11 +39,17 @@ public static class DataSourceTestData
                 _ => db.ToString()
             };
 
+            var markerFormat = db switch
+            {
+                SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.Oracle => ":{0}",
+                _ => "@{0}"
+            };
+
             var schema = DataSourceInformation.BuildEmptySchema(
                 productName,
                 "1.2.3",
                 db == SupportedDatabase.Sqlite ? "@p[0-9]+" : "@[0-9]+",
-                "@{0}",
+                markerFormat,
                 64,
                 @"@\\w+",
                 @"[@:]\w+",

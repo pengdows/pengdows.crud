@@ -34,7 +34,7 @@ public class SqlDialectFeatureTests
         var dialect = SqlDialectFactory.CreateDialectForType(
             SupportedDatabase.SqlServer,
             factory,
-                NullLoggerFactory.Instance.CreateLogger<SqlDialect>());
+                NullLogger<SqlDialect>.Instance);
         await dialect.DetectDatabaseInfoAsync(tracked);
         Assert.True(dialect.SupportsJsonTypes);
     }
@@ -62,7 +62,7 @@ public class SqlDialectFeatureTests
         var dialect = SqlDialectFactory.CreateDialectForType(
             SupportedDatabase.SqlServer,
             factory,
-            NullLoggerFactory.Instance.CreateLogger<SqlDialect>());
+            NullLogger<SqlDialect>.Instance);
         await dialect.DetectDatabaseInfoAsync(tracked);
         Assert.False(dialect.SupportsJsonTypes);
     }

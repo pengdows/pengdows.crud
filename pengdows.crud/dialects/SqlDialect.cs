@@ -48,7 +48,8 @@ public abstract class SqlDialect
     /// <summary>
     /// The highest SQL standard level this database/version supports
     /// </summary>
-    public abstract SqlStandardLevel MaxSupportedStandard { get; }
+    public virtual SqlStandardLevel MaxSupportedStandard =>
+        IsInitialized ? ProductInfo.StandardCompliance : SqlStandardLevel.Sql92;
 
     // SQL standard defaults - can be overridden for database-specific behavior
     public virtual string QuotePrefix => "\"";  // SQL-92 standard
@@ -166,10 +167,33 @@ public abstract class SqlDialect
         return CreateDbParameter(null, type, value);
     }
 
-    // Abstract methods for database-specific operations
+    // Methods for database-specific operations
     public abstract string GetVersionQuery();
-    public abstract string GetConnectionSessionSettings();
-    public abstract void ApplyConnectionSettings(IDbConnection connection);
+
+    public virtual string GetConnectionSessionSettings()
+    {
+        return string.Empty;
+    }
+
+    public virtual void ApplyConnectionSettings(IDbConnection connection)
+    {
+        var settings = GetConnectionSessionSettings();
+        if (string.IsNullOrWhiteSpace(settings))
+        {
+            return;
+        }
+
+        try
+        {
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = settings;
+            cmd.ExecuteNonQuery();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to apply connection settings for {DatabaseType}", DatabaseType);
+        }
+    }
 
     /// <summary>
     /// Detects database product information from the connection
@@ -222,7 +246,7 @@ public abstract class SqlDialect
     /// </summary>
     protected virtual SqlStandardLevel DetermineStandardCompliance(Version? version)
     {
-        return MaxSupportedStandard;
+        return SqlStandardLevel.Sql92;
     }
 
     public DatabaseProductInfo DetectDatabaseInfo(ITrackedConnection connection)
@@ -242,15 +266,8 @@ public abstract class SqlDialect
 
             await using var cmd = (DbCommand)connection.CreateCommand();
             cmd.CommandText = versionQuery;
-            await using var reader = await cmd.ExecuteReaderAsync(CommandBehavior.SingleRow | CommandBehavior.SingleResult);
-
-            if (await reader.ReadAsync())
-            {
-                var result = reader.GetValue(0)?.ToString();
-                return result ?? "Unknown Version";
-            }
-
-            return "Unknown Version";
+            var result = await cmd.ExecuteScalarAsync();
+            return result?.ToString() ?? "Unknown Version";
         }
         catch (Exception ex)
         {
@@ -378,10 +395,19 @@ public abstract class SqlDialect
             return null;
         }
 
-        var match = Regex.Match(versionString, @"(?<ver>\d+(?:\.\d+)*)");
-        if (match.Success && Version.TryParse(match.Groups["ver"].Value, out var version))
+        var matches = Regex.Matches(versionString, @"\d+(?:\.\d+)+");
+        if (matches.Count > 0)
         {
-            return version;
+            if (Version.TryParse(matches[^1].Value, out var detailed))
+            {
+                return detailed;
+            }
+        }
+
+        var fallback = Regex.Match(versionString, @"\d+");
+        if (fallback.Success && Version.TryParse(fallback.Value, out var simple))
+        {
+            return simple;
         }
 
         return null;

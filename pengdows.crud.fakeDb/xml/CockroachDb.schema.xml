@@ -43,8 +43,8 @@
     </xs:schema>
     <DataSourceInformation>
         <CompositeIdentifierSeparatorPattern>\.</CompositeIdentifierSeparatorPattern>
-        <DataSourceProductName>Npgsql</DataSourceProductName>
-        <DataSourceProductVersion>13.0.0</DataSourceProductVersion>
+        <DataSourceProductName>CockroachDB</DataSourceProductName>
+        <DataSourceProductVersion>1.2.3</DataSourceProductVersion>
         <DataSourceProductVersionNormalized>13.00.00</DataSourceProductVersionNormalized>
         <GroupByBehavior>2</GroupByBehavior>
         <IdentifierPattern>

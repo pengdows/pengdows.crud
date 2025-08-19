@@ -24,8 +24,6 @@ public class OracleDialect : SqlDialect
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.Oracle;
     public override bool RequiresStoredProcParameterNameMatch => true;
 
-    public override SqlStandardLevel MaxSupportedStandard => SqlStandardLevel.Sql2016;
-
     public override bool SupportsMerge => true;
     public override bool SupportsJsonTypes => IsInitialized && ProductInfo.ParsedVersion?.Major >= 12;
 
@@ -34,20 +32,6 @@ public class OracleDialect : SqlDialect
     public override string GetConnectionSessionSettings()
     {
         return "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD';";
-    }
-
-    public override void ApplyConnectionSettings(IDbConnection connection)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = GetConnectionSessionSettings();
-            cmd.ExecuteNonQuery();
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Failed to apply Oracle connection settings");
-        }
     }
 
     protected override SqlStandardLevel DetermineStandardCompliance(Version? version)

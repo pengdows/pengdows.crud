@@ -175,7 +175,7 @@ public class DatabaseContextTests
             new object[] { SupportedDatabase.CockroachDb, true },
             new object[] { SupportedDatabase.Oracle, true },
             new object[] { SupportedDatabase.Sqlite, true },
-            new object[] { SupportedDatabase.Firebird, false }
+            new object[] { SupportedDatabase.Firebird, true }
         };
     }
 
@@ -395,11 +395,11 @@ public class DatabaseContextTests
     [Fact]
     public void PinnedConnection_WithoutSessionSettings_DoesNotExecute()
     {
-        var factory = new RecordingFactory(SupportedDatabase.Firebird);
+        var factory = new RecordingFactory(SupportedDatabase.SqlServer);
         var config = new DatabaseContextConfiguration
         {
-            ConnectionString = "Data Source=test;EmulatedProduct=Firebird",
-            ProviderName = SupportedDatabase.Firebird.ToString(),
+            ConnectionString = "Data Source=test;EmulatedProduct=SqlServer",
+            ProviderName = SupportedDatabase.SqlServer.ToString(),
             DbMode = DbMode.SingleConnection
         };
 

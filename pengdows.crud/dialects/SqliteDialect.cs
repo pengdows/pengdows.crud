@@ -25,8 +25,6 @@ public class SqliteDialect : SqlDialect
     public override int ParameterNameMaxLength => 255;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.None;
 
-    public override SqlStandardLevel MaxSupportedStandard => SqlStandardLevel.Sql2016;
-
     public override bool SupportsInsertOnConflict => true;
     public override bool SupportsMerge => false;
     public override bool SupportsNamespaces => false;
@@ -39,20 +37,6 @@ public class SqliteDialect : SqlDialect
     public override string GetConnectionSessionSettings()
     {
         return "PRAGMA foreign_keys = ON;";
-    }
-
-    public override void ApplyConnectionSettings(IDbConnection connection)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = GetConnectionSessionSettings();
-            cmd.ExecuteNonQuery();
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Failed to apply SQLite connection settings");
-        }
     }
 
     protected override async Task<string?> GetProductNameAsync(ITrackedConnection connection)
