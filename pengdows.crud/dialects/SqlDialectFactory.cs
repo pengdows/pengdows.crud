@@ -63,7 +63,7 @@ public static class SqlDialectFactory
             SupportedDatabase.MariaDb => new MySqlDialect(factory, logger),
             SupportedDatabase.Sqlite => new SqliteDialect(factory, logger),
             SupportedDatabase.Oracle => new OracleDialect(factory, logger),
-            SupportedDatabase.Firebird => throw new NotImplementedException("Firebird dialect not yet implemented"),
+            SupportedDatabase.Firebird => new FirebirdDialect(factory, logger),
             _ => throw new ArgumentException($"Unsupported database type: {databaseType}")
         };
     }

@@ -66,14 +66,14 @@ public class SqlDialectFactoryTests
     }
 
     [Fact]
-    public void CreateDialectForType_Firebird_ThrowsNotImplementedException()
+    public void CreateDialectForType_Firebird_ReturnsFirebirdDialect()
     {
         var factory = new FakeDbFactory(SupportedDatabase.Firebird);
-        Assert.Throws<NotImplementedException>(() =>
-            SqlDialectFactory.CreateDialectForType(
-                SupportedDatabase.Firebird,
-                factory,
-                    NullLogger<SqlDialect>.Instance));
+        var dialect = SqlDialectFactory.CreateDialectForType(
+            SupportedDatabase.Firebird,
+            factory,
+            NullLogger<SqlDialect>.Instance);
+        Assert.IsType<FirebirdDialect>(dialect);
     }
 
     [Fact]
