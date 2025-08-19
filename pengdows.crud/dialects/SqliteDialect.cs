@@ -39,20 +39,6 @@ public class SqliteDialect : SqlDialect
         return "PRAGMA foreign_keys = ON;";
     }
 
-    public override void ApplyConnectionSettings(IDbConnection connection)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = GetConnectionSessionSettings();
-            cmd.ExecuteNonQuery();
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Failed to apply SQLite connection settings");
-        }
-    }
-
     protected override async Task<string?> GetProductNameAsync(ITrackedConnection connection)
     {
         try

@@ -34,20 +34,6 @@ public class OracleDialect : SqlDialect
         return "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD';";
     }
 
-    public override void ApplyConnectionSettings(IDbConnection connection)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = GetConnectionSessionSettings();
-            cmd.ExecuteNonQuery();
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Failed to apply Oracle connection settings");
-        }
-    }
-
     protected override SqlStandardLevel DetermineStandardCompliance(Version? version)
     {
         if (version == null)

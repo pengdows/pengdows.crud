@@ -167,10 +167,33 @@ public abstract class SqlDialect
         return CreateDbParameter(null, type, value);
     }
 
-    // Abstract methods for database-specific operations
+    // Methods for database-specific operations
     public abstract string GetVersionQuery();
-    public abstract string GetConnectionSessionSettings();
-    public abstract void ApplyConnectionSettings(IDbConnection connection);
+
+    public virtual string GetConnectionSessionSettings()
+    {
+        return string.Empty;
+    }
+
+    public virtual void ApplyConnectionSettings(IDbConnection connection)
+    {
+        var settings = GetConnectionSessionSettings();
+        if (string.IsNullOrWhiteSpace(settings))
+        {
+            return;
+        }
+
+        try
+        {
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = settings;
+            cmd.ExecuteNonQuery();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to apply connection settings for {DatabaseType}", DatabaseType);
+        }
+    }
 
     /// <summary>
     /// Detects database product information from the connection

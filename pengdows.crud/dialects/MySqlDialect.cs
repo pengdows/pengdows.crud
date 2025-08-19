@@ -39,20 +39,6 @@ public class MySqlDialect : SqlDialect
         return "SET SESSION sql_mode = 'STRICT_ALL_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ENGINE_SUBSTITUTION,ANSI_QUOTES';";
     }
 
-    public override void ApplyConnectionSettings(IDbConnection connection)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = GetConnectionSessionSettings();
-            cmd.ExecuteNonQuery();
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Failed to apply MySQL connection settings");
-        }
-    }
-
     protected override SqlStandardLevel DetermineStandardCompliance(Version? version)
     {
         if (version == null)

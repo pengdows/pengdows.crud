@@ -37,20 +37,6 @@ SET client_min_messages = warning;
 SET search_path = public;";
     }
 
-    public override void ApplyConnectionSettings(IDbConnection connection)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = GetConnectionSessionSettings();
-            cmd.ExecuteNonQuery();
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Failed to apply PostgreSQL connection settings");
-        }
-    }
-
     protected override SqlStandardLevel DetermineStandardCompliance(Version? version)
     {
         if (version == null)
