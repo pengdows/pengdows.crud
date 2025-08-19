@@ -89,7 +89,7 @@ public class TransactionContextTests
     public static IEnumerable<object[]> AllSupportedProviders()
     {
         return Enum.GetValues<SupportedDatabase>()
-            .Where(p => p != SupportedDatabase.Unknown && p != SupportedDatabase.Firebird)
+            .Where(p => p != SupportedDatabase.Unknown)
             .Select(p => new object[] { p });
     }
 
