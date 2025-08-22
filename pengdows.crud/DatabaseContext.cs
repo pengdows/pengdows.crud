@@ -2,6 +2,7 @@
 
 using System.Data;
 using System.Data.Common;
+using System.Linq;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -37,6 +38,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     private bool _isSqlServer;
     private bool _isWriteConnection = true;
     private long _maxNumberOfOpenConnections;
+    private readonly bool _setDefaultSearchPath;
 
     public Guid RootId { get; } = Guid.NewGuid();
 
@@ -57,7 +59,8 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
                 DbMode = mode
             },
             DbProviderFactories.GetFactory(providerFactory ?? throw new ArgumentNullException(nameof(providerFactory))),
-            (loggerFactory ?? NullLoggerFactory.Instance))
+            (loggerFactory ?? NullLoggerFactory.Instance),
+            typeMapRegistry)
     {
     }
 
@@ -77,14 +80,16 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
                 DbMode = mode
             },
             factory,
-            (loggerFactory ?? NullLoggerFactory.Instance))
+            (loggerFactory ?? NullLoggerFactory.Instance),
+            typeMapRegistry)
     {
     }
 
     public DatabaseContext(
         IDatabaseContextConfiguration configuration,
         DbProviderFactory factory,
-        ILoggerFactory? loggerFactory = null)
+        ILoggerFactory? loggerFactory = null,
+        ITypeMapRegistry? typeMapRegistry = null)
     {
         try
         {
@@ -93,20 +98,18 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             TypeCoercionHelper.Logger =
                 _loggerFactory.CreateLogger(nameof(TypeCoercionHelper));
             ReadWriteMode = configuration.ReadWriteMode;
-            TypeMapRegistry = new TypeMapRegistry();
+            TypeMapRegistry = typeMapRegistry ?? new TypeMapRegistry();
             ConnectionMode = configuration.DbMode;
             _factory = factory ?? throw new NullReferenceException(nameof(factory));
+            _setDefaultSearchPath = configuration.SetDefaultSearchPath;
 
             var initialConnection = InitializeInternals(configuration);
             _dialect = SqlDialectFactory.CreateDialect(initialConnection, _factory, loggerFactory);
             _dataSourceInfo = new DataSourceInformation(_dialect);
             Name = _dataSourceInfo.DatabaseProductName;
 
+            RCSIEnabled = DetectRCSI(initialConnection);
             SetupConnectionSessionSettingsForProvider(initialConnection);
-            if (ConnectionMode != DbMode.Standard)
-            {
-                ApplyConnectionSessionSettings(initialConnection);
-            }
 
             if (_dataSourceInfo.Product == SupportedDatabase.Sqlite)
             {
@@ -117,7 +120,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
                     : DbMode.SingleWriter;
             }
 
-            _isolationResolver ??= new IsolationResolver(Product, RCSIEnabled);
+            _isolationResolver = new IsolationResolver(Product, RCSIEnabled);
 
             var connFactory = () => FactoryCreateConnection(null, false);
             _connectionStrategy = ConnectionMode switch
@@ -164,7 +167,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
 
 
     public bool IsReadOnlyConnection => _isReadConnection && !_isWriteConnection;
-    public bool RCSIEnabled { get; }
+    public bool RCSIEnabled { get; private set; }
 
     public ILockerAsync GetLock()
     {
@@ -333,6 +336,13 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
                         break;
                     }
                     case ConnectionState.Closed:
+                        if (from == ConnectionState.Broken)
+                        {
+                            break;
+                        }
+                        _logger.LogDebug("Closed or broken connection: " + Name);
+                        Interlocked.Decrement(ref _connectionCount);
+                        break;
                     case ConnectionState.Broken:
                         _logger.LogDebug("Closed or broken connection: " + Name);
                         Interlocked.Decrement(ref _connectionCount);
@@ -415,7 +425,12 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             var key = reader.GetString(0).ToUpperInvariant();
             if (settings.ContainsKey(key))
             {
-                currentSettings[key] = reader.GetString(1) == "SET" ? "ON" : "OFF";
+                var val = reader.GetString(1);
+                currentSettings[key] =
+                    (string.Equals(val, "SET", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(val, "ON", StringComparison.OrdinalIgnoreCase))
+                        ? "ON"
+                        : "OFF";
             }
         }
 
@@ -432,6 +447,21 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             sb.AppendLine(";\nSET NOCOUNT OFF;");
             _connectionSessionSettings = sb.ToString();
         }
+    }
+
+    private bool DetectRCSI(ITrackedConnection conn)
+    {
+        if (_dataSourceInfo.Product != SupportedDatabase.SqlServer)
+        {
+            return false;
+        }
+
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT is_read_committed_snapshot_on FROM sys.databases WHERE name = DB_NAME()";
+        var val = cmd.ExecuteScalar();
+        var v = val is int i ? i : Convert.ToInt32(val ?? 0);
+        return v == 1;
     }
 
     private StringBuilder CompareResults(Dictionary<string, string> expected, Dictionary<string, string> recorded)
@@ -498,16 +528,18 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             case SupportedDatabase.MySql:
             case SupportedDatabase.MariaDb:
                 _connectionSessionSettings =
-                    "SET SESSION sql_mode = 'STRICT_ALL_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ENGINE_SUBSTITUTION,ANSI_QUOTES';\n";
+                    "SET SESSION sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_ALL_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,ANSI_QUOTES,NO_ENGINE_SUBSTITUTION';\n";
                 break;
 
             case SupportedDatabase.PostgreSql:
             case SupportedDatabase.CockroachDb:
-                _connectionSessionSettings = @"
-                SET standard_conforming_strings = on;
-                SET client_min_messages = warning;
-                SET search_path = public;
-";
+                _connectionSessionSettings =
+                    "SET standard_conforming_strings = on;\nSET client_min_messages = warning;";
+                if (_setDefaultSearchPath)
+                {
+                    _connectionSessionSettings += "\nSET search_path = public;";
+                }
+                _connectionSessionSettings += "\n";
                 break;
 
             case SupportedDatabase.Oracle:

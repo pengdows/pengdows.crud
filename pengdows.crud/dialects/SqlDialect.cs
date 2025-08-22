@@ -1,5 +1,6 @@
 using System.Data;
 using System.Data.Common;
+using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
@@ -106,7 +107,11 @@ public abstract class SqlDialect
         }
 
         var cleaned = name.Replace(QuotePrefix, string.Empty).Replace(QuoteSuffix, string.Empty);
-        var parts = cleaned.Split(CompositeIdentifierSeparator);
+        var parts = cleaned
+            .Split(CompositeIdentifierSeparator)
+            .Select(p => p.Trim())
+            .Where(p => p.Length > 0)
+            .ToArray();
         var sb = new StringBuilder();
 
         for (var i = 0; i < parts.Length; i++)
@@ -151,9 +156,27 @@ public abstract class SqlDialect
         p.DbType = type;
         p.Value = valueIsNull ? DBNull.Value : value!;
 
-        if (!valueIsNull && p.DbType == DbType.String && value is string s)
+        if (!valueIsNull)
         {
-            p.Size = Math.Max(s.Length, 1);
+            switch (p.DbType)
+            {
+                case DbType.String:
+                case DbType.AnsiString:
+                case DbType.StringFixedLength:
+                case DbType.AnsiStringFixedLength:
+                    if (value is string s)
+                    {
+                        p.Size = Math.Max(s.Length, 1);
+                    }
+                    break;
+                case DbType.Decimal when value is decimal dec:
+                {
+                    var (prec, scale) = DecimalHelpers.Infer(dec);
+                    p.Precision = (byte)prec;
+                    p.Scale = (byte)scale;
+                    break;
+                }
+            }
         }
 
         return p;
