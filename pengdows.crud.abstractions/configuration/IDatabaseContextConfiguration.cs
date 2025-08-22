@@ -30,5 +30,10 @@ public interface IDatabaseContextConfiguration
     /// Gets or sets whether the context is in read-only, write-only, or read-write mode.
     /// </summary>
     ReadWriteMode ReadWriteMode { get; set; }
+
+    /// <summary>
+    /// When true, applies a default search_path of 'public' for PostgreSQL connections.
+    /// </summary>
+    bool SetDefaultSearchPath { get; set; }
 }
 

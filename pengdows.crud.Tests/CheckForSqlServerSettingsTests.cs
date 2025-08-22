@@ -135,6 +135,55 @@ public class CheckForSqlServerSettingsTests
     }
 
     [Fact]
+    public void CheckForSqlServerSettings_OnValues_LeavesSettingsUnchanged()
+    {
+        using var ctx = CreateContext();
+        SetSessionSettings(ctx, string.Empty);
+        ForceSqlServer(ctx);
+
+        var rows = new[]
+        {
+            new Dictionary<string, object> { { "a", "ANSI_NULLS" }, { "b", "ON" } },
+            new Dictionary<string, object> { { "a", "ANSI_PADDING" }, { "b", "ON" } },
+            new Dictionary<string, object> { { "a", "ANSI_WARNINGS" }, { "b", "ON" } },
+            new Dictionary<string, object> { { "a", "ARITHABORT" }, { "b", "ON" } },
+            new Dictionary<string, object> { { "a", "CONCAT_NULL_YIELDS_NULL" }, { "b", "ON" } },
+            new Dictionary<string, object> { { "a", "QUOTED_IDENTIFIER" }, { "b", "ON" } },
+            new Dictionary<string, object> { { "a", "NUMERIC_ROUNDABORT" }, { "b", "OFF" } }
+        };
+
+        var conn = BuildConnection(rows);
+        Invoke(ctx, conn);
+
+        Assert.Equal(string.Empty, GetSessionSettings(ctx));
+    }
+
+    [Fact]
+    public void CheckForSqlServerSettings_UnexpectedValues_TreatedAsOff()
+    {
+        using var ctx = CreateContext();
+        SetSessionSettings(ctx, string.Empty);
+        ForceSqlServer(ctx);
+
+        var rows = new[]
+        {
+            new Dictionary<string, object> { { "a", "ANSI_NULLS" }, { "b", "UNKNOWN" } },
+            new Dictionary<string, object> { { "a", "ANSI_PADDING" }, { "b", "UNKNOWN" } },
+            new Dictionary<string, object> { { "a", "ANSI_WARNINGS" }, { "b", "UNKNOWN" } },
+            new Dictionary<string, object> { { "a", "ARITHABORT" }, { "b", "UNKNOWN" } },
+            new Dictionary<string, object> { { "a", "CONCAT_NULL_YIELDS_NULL" }, { "b", "UNKNOWN" } },
+            new Dictionary<string, object> { { "a", "QUOTED_IDENTIFIER" }, { "b", "UNKNOWN" } },
+            new Dictionary<string, object> { { "a", "NUMERIC_ROUNDABORT" }, { "b", "SET" } }
+        };
+
+        var conn = BuildConnection(rows);
+        Invoke(ctx, conn);
+
+        var script = GetSessionSettings(ctx);
+        Assert.Contains("SET ANSI_NULLS ON", script);
+    }
+
+    [Fact]
     public void CheckForSqlServerSettings_Differences_BuildsSettingsScript()
     {
         using var ctx = CreateContext();
