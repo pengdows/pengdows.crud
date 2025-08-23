@@ -102,9 +102,12 @@ public sealed class IsolationResolver : IIsolationResolver
             [
                 IsolationLevel.ReadCommitted,
                 IsolationLevel.Serializable
-            ]
+            ],
 
-            // Add more as needed
+            [SupportedDatabase.DuckDb] =
+            [
+                IsolationLevel.Serializable
+            ]
         };
 
         return map.TryGetValue(db, out var set) ? set : throw new NotSupportedException($"Unsupported DB: {db}");
@@ -163,6 +166,12 @@ public sealed class IsolationResolver : IIsolationResolver
             SupportedDatabase.Oracle => new()
             {
                 [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
+                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable
+            },
+
+            SupportedDatabase.DuckDb => new()
+            {
+                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.Serializable,
                 [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable
             },
             _ => throw new NotSupportedException($"Isolation profile mapping not defined for DB: {db}")

@@ -1,7 +1,7 @@
-using System.Collections.Generic;
-using System.Reflection;
 using System.Data.Common;
-using pengdows.crud.configuration;
+using Microsoft.Extensions.Logging.Abstractions;
+using pengdows.crud;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.FakeDb;
 using pengdows.crud.wrappers;
@@ -11,21 +11,6 @@ namespace pengdows.crud.Tests;
 
 public class RcsidDetectionTests
 {
-    private static MethodInfo GetMethod()
-        => typeof(DatabaseContext).GetMethod("DetectRCSI", BindingFlags.Instance | BindingFlags.NonPublic)!;
-
-    private static DatabaseContext CreateContext()
-    {
-        var config = new DatabaseContextConfiguration
-        {
-            ConnectionString = $"Data Source=:memory:;EmulatedProduct={SupportedDatabase.SqlServer}",
-            ProviderName = SupportedDatabase.SqlServer.ToString(),
-            DbMode = DbMode.SingleConnection
-        };
-        var factory = new FakeDbFactory(SupportedDatabase.SqlServer);
-        return new DatabaseContext(config, factory);
-    }
-
     private static ITrackedConnection BuildConnection(int rcsiFlag)
     {
         var inner = new FakeDbConnection
@@ -38,22 +23,71 @@ public class RcsidDetectionTests
     }
 
     [Fact]
-    public void DetectRCSI_ReturnsTrueWhenEnabled()
+    public void SqlServerDialect_ReturnsTrueWhenRCSIEnabled()
     {
-        using var ctx = CreateContext();
-        var method = GetMethod();
+        var dialect = new SqlServerDialect(new FakeDbFactory(SupportedDatabase.SqlServer),
+            NullLoggerFactory.Instance.CreateLogger<SqlServerDialect>());
         var conn = BuildConnection(1);
-        var result = (bool)method.Invoke(ctx, new object[] { conn });
+        var result = dialect.IsReadCommittedSnapshotOn(conn);
         Assert.True(result);
     }
 
     [Fact]
-    public void DetectRCSI_ReturnsFalseWhenDisabled()
+    public void SqlServerDialect_ReturnsFalseWhenRCSIDisabled()
     {
-        using var ctx = CreateContext();
-        var method = GetMethod();
+        var dialect = new SqlServerDialect(new FakeDbFactory(SupportedDatabase.SqlServer),
+            NullLoggerFactory.Instance.CreateLogger<SqlServerDialect>());
         var conn = BuildConnection(0);
-        var result = (bool)method.Invoke(ctx, new object[] { conn });
+        var result = dialect.IsReadCommittedSnapshotOn(conn);
         Assert.False(result);
+    }
+
+    [Fact]
+    public void Sql92Dialect_RCSICheckAlwaysFalse()
+    {
+        var dialect = new Sql92Dialect(new FakeDbFactory(SupportedDatabase.Unknown),
+            NullLoggerFactory.Instance.CreateLogger<Sql92Dialect>());
+        var conn = BuildConnection(1);
+        var result = dialect.IsReadCommittedSnapshotOn(conn);
+        Assert.False(result);
+    }
+
+    private class RcsiDbFactory : DbProviderFactory
+    {
+        private readonly int _flag;
+
+        public RcsiDbFactory(int flag)
+        {
+            _flag = flag;
+        }
+
+        public override DbConnection CreateConnection()
+        {
+            var conn = new FakeDbConnection
+            {
+                ConnectionString = $"Data Source=:memory:;EmulatedProduct={SupportedDatabase.SqlServer}"
+            };
+            conn.EnqueueScalarResult(_flag);
+            return conn;
+        }
+
+        public override DbCommand CreateCommand() => new FakeDbCommand();
+        public override DbParameter CreateParameter() => new FakeDbParameter();
+    }
+
+    [Fact]
+    public void DatabaseContext_RCSIEnabledTrueWhenDetected()
+    {
+        var factory = new RcsiDbFactory(1);
+        using var context = new DatabaseContext($"Data Source=:memory:;EmulatedProduct={SupportedDatabase.SqlServer}", factory);
+        Assert.True(context.RCSIEnabled);
+    }
+
+    [Fact]
+    public void DatabaseContext_RCSIEnabledFalseWhenDisabled()
+    {
+        var factory = new RcsiDbFactory(0);
+        using var context = new DatabaseContext($"Data Source=:memory:;EmulatedProduct={SupportedDatabase.SqlServer}", factory);
+        Assert.False(context.RCSIEnabled);
     }
 }

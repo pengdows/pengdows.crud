@@ -76,13 +76,24 @@ public class SqlDialectFactoryTests
     }
 
     [Fact]
-    public void CreateDialectForType_Unknown_ThrowsArgumentException()
+    public void CreateDialectForType_DuckDb_ReturnsDuckDbDialect()
+    {
+        var factory = new FakeDbFactory(SupportedDatabase.DuckDb);
+        var dialect = SqlDialectFactory.CreateDialectForType(
+            SupportedDatabase.DuckDb,
+            factory,
+            NullLogger<SqlDialect>.Instance);
+        Assert.IsType<DuckDbDialect>(dialect);
+    }
+
+    [Fact]
+    public void CreateDialectForType_Unknown_ReturnsSql92Dialect()
     {
         var factory = new FakeDbFactory(SupportedDatabase.Unknown);
-        Assert.Throws<ArgumentException>(() =>
-            SqlDialectFactory.CreateDialectForType(
-                SupportedDatabase.Unknown,
-                factory,
-                NullLogger<SqlDialect>.Instance));
+        var dialect = SqlDialectFactory.CreateDialectForType(
+            SupportedDatabase.Unknown,
+            factory,
+            NullLogger<SqlDialect>.Instance);
+        Assert.IsType<Sql92Dialect>(dialect);
     }
 }

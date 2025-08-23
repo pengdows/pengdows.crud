@@ -58,15 +58,21 @@ public interface ISqlDialect
     bool SupportsInsertOnConflict { get; }
     bool RequiresStoredProcParameterNameMatch { get; }
     bool SupportsNamespaces { get; }
+    bool IsFallbackDialect { get; }
+    string GetCompatibilityWarning();
+    bool CanUseModernFeatures { get; }
+    bool HasBasicCompatibility { get; }
     string WrapObjectName(string name);
     string MakeParameterName(string parameterName);
     string MakeParameterName(DbParameter dbParameter);
     DbParameter CreateDbParameter<T>(string? name, DbType type, T value);
     DbParameter CreateDbParameter<T>(DbType type, T value);
     string GetVersionQuery();
+    string GetDatabaseVersion(ITrackedConnection connection);
     DataTable GetDataSourceInformationSchema(ITrackedConnection connection);
     string GetConnectionSessionSettings();
     void ApplyConnectionSettings(IDbConnection connection);
+    bool IsReadCommittedSnapshotOn(ITrackedConnection connection);
 
     /// <summary>
     /// Detects database product information from the connection

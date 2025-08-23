@@ -3,6 +3,7 @@
 using System.Collections.Concurrent;
 using System.Data;
 using System.Data.Common;
+using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
@@ -285,9 +286,11 @@ public class EntityHelper<TEntity, TRowID> :
 
         var sb = sc.Query;
         sb.Append("SELECT ");
-        sb.Append(string.Join(", ", _tableInfo.Columns.Values.Select(col => string.Format("{0}{1}",
-            wrappedAlias,
-            _dialect.WrapObjectName(col.Name)))));
+        sb.Append(string.Join(", ", _tableInfo.Columns.Values
+            .OrderBy(c => c.Ordinal)
+            .Select(col => string.Format("{0}{1}",
+                wrappedAlias,
+                _dialect.WrapObjectName(col.Name)))));
         sb.Append("\nFROM ").Append(WrappedTableName);
         if (wrappedAlias.Length > 0)
         {
@@ -556,7 +559,10 @@ public class EntityHelper<TEntity, TRowID> :
 
     private List<IColumnInfo> GetPrimaryKeys()
     {
-        var keys = _tableInfo.Columns.Values.Where(o => o.IsPrimaryKey).ToList();
+        var keys = _tableInfo.Columns.Values
+            .Where(o => o.IsPrimaryKey)
+            .OrderBy(k => k.PkOrder)
+            .ToList();
         if (keys.Count < 1)
         {
             throw new Exception($"No primary keys found for type {typeof(TEntity).Name}");

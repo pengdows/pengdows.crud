@@ -106,11 +106,25 @@ public interface IDataSourceInformation
     SqlStandardLevel StandardCompliance { get; }
 
     /// <summary>
-    /// Retrieves the raw database version string from the specified connection.
+    /// Indicates whether the SQL-92 fallback dialect is in use.
     /// </summary>
-    /// <param name="connection">The connection to query.</param>
-    /// <returns>The version string reported by the database.</returns>
-    string GetDatabaseVersion(ITrackedConnection connection);
+    bool IsUsingFallbackDialect { get; }
+
+    /// <summary>
+    /// Returns a compatibility warning if using the fallback dialect.
+    /// </summary>
+    /// <returns>A warning message or an empty string.</returns>
+    string GetCompatibilityWarning();
+
+    /// <summary>
+    /// Indicates whether SQL:2003 or later features can be used.
+    /// </summary>
+    bool CanUseModernFeatures { get; }
+
+    /// <summary>
+    /// Indicates whether the database meets basic SQL-92 compatibility.
+    /// </summary>
+    bool HasBasicCompatibility { get; }
 
     /// <summary>
     /// Retrieves the data source information schema for the specified connection.

@@ -1,8 +1,10 @@
 using System.Data;
 using System.Data.Common;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.wrappers;
+using pengdows.crud;
 
 namespace pengdows.crud.dialects;
 
@@ -18,49 +20,6 @@ public class Sql92Dialect : SqlDialect
     }
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.Unknown;
-    public override string ParameterMarker => "?";  // SQL-92 standard positional parameters
-    public override bool SupportsNamedParameters => false;  // SQL-92 only has positional
-    public override int MaxParameterLimit => 255;  // Conservative limit
-    public override int ParameterNameMaxLength => 18;  // SQL-92 identifier limit
-    public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.None;
-
-    // SQL-92 standard identifiers
-    public override string QuotePrefix => "\"";
-    public override string QuoteSuffix => "\"";
-
-    // Only SQL-92 compliant features enabled
-    public override bool SupportsMerge => false;
-    public override bool SupportsInsertOnConflict => false;
-    public override bool SupportsJsonTypes => false;
-    public override bool SupportsArrayTypes => false;
-    public override bool SupportsWindowFunctions => false;
-    public override bool SupportsCommonTableExpressions => false;
-    public override bool SupportsXmlTypes => false;
-    public override bool SupportsTemporalData => false;
-    public override bool SupportsEnhancedWindowFunctions => false;
-    public override bool SupportsRowPatternMatching => false;
-    public override bool SupportsMultidimensionalArrays => false;
-    public override bool SupportsPropertyGraphQueries => false;
-    public override bool SupportsUserDefinedTypes => false;
-    public override bool SupportsRegularExpressions => false;
-    public override bool SupportsInsteadOfTriggers => false;
-    public override bool SupportsTruncateTable => false;
-    public override bool SupportsNamespaces => false;  // Conservative - not all SQL-92 DBs support schemas
-
-    // SQL-92 does support these basic features
-    public override bool SupportsIntegrityConstraints => true;
-    public override bool SupportsJoins => true;
-    public override bool SupportsOuterJoins => true;
-    public override bool SupportsSubqueries => true;
-    public override bool SupportsUnion => true;
-
-    public override string GetVersionQuery() => "SELECT 'SQL-92 Compatible Database' AS version";
-
-    public override string GetConnectionSessionSettings()
-    {
-        // No session settings - maximum compatibility
-        return string.Empty;
-    }
 
     public override void ApplyConnectionSettings(IDbConnection connection)
     {
@@ -68,27 +27,9 @@ public class Sql92Dialect : SqlDialect
         Logger.LogDebug("Using SQL-92 fallback dialect - no connection settings applied");
     }
 
-    protected override SqlStandardLevel DetermineStandardCompliance(Version? version)
-    {
-        // Always return SQL-92 as this is our baseline
-        return SqlStandardLevel.Sql92;
-    }
-
     protected override string ExtractProductNameFromVersion(string versionString)
     {
         return "Unknown Database (SQL-92 Compatible)";
-    }
-
-    public override string MakeParameterName(string parameterName)
-    {
-        // SQL-92 uses positional parameters only
-        return "?";
-    }
-
-    public override string MakeParameterName(DbParameter dbParameter)
-    {
-        // SQL-92 uses positional parameters only
-        return "?";
     }
 
     public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
@@ -189,5 +130,31 @@ public class Sql92Dialect : SqlDialect
 
         Logger.LogWarning("Using SQL-92 fallback dialect for unknown database product");
         return null;
+    }
+
+    public override DataTable GetDataSourceInformationSchema(ITrackedConnection connection)
+    {
+        try
+        {
+            var schema = connection.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
+            if (schema.Rows.Count > 0)
+            {
+                return schema;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "Data source information schema unavailable; using SQL-92 defaults");
+        }
+
+        return DataSourceInformation.BuildEmptySchema(
+            "Unknown Database (SQL-92 Compatible)",
+            "Unknown Version",
+            Regex.Escape(ParameterMarker),
+            ParameterMarker,
+            ParameterNameMaxLength,
+            ParameterNamePattern.ToString(),
+            ParameterNamePattern.ToString(),
+            SupportsNamedParameters);
     }
 }

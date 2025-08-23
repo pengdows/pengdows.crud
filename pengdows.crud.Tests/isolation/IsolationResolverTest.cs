@@ -103,6 +103,28 @@ public class IsolationResolverTests
     }
 
     [Fact]
+    public void GetSupportedLevels_DuckDb()
+    {
+        var resolver = new IsolationResolver(SupportedDatabase.DuckDb, false);
+
+        var levels = resolver.GetSupportedLevels().OrderBy(l => l).ToArray();
+        var expected = new[] { IsolationLevel.Serializable };
+
+        Assert.Equal(expected, levels);
+    }
+
+    [Fact]
+    public void Resolve_DuckDb_Mappings()
+    {
+        var resolver = new IsolationResolver(SupportedDatabase.DuckDb, false);
+
+        Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
+        Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.StrictConsistency));
+        Assert.Throws<NotSupportedException>(() => resolver.Resolve(IsolationProfile.FastWithRisks));
+        Assert.Throws<InvalidOperationException>(() => resolver.Validate(IsolationLevel.ReadCommitted));
+    }
+
+    [Fact]
     public void GetSupportedLevels_Sqlite()
     {
         var resolver = new IsolationResolver(SupportedDatabase.Sqlite, false);

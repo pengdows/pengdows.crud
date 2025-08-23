@@ -99,15 +99,18 @@ public class FakeDbCommand : DbCommand
             SupportedDatabase.Sqlite when normalizedCommand == "SELECT SQLITE_VERSION()" 
                 => "3.42.0",
             
-            SupportedDatabase.Oracle when normalizedCommand.Contains("SELECT * FROM V$VERSION") 
+            SupportedDatabase.Oracle when normalizedCommand.Contains("SELECT * FROM V$VERSION")
                 => "Oracle Database 19c Enterprise Edition Release 19.0.0.0.0",
-            
-            SupportedDatabase.Firebird when normalizedCommand.Contains("RDB$GET_CONTEXT('SYSTEM', 'ENGINE_VERSION')") 
+
+            SupportedDatabase.Firebird when normalizedCommand.Contains("RDB$GET_CONTEXT('SYSTEM', 'ENGINE_VERSION')")
                 => "4.0.0",
-            
-            SupportedDatabase.CockroachDb when normalizedCommand == "SELECT VERSION()" 
+
+            SupportedDatabase.CockroachDb when normalizedCommand == "SELECT VERSION()"
                 => "CockroachDB CCL v23.1.0",
-            
+
+            SupportedDatabase.DuckDb when normalizedCommand == "SELECT VERSION()"
+                => "DuckDB 0.9.2",
+
             _ => null
         };
     }

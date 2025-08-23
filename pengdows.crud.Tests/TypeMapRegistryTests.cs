@@ -2,6 +2,7 @@
 
 using System;
 using System.Data;
+using System.Linq;
 using pengdows.crud.attributes;
 using pengdows.crud.exceptions;
 using Xunit;
@@ -82,6 +83,27 @@ public class TypeMapRegistryTests
         Assert.False(info.HasAuditColumns);
     }
 
+    [Fact]
+    public void GetTableInfo_StoresOrdinalAndPkOrder()
+    {
+        var registry = new TypeMapRegistry();
+        var info = registry.GetTableInfo<OrderedEntity>();
+
+        var columns = info.Columns.Values.OrderBy(c => c.Ordinal).ToList();
+        Assert.Equal(new[] { "A", "B" }, columns.Select(c => c.Name));
+
+        var pks = info.Columns.Values.Where(c => c.IsPrimaryKey).OrderBy(c => c.PkOrder).ToList();
+        Assert.Equal(new[] { "A", "B" }, pks.Select(c => c.Name));
+    }
+
+    [Fact]
+    public void GetTableInfo_DefaultOrdinalIsZero()
+    {
+        var registry = new TypeMapRegistry();
+        var info = registry.GetTableInfo<MyEntity>();
+        Assert.All(info.Columns.Values, c => Assert.Equal(0, c.Ordinal));
+    }
+
     [Table("MultipleVersions")]
     private class MultipleVersions
     {
@@ -121,5 +143,17 @@ public class TypeMapRegistryTests
     private class MyEntity
     {
         [Id] [Column("Id", DbType.Int32)] public int Id { get; set; }
+    }
+
+    [Table("Ordered")]
+    private class OrderedEntity
+    {
+        [PrimaryKey(2)]
+        [Column("B", DbType.Int32, 2)]
+        public int B { get; set; }
+
+        [PrimaryKey(1)]
+        [Column("A", DbType.Int32, 1)]
+        public int A { get; set; }
     }
 }

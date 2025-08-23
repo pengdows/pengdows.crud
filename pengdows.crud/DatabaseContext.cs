@@ -2,7 +2,6 @@
 
 using System.Data;
 using System.Data.Common;
-using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
@@ -25,16 +24,13 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<IDatabaseContext> _logger;
     private readonly IConnectionStrategy _connectionStrategy;
-    private bool _applyConnectionSessionSettings;
 
     private long _connectionCount;
-    private string _connectionSessionSettings;
     private string _connectionString;
     private DataSourceInformation _dataSourceInfo;
     private readonly SqlDialect _dialect;
     private IIsolationResolver _isolationResolver;
     private bool _isReadConnection = true;
-    private bool _isSqlServer;
     private bool _isWriteConnection = true;
     private long _maxNumberOfOpenConnections;
     private readonly bool _setDefaultSearchPath;
@@ -107,8 +103,11 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             _dataSourceInfo = new DataSourceInformation(_dialect);
             Name = _dataSourceInfo.DatabaseProductName;
 
-            RCSIEnabled = DetectRCSI(initialConnection);
-            SetupConnectionSessionSettingsForProvider(initialConnection);
+            RCSIEnabled = _dialect.IsReadCommittedSnapshotOn(initialConnection);
+            if (ConnectionMode != DbMode.Standard)
+            {
+                _dialect.ApplyConnectionSettings(initialConnection);
+            }
 
             if (_dataSourceInfo.Product == SupportedDatabase.Sqlite)
             {
@@ -121,7 +120,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
 
             _isolationResolver = new IsolationResolver(Product, RCSIEnabled);
 
-            var connFactory = () => FactoryCreateConnection(null, false);
+            var connFactory = () => FactoryCreateConnection(null, false, c => _dialect.ApplyConnectionSettings(c));
             _connectionStrategy = ConnectionMode switch
             {
                 DbMode.Standard => new StandardConnectionStrategy(connFactory),
@@ -181,10 +180,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     public ITypeMapRegistry TypeMapRegistry { get; }
 
     public IDataSourceInformation DataSourceInfo => _dataSourceInfo;
-
-
-    public string SessionSettingsPreamble => _connectionSessionSettings ?? "";
-
+    public string SessionSettingsPreamble => _dialect.GetConnectionSessionSettings();
 
     public ITransactionContext BeginTransaction(
         IsolationLevel? isolationLevel = null,
@@ -311,7 +307,10 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         return _dialect.MakeParameterName(parameterName);
     }
 
-    private ITrackedConnection FactoryCreateConnection(string? connectionString = null, bool isSharedConnection = false)
+    private ITrackedConnection FactoryCreateConnection(
+        string? connectionString = null,
+        bool isSharedConnection = false,
+        Action<DbConnection>? onFirstOpen = null)
     {
         SanitizeConnectionString(connectionString);
 
@@ -320,7 +319,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
 
         var tracked = new TrackedConnection(
             connection,
-            (sender, args) => //StateChangeHandler
+            (sender, args) =>
             {
                 var to = args.CurrentState;
                 var from = args.OriginalState;
@@ -347,7 +346,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
                         break;
                 }
             },
-            onFirstOpen: ApplyConnectionSessionSettings,
+            onFirstOpen,
             onDispose: conn => { _logger.LogDebug("Connection disposed."); },
             null,
             isSharedConnection
@@ -388,101 +387,6 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         return _connectionStrategy.ReleaseConnectionAsync(connection);
     }
 
-    private void CheckForSqlServerSettings(ITrackedConnection conn)
-    {
-        _isSqlServer =
-            _dataSourceInfo.DatabaseProductName.StartsWith("Microsoft SQL Server", StringComparison.OrdinalIgnoreCase)
-            && !_dataSourceInfo.DatabaseProductName.Contains("Compact", StringComparison.OrdinalIgnoreCase);
-
-        if (!_isSqlServer)
-        {
-            return;
-        }
-
-        var settings = new Dictionary<string, string>
-        {
-            { "ANSI_NULLS", "ON" },
-            { "ANSI_PADDING", "ON" },
-            { "ANSI_WARNINGS", "ON" },
-            { "ARITHABORT", "ON" },
-            { "CONCAT_NULL_YIELDS_NULL", "ON" },
-            { "QUOTED_IDENTIFIER", "ON" },
-            { "NUMERIC_ROUNDABORT", "OFF" }
-        };
-
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = "DBCC USEROPTIONS;";
-
-        using var reader = cmd.ExecuteReader();
-        var currentSettings = settings.ToDictionary(kvp => kvp.Key, _ => "OFF");
-        var anyRows = false;
-
-        while (reader.Read())
-        {
-            anyRows = true;
-            var key = reader.GetString(0).ToUpperInvariant();
-            if (settings.ContainsKey(key))
-            {
-                var val = reader.GetString(1);
-                currentSettings[key] =
-                    (string.Equals(val, "SET", StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(val, "ON", StringComparison.OrdinalIgnoreCase))
-                        ? "ON"
-                        : "OFF";
-            }
-        }
-
-        if (!anyRows)
-        {
-            return;
-        }
-
-        var sb = CompareResults(settings, currentSettings);
-
-        if (sb.Length > 0)
-        {
-            sb.Insert(0, "SET NOCOUNT ON;\n");
-            sb.AppendLine(";\nSET NOCOUNT OFF;");
-            _connectionSessionSettings = sb.ToString();
-        }
-    }
-
-    private bool DetectRCSI(ITrackedConnection conn)
-    {
-        if (_dataSourceInfo.Product != SupportedDatabase.SqlServer)
-        {
-            return false;
-        }
-
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText =
-            "SELECT is_read_committed_snapshot_on FROM sys.databases WHERE name = DB_NAME()";
-        var val = cmd.ExecuteScalar();
-        var v = val is int i ? i : Convert.ToInt32(val ?? 0);
-        return v == 1;
-    }
-
-    private StringBuilder CompareResults(Dictionary<string, string> expected, Dictionary<string, string> recorded)
-    {
-        //used for checking which connection/session settings are on or off for mssql
-        var sb = new StringBuilder();
-        foreach (var expectedKvp in expected)
-        {
-            recorded.TryGetValue(expectedKvp.Key, out var result);
-            if (result != expectedKvp.Value)
-            {
-                if (sb.Length > 0)
-                {
-                    sb.AppendLine();
-                }
-
-                sb.Append($"SET {expectedKvp.Key} {expectedKvp.Value}");
-            }
-        }
-
-        return sb;
-    }
-
     private ITrackedConnection? InitializeInternals(IDatabaseContextConfiguration config)
     {
         var connectionString = config.ConnectionString;
@@ -492,7 +396,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         {
             _isReadConnection = (ReadWriteMode & ReadWriteMode.ReadOnly) == ReadWriteMode.ReadOnly;
             _isWriteConnection = (ReadWriteMode & ReadWriteMode.WriteOnly) == ReadWriteMode.WriteOnly;
-            conn = FactoryCreateConnection(connectionString, true);
+            conn = FactoryCreateConnection(connectionString, true, null);
             conn.Open();
         }
         catch (Exception ex)
@@ -510,79 +414,6 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         return csb;
     }
 
-    private void SetupConnectionSessionSettingsForProvider(ITrackedConnection conn)
-    {
-        switch (_dataSourceInfo.Product)
-        {
-            case SupportedDatabase.SqlServer:
-                // sets up only what is necessary
-                if (ConnectionMode != DbMode.SingleConnection)
-                {
-                    CheckForSqlServerSettings(conn);
-                }
-
-                break;
-
-            case SupportedDatabase.MySql:
-            case SupportedDatabase.MariaDb:
-                _connectionSessionSettings =
-                    "SET SESSION sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_ALL_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,ANSI_QUOTES,NO_ENGINE_SUBSTITUTION';\n";
-                break;
-
-            case SupportedDatabase.PostgreSql:
-            case SupportedDatabase.CockroachDb:
-                _connectionSessionSettings =
-                    "SET standard_conforming_strings = on;\nSET client_min_messages = warning;";
-                if (_setDefaultSearchPath)
-                {
-                    _connectionSessionSettings += "\nSET search_path = public;";
-                }
-                _connectionSessionSettings += "\n";
-                break;
-
-            case SupportedDatabase.Oracle:
-                _connectionSessionSettings = @"
-                ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD';
-";
-//                ALTER SESSION SET CURRENT_SCHEMA = your_schema;
-                break;
-
-            case SupportedDatabase.Sqlite:
-                _connectionSessionSettings = "PRAGMA foreign_keys = ON;";
-                break;
-
-            //DB 2 can't be supported under modern .net
-            //             case SupportedDatabase.Db2:
-            //                 _connectionSessionSettings = @"
-            //                  SET CURRENT DEGREE = 'ANY';
-            // ";
-            //                break;
-
-            default:
-                _connectionSessionSettings = string.Empty;
-                break;
-        }
-
-        _applyConnectionSessionSettings = _connectionSessionSettings?.Length > 0;
-    }
-
-
-    private void ApplyConnectionSessionSettings(IDbConnection connection)
-    {
-        _logger.LogInformation("Applying connection session settings");
-        if (_applyConnectionSessionSettings)
-            try
-            {
-                using var cmd = connection.CreateCommand();
-                cmd.CommandText = _connectionSessionSettings;
-                cmd.ExecuteNonQuery();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError("Error setting session settings:" + ex.Message);
-                _applyConnectionSessionSettings = false;
-            }
-    }
 
 
     protected override void DisposeManaged()

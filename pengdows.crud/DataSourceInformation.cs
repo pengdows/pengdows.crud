@@ -45,47 +45,17 @@ public class DataSourceInformation : IDataSourceInformation
     public bool SupportsMerge => _dialect.SupportsMerge;
     public bool SupportsInsertOnConflict => _dialect.SupportsInsertOnConflict;
     public bool RequiresStoredProcParameterNameMatch => _dialect.RequiresStoredProcParameterNameMatch;
-
-    public string GetDatabaseVersion(ITrackedConnection connection)
+    public bool IsUsingFallbackDialect => _dialect.IsFallbackDialect;
+    public string GetCompatibilityWarning()
     {
-        try
-        {
-            var versionQuery = _dialect.GetVersionQuery();
-            if (string.IsNullOrWhiteSpace(versionQuery))
-            {
-                return "Unknown Database Version";
-            }
-
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = versionQuery;
-            var version = cmd.ExecuteScalar()?.ToString();
-            return version ?? "Unknown Version";
-        }
-        catch (Exception ex)
-        {
-            return "Error retrieving version: " + ex.Message;
-        }
+        return _dialect.GetCompatibilityWarning();
     }
+    public bool CanUseModernFeatures => _dialect.CanUseModernFeatures;
+    public bool HasBasicCompatibility => _dialect.HasBasicCompatibility;
 
     public DataTable GetSchema(ITrackedConnection connection)
     {
         return _dialect.GetDataSourceInformationSchema(connection);
-    }
-
-    public int? GetMajorVersion()
-    {
-        if (ParsedVersion != null)
-        {
-            return ParsedVersion.Major;
-        }
-
-        ParsedVersion = _dialect.ParseVersion(DatabaseProductVersion);
-        return ParsedVersion?.Major;
-    }
-
-    public int? GetPostgreSqlMajorVersion()
-    {
-        return Product == SupportedDatabase.PostgreSql ? GetMajorVersion() : null;
     }
 
     public static DataSourceInformation Create(ITrackedConnection connection, DbProviderFactory factory, ILoggerFactory? loggerFactory = null)

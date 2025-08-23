@@ -24,6 +24,8 @@ public class OracleDialect : SqlDialect
     public override SqlStandardLevel MaxSupportedStandard =>
         IsInitialized ? base.MaxSupportedStandard : DetermineStandardCompliance(null);
 
+    public override bool SupportsNamespaces => true;
+
     public override bool SupportsMerge => true;
     public override bool SupportsJsonTypes => IsInitialized && ProductInfo.ParsedVersion?.Major >= 12;
 

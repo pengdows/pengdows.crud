@@ -8,6 +8,7 @@ using pengdows.crud.enums;
 using pengdows.crud.FakeDb;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.wrappers;
+using pengdows.crud.dialects;
 using Xunit;
 
 #endregion
@@ -41,6 +42,7 @@ public static class DataSourceTestData
             var markerFormat = db switch
             {
                 SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.Oracle => ":{0}",
+                SupportedDatabase.DuckDb => "$" + "{0}",
                 _ => "@{0}"
             };
 
@@ -55,18 +57,23 @@ public static class DataSourceTestData
                 db != SupportedDatabase.Sqlite
             );
 
-            var versionSql = db switch
+            var factory = new FakeDbFactory(db.ToString());
+
+            SqlDialect dialect = db switch
             {
-                SupportedDatabase.SqlServer => "SELECT @@VERSION",
-                SupportedDatabase.MySql => "SELECT VERSION()",
-                SupportedDatabase.MariaDb => "SELECT VERSION()",
-                SupportedDatabase.PostgreSql => "SELECT version()",
-                SupportedDatabase.CockroachDb => "SELECT version()",
-                SupportedDatabase.Sqlite => "SELECT sqlite_version()",
-                SupportedDatabase.Firebird => "SELECT rdb$get_context('SYSTEM', 'ENGINE_VERSION') FROM rdb$database",
-                SupportedDatabase.Oracle => "SELECT * FROM v$version WHERE banner LIKE 'Oracle%'",
-                _ => string.Empty
+                SupportedDatabase.SqlServer => new SqlServerDialect(factory, NullLogger.Instance),
+                SupportedDatabase.MySql => new MySqlDialect(factory, NullLogger.Instance),
+                SupportedDatabase.MariaDb => new MySqlDialect(factory, NullLogger.Instance),
+                SupportedDatabase.PostgreSql => new PostgreSqlDialect(factory, NullLogger.Instance),
+                SupportedDatabase.CockroachDb => new PostgreSqlDialect(factory, NullLogger.Instance),
+                SupportedDatabase.Sqlite => new SqliteDialect(factory, NullLogger.Instance),
+                SupportedDatabase.Firebird => new FirebirdDialect(factory, NullLogger.Instance),
+                SupportedDatabase.Oracle => new OracleDialect(factory, NullLogger.Instance),
+                SupportedDatabase.DuckDb => new DuckDbDialect(factory, NullLogger.Instance),
+                _ => new Sql92Dialect(factory, NullLogger.Instance)
             };
+
+            var versionSql = dialect.GetVersionQuery();
 
             var versionString = db switch
             {
@@ -112,19 +119,20 @@ public class DataSourceInformationTests
         var expectedMarker = db switch
         {
             SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.Oracle => ":",
+            SupportedDatabase.DuckDb => "$",
             _ => "@"
         };
         Assert.Equal(expectedMarker, info.ParameterMarker);
 
         // Assert: major version parsing
         var expectedMajor = db == SupportedDatabase.PostgreSql ? 15 : 1;
-        Assert.Equal(expectedMajor, info.GetMajorVersion());
+        Assert.Equal(expectedMajor, info.ParsedVersion?.Major);
 
         // Assert: merge support
         var canMerge = db == SupportedDatabase.SqlServer
                        || db == SupportedDatabase.Oracle
                        || db == SupportedDatabase.Firebird
-                       || (db == SupportedDatabase.PostgreSql && info.GetMajorVersion() > 14);
+                       || (db == SupportedDatabase.PostgreSql && info.ParsedVersion?.Major > 14);
         Assert.Equal(canMerge, info.SupportsMerge);
 
         // Assert: insert-on-conflict support
@@ -134,7 +142,8 @@ public class DataSourceInformationTests
             SupportedDatabase.CockroachDb,
             SupportedDatabase.Sqlite,
             SupportedDatabase.MySql,
-            SupportedDatabase.MariaDb
+            SupportedDatabase.MariaDb,
+            SupportedDatabase.DuckDb
         }).Contains(db);
         Assert.Equal(canConflict, info.SupportsInsertOnConflict);
 
@@ -151,7 +160,7 @@ public class DataSourceInformationTests
         var expectedRequiresStoredProcParameterNameMatch = db switch
         {
             SupportedDatabase.Firebird or SupportedDatabase.Sqlite or SupportedDatabase.SqlServer
-                or SupportedDatabase.MySql or SupportedDatabase.MariaDb => false,
+                or SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.DuckDb => false,
             SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.Oracle => true,
             _ => true
         };
@@ -172,9 +181,10 @@ public class DataSourceInformationTests
         connection.ConnectionString = $"Data Source=test;EmulatedProduct={db}";
         var tracked = new FakeTrackedConnection(connection, schema, scalars);
 
-        var info = DataSourceInformation.Create(tracked, factory, NullLoggerFactory.Instance);
+        var dialect = SqlDialectFactory.CreateDialect(tracked, factory, NullLoggerFactory.Instance);
+        var info = new DataSourceInformation(dialect);
 
-        var result = info.GetDatabaseVersion(tracked);
+        var result = dialect.GetDatabaseVersion(tracked);
         var expected = scalars.Values.First().ToString();
         Assert.Equal(expected, result);
     }

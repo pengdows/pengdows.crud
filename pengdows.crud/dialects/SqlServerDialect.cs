@@ -3,6 +3,7 @@ using System.Data.Common;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.wrappers;
 
 namespace pengdows.crud.dialects;
 
@@ -40,6 +41,7 @@ public class SqlServerDialect : SqlDialect
 
     public override string QuotePrefix => "\"";
     public override string QuoteSuffix => "\"";
+    public override bool SupportsNamespaces => true;
 
     // Version-specific overrides
     public override bool SupportsMerge => true;
@@ -50,6 +52,16 @@ public class SqlServerDialect : SqlDialect
     public override string GetConnectionSessionSettings()
     {
         return _sessionSettings ?? string.Empty;
+    }
+
+    public override bool IsReadCommittedSnapshotOn(ITrackedConnection conn)
+    {
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT is_read_committed_snapshot_on FROM sys.databases WHERE name = DB_NAME()";
+        var val = cmd.ExecuteScalar();
+        var v = val is int i ? i : Convert.ToInt32(val ?? 0);
+        return v == 1;
     }
 
     public override void ApplyConnectionSettings(IDbConnection connection)
