@@ -53,20 +53,9 @@ public class FirebirdDialectTests
         var conn = (FakeDbConnection)factory.CreateConnection();
         conn.Open();
         conn.EnqueueNonQueryResult(1);
-        var dialect = new NoSettingsFirebirdDialect(factory, NullLogger<FirebirdDialect>.Instance);
+        var dialect = new FirebirdDialect(factory, NullLogger<FirebirdDialect>.Instance);
         dialect.ApplyConnectionSettings(conn);
         Assert.Single(conn.NonQueryResults);
     }
 
-    private sealed class NoSettingsFirebirdDialect : FirebirdDialect
-    {
-        public NoSettingsFirebirdDialect(DbProviderFactory factory, ILogger logger) : base(factory, logger)
-        {
-        }
-
-        public override string GetConnectionSessionSettings()
-        {
-            return string.Empty;
-        }
-    }
 }

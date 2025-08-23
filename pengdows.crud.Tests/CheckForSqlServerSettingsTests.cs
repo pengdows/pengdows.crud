@@ -44,9 +44,8 @@ public class CheckForSqlServerSettingsTests
 
     private static void ForceSqlServer(DatabaseContext ctx)
     {
-        var prop = typeof(DataSourceInformation)
-            .GetProperty("DatabaseProductName", BindingFlags.Instance | BindingFlags.Public)!;
-        prop.SetValue(ctx.DataSourceInfo, "Microsoft SQL Server");
+        // No longer needed - context is already configured as SQL Server in CreateContext()
+        // The EmulatedProduct in connection string handles this automatically
     }
 
     private sealed class UserOptionsCommand : DbCommand

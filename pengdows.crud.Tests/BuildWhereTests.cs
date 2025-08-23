@@ -32,20 +32,17 @@ public class BuildWhereTests : SqlLiteContextTestBase
     [Fact]
     public void BuildWhere_TooManyParameters_Throws()
     {
+        // Test parameter limit behavior by creating a large number of parameters
+        // that would exceed any reasonable database parameter limit
         var sc = Context.CreateSqlContainer();
-        var info = (DataSourceInformation)Context.DataSourceInfo;
-        var prop = typeof(DataSourceInformation).GetProperty("MaxParameterLimit", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)!;
-        var original = info.MaxParameterLimit;
-        prop.SetValue(info, 1);
-        try
+        var largeParameterArray = new int?[1000];
+        for (int i = 0; i < 1000; i++)
         {
-            Assert.Throws<TooManyParametersException>(() =>
-                _helper.BuildWhere(Context.WrapObjectName("Id"), new int?[] { 1, 2 }, sc));
+            largeParameterArray[i] = i;
         }
-        finally
-        {
-            prop.SetValue(info, original);
-        }
+
+        Assert.Throws<TooManyParametersException>(() =>
+            _helper.BuildWhere(Context.WrapObjectName("Id"), largeParameterArray, sc));
     }
 
     [Fact]

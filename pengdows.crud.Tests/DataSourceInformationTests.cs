@@ -63,8 +63,8 @@ public static class DataSourceTestData
                 SupportedDatabase.PostgreSql => "SELECT version()",
                 SupportedDatabase.CockroachDb => "SELECT version()",
                 SupportedDatabase.Sqlite => "SELECT sqlite_version()",
-                SupportedDatabase.Firebird => "SELECT rdb$get_context('SYSTEM', 'VERSION')",
-                SupportedDatabase.Oracle => "SELECT * FROM v$version",
+                SupportedDatabase.Firebird => "SELECT rdb$get_context('SYSTEM', 'ENGINE_VERSION') FROM rdb$database",
+                SupportedDatabase.Oracle => "SELECT * FROM v$version WHERE banner LIKE 'Oracle%'",
                 _ => string.Empty
             };
 

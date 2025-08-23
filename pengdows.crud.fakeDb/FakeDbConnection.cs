@@ -14,12 +14,15 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
     private SupportedDatabase? _emulatedProduct;
     private DataTable? _schemaTable;
     private ConnectionState _state = ConnectionState.Closed;
+    private string _serverVersion = "1.0";
+    private int? _maxParameterLimit;
     public override string DataSource => "FakeSource";
-    public override string ServerVersion => "1.0";
+    public override string ServerVersion => GetEmulatedServerVersion();
 
     internal readonly Queue<IEnumerable<Dictionary<string, object>>> ReaderResults = new();
     internal readonly Queue<object?> ScalarResults = new();
     public readonly Queue<int> NonQueryResults = new();
+    internal readonly Dictionary<string, object?> ScalarResultsByCommand = new();
 
     public void EnqueueReaderResult(IEnumerable<Dictionary<string, object>> rows)
     {
@@ -34,6 +37,45 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
     public void EnqueueNonQueryResult(int value)
     {
         NonQueryResults.Enqueue(value);
+    }
+
+    public void SetScalarResultForCommand(string commandText, object? value)
+    {
+        ScalarResultsByCommand[commandText] = value;
+    }
+
+    public void SetServerVersion(string version)
+    {
+        _serverVersion = version;
+    }
+
+    public void SetMaxParameterLimit(int limit)
+    {
+        _maxParameterLimit = limit;
+    }
+
+    public int? GetMaxParameterLimit()
+    {
+        return _maxParameterLimit;
+    }
+
+    private string GetEmulatedServerVersion()
+    {
+        if (!string.IsNullOrEmpty(_serverVersion) && _serverVersion != "1.0")
+            return _serverVersion;
+
+        return EmulatedProduct switch
+        {
+            SupportedDatabase.SqlServer => "Microsoft SQL Server 2019",
+            SupportedDatabase.PostgreSql => "PostgreSQL 15.0",
+            SupportedDatabase.MySql => "8.0.33",
+            SupportedDatabase.MariaDb => "10.11.0",
+            SupportedDatabase.Sqlite => "3.42.0",
+            SupportedDatabase.Oracle => "Oracle Database 19c",
+            SupportedDatabase.Firebird => "4.0.0",
+            SupportedDatabase.CockroachDb => "v23.1.0",
+            _ => "1.0"
+        };
     }
 
     public SupportedDatabase EmulatedProduct
