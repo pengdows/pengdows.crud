@@ -45,7 +45,7 @@ public class DataSourceInformationNegativeTests
 
     private sealed class EmptyVersionDialect : SqlDialect
     {
-        private readonly DatabaseProductInfo _info = new()
+        private readonly IDatabaseProductInfo _info = new DatabaseProductInfo
         {
             ProductName = "Test",
             ProductVersion = "1.0",
@@ -62,8 +62,8 @@ public class DataSourceInformationNegativeTests
         public override int ParameterNameMaxLength => 1;
         public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.None;
         public override string GetVersionQuery() => string.Empty;
-        public override Task<DatabaseProductInfo> DetectDatabaseInfoAsync(ITrackedConnection connection) => Task.FromResult(_info);
-        public override DatabaseProductInfo DetectDatabaseInfo(ITrackedConnection connection) => _info;
+        public override Task<IDatabaseProductInfo> DetectDatabaseInfoAsync(ITrackedConnection connection) => Task.FromResult(_info);
+        public override IDatabaseProductInfo DetectDatabaseInfo(ITrackedConnection connection) => _info;
     }
 
     [Fact]

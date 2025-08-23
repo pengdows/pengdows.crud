@@ -163,7 +163,7 @@ public class SqlContainerTests : SqlLiteContextTestBase
 
     public void Dispose_ClearsQueryAndParameters()
     {
-        var container = new SqlContainer(Context, ((ISqlDialectProvider)Context).Dialect);
+        var container = Context.CreateSqlContainer();
         var param = new FakeDbParameter { ParameterName = "p", DbType = DbType.Int32, Value = 1 };
         container.AddParameter(param);
         container.Query.Append("SELECT 1");
@@ -178,7 +178,7 @@ public class SqlContainerTests : SqlLiteContextTestBase
     [Fact]
     public async Task DisposeAsync_ClearsQueryAndParameters()
     {
-        var container = new SqlContainer(Context, ((ISqlDialectProvider)Context).Dialect);
+        var container = Context.CreateSqlContainer();
         var param = new FakeDbParameter { ParameterName = "p", DbType = DbType.Int32, Value = 1 };
         container.AddParameter(param);
         container.Query.Append("SELECT 1");

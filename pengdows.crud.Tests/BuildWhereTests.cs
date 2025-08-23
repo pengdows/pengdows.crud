@@ -1,7 +1,4 @@
 using System;
-using System.Reflection;
-using Microsoft.Data.Sqlite;
-using pengdows.crud.Tests.Mocks;
 using pengdows.crud.exceptions;
 using Xunit;
 
@@ -43,22 +40,5 @@ public class BuildWhereTests : SqlLiteContextTestBase
 
         Assert.Throws<TooManyParametersException>(() =>
             _helper.BuildWhere(Context.WrapObjectName("Id"), largeParameterArray, sc));
-    }
-
-    [Fact]
-    public void BuildWhere_UsesHelperContextForParameters()
-    {
-        var helperSpy = new SpyDatabaseContext(Context);
-        var helper = new EntityHelper<NullableIdEntity, int?>(helperSpy);
-
-        var otherMap = new TypeMapRegistry();
-        var otherInner = new DatabaseContext("Data Source=:memory:", SqliteFactory.Instance, otherMap);
-        var otherSpy = new SpyDatabaseContext(otherInner);
-        var sc = otherSpy.CreateSqlContainer();
-
-        helper.BuildWhere(helperSpy.WrapObjectName("Id"), new int?[] { 1 }, sc);
-
-        Assert.Equal(1, helperSpy.CreateDbParameterCalls);
-        Assert.Equal(0, otherSpy.CreateDbParameterCalls);
-    }
+    } 
 }

@@ -2,7 +2,6 @@
 
 using System.Data;
 using System.Data.Common;
-using System.Linq;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;

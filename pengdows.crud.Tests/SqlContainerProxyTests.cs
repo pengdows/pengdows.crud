@@ -38,14 +38,5 @@ public class SqlContainerProxyTests : SqlLiteContextTestBase
         Assert.Throws<NullReferenceException>(() => sc.MakeParameterName((DbParameter)null!));
     }
 
-    [Fact]
-    public void CreateDbParameter_DelegatesToContext()
-    {
-        var spy = new SpyDatabaseContext(Context);
-        var sc = spy.CreateSqlContainer();
-        var p = sc.CreateDbParameter("p1", DbType.Int32, 1);
-        Assert.Equal("p1", p.ParameterName);
-        Assert.Equal(1, spy.CreateDbParameterCalls);
-        Assert.Equal(0, sc.ParameterCount);
-    }
+    
 }

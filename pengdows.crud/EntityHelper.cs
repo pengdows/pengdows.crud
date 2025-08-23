@@ -76,7 +76,7 @@ public class EntityHelper<TEntity, TRowID> :
     private void Initialize(IDatabaseContext databaseContext, EnumParseFailureMode enumParseBehavior)
     {
         _context = databaseContext;
-        _dialect = ((ISqlDialectProvider)databaseContext).Dialect;
+        //_dialect = ((ISqlDialectProvider)databaseContext).Dialect;
         _tableInfo = _context.TypeMapRegistry.GetTableInfo<TEntity>() ??
                      throw new InvalidOperationException($"Type {typeof(TEntity).FullName} is not a table.");
         _hasAuditColumns = _tableInfo.HasAuditColumns;

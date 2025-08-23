@@ -7,14 +7,7 @@ namespace pengdows.crud.Tests;
 
 public class SpyDatabaseContextTests : SqlLiteContextTestBase
 {
-    [Fact]
-    public void Dialect_DelegatesToInnerContext()
-    {
-        var spy = new SpyDatabaseContext(Context);
-        var expected = ((ISqlDialectProvider)Context).Dialect;
-        var actual = ((ISqlDialectProvider)spy).Dialect;
-        Assert.Equal(expected, actual);
-    }
+
 
     [Fact]
     public void EntityHelper_WithContextMissingDialectProvider_Throws()

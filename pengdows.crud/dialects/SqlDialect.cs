@@ -273,7 +273,7 @@ public abstract class SqlDialect:ISqlDialect
         return SqlStandardLevel.Sql92;
     }
 
-    public IDatabaseProductInfo DetectDatabaseInfo(ITrackedConnection connection)
+    public virtual IDatabaseProductInfo DetectDatabaseInfo(ITrackedConnection connection)
     {
         return DetectDatabaseInfoAsync(connection).GetAwaiter().GetResult();
     }
