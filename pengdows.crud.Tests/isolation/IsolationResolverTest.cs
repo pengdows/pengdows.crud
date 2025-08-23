@@ -16,7 +16,8 @@ public class IsolationResolverTests
     [Fact]
     public void Constructor_UnsupportedDatabase_Throws()
     {
-        Assert.Throws<NotSupportedException>(() => new IsolationResolver(SupportedDatabase.Unknown, true));
+        // Since Unknown is now supported, use an invalid enum value
+        Assert.Throws<NotSupportedException>(() => new IsolationResolver((SupportedDatabase)999, true));
     }
 
     [Fact]

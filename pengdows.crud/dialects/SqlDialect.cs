@@ -95,6 +95,7 @@ public abstract class SqlDialect:ISqlDialect
 
     // Database-specific extensions (override as needed)
     public virtual bool SupportsInsertOnConflict => false; // PostgreSQL, SQLite extension
+    public virtual bool SupportsOnDuplicateKey => false; // MySQL, MariaDB extension
     public virtual bool RequiresStoredProcParameterNameMatch => false;
     public virtual bool SupportsNamespaces => false; // SQL-92 does not require schema support
 

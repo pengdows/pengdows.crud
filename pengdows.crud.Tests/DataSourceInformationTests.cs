@@ -131,7 +131,7 @@ public class DataSourceInformationTests
         // Assert: merge support
         var canMerge = db == SupportedDatabase.SqlServer
                        || db == SupportedDatabase.Oracle
-                       || db == SupportedDatabase.Firebird
+                       || (db == SupportedDatabase.Firebird && info.ParsedVersion?.Major >= 2)
                        || (db == SupportedDatabase.PostgreSql && info.ParsedVersion?.Major > 14);
         Assert.Equal(canMerge, info.SupportsMerge);
 
@@ -141,11 +141,16 @@ public class DataSourceInformationTests
             SupportedDatabase.PostgreSql,
             SupportedDatabase.CockroachDb,
             SupportedDatabase.Sqlite,
-            SupportedDatabase.MySql,
-            SupportedDatabase.MariaDb,
             SupportedDatabase.DuckDb
         }).Contains(db);
         Assert.Equal(canConflict, info.SupportsInsertOnConflict);
+
+        var canOnDuplicateKey = (new[]
+        {
+            SupportedDatabase.MySql,
+            SupportedDatabase.MariaDb
+        }).Contains(db);
+        Assert.Equal(canOnDuplicateKey, info.SupportsOnDuplicateKey);
 
         // Assert: proc wrap style
         var expectedWrap = db switch
@@ -154,7 +159,7 @@ public class DataSourceInformationTests
             SupportedDatabase.Oracle => ProcWrappingStyle.Oracle,
             SupportedDatabase.MySql or SupportedDatabase.MariaDb => ProcWrappingStyle.Call,
             SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb => ProcWrappingStyle.PostgreSQL,
-            SupportedDatabase.Firebird => ProcWrappingStyle.ExecuteProcedure,
+            SupportedDatabase.Firebird => ProcWrappingStyle.Call,
             _ => ProcWrappingStyle.None
         };
         var expectedRequiresStoredProcParameterNameMatch = db switch

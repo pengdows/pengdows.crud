@@ -88,10 +88,13 @@ public class EntityHelperNegativeTests : SqlLiteContextTestBase
     public void BuildUpsert_UnsupportedDatabase_Throws()
     {
         var factory = new FakeDbFactory(SupportedDatabase.Unknown);
+        var context = new DatabaseContext("Data Source=:memory:;EmulatedProduct=Unknown", factory);
         
-        // Creating a DatabaseContext with Unknown database type should throw ArgumentException
-        Assert.Throws<ArgumentException>(() => 
-            new DatabaseContext("Data Source=:memory:;EmulatedProduct=Unknown", factory));
+        // BuildUpsert should throw NotSupportedException for unknown database types
+        var entityHelper = new EntityHelper<TestEntity, int>(context);
+        var testEntity = new TestEntity { Id = 1, Name = "Test" };
+        Assert.Throws<NotSupportedException>(() => 
+            entityHelper.BuildUpsert(testEntity));
     }
 
     private async Task BuildTestTable()

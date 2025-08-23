@@ -775,23 +775,23 @@ public class EntityHelper<TEntity, TRowID> :
 
         var ctx = context ?? _context;
 
-        if (ctx.Product == SupportedDatabase.PostgreSql)
+        // Use dialect capabilities instead of hard-coded database switching
+        if (ctx.DataSourceInfo.SupportsMerge)
         {
-            if (TryParseMajorVersion(ctx.DataSourceInfo.DatabaseProductVersion, out var major) && major > 14)
-            {
-                return BuildUpsertMerge(entity, ctx);
-            }
+            return BuildUpsertMerge(entity, ctx);
+        }
 
+        if (ctx.DataSourceInfo.SupportsInsertOnConflict)
+        {
             return BuildUpsertOnConflict(entity, ctx);
         }
 
-        return ctx.Product switch
+        if (ctx.DataSourceInfo.SupportsOnDuplicateKey)
         {
-            SupportedDatabase.CockroachDb or SupportedDatabase.Sqlite => BuildUpsertOnConflict(entity, ctx),
-            SupportedDatabase.MySql or SupportedDatabase.MariaDb => BuildUpsertOnDuplicate(entity, ctx),
-            SupportedDatabase.SqlServer => BuildUpsertMerge(entity, ctx),
-            _ => throw new NotSupportedException($"Upsert not supported for {ctx.Product}")
-        };
+            return BuildUpsertOnDuplicate(entity, ctx);
+        }
+
+        throw new NotSupportedException($"Upsert not supported for {ctx.Product}");
     }
 
     private async Task<TEntity?> LoadOriginalAsync(TEntity objectToUpdate)

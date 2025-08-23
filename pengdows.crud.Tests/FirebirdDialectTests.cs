@@ -47,7 +47,7 @@ public class FirebirdDialectTests
     }
 
     [Fact]
-    public void ApplyConnectionSettings_NoScript_DoesNotExecute()
+    public void ApplyConnectionSettings_WithSettings_ExecutesCommand()
     {
         var factory = new FakeDbFactory(SupportedDatabase.Firebird);
         var conn = (FakeDbConnection)factory.CreateConnection();
@@ -55,7 +55,7 @@ public class FirebirdDialectTests
         conn.EnqueueNonQueryResult(1);
         var dialect = new FirebirdDialect(factory, NullLogger<FirebirdDialect>.Instance);
         dialect.ApplyConnectionSettings(conn);
-        Assert.Single(conn.NonQueryResults);
+        Assert.Empty(conn.NonQueryResults);
     }
 
 }

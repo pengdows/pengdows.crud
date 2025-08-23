@@ -38,7 +38,13 @@ public class EntityHelperOrderingTests : SqlLiteContextTestBase
         var sc = Context.CreateSqlContainer();
         helper.BuildWhereByPrimaryKey(new[] { new OrderedEntity { A = 1, B = 2 } }, sc);
         var query = sc.Query.ToString();
-        Assert.Contains("(\"A\" = @p0 AND \"B\" = @p1)", query);
+        // Check that the columns are ordered by PK order (A before B) but allow any parameter names
+        Assert.Contains("(\"A\" = @", query);
+        Assert.Contains(" AND \"B\" = @", query);
+        // Verify A comes before B in the query
+        var aIndex = query.IndexOf("\"A\" = @", StringComparison.Ordinal);
+        var bIndex = query.IndexOf("\"B\" = @", StringComparison.Ordinal);
+        Assert.True(aIndex < bIndex, "Primary key column A should appear before B in the query");
     }
 
     [Fact]

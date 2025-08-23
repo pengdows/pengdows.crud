@@ -104,7 +104,8 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             Name = _dataSourceInfo.DatabaseProductName;
 
             RCSIEnabled = _dialect.IsReadCommittedSnapshotOn(initialConnection);
-            if (ConnectionMode != DbMode.Standard)
+            if (ConnectionMode != DbMode.Standard && 
+                !(_dataSourceInfo.Product == SupportedDatabase.SqlServer && ConnectionMode == DbMode.SingleConnection))
             {
                 _dialect.ApplyConnectionSettings(initialConnection);
             }

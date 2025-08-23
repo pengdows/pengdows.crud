@@ -30,6 +30,7 @@ public class DialectPropertyTests
                 false,
                 false,
                 false,
+                false,
                 true,
                 true)
         };
@@ -46,6 +47,7 @@ public class DialectPropertyTests
                 ProcWrappingStyle.Call,
                 "`",
                 "`",
+                false,
                 true,
                 false,
                 false,
@@ -67,6 +69,7 @@ public class DialectPropertyTests
                 ProcWrappingStyle.Oracle,
                 "\"",
                 "\"",
+                false,
                 false,
                 true,
                 false,
@@ -91,6 +94,7 @@ public class DialectPropertyTests
                 true,
                 false,
                 false,
+                false,
                 true,
                 true,
                 true,
@@ -109,6 +113,7 @@ public class DialectPropertyTests
                 ProcWrappingStyle.Exec,
                 "\"",
                 "\"",
+                false,
                 false,
                 true,
                 false,
@@ -136,6 +141,7 @@ public class DialectPropertyTests
                 false,
                 false,
                 false,
+                false,
                 false)
         };
 
@@ -152,6 +158,7 @@ public class DialectPropertyTests
                 "\"",
                 "\"",
                 true,
+                false,
                 false,
                 true,
                 true,
@@ -195,6 +202,9 @@ public class DialectPropertyTests
         Assert.Equal(expected.SupportsInsertOnConflict, dialect.SupportsInsertOnConflict);
         Assert.NotEqual(!expected.SupportsInsertOnConflict, dialect.SupportsInsertOnConflict);
 
+        Assert.Equal(expected.SupportsOnDuplicateKey, dialect.SupportsOnDuplicateKey);
+        Assert.NotEqual(!expected.SupportsOnDuplicateKey, dialect.SupportsOnDuplicateKey);
+
         Assert.Equal(expected.SupportsMerge, dialect.SupportsMerge);
         Assert.NotEqual(!expected.SupportsMerge, dialect.SupportsMerge);
 
@@ -224,6 +234,7 @@ public class DialectPropertyTests
         string QuotePrefix,
         string QuoteSuffix,
         bool SupportsInsertOnConflict,
+        bool SupportsOnDuplicateKey,
         bool SupportsMerge,
         bool SupportsJsonTypes,
         bool SupportsWindowFunctions,

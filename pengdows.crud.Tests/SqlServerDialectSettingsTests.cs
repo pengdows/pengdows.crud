@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
@@ -82,7 +83,7 @@ public class SqlServerDialectSettingsTests
     }
 
     [Fact]
-    public void ApplyConnectionSettings_OptimalSettings_CachesEmpty()
+    public async Task ApplyConnectionSettings_OptimalSettings_CachesEmpty()
     {
         var rows = new[]
         {
@@ -97,12 +98,13 @@ public class SqlServerDialectSettingsTests
         using var conn = BuildConnection(rows);
         var factory = new FakeDbFactory(SupportedDatabase.SqlServer);
         var dialect = new SqlServerDialect(factory, NullLogger<SqlServerDialect>.Instance);
+        await dialect.DetectDatabaseInfoAsync(conn);
         dialect.ApplyConnectionSettings(conn);
         Assert.Equal(string.Empty, dialect.GetConnectionSessionSettings());
     }
 
     [Fact]
-    public void ApplyConnectionSettings_QuotedIdentifierOff_BuildsSettingsScript()
+    public async Task ApplyConnectionSettings_QuotedIdentifierOff_BuildsSettingsScript()
     {
         var rows = new[]
         {
@@ -117,6 +119,7 @@ public class SqlServerDialectSettingsTests
         using var conn = BuildConnection(rows);
         var factory = new FakeDbFactory(SupportedDatabase.SqlServer);
         var dialect = new SqlServerDialect(factory, NullLogger<SqlServerDialect>.Instance);
+        await dialect.DetectDatabaseInfoAsync(conn);
         dialect.ApplyConnectionSettings(conn);
         var settings = dialect.GetConnectionSessionSettings();
         Assert.Contains("SET QUOTED_IDENTIFIER ON", settings);

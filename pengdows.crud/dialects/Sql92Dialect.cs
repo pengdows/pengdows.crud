@@ -21,11 +21,6 @@ public class Sql92Dialect : SqlDialect
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.Unknown;
 
-    public override void ApplyConnectionSettings(IDbConnection connection)
-    {
-        // No settings to apply for maximum compatibility
-        Logger.LogDebug("Using SQL-92 fallback dialect - no connection settings applied");
-    }
 
     protected override string ExtractProductNameFromVersion(string versionString)
     {

@@ -33,7 +33,6 @@ public class TypeMapRegistry : ITypeMapRegistry
                 if (colAttr != null)
                 {
                     var idAttr = prop.GetCustomAttribute<IdAttribute>();
-                    var pk = prop.GetCustomAttribute<PrimaryKeyAttribute>();
                     var hasNonInsertable =
                         prop.GetCustomAttribute<NonInsertableAttribute>() != null ||
                         (idAttr != null && !idAttr.Writable);
@@ -59,7 +58,7 @@ public class TypeMapRegistry : ITypeMapRegistry
                         IsCreatedOn = prop.GetCustomAttribute<CreatedOnAttribute>() != null,
                         IsLastUpdatedBy = prop.GetCustomAttribute<LastUpdatedByAttribute>() != null,
                         IsLastUpdatedOn = prop.GetCustomAttribute<LastUpdatedOnAttribute>() != null,
-                        Ordinal = colAttr.Ordinal
+                        Ordinal = colAttr.Ordinal 
                     };
                     if (ci.IsLastUpdatedBy) tableInfo.LastUpdatedBy = ci;
 

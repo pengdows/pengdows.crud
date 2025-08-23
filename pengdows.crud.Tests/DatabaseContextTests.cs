@@ -168,7 +168,7 @@ public class DatabaseContextTests
     {
         return new List<object[]>
         {
-            new object[] { SupportedDatabase.SqlServer, false },
+            new object[] { SupportedDatabase.SqlServer, true },
             new object[] { SupportedDatabase.MySql, true },
             new object[] { SupportedDatabase.MariaDb, true },
             new object[] { SupportedDatabase.PostgreSql, true },

@@ -56,6 +56,7 @@ public interface ISqlDialect
     bool SupportsMultidimensionalArrays { get; }
     bool SupportsPropertyGraphQueries { get; }
     bool SupportsInsertOnConflict { get; }
+    bool SupportsOnDuplicateKey { get; }
     bool RequiresStoredProcParameterNameMatch { get; }
     bool SupportsNamespaces { get; }
     bool IsFallbackDialect { get; }

@@ -41,19 +41,6 @@ public class FirebirdDialect : SqlDialect
         return "SET TRANSACTION ISOLATION LEVEL READ COMMITTED;\nSET SQL DIALECT 3;";
     }
 
-    public override void ApplyConnectionSettings(IDbConnection connection)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = GetConnectionSessionSettings();
-            cmd.ExecuteNonQuery();
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Failed to apply Firebird connection settings");
-        }
-    }
 
     protected override async Task<string?> GetProductNameAsync(ITrackedConnection connection)
     {

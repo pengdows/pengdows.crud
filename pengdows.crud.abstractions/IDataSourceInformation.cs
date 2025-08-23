@@ -95,6 +95,11 @@ public interface IDataSourceInformation
     bool SupportsInsertOnConflict { get; }
 
     /// <summary>
+    /// Gets a value indicating whether the database supports INSERT ... ON DUPLICATE KEY UPDATE semantics.
+    /// </summary>
+    bool SupportsOnDuplicateKey { get; }
+
+    /// <summary>
     /// Indicates whether stored procedure parameter names must match the declared names in the database.
     /// This is true for Oracle, PostgreSQL, and CockroachDB when using named binding.
     /// </summary>

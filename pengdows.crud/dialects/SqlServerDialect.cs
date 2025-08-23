@@ -77,29 +77,6 @@ public class SqlServerDialect : SqlDialect
         return productInfo;
     }
 
-    public override void ApplyConnectionSettings(IDbConnection connection)
-    {
-        try
-        {
-            if (!string.IsNullOrEmpty(_sessionSettings))
-            {
-                Logger.LogDebug("Applying SQL Server session settings: {Settings}", _sessionSettings);
-                using var cmd = connection.CreateCommand();
-                cmd.CommandText = _sessionSettings;
-                cmd.ExecuteNonQuery();
-            }
-            else
-            {
-                Logger.LogDebug("SQL Server session settings are already optimal, no changes needed");
-            }
-
-        }
-        catch (Exception ex)
-        {
-            _sessionSettings ??= DefaultSessionSettings;
-            Logger.LogError(ex, "Failed to apply SQL Server connection settings");
-        }
-    }
 
     private string CheckSqlServerSettings(IDbConnection connection)
     {

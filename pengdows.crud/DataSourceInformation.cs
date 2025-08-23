@@ -44,6 +44,7 @@ public class DataSourceInformation : IDataSourceInformation
     public int MaxParameterLimit => _dialect.MaxParameterLimit;
     public bool SupportsMerge => _dialect.SupportsMerge;
     public bool SupportsInsertOnConflict => _dialect.SupportsInsertOnConflict;
+    public bool SupportsOnDuplicateKey => _dialect.SupportsOnDuplicateKey;
     public bool RequiresStoredProcParameterNameMatch => _dialect.RequiresStoredProcParameterNameMatch;
     public bool IsUsingFallbackDialect => _dialect.IsFallbackDialect;
     public string GetCompatibilityWarning()
