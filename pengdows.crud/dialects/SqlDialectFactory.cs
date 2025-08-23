@@ -63,7 +63,7 @@ public static class SqlDialectFactory
             SupportedDatabase.Oracle => new OracleDialect(factory, logger),
             SupportedDatabase.Firebird => new FirebirdDialect(factory, logger),
             SupportedDatabase.DuckDb => new DuckDbDialect(factory, logger),
-            _ => throw new ArgumentException($"Unsupported database type: {databaseType}")
+            _ => new Sql92Dialect(factory, logger)
         };
     }
 
@@ -79,6 +79,7 @@ public static class SqlDialectFactory
             var name when name.Contains("sqlite") => SupportedDatabase.Sqlite,
             var name when name.Contains("oracle") => SupportedDatabase.Oracle,
             var name when name.Contains("firebird") => SupportedDatabase.Firebird,
+            var name when name.Contains("duckdb") => SupportedDatabase.DuckDb,
             _ => SupportedDatabase.Unknown
         };
     }
@@ -118,6 +119,7 @@ public static class SqlDialectFactory
             var n when n.Contains("oracle") => SupportedDatabase.Oracle,
             var n when n.Contains("sqlite") => SupportedDatabase.Sqlite,
             var n when n.Contains("firebird") => SupportedDatabase.Firebird,
+            var n when n.Contains("duckdb") || n.Contains("duck db") => SupportedDatabase.DuckDb,
             _ => SupportedDatabase.Unknown
         };
     }

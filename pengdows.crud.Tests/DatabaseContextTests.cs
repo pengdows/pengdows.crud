@@ -175,7 +175,8 @@ public class DatabaseContextTests
             new object[] { SupportedDatabase.CockroachDb, true },
             new object[] { SupportedDatabase.Oracle, true },
             new object[] { SupportedDatabase.Sqlite, true },
-            new object[] { SupportedDatabase.Firebird, false }
+            new object[] { SupportedDatabase.Firebird, true },
+            new object[] { SupportedDatabase.DuckDb, false }
         };
     }
 

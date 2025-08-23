@@ -23,14 +23,27 @@ public class SqlDialectFactoryDetectionTests
     }
 
     [Fact]
-    public void CreateDialect_UnknownProduct_Throws()
+    public void CreateDialect_DetectsDuckDbFromConnection()
+    {
+        var factory = new FakeDbFactory(SupportedDatabase.DuckDb);
+        using var conn = factory.CreateConnection();
+        conn.ConnectionString = "EmulatedProduct=DuckDb";
+        conn.Open();
+        var tracked = new TrackedConnection(conn);
+        var dialect = SqlDialectFactory.CreateDialect(tracked, factory, NullLoggerFactory.Instance);
+        Assert.Equal(SupportedDatabase.DuckDb, dialect.DatabaseType);
+    }
+
+    [Fact]
+    public void CreateDialect_UnknownProduct_ReturnsSql92Dialect()
     {
         var factory = new FakeDbFactory(SupportedDatabase.Unknown);
         using var conn = factory.CreateConnection();
         conn.ConnectionString = "EmulatedProduct=Unknown";
         conn.Open();
         var tracked = new TrackedConnection(conn);
-        Assert.Throws<ArgumentException>(() =>
-            SqlDialectFactory.CreateDialect(tracked, factory, NullLoggerFactory.Instance));
+        var dialect = SqlDialectFactory.CreateDialect(tracked, factory, NullLoggerFactory.Instance);
+        Assert.IsType<Sql92Dialect>(dialect);
+        Assert.Equal(SupportedDatabase.Unknown, dialect.DatabaseType);
     }
 }

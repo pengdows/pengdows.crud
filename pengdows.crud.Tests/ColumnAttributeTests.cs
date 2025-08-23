@@ -14,9 +14,10 @@ public class ColumnAttributeTests
     [Fact]
     public void TestConstructor()
     {
-        var testSubject = new ColumnAttribute("test_column", DbType.DateTime);
+        var testSubject = new ColumnAttribute("test_column", DbType.DateTime, 5);
         Assert.Equal("test_column", testSubject.Name);
         Assert.Equal(DbType.DateTime, testSubject.Type);
+        Assert.Equal(5, testSubject.Ordinal);
     }
 
     [Fact]
@@ -27,6 +28,13 @@ public class ColumnAttributeTests
         var tableInfo = tmr.GetTableInfo<TestClass>();
         var colVals = tableInfo.Columns.Values;
         Assert.Equal("column_name", colVals.FirstOrDefault().Name);
+    }
+
+    [Fact]
+    public void Constructor_DefaultOrdinalIsZero()
+    {
+        var attr = new ColumnAttribute("col", DbType.Int32);
+        Assert.Equal(0, attr.Ordinal);
     }
 
     [Table("test_table")]

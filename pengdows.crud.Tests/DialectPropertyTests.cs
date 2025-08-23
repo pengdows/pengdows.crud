@@ -138,6 +138,27 @@ public class DialectPropertyTests
                 false,
                 false)
         };
+
+        yield return new object[]
+        {
+            new DuckDbDialect(new FakeDbFactory(SupportedDatabase.DuckDb), logger),
+            new DialectProps(
+                SupportedDatabase.DuckDb,
+                "$",
+                true,
+                65535,
+                255,
+                ProcWrappingStyle.None,
+                "\"",
+                "\"",
+                true,
+                false,
+                true,
+                true,
+                true,
+                true,
+                true)
+        };
     }
 
     [Theory]

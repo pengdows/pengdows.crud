@@ -24,6 +24,8 @@ public class PostgreSqlDialect : SqlDialect
     public override SqlStandardLevel MaxSupportedStandard =>
         IsInitialized ? base.MaxSupportedStandard : DetermineStandardCompliance(null);
 
+    public override bool SupportsNamespaces => true;
+
     public override bool SupportsInsertOnConflict => true;
     public override bool SupportsMerge => IsInitialized && ProductInfo.ParsedVersion?.Major >= 15;
     public override bool SupportsJsonTypes => IsInitialized && ProductInfo.ParsedVersion?.Major >= 9;

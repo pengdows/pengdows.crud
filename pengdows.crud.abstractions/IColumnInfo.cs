@@ -22,9 +22,12 @@ public interface IColumnInfo
     JsonSerializerOptions JsonSerializerOptions { get; set; }
     bool IsIdIsWritable { get; set; }
     bool IsPrimaryKey { get; set; }
+    int PkOrder { get; set; }
     bool IsVersion { get; set; }
     bool IsCreatedBy { get; set; }
     bool IsCreatedOn { get; set; }
     bool IsLastUpdatedBy { get; set; }
     bool IsLastUpdatedOn { get; set; }
-    object? MakeParameterValueFromField<T>(T objectToCreate);}
+    int Ordinal { get; set; }
+    object? MakeParameterValueFromField<T>(T objectToCreate);
+}

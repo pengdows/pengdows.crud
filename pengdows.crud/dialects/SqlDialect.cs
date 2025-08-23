@@ -34,13 +34,13 @@ public abstract class SqlDialect:ISqlDialect
     /// </summary>
     public bool IsInitialized => _productInfo != null;
 
-    // Abstract properties that each dialect must define
+    // Core properties with SQL-92 defaults; override for database-specific behavior
     public abstract SupportedDatabase DatabaseType { get; }
-    public abstract string ParameterMarker { get; }
-    public abstract bool SupportsNamedParameters { get; }
-    public abstract int MaxParameterLimit { get; }
-    public abstract int ParameterNameMaxLength { get; }
-    public abstract ProcWrappingStyle ProcWrappingStyle { get; }
+    public virtual string ParameterMarker => "?";
+    public virtual bool SupportsNamedParameters => false;
+    public virtual int MaxParameterLimit => 255;
+    public virtual int ParameterNameMaxLength => 18;
+    public virtual ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.None;
 
     /// <summary>
     /// The highest SQL standard level this database/version supports
@@ -96,7 +96,32 @@ public abstract class SqlDialect:ISqlDialect
     // Database-specific extensions (override as needed)
     public virtual bool SupportsInsertOnConflict => false; // PostgreSQL, SQLite extension
     public virtual bool RequiresStoredProcParameterNameMatch => false;
-    public virtual bool SupportsNamespaces => true; // Most databases support schemas/namespaces, SQLite does not
+    public virtual bool SupportsNamespaces => false; // SQL-92 does not require schema support
+
+    /// <summary>
+    /// Indicates whether this dialect represents an unknown database using the SQL-92 fallback.
+    /// </summary>
+    public bool IsFallbackDialect => ProductInfo.DatabaseType == SupportedDatabase.Unknown;
+
+    /// <summary>
+    /// Returns a warning if the SQL-92 fallback dialect is in use.
+    /// </summary>
+    public string GetCompatibilityWarning()
+    {
+        return IsFallbackDialect
+            ? "Using SQL-92 fallback dialect - some features may be unavailable"
+            : string.Empty;
+    }
+
+    /// <summary>
+    /// Indicates whether SQL:2003 or later features may be used.
+    /// </summary>
+    public bool CanUseModernFeatures => MaxSupportedStandard >= SqlStandardLevel.Sql2003;
+
+    /// <summary>
+    /// Indicates whether the database meets SQL-92 compatibility.
+    /// </summary>
+    public bool HasBasicCompatibility => MaxSupportedStandard >= SqlStandardLevel.Sql92;
 
     public virtual string WrapObjectName(string name)
     {
@@ -187,7 +212,28 @@ public abstract class SqlDialect:ISqlDialect
     }
 
     // Methods for database-specific operations
-    public abstract string GetVersionQuery();
+    public virtual string GetVersionQuery() => "SELECT 'SQL-92 Compatible Database' AS version";
+
+    public virtual string GetDatabaseVersion(ITrackedConnection connection)
+    {
+        try
+        {
+            var versionQuery = GetVersionQuery();
+            if (string.IsNullOrWhiteSpace(versionQuery))
+            {
+                return "Unknown Database Version";
+            }
+
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = versionQuery;
+            var version = cmd.ExecuteScalar()?.ToString();
+            return version ?? "Unknown Version";
+        }
+        catch (Exception ex)
+        {
+            return "Error retrieving version: " + ex.Message;
+        }
+    }
 
     public virtual DataTable GetDataSourceInformationSchema(ITrackedConnection connection)
     {
@@ -217,6 +263,11 @@ public abstract class SqlDialect:ISqlDialect
         {
             Logger.LogError(ex, "Failed to apply connection settings for {DatabaseType}", DatabaseType);
         }
+    }
+
+    public virtual bool IsReadCommittedSnapshotOn(ITrackedConnection connection)
+    {
+        return false;
     }
 
     /// <summary>
@@ -407,6 +458,11 @@ public abstract class SqlDialect:ISqlDialect
         if (combined.Contains("firebird"))
         {
             return SupportedDatabase.Firebird;
+        }
+
+        if (combined.Contains("duckdb") || combined.Contains("duck db"))
+        {
+            return SupportedDatabase.DuckDb;
         }
 
         return DatabaseType;

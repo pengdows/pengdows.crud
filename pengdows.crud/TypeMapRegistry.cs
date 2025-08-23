@@ -33,6 +33,7 @@ public class TypeMapRegistry : ITypeMapRegistry
                 if (colAttr != null)
                 {
                     var idAttr = prop.GetCustomAttribute<IdAttribute>();
+                    var pk = prop.GetCustomAttribute<PrimaryKeyAttribute>();
                     var hasNonInsertable =
                         prop.GetCustomAttribute<NonInsertableAttribute>() != null ||
                         (idAttr != null && !idAttr.Writable);
@@ -50,12 +51,14 @@ public class TypeMapRegistry : ITypeMapRegistry
                         IsJsonType = prop.GetCustomAttribute<JsonAttribute>() != null,
                         JsonSerializerOptions = prop.GetCustomAttribute<JsonAttribute>()?.SerializerOptions ??
                                                 JsonSerializerOptions.Default,
-                        IsPrimaryKey = prop.GetCustomAttribute<PrimaryKeyAttribute>() != null,
+                        IsPrimaryKey = pk != null,
+                        PkOrder = pk?.Order ?? 0,
                         IsVersion = prop.GetCustomAttribute<VersionAttribute>() != null,
                         IsCreatedBy = prop.GetCustomAttribute<CreatedByAttribute>() != null,
                         IsCreatedOn = prop.GetCustomAttribute<CreatedOnAttribute>() != null,
                         IsLastUpdatedBy = prop.GetCustomAttribute<LastUpdatedByAttribute>() != null,
-                        IsLastUpdatedOn = prop.GetCustomAttribute<LastUpdatedOnAttribute>() != null
+                        IsLastUpdatedOn = prop.GetCustomAttribute<LastUpdatedOnAttribute>() != null,
+                        Ordinal = colAttr.Ordinal
                     };
                     if (ci.IsLastUpdatedBy) tableInfo.LastUpdatedBy = ci;
 
