@@ -47,31 +47,6 @@ public class DuckDbDialect : SqlDialect
     {
         return string.Empty;
     }
-
-    public override void ApplyConnectionSettings(IDbConnection connection)
-    {
-        try
-        {
-            var settings = GetConnectionSessionSettings();
-            if (!string.IsNullOrWhiteSpace(settings))
-            {
-                using var cmd = connection.CreateCommand();
-                foreach (var trimmed in settings
-                             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
-                             .Select(setting => setting.Trim())
-                             .Where(trimmed => !string.IsNullOrEmpty(trimmed) && !trimmed.StartsWith("--")))
-                {
-                    cmd.CommandText = trimmed;
-                    cmd.ExecuteNonQuery();
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Failed to apply DuckDB connection settings");
-        }
-    }
-
     protected override async Task<string?> GetProductNameAsync(ITrackedConnection connection)
     {
         try

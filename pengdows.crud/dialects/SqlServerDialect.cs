@@ -64,15 +64,23 @@ public class SqlServerDialect : SqlDialect
         return v == 1;
     }
 
+    public override async Task<IDatabaseProductInfo> DetectDatabaseInfoAsync(ITrackedConnection connection)
+    {
+        var productInfo = await base.DetectDatabaseInfoAsync(connection);
+        
+        // Check and cache SQL Server session settings during initialization
+        if (_sessionSettings == null)
+        {
+            _sessionSettings = CheckSqlServerSettings(connection);
+        }
+        
+        return productInfo;
+    }
+
     public override void ApplyConnectionSettings(IDbConnection connection)
     {
         try
         {
-            if (_sessionSettings == null)
-            {
-                _sessionSettings = CheckSqlServerSettings(connection);
-            }
-
             if (!string.IsNullOrEmpty(_sessionSettings))
             {
                 Logger.LogDebug("Applying SQL Server session settings: {Settings}", _sessionSettings);

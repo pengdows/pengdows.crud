@@ -1,6 +1,6 @@
 namespace pengdows.crud.dialects;
 
-public interface ISqlDialectProvider
+internal interface ISqlDialectProvider
 {
     ISqlDialect Dialect { get; }
 }

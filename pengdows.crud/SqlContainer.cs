@@ -17,15 +17,15 @@ namespace pengdows.crud;
 public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
 {
     private readonly IDatabaseContext _context;
-    private readonly SqlDialect _dialect;
+    private readonly ISqlDialect _dialect;
 
     private readonly ILogger<ISqlContainer> _logger;
     private readonly Dictionary<string, DbParameter> _parameters = new();
 
-    internal SqlContainer(IDatabaseContext context, SqlDialect dialect, string? query = "", ILogger<ISqlContainer>? logger = null)
+    internal SqlContainer(IDatabaseContext context, string? query = "", ILogger<ISqlContainer>? logger = null)
     {
         _context = context;
-        _dialect = dialect;
+        _dialect = (context as ISqlDialectProvider)?.Dialect;
         _logger = logger ?? NullLogger<ISqlContainer>.Instance;
         Query = new StringBuilder(query ?? string.Empty);
     }

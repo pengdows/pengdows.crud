@@ -14,11 +14,11 @@ using pengdows.crud.wrappers;
 
 namespace pengdows.crud;
 
-public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, IContextIdentity
+public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, IContextIdentity, ISqlDialectProvider
 {
     private readonly ITrackedConnection _connection;
     private readonly IDatabaseContext _context;
-    private readonly SqlDialect _dialect;
+    private readonly ISqlDialect _dialect;
     private readonly ILogger<TransactionContext> _logger;
     private readonly SemaphoreSlim _semaphoreSlim;
     private readonly IDbTransaction _transaction;
@@ -31,14 +31,13 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
 
     internal TransactionContext(
         IDatabaseContext context,
-        SqlDialect dialect,
         IsolationLevel isolationLevel = IsolationLevel.Unspecified,
         ExecutionType? executionType = null,
         ILogger<TransactionContext>? logger = null)
     {
         _logger = logger ?? new NullLogger<TransactionContext>();
         _context = context ?? throw new ArgumentNullException(nameof(context));
-        _dialect = dialect;
+        _dialect = (context as ISqlDialectProvider).Dialect;
         RootId = ((IContextIdentity)_context).RootId;
 
         executionType ??= _context.IsReadOnlyConnection ? ExecutionType.Read : ExecutionType.Write;
@@ -97,7 +96,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
             throw new InvalidOperationException("Cannot create a SQL container because the transaction is completed.");
         }
 
-        return new SqlContainer(this, _dialect, query);
+        return new SqlContainer(this, query);
     }
 
     public DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
@@ -341,4 +340,6 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
             _connection.Open();
         }
     }
+
+    public ISqlDialect Dialect =>  _dialect;
 }

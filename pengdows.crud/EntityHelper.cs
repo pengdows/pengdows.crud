@@ -42,7 +42,7 @@ public class EntityHelper<TEntity, TRowID> :
 
     private readonly IAuditValueResolver? _auditValueResolver;
     private IDatabaseContext _context;
-    private SqlDialect _dialect;
+    private ISqlDialect _dialect;
     private readonly Guid _rootId;
 
     private IColumnInfo? _idColumn;
@@ -77,7 +77,7 @@ public class EntityHelper<TEntity, TRowID> :
     private void Initialize(IDatabaseContext databaseContext, EnumParseFailureMode enumParseBehavior)
     {
         _context = databaseContext;
-        //_dialect = ((ISqlDialectProvider)databaseContext).Dialect;
+        _dialect = (databaseContext as ISqlDialectProvider)?.Dialect;
         _tableInfo = _context.TypeMapRegistry.GetTableInfo<TEntity>() ??
                      throw new InvalidOperationException($"Type {typeof(TEntity).FullName} is not a table.");
         _hasAuditColumns = _tableInfo.HasAuditColumns;

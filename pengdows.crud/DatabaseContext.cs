@@ -18,7 +18,7 @@ using pengdows.crud.wrappers;
 
 namespace pengdows.crud;
 
-public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IContextIdentity
+public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IContextIdentity, ISqlDialectProvider
 {
     private readonly DbProviderFactory _factory;
     private readonly ILoggerFactory _loggerFactory;
@@ -213,7 +213,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             isolationLevel ??= IsolationLevel.ReadCommitted;
         }
 
-        return new TransactionContext(this, _dialect, isolationLevel.Value, executionType);
+        return new TransactionContext(this, isolationLevel.Value, executionType);
     }
 
     public ITransactionContext BeginTransaction(
@@ -229,7 +229,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
 
     public ISqlContainer CreateSqlContainer(string? query = null)
     {
-        return new SqlContainer(this, _dialect, query);
+        return new SqlContainer(this, query);
     }
 
     public DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
@@ -427,4 +427,6 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         await _connectionStrategy.DisposeAsync().ConfigureAwait(false);
         await base.DisposeManagedAsync().ConfigureAwait(false);
     }
+
+    public ISqlDialect Dialect => _dialect;
 }

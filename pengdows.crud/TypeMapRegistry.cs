@@ -37,6 +37,7 @@ public class TypeMapRegistry : ITypeMapRegistry
                     var hasNonInsertable =
                         prop.GetCustomAttribute<NonInsertableAttribute>() != null ||
                         (idAttr != null && !idAttr.Writable);
+                    var pk = prop.GetCustomAttribute<PrimaryKeyAttribute>();
                     var ci = new ColumnInfo
                     {
                         Name = colAttr.Name,
