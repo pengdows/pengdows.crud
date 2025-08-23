@@ -14,7 +14,7 @@ using pengdows.crud.wrappers;
 
 namespace pengdows.crud;
 
-public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, IContextIdentity, ISqlDialectProvider
+public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, IContextIdentity
 {
     private readonly ITrackedConnection _connection;
     private readonly IDatabaseContext _context;
@@ -150,8 +150,6 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
     {
         return _dialect.MakeParameterName(parameterName);
     }
-
-    SqlDialect ISqlDialectProvider.Dialect => _dialect;
 
     public ProcWrappingStyle ProcWrappingStyle => _context.ProcWrappingStyle;
 

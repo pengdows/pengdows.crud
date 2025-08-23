@@ -17,7 +17,9 @@ using testbed.Cockroach;
 #endregion
 
 foreach (var (assembly, type, factory) in DbProviderFactoryFinder.FindAllFactories())
+{
     Console.WriteLine($"Found: {type} in {assembly}");
+}
 
 var builder = Host.CreateApplicationBuilder(args);
 builder.Services.AddScoped<IAuditValueResolver, StringAuditContextProvider>();
@@ -33,7 +35,13 @@ await using (var liteDb = new DatabaseContext("Data Source=mydb.sqlite", SqliteF
     liteDb.Dispose();
 }
 
-
+// await using (var duck = new DatabaseContext("Server=localhost;Port=54321;Database=duckdb;Pooling=true;",))
+//                DbProviderFactoryFinder.GetFactory("DuckDB.Data.DuckDBClient.DuckDBProviderFactory")!,
+//                host.Services.GetRequiredService<ITypeMapRegistry>()))
+// {
+//     var d = new TestProvider(duck, host.Services);
+//     await d.RunTest();
+// }
 // var cs = $"DataSource=localhost;Port=5000;Database={0};Uid=sa;Pwd=MyStr0ngP@ssw0rd;";
 //
 // // wait for ASE to be ready
@@ -123,11 +131,15 @@ async Task WaitForDbToStart(DbProviderFactory instance, string connectionString,
             try
             {
                 if (csb is not FbConnectionStringBuilder orig)
+                {
                     throw new InvalidOperationException("Connection string builder is not valid.");
+                }
 
                 var db = orig.Database;
                 if (string.IsNullOrWhiteSpace(db))
+                {
                     throw new InvalidOperationException("Database path is not specified.");
+                }
 
                 var csbTemp = new FbConnectionStringBuilder
                 {
@@ -161,7 +173,10 @@ async Task WaitForDbToStart(DbProviderFactory instance, string connectionString,
         catch (Exception ex)
         {
             var currentError = ex.Message;
-            if (currentError != lastError) Console.WriteLine(currentError);
+            if (currentError != lastError)
+            {
+                Console.WriteLine(currentError);
+            }
 
             lastError = currentError;
             await Task.Delay(1000);

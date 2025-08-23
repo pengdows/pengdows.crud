@@ -176,6 +176,9 @@ CREATE TABLE {0}test_table{1} (
         var ctx = db ?? _context;
         var sc = _helper.BuildDelete(t.Id, ctx);
         var count = await sc.ExecuteNonQueryAsync();
-        if (count != 1) throw new Exception("Delete failed");
+        if (count != 1)
+        {
+            throw new Exception("Delete failed");
+        }
     }
 }

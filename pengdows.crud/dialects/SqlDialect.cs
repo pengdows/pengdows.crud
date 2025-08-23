@@ -1,6 +1,5 @@
 using System.Data;
 using System.Data.Common;
-using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
@@ -12,12 +11,12 @@ namespace pengdows.crud.dialects;
 /// <summary>
 /// Base SQL dialect implementing standard SQL behaviors with feature detection
 /// </summary>
-public abstract class SqlDialect
+public abstract class SqlDialect:ISqlDialect
 {
     protected readonly DbProviderFactory Factory;
     protected readonly ILogger Logger;
 
-    private DatabaseProductInfo? _productInfo;
+    private IDatabaseProductInfo? _productInfo;
 
     protected SqlDialect(DbProviderFactory factory, ILogger logger)
     {
@@ -28,7 +27,7 @@ public abstract class SqlDialect
     /// <summary>
     /// Gets the detected database product information. Call DetectDatabaseInfo first.
     /// </summary>
-    public DatabaseProductInfo ProductInfo => _productInfo ?? throw new InvalidOperationException("Database info not detected. Call DetectDatabaseInfo first.");
+    public IDatabaseProductInfo ProductInfo => _productInfo ?? throw new InvalidOperationException("Database info not detected. Call DetectDatabaseInfo first.");
 
     /// <summary>
     /// Whether database info has been detected
@@ -223,7 +222,7 @@ public abstract class SqlDialect
     /// <summary>
     /// Detects database product information from the connection
     /// </summary>
-    public virtual async Task<DatabaseProductInfo> DetectDatabaseInfoAsync(ITrackedConnection connection)
+    public virtual async Task<IDatabaseProductInfo> DetectDatabaseInfoAsync(ITrackedConnection connection)
     {
         if (_productInfo != null)
         {
@@ -274,7 +273,7 @@ public abstract class SqlDialect
         return SqlStandardLevel.Sql92;
     }
 
-    public DatabaseProductInfo DetectDatabaseInfo(ITrackedConnection connection)
+    public IDatabaseProductInfo DetectDatabaseInfo(ITrackedConnection connection)
     {
         return DetectDatabaseInfoAsync(connection).GetAwaiter().GetResult();
     }
@@ -461,3 +460,5 @@ public abstract class SqlDialect
         return new string(buffer);
     }
 }
+
+

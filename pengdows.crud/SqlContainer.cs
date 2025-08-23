@@ -14,7 +14,7 @@ using pengdows.crud.wrappers;
 
 namespace pengdows.crud;
 
-public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectProvider
+public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
 {
     private readonly IDatabaseContext _context;
     private readonly SqlDialect _dialect;
@@ -57,12 +57,12 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
     public DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
-        return _context.CreateDbParameter(name, type, value);
+        return _dialect.CreateDbParameter(name, type, value);
     }
 
     public DbParameter CreateDbParameter<T>(DbType type, T value)
     {
-        return _context.CreateDbParameter(type, value);
+        return _dialect.CreateDbParameter(type, value);
     }
 
 
@@ -180,9 +180,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             }
         }
     }
-
-    SqlDialect ISqlDialectProvider.Dialect => _dialect;
-
+    
     public async Task<int> ExecuteNonQueryAsync(CommandType commandType = CommandType.Text)
     {
         _context.AssertIsWriteConnection();

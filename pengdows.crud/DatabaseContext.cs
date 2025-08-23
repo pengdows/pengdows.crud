@@ -20,7 +20,7 @@ using pengdows.crud.wrappers;
 
 namespace pengdows.crud;
 
-public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IContextIdentity, ISqlDialectProvider
+public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IContextIdentity
 {
     private readonly DbProviderFactory _factory;
     private readonly ILoggerFactory _loggerFactory;
@@ -296,8 +296,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
 
     public string CompositeIdentifierSeparator => _dialect.CompositeIdentifierSeparator;
 
-    SqlDialect ISqlDialectProvider.Dialect => _dialect;
-
+ 
     public string WrapObjectName(string name)
     {
         return _dialect.WrapObjectName(name);

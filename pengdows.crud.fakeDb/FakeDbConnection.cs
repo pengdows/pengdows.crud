@@ -136,14 +136,16 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
         await base.DisposeAsync();
     }
 
-    public override async Task CloseAsync()
+    public override Task CloseAsync()
     {
         Close();
+        return Task.CompletedTask;
     }
 
-    public override async Task OpenAsync(CancellationToken cancellationToken)
+    public override Task OpenAsync(CancellationToken cancellationToken)
     {
         Open();
+        return Task.CompletedTask;
     }
 
     private SupportedDatabase ParseEmulatedProduct(string connStr)

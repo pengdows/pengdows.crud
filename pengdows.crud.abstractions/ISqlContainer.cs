@@ -3,6 +3,7 @@
 using System.Data;
 using System.Data.Common;
 using System.Text;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
@@ -15,7 +16,7 @@ namespace pengdows.crud;
 /// Represents a composable, parameterized SQL container that supports dynamic query building,
 /// safe parameter binding, and execution in the context of a tracked database connection.
 /// </summary>
-public interface ISqlContainer : ISafeAsyncDisposableBase
+public interface ISqlContainer :ISafeAsyncDisposableBase
 {
     /// <summary>
     /// Gets the <see cref="StringBuilder"/> used to compose the SQL query.
