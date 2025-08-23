@@ -62,6 +62,7 @@ public static class SqlDialectFactory
             SupportedDatabase.Sqlite => new SqliteDialect(factory, logger),
             SupportedDatabase.Oracle => new OracleDialect(factory, logger),
             SupportedDatabase.Firebird => new FirebirdDialect(factory, logger),
+            SupportedDatabase.DuckDb => new DuckDbDialect(factory, logger),
             _ => throw new ArgumentException($"Unsupported database type: {databaseType}")
         };
     }
