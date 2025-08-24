@@ -93,7 +93,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             TypeCoercionHelper.Logger =
                 _loggerFactory.CreateLogger(nameof(TypeCoercionHelper));
             ReadWriteMode = configuration.ReadWriteMode;
-            TypeMapRegistry = typeMapRegistry ?? new TypeMapRegistry();
+            TypeMapRegistry = new TypeMapRegistry();
             ConnectionMode = configuration.DbMode;
             _factory = factory ?? throw new NullReferenceException(nameof(factory));
             _setDefaultSearchPath = configuration.SetDefaultSearchPath;
