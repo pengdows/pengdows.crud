@@ -19,7 +19,7 @@ public class User
     [Id(false)]
     [Column("Id", DbType.Int32)]
     public int Id { get; set; }
-    [PrimaryKey]
+    [PrimaryKey(1)]
     [Column("Name", DbType.String)]
     public string Name { get; set; } = string.Empty;
 

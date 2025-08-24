@@ -29,11 +29,11 @@ public class SingleIdGuardTests : SqlLiteContextTestBase
     [Table("Composite")]
     private class CompositeEntity
     {
-        [PrimaryKey]
+        [PrimaryKey(1)]
         [Column("Key1", DbType.Int32)]
         public int Key1 { get; set; }
 
-        [PrimaryKey]
+        [PrimaryKey(2)]
         [Column("Key2", DbType.Int32)]
         public int Key2 { get; set; }
     }

@@ -21,6 +21,17 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
         Assert.StartsWith("INSERT INTO", sql, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void BuildUpsert_CompositeKeys_ListAllInConflictClause()
+    {
+        TypeMap.Register<CompositeKeyEntity>();
+        var helper = new EntityHelper<CompositeKeyEntity, int>(Context);
+        var entity = new CompositeKeyEntity { Key1 = 1, Key2 = 2, Value = "v" };
+        var sc = helper.BuildUpsert(entity);
+        var sql = sc.Query.ToString();
+        Assert.Contains("ON CONFLICT (\"Key1\", \"Key2\")", sql);
+    }
+
     [Fact(Skip = "PostgreSQL version-specific logic requires more complex setup beyond FakeDb capabilities")]
     public void BuildUpsert_UsesMerge_ForPostgres15()
     {

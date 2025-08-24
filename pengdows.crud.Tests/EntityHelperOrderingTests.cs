@@ -50,10 +50,8 @@ public class EntityHelperOrderingTests : SqlLiteContextTestBase
     [Fact]
     public void BuildWhereByPrimaryKey_NoKeys_Throws()
     {
-        TypeMap.Register<DefaultEntity>();
-        var helper = new EntityHelper<DefaultEntity, int>(Context);
-        var sc = Context.CreateSqlContainer();
-        Assert.Throws<Exception>(() => helper.BuildWhereByPrimaryKey(new[] { new DefaultEntity { A = 1, B = 2 } }, sc));
+        var registry = new TypeMapRegistry();
+        Assert.Throws<InvalidOperationException>(() => registry.Register<NoKeyEntity>());
     }
 
     [Table("Ordered")]
@@ -71,11 +69,22 @@ public class EntityHelperOrderingTests : SqlLiteContextTestBase
     [Table("Default")]
     private class DefaultEntity
     {
+        [Id]
         [Column("B", DbType.Int32)]
         public int B { get; set; }
 
         [Column("A", DbType.Int32)]
         public int A { get; set; }
+    }
+
+    [Table("NoKey")]
+    private class NoKeyEntity
+    {
+        [Column("A", DbType.Int32)]
+        public int A { get; set; }
+
+        [Column("B", DbType.Int32)]
+        public int B { get; set; }
     }
 }
 

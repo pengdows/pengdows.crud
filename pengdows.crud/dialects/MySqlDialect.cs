@@ -54,4 +54,9 @@ public class MySqlDialect : SqlDialect
             _ => SqlStandardLevel.Sql92
         };
     }
+
+    public override string UpsertIncomingColumn(string columnName)
+    {
+        return $"VALUES({WrapObjectName(columnName)})";
+    }
 }

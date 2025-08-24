@@ -34,6 +34,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
 
     public int ParameterCount => _parameters.Count;
 
+    public bool HasWhereAppended { get; set; }
+
     public string QuotePrefix => _dialect.QuotePrefix;
 
     public string QuoteSuffix => _dialect.QuoteSuffix;

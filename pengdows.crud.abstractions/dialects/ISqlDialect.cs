@@ -66,6 +66,7 @@ public interface ISqlDialect
     string WrapObjectName(string name);
     string MakeParameterName(string parameterName);
     string MakeParameterName(DbParameter dbParameter);
+    string UpsertIncomingColumn(string columnName);
     DbParameter CreateDbParameter<T>(string? name, DbType type, T value);
     DbParameter CreateDbParameter<T>(DbType type, T value);
     string GetVersionQuery();

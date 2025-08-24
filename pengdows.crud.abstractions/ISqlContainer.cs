@@ -29,6 +29,11 @@ public interface ISqlContainer :ISafeAsyncDisposableBase
     int ParameterCount { get; }
 
     /// <summary>
+    /// Indicates whether a WHERE clause has already been appended to the query.
+    /// </summary>
+    bool HasWhereAppended { get; set; }
+
+    /// <summary>
     /// Prefix used for quoting identifiers.
     /// </summary>
     string QuotePrefix { get; }
