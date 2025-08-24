@@ -34,14 +34,8 @@ await using (var liteDb = new DatabaseContext("Data Source=mydb.sqlite", SqliteF
     await lite.RunTest();
     liteDb.Dispose();
 }
-
-// await using (var duck = new DatabaseContext("Server=localhost;Port=54321;Database=duckdb;Pooling=true;",))
-//                DbProviderFactoryFinder.GetFactory("DuckDB.Data.DuckDBClient.DuckDBProviderFactory")!,
-//                host.Services.GetRequiredService<ITypeMapRegistry>()))
-// {
-//     var d = new TestProvider(duck, host.Services);
-//     await d.RunTest();
-// }
+await using var duck = new DuckDbTestContainer();
+await duck.RunTestWithContainerAsync<TestProvider>(host.Services, (db, sp) => new TestProvider(db, sp));
 // var cs = $"DataSource=localhost;Port=5000;Database={0};Uid=sa;Pwd=MyStr0ngP@ssw0rd;";
 //
 // // wait for ASE to be ready

@@ -110,13 +110,22 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
                 _dialect.ApplyConnectionSettings(initialConnection);
             }
 
-            if (_dataSourceInfo.Product == SupportedDatabase.Sqlite)
+            switch (_dataSourceInfo.Product)
             {
-                var csb = GetFactoryConnectionStringBuilder(string.Empty);
-                var ds = csb["Data Source"] as string;
-                ConnectionMode = ":memory:" == ds
-                    ? DbMode.SingleConnection
-                    : DbMode.SingleWriter;
+                case SupportedDatabase.Sqlite:
+                case SupportedDatabase.DuckDb:
+                {
+                    var csb = GetFactoryConnectionStringBuilder(string.Empty);
+                    var ds = csb["Data Source"] as string;
+                    ConnectionMode = ":memory:" == ds
+                        ? DbMode.SingleConnection
+                        : DbMode.SingleWriter;
+                    break;
+                }
+                default:
+                {
+                    break;
+                }
             }
 
             _isolationResolver = new IsolationResolver(Product, RCSIEnabled);

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Moq;
 using pengdows.crud.enums;
@@ -127,19 +128,84 @@ public class ConnectionStrategyTests
     }
 
     [Fact]
-    public void KeepAliveStrategy_DisposesConnection()
+    public void KeepAliveStrategy_ReleasingNonSentinel_Disposes()
     {
-        var mock = new Mock<ITrackedConnection>();
-        var strategy = new KeepAliveConnectionStrategy(() => mock.Object);
+        var sentinel = new Mock<ITrackedConnection>();
+        sentinel.Setup(c => c.Open());
+        var other = new Mock<ITrackedConnection>();
+        var queue = new Queue<ITrackedConnection>(new[] { sentinel.Object, other.Object });
+        var strategy = new KeepAliveConnectionStrategy(() => queue.Dequeue());
         var conn = strategy.GetConnection(ExecutionType.Read);
         strategy.ReleaseConnection(conn);
-        mock.Verify(c => c.Dispose(), Times.Once);
+        other.Verify(c => c.Dispose(), Times.Once);
+        sentinel.Verify(c => c.Dispose(), Times.Never);
     }
 
     [Fact]
-    public void KeepAliveStrategy_CloseNull_DoesNothing()
+    public void KeepAliveStrategy_ReleasingSentinel_DoesNotDispose()
     {
-        var strategy = new KeepAliveConnectionStrategy(() => new Mock<ITrackedConnection>().Object);
+        var sentinel = new Mock<ITrackedConnection>();
+        sentinel.Setup(c => c.Open());
+        var strategy = new KeepAliveConnectionStrategy(() => sentinel.Object);
+        strategy.ReleaseConnection(sentinel.Object);
+        sentinel.Verify(c => c.Dispose(), Times.Never);
+    }
+
+    [Fact]
+    public void KeepAliveStrategy_Dispose_DisposesSentinelOnce()
+    {
+        var sentinel = new Mock<ITrackedConnection>();
+        sentinel.Setup(c => c.Open());
+        var strategy = new KeepAliveConnectionStrategy(() => sentinel.Object);
+        strategy.Dispose();
+        strategy.Dispose();
+        sentinel.Verify(c => c.Dispose(), Times.Once);
+    }
+
+    [Fact]
+    public async Task KeepAliveStrategy_ReleaseConnectionAsync_DisposesAsync()
+    {
+        var sentinel = new Mock<ITrackedConnection>();
+        sentinel.Setup(c => c.Open());
+        sentinel.As<IAsyncDisposable>().Setup(d => d.DisposeAsync()).Returns(ValueTask.CompletedTask);
+        var other = new Mock<ITrackedConnection>();
+        other.As<IAsyncDisposable>().Setup(d => d.DisposeAsync()).Returns(ValueTask.CompletedTask).Verifiable();
+        var queue = new Queue<ITrackedConnection>(new[] { sentinel.Object, other.Object });
+        var strategy = new KeepAliveConnectionStrategy(() => queue.Dequeue());
+        var conn = strategy.GetConnection(ExecutionType.Read);
+        await strategy.ReleaseConnectionAsync(conn);
+        other.As<IAsyncDisposable>().Verify(d => d.DisposeAsync(), Times.Once);
+        sentinel.As<IAsyncDisposable>().Verify(d => d.DisposeAsync(), Times.Never);
+        sentinel.Verify(c => c.Dispose(), Times.Never);
+    }
+
+    [Fact]
+    public async Task KeepAliveStrategy_ReleaseConnectionAsync_SentinelNotDisposed()
+    {
+        var sentinel = new Mock<ITrackedConnection>();
+        sentinel.Setup(c => c.Open());
+        sentinel.As<IAsyncDisposable>().Setup(d => d.DisposeAsync()).Returns(ValueTask.CompletedTask);
+        var strategy = new KeepAliveConnectionStrategy(() => sentinel.Object);
+        await strategy.ReleaseConnectionAsync(sentinel.Object);
+        sentinel.As<IAsyncDisposable>().Verify(d => d.DisposeAsync(), Times.Never);
+        sentinel.Verify(c => c.Dispose(), Times.Never);
+    }
+
+    [Fact]
+    public async Task KeepAliveStrategy_ReleaseConnectionAsync_Null_DoesNothing()
+    {
+        var sentinel = new Mock<ITrackedConnection>();
+        sentinel.Setup(c => c.Open());
+        var strategy = new KeepAliveConnectionStrategy(() => sentinel.Object);
+        await strategy.ReleaseConnectionAsync(null);
+    }
+
+    [Fact]
+    public void KeepAliveStrategy_ReleaseConnection_Null_DoesNothing()
+    {
+        var sentinel = new Mock<ITrackedConnection>();
+        sentinel.Setup(c => c.Open());
+        var strategy = new KeepAliveConnectionStrategy(() => sentinel.Object);
         strategy.ReleaseConnection(null);
     }
 
