@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.FakeDb;
+using pengdows.crud.Tests.Mocks;
 using pengdows.crud.connection;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
@@ -199,6 +200,44 @@ public class TransactionContextTests
         var context = CreateContext(SupportedDatabase.Sqlite);
         using var tx = context.BeginTransaction();
         Assert.Throws<NullReferenceException>(() => tx.MakeParameterName((DbParameter)null!));
+    }
+
+    [Fact]
+    public void MakeParameterName_String_DelegatesToContext()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        using var tx = context.BeginTransaction();
+        Assert.Equal(context.MakeParameterName("p"), tx.MakeParameterName("p"));
+    }
+
+    [Fact]
+    public void MakeParameterName_NullString_ReturnsMarker()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        using var tx = context.BeginTransaction();
+        Assert.Equal(context.DataSourceInfo.ParameterMarker, tx.MakeParameterName((string)null));
+    }
+
+    [Fact]
+    public void CreateDbParameter_DelegatesToContext()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        using var tx = context.BeginTransaction();
+        var p = tx.CreateDbParameter("p", DbType.Int32, 1);
+
+        Assert.Equal("p", p.ParameterName);
+        Assert.Equal(DbType.Int32, p.DbType);
+        Assert.Equal(1, p.Value);
+    }
+
+    [Fact]
+    public void CreateDbParameter_FactoryReturnsNull_Throws()
+    {
+        var factory = new NullParameterFactory();
+        var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory);
+        using var tx = ctx.BeginTransaction();
+
+        Assert.Throws<InvalidOperationException>(() => tx.CreateDbParameter("p", DbType.Int32, 1));
     }
 
     [Theory]

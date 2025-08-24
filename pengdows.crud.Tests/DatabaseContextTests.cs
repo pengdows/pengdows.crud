@@ -11,6 +11,7 @@ using Moq;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.FakeDb;
+using pengdows.crud.Tests.Mocks;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
 using Xunit;
@@ -111,6 +112,15 @@ public class DatabaseContextTests
         Assert.Equal("p1", result.ParameterName);
         Assert.Equal(DbType.Int32, result.DbType);
         Assert.Equal(123, result.Value);
+    }
+
+    [Fact]
+    public void CreateDbParameter_FactoryReturnsNull_Throws()
+    {
+        var factory = new NullParameterFactory();
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory);
+
+        Assert.Throws<InvalidOperationException>(() => context.CreateDbParameter("p", DbType.Int32, 1));
     }
 
     [Theory]
@@ -310,6 +320,25 @@ public class DatabaseContextTests
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
         var name = context.MakeParameterName("foo");
         Assert.StartsWith(context.DataSourceInfo.ParameterMarker, name);
+    }
+
+    [Fact]
+    public void MakeParameterName_DbParameter_UsesMarker()
+    {
+        var product = SupportedDatabase.PostgreSql;
+        var factory = new FakeDbFactory(product);
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
+        var p = context.CreateDbParameter("p", DbType.Int32, 1);
+        var name = context.MakeParameterName(p);
+        Assert.StartsWith(context.DataSourceInfo.ParameterMarker, name);
+    }
+
+    [Fact]
+    public void MakeParameterName_NullString_ReturnsMarker()
+    {
+        var factory = new FakeDbFactory(SupportedDatabase.PostgreSql);
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=PostgreSql", factory);
+        Assert.Equal(context.DataSourceInfo.ParameterMarker, context.MakeParameterName((string)null));
     }
 
     [Fact]
