@@ -18,12 +18,13 @@ public class BuildWhereTests : SqlLiteContextTestBase
     public void BuildWhere_WithExistingClause_AppendsAnd()
     {
         var sc = Context.CreateSqlContainer("SELECT 1 WHERE 1=1");
+        sc.HasWhereAppended = true;
         var wrapped = Context.WrapObjectName("Id");
-        _helper.BuildWhere(wrapped, new int?[] { 1, null }, sc);
+        _helper.BuildWhere(wrapped, new int?[] { 1, 2 }, sc);
         var sql = sc.Query.ToString();
-        Assert.Contains("AND (", sql);
+        Assert.Contains("AND", sql);
         Assert.Contains("IN (", sql);
-        Assert.Contains("IS NULL", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("IS NULL", sql, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

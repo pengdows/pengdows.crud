@@ -97,11 +97,86 @@ public class TypeMapRegistryTests
     }
 
     [Fact]
-    public void GetTableInfo_DefaultOrdinalIsZero()
+    public void GetTableInfo_AutoAssignsOrdinalWhenZero()
     {
         var registry = new TypeMapRegistry();
         var info = registry.GetTableInfo<MyEntity>();
-        Assert.All(info.Columns.Values, c => Assert.Equal(0, c.Ordinal));
+        var ordinals = info.Columns.Values.Select(c => c.Ordinal).ToList();
+        Assert.Equal(new[] { 1 }, ordinals);
+    }
+
+    [Fact]
+    public void GetTableInfo_SucceedsWithPrimaryKeysOnly()
+    {
+        var registry = new TypeMapRegistry();
+        var info = registry.GetTableInfo<PkOnlyEntity>();
+        Assert.NotNull(info);
+    }
+
+    [Fact]
+    public void GetTableInfo_ThrowsIfNoKeyDefined()
+    {
+        var registry = new TypeMapRegistry();
+        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<NoKeyEntity>());
+    }
+
+    [Fact]
+    public void GetTableInfo_SucceedsWithEnumColumn()
+    {
+        var registry = new TypeMapRegistry();
+        var info = registry.GetTableInfo<EnumValidEntity>();
+        Assert.True(info.Columns["State"].IsEnum);
+    }
+
+    [Fact]
+    public void GetTableInfo_ThrowsIfEnumColumnOnNonEnum()
+    {
+        var registry = new TypeMapRegistry();
+        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<EnumAttrOnNonEnum>());
+    }
+
+    [Fact]
+    public void GetTableInfo_ThrowsIfEnumPropertyMissingEnumColumn()
+    {
+        var registry = new TypeMapRegistry();
+        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<EnumMissingAttr>());
+    }
+
+    [Fact]
+    public void GetTableInfo_SucceedsWithJsonString()
+    {
+        var registry = new TypeMapRegistry();
+        var info = registry.GetTableInfo<JsonValidEntity>();
+        Assert.True(info.Columns["Data"].IsJsonType);
+    }
+
+    [Fact]
+    public void GetTableInfo_ThrowsIfJsonNotString()
+    {
+        var registry = new TypeMapRegistry();
+        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<JsonInvalidEntity>());
+    }
+
+    [Fact]
+    public void GetTableInfo_ThrowsOnDuplicateColumnName()
+    {
+        var registry = new TypeMapRegistry();
+        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<DuplicateColumns>());
+    }
+
+    [Fact]
+    public void GetTableInfo_ThrowsOnInvalidPrimaryKeyOrder()
+    {
+        var registry = new TypeMapRegistry();
+        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<BadPkOrder>());
+        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<ZeroPkOrder>());
+    }
+
+    [Fact]
+    public void GetTableInfo_ThrowsOnDuplicateOrdinal()
+    {
+        var registry = new TypeMapRegistry();
+        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<DuplicateOrdinalEntity>());
     }
 
     [Table("MultipleVersions")]
@@ -116,7 +191,7 @@ public class TypeMapRegistryTests
     private class IdWithPrimaryKey
     {
         [Id]
-        [PrimaryKey]
+        [PrimaryKey(1)]
         [Column("Id", DbType.Int32)]
         public int Id { get; set; }
     }
@@ -155,5 +230,127 @@ public class TypeMapRegistryTests
         [PrimaryKey(1)]
         [Column("A", DbType.Int32, 1)]
         public int A { get; set; }
+    }
+
+    [Table("PkOnly")]
+    private class PkOnlyEntity
+    {
+        [PrimaryKey(1)]
+        [Column("A", DbType.Int32)]
+        public int A { get; set; }
+    }
+
+    [Table("NoKey")]
+    private class NoKeyEntity
+    {
+        [Column("A", DbType.Int32)]
+        public int A { get; set; }
+    }
+
+    private enum SampleEnum
+    {
+        One,
+        Two
+    }
+
+    [Table("EnumValid")]
+    private class EnumValidEntity
+    {
+        [Id]
+        [Column("Id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [Column("State", DbType.Int32)]
+        [EnumColumn(typeof(SampleEnum))]
+        public SampleEnum State { get; set; }
+    }
+
+    [Table("EnumAttrOnNonEnum")]
+    private class EnumAttrOnNonEnum
+    {
+        [Id]
+        [Column("Id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [Column("Name", DbType.String)]
+        [EnumColumn(typeof(SampleEnum))]
+        public string Name { get; set; } = string.Empty;
+    }
+
+    [Table("EnumMissingAttr")]
+    private class EnumMissingAttr
+    {
+        [Id]
+        [Column("Id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [Column("State", DbType.Int32)]
+        public SampleEnum State { get; set; }
+    }
+
+    [Table("JsonValid")]
+    private class JsonValidEntity
+    {
+        [Id]
+        [Column("Id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [Column("Data", DbType.String)]
+        [Json]
+        public object Data { get; set; } = new();
+    }
+
+    [Table("JsonInvalid")]
+    private class JsonInvalidEntity
+    {
+        [Id]
+        [Column("Id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [Column("Data", DbType.Int32)]
+        [Json]
+        public int Data { get; set; }
+    }
+
+    [Table("DuplicateColumns")]
+    private class DuplicateColumns
+    {
+        [Id]
+        [Column("Name", DbType.String)]
+        public string Name1 { get; set; } = string.Empty;
+
+        [Column("name", DbType.String)]
+        public string Name2 { get; set; } = string.Empty;
+    }
+
+    [Table("BadPkOrder")]
+    private class BadPkOrder
+    {
+        [PrimaryKey(1)]
+        [Column("A", DbType.Int32)]
+        public int A { get; set; }
+
+        [PrimaryKey(1)]
+        [Column("B", DbType.Int32)]
+        public int B { get; set; }
+    }
+
+    [Table("ZeroPkOrder")]
+    private class ZeroPkOrder
+    {
+        [PrimaryKey(0)]
+        [Column("A", DbType.Int32)]
+        public int A { get; set; }
+    }
+
+    [Table("DuplicateOrdinal")]
+    private class DuplicateOrdinalEntity
+    {
+        [Id]
+        [Column("A", DbType.Int32, 1)]
+        public int A { get; set; }
+
+        [Column("B", DbType.Int32, 1)]
+        public int B { get; set; }
     }
 }

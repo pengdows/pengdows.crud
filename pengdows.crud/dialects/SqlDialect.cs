@@ -167,6 +167,11 @@ public abstract class SqlDialect:ISqlDialect
         return MakeParameterName(dbParameter.ParameterName);
     }
 
+    public virtual string UpsertIncomingColumn(string columnName)
+    {
+        return $"EXCLUDED.{WrapObjectName(columnName)}";
+    }
+
     public virtual DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
         var p = Factory.CreateParameter() ?? throw new InvalidOperationException("Failed to create parameter.");

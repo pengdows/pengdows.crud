@@ -1,8 +1,10 @@
+using System;
+
 namespace pengdows.crud;
 
 public class TableInfo : ITableInfo
 {
-    public Dictionary<string, IColumnInfo> Columns { get; } = new();
+    public Dictionary<string, IColumnInfo> Columns { get; } = new(StringComparer.OrdinalIgnoreCase);
     public string Schema { get; set; }
     public string Name { get; set; }
     public IColumnInfo Id { get; set; }

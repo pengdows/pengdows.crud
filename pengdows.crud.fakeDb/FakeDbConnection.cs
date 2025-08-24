@@ -108,8 +108,13 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
 
     public override ConnectionState State => _state;
 
+    public int OpenCount { get; private set; }
+
+    public int OpenAsyncCount { get; private set; }
+
     public override void Open()
     {
+        OpenCount++;
         ParseEmulatedProduct(ConnectionString);
         var original = _state;
 
@@ -149,6 +154,7 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
 
     public override Task OpenAsync(CancellationToken cancellationToken)
     {
+        OpenAsyncCount++;
         Open();
         return Task.CompletedTask;
     }

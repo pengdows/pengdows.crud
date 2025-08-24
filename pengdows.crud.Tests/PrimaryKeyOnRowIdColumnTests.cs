@@ -30,7 +30,7 @@ public class PrimaryKeyOnRowIdColumnTests
     [Table("test_table")]
     private class TestClass
     {
-        [PrimaryKey]
+        [PrimaryKey(1)]
         [Id]
         [Column("column_name", DbType.String)]
         public string ColumnName { get; set; }
