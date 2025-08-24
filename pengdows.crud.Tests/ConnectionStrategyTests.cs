@@ -163,6 +163,19 @@ public class ConnectionStrategyTests
     }
 
     [Fact]
+    public async Task KeepAliveStrategy_DisposeAsync_DisposesSentinelAsyncOnce()
+    {
+        var sentinel = new Mock<ITrackedConnection>();
+        sentinel.Setup(c => c.Open());
+        sentinel.Setup(c => c.DisposeAsync()).Returns(ValueTask.CompletedTask).Verifiable();
+        var strategy = new KeepAliveConnectionStrategy(() => sentinel.Object);
+        await strategy.DisposeAsync();
+        await strategy.DisposeAsync();
+        sentinel.Verify(c => c.DisposeAsync(), Times.Once);
+        sentinel.Verify(c => c.Dispose(), Times.Never);
+    }
+
+    [Fact]
     public async Task KeepAliveStrategy_ReleaseConnectionAsync_DisposesAsync()
     {
         var sentinel = new Mock<ITrackedConnection>();
@@ -175,6 +188,23 @@ public class ConnectionStrategyTests
         var conn = strategy.GetConnection(ExecutionType.Read);
         await strategy.ReleaseConnectionAsync(conn);
         other.As<IAsyncDisposable>().Verify(d => d.DisposeAsync(), Times.Once);
+        sentinel.As<IAsyncDisposable>().Verify(d => d.DisposeAsync(), Times.Never);
+        sentinel.Verify(c => c.Dispose(), Times.Never);
+    }
+
+    [Fact]
+    public async Task KeepAliveStrategy_ReleaseConnectionAsync_DisposesSyncConnection()
+    {
+        var sentinel = new Mock<ITrackedConnection>();
+        sentinel.Setup(c => c.Open());
+        sentinel.As<IAsyncDisposable>().Setup(d => d.DisposeAsync()).Returns(ValueTask.CompletedTask);
+        var other = new Mock<ITrackedConnection>();
+        var queue = new Queue<ITrackedConnection>(new[] { sentinel.Object, other.Object });
+        var strategy = new KeepAliveConnectionStrategy(() => queue.Dequeue());
+        var conn = strategy.GetConnection(ExecutionType.Read);
+        Assert.False(conn is IAsyncDisposable);
+        await strategy.ReleaseConnectionAsync(conn);
+        other.Verify(c => c.Dispose(), Times.Once);
         sentinel.As<IAsyncDisposable>().Verify(d => d.DisposeAsync(), Times.Never);
         sentinel.Verify(c => c.Dispose(), Times.Never);
     }
