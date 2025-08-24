@@ -242,6 +242,22 @@ public class DatabaseContextTests
     }
 
     [Fact]
+    public void DuckDbInMemory_SetsSingleConnectionMode()
+    {
+        var factory = new FakeDbFactory(SupportedDatabase.DuckDb);
+        using var context = new DatabaseContext("Data Source=:memory:;EmulatedProduct=DuckDb", factory);
+        Assert.Equal(DbMode.SingleConnection, context.ConnectionMode);
+    }
+
+    [Fact]
+    public void DuckDbFile_SetsSingleWriterMode()
+    {
+        var factory = new FakeDbFactory(SupportedDatabase.DuckDb);
+        using var context = new DatabaseContext("Data Source=test;EmulatedProduct=DuckDb", factory);
+        Assert.Equal(DbMode.SingleWriter, context.ConnectionMode);
+    }
+
+    [Fact]
     public void BeginTransaction_ReadOnly_InvalidIsolation_Throws()
     {
         var product = SupportedDatabase.Sqlite;
