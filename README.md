@@ -116,7 +116,8 @@ Instead, it helps you write **real SQL** that's:
 
 Topics include:
 
-- `EntityHelper<TEntity, TRowID>`
+ - `EntityHelper<TEntity, TRowID>`
+ - [Creating an Entity for EntityHelper](docs/creating-an-entity.md)
 - `SqlContainer`
 - `DbMode` and connection management
 - Audit and UTC logging
