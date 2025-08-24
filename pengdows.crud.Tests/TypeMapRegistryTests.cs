@@ -129,17 +129,23 @@ public class TypeMapRegistryTests
     }
 
     [Fact]
-    public void GetTableInfo_ThrowsIfEnumColumnOnNonEnum()
+    public void GetTableInfo_AllowsEnumColumnOnNonEnum()
     {
         var registry = new TypeMapRegistry();
-        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<EnumAttrOnNonEnum>());
+        var info = registry.GetTableInfo<EnumAttrOnNonEnum>();
+        var propType = typeof(EnumAttrOnNonEnum).GetProperty("Name")?.PropertyType;
+        Assert.False(propType?.IsEnum);
+        Assert.True(info.Columns["Name"].IsEnum);
     }
 
     [Fact]
-    public void GetTableInfo_ThrowsIfEnumPropertyMissingEnumColumn()
+    public void GetTableInfo_AllowsEnumPropertyMissingEnumColumn()
     {
         var registry = new TypeMapRegistry();
-        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<EnumMissingAttr>());
+        var info = registry.GetTableInfo<EnumMissingAttr>();
+        var propType = typeof(EnumMissingAttr).GetProperty("State")?.PropertyType;
+        Assert.True(propType?.IsEnum);
+        Assert.False(info.Columns["State"].IsEnum);
     }
 
     [Fact]
@@ -151,10 +157,12 @@ public class TypeMapRegistryTests
     }
 
     [Fact]
-    public void GetTableInfo_ThrowsIfJsonNotString()
+    public void GetTableInfo_AllowsJsonNotString()
     {
         var registry = new TypeMapRegistry();
-        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<JsonInvalidEntity>());
+        var info = registry.GetTableInfo<JsonInvalidEntity>();
+        Assert.Equal(DbType.Int32, info.Columns["Data"].DbType);
+        Assert.True(info.Columns["Data"].IsJsonType);
     }
 
     [Fact]

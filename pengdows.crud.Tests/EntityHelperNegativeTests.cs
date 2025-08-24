@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Data.Common;
 using System.Reflection;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using pengdows.crud.attributes;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;
@@ -41,21 +43,30 @@ public class EntityHelperNegativeTests : SqlLiteContextTestBase
     }
 
     [Fact]
-    public async Task BuildUpdateAsync_NoChanges_Throws()
+    public async Task BuildUpdateAsync_NoAudit_NoChanges_Throws()
     {
-        await BuildTestTable();
-        var newEntity = new TestEntity { Name = Guid.NewGuid().ToString() };
-        await helper.CreateAsync(newEntity, Context);
-        var loaded = (await helper.LoadListAsync(helper.BuildBaseRetrieve("a")))[0];
+        TypeMap.Register<NoAuditEntity>();
+        var noAuditHelper = new EntityHelper<NoAuditEntity, int>(Context);
+        await BuildNoAuditTable();
+        var e = new NoAuditEntity { Name = Guid.NewGuid().ToString() };
+        await noAuditHelper.CreateAsync(e, Context);
+        var loaded = (await noAuditHelper.LoadListAsync(noAuditHelper.BuildBaseRetrieve("a")))[0];
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await helper.BuildUpdateAsync(loaded, true));
+            await noAuditHelper.BuildUpdateAsync(loaded, true));
     }
 
     [Fact]
     public void BuildWhereByPrimaryKey_NullList_Throws()
     {
         var sc = Context.CreateSqlContainer();
-        Assert.Throws<ArgumentException>(() => helper.BuildWhereByPrimaryKey(null, sc));
+        Assert.Throws<ArgumentException>("listOfObjects", () => helper.BuildWhereByPrimaryKey(null, sc));
+    }
+
+    [Fact]
+    public void BuildWhereByPrimaryKey_EmptyList_Throws()
+    {
+        var sc = Context.CreateSqlContainer();
+        Assert.Throws<ArgumentException>("listOfObjects", () => helper.BuildWhereByPrimaryKey(new List<TestEntity>(), sc));
     }
 
     [Fact]
@@ -111,5 +122,26 @@ public class EntityHelperNegativeTests : SqlLiteContextTestBase
 {0}Version{1} INTEGER NOT NULL DEFAULT 0)", qp, qs);
         var container = Context.CreateSqlContainer(sql);
         await container.ExecuteNonQueryAsync();
+    }
+
+    private async Task BuildNoAuditTable()
+    {
+        var qp = Context.QuotePrefix;
+        var qs = Context.QuoteSuffix;
+        var sql = string.Format(
+            @"CREATE TABLE IF NOT EXISTS {0}NoAudit{1} ({0}Id{1} INTEGER PRIMARY KEY,{0}Name{1} TEXT NOT NULL)", qp, qs);
+        var container = Context.CreateSqlContainer(sql);
+        await container.ExecuteNonQueryAsync();
+    }
+
+    [Table("NoAudit")]
+    private class NoAuditEntity
+    {
+        [Id(false)]
+        [Column("Id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [Column("Name", DbType.String)]
+        public string Name { get; set; } = string.Empty;
     }
 }

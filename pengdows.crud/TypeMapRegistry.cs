@@ -178,25 +178,6 @@ public class TypeMapRegistry : ITypeMapRegistry
             }
         }
 
-        foreach (var c in tableInfo.Columns.Values)
-        {
-            var propType = c.PropertyInfo.PropertyType;
-            if (c.IsEnum && !propType.IsEnum)
-            {
-                throw new InvalidOperationException($"[EnumColumn] on non-enum property {type.Name}.{c.PropertyInfo.Name}");
-            }
-
-            if (!c.IsEnum && propType.IsEnum)
-            {
-                throw new InvalidOperationException($"Enum property {type.Name}.{c.PropertyInfo.Name} must be annotated with [EnumColumn].");
-            }
-
-            if (c.IsJsonType && c.DbType != DbType.String)
-            {
-                throw new InvalidOperationException($"[Json] column {type.Name}.{c.PropertyInfo.Name} must use DbType.String or a JSON-capable DbType.");
-            }
-        }
-
         tableInfo.HasAuditColumns = tableInfo.CreatedBy != null ||
                                     tableInfo.CreatedOn != null ||
                                     tableInfo.LastUpdatedBy != null ||

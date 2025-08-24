@@ -30,15 +30,15 @@ public class UpdateDeleteAsyncTests : SqlLiteContextTestBase
     }
 
     [Fact]
-    public async Task UpdateAsync_WhenNoChange_ReturnsZero()
+    public async Task UpdateAsync_AuditOnly_ReturnsOne()
     {
         var e = new TestEntity { Name = Guid.NewGuid().ToString() };
         await helper.CreateAsync(e, Context);
         var loaded = (await helper.LoadListAsync(helper.BuildBaseRetrieve("a"))).First();
         var originalUpdated = loaded.LastUpdatedOn;
         var count = await helper.UpdateAsync(loaded);
-        Assert.Equal(0, count);
-        Assert.Equal(originalUpdated, loaded.LastUpdatedOn);
+        Assert.Equal(1, count);
+        Assert.NotEqual(originalUpdated, loaded.LastUpdatedOn);
     }
 
     [Fact]
@@ -91,6 +91,32 @@ public class UpdateDeleteAsyncTests : SqlLiteContextTestBase
 
         Assert.NotNull(result);
         Assert.Equal(loaded.Id, result!.Id);
+    }
+
+    [Fact]
+    public async Task RetrieveOneAsync_ByEntity_ReturnsRow()
+    {
+        await BuildTestTable();
+        var entity = new TestEntity { Name = Guid.NewGuid().ToString() };
+        await helper.CreateAsync(entity, Context);
+
+        var loaded = (await helper.LoadListAsync(helper.BuildBaseRetrieve("a"))).First();
+        var result = await helper.RetrieveOneAsync(loaded);
+
+        Assert.NotNull(result);
+        Assert.Equal(loaded.Id, result!.Id);
+    }
+
+    [Fact]
+    public async Task BuildUpdateAsync_AuditOnly_IncludesAuditColumns()
+    {
+        await BuildTestTable();
+        var e = new TestEntity { Name = Guid.NewGuid().ToString() };
+        await helper.CreateAsync(e, Context);
+        var loaded = (await helper.LoadListAsync(helper.BuildBaseRetrieve("a"))).First();
+        var sc = await helper.BuildUpdateAsync(loaded, true);
+        var sql = sc.Query.ToString();
+        Assert.Contains(Context.WrapObjectName("LastUpdatedOn"), sql);
     }
 
     private async Task BuildTestTable()
