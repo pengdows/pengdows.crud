@@ -196,7 +196,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
             conn = _context.GetConnection(ExecutionType.Write, isTransaction);
             await using var connectionLocker = conn.GetLock();
             await connectionLocker.LockAsync().ConfigureAwait(false);
-            cmd = PrepareCommand(conn, commandType, ExecutionType.Write);
+            cmd = await PrepareCommandAsync(conn, commandType, ExecutionType.Write).ConfigureAwait(false);
 
             return await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
         }
@@ -235,7 +235,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
             conn = _context.GetConnection(ExecutionType.Read, isTransaction);
             var connectionLocker = conn.GetLock();
             await connectionLocker.LockAsync().ConfigureAwait(false);
-            cmd = PrepareCommand(conn, commandType, ExecutionType.Read);
+            cmd = await PrepareCommandAsync(conn, commandType, ExecutionType.Read).ConfigureAwait(false);
 
             // unless the databaseContext is in a transaction or SingleConnection mode,
             // a new connection is returned for every READ operation, therefore, we
@@ -275,7 +275,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
     }
 
 
-    private DbCommand PrepareCommand(ITrackedConnection conn, CommandType commandType, ExecutionType executionType)
+    private async Task<DbCommand> PrepareCommandAsync(ITrackedConnection conn, CommandType commandType, ExecutionType executionType)
     {
         if (commandType == CommandType.TableDirect)
         {
@@ -287,7 +287,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
             throw new InvalidOperationException("SQL query is empty.");
         }
 
-        OpenConnection(conn);
+        await OpenConnectionAsync(conn).ConfigureAwait(false);
         var cmd = CreateCommand(conn);
         cmd.CommandType = CommandType.Text;
         _logger.LogInformation("Executing SQL: {Sql}", Query.ToString());
@@ -319,12 +319,14 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
         return cmd;
     }
 
-    private void OpenConnection(ITrackedConnection conn)
+    private Task OpenConnectionAsync(ITrackedConnection conn)
     {
         if (conn.State != ConnectionState.Open)
         {
-            conn.Open();
+            return conn.OpenAsync();
         }
+
+        return Task.CompletedTask;
     }
 
     private void Cleanup(DbCommand? cmd, ITrackedConnection? conn, ExecutionType executionType)
