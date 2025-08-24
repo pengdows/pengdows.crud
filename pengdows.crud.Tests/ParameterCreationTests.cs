@@ -1,3 +1,4 @@
+using System;
 using System.Data;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
