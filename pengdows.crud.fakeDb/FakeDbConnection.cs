@@ -103,7 +103,7 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
         set => _connectionString = value;
     }
 
-    public int ConnectionTimeout { get; }
+    public override int ConnectionTimeout => 0;
     public override string Database => _emulatedProduct?.ToString() ?? string.Empty;
 
     public override ConnectionState State => _state;

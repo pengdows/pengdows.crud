@@ -74,5 +74,27 @@ public class SqlContainerProxyTests : SqlLiteContextTestBase
         Assert.Throws<InvalidOperationException>(() => sc.CreateDbParameter("p", DbType.Int32, 1));
     }
 
+    [Fact]
+    public void CreateDbParameter_WithoutName_DelegatesToDialect()
+    {
+        var sc = Context.CreateSqlContainer();
+        var p = sc.CreateDbParameter(DbType.Int32, 1);
+
+        Assert.False(string.IsNullOrEmpty(p.ParameterName));
+        Assert.Equal(DbType.Int32, p.DbType);
+        Assert.Equal(1, p.Value);
+    }
+
+    [Fact]
+    public void CreateDbParameter_WithoutName_NullValue_UsesDbNull()
+    {
+        var sc = Context.CreateSqlContainer();
+        var p = sc.CreateDbParameter<string>(DbType.String, null);
+
+        Assert.False(string.IsNullOrEmpty(p.ParameterName));
+        Assert.Equal(DbType.String, p.DbType);
+        Assert.Equal(DBNull.Value, p.Value);
+    }
+
     
 }

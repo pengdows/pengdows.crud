@@ -60,6 +60,48 @@ public class SqlContainerTests : SqlLiteContextTestBase
     }
 
     [Fact]
+    public void AddParameterWithValue_DbParameter_Throws()
+    {
+        var container = Context.CreateSqlContainer();
+        var param = new FakeDbParameter();
+
+        Assert.Throws<ArgumentException>(() => container.AddParameterWithValue(DbType.Int32, param));
+    }
+
+    [Fact]
+    public void AddParameter_Null_DoesNothing()
+    {
+        var container = Context.CreateSqlContainer();
+        container.AddParameter(null);
+
+        Assert.Equal(0, container.ParameterCount);
+    }
+
+    [Fact]
+    public void AddParameter_AssignsGeneratedName_WhenMissing()
+    {
+        var container = Context.CreateSqlContainer();
+        var param = new FakeDbParameter { DbType = DbType.Int32, Value = 1 };
+        container.AddParameter(param);
+
+        Assert.False(string.IsNullOrEmpty(param.ParameterName));
+        Assert.Equal(1, container.ParameterCount);
+    }
+
+    [Fact]
+    public void Clear_RemovesQueryAndParameters()
+    {
+        var container = Context.CreateSqlContainer();
+        container.Query.Append("SELECT 1");
+        container.AddParameterWithValue(DbType.Int32, 1);
+
+        container.Clear();
+
+        Assert.Equal(string.Empty, container.Query.ToString());
+        Assert.Equal(0, container.ParameterCount);
+    }
+
+    [Fact]
     public async Task ExecuteNonQueryAsync_InsertsData()
     {
         var qp = Context.QuotePrefix;
@@ -210,5 +252,53 @@ public class SqlContainerTests : SqlLiteContextTestBase
         Assert.NotEqual("[", container.QuotePrefix);
         Assert.NotEqual("]", container.QuoteSuffix);
         Assert.NotEqual("/", container.CompositeIdentifierSeparator);
+    }
+
+    [Fact]
+    public void WrapForStoredProc_ExecStyle_IncludesParameters()
+    {
+        var factory = new FakeDbFactory(SupportedDatabase.SqlServer);
+        var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}", factory);
+        var container = ctx.CreateSqlContainer("dbo.my_proc");
+        var param = container.AddParameterWithValue(DbType.Int32, 1);
+        var expectedName = ctx.MakeParameterName(param);
+
+        var result = container.WrapForStoredProc(ExecutionType.Write);
+
+        Assert.Equal($"EXEC dbo.my_proc {expectedName}", result);
+    }
+
+    [Fact]
+    public void WrapForStoredProc_PostgreSqlRead_UsesSelectSyntax()
+    {
+        var factory = new FakeDbFactory(SupportedDatabase.PostgreSql);
+        var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.PostgreSql}", factory);
+        var container = ctx.CreateSqlContainer("my_proc");
+        var param = container.AddParameterWithValue(DbType.Int32, 1);
+        var expectedName = ctx.MakeParameterName(param);
+
+        var result = container.WrapForStoredProc(ExecutionType.Read);
+
+        Assert.Equal($"SELECT * FROM my_proc({expectedName})", result);
+    }
+
+    [Fact]
+    public void WrapForStoredProc_NoProcedureName_Throws()
+    {
+        var factory = new FakeDbFactory(SupportedDatabase.SqlServer);
+        var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}", factory);
+        var container = ctx.CreateSqlContainer();
+
+        Assert.Throws<InvalidOperationException>(() => container.WrapForStoredProc(ExecutionType.Read));
+    }
+
+    [Fact]
+    public void WrapForStoredProc_UnsupportedStyle_Throws()
+    {
+        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
+        var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}", factory);
+        var container = ctx.CreateSqlContainer("my_proc");
+
+        Assert.Throws<NotSupportedException>(() => container.WrapForStoredProc(ExecutionType.Read));
     }
 }
