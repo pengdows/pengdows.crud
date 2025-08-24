@@ -20,7 +20,6 @@ riderModule.iml
 # Coverage
 TestResults/
 coverage-report/
-coverage.json
 
 .claude/
 
