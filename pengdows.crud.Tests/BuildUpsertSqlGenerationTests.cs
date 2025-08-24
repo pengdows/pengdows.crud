@@ -32,13 +32,4 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
         Assert.Contains("ON CONFLICT (\"Key1\", \"Key2\")", sql);
     }
 
-    [Fact(Skip = "PostgreSQL version-specific logic requires more complex setup beyond FakeDb capabilities")]
-    public void BuildUpsert_UsesMerge_ForPostgres15()
-    {
-        // This test was originally trying to force PostgreSQL 15 behavior using reflection
-        // The proper fix would require a more sophisticated FakeDb that can simulate 
-        // PostgreSQL version-specific dialect behavior, which is beyond the scope of
-        // the current DataSourceInformation architecture refactoring
-        Assert.True(true, "Test skipped: requires PostgreSQL version-specific dialect simulation");
-    }
 }

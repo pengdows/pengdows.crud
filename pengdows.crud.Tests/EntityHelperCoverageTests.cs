@@ -22,16 +22,6 @@ public class EntityHelperCoverageTests
         Assert.Contains("ON DUPLICATE KEY UPDATE", sql, StringComparison.OrdinalIgnoreCase);
     }
 
-    [Fact(Skip = "PostgreSQL version-specific logic requires more complex setup beyond FakeDb capabilities")]
-    public void BuildUpsert_UsesOnConflict_ForPostgres14()
-    {
-        // This test was originally trying to force PostgreSQL 14 behavior using reflection
-        // The proper fix would require a more sophisticated FakeDb that can simulate 
-        // PostgreSQL version-specific dialect behavior, which is beyond the scope of
-        // the current DataSourceInformation architecture refactoring
-        Assert.True(true, "Test skipped: requires PostgreSQL version-specific dialect simulation");
-    }
-
     [Theory]
     [InlineData("PostgreSQL 15.2", true, 15)]
     [InlineData("", false, 0)]
