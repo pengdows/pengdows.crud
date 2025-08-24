@@ -24,7 +24,7 @@ public class DuckDbTestContainerTests
             .BuildServiceProvider();
 
         await using var ctx = await container.GetDatabaseContextAsync(services);
-        Assert.Equal(SupportedDatabase.DuckDb, ctx.Product);
+        Assert.Equal(SupportedDatabase.DuckDB, ctx.Product);
     }
 
     [Fact]

@@ -18,4 +18,6 @@ public interface ITransactionContext : IDatabaseContext
     IsolationLevel IsolationLevel { get; }
     void Commit();
     void Rollback();
+    Task SavepointAsync(string name);
+    Task RollbackToSavepointAsync(string name);
 }

@@ -19,7 +19,7 @@ public class SupportedDatabaseTests
     [InlineData("PostgreSql", SupportedDatabase.PostgreSql)]
     [InlineData("Sqlite", SupportedDatabase.Sqlite)]
     [InlineData("SqlServer", SupportedDatabase.SqlServer)]
-    [InlineData("DuckDb", SupportedDatabase.DuckDb)]
+    [InlineData("DuckDB", SupportedDatabase.DuckDB)]
     [InlineData("Unknown", SupportedDatabase.Unknown)]
     public void EnumParse_ShouldReturnCorrectValue(string input, SupportedDatabase expected)
     {
@@ -49,7 +49,7 @@ public class SupportedDatabaseTests
                 "MariaDb",
                 "MySql",
                 "Sqlite",
-                "DuckDb"
+                "DuckDB"
             },
             names);
     }

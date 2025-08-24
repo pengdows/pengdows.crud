@@ -26,6 +26,7 @@ public class SqliteDialect : SqlDialect
 
     public override bool SupportsInsertOnConflict => true;
     public override bool SupportsMerge => false;
+    public override bool SupportsSavepoints => true;
     public override bool SupportsJsonTypes => IsInitialized && ProductInfo.ParsedVersion >= new Version(3, 45);
     public override bool SupportsWindowFunctions => IsInitialized && ProductInfo.ParsedVersion >= new Version(3, 25);
     public override bool SupportsCommonTableExpressions => IsInitialized && ProductInfo.ParsedVersion >= new Version(3, 8, 3);
@@ -92,5 +93,10 @@ public class SqliteDialect : SqlDialect
         }
 
         return SqlStandardLevel.Sql92;
+    }
+
+    public override bool IsUniqueViolation(DbException ex)
+    {
+        return ex is DbException dbEx && dbEx.ErrorCode == 19;
     }
 }
