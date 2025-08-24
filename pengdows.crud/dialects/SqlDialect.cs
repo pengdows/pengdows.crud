@@ -37,6 +37,7 @@ public abstract class SqlDialect:ISqlDialect
     // Core properties with SQL-92 defaults; override for database-specific behavior
     public abstract SupportedDatabase DatabaseType { get; }
     public virtual string ParameterMarker => "?";
+    public virtual string ParameterMarkerAt(int ordinal) => ParameterMarker;
     public virtual bool SupportsNamedParameters => false;
     public virtual int MaxParameterLimit => 255;
     public virtual int ParameterNameMaxLength => 18;
@@ -96,6 +97,7 @@ public abstract class SqlDialect:ISqlDialect
     // Database-specific extensions (override as needed)
     public virtual bool SupportsInsertOnConflict => false; // PostgreSQL, SQLite extension
     public virtual bool SupportsOnDuplicateKey => false; // MySQL, MariaDB extension
+    public virtual bool SupportsSavepoints => false;
     public virtual bool RequiresStoredProcParameterNameMatch => false;
     public virtual bool SupportsNamespaces => false; // SQL-92 does not require schema support
 
@@ -272,6 +274,11 @@ public abstract class SqlDialect:ISqlDialect
     }
 
     public virtual bool IsReadCommittedSnapshotOn(ITrackedConnection connection)
+    {
+        return false;
+    }
+
+    public virtual bool IsUniqueViolation(DbException ex)
     {
         return false;
     }
@@ -468,7 +475,7 @@ public abstract class SqlDialect:ISqlDialect
 
         if (combined.Contains("duckdb") || combined.Contains("duck db"))
         {
-            return SupportedDatabase.DuckDb;
+            return SupportedDatabase.DuckDB;
         }
 
         return DatabaseType;

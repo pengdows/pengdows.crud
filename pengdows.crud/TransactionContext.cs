@@ -208,6 +208,46 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         CompleteTransactionWithWait(() => _transaction.Rollback(), false);
     }
 
+    public async Task SavepointAsync(string name)
+    {
+        if (!_dialect.SupportsSavepoints)
+        {
+            return;
+        }
+
+        using var cmd = _connection.CreateCommand();
+        cmd.Transaction = _transaction;
+        cmd.CommandText = $"SAVEPOINT {name}";
+        if (cmd is DbCommand db)
+        {
+            await db.ExecuteNonQueryAsync().ConfigureAwait(false);
+        }
+        else
+        {
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    public async Task RollbackToSavepointAsync(string name)
+    {
+        if (!_dialect.SupportsSavepoints)
+        {
+            return;
+        }
+
+        using var cmd = _connection.CreateCommand();
+        cmd.Transaction = _transaction;
+        cmd.CommandText = $"ROLLBACK TO SAVEPOINT {name}";
+        if (cmd is DbCommand db)
+        {
+            await db.ExecuteNonQueryAsync().ConfigureAwait(false);
+        }
+        else
+        {
+            cmd.ExecuteNonQuery();
+        }
+    }
+
     private void CompleteTransactionWithWait(Action action, bool markCommitted)
     {
         _semaphoreSlim.Wait();

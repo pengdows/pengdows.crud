@@ -104,9 +104,9 @@ public class IsolationResolverTests
     }
 
     [Fact]
-    public void GetSupportedLevels_DuckDb()
+    public void GetSupportedLevels_DuckDB()
     {
-        var resolver = new IsolationResolver(SupportedDatabase.DuckDb, false);
+        var resolver = new IsolationResolver(SupportedDatabase.DuckDB, false);
 
         var levels = resolver.GetSupportedLevels().OrderBy(l => l).ToArray();
         var expected = new[] { IsolationLevel.Serializable };
@@ -115,9 +115,9 @@ public class IsolationResolverTests
     }
 
     [Fact]
-    public void Resolve_DuckDb_Mappings()
+    public void Resolve_DuckDB_Mappings()
     {
-        var resolver = new IsolationResolver(SupportedDatabase.DuckDb, false);
+        var resolver = new IsolationResolver(SupportedDatabase.DuckDB, false);
 
         Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
         Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.StrictConsistency));

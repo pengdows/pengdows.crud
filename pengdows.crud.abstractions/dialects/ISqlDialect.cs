@@ -20,6 +20,7 @@ public interface ISqlDialect
 
     SupportedDatabase DatabaseType { get; }
     string ParameterMarker { get; }
+    string ParameterMarkerAt(int ordinal);
     bool SupportsNamedParameters { get; }
     int MaxParameterLimit { get; }
     int ParameterNameMaxLength { get; }
@@ -57,6 +58,7 @@ public interface ISqlDialect
     bool SupportsPropertyGraphQueries { get; }
     bool SupportsInsertOnConflict { get; }
     bool SupportsOnDuplicateKey { get; }
+    bool SupportsSavepoints { get; }
     bool RequiresStoredProcParameterNameMatch { get; }
     bool SupportsNamespaces { get; }
     bool IsFallbackDialect { get; }
@@ -75,6 +77,7 @@ public interface ISqlDialect
     string GetConnectionSessionSettings();
     void ApplyConnectionSettings(IDbConnection connection);
     bool IsReadCommittedSnapshotOn(ITrackedConnection connection);
+    bool IsUniqueViolation(DbException ex);
 
     /// <summary>
     /// Detects database product information from the connection

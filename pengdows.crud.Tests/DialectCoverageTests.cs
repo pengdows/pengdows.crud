@@ -16,7 +16,8 @@ public class DialectCoverageTests
             new MySqlDialect(new FakeDbFactory(SupportedDatabase.MySql), NullLogger<MySqlDialect>.Instance),
             "`",
             true,
-            "@"
+            "@",
+            false
         };
 
         yield return new object[]
@@ -24,15 +25,17 @@ public class DialectCoverageTests
             new OracleDialect(new FakeDbFactory(SupportedDatabase.Oracle), NullLogger<OracleDialect>.Instance),
             "\"",
             true,
-            ":"
+            ":",
+            false
         };
 
         yield return new object[]
         {
-            new DuckDbDialect(new FakeDbFactory(SupportedDatabase.DuckDb), NullLogger<DuckDbDialect>.Instance),
+            new DuckDbDialect(new FakeDbFactory(SupportedDatabase.DuckDB), NullLogger<DuckDbDialect>.Instance),
             "\"",
             true,
-            "$"
+            "$",
+            false
         };
 
         yield return new object[]
@@ -40,7 +43,8 @@ public class DialectCoverageTests
             new Sql92Dialect(new FakeDbFactory(SupportedDatabase.Unknown), NullLogger<Sql92Dialect>.Instance),
             "\"",
             false,
-            "?"
+            "?",
+            false
         };
 
         yield return new object[]
@@ -48,7 +52,8 @@ public class DialectCoverageTests
             new PostgreSqlDialect(new FakeDbFactory(SupportedDatabase.PostgreSql), NullLogger<PostgreSqlDialect>.Instance),
             "\"",
             true,
-            ":"
+            ":",
+            false
         };
 
         yield return new object[]
@@ -56,7 +61,8 @@ public class DialectCoverageTests
             new SqlServerDialect(new FakeDbFactory(SupportedDatabase.SqlServer), NullLogger<SqlServerDialect>.Instance),
             "\"",
             true,
-            "@"
+            "@",
+            false
         };
 
         yield return new object[]
@@ -64,7 +70,8 @@ public class DialectCoverageTests
             new SqliteDialect(new FakeDbFactory(SupportedDatabase.Sqlite), NullLogger<SqliteDialect>.Instance),
             "\"",
             true,
-            "@"
+            "@",
+            true
         };
 
         yield return new object[]
@@ -72,13 +79,14 @@ public class DialectCoverageTests
             new FirebirdDialect(new FakeDbFactory(SupportedDatabase.Firebird), NullLogger<FirebirdDialect>.Instance),
             "\"",
             true,
-            "@"
+            "@",
+            true
         };
     }
 
     [Theory]
     [MemberData(nameof(DialectData))]
-    public void WrapObjectName_WrapsIdentifier(SqlDialect dialect, string quote, bool supportsNamed, string marker)
+    public void WrapObjectName_WrapsIdentifier(SqlDialect dialect, string quote, bool supportsNamed, string marker, bool supportsSavepoints)
     {
         var wrapped = dialect.WrapObjectName("schema.table");
         Assert.Equal($"{quote}schema{quote}.{quote}table{quote}", wrapped);
@@ -87,7 +95,7 @@ public class DialectCoverageTests
 
     [Theory]
     [MemberData(nameof(DialectData))]
-    public void WrapObjectName_Null_ReturnsEmpty(SqlDialect dialect, string quote, bool supportsNamed, string marker)
+    public void WrapObjectName_Null_ReturnsEmpty(SqlDialect dialect, string quote, bool supportsNamed, string marker, bool supportsSavepoints)
     {
         var wrapped = dialect.WrapObjectName(null);
         Assert.Equal(string.Empty, wrapped);
@@ -96,8 +104,8 @@ public class DialectCoverageTests
 
     [Theory]
     [MemberData(nameof(DialectData))]
-    public void MakeParameterName_UsesMarker(SqlDialect dialect, string quote, bool supportsNamed, string marker)
-    {
+    public void MakeParameterName_UsesMarker(SqlDialect dialect, string quote, bool supportsNamed, string marker, bool supportsSavepoints)
+        {
         var name = dialect.MakeParameterName("p");
         if (supportsNamed)
         {
@@ -115,6 +123,21 @@ public class DialectCoverageTests
         {
             Assert.Equal("?", name);
             Assert.NotEqual("?p", name);
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(DialectData))]
+    public void SupportsSavepoints_ReportsCapability(SqlDialect dialect, string quote, bool supportsNamed, string marker, bool supportsSavepoints)
+    {
+        Assert.Equal(supportsSavepoints, dialect.SupportsSavepoints);
+        if (supportsSavepoints)
+        {
+            Assert.True(dialect.SupportsSavepoints);
+        }
+        else
+        {
+            Assert.False(dialect.SupportsSavepoints);
         }
     }
 }

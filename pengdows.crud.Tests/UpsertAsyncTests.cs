@@ -34,12 +34,12 @@ public class UpsertAsyncTests : SqlLiteContextTestBase
         var e = new TestEntity { Name = Guid.NewGuid().ToString() };
         await helper.CreateAsync(e, Context);
         var loaded = (await helper.LoadListAsync(helper.BuildBaseRetrieve("a"))).First();
-        loaded.Name = Guid.NewGuid().ToString();
+        var originalUpdated = loaded.LastUpdatedOn;
 
         var affected = await helper.UpsertAsync(loaded);
         Assert.Equal(1, affected);
         var reloaded = (await helper.LoadListAsync(helper.BuildBaseRetrieve("a"))).First(x => x.Id == loaded.Id);
-        Assert.Equal(loaded.Name, reloaded.Name);
+        Assert.True(reloaded.LastUpdatedOn > originalUpdated);
     }
 
     private async Task BuildTestTable()

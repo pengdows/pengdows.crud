@@ -12,5 +12,5 @@ public enum SupportedDatabase
     MariaDb = 32, // Better than MySQL, but still MySQL-rooted
     MySql = 64, // Historically non-standard, improving over time
     Sqlite = 128, // Minimal subset of SQL; useful, but not standard-compliant 
-    DuckDb = 256 // Lightweight, in-process, with limited SQL support
+    DuckDB = 256 // Lightweight, in-process, with limited SQL support
 }

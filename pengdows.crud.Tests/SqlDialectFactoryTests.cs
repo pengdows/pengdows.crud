@@ -76,11 +76,11 @@ public class SqlDialectFactoryTests
     }
 
     [Fact]
-    public void CreateDialectForType_DuckDb_ReturnsDuckDbDialect()
+    public void CreateDialectForType_DuckDB_ReturnsDuckDbDialect()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.DuckDb);
+        var factory = new FakeDbFactory(SupportedDatabase.DuckDB);
         var dialect = SqlDialectFactory.CreateDialectForType(
-            SupportedDatabase.DuckDb,
+            SupportedDatabase.DuckDB,
             factory,
             NullLogger<SqlDialect>.Instance);
         Assert.IsType<DuckDbDialect>(dialect);

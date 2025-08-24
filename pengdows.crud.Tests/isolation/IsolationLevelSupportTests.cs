@@ -40,7 +40,7 @@ public class IsolationLevelSupportTests
                 IsolationLevel.RepeatableRead,
                 IsolationLevel.Serializable
             },
-            [SupportedDatabase.DuckDb] = new[]
+            [SupportedDatabase.DuckDB] = new[]
             {
                 IsolationLevel.Serializable
             }
@@ -62,7 +62,7 @@ public class IsolationLevelSupportTests
         Assert.Throws<InvalidOperationException>(() =>
             validator.Validate(SupportedDatabase.SqlServer, IsolationLevel.Chaos));
         Assert.Throws<InvalidOperationException>(() =>
-            validator.Validate(SupportedDatabase.DuckDb, IsolationLevel.ReadCommitted));
+            validator.Validate(SupportedDatabase.DuckDB, IsolationLevel.ReadCommitted));
     }
 
     [Fact]
