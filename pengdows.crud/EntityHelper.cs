@@ -50,7 +50,6 @@ public class EntityHelper<TEntity, TRowID> :
     // private readonly IServiceProvider _serviceProvider;
     private ITableInfo _tableInfo;
     private bool _hasAuditColumns;
-    private Type? _userFieldType = null;
 
     private IColumnInfo? _versionColumn;
 
@@ -77,22 +76,12 @@ public class EntityHelper<TEntity, TRowID> :
     private void Initialize(IDatabaseContext databaseContext, EnumParseFailureMode enumParseBehavior)
     {
         _context = databaseContext;
-        _dialect = (databaseContext as ISqlDialectProvider)?.Dialect;
+        _dialect = (databaseContext as ISqlDialectProvider)?.Dialect
+            ?? throw new InvalidOperationException(
+                "IDatabaseContext must implement ISqlDialectProvider and expose a non-null Dialect.");
         _tableInfo = _context.TypeMapRegistry.GetTableInfo<TEntity>() ??
                      throw new InvalidOperationException($"Type {typeof(TEntity).FullName} is not a table.");
         _hasAuditColumns = _tableInfo.HasAuditColumns;
-
-        var propertyInfoPropertyType = _tableInfo.Columns
-            .Values
-            .FirstOrDefault(c =>
-                c.PropertyInfo.GetCustomAttribute<CreatedByAttribute>() != null ||
-                c.PropertyInfo.GetCustomAttribute<LastUpdatedByAttribute>() != null
-            )?.PropertyInfo.PropertyType;
-
-        if (propertyInfoPropertyType != null)
-        {
-            _userFieldType = propertyInfoPropertyType;
-        }
 
         WrappedTableName = (!string.IsNullOrEmpty(_tableInfo.Schema)
                                ? WrapObjectName(_tableInfo.Schema) +
@@ -193,24 +182,7 @@ public class EntityHelper<TEntity, TRowID> :
         var parameters = new List<DbParameter>();
 
         var sc = ctx.CreateSqlContainer();
-        SetAuditFields(objectToCreate, false);
-
-        // Initialize version to 1 if a numeric version column exists and the current value is unset
-        if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
-        {
-            var current = _versionColumn.PropertyInfo.GetValue(objectToCreate);
-            if (current == null || Utils.IsZeroNumeric(current))
-            {
-                var target = Nullable.GetUnderlyingType(_versionColumn.PropertyInfo.PropertyType) ??
-                             _versionColumn.PropertyInfo.PropertyType;
-
-                if (Utils.IsZeroNumeric(Convert.ChangeType(0, target)))
-                {
-                    var one = Convert.ChangeType(1, target);
-                    _versionColumn.PropertyInfo.SetValue(objectToCreate, one);
-                }
-            }
-        }
+        PrepareForInsertOrUpsert(objectToCreate);
 
         foreach (var column in _tableInfo.Columns.Values)
         {
@@ -385,6 +357,8 @@ public class EntityHelper<TEntity, TRowID> :
 
     public Action<object, object?> GetOrCreateSetter(PropertyInfo prop)
     {
+        // The generated setter casts directly; a database NULL assigned to a non-nullable property will throw.
+        // This fail-fast behavior surfaces unexpected schema mismatches immediately.
         return _propertySetters.GetOrAdd(prop, p =>
         {
             var objParam = Expression.Parameter(typeof(object));
@@ -407,7 +381,7 @@ public class EntityHelper<TEntity, TRowID> :
         ValidateSameRoot(context);
         var ctx = context ?? _context;
         var list = new List<TEntity> { objectToRetrieve };
-        var sc = BuildRetrieve(list, null, ctx);
+        var sc = BuildRetrieve(list, string.Empty, ctx);
         return LoadSingleAsync(sc);
     }
 
@@ -543,11 +517,11 @@ public class EntityHelper<TEntity, TRowID> :
         sc.Query.Append(sb);
     }
 
-    private void ValidateWhereInputs(IReadOnlyCollection<TEntity>? listOfObjects, ISqlContainer sc)
+    private void ValidateWhereInputs(IReadOnlyCollection<TEntity>? listOfObjects, ISqlContainer _)
     {
-        if (Utils.IsNullOrEmpty(listOfObjects) || sc == null)
+        if (listOfObjects == null || listOfObjects.Count == 0)
         {
-            throw new ArgumentException("List of objects cannot be null or empty.");
+            throw new ArgumentException("List of objects cannot be null or empty.", nameof(listOfObjects));
         }
     }
 
@@ -570,6 +544,7 @@ public class EntityHelper<TEntity, TRowID> :
         var count = sc.ParameterCount + (toAdd ?? 0);
         if (count > _context.MaxParameterLimit)
         {
+            // For large batches consider chunking inputs; this method fails fast when exceeding limits.
             throw new TooManyParametersException("Too many parameters", _context.MaxParameterLimit);
         }
     }
@@ -655,15 +630,13 @@ public class EntityHelper<TEntity, TRowID> :
             throw new InvalidOperationException("Original record not found for update.");
         }
 
-        var (preClause, _) = BuildSetClause(objectToUpdate, original);
-        if (preClause.Length == 0)
-        {
-            throw new InvalidOperationException("No changes detected for update.");
-        }
-
         SetAuditFields(objectToUpdate, true);
 
         var (setClause, parameters) = BuildSetClause(objectToUpdate, original);
+        if (setClause.Length == 0)
+        {
+            throw new InvalidOperationException("No changes detected for update.");
+        }
 
         if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
         {
@@ -964,25 +937,28 @@ public class EntityHelper<TEntity, TRowID> :
         }
     }
 
+    private void PrepareForInsertOrUpsert(TEntity e)
+    {
+        SetAuditFields(e, updateOnly: false);
+        if (_versionColumn == null || _versionColumn.PropertyInfo.PropertyType == typeof(byte[]))
+        {
+            return;
+        }
+
+        var v = _versionColumn.PropertyInfo.GetValue(e);
+        if (v == null || Utils.IsZeroNumeric(v))
+        {
+            var t = Nullable.GetUnderlyingType(_versionColumn.PropertyInfo.PropertyType) ??
+                    _versionColumn.PropertyInfo.PropertyType;
+            _versionColumn.PropertyInfo.SetValue(e, Convert.ChangeType(1, t));
+        }
+    }
+
     private ISqlContainer BuildUpsertOnConflict(TEntity entity, IDatabaseContext context)
     {
         ValidateSameRoot(context);
         var ctx = context ?? _context;
-        SetAuditFields(entity, false);
-        if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
-        {
-            var current = _versionColumn.PropertyInfo.GetValue(entity);
-            if (current == null || Utils.IsZeroNumeric(current))
-            {
-                var target = Nullable.GetUnderlyingType(_versionColumn.PropertyInfo.PropertyType) ??
-                             _versionColumn.PropertyInfo.PropertyType;
-                if (Utils.IsZeroNumeric(Convert.ChangeType(0, target)))
-                {
-                    var one = Convert.ChangeType(1, target);
-                    _versionColumn.PropertyInfo.SetValue(entity, one);
-                }
-            }
-        }
+        PrepareForInsertOrUpsert(entity);
 
         var columns = new List<string>();
         var values = new List<string>();
@@ -1030,6 +1006,7 @@ public class EntityHelper<TEntity, TRowID> :
 
             if (_auditValueResolver == null && column.IsLastUpdatedBy)
             {
+                // Without a resolver we preserve existing LastUpdatedBy on conflict updates.
                 continue;
             }
 
@@ -1076,21 +1053,7 @@ public class EntityHelper<TEntity, TRowID> :
         ValidateSameRoot(context);
         var ctx = context ?? _context;
 
-        SetAuditFields(entity, false);
-        if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
-        {
-            var current = _versionColumn.PropertyInfo.GetValue(entity);
-            if (current == null || Utils.IsZeroNumeric(current))
-            {
-                var target = Nullable.GetUnderlyingType(_versionColumn.PropertyInfo.PropertyType) ??
-                             _versionColumn.PropertyInfo.PropertyType;
-                if (Utils.IsZeroNumeric(Convert.ChangeType(0, target)))
-                {
-                    var one = Convert.ChangeType(1, target);
-                    _versionColumn.PropertyInfo.SetValue(entity, one);
-                }
-            }
-        }
+        PrepareForInsertOrUpsert(entity);
 
         var columns = new List<string>();
         var values = new List<string>();
@@ -1128,6 +1091,12 @@ public class EntityHelper<TEntity, TRowID> :
         {
             if (column.IsId || column.IsVersion || column.IsNonUpdateable || column.IsCreatedBy || column.IsCreatedOn)
             {
+                continue;
+            }
+
+            if (_auditValueResolver == null && column.IsLastUpdatedBy)
+            {
+                // Without a resolver we preserve existing LastUpdatedBy on duplicate updates.
                 continue;
             }
 
@@ -1169,21 +1138,7 @@ public class EntityHelper<TEntity, TRowID> :
         ValidateSameRoot(context);
         var ctx = context ?? _context;
 
-        SetAuditFields(entity, false);
-        if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
-        {
-            var current = _versionColumn.PropertyInfo.GetValue(entity);
-            if (current == null || Utils.IsZeroNumeric(current))
-            {
-                var target = Nullable.GetUnderlyingType(_versionColumn.PropertyInfo.PropertyType) ??
-                             _versionColumn.PropertyInfo.PropertyType;
-                if (Utils.IsZeroNumeric(Convert.ChangeType(0, target)))
-                {
-                    var one = Convert.ChangeType(1, target);
-                    _versionColumn.PropertyInfo.SetValue(entity, one);
-                }
-            }
-        }
+        PrepareForInsertOrUpsert(entity);
 
         var srcColumns = new List<string>();
         var insertColumns = new List<string>();
@@ -1218,6 +1173,12 @@ public class EntityHelper<TEntity, TRowID> :
         {
             if (column.IsId || column.IsVersion || column.IsNonUpdateable || column.IsCreatedBy || column.IsCreatedOn)
             {
+                continue;
+            }
+
+            if (_auditValueResolver == null && column.IsLastUpdatedBy)
+            {
+                // Without a resolver we preserve existing LastUpdatedBy on merge updates.
                 continue;
             }
 
@@ -1383,23 +1344,6 @@ public class EntityHelper<TEntity, TRowID> :
             return true;
 
         return EqualityComparer<TRowID>.Default.Equals((TRowID)value!, default!);
-    }
-
-    private static bool TryParseMajorVersion(string version, out int major)
-    {
-        major = 0;
-        if (string.IsNullOrWhiteSpace(version))
-        {
-            return false;
-        }
-
-        var match = Regex.Match(version, "(\\d+)");
-        if (!match.Success)
-        {
-            return false;
-        }
-
-        return int.TryParse(match.Groups[1].Value, out major);
     }
 
     private static void ValidateRowIdType()

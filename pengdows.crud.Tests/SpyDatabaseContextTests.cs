@@ -19,6 +19,6 @@ public class SpyDatabaseContextTests : SqlLiteContextTestBase
         mockCtx.SetupGet(c => c.TypeMapRegistry).Returns(map);
         mockCtx.As<IContextIdentity>().SetupGet(i => i.RootId).Returns(Guid.NewGuid());
 
-        Assert.Throws<NullReferenceException>(() => new EntityHelper<NullableIdEntity, int?>(mockCtx.Object));
+        Assert.Throws<InvalidOperationException>(() => new EntityHelper<NullableIdEntity, int?>(mockCtx.Object));
     }
 }

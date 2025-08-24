@@ -48,6 +48,22 @@ public class EntityHelperOrderingTests : SqlLiteContextTestBase
     }
 
     [Fact]
+    public void BuildWhereByPrimaryKey_MultipleCompositeKeys_GeneratesOr()
+    {
+        TypeMap.Register<OrderedEntity>();
+        var helper = new EntityHelper<OrderedEntity, int>(Context);
+        var sc = Context.CreateSqlContainer();
+        var list = new[]
+        {
+            new OrderedEntity { A = 1, B = 2 },
+            new OrderedEntity { A = 3, B = 4 }
+        };
+        helper.BuildWhereByPrimaryKey(list, sc);
+        var query = sc.Query.ToString();
+        Assert.Contains(" OR ", query);
+    }
+
+    [Fact]
     public void BuildWhereByPrimaryKey_NoKeys_Throws()
     {
         var registry = new TypeMapRegistry();
