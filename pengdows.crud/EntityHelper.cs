@@ -722,33 +722,16 @@ public class EntityHelper<TEntity, TRowID> :
 
         ValidateSameRoot(context);
         var ctx = context ?? _context;
-        if (_idColumn == null)
+
+        try
         {
-            throw new NotSupportedException(
-                "Single-ID operations require a designated Id column; use composite-key helpers.");
+            var sc = BuildUpsert(entity, ctx);
+            return await sc.ExecuteNonQueryAsync();
         }
-
-        var idValue = _idColumn.PropertyInfo.GetValue(entity);
-
-        if (IsDefaultId(idValue))
+        catch (NotSupportedException)
         {
-            return await CreateAsync(entity, ctx) ? 1 : 0;
+            return await UpsertPortableAsync(entity, ctx);
         }
-
-        if (_idColumn.IsIdIsWritable)
-        {
-            try
-            {
-                var sc = BuildUpsert(entity, ctx);
-                return await sc.ExecuteNonQueryAsync();
-            }
-            catch (NotSupportedException)
-            {
-                // fall back to update
-            }
-        }
-
-        return await UpdateAsync(entity, ctx);
     }
 
     public ISqlContainer BuildUpsert(TEntity entity, IDatabaseContext? context = null)
@@ -784,6 +767,96 @@ public class EntityHelper<TEntity, TRowID> :
         throw new NotSupportedException($"Upsert not supported for {ctx.Product}");
     }
 
+    private IReadOnlyList<IColumnInfo> ResolveUpsertKey()
+    {
+        if (_idColumn != null && _idColumn.IsIdIsWritable)
+        {
+            return new List<IColumnInfo> { _idColumn! };
+        }
+
+        var keys = _tableInfo.Columns.Values
+            .Where(c => c.IsPrimaryKey)
+            .OrderBy(c => c.PkOrder)
+            .ToList();
+
+        if (keys.Count > 0)
+        {
+            return keys;
+        }
+
+        throw new NotSupportedException("Upsert requires client-assigned Id or [PrimaryKey] attributes.");
+    }
+
+    private (string sql, List<DbParameter> parameters) BuildUpdateByKey(TEntity updated,
+        IReadOnlyList<IColumnInfo> keyCols)
+    {
+        SetAuditFields(updated, true);
+        var (setClause, parameters) = BuildSetClause(updated, null);
+        if (setClause.Length == 0)
+        {
+            throw new InvalidOperationException("No changes detected for update.");
+        }
+
+        if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
+        {
+            IncrementVersion(setClause);
+        }
+
+        var where = new StringBuilder();
+        for (var i = 0; i < keyCols.Count; i++)
+        {
+            if (i > 0)
+            {
+                where.Append(" AND ");
+            }
+
+            var key = keyCols[i];
+            var v = key.MakeParameterValueFromField(updated);
+            var p = _context.CreateDbParameter(key.DbType, v);
+            parameters.Add(p);
+            where.Append($"{WrapObjectName(key.Name)} = {MakeParameterName(p)}");
+        }
+
+        var sql = $"UPDATE {WrappedTableName} SET {setClause} WHERE {where}";
+        if (_versionColumn != null)
+        {
+            var vv = _versionColumn.MakeParameterValueFromField(updated);
+            var p = _context.CreateDbParameter(_versionColumn.DbType, vv);
+            parameters.Add(p);
+            sql += $" AND {WrapObjectName(_versionColumn.Name)} = {MakeParameterName(p)}";
+        }
+
+        return (sql, parameters);
+    }
+
+    private async Task<int> UpsertPortableAsync(TEntity entity, IDatabaseContext ctx)
+    {
+        var keyCols = ResolveUpsertKey();
+        var (updateSql, updateParams) = BuildUpdateByKey(entity, keyCols);
+        var scUpdate = ctx.CreateSqlContainer();
+        scUpdate.Query.Append(updateSql);
+        scUpdate.AddParameters(updateParams);
+        var rows = await scUpdate.ExecuteNonQueryAsync().ConfigureAwait(false);
+        if (rows > 0)
+        {
+            return rows;
+        }
+
+        var scInsert = BuildCreate(entity, ctx);
+
+        try
+        {
+            return await scInsert.ExecuteNonQueryAsync().ConfigureAwait(false);
+        }
+        catch (DbException ex) when (_dialect.IsUniqueViolation(ex))
+        {
+            var scUpdate2 = ctx.CreateSqlContainer();
+            scUpdate2.Query.Append(updateSql);
+            scUpdate2.AddParameters(updateParams);
+            return await scUpdate2.ExecuteNonQueryAsync().ConfigureAwait(false);
+        }
+    }
+
     private async Task<TEntity?> LoadOriginalAsync(TEntity objectToUpdate)
     {
         var idValue = _idColumn!.PropertyInfo.GetValue(objectToUpdate);
@@ -807,6 +880,11 @@ public class EntityHelper<TEntity, TRowID> :
 
             var newValue = column.MakeParameterValueFromField(updated);
             var originalValue = original != null ? column.MakeParameterValueFromField(original) : null;
+
+            if (_auditValueResolver == null && column.IsLastUpdatedBy && Utils.IsNullOrDbNull(newValue))
+            {
+                continue;
+            }
 
             if (original != null && ValuesAreEqual(newValue, originalValue, column.DbType))
             {
@@ -924,6 +1002,11 @@ public class EntityHelper<TEntity, TRowID> :
 
             var value = column.MakeParameterValueFromField(entity);
 
+            if (_auditValueResolver == null && (column.IsCreatedBy || column.IsLastUpdatedBy) && Utils.IsNullOrDbNull(value))
+            {
+                continue;
+            }
+
             columns.Add(WrapObjectName(column.Name));
             if (Utils.IsNullOrDbNull(value))
             {
@@ -941,6 +1024,11 @@ public class EntityHelper<TEntity, TRowID> :
         foreach (var column in _tableInfo.Columns.Values)
         {
             if (column.IsId || column.IsVersion || column.IsNonUpdateable || column.IsCreatedBy || column.IsCreatedOn)
+            {
+                continue;
+            }
+
+            if (_auditValueResolver == null && column.IsLastUpdatedBy)
             {
                 continue;
             }
