@@ -1,6 +1,7 @@
 using System;
 using System.Data;
 using System.Data.Common;
+using pengdows.crud;
 using pengdows.crud.Tests.Mocks;
 using Xunit;
 
@@ -36,6 +37,41 @@ public class SqlContainerProxyTests : SqlLiteContextTestBase
     {
         var sc = Context.CreateSqlContainer();
         Assert.Throws<NullReferenceException>(() => sc.MakeParameterName((DbParameter)null!));
+    }
+
+    [Fact]
+    public void MakeParameterName_String_ForwardsToContext()
+    {
+        var sc = Context.CreateSqlContainer();
+        Assert.Equal(Context.MakeParameterName("p"), sc.MakeParameterName("p"));
+    }
+
+    [Fact]
+    public void MakeParameterName_NullString_ReturnsMarker()
+    {
+        var sc = Context.CreateSqlContainer();
+        Assert.Equal(Context.DataSourceInfo.ParameterMarker, sc.MakeParameterName((string)null));
+    }
+
+    [Fact]
+    public void CreateDbParameter_DelegatesToDialect()
+    {
+        var sc = Context.CreateSqlContainer();
+        var p = sc.CreateDbParameter("p", DbType.Int32, 1);
+
+        Assert.Equal("p", p.ParameterName);
+        Assert.Equal(DbType.Int32, p.DbType);
+        Assert.Equal(1, p.Value);
+    }
+
+    [Fact]
+    public void CreateDbParameter_FactoryReturnsNull_Throws()
+    {
+        var factory = new NullParameterFactory();
+        var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory);
+        var sc = ctx.CreateSqlContainer();
+
+        Assert.Throws<InvalidOperationException>(() => sc.CreateDbParameter("p", DbType.Int32, 1));
     }
 
     
