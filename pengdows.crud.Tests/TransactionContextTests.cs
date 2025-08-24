@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
@@ -420,6 +421,61 @@ public class TransactionContextTests
         Assert.True((e1 is null) ^ (e2 is null));
         Assert.IsType<InvalidOperationException>(e1 ?? e2!);
         Assert.Equal(1, strategy.ReleaseCount);
+    }
+
+    [Fact]
+    public async Task RollbackAsync_MarksAsRolledBack()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        var tx = context.BeginTransaction();
+        var method = typeof(TransactionContext).GetMethod("RollbackAsync", BindingFlags.Instance | BindingFlags.NonPublic);
+
+        await (Task)method!.Invoke(tx, null)!;
+
+        Assert.True(tx.WasRolledBack);
+        Assert.True(tx.IsCompleted);
+    }
+
+    [Fact]
+    public async Task RollbackAsync_Twice_Throws()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        var tx = context.BeginTransaction();
+        var method = typeof(TransactionContext).GetMethod("RollbackAsync", BindingFlags.Instance | BindingFlags.NonPublic);
+
+        await (Task)method!.Invoke(tx, null)!;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await (Task)method.Invoke(tx, null)!);
+    }
+
+    [Fact]
+    public void PropertyDelegates_MatchContext()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        using var tx = (TransactionContext)context.BeginTransaction();
+        var identity = (IContextIdentity)context;
+
+        Assert.Equal(context.NumberOfOpenConnections, tx.NumberOfOpenConnections);
+        Assert.NotEqual(0, tx.NumberOfOpenConnections);
+        Assert.Equal(context.Product, tx.Product);
+        Assert.Equal(context.MaxNumberOfConnections, tx.MaxNumberOfConnections);
+        Assert.NotEqual(0, tx.MaxNumberOfConnections);
+        Assert.Equal(context.IsReadOnlyConnection, tx.IsReadOnlyConnection);
+        Assert.False(tx.IsReadOnlyConnection);
+        Assert.Equal(context.RCSIEnabled, tx.RCSIEnabled);
+        Assert.False(tx.RCSIEnabled);
+        Assert.Equal(context.MaxParameterLimit, tx.MaxParameterLimit);
+        Assert.NotEqual(0, tx.MaxParameterLimit);
+        Assert.Equal(DbMode.SingleConnection, tx.ConnectionMode);
+        Assert.NotEqual(DbMode.SingleWriter, tx.ConnectionMode);
+        Assert.Equal(context.TypeMapRegistry, tx.TypeMapRegistry);
+        Assert.NotNull(tx.TypeMapRegistry);
+        Assert.Equal(context.DataSourceInfo, tx.DataSourceInfo);
+        Assert.NotNull(tx.DataSourceInfo);
+        Assert.Equal(context.SessionSettingsPreamble, tx.SessionSettingsPreamble);
+        Assert.Equal(identity.RootId, tx.RootId);
+        Assert.NotEqual(Guid.Empty, tx.TransactionId);
     }
 
     private static void ReplaceStrategy(DatabaseContext context, IConnectionStrategy strategy)
