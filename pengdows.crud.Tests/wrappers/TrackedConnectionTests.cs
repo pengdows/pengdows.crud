@@ -2,6 +2,7 @@
 using System.Data;
 using System.Threading.Tasks;
 using pengdows.crud.FakeDb;
+using pengdows.crud.enums;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
 using Xunit;
@@ -109,5 +110,45 @@ public class TrackedConnectionTests
 
         Assert.Equal(ConnectionState.Closed, conn.State);
         Assert.Equal(1, disposeCount);
+    }
+
+    [Fact]
+    public void Properties_DelegateToUnderlyingConnection()
+    {
+        using var conn = new FakeDbConnection();
+        conn.EmulatedProduct = SupportedDatabase.SqlServer;
+        conn.SetServerVersion("2.0");
+        using var tracked = new TrackedConnection(conn);
+
+        Assert.Equal(conn.Database, tracked.Database);
+        Assert.Equal(conn.DataSource, tracked.DataSource);
+        Assert.Equal("2.0", tracked.ServerVersion);
+        Assert.Equal(conn.ConnectionTimeout, tracked.ConnectionTimeout);
+    }
+
+    [Fact]
+    public void ConnectionString_GetSet_Passthrough()
+    {
+        using var conn = new FakeDbConnection();
+        using var tracked = new TrackedConnection(conn);
+
+        tracked.ConnectionString = "Data Source=test";
+        Assert.Equal("Data Source=test", tracked.ConnectionString);
+
+        tracked.ConnectionString = null;
+        Assert.Null(tracked.ConnectionString);
+    }
+
+    [Fact]
+    public void State_ReflectsUnderlyingConnectionState()
+    {
+        using var conn = new FakeDbConnection();
+        using var tracked = new TrackedConnection(conn);
+
+        Assert.Equal(ConnectionState.Closed, tracked.State);
+        tracked.Open();
+        Assert.Equal(ConnectionState.Open, tracked.State);
+        tracked.Close();
+        Assert.Equal(ConnectionState.Closed, tracked.State);
     }
 }

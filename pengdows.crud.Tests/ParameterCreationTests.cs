@@ -32,4 +32,26 @@ public class ParameterCreationTests
         Assert.Equal((byte)0, p.Precision);
         Assert.Equal((byte)0, p.Scale);
     }
+
+    [Fact]
+    public void CreateDbParameter_NoName_GeneratesName()
+    {
+        var dialect = CreateDialect();
+        var p = dialect.CreateDbParameter(DbType.Int32, 5);
+
+        Assert.False(string.IsNullOrEmpty(p.ParameterName));
+        Assert.Equal(DbType.Int32, p.DbType);
+        Assert.Equal(5, p.Value);
+    }
+
+    [Fact]
+    public void CreateDbParameter_NoName_NullValue_UsesDbNull()
+    {
+        var dialect = CreateDialect();
+        var p = dialect.CreateDbParameter<string>(DbType.String, null);
+
+        Assert.False(string.IsNullOrEmpty(p.ParameterName));
+        Assert.Equal(DbType.String, p.DbType);
+        Assert.Equal(DBNull.Value, p.Value);
+    }
 }
