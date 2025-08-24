@@ -104,7 +104,7 @@ public sealed class IsolationResolver : IIsolationResolver
                 IsolationLevel.Serializable
             ],
 
-            [SupportedDatabase.DuckDb] =
+            [SupportedDatabase.DuckDB] =
             [
                 IsolationLevel.Serializable
             ],
@@ -176,7 +176,7 @@ public sealed class IsolationResolver : IIsolationResolver
                 [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable
             },
 
-            SupportedDatabase.DuckDb => new()
+            SupportedDatabase.DuckDB => new()
             {
                 [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.Serializable,
                 [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable

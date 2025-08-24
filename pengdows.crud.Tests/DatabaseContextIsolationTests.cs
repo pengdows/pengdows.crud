@@ -20,8 +20,8 @@ public class DatabaseContextIsolationTests
     [InlineData(SupportedDatabase.PostgreSql, IsolationProfile.FastWithRisks, IsolationLevel.ReadUncommitted)]
     [InlineData(SupportedDatabase.CockroachDb, IsolationProfile.StrictConsistency, IsolationLevel.Serializable)]
     [InlineData(SupportedDatabase.CockroachDb, IsolationProfile.SafeNonBlockingReads, IsolationLevel.Serializable)]
-    [InlineData(SupportedDatabase.DuckDb, IsolationProfile.SafeNonBlockingReads, IsolationLevel.Serializable)]
-    [InlineData(SupportedDatabase.DuckDb, IsolationProfile.StrictConsistency, IsolationLevel.Serializable)]
+    [InlineData(SupportedDatabase.DuckDB, IsolationProfile.SafeNonBlockingReads, IsolationLevel.Serializable)]
+    [InlineData(SupportedDatabase.DuckDB, IsolationProfile.StrictConsistency, IsolationLevel.Serializable)]
     public void BeginTransaction_ResolvesIsolationLevel(SupportedDatabase product, IsolationProfile profile,
         IsolationLevel expected)
     {
@@ -47,8 +47,8 @@ public class DatabaseContextIsolationTests
             new FakeDbFactory(SupportedDatabase.CockroachDb.ToString()));
         Assert.Throws<NotSupportedException>(() => context.BeginTransaction(IsolationProfile.FastWithRisks));
 
-        context = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.DuckDb}",
-            new FakeDbFactory(SupportedDatabase.DuckDb.ToString()));
+        context = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.DuckDB}",
+            new FakeDbFactory(SupportedDatabase.DuckDB.ToString()));
         Assert.Throws<NotSupportedException>(() => context.BeginTransaction(IsolationProfile.FastWithRisks));
     }
 }

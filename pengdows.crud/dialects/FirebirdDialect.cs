@@ -19,6 +19,7 @@ public class FirebirdDialect : SqlDialect
     public override SupportedDatabase DatabaseType => SupportedDatabase.Firebird;
     public override string ParameterMarker => "@";
     public override bool SupportsNamedParameters => true;
+    public override bool SupportsSavepoints => true;
     public override int MaxParameterLimit => 65535;
     public override int ParameterNameMaxLength => 63;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.Call;

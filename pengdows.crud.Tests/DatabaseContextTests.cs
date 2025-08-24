@@ -186,7 +186,7 @@ public class DatabaseContextTests
             new object[] { SupportedDatabase.Oracle, true },
             new object[] { SupportedDatabase.Sqlite, true },
             new object[] { SupportedDatabase.Firebird, true },
-            new object[] { SupportedDatabase.DuckDb, false }
+            new object[] { SupportedDatabase.DuckDB, false }
         };
     }
 
@@ -242,18 +242,18 @@ public class DatabaseContextTests
     }
 
     [Fact]
-    public void DuckDbInMemory_SetsSingleConnectionMode()
+    public void DuckDBInMemory_SetsSingleConnectionMode()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.DuckDb);
-        using var context = new DatabaseContext("Data Source=:memory:;EmulatedProduct=DuckDb", factory);
+        var factory = new FakeDbFactory(SupportedDatabase.DuckDB);
+        using var context = new DatabaseContext("Data Source=:memory:;EmulatedProduct=DuckDB", factory);
         Assert.Equal(DbMode.SingleConnection, context.ConnectionMode);
     }
 
     [Fact]
-    public void DuckDbFile_SetsSingleWriterMode()
+    public void DuckDBFile_SetsSingleWriterMode()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.DuckDb);
-        using var context = new DatabaseContext("Data Source=test;EmulatedProduct=DuckDb", factory);
+        var factory = new FakeDbFactory(SupportedDatabase.DuckDB);
+        using var context = new DatabaseContext("Data Source=test;EmulatedProduct=DuckDB", factory);
         Assert.Equal(DbMode.SingleWriter, context.ConnectionMode);
     }
 

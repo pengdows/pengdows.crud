@@ -475,7 +475,7 @@ public abstract class SqlDialect:ISqlDialect
 
         if (combined.Contains("duckdb") || combined.Contains("duck db"))
         {
-            return SupportedDatabase.DuckDb;
+            return SupportedDatabase.DuckDB;
         }
 
         return DatabaseType;

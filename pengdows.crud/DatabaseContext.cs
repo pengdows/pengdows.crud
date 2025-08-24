@@ -113,7 +113,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             switch (_dataSourceInfo.Product)
             {
                 case SupportedDatabase.Sqlite:
-                case SupportedDatabase.DuckDb:
+                case SupportedDatabase.DuckDB:
                 {
                     var csb = GetFactoryConnectionStringBuilder(string.Empty);
                     var ds = csb["Data Source"] as string;

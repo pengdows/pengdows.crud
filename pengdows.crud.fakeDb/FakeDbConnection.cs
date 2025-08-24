@@ -76,7 +76,7 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
             SupportedDatabase.Oracle => "Oracle Database 19c",
             SupportedDatabase.Firebird => "4.0.0",
             SupportedDatabase.CockroachDb => "v23.1.0",
-            SupportedDatabase.DuckDb => "DuckDB 0.9.2",
+            SupportedDatabase.DuckDB => "DuckDB 0.9.2",
             _ => "1.0"
         };
     }

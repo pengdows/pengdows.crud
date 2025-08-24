@@ -42,7 +42,7 @@ public static class DataSourceTestData
             var markerFormat = db switch
             {
                 SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.Oracle => ":{0}",
-                SupportedDatabase.DuckDb => "$" + "{0}",
+                SupportedDatabase.DuckDB => "$" + "{0}",
                 _ => "@{0}"
             };
 
@@ -69,7 +69,7 @@ public static class DataSourceTestData
                 SupportedDatabase.Sqlite => new SqliteDialect(factory, NullLogger.Instance),
                 SupportedDatabase.Firebird => new FirebirdDialect(factory, NullLogger.Instance),
                 SupportedDatabase.Oracle => new OracleDialect(factory, NullLogger.Instance),
-                SupportedDatabase.DuckDb => new DuckDbDialect(factory, NullLogger.Instance),
+                SupportedDatabase.DuckDB => new DuckDbDialect(factory, NullLogger.Instance),
                 _ => new Sql92Dialect(factory, NullLogger.Instance)
             };
 
@@ -119,7 +119,7 @@ public class DataSourceInformationTests
         var expectedMarker = db switch
         {
             SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.Oracle => ":",
-            SupportedDatabase.DuckDb => "$",
+            SupportedDatabase.DuckDB => "$",
             _ => "@"
         };
         Assert.Equal(expectedMarker, info.ParameterMarker);
@@ -141,7 +141,7 @@ public class DataSourceInformationTests
             SupportedDatabase.PostgreSql,
             SupportedDatabase.CockroachDb,
             SupportedDatabase.Sqlite,
-            SupportedDatabase.DuckDb
+            SupportedDatabase.DuckDB
         }).Contains(db);
         Assert.Equal(canConflict, info.SupportsInsertOnConflict);
 
@@ -165,7 +165,7 @@ public class DataSourceInformationTests
         var expectedRequiresStoredProcParameterNameMatch = db switch
         {
             SupportedDatabase.Firebird or SupportedDatabase.Sqlite or SupportedDatabase.SqlServer
-                or SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.DuckDb => false,
+                or SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.DuckDB => false,
             SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.Oracle => true,
             _ => true
         };

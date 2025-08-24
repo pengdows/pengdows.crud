@@ -23,15 +23,15 @@ public class SqlDialectFactoryDetectionTests
     }
 
     [Fact]
-    public void CreateDialect_DetectsDuckDbFromConnection()
+    public void CreateDialect_DetectsDuckDBFromConnection()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.DuckDb);
+        var factory = new FakeDbFactory(SupportedDatabase.DuckDB);
         using var conn = factory.CreateConnection();
-        conn.ConnectionString = "EmulatedProduct=DuckDb";
+        conn.ConnectionString = "EmulatedProduct=DuckDB";
         conn.Open();
         var tracked = new TrackedConnection(conn);
         var dialect = SqlDialectFactory.CreateDialect(tracked, factory, NullLoggerFactory.Instance);
-        Assert.Equal(SupportedDatabase.DuckDb, dialect.DatabaseType);
+        Assert.Equal(SupportedDatabase.DuckDB, dialect.DatabaseType);
     }
 
     [Fact]

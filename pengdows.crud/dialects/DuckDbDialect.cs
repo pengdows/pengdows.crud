@@ -16,7 +16,7 @@ public class DuckDbDialect : SqlDialect
     {
     }
 
-    public override SupportedDatabase DatabaseType => SupportedDatabase.DuckDb;
+    public override SupportedDatabase DatabaseType => SupportedDatabase.DuckDB;
     public override string ParameterMarker => "$";
     public override bool SupportsNamedParameters => true;
     public override int MaxParameterLimit => 65535;

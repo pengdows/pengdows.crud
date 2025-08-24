@@ -108,7 +108,7 @@ public class FakeDbCommand : DbCommand
             SupportedDatabase.CockroachDb when normalizedCommand == "SELECT VERSION()"
                 => "CockroachDB CCL v23.1.0",
 
-            SupportedDatabase.DuckDb when normalizedCommand == "SELECT VERSION()"
+            SupportedDatabase.DuckDB when normalizedCommand == "SELECT VERSION()"
                 => "DuckDB 0.9.2",
 
             _ => null

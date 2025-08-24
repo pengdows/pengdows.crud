@@ -147,9 +147,9 @@ public class DialectPropertyTests
 
         yield return new object[]
         {
-            new DuckDbDialect(new FakeDbFactory(SupportedDatabase.DuckDb), logger),
+            new DuckDbDialect(new FakeDbFactory(SupportedDatabase.DuckDB), logger),
             new DialectProps(
-                SupportedDatabase.DuckDb,
+                SupportedDatabase.DuckDB,
                 "$",
                 true,
                 65535,
