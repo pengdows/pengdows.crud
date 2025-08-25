@@ -9,6 +9,8 @@ using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Runtime.CompilerServices;
+using System.Globalization;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.attributes;
@@ -52,6 +54,8 @@ public class EntityHelper<TEntity, TRowID> :
     private bool _hasAuditColumns;
 
     private IColumnInfo? _versionColumn;
+
+    private readonly Dictionary<IColumnInfo, Func<object?, object?>> _readerConverters = new();
 
     public EntityHelper(IDatabaseContext databaseContext,
         EnumParseFailureMode enumParseBehavior = EnumParseFailureMode.Throw
@@ -144,14 +148,13 @@ public class EntityHelper<TEntity, TRowID> :
             var colName = reader.GetName(i);
             if (_tableInfo.Columns.TryGetValue(colName, out var column))
             {
-                var value = reader.IsDBNull(i) ? null : reader.GetValue(i);
-
-                var dbFieldType = reader.GetFieldType(i);
-                value = TypeCoercionHelper.Coerce(value, dbFieldType, column);
+                var raw = reader.IsDBNull(i) ? null : reader.GetValue(i);
+                var converter = GetOrCreateReaderConverter(column);
+                var coerced = converter(raw);
                 try
                 {
                     var setter = GetOrCreateSetter(column.PropertyInfo);
-                    setter(obj, value);
+                    setter(obj, coerced);
                 }
                 catch (Exception ex)
                 {
@@ -162,6 +165,145 @@ public class EntityHelper<TEntity, TRowID> :
         }
 
         return obj;
+    }
+
+    private Func<object?, object?> GetOrCreateReaderConverter(IColumnInfo column)
+    {
+        if (_readerConverters.TryGetValue(column, out var existing))
+        {
+            return existing;
+        }
+
+        Func<object?, object?> converter;
+
+        if (column.IsEnum && column.EnumType != null)
+        {
+            var enumType = column.EnumType;
+            var enumAsString = column.DbType == DbType.String;
+            var underlying = Enum.GetUnderlyingType(enumType);
+            if (enumAsString)
+            {
+                converter = value =>
+                {
+                    if (value == null || value is DBNull)
+                    {
+                        return null;
+                    }
+
+                    var s = value as string ?? value.ToString();
+                    try
+                    {
+                        return Enum.Parse(enumType, s!, false);
+                    }
+                    catch
+                    {
+                        switch (EnumParseBehavior)
+                        {
+                            case EnumParseFailureMode.Throw:
+                                throw;
+                            case EnumParseFailureMode.SetNullAndLog:
+                                Logger.LogWarning("Cannot convert '{Value}' to enum {EnumType}.", s, enumType);
+                                return null;
+                            case EnumParseFailureMode.SetDefaultValue:
+                                return Activator.CreateInstance(enumType);
+                            default:
+                                return null;
+                        }
+                    }
+                };
+            }
+            else
+            {
+                converter = value =>
+                {
+                    if (value == null || value is DBNull)
+                    {
+                        return null;
+                    }
+
+                    try
+                    {
+                        var boxed = Convert.ChangeType(value, underlying, CultureInfo.InvariantCulture);
+                        return Enum.ToObject(enumType, boxed!);
+                    }
+                    catch
+                    {
+                        switch (EnumParseBehavior)
+                        {
+                            case EnumParseFailureMode.Throw:
+                                throw;
+                            case EnumParseFailureMode.SetNullAndLog:
+                                Logger.LogWarning("Cannot convert '{Value}' to enum {EnumType}.", value, enumType);
+                                return null;
+                            case EnumParseFailureMode.SetDefaultValue:
+                                return Activator.CreateInstance(enumType);
+                            default:
+                                return null;
+                        }
+                    }
+                };
+            }
+
+            _readerConverters[column] = converter;
+            return converter;
+        }
+
+        if (column.IsJsonType)
+        {
+            var propType = column.PropertyInfo.PropertyType;
+            var opts = column.JsonSerializerOptions ?? new JsonSerializerOptions();
+            converter = value =>
+            {
+                if (value == null || value is DBNull)
+                {
+                    return null;
+                }
+
+                var s = value as string ?? value.ToString();
+                return JsonSerializer.Deserialize(s!, propType, opts);
+            };
+
+            _readerConverters[column] = converter;
+            return converter;
+        }
+
+        converter = value =>
+        {
+            if (value == null || value is DBNull)
+            {
+                return null;
+            }
+
+            var targetType = column.PropertyInfo.PropertyType;
+            var sourceType = value.GetType();
+
+            if (targetType.IsAssignableFrom(sourceType))
+            {
+                return value;
+            }
+
+            var underlying = Nullable.GetUnderlyingType(targetType) ?? targetType;
+
+            try
+            {
+                return Convert.ChangeType(value, underlying, CultureInfo.InvariantCulture);
+            }
+            catch
+            {
+                switch (column.DbType)
+                {
+                    case DbType.Decimal:
+                    case DbType.Currency:
+                    case DbType.VarNumeric:
+                        return Convert.ToDecimal(value, CultureInfo.InvariantCulture);
+                    default:
+                        return value;
+                }
+            }
+        };
+
+        _readerConverters[column] = converter;
+        return converter;
     }
 
     public async Task<bool> CreateAsync(TEntity entity, IDatabaseContext context)
