@@ -1,10 +1,9 @@
 #region
 
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Data;
-using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using pengdows.crud.attributes;
 using pengdows.crud.exceptions;
@@ -13,21 +12,25 @@ using pengdows.crud.exceptions;
 
 namespace pengdows.crud;
 
-public class TypeMapRegistry : ITypeMapRegistry
+public sealed class TypeMapRegistry : ITypeMapRegistry
 {
     private readonly ConcurrentDictionary<Type, TableInfo> _typeMap = new();
 
     public ITableInfo GetTableInfo<T>()
     {
         var type = typeof(T);
+        return _typeMap.GetOrAdd(type, BuildTableInfo);
+    }
 
-        if (_typeMap.TryGetValue(type, out var cached))
-        {
-            return cached;
-        }
+    public void Register<T>() => GetTableInfo<T>();
 
-        var tattr = type.GetCustomAttribute<TableAttribute>() ??
-                    throw new InvalidOperationException($"Type {type.Name} does not have a TableAttribute.");
+    // ------------------ build pipeline ------------------
+
+    private TableInfo BuildTableInfo(Type entityType)
+    {
+        var tattr = entityType.GetCustomAttribute<TableAttribute>()
+                   ?? throw new InvalidOperationException(
+                       $"Type {entityType.Name} does not have a TableAttribute.");
 
         var tableInfo = new TableInfo
         {
@@ -35,164 +38,213 @@ public class TypeMapRegistry : ITypeMapRegistry
             Schema = tattr.Schema ?? string.Empty
         };
 
-        var properties = type.GetProperties(BindingFlags.Instance | BindingFlags.Public);
-
-        foreach (var prop in properties)
+        foreach (var prop in entityType.GetProperties(BindingFlags.Instance | BindingFlags.Public))
         {
-            var attrs = prop.GetCustomAttributes(inherit: true);
-
-            TAttr? A<TAttr>() where TAttr : Attribute
-            {
-                return (TAttr?)attrs.FirstOrDefault(a => a is TAttr);
-            }
-
-            var colAttr = A<ColumnAttribute>();
-            if (colAttr == null)
-            {
-                continue;
-            }
-
-            var idAttr = A<IdAttribute>();
-            var pkAttr = A<PrimaryKeyAttribute>();
-            var enumAttr = A<EnumColumnAttribute>();
-            var jsonAttr = A<JsonAttribute>();
-            var nonIns = A<NonInsertableAttribute>();
-            var nonUpd = A<NonUpdateableAttribute>();
-            var verAttr = A<VersionAttribute>();
-            var cby = A<CreatedByAttribute>();
-            var con = A<CreatedOnAttribute>();
-            var lby = A<LastUpdatedByAttribute>();
-            var lon = A<LastUpdatedOnAttribute>();
-
-            var isId = idAttr != null;
-            var isIdWritable = idAttr?.Writable ?? true;
-            var isNonInsertable = nonIns != null || (isId && !isIdWritable);
-
-            var ci = new ColumnInfo
-            {
-                Name = colAttr.Name,
-                PropertyInfo = prop,
-                DbType = colAttr.Type,
-                IsId = isId,
-                IsIdIsWritable = isId && isIdWritable && nonIns == null,
-                IsNonInsertable = isNonInsertable,
-                IsNonUpdateable = nonUpd != null || isId,
-                IsPrimaryKey = pkAttr != null,
-                PkOrder = pkAttr?.Order ?? 0,
-                IsEnum = enumAttr != null,
-                EnumType = enumAttr?.EnumType,
-                IsJsonType = jsonAttr != null,
-                JsonSerializerOptions = jsonAttr?.SerializerOptions != null
-                    ? new JsonSerializerOptions(jsonAttr.SerializerOptions)
-                    : JsonSerializerOptions.Default,
-                IsVersion = verAttr != null,
-                IsCreatedBy = cby != null,
-                IsCreatedOn = con != null,
-                IsLastUpdatedBy = lby != null,
-                IsLastUpdatedOn = lon != null,
-                Ordinal = colAttr.Ordinal
-            };
-
-            if (ci.IsLastUpdatedBy)
-            {
-                tableInfo.LastUpdatedBy = ci;
-            }
-
-            if (ci.IsLastUpdatedOn)
-            {
-                tableInfo.LastUpdatedOn = ci;
-            }
-
-            if (ci.IsCreatedBy)
-            {
-                tableInfo.CreatedBy = ci;
-            }
-
-            if (ci.IsCreatedOn)
-            {
-                tableInfo.CreatedOn = ci;
-            }
-
-            if (tableInfo.Columns.ContainsKey(ci.Name))
-            {
-                throw new InvalidOperationException($"Duplicate ColumnAttribute name '{ci.Name}' on type {type.Name}.");
-            }
-
-            tableInfo.Columns[ci.Name] = ci;
-
-            if (ci.IsId)
-            {
-                if (tableInfo.Id != null)
-                {
-                    throw new TooManyColumns("Only one id is allowed.");
-                }
-
-                tableInfo.Id = ci;
-
-                if (ci.IsPrimaryKey)
-                {
-                    throw new PrimaryKeyOnRowIdColumn("Not allowed to have primary key attribute on id column.");
-                }
-            }
-
-            if (ci.IsVersion)
-            {
-                if (tableInfo.Version != null)
-                {
-                    throw new TooManyColumns("Only one version is allowed.");
-                }
-
-                tableInfo.Version = ci;
-            }
+            ProcessProperty(entityType, prop, tableInfo);
         }
 
         if (tableInfo.Columns.Count == 0)
         {
-            throw new NoColumnsFoundException("This POCO entity has no properties, marked as columns.");
+            throw new NoColumnsFoundException($"This POCO entity {entityType.Name} has no properties, marked as columns.");
         }
 
+        ValidatePrimaryKeys(entityType, tableInfo);
+        tableInfo.HasAuditColumns = HasAuditColumns(tableInfo);
+        AssignOrdinals(entityType, tableInfo);
+
+        return tableInfo;
+    }
+
+    // ------------------ helpers ------------------
+
+    private static void ProcessProperty(Type entityType, PropertyInfo prop, TableInfo tableInfo)
+    {
+        var attrs = prop.GetCustomAttributes(inherit: true);
+
+        static TAttr? A<TAttr>(object[] atts) where TAttr : Attribute =>
+            (TAttr?)atts.FirstOrDefault(a => a is TAttr);
+
+        var colAttr = A<ColumnAttribute>(attrs);
+        if (colAttr == null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(colAttr.Name))
+        {
+            throw new InvalidOperationException(
+                $"ColumnAttribute.Name cannot be null/empty on {entityType.FullName}.{prop.Name}");
+        }
+
+        var idAttr   = A<IdAttribute>(attrs);
+        var pkAttr   = A<PrimaryKeyAttribute>(attrs);
+        var enumAttr = A<EnumColumnAttribute>(attrs);
+        var jsonAttr = A<JsonAttribute>(attrs);
+        var nonIns   = A<NonInsertableAttribute>(attrs);
+        var nonUpd   = A<NonUpdateableAttribute>(attrs);
+        var verAttr  = A<VersionAttribute>(attrs);
+        var cby      = A<CreatedByAttribute>(attrs);
+        var con      = A<CreatedOnAttribute>(attrs);
+        var lby      = A<LastUpdatedByAttribute>(attrs);
+        var lon      = A<LastUpdatedOnAttribute>(attrs);
+
+        var isId = idAttr != null;
+        var isIdWritable = idAttr?.Writable ?? true;
+        
+        
+        var ci = new ColumnInfo
+        {
+            Name               = colAttr.Name,
+            PropertyInfo       = prop,
+            DbType             = colAttr.Type,
+            Ordinal            = colAttr.Ordinal,
+            IsId               = isId,
+            IsIdIsWritable     = isId && isIdWritable && nonIns == null,
+            IsNonInsertable    = nonIns != null || (isId && !isIdWritable),
+            IsNonUpdateable    = nonUpd != null || isId,
+            IsPrimaryKey       = pkAttr != null,
+            PkOrder            = pkAttr?.Order ?? 0,
+            IsVersion          = verAttr != null,
+            IsCreatedBy        = cby != null,
+            IsCreatedOn        = con != null,
+            IsLastUpdatedBy    = lby != null,
+            IsLastUpdatedOn    = lon != null,
+            // Only treat as enum when [EnumColumn] is present; plain enum properties are allowed but not special-cased.
+            IsEnum             = enumAttr != null,
+            EnumType           = enumAttr?.EnumType,     
+            IsJsonType         = jsonAttr != null,
+            JsonSerializerOptions = jsonAttr?.SerializerOptions != null
+                ? new JsonSerializerOptions(jsonAttr.SerializerOptions)
+                : new JsonSerializerOptions()
+        };
+
+        ConfigureEnumColumn(entityType, prop, ci);
+        AttachAuditReferences(tableInfo, ci);
+        AddColumnToMap(entityType, prop, tableInfo, ci);
+        CaptureSpecialColumns(entityType, tableInfo, ci);
+    }
+
+    private static void ConfigureEnumColumn(Type entityType, PropertyInfo prop, ColumnInfo ci)
+    {
+        if (!ci.IsEnum || ci.EnumType == null)
+        {
+            return;
+        }
+
+        ci.EnumUnderlyingType = Enum.GetUnderlyingType(ci.EnumType);
+        ci.EnumAsString = IsStringDbType(ci.DbType);
+
+        if (!ci.EnumAsString && !IsNumericDbType(ci.DbType))
+        {
+            throw new InvalidOperationException(
+                $"Enum column {entityType.FullName}.{prop.Name} must use string or numeric DbType; found {ci.DbType}.");
+        }
+    }
+
+    private static void AttachAuditReferences(TableInfo tableInfo, ColumnInfo ci)
+    {
+        if (ci.IsLastUpdatedBy)
+        {
+            tableInfo.LastUpdatedBy = ci;
+        }
+
+        if (ci.IsLastUpdatedOn)
+        {
+            tableInfo.LastUpdatedOn = ci;
+        }
+
+        if (ci.IsCreatedBy)
+        {
+            tableInfo.CreatedBy     = ci;
+        }
+
+        if (ci.IsCreatedOn)
+        {
+            tableInfo.CreatedOn     = ci;
+        }
+    }
+
+    private static void AddColumnToMap(Type entityType, PropertyInfo prop, TableInfo tableInfo, ColumnInfo ci)
+    {
+        if (tableInfo.Columns.ContainsKey(ci.Name))
+        {
+            throw new InvalidOperationException(
+                $"Duplicate [Column(\"{ci.Name}\")] on {entityType.FullName}.{prop.Name}");
+        }
+
+        tableInfo.Columns[ci.Name] = ci;
+    }
+
+    private static void CaptureSpecialColumns(Type entityType, TableInfo tableInfo, ColumnInfo ci)
+    {
+        if (ci.IsId)
+        {
+            if (tableInfo.Id != null)
+            {
+                throw new TooManyColumns($"Multiple [Id] detected on {entityType.FullName}.");
+            }
+
+            tableInfo.Id = ci;
+
+            if (ci.IsPrimaryKey)
+            {
+                throw new PrimaryKeyOnRowIdColumn(
+                    $"[PrimaryKey] is not allowed on Id column {entityType.FullName}.{ci.PropertyInfo.Name}.");
+            }
+        }
+
+        if (ci.IsVersion)
+        {
+            if (tableInfo.Version != null)
+            {
+                throw new TooManyColumns($"Multiple [Version] detected on {entityType.FullName}.");
+            }
+
+            tableInfo.Version = ci;
+        }
+    }
+
+    private static void ValidatePrimaryKeys(Type entityType, TableInfo tableInfo)
+    {
         var hasId = tableInfo.Id != null;
-        var primaryKeys = new List<IColumnInfo>();
-        foreach (var col in tableInfo.Columns.Values)
+        var pks = tableInfo.Columns.Values.Where(c => c.IsPrimaryKey).ToList();
+
+        if (!hasId && pks.Count == 0)
         {
-            if (col.IsPrimaryKey)
+            throw new InvalidOperationException(
+                $"Type {entityType.FullName} must define either [Id] or [PrimaryKey].");
+        }
+
+        if (pks.Count == 0)
+        {
+            return;
+        }
+
+        var seen = new HashSet<int>();
+        foreach (var pk in pks)
+        {
+            if (pk.PkOrder <= 0 || !seen.Add(pk.PkOrder))
             {
-                primaryKeys.Add(col);
+                throw new InvalidOperationException(
+                    $"Type {entityType.FullName} has invalid PrimaryKey order values (must be unique and > 0).");
             }
         }
+    }
 
-        if (!hasId && primaryKeys.Count == 0)
-        {
-            throw new InvalidOperationException($"Type {type.Name} must define either [Id] or [PrimaryKey] attributes.");
-        }
+    private static bool HasAuditColumns(TableInfo t) =>
+        t.CreatedBy != null || t.CreatedOn != null || t.LastUpdatedBy != null || t.LastUpdatedOn != null;
 
-        if (primaryKeys.Count > 0)
-        {
-            var seenPkOrders = new HashSet<int>();
-            foreach (var pk in primaryKeys)
-            {
-                if (pk.PkOrder <= 0 || !seenPkOrders.Add(pk.PkOrder))
-                {
-                    throw new InvalidOperationException($"Type {type.Name} has invalid PrimaryKey order values (must be unique and > 0).");
-                }
-            }
-        }
-
-        tableInfo.HasAuditColumns = tableInfo.CreatedBy != null ||
-                                    tableInfo.CreatedOn != null ||
-                                    tableInfo.LastUpdatedBy != null ||
-                                    tableInfo.LastUpdatedOn != null;
-
+    private static void AssignOrdinals(Type entityType, TableInfo tableInfo)
+    {
         var colsList = tableInfo.Columns.Values.ToList();
-        var allZero = true;
-        for (var i = 0; i < colsList.Count; i++)
+
+        if (colsList.Any(c => c.Ordinal < 0))
         {
-            if (colsList[i].Ordinal != 0)
-            {
-                allZero = false;
-                break;
-            }
+            throw new InvalidOperationException(
+                $"Negative ColumnAttribute.Ordinal detected in {entityType.FullName}");
         }
+
+        var allZero = colsList.All(c => c.Ordinal == 0);
 
         if (allZero)
         {
@@ -200,28 +252,29 @@ public class TypeMapRegistry : ITypeMapRegistry
             {
                 colsList[i].Ordinal = i + 1;
             }
+
+            return;
         }
-        else
+
+        var seen = new HashSet<int>();
+        foreach (var c in colsList)
         {
-            var seenOrdinals = new HashSet<int>();
-            foreach (var col in colsList)
+            if (c.Ordinal != 0 && !seen.Add(c.Ordinal))
             {
-                if (col.Ordinal != 0)
-                {
-                    if (!seenOrdinals.Add(col.Ordinal))
-                    {
-                        throw new InvalidOperationException($"Duplicate ColumnAttribute.Ordinal {col.Ordinal} in {type.Name}");
-                    }
-                }
+                throw new InvalidOperationException(
+                    $"Duplicate ColumnAttribute.Ordinal {c.Ordinal} in {entityType.FullName}");
             }
         }
-
-        _typeMap[type] = tableInfo;
-        return tableInfo;
     }
 
-    public void Register<T>()
-    {
-        GetTableInfo<T>();
-    }
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsStringDbType(DbType dbType) =>
+        dbType is DbType.String or DbType.AnsiString or DbType.StringFixedLength or DbType.AnsiStringFixedLength;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsNumericDbType(DbType dbType) =>
+        dbType is DbType.Byte or DbType.SByte
+            or DbType.Int16 or DbType.Int32 or DbType.Int64
+            or DbType.UInt16 or DbType.UInt32 or DbType.UInt64
+            or DbType.Decimal or DbType.VarNumeric;
 }

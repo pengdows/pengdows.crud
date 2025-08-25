@@ -28,7 +28,7 @@ public class DuckDbTestContainer : TestContainer
         var context = new DatabaseContext(
             _connectionString,
             DuckDBClientFactory.Instance,
-            services.GetRequiredService<ITypeMapRegistry>());
+            null);
         return Task.FromResult<IDatabaseContext>(context);
     }
 }

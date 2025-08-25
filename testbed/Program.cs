@@ -23,12 +23,11 @@ foreach (var (assembly, type, factory) in DbProviderFactoryFinder.FindAllFactori
 
 var builder = Host.CreateApplicationBuilder(args);
 builder.Services.AddScoped<IAuditValueResolver, StringAuditContextProvider>();
-builder.Services.AddSingleton<ITypeMapRegistry, TypeMapRegistry>();
-
+ 
 var host = builder.Build();
 
 await using (var liteDb = new DatabaseContext("Data Source=mydb.sqlite", SqliteFactory.Instance,
-                 host.Services.GetRequiredService<ITypeMapRegistry>()))
+                 null))
 {
     var lite = new TestProvider(liteDb, host.Services);
     await lite.RunTest();
@@ -83,7 +82,7 @@ await ms.RunTestWithContainerAsync<TestProvider>(host.Services, (db, sp) => new 
 // await o.RunTestWithContainerAsync<OracleTestProvider>(host.Services, (db, sp) => new OracleTestProvider(db, sp));
 // var oracleConnectionString = "User Id=system;Password=mysecurepassword; Data Source=localhost:51521/XEPDB1;";
 // var oracleDb = new DatabaseContext(oracleConnectionString, OracleClientFactory.Instance,
-//     host.Services.GetRequiredService<ITypeMapRegistry>());
+//     null);
 // var oracle = new OracleTestProvider(oracleDb, host.Services);
 // await oracle.RunTest();
 

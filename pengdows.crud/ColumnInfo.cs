@@ -29,6 +29,8 @@ public class ColumnInfo : IColumnInfo
     public bool IsLastUpdatedBy { get; set; }
     public bool IsLastUpdatedOn { get; set; }
     public int Ordinal { get; set; }
+    public Type EnumUnderlyingType { get; set; }
+    public bool EnumAsString { get; set; }
 
     public object? MakeParameterValueFromField<T>(T objectToCreate)
     {
