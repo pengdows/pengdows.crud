@@ -46,10 +46,12 @@ public class MySqlTestContainer : TestContainer
     public override async Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)
     {
         if (_connectionString is null)
+        {
             throw new InvalidOperationException("Container not started yet.");
+        }
 
         return new DatabaseContext(_connectionString, MySqlClientFactory.Instance,
-            services.GetRequiredService<ITypeMapRegistry>());
+            null);
     }
 
     public async ValueTask DisposeAsync()

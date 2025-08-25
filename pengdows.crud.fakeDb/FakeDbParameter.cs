@@ -21,6 +21,8 @@ public class FakeDbParameter : DbParameter, IDbDataParameter
     [AllowNull]
     public override object Value { get; set; }
     public override int Size { get; set; }
+    public override byte Precision { get; set; }
+    public override byte Scale { get; set; }
 
     public override void ResetDbType()
     {

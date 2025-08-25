@@ -1,0 +1,64 @@
+using System;
+using System.Collections.Generic;
+using pengdows.crud.enums;
+using pengdows.crud.FakeDb;
+using pengdows.crud.wrappers;
+using Microsoft.Extensions.Logging.Abstractions;
+using Xunit;
+
+namespace pengdows.crud.Tests;
+
+public class DataSourceInformationParameterTests
+{
+    private static ITrackedConnection BuildSqliteConnection()
+    {
+        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
+        var conn = (FakeDbConnection)factory.CreateConnection();
+        conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}";
+
+        var row = new Dictionary<string, object> { { "version", "3.0" } };
+        conn.EnqueueReaderResult(new[] { row });
+        conn.EnqueueReaderResult(new[] { row });
+        conn.EnqueueReaderResult(new[] { row });
+
+        conn.Open();
+        return new TrackedConnection(conn);
+    }
+
+    [Fact]
+    public void ParameterProperties_ExposeDialectSettings()
+    {
+        var tracked = BuildSqliteConnection();
+        var info = DataSourceInformation.Create(
+            tracked,
+            new FakeDbFactory(SupportedDatabase.Sqlite),
+            NullLoggerFactory.Instance);
+
+        // ParameterMarkerPattern defaults to empty
+        Assert.Equal(string.Empty, info.ParameterMarkerPattern);
+        Assert.NotEqual("@", info.ParameterMarkerPattern);
+
+        // ParameterNameMaxLength reflects dialect setting
+        Assert.Equal(255, info.ParameterNameMaxLength);
+        Assert.NotEqual(0, info.ParameterNameMaxLength);
+
+        // ParameterNamePatternRegex should match valid names and reject invalid ones
+        var validName = "valid";
+        var invalidName = "1invalid";
+        Assert.True(info.ParameterNamePatternRegex.IsMatch(validName));
+        Assert.False(info.ParameterNamePatternRegex.IsMatch(invalidName));
+    }
+
+    [Fact]
+    public void Create_Throws_OnNullArguments()
+    {
+        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
+
+        Assert.Throws<ArgumentNullException>(
+            () => DataSourceInformation.Create(null!, factory, NullLoggerFactory.Instance));
+
+        var tracked = BuildSqliteConnection();
+        Assert.Throws<ArgumentNullException>(
+            () => DataSourceInformation.Create(tracked, null!, NullLoggerFactory.Instance));
+    }
+}

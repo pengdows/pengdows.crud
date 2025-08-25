@@ -95,17 +95,41 @@ public interface IDataSourceInformation
     bool SupportsInsertOnConflict { get; }
 
     /// <summary>
+    /// Gets a value indicating whether the database supports INSERT ... ON DUPLICATE KEY UPDATE semantics.
+    /// </summary>
+    bool SupportsOnDuplicateKey { get; }
+
+    /// <summary>
     /// Indicates whether stored procedure parameter names must match the declared names in the database.
     /// This is true for Oracle, PostgreSQL, and CockroachDB when using named binding.
     /// </summary>
     bool RequiresStoredProcParameterNameMatch { get; }
 
     /// <summary>
-    /// Retrieves the raw database version string from the specified connection.
+    /// Gets the SQL standard compliance level for the detected database.
     /// </summary>
-    /// <param name="connection">The connection to query.</param>
-    /// <returns>The version string reported by the database.</returns>
-    string GetDatabaseVersion(ITrackedConnection connection);
+    SqlStandardLevel StandardCompliance { get; }
+
+    /// <summary>
+    /// Indicates whether the SQL-92 fallback dialect is in use.
+    /// </summary>
+    bool IsUsingFallbackDialect { get; }
+
+    /// <summary>
+    /// Returns a compatibility warning if using the fallback dialect.
+    /// </summary>
+    /// <returns>A warning message or an empty string.</returns>
+    string GetCompatibilityWarning();
+
+    /// <summary>
+    /// Indicates whether SQL:2003 or later features can be used.
+    /// </summary>
+    bool CanUseModernFeatures { get; }
+
+    /// <summary>
+    /// Indicates whether the database meets basic SQL-92 compatibility.
+    /// </summary>
+    bool HasBasicCompatibility { get; }
 
     /// <summary>
     /// Retrieves the data source information schema for the specified connection.

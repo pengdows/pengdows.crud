@@ -2,6 +2,7 @@
 
 using System.Data;
 using System.Data.Common;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.threading;
@@ -41,7 +42,7 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// <summary>
     /// Stored Procedure wrapping style (CALL vs EXEC vs plain SELECT).
     /// </summary>
-    ProcWrappingStyle ProcWrappingStyle { get; set; }
+    ProcWrappingStyle ProcWrappingStyle { get; }
 
     /// <summary>
     /// The hard limit of parameters this provider supports per statement.
@@ -52,21 +53,6 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// Current number of open connections. Usually 0 for DbMode.Standard, 1 otherwise.
     /// </summary>
     long NumberOfOpenConnections { get; }
-
-    /// <summary>
-    /// Character or string that prefixes quoted identifiers (e.g., ", `, [).
-    /// </summary>
-    string QuotePrefix { get; }
-
-    /// <summary>
-    /// Character or string that suffixes quoted identifiers.
-    /// </summary>
-    string QuoteSuffix { get; }
-
-    /// <summary>
-    /// Separator used between schema/table/column parts, typically "."
-    /// </summary>
-    string CompositeIdentifierSeparator { get; }
 
     /// <summary>
     /// Detected database product (e.g., PostgreSQL, Oracle).
@@ -92,6 +78,42 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// True if the provider supports named parameters (e.g., :name, @param).
     /// </summary>
     bool SupportsNamedParameters => DataSourceInfo.SupportsNamedParameters;
+
+    /// <summary>
+    /// Prefix used for quoting identifiers.
+    /// </summary>
+    string QuotePrefix { get; }
+
+    /// <summary>
+    /// Suffix used for quoting identifiers.
+    /// </summary>
+    string QuoteSuffix { get; }
+
+    /// <summary>
+    /// Separator between parts of a composite identifier (e.g., schema and table).
+    /// </summary>
+    string CompositeIdentifierSeparator { get; }
+
+    /// <summary>
+    /// Wraps the provided identifier using the current dialect's quoting rules.
+    /// </summary>
+    /// <param name="name">The identifier to wrap.</param>
+    /// <returns>The wrapped identifier or an empty string if <paramref name="name"/> is null or empty.</returns>
+    string WrapObjectName(string name);
+
+    /// <summary>
+    /// Formats a parameter name according to the provider's conventions.
+    /// </summary>
+    /// <param name="dbParameter">The parameter to format.</param>
+    /// <returns>The correctly formatted parameter name.</returns>
+    string MakeParameterName(DbParameter dbParameter);
+
+    /// <summary>
+    /// Formats a raw parameter name string according to provider conventions.
+    /// </summary>
+    /// <param name="parameterName">The base parameter name.</param>
+    /// <returns>The correctly formatted parameter name.</returns>
+    string MakeParameterName(string parameterName);
 
     /// <summary>
     /// Indicates whether this context supports read operations.
@@ -126,10 +148,6 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// </summary>
     ITrackedConnection GetConnection(ExecutionType executionType, bool isShared = false);
 
-    /// <summary>
-    /// Wraps the given identifier in quote characters.
-    /// </summary>
-    string WrapObjectName(string name);
 
     /// <summary>
     /// Begins a transaction using the native ADO.NET IsolationLevel.
@@ -161,15 +179,6 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// </summary>
     void AssertIsReadConnection();
 
-    /// <summary>
-    /// Formats a DbParameter name for command use.
-    /// </summary>
-    string MakeParameterName(DbParameter dbParameter);
-
-    /// <summary>
-    /// Formats a raw parameter name for command use.
-    /// </summary>
-    string MakeParameterName(string parameterName);
 
     /// <summary>
     /// Returns a connection to the strategy, disposing it if necessary.

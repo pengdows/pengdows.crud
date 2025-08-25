@@ -52,7 +52,13 @@ public class FakeTrackedConnection : TrackedConnection, ITrackedConnection
                 new Dictionary<string, object> { { "version", value } }
             });
 
-            // Result for ExecuteScalar based calls
+            // Configure scalar results by command text
+            foreach (var kvp in scalars)
+            {
+                fake.SetScalarResultForCommand(kvp.Key, kvp.Value);
+            }
+
+            // Fallback for ExecuteScalar based calls
             fake.EnqueueScalarResult(value);
         }
     }

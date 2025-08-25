@@ -43,8 +43,8 @@
     </xs:schema>
     <DataSourceInformation>
         <CompositeIdentifierSeparatorPattern>\.</CompositeIdentifierSeparatorPattern>
-        <DataSourceProductName>Npgsql</DataSourceProductName>
-        <DataSourceProductVersion>13.0.0</DataSourceProductVersion>
+        <DataSourceProductName>CockroachDB</DataSourceProductName>
+        <DataSourceProductVersion>1.2.3</DataSourceProductVersion>
         <DataSourceProductVersionNormalized>13.00.00</DataSourceProductVersionNormalized>
         <GroupByBehavior>2</GroupByBehavior>
         <IdentifierPattern>
@@ -53,7 +53,7 @@
         <IdentifierCase>1</IdentifierCase>
         <OrderByColumnsInSelect>false</OrderByColumnsInSelect>
         <ParameterMarkerFormat>{0}</ParameterMarkerFormat>
-        <ParameterMarkerPattern>@[\p{Lo}\p{Lu}\p{Ll}\p{Lm}_@#][\p{Lo}\p{Lu}\p{Ll}\p{Lm}\p{Nd}\uff3f_@#\$]*(?=\s+|$)
+        <ParameterMarkerPattern>:[\p{Lo}\p{Lu}\p{Ll}\p{Lm}_@#][\p{Lo}\p{Lu}\p{Ll}\p{Lm}\p{Nd}\uff3f_@#\$]*(?=\s+|$)
         </ParameterMarkerPattern>
         <ParameterNameMaxLength>63</ParameterNameMaxLength>
         <QuotedIdentifierPattern>"(([^\"]|\"\")*)"</QuotedIdentifierPattern>

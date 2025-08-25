@@ -16,4 +16,11 @@ public class ExceptionTests
         Assert.Equal("Exceeded", ex.Message);
         Assert.Equal(2000, ex.MaxAllowed);
     }
+
+    [Fact]
+    public void InvalidValueException_CarriesMessage()
+    {
+        var ex = new InvalidValueException("bad value");
+        Assert.Equal("bad value", ex.Message);
+    }
 }

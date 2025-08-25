@@ -102,9 +102,19 @@ public sealed class IsolationResolver : IIsolationResolver
             [
                 IsolationLevel.ReadCommitted,
                 IsolationLevel.Serializable
-            ]
+            ],
 
-            // Add more as needed
+            [SupportedDatabase.DuckDB] =
+            [
+                IsolationLevel.Serializable
+            ],
+
+            [SupportedDatabase.Unknown] =
+            [
+                IsolationLevel.ReadCommitted,
+                IsolationLevel.RepeatableRead,
+                IsolationLevel.Serializable
+            ]
         };
 
         return map.TryGetValue(db, out var set) ? set : throw new NotSupportedException($"Unsupported DB: {db}");
@@ -165,6 +175,20 @@ public sealed class IsolationResolver : IIsolationResolver
                 [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
                 [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable
             },
+
+            SupportedDatabase.DuckDB => new()
+            {
+                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.Serializable,
+                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable
+            },
+
+            SupportedDatabase.Unknown => new()
+            {
+                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
+                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
+                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
+            },
+
             _ => throw new NotSupportedException($"Isolation profile mapping not defined for DB: {db}")
         };
     }

@@ -5,6 +5,7 @@ using System.Data.Common;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
@@ -16,6 +17,7 @@ namespace pengdows.crud;
 public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
 {
     private readonly IDatabaseContext _context;
+    private readonly ISqlDialect _dialect;
 
     private readonly ILogger<ISqlContainer> _logger;
     private readonly Dictionary<string, DbParameter> _parameters = new();
@@ -23,19 +25,47 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
     internal SqlContainer(IDatabaseContext context, string? query = "", ILogger<ISqlContainer>? logger = null)
     {
         _context = context;
+        _dialect = (context as ISqlDialectProvider)?.Dialect;
         _logger = logger ?? NullLogger<ISqlContainer>.Instance;
-        Query = new StringBuilder(query);
+        Query = new StringBuilder(query ?? string.Empty);
     }
 
     public StringBuilder Query { get; }
 
     public int ParameterCount => _parameters.Count;
 
-    public string QuotePrefix => _context.QuotePrefix;
+    public bool HasWhereAppended { get; set; }
 
-    public string QuoteSuffix => _context.QuoteSuffix;
+    public string QuotePrefix => _dialect.QuotePrefix;
 
-    public string CompositeIdentifierSeparator => _context.CompositeIdentifierSeparator;
+    public string QuoteSuffix => _dialect.QuoteSuffix;
+
+    public string CompositeIdentifierSeparator => _dialect.CompositeIdentifierSeparator;
+
+    public string WrapObjectName(string name)
+    {
+        return _dialect.WrapObjectName(name);
+    }
+
+    public string MakeParameterName(DbParameter dbParameter)
+    {
+        return _dialect.MakeParameterName(dbParameter);
+    }
+
+    public string MakeParameterName(string parameterName)
+    {
+        return _dialect.MakeParameterName(parameterName);
+    }
+
+    public DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
+    {
+        return _dialect.CreateDbParameter(name, type, value);
+    }
+
+    public DbParameter CreateDbParameter<T>(DbType type, T value)
+    {
+        return _dialect.CreateDbParameter(type, value);
+    }
 
 
     public void AddParameter(DbParameter parameter)
@@ -45,14 +75,20 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
             return;
         }
 
-        if (string.IsNullOrEmpty(parameter.ParameterName)) parameter.ParameterName = GenerateRandomName();
+        if (string.IsNullOrEmpty(parameter.ParameterName))
+        {
+            parameter.ParameterName = GenerateRandomName();
+        }
 
         _parameters.Add(parameter.ParameterName, parameter);
     }
 
     public DbParameter AddParameterWithValue<T>(DbType type, T value)
     {
-        if (value is DbParameter) throw new ArgumentException("Parameter type can't be DbParameter.");
+        if (value is DbParameter)
+        {
+            throw new ArgumentException("Parameter type can't be DbParameter.");
+        }
 
         return AddParameterWithValue(null, type, value);
     }
@@ -70,8 +106,10 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
     {
         var cmd = conn.CreateCommand();
         if (_context is TransactionContext transactionContext)
+        {
             cmd.Transaction = (transactionContext.Transaction as DbTransaction)
                               ?? throw new InvalidOperationException("Transaction is not a transaction");
+        }
 
         return (cmd as DbCommand)
                ?? throw new InvalidOperationException("Command is not a DbCommand");
@@ -124,34 +162,27 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
 
             // Named parameter support check
             if (_context.SupportsNamedParameters)
+            {
                 // Trust that dev has set correct names
-                return string.Join(", ", _parameters.Values.Select(p => _context.MakeParameterName(p)));
+                return string.Join(", ", _parameters.Values.Select(p => _dialect.MakeParameterName(p)));
+            }
 
             // Positional binding (e.g., SQLite, MySQL)
             return string.Join(", ", Enumerable.Repeat("?", _parameters.Count));
         }
     }
-
-
-    public string WrapObjectName(string objectName)
-    {
-        return _context.WrapObjectName(objectName);
-    }
-
-    public string MakeParameterName(DbParameter parameter)
-    {
-        return _context.MakeParameterName(parameter);
-    }
-
     private string GenerateRandomName()
     {
         while (true)
         {
             var name = _context.GenerateRandomName();
-            if (!_parameters.ContainsKey(name)) return name;
+            if (!_parameters.ContainsKey(name))
+            {
+                return name;
+            }
         }
     }
-
+    
     public async Task<int> ExecuteNonQueryAsync(CommandType commandType = CommandType.Text)
     {
         _context.AssertIsWriteConnection();
@@ -165,7 +196,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
             conn = _context.GetConnection(ExecutionType.Write, isTransaction);
             await using var connectionLocker = conn.GetLock();
             await connectionLocker.LockAsync().ConfigureAwait(false);
-            cmd = PrepareCommand(conn, commandType, ExecutionType.Write);
+            cmd = await PrepareCommandAsync(conn, commandType, ExecutionType.Write).ConfigureAwait(false);
 
             return await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
         }
@@ -204,11 +235,11 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
             conn = _context.GetConnection(ExecutionType.Read, isTransaction);
             var connectionLocker = conn.GetLock();
             await connectionLocker.LockAsync().ConfigureAwait(false);
-            cmd = PrepareCommand(conn, commandType, ExecutionType.Read);
+            cmd = await PrepareCommandAsync(conn, commandType, ExecutionType.Read).ConfigureAwait(false);
 
-            // unless the databaseContext is in a transaction or SingleConnection mode, 
-            // a new connection is returned for every READ operation, therefore, we 
-            // are going to set the connection to close and dispose when the reader is 
+            // unless the databaseContext is in a transaction or SingleConnection mode,
+            // a new connection is returned for every READ operation, therefore, we
+            // are going to set the connection to close and dispose when the reader is
             // closed. This prevents leaking
             var isSingleConnection = _context.ConnectionMode == DbMode.SingleConnection;
             var isReadOnlyConnection = _context.IsReadOnlyConnection;
@@ -219,7 +250,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
 
             // if this is our single connection to the database, for a transaction
             //or sqlCe mode, or single connection mode, we will NOT close the connection.
-            // otherwise, we will have the connection set to autoclose so that we 
+            // otherwise, we will have the connection set to autoclose so that we
             //close the underlying connection when the DbDataReader is closed;
             var dr = await cmd.ExecuteReaderAsync(behavior).ConfigureAwait(false);
             return new TrackedReader(dr, conn, connectionLocker, behavior == CommandBehavior.CloseConnection);
@@ -244,13 +275,19 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
     }
 
 
-    private DbCommand PrepareCommand(ITrackedConnection conn, CommandType commandType, ExecutionType executionType)
+    private async Task<DbCommand> PrepareCommandAsync(ITrackedConnection conn, CommandType commandType, ExecutionType executionType)
     {
-        if (commandType == CommandType.TableDirect) throw new NotSupportedException("TableDirect isn't supported.");
+        if (commandType == CommandType.TableDirect)
+        {
+            throw new NotSupportedException("TableDirect isn't supported.");
+        }
 
-        if (Query.Length == 0) throw new InvalidOperationException("SQL query is empty.");
+        if (Query.Length == 0)
+        {
+            throw new InvalidOperationException("SQL query is empty.");
+        }
 
-        OpenConnection(conn);
+        await OpenConnectionAsync(conn).ConfigureAwait(false);
         var cmd = CreateCommand(conn);
         cmd.CommandType = CommandType.Text;
         _logger.LogInformation("Executing SQL: {Sql}", Query.ToString());
@@ -264,24 +301,38 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
             ? WrapForStoredProc(executionType)
             : Query.ToString();
         if (_parameters.Count > _context.MaxParameterLimit)
+        {
             throw new InvalidOperationException(
                 $"Query exceeds the maximum parameter limit of {_context.MaxParameterLimit} for {_context.DatabaseProductName}.");
+        }
 
-        foreach (var param in _parameters.Values) cmd.Parameters.Add(param);
+        foreach (var param in _parameters.Values)
+        {
+            cmd.Parameters.Add(param);
+        }
 
-        if (_context.PrepareStatements) cmd.Prepare();
+        if (_context.PrepareStatements)
+        {
+            cmd.Prepare();
+        }
 
         return cmd;
     }
 
-    private void OpenConnection(ITrackedConnection conn)
+    private Task OpenConnectionAsync(ITrackedConnection conn)
     {
-        if (conn.State != ConnectionState.Open) conn.Open();
+        if (conn.State != ConnectionState.Open)
+        {
+            return conn.OpenAsync();
+        }
+
+        return Task.CompletedTask;
     }
 
     private void Cleanup(DbCommand? cmd, ITrackedConnection? conn, ExecutionType executionType)
     {
         if (cmd != null)
+        {
             try
             {
                 cmd.Parameters?.Clear();
@@ -293,6 +344,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
                 _logger.LogWarning($"Command disposal failed: {ex.Message}");
                 // We're intentionally not retrying here anymore — disposal failure is generally harmless in this case
             }
+        }
 
         // Don't dispose read connections — they are left open until the reader disposes
         if (executionType == ExecutionType.Read)

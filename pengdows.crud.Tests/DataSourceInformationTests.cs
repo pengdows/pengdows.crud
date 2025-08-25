@@ -4,11 +4,11 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
-using System.Reflection;
 using pengdows.crud.enums;
 using pengdows.crud.FakeDb;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.wrappers;
+using pengdows.crud.dialects;
 using Xunit;
 
 #endregion
@@ -21,7 +21,10 @@ public static class DataSourceTestData
     {
         foreach (SupportedDatabase db in Enum.GetValues(typeof(SupportedDatabase)))
         {
-            if (db == SupportedDatabase.Unknown) continue;
+            if (db == SupportedDatabase.Unknown)
+            {
+                continue;
+            }
 
             var productName = db switch
             {
@@ -36,29 +39,41 @@ public static class DataSourceTestData
                 _ => db.ToString()
             };
 
+            var markerFormat = db switch
+            {
+                SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.Oracle => ":{0}",
+                SupportedDatabase.DuckDB => "$" + "{0}",
+                _ => "@{0}"
+            };
+
             var schema = DataSourceInformation.BuildEmptySchema(
                 productName,
                 "1.2.3",
                 db == SupportedDatabase.Sqlite ? "@p[0-9]+" : "@[0-9]+",
-                "@{0}",
+                markerFormat,
                 64,
                 @"@\\w+",
                 @"[@:]\w+",
                 db != SupportedDatabase.Sqlite
             );
 
-            var versionSql = db switch
+            var factory = new FakeDbFactory(db.ToString());
+
+            SqlDialect dialect = db switch
             {
-                SupportedDatabase.SqlServer => "SELECT @@VERSION",
-                SupportedDatabase.MySql => "SELECT VERSION()",
-                SupportedDatabase.MariaDb => "SELECT VERSION()",
-                SupportedDatabase.PostgreSql => "SELECT version()",
-                SupportedDatabase.CockroachDb => "SELECT version()",
-                SupportedDatabase.Sqlite => "SELECT sqlite_version()",
-                SupportedDatabase.Firebird => "SELECT rdb$get_context('SYSTEM', 'VERSION')",
-                SupportedDatabase.Oracle => "SELECT * FROM v$version",
-                _ => string.Empty
+                SupportedDatabase.SqlServer => new SqlServerDialect(factory, NullLogger.Instance),
+                SupportedDatabase.MySql => new MySqlDialect(factory, NullLogger.Instance),
+                SupportedDatabase.MariaDb => new MySqlDialect(factory, NullLogger.Instance),
+                SupportedDatabase.PostgreSql => new PostgreSqlDialect(factory, NullLogger.Instance),
+                SupportedDatabase.CockroachDb => new PostgreSqlDialect(factory, NullLogger.Instance),
+                SupportedDatabase.Sqlite => new SqliteDialect(factory, NullLogger.Instance),
+                SupportedDatabase.Firebird => new FirebirdDialect(factory, NullLogger.Instance),
+                SupportedDatabase.Oracle => new OracleDialect(factory, NullLogger.Instance),
+                SupportedDatabase.DuckDB => new DuckDbDialect(factory, NullLogger.Instance),
+                _ => new Sql92Dialect(factory, NullLogger.Instance)
             };
+
+            var versionSql = dialect.GetVersionQuery();
 
             var versionString = db switch
             {
@@ -92,7 +107,7 @@ public class DataSourceInformationTests
         var conn = new FakeTrackedConnection(x, schema, scalars);
 
         // Act
-        var info = DataSourceInformation.Create(conn, NullLoggerFactory.Instance);
+        var info = DataSourceInformation.Create(conn, factory, NullLoggerFactory.Instance);
 
         // Assert: product detection
         //Assert.Equal(db, info.Product);
@@ -104,19 +119,20 @@ public class DataSourceInformationTests
         var expectedMarker = db switch
         {
             SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.Oracle => ":",
+            SupportedDatabase.DuckDB => "$",
             _ => "@"
         };
         Assert.Equal(expectedMarker, info.ParameterMarker);
 
         // Assert: major version parsing
         var expectedMajor = db == SupportedDatabase.PostgreSql ? 15 : 1;
-        Assert.Equal(expectedMajor, info.GetMajorVersion());
+        Assert.Equal(expectedMajor, info.ParsedVersion?.Major);
 
         // Assert: merge support
         var canMerge = db == SupportedDatabase.SqlServer
                        || db == SupportedDatabase.Oracle
-                       || db == SupportedDatabase.Firebird
-                       || (db == SupportedDatabase.PostgreSql && info.GetMajorVersion() > 14);
+                       || (db == SupportedDatabase.Firebird && info.ParsedVersion?.Major >= 2)
+                       || (db == SupportedDatabase.PostgreSql && info.ParsedVersion?.Major > 14);
         Assert.Equal(canMerge, info.SupportsMerge);
 
         // Assert: insert-on-conflict support
@@ -125,10 +141,16 @@ public class DataSourceInformationTests
             SupportedDatabase.PostgreSql,
             SupportedDatabase.CockroachDb,
             SupportedDatabase.Sqlite,
+            SupportedDatabase.DuckDB
+        }).Contains(db);
+        Assert.Equal(canConflict, info.SupportsInsertOnConflict);
+
+        var canOnDuplicateKey = (new[]
+        {
             SupportedDatabase.MySql,
             SupportedDatabase.MariaDb
         }).Contains(db);
-        Assert.Equal(canConflict, info.SupportsInsertOnConflict);
+        Assert.Equal(canOnDuplicateKey, info.SupportsOnDuplicateKey);
 
         // Assert: proc wrap style
         var expectedWrap = db switch
@@ -137,13 +159,13 @@ public class DataSourceInformationTests
             SupportedDatabase.Oracle => ProcWrappingStyle.Oracle,
             SupportedDatabase.MySql or SupportedDatabase.MariaDb => ProcWrappingStyle.Call,
             SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb => ProcWrappingStyle.PostgreSQL,
-            SupportedDatabase.Firebird => ProcWrappingStyle.ExecuteProcedure,
+            SupportedDatabase.Firebird => ProcWrappingStyle.Call,
             _ => ProcWrappingStyle.None
         };
         var expectedRequiresStoredProcParameterNameMatch = db switch
         {
             SupportedDatabase.Firebird or SupportedDatabase.Sqlite or SupportedDatabase.SqlServer
-                or SupportedDatabase.MySql or SupportedDatabase.MariaDb => false,
+                or SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.DuckDB => false,
             SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.Oracle => true,
             _ => true
         };
@@ -164,28 +186,14 @@ public class DataSourceInformationTests
         connection.ConnectionString = $"Data Source=test;EmulatedProduct={db}";
         var tracked = new FakeTrackedConnection(connection, schema, scalars);
 
-        var info = DataSourceInformation.Create(tracked, NullLoggerFactory.Instance);
+        var dialect = SqlDialectFactory.CreateDialect(tracked, factory, NullLoggerFactory.Instance);
+        var info = new DataSourceInformation(dialect);
 
-        var result = info.GetDatabaseVersion(tracked);
+        var result = dialect.GetDatabaseVersion(tracked);
         var expected = scalars.Values.First().ToString();
         Assert.Equal(expected, result);
     }
 
-    [Fact]
-    public void GetDatabaseVersion_UnknownProduct_ReturnsUnknown()
-    {
-        var factory = new FakeDbFactory(SupportedDatabase.SqlServer);
-        var connection = factory.CreateConnection();
-        connection.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}";
-        var tracked = new FakeTrackedConnection(connection, DataSourceInformation.BuildEmptySchema("test", "1", "@", "@{0}", 64, "@w+", "@w+", true), new Dictionary<string, object>());
-        var info = DataSourceInformation.Create(tracked, NullLoggerFactory.Instance);
-
-        var prop = typeof(DataSourceInformation).GetProperty("Product", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
-        prop!.SetValue(info, SupportedDatabase.Unknown);
-
-        var result = info.GetDatabaseVersion(tracked);
-        Assert.Equal("Unknown Database Version", result);
-    }
     private static ITrackedConnection BuildSqliteConnectionMock()
     {
         var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
@@ -206,7 +214,7 @@ public class DataSourceInformationTests
     public void GetSchema_UsesEmbeddedForSqlite()
     {
         var tracked = BuildSqliteConnectionMock();
-        var info = DataSourceInformation.Create(tracked, NullLoggerFactory.Instance);
+        var info = DataSourceInformation.Create(tracked, new FakeDbFactory(SupportedDatabase.Sqlite), NullLoggerFactory.Instance);
 
         var schema = info.GetSchema(tracked);
         Assert.Equal("SQLite", schema.Rows[0].Field<string>("DataSourceProductName"));
@@ -220,31 +228,11 @@ public class DataSourceInformationTests
         var conn = factory.CreateConnection();
         conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}";
         using var tracked = new TrackedConnection(conn);
-        var info = DataSourceInformation.Create(tracked, NullLoggerFactory.Instance);
+        var info = DataSourceInformation.Create(tracked, factory, NullLoggerFactory.Instance);
 
         var schema = info.GetSchema(tracked);
         Assert.Contains("SQL Server", schema.Rows[0].Field<string>("DataSourceProductName"));
         Assert.Equal("{0}", schema.Rows[0].Field<string>("ParameterMarkerFormat"));
     }
 
-    [Theory]
-    [InlineData("SQL Server 2019", SupportedDatabase.SqlServer)]
-    [InlineData("MariaDB 10.3", SupportedDatabase.MariaDb)]
-    [InlineData("MySQL 8.0", SupportedDatabase.MySql)]
-    [InlineData("Npgsql", SupportedDatabase.PostgreSql)]
-    [InlineData("PostgreSQL 14", SupportedDatabase.PostgreSql)]
-    [InlineData("Oracle Database", SupportedDatabase.Oracle)]
-    [InlineData("SQLite", SupportedDatabase.Sqlite)]
-    [InlineData("Firebird", SupportedDatabase.Firebird)]
-    [InlineData("Something Else", SupportedDatabase.Unknown)]
-    [InlineData(null, SupportedDatabase.Unknown)]
-    public void InferDatabaseProduct_ReturnsExpected(string name, SupportedDatabase expected)
-    {
-        var method = typeof(DataSourceInformation).GetMethod(
-            "InferDatabaseProduct",
-            BindingFlags.NonPublic | BindingFlags.Static)!;
-
-        var result = (SupportedDatabase)method.Invoke(null, new object?[] { name })!;
-        Assert.Equal(expected, result);
-    }
 }

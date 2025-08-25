@@ -20,5 +20,6 @@ public class EnumTests
     public void SupportedDatabase_ContainsExpectedValues()
     {
         Assert.True(Enum.IsDefined(typeof(SupportedDatabase), SupportedDatabase.PostgreSql));
+        Assert.True(Enum.IsDefined(typeof(SupportedDatabase), SupportedDatabase.DuckDB));
     }
 }

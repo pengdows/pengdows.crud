@@ -3,6 +3,7 @@
 using System.Data;
 using System.Data.Common;
 using System.Text;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
@@ -15,7 +16,7 @@ namespace pengdows.crud;
 /// Represents a composable, parameterized SQL container that supports dynamic query building,
 /// safe parameter binding, and execution in the context of a tracked database connection.
 /// </summary>
-public interface ISqlContainer : ISafeAsyncDisposableBase
+public interface ISqlContainer :ISafeAsyncDisposableBase
 {
     /// <summary>
     /// Gets the <see cref="StringBuilder"/> used to compose the SQL query.
@@ -28,19 +29,64 @@ public interface ISqlContainer : ISafeAsyncDisposableBase
     int ParameterCount { get; }
 
     /// <summary>
-    /// Gets the string used to prefix quoted identifiers.
+    /// Indicates whether a WHERE clause has already been appended to the query.
+    /// </summary>
+    bool HasWhereAppended { get; set; }
+
+    /// <summary>
+    /// Prefix used for quoting identifiers.
     /// </summary>
     string QuotePrefix { get; }
 
     /// <summary>
-    /// Gets the string used to suffix quoted identifiers.
+    /// Suffix used for quoting identifiers.
     /// </summary>
     string QuoteSuffix { get; }
 
     /// <summary>
-    /// Gets the separator used when quoting composite identifiers.
+    /// Separator between parts of a composite identifier.
     /// </summary>
     string CompositeIdentifierSeparator { get; }
+
+    /// <summary>
+    /// Wraps the provided identifier using the container's dialect rules.
+    /// </summary>
+    /// <param name="name">The identifier to wrap.</param>
+    /// <returns>The wrapped identifier or an empty string when <paramref name="name"/> is null or empty.</returns>
+    string WrapObjectName(string name);
+
+    /// <summary>
+    /// Formats a parameter name using the container's dialect.
+    /// </summary>
+    /// <param name="dbParameter">The parameter to format.</param>
+    /// <returns>The correctly formatted parameter name.</returns>
+    string MakeParameterName(DbParameter dbParameter);
+
+    /// <summary>
+    /// Formats a raw parameter name using the container's dialect.
+    /// </summary>
+    /// <param name="parameterName">The base parameter name.</param>
+    /// <returns>The correctly formatted parameter name.</returns>
+    string MakeParameterName(string parameterName);
+
+    /// <summary>
+    /// Creates a new <see cref="DbParameter"/> without adding it to the container.
+    /// </summary>
+    /// <typeparam name="T">The value type.</typeparam>
+    /// <param name="name">Parameter name or <c>null</c> for auto-generation.</param>
+    /// <param name="type">Database type of the parameter.</param>
+    /// <param name="value">The value to assign.</param>
+    /// <returns>The created parameter.</returns>
+    DbParameter CreateDbParameter<T>(string? name, DbType type, T value);
+
+    /// <summary>
+    /// Creates an unnamed <see cref="DbParameter"/> without adding it to the container.
+    /// </summary>
+    /// <typeparam name="T">The value type.</typeparam>
+    /// <param name="type">Database type of the parameter.</param>
+    /// <param name="value">The value to assign.</param>
+    /// <returns>The created parameter.</returns>
+    DbParameter CreateDbParameter<T>(DbType type, T value);
 
     /// <summary>
     /// Adds a pre-constructed parameter to the container.
@@ -115,17 +161,4 @@ public interface ISqlContainer : ISafeAsyncDisposableBase
     /// <returns>The wrapped command text.</returns>
     string WrapForStoredProc(ExecutionType executionType, bool includeParameters = true);
 
-    /// <summary>
-    /// Wraps an object name using the current quoting rules.
-    /// </summary>
-    /// <param name="objectName">The name to wrap.</param>
-    /// <returns>The wrapped object name.</returns>
-    string WrapObjectName(string objectName);
-
-    /// <summary>
-    /// Generates a command parameter name for the given parameter.
-    /// </summary>
-    /// <param name="parameter">The parameter for which to generate a name.</param>
-    /// <returns>The generated name.</returns>
-    string MakeParameterName(DbParameter parameter);
 }

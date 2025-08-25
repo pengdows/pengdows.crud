@@ -7,7 +7,7 @@
         <Version>1.0.0.0</Version>
         <AssemblyVersion>1.0.0.0</AssemblyVersion>
         <FileVersion>1.0.0.0</FileVersion>
-        <Description>High Speed Lightweight ORM/DB Access</Description>
+        <Description>High Speed Lightweight DB Access</Description>
         <Authors>Pengdows</Authors>
         <PackageTags>crud,nuget</PackageTags>
         <RepositoryUrl>https://github.com/pengdows/pengdows.crud</RepositoryUrl>

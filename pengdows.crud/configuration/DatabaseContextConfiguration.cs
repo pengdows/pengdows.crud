@@ -12,4 +12,5 @@ public class DatabaseContextConfiguration : IDatabaseContextConfiguration
     public string ProviderName { get; set; }
     public DbMode DbMode { get; set; } = DbMode.Standard;
     public ReadWriteMode ReadWriteMode { get; set; } = ReadWriteMode.ReadWrite;
+    public bool SetDefaultSearchPath { get; set; }
 }

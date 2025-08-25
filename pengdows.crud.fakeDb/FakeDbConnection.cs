@@ -14,12 +14,15 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
     private SupportedDatabase? _emulatedProduct;
     private DataTable? _schemaTable;
     private ConnectionState _state = ConnectionState.Closed;
+    private string _serverVersion = "1.0";
+    private int? _maxParameterLimit;
     public override string DataSource => "FakeSource";
-    public override string ServerVersion => "1.0";
+    public override string ServerVersion => GetEmulatedServerVersion();
 
     internal readonly Queue<IEnumerable<Dictionary<string, object>>> ReaderResults = new();
     internal readonly Queue<object?> ScalarResults = new();
-    internal readonly Queue<int> NonQueryResults = new();
+    public readonly Queue<int> NonQueryResults = new();
+    internal readonly Dictionary<string, object?> ScalarResultsByCommand = new();
 
     public void EnqueueReaderResult(IEnumerable<Dictionary<string, object>> rows)
     {
@@ -36,6 +39,48 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
         NonQueryResults.Enqueue(value);
     }
 
+    public void SetScalarResultForCommand(string commandText, object? value)
+    {
+        ScalarResultsByCommand[commandText] = value;
+    }
+
+    public void SetServerVersion(string version)
+    {
+        _serverVersion = version;
+    }
+
+    public void SetMaxParameterLimit(int limit)
+    {
+        _maxParameterLimit = limit;
+    }
+
+    public int? GetMaxParameterLimit()
+    {
+        return _maxParameterLimit;
+    }
+
+    private string GetEmulatedServerVersion()
+    {
+        if (!string.IsNullOrEmpty(_serverVersion) && _serverVersion != "1.0")
+        {
+            return _serverVersion;
+        }
+
+        return EmulatedProduct switch
+        {
+            SupportedDatabase.SqlServer => "Microsoft SQL Server 2019",
+            SupportedDatabase.PostgreSql => "PostgreSQL 15.0",
+            SupportedDatabase.MySql => "8.0.33",
+            SupportedDatabase.MariaDb => "10.11.0",
+            SupportedDatabase.Sqlite => "3.42.0",
+            SupportedDatabase.Oracle => "Oracle Database 19c",
+            SupportedDatabase.Firebird => "4.0.0",
+            SupportedDatabase.CockroachDb => "v23.1.0",
+            SupportedDatabase.DuckDB => "DuckDB 0.9.2",
+            _ => "1.0"
+        };
+    }
+
     public SupportedDatabase EmulatedProduct
     {
         get
@@ -46,7 +91,9 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
         set
         {
             if (_emulatedProduct == null || _emulatedProduct == SupportedDatabase.Unknown)
+            {
                 _emulatedProduct = value;
+            }
         }
     }
 
@@ -56,13 +103,18 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
         set => _connectionString = value;
     }
 
-    public int ConnectionTimeout { get; }
+    public override int ConnectionTimeout => 0;
     public override string Database => _emulatedProduct?.ToString() ?? string.Empty;
 
     public override ConnectionState State => _state;
 
+    public int OpenCount { get; private set; }
+
+    public int OpenAsyncCount { get; private set; }
+
     public override void Open()
     {
+        OpenCount++;
         ParseEmulatedProduct(ConnectionString);
         var original = _state;
 
@@ -94,14 +146,17 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
         await base.DisposeAsync();
     }
 
-    public override async Task CloseAsync()
+    public override Task CloseAsync()
     {
         Close();
+        return Task.CompletedTask;
     }
 
-    public override async Task OpenAsync(CancellationToken cancellationToken)
+    public override Task OpenAsync(CancellationToken cancellationToken)
     {
+        OpenAsyncCount++;
         Open();
+        return Task.CompletedTask;
     }
 
     private SupportedDatabase ParseEmulatedProduct(string connStr)
@@ -110,11 +165,15 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
         {
             var builder = new DbConnectionStringBuilder { ConnectionString = connStr };
             if (!builder.TryGetValue("EmulatedProduct", out var raw))
+            {
                 EmulatedProduct = SupportedDatabase.Unknown;
+            }
             else
+            {
                 EmulatedProduct = Enum.TryParse<SupportedDatabase>(raw.ToString(), true, out var result)
                     ? result
                     : throw new ArgumentException($"Invalid EmulatedProduct: {raw}");
+            }
         }
 
         return EmulatedProduct;
@@ -122,7 +181,10 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
 
     private void RaiseStateChangedEvent(ConnectionState originalState)
     {
-        if (_state != originalState) OnStateChange(new StateChangeEventArgs(originalState, _state));
+        if (_state != originalState)
+        {
+            OnStateChange(new StateChangeEventArgs(originalState, _state));
+        }
     }
 
     protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel)
@@ -137,10 +199,15 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
 
     public override DataTable GetSchema()
     {
-        if (_schemaTable != null) return _schemaTable;
+        if (_schemaTable != null)
+        {
+            return _schemaTable;
+        }
 
         if (_emulatedProduct is null or SupportedDatabase.Unknown)
+        {
             throw new InvalidOperationException("EmulatedProduct must be configured via connection string.");
+        }
 
         var resourceName = $"pengdows.crud.fakeDb.xml.{_emulatedProduct}.schema.xml";
 
@@ -156,10 +223,15 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
 
     public override DataTable GetSchema(string meta)
     {
-        if (_schemaTable != null) return _schemaTable;
+        if (_schemaTable != null)
+        {
+            return _schemaTable;
+        }
 
         if (_emulatedProduct is null or SupportedDatabase.Unknown)
+        {
             throw new InvalidOperationException("EmulatedProduct must be configured via connection string.");
+        }
 
         var resourceName = $"pengdows.crud.fakeDb.xml.{_emulatedProduct}.schema.xml";
 

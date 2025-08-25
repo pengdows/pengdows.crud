@@ -3,11 +3,14 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Data.Common;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.FakeDb;
+using pengdows.crud.Tests.Mocks;
 using pengdows.crud.connection;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
@@ -152,6 +155,91 @@ public class TransactionContextTests
         Assert.True(char.IsLetter(name[0]));
     }
 
+    [Fact]
+    public void QuoteProperties_DelegateToContext()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        using var tx = context.BeginTransaction();
+        Assert.Equal(context.QuotePrefix, tx.QuotePrefix);
+        Assert.Equal(context.QuoteSuffix, tx.QuoteSuffix);
+        Assert.Equal(context.CompositeIdentifierSeparator, tx.CompositeIdentifierSeparator);
+        Assert.NotEqual("?", tx.QuotePrefix);
+        Assert.NotEqual("?", tx.QuoteSuffix);
+        Assert.NotEqual("?", tx.CompositeIdentifierSeparator);
+    }
+
+    [Fact]
+    public void WrapObjectName_DelegatesToContext()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        using var tx = context.BeginTransaction();
+        var result = tx.WrapObjectName("Test");
+        Assert.Equal(context.WrapObjectName("Test"), result);
+    }
+
+    [Fact]
+    public void WrapObjectName_Null_ReturnsEmpty()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        using var tx = context.BeginTransaction();
+        Assert.Equal(string.Empty, tx.WrapObjectName(null));
+    }
+
+    [Fact]
+    public void MakeParameterName_DelegatesToContext()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        using var tx = context.BeginTransaction();
+        var p = tx.CreateDbParameter("p", DbType.Int32, 1);
+        Assert.Equal(context.MakeParameterName(p), tx.MakeParameterName(p));
+    }
+
+    [Fact]
+    public void MakeParameterName_NullParameter_Throws()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        using var tx = context.BeginTransaction();
+        Assert.Throws<NullReferenceException>(() => tx.MakeParameterName((DbParameter)null!));
+    }
+
+    [Fact]
+    public void MakeParameterName_String_DelegatesToContext()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        using var tx = context.BeginTransaction();
+        Assert.Equal(context.MakeParameterName("p"), tx.MakeParameterName("p"));
+    }
+
+    [Fact]
+    public void MakeParameterName_NullString_ReturnsMarker()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        using var tx = context.BeginTransaction();
+        Assert.Equal(context.DataSourceInfo.ParameterMarker, tx.MakeParameterName((string)null));
+    }
+
+    [Fact]
+    public void CreateDbParameter_DelegatesToContext()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        using var tx = context.BeginTransaction();
+        var p = tx.CreateDbParameter("p", DbType.Int32, 1);
+
+        Assert.Equal("p", p.ParameterName);
+        Assert.Equal(DbType.Int32, p.DbType);
+        Assert.Equal(1, p.Value);
+    }
+
+    [Fact]
+    public void CreateDbParameter_FactoryReturnsNull_Throws()
+    {
+        var factory = new NullParameterFactory();
+        var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory);
+        using var tx = ctx.BeginTransaction();
+
+        Assert.Throws<InvalidOperationException>(() => tx.CreateDbParameter("p", DbType.Int32, 1));
+    }
+
     [Theory]
     [MemberData(nameof(AllSupportedProviders))]
     public void NestedTransactionsFail(SupportedDatabase product)
@@ -265,29 +353,25 @@ public class TransactionContextTests
     }
 
     [Fact]
-    public void MakeParameterName_ForwardsToContext()
-    {
-        var context = (DatabaseContext)CreateContext(SupportedDatabase.PostgreSql);
-        using var tx = context.BeginTransaction();
-        var param = context.CreateDbParameter("foo", DbType.Int32, 1);
-
-        Assert.Equal(context.MakeParameterName("foo"), tx.MakeParameterName("foo"));
-        Assert.Equal(context.MakeParameterName(param), tx.MakeParameterName(param));
-    }
-
-    [Fact]
     public void ProcWrappingStyle_GetMatchesContext()
     {
         var context = (DatabaseContext)CreateContext(SupportedDatabase.Sqlite);
         using var tx = context.BeginTransaction();
 
         Assert.Equal(context.ProcWrappingStyle, tx.ProcWrappingStyle);
-
-        ((IDatabaseContext)tx).ProcWrappingStyle = ProcWrappingStyle.Call;
-        Assert.Equal(ProcWrappingStyle.Call, tx.ProcWrappingStyle);
-
         tx.Dispose();
-        Assert.Throws<ObjectDisposedException>(() => ((IDatabaseContext)tx).ProcWrappingStyle = ProcWrappingStyle.Call);
+        Assert.Equal(context.ProcWrappingStyle, tx.ProcWrappingStyle);
+    }
+
+    [Fact]
+    public void QuoteProperties_MatchContext()
+    {
+        var context = (DatabaseContext)CreateContext(SupportedDatabase.PostgreSql);
+        using var tx = context.BeginTransaction();
+
+        Assert.Equal(context.QuotePrefix, tx.QuotePrefix);
+        Assert.Equal(context.QuoteSuffix, tx.QuoteSuffix);
+        Assert.Equal(context.CompositeIdentifierSeparator, tx.CompositeIdentifierSeparator);
     }
 
     [Fact]
@@ -376,6 +460,61 @@ public class TransactionContextTests
         Assert.True((e1 is null) ^ (e2 is null));
         Assert.IsType<InvalidOperationException>(e1 ?? e2!);
         Assert.Equal(1, strategy.ReleaseCount);
+    }
+
+    [Fact]
+    public async Task RollbackAsync_MarksAsRolledBack()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        var tx = context.BeginTransaction();
+        var method = typeof(TransactionContext).GetMethod("RollbackAsync", BindingFlags.Instance | BindingFlags.NonPublic);
+
+        await (Task)method!.Invoke(tx, null)!;
+
+        Assert.True(tx.WasRolledBack);
+        Assert.True(tx.IsCompleted);
+    }
+
+    [Fact]
+    public async Task RollbackAsync_Twice_Throws()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        var tx = context.BeginTransaction();
+        var method = typeof(TransactionContext).GetMethod("RollbackAsync", BindingFlags.Instance | BindingFlags.NonPublic);
+
+        await (Task)method!.Invoke(tx, null)!;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await (Task)method.Invoke(tx, null)!);
+    }
+
+    [Fact]
+    public void PropertyDelegates_MatchContext()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        using var tx = (TransactionContext)context.BeginTransaction();
+        var identity = (IContextIdentity)context;
+
+        Assert.Equal(context.NumberOfOpenConnections, tx.NumberOfOpenConnections);
+        Assert.NotEqual(0, tx.NumberOfOpenConnections);
+        Assert.Equal(context.Product, tx.Product);
+        Assert.Equal(context.MaxNumberOfConnections, tx.MaxNumberOfConnections);
+        Assert.NotEqual(0, tx.MaxNumberOfConnections);
+        Assert.Equal(context.IsReadOnlyConnection, tx.IsReadOnlyConnection);
+        Assert.False(tx.IsReadOnlyConnection);
+        Assert.Equal(context.RCSIEnabled, tx.RCSIEnabled);
+        Assert.False(tx.RCSIEnabled);
+        Assert.Equal(context.MaxParameterLimit, tx.MaxParameterLimit);
+        Assert.NotEqual(0, tx.MaxParameterLimit);
+        Assert.Equal(DbMode.SingleConnection, tx.ConnectionMode);
+        Assert.NotEqual(DbMode.SingleWriter, tx.ConnectionMode);
+        Assert.Equal(context.TypeMapRegistry, tx.TypeMapRegistry);
+        Assert.NotNull(tx.TypeMapRegistry);
+        Assert.Equal(context.DataSourceInfo, tx.DataSourceInfo);
+        Assert.NotNull(tx.DataSourceInfo);
+        Assert.Equal(context.SessionSettingsPreamble, tx.SessionSettingsPreamble);
+        Assert.Equal(identity.RootId, tx.RootId);
+        Assert.NotEqual(Guid.Empty, tx.TransactionId);
     }
 
     private static void ReplaceStrategy(DatabaseContext context, IConnectionStrategy strategy)

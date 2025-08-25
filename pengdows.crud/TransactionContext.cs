@@ -4,6 +4,7 @@ using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.threading;
@@ -13,10 +14,11 @@ using pengdows.crud.wrappers;
 
 namespace pengdows.crud;
 
-public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
+public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, IContextIdentity, ISqlDialectProvider
 {
     private readonly ITrackedConnection _connection;
     private readonly IDatabaseContext _context;
+    private readonly ISqlDialect _dialect;
     private readonly ILogger<TransactionContext> _logger;
     private readonly SemaphoreSlim _semaphoreSlim;
     private readonly IDbTransaction _transaction;
@@ -24,6 +26,8 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
     private volatile bool _committed;
     private volatile bool _rolledBack;
     private int _completedState;
+
+    public Guid RootId { get; }
 
     internal TransactionContext(
         IDatabaseContext context,
@@ -33,6 +37,8 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
     {
         _logger = logger ?? new NullLogger<TransactionContext>();
         _context = context ?? throw new ArgumentNullException(nameof(context));
+        _dialect = (context as ISqlDialectProvider).Dialect;
+        RootId = ((IContextIdentity)_context).RootId;
 
         executionType ??= _context.IsReadOnlyConnection ? ExecutionType.Read : ExecutionType.Write;
 
@@ -62,9 +68,6 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
     public IsolationLevel IsolationLevel => _transaction.IsolationLevel;
 
     public long NumberOfOpenConnections => _context.NumberOfOpenConnections;
-    public string QuotePrefix => _context.QuotePrefix;
-    public string QuoteSuffix => _context.QuoteSuffix;
-    public string CompositeIdentifierSeparator => _context.CompositeIdentifierSeparator;
     public SupportedDatabase Product => _context.Product;
     public long MaxNumberOfConnections => _context.MaxNumberOfConnections;
     public bool IsReadOnlyConnection => _context.IsReadOnlyConnection;
@@ -111,11 +114,6 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
         return _connection;
     }
 
-    public string WrapObjectName(string name)
-    {
-        return _context.WrapObjectName(name);
-    }
-
     public string GenerateRandomName(int length = 5, int parameterNameMaxLength = 30)
     {
         return _context.GenerateRandomName(length, parameterNameMaxLength);
@@ -131,27 +129,30 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
         _context.AssertIsWriteConnection();
     }
 
-    public string MakeParameterName(string parameterName)
+    public string QuotePrefix => _dialect.QuotePrefix;
+
+    public string QuoteSuffix => _dialect.QuoteSuffix;
+
+    public string CompositeIdentifierSeparator => _dialect.CompositeIdentifierSeparator;
+
+    public string WrapObjectName(string name)
     {
-        return _context.MakeParameterName(parameterName);
+        return _dialect.WrapObjectName(name);
     }
 
     public string MakeParameterName(DbParameter dbParameter)
     {
-        return _context.MakeParameterName(dbParameter);
+        return _dialect.MakeParameterName(dbParameter);
+    }
+
+    public string MakeParameterName(string parameterName)
+    {
+        return _dialect.MakeParameterName(parameterName);
     }
 
     public ProcWrappingStyle ProcWrappingStyle => _context.ProcWrappingStyle;
 
-    ProcWrappingStyle IDatabaseContext.ProcWrappingStyle
-    {
-        get => _context.ProcWrappingStyle;
-        set
-        {
-            ThrowIfDisposed();
-            _context.ProcWrappingStyle = value;
-        }
-    }
+    ProcWrappingStyle IDatabaseContext.ProcWrappingStyle => _context.ProcWrappingStyle;
 
     ITransactionContext IDatabaseContext.BeginTransaction(IsolationProfile isolationProfile, ExecutionType executionType)
     {
@@ -205,6 +206,46 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
     {
         ThrowIfDisposed();
         CompleteTransactionWithWait(() => _transaction.Rollback(), false);
+    }
+
+    public async Task SavepointAsync(string name)
+    {
+        if (!_dialect.SupportsSavepoints)
+        {
+            return;
+        }
+
+        using var cmd = _connection.CreateCommand();
+        cmd.Transaction = _transaction;
+        cmd.CommandText = $"SAVEPOINT {name}";
+        if (cmd is DbCommand db)
+        {
+            await db.ExecuteNonQueryAsync().ConfigureAwait(false);
+        }
+        else
+        {
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    public async Task RollbackToSavepointAsync(string name)
+    {
+        if (!_dialect.SupportsSavepoints)
+        {
+            return;
+        }
+
+        using var cmd = _connection.CreateCommand();
+        cmd.Transaction = _transaction;
+        cmd.CommandText = $"ROLLBACK TO SAVEPOINT {name}";
+        if (cmd is DbCommand db)
+        {
+            await db.ExecuteNonQueryAsync().ConfigureAwait(false);
+        }
+        else
+        {
+            cmd.ExecuteNonQuery();
+        }
     }
 
     private void CompleteTransactionWithWait(Action action, bool markCommitted)
@@ -339,4 +380,6 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext
             _connection.Open();
         }
     }
+
+    public ISqlDialect Dialect =>  _dialect;
 }

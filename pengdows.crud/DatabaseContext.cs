@@ -2,14 +2,13 @@
 
 using System.Data;
 using System.Data.Common;
-using System.Text;
-using System.Threading;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;
 using pengdows.crud.connection;
+using pengdows.crud.dialects;
 using pengdows.crud.infrastructure;
 using pengdows.crud.isolation;
 using pengdows.crud.threading;
@@ -19,23 +18,24 @@ using pengdows.crud.wrappers;
 
 namespace pengdows.crud;
 
-public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
+public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IContextIdentity, ISqlDialectProvider
 {
     private readonly DbProviderFactory _factory;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<IDatabaseContext> _logger;
     private readonly IConnectionStrategy _connectionStrategy;
-    private bool _applyConnectionSessionSettings;
 
     private long _connectionCount;
-    private string _connectionSessionSettings;
     private string _connectionString;
     private DataSourceInformation _dataSourceInfo;
+    private readonly SqlDialect _dialect;
     private IIsolationResolver _isolationResolver;
     private bool _isReadConnection = true;
-    private bool _isSqlServer;
     private bool _isWriteConnection = true;
     private long _maxNumberOfOpenConnections;
+    private readonly bool _setDefaultSearchPath;
+
+    public Guid RootId { get; } = Guid.NewGuid();
 
     [Obsolete("Use the constructor that takes DatabaseContextConfiguration instead.")]
     public DatabaseContext(
@@ -54,7 +54,8 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
                 DbMode = mode
             },
             DbProviderFactories.GetFactory(providerFactory ?? throw new ArgumentNullException(nameof(providerFactory))),
-            (loggerFactory ?? NullLoggerFactory.Instance))
+            (loggerFactory ?? NullLoggerFactory.Instance),
+            typeMapRegistry)
     {
     }
 
@@ -74,14 +75,16 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
                 DbMode = mode
             },
             factory,
-            (loggerFactory ?? NullLoggerFactory.Instance))
+            (loggerFactory ?? NullLoggerFactory.Instance),
+            typeMapRegistry)
     {
     }
 
     public DatabaseContext(
         IDatabaseContextConfiguration configuration,
         DbProviderFactory factory,
-        ILoggerFactory? loggerFactory = null)
+        ILoggerFactory? loggerFactory = null,
+        ITypeMapRegistry? typeMapRegistry = null)
     {
         try
         {
@@ -90,12 +93,44 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
             TypeCoercionHelper.Logger =
                 _loggerFactory.CreateLogger(nameof(TypeCoercionHelper));
             ReadWriteMode = configuration.ReadWriteMode;
-            TypeMapRegistry = new TypeMapRegistry();
+            TypeMapRegistry = typeMapRegistry ?? new TypeMapRegistry();
             ConnectionMode = configuration.DbMode;
             _factory = factory ?? throw new NullReferenceException(nameof(factory));
+            _setDefaultSearchPath = configuration.SetDefaultSearchPath;
 
             var initialConnection = InitializeInternals(configuration);
-            var connFactory = () => FactoryCreateConnection(null, false);
+            _dialect = SqlDialectFactory.CreateDialect(initialConnection, _factory, loggerFactory);
+            _dataSourceInfo = new DataSourceInformation(_dialect);
+            Name = _dataSourceInfo.DatabaseProductName;
+
+            RCSIEnabled = _dialect.IsReadCommittedSnapshotOn(initialConnection);
+            if (ConnectionMode != DbMode.Standard && 
+                !(_dataSourceInfo.Product == SupportedDatabase.SqlServer && ConnectionMode == DbMode.SingleConnection))
+            {
+                _dialect.ApplyConnectionSettings(initialConnection);
+            }
+
+            switch (_dataSourceInfo.Product)
+            {
+                case SupportedDatabase.Sqlite:
+                case SupportedDatabase.DuckDB:
+                {
+                    var csb = GetFactoryConnectionStringBuilder(string.Empty);
+                    var ds = csb["Data Source"] as string;
+                    ConnectionMode = ":memory:" == ds
+                        ? DbMode.SingleConnection
+                        : DbMode.SingleWriter;
+                    break;
+                }
+                default:
+                {
+                    break;
+                }
+            }
+
+            _isolationResolver = new IsolationResolver(Product, RCSIEnabled);
+
+            var connFactory = () => FactoryCreateConnection(null, false, c => _dialect.ApplyConnectionSettings(c));
             _connectionStrategy = ConnectionMode switch
             {
                 DbMode.Standard => new StandardConnectionStrategy(connFactory),
@@ -104,13 +139,20 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
                 DbMode.KeepAlive => new KeepAliveConnectionStrategy(connFactory),
                 _ => throw new InvalidOperationException("Invalid connection mode."),
             };
+
+            if (ConnectionMode == DbMode.Standard)
+            {
+                initialConnection?.Dispose();
+                initialConnection = null;
+            }
         }
         catch (Exception e)
         {
-            _logger.LogError(e.Message);
+            _logger?.LogError(e.Message);
             throw;
         }
     }
+    
 
     public ReadWriteMode ReadWriteMode { get; set; }
 
@@ -123,7 +165,9 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
         {
             //don't let it change
             if (!string.IsNullOrWhiteSpace(_connectionString) || string.IsNullOrWhiteSpace(value))
+            {
                 throw new ArgumentException($"Connection string reset attempted.");
+            }
 
             _connectionString = value;
         }
@@ -131,7 +175,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 
 
     public bool IsReadOnlyConnection => _isReadConnection && !_isWriteConnection;
-    public bool RCSIEnabled { get; }
+    public bool RCSIEnabled { get; private set; }
 
     public ILockerAsync GetLock()
     {
@@ -146,32 +190,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     public ITypeMapRegistry TypeMapRegistry { get; }
 
     public IDataSourceInformation DataSourceInfo => _dataSourceInfo;
-
-
-    public string SessionSettingsPreamble => _connectionSessionSettings ?? "";
-
-    public string WrapObjectName(string name)
-    {
-        var qp = QuotePrefix;
-        var qs = QuoteSuffix;
-        var tmp = name?.Replace(qp, string.Empty)?.Replace(qs, string.Empty);
-        if (string.IsNullOrEmpty(tmp)) return string.Empty;
-
-        var ss = tmp.Split(CompositeIdentifierSeparator);
-
-        var sb = new StringBuilder();
-        foreach (var s in ss)
-        {
-            if (sb.Length > 0) sb.Append(CompositeIdentifierSeparator);
-
-            sb.Append(qp);
-            sb.Append(s);
-            sb.Append(qs);
-        }
-
-        return sb.ToString();
-    }
-
+    public string SessionSettingsPreamble => _dialect.GetConnectionSessionSettings();
 
     public ITransactionContext BeginTransaction(
         IsolationLevel? isolationLevel = null,
@@ -216,7 +235,6 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     }
 
 
-    public string CompositeIdentifierSeparator => _dataSourceInfo.CompositeIdentifierSeparator;
     public SupportedDatabase Product => _dataSourceInfo.Product;
 
     public ISqlContainer CreateSqlContainer(string? query = null)
@@ -226,17 +244,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 
     public DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
-        var p = _factory.CreateParameter() ?? throw new InvalidOperationException("Failed to create parameter.");
-
-        if (string.IsNullOrWhiteSpace(name)) name = GenerateRandomName();
-
-        var valueIsNull = Utils.IsNullOrDbNull(value);
-        p.ParameterName = name;
-        p.DbType = type;
-        p.Value = valueIsNull ? DBNull.Value : value;
-        if (!valueIsNull && p.DbType == DbType.String && value is string s) p.Size = Math.Max(s.Length, 1);
-
-        return p;
+        return _dialect.CreateDbParameter(name, type, value);
     }
 
 
@@ -247,33 +255,29 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 
     public string GenerateRandomName(int length = 5, int parameterNameMaxLength = 30)
     {
-        var validChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_".ToCharArray();
-        var len = Math.Min(Math.Max(length, 2), parameterNameMaxLength);
-
-        Span<char> buffer = stackalloc char[len];
-        const int firstCharMax = 52; // a-zA-Z
-        var anyOtherMax = validChars.Length;
-
-        buffer[0] = validChars[Random.Shared.Next(firstCharMax)];
-        for (var i = 1; i < len; i++) buffer[i] = validChars[Random.Shared.Next(anyOtherMax)];
-
-        return new string(buffer);
+       return _dialect.GenerateRandomName(length, parameterNameMaxLength);
     }
 
 
     public DbParameter CreateDbParameter<T>(DbType type, T value)
     {
-        return CreateDbParameter(null, type, value);
+        return _dialect.CreateDbParameter(type, value);
     }
 
     public void AssertIsReadConnection()
     {
-        if (!_isReadConnection) throw new InvalidOperationException("The connection is not read connection.");
+        if (!_isReadConnection)
+        {
+            throw new InvalidOperationException("The connection is not read connection.");
+        }
     }
 
     public void AssertIsWriteConnection()
     {
-        if (!_isWriteConnection) throw new InvalidOperationException("The connection is not write connection.");
+        if (!_isWriteConnection)
+        {
+            throw new InvalidOperationException("The connection is not write connection.");
+        }
     }
 
 
@@ -282,24 +286,8 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
         _connectionStrategy.ReleaseConnection(connection);
     }
 
-    public string MakeParameterName(DbParameter dbParameter)
-    {
-        return MakeParameterName(dbParameter.ParameterName);
-    }
 
-    public string MakeParameterName(string parameterName)
-    {
-        return !_dataSourceInfo.SupportsNamedParameters
-            ? "?"
-            : $"{_dataSourceInfo.ParameterMarker}{parameterName}";
-    }
-
-
-    public ProcWrappingStyle ProcWrappingStyle
-    {
-        get => _dataSourceInfo.ProcWrappingStyle;
-        set => _dataSourceInfo.ProcWrappingStyle = value;
-    }
+    public ProcWrappingStyle ProcWrappingStyle => _dataSourceInfo.ProcWrappingStyle;
 
     public int MaxParameterLimit => _dataSourceInfo.MaxParameterLimit;
 
@@ -307,11 +295,32 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 
     public long NumberOfOpenConnections => Interlocked.Read(ref _connectionCount);
 
-    public string QuotePrefix => DataSourceInfo.QuotePrefix;
+    public string QuotePrefix => _dialect.QuotePrefix;
 
-    public string QuoteSuffix => DataSourceInfo.QuoteSuffix;
+    public string QuoteSuffix => _dialect.QuoteSuffix;
 
-    private ITrackedConnection FactoryCreateConnection(string? connectionString = null, bool isSharedConnection = false)
+    public string CompositeIdentifierSeparator => _dialect.CompositeIdentifierSeparator;
+
+ 
+    public string WrapObjectName(string name)
+    {
+        return _dialect.WrapObjectName(name);
+    }
+
+    public string MakeParameterName(DbParameter dbParameter)
+    {
+        return _dialect.MakeParameterName(dbParameter);
+    }
+
+    public string MakeParameterName(string parameterName)
+    {
+        return _dialect.MakeParameterName(parameterName);
+    }
+
+    private ITrackedConnection FactoryCreateConnection(
+        string? connectionString = null,
+        bool isSharedConnection = false,
+        Action<DbConnection>? onFirstOpen = null)
     {
         SanitizeConnectionString(connectionString);
 
@@ -320,7 +329,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 
         var tracked = new TrackedConnection(
             connection,
-            (sender, args) => //StateChangeHandler
+            (sender, args) =>
             {
                 var to = args.CurrentState;
                 var from = args.OriginalState;
@@ -334,13 +343,20 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
                         break;
                     }
                     case ConnectionState.Closed:
+                        if (from == ConnectionState.Broken)
+                        {
+                            break;
+                        }
+                        _logger.LogDebug("Closed or broken connection: " + Name);
+                        Interlocked.Decrement(ref _connectionCount);
+                        break;
                     case ConnectionState.Broken:
                         _logger.LogDebug("Closed or broken connection: " + Name);
                         Interlocked.Decrement(ref _connectionCount);
                         break;
                 }
             },
-            onFirstOpen: ApplyConnectionSessionSettings,
+            onFirstOpen,
             onDispose: conn => { _logger.LogDebug("Connection disposed."); },
             null,
             isSharedConnection
@@ -381,123 +397,21 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
         return _connectionStrategy.ReleaseConnectionAsync(connection);
     }
 
-    private void CheckForSqlServerSettings(ITrackedConnection conn)
-    {
-        _isSqlServer =
-            _dataSourceInfo.DatabaseProductName.StartsWith("Microsoft SQL Server", StringComparison.OrdinalIgnoreCase)
-            && !_dataSourceInfo.DatabaseProductName.Contains("Compact", StringComparison.OrdinalIgnoreCase);
-
-        if (!_isSqlServer) return;
-
-        var settings = new Dictionary<string, string>
-        {
-            { "ANSI_NULLS", "ON" },
-            { "ANSI_PADDING", "ON" },
-            { "ANSI_WARNINGS", "ON" },
-            { "ARITHABORT", "ON" },
-            { "CONCAT_NULL_YIELDS_NULL", "ON" },
-            { "QUOTED_IDENTIFIER", "ON" },
-            { "NUMERIC_ROUNDABORT", "OFF" }
-        };
-
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = "DBCC USEROPTIONS;";
-
-        using var reader = cmd.ExecuteReader();
-        var currentSettings = settings.ToDictionary(kvp => kvp.Key, kvp => "OFF");
-
-        while (reader.Read())
-        {
-            var key = reader.GetString(0).ToUpperInvariant();
-            if (settings.ContainsKey(key)) currentSettings[key] = reader.GetString(1) == "SET" ? "ON" : "OFF";
-        }
-
-        var sb = CompareResults(settings, currentSettings);
-
-
-        if (sb.Length > 0)
-        {
-            sb.Insert(0, "SET NOCOUNT ON;\n");
-            sb.AppendLine(";\nSET NOCOUNT OFF;");
-            _connectionSessionSettings = sb.ToString();
-        }
-    }
-
-    private StringBuilder CompareResults(Dictionary<string, string> expected, Dictionary<string, string> recorded)
-    {
-        //used for checking which connection/session settings are on or off for mssql
-        var sb = new StringBuilder();
-        foreach (var expectedKvp in expected)
-        {
-            recorded.TryGetValue(expectedKvp.Key, out var result);
-            if (result != expectedKvp.Value)
-            {
-                if (sb.Length > 0) sb.AppendLine();
-
-                sb.Append($"SET {expectedKvp.Key} {expectedKvp.Value}");
-            }
-        }
-
-        return sb;
-    }
-
     private ITrackedConnection? InitializeInternals(IDatabaseContextConfiguration config)
     {
         var connectionString = config.ConnectionString;
-        var mode = config.DbMode;
         ReadWriteMode = config.ReadWriteMode;
         ITrackedConnection? conn = null;
         try
         {
             _isReadConnection = (ReadWriteMode & ReadWriteMode.ReadOnly) == ReadWriteMode.ReadOnly;
             _isWriteConnection = (ReadWriteMode & ReadWriteMode.WriteOnly) == ReadWriteMode.WriteOnly;
-            // this connection will be set as our single connection for any DbMode != DbMode.Standard
-            // so we set it to shared.
-            conn = FactoryCreateConnection(connectionString, true);
-            try
-            {
-                conn.Open();
-            }
-            catch (Exception ex)
-            {
-                throw new ConnectionFailedException(ex.Message);
-            }
-
-            _dataSourceInfo = DataSourceInformation.Create(conn, _loggerFactory);
-            SetupConnectionSessionSettingsForProvider(conn);
-            if (mode != DbMode.Standard)
-            {
-                ApplyConnectionSessionSettings(conn);
-            }
-            Name = _dataSourceInfo.DatabaseProductName;
-            if (_dataSourceInfo.Product == SupportedDatabase.Sqlite)
-            {
-                // Determine correct mode based on connection string
-                // ":memory:" needs a persistent connection to avoid data loss
-                // file-based SQLite requires a single writer to avoid lock conflicts
-                var csb = GetFactoryConnectionStringBuilder(String.Empty);
-                var ds = csb["Data Source"] as string;
-                ConnectionMode = ":memory:" == ds
-                    ? DbMode.SingleConnection
-                    : DbMode.SingleWriter;
-                mode = ConnectionMode;
-            }
-
-            _isolationResolver ??= new IsolationResolver(Product, RCSIEnabled);
+            conn = FactoryCreateConnection(connectionString, true, null);
+            conn.Open();
         }
-        catch(Exception ex){
-            _logger.LogError(ex, ex.Message);
-            throw;
-        }
-        finally
+        catch (Exception ex)
         {
-            _isolationResolver ??= new IsolationResolver(Product, RCSIEnabled);
-            if (mode == DbMode.Standard)
-            {
-                //if it is standard mode, we can close it.
-                conn?.Dispose();
-                conn = null;
-            }
+            throw new ConnectionFailedException(ex.Message);
         }
 
         return conn;
@@ -510,78 +424,6 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
         return csb;
     }
 
-    private void SetupConnectionSessionSettingsForProvider(ITrackedConnection conn)
-    {
-        switch (_dataSourceInfo.Product)
-        {
-            case SupportedDatabase.SqlServer:
-                //sets up only what is necessary
-                CheckForSqlServerSettings(conn);
-                break;
-
-            case SupportedDatabase.MySql:
-            case SupportedDatabase.MariaDb:
-                _connectionSessionSettings =
-                    "SET SESSION sql_mode = 'STRICT_ALL_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ENGINE_SUBSTITUTION,ANSI_QUOTES';\n";
-                break;
-
-            case SupportedDatabase.PostgreSql:
-            case SupportedDatabase.CockroachDb:
-                _connectionSessionSettings = @"
-                SET standard_conforming_strings = on;
-                SET client_min_messages = warning;
-                SET search_path = public;
-";
-                break;
-
-            case SupportedDatabase.Oracle:
-                _connectionSessionSettings = @"
-                ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD';
-";
-//                ALTER SESSION SET CURRENT_SCHEMA = your_schema;
-                break;
-
-            case SupportedDatabase.Sqlite:
-                _connectionSessionSettings = "PRAGMA foreign_keys = ON;";
-                break;
-
-            case SupportedDatabase.Firebird:
-                // _connectionSessionSettings = "SET NAMES UTF8;";
-                // has to be done in connection string, not session;
-                break;
-
-            //DB 2 can't be supported under modern .net 
-            //             case SupportedDatabase.Db2:
-            //                 _connectionSessionSettings = @"
-            //                  SET CURRENT DEGREE = 'ANY';
-            // ";
-            //                break;
-
-            default:
-                _connectionSessionSettings = string.Empty;
-                break;
-        }
-
-        _applyConnectionSessionSettings = _connectionSessionSettings?.Length > 0;
-    }
-
-
-    private void ApplyConnectionSessionSettings(IDbConnection connection)
-    {
-        _logger.LogInformation("Applying connection session settings");
-        if (_applyConnectionSessionSettings)
-            try
-            {
-                using var cmd = connection.CreateCommand();
-                cmd.CommandText = _connectionSessionSettings;
-                cmd.ExecuteNonQuery();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError("Error setting session settings:" + ex.Message);
-                _applyConnectionSessionSettings = false;
-            }
-    }
 
 
     protected override void DisposeManaged()
@@ -595,4 +437,6 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
         await _connectionStrategy.DisposeAsync().ConfigureAwait(false);
         await base.DisposeManagedAsync().ConfigureAwait(false);
     }
+
+    public ISqlDialect Dialect => _dialect;
 }

@@ -16,7 +16,8 @@ public class IsolationResolverTests
     [Fact]
     public void Constructor_UnsupportedDatabase_Throws()
     {
-        Assert.Throws<NotSupportedException>(() => new IsolationResolver(SupportedDatabase.Unknown, true));
+        // Since Unknown is now supported, use an invalid enum value
+        Assert.Throws<NotSupportedException>(() => new IsolationResolver((SupportedDatabase)999, true));
     }
 
     [Fact]
@@ -100,6 +101,28 @@ public class IsolationResolverTests
         Assert.Equal(IsolationLevel.ReadCommitted, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
         Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.StrictConsistency));
         Assert.Throws<NotSupportedException>(() => resolver.Resolve(IsolationProfile.FastWithRisks));
+    }
+
+    [Fact]
+    public void GetSupportedLevels_DuckDB()
+    {
+        var resolver = new IsolationResolver(SupportedDatabase.DuckDB, false);
+
+        var levels = resolver.GetSupportedLevels().OrderBy(l => l).ToArray();
+        var expected = new[] { IsolationLevel.Serializable };
+
+        Assert.Equal(expected, levels);
+    }
+
+    [Fact]
+    public void Resolve_DuckDB_Mappings()
+    {
+        var resolver = new IsolationResolver(SupportedDatabase.DuckDB, false);
+
+        Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
+        Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.StrictConsistency));
+        Assert.Throws<NotSupportedException>(() => resolver.Resolve(IsolationProfile.FastWithRisks));
+        Assert.Throws<InvalidOperationException>(() => resolver.Validate(IsolationLevel.ReadCommitted));
     }
 
     [Fact]

@@ -17,23 +17,24 @@ using testbed.Cockroach;
 #endregion
 
 foreach (var (assembly, type, factory) in DbProviderFactoryFinder.FindAllFactories())
+{
     Console.WriteLine($"Found: {type} in {assembly}");
+}
 
 var builder = Host.CreateApplicationBuilder(args);
 builder.Services.AddScoped<IAuditValueResolver, StringAuditContextProvider>();
-builder.Services.AddSingleton<ITypeMapRegistry, TypeMapRegistry>();
-
+ 
 var host = builder.Build();
 
 await using (var liteDb = new DatabaseContext("Data Source=mydb.sqlite", SqliteFactory.Instance,
-                 host.Services.GetRequiredService<ITypeMapRegistry>()))
+                 null))
 {
     var lite = new TestProvider(liteDb, host.Services);
     await lite.RunTest();
     liteDb.Dispose();
 }
-
-
+await using var duck = new DuckDbTestContainer();
+await duck.RunTestWithContainerAsync<TestProvider>(host.Services, (db, sp) => new TestProvider(db, sp));
 // var cs = $"DataSource=localhost;Port=5000;Database={0};Uid=sa;Pwd=MyStr0ngP@ssw0rd;";
 //
 // // wait for ASE to be ready
@@ -81,7 +82,7 @@ await ms.RunTestWithContainerAsync<TestProvider>(host.Services, (db, sp) => new 
 // await o.RunTestWithContainerAsync<OracleTestProvider>(host.Services, (db, sp) => new OracleTestProvider(db, sp));
 // var oracleConnectionString = "User Id=system;Password=mysecurepassword; Data Source=localhost:51521/XEPDB1;";
 // var oracleDb = new DatabaseContext(oracleConnectionString, OracleClientFactory.Instance,
-//     host.Services.GetRequiredService<ITypeMapRegistry>());
+//     null);
 // var oracle = new OracleTestProvider(oracleDb, host.Services);
 // await oracle.RunTest();
 
@@ -123,11 +124,15 @@ async Task WaitForDbToStart(DbProviderFactory instance, string connectionString,
             try
             {
                 if (csb is not FbConnectionStringBuilder orig)
+                {
                     throw new InvalidOperationException("Connection string builder is not valid.");
+                }
 
                 var db = orig.Database;
                 if (string.IsNullOrWhiteSpace(db))
+                {
                     throw new InvalidOperationException("Database path is not specified.");
+                }
 
                 var csbTemp = new FbConnectionStringBuilder
                 {
@@ -161,7 +166,10 @@ async Task WaitForDbToStart(DbProviderFactory instance, string connectionString,
         catch (Exception ex)
         {
             var currentError = ex.Message;
-            if (currentError != lastError) Console.WriteLine(currentError);
+            if (currentError != lastError)
+            {
+                Console.WriteLine(currentError);
+            }
 
             lastError = currentError;
             await Task.Delay(1000);

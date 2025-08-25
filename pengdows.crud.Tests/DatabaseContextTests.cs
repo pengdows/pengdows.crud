@@ -11,6 +11,7 @@ using Moq;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.FakeDb;
+using pengdows.crud.Tests.Mocks;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
 using Xunit;
@@ -67,6 +68,29 @@ public class DatabaseContextTests
         Assert.Contains(".", wrapped);
     }
 
+    [Fact]
+    public void WrapObjectName_Null_ReturnsEmpty()
+    {
+        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory);
+        var result = context.WrapObjectName(null);
+        Assert.Equal(string.Empty, result);
+    }
+
+    [Theory]
+    [MemberData(nameof(AllSupportedProviders))]
+    public void QuoteProperties_DelegateToDialect(SupportedDatabase product)
+    {
+        var factory = new FakeDbFactory(product);
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
+        Assert.Equal(context.DataSourceInfo.QuotePrefix, context.QuotePrefix);
+        Assert.Equal(context.DataSourceInfo.QuoteSuffix, context.QuoteSuffix);
+        Assert.Equal(context.DataSourceInfo.CompositeIdentifierSeparator, context.CompositeIdentifierSeparator);
+        Assert.NotEqual("?", context.QuotePrefix);
+        Assert.NotEqual("?", context.QuoteSuffix);
+        Assert.NotEqual("?", context.CompositeIdentifierSeparator);
+    }
+
     [Theory]
     [MemberData(nameof(AllSupportedProviders))]
     public void GenerateRandomName_ValidatesFirstChar(SupportedDatabase product)
@@ -88,6 +112,15 @@ public class DatabaseContextTests
         Assert.Equal("p1", result.ParameterName);
         Assert.Equal(DbType.Int32, result.DbType);
         Assert.Equal(123, result.Value);
+    }
+
+    [Fact]
+    public void CreateDbParameter_FactoryReturnsNull_Throws()
+    {
+        var factory = new NullParameterFactory();
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory);
+
+        Assert.Throws<InvalidOperationException>(() => context.CreateDbParameter("p", DbType.Int32, 1));
     }
 
     [Theory]
@@ -145,14 +178,15 @@ public class DatabaseContextTests
     {
         return new List<object[]>
         {
-            new object[] { SupportedDatabase.SqlServer, false },
+            new object[] { SupportedDatabase.SqlServer, true },
             new object[] { SupportedDatabase.MySql, true },
             new object[] { SupportedDatabase.MariaDb, true },
             new object[] { SupportedDatabase.PostgreSql, true },
             new object[] { SupportedDatabase.CockroachDb, true },
             new object[] { SupportedDatabase.Oracle, true },
             new object[] { SupportedDatabase.Sqlite, true },
-            new object[] { SupportedDatabase.Firebird, false }
+            new object[] { SupportedDatabase.Firebird, true },
+            new object[] { SupportedDatabase.DuckDB, false }
         };
     }
 
@@ -205,6 +239,22 @@ public class DatabaseContextTests
         Assert.Equal(ConnectionState.Open, conn.State);
         context.Dispose();
         Assert.Equal(0, context.NumberOfOpenConnections);
+    }
+
+    [Fact]
+    public void DuckDBInMemory_SetsSingleConnectionMode()
+    {
+        var factory = new FakeDbFactory(SupportedDatabase.DuckDB);
+        using var context = new DatabaseContext("Data Source=:memory:;EmulatedProduct=DuckDB", factory);
+        Assert.Equal(DbMode.SingleConnection, context.ConnectionMode);
+    }
+
+    [Fact]
+    public void DuckDBFile_SetsSingleWriterMode()
+    {
+        var factory = new FakeDbFactory(SupportedDatabase.DuckDB);
+        using var context = new DatabaseContext("Data Source=test;EmulatedProduct=DuckDB", factory);
+        Assert.Equal(DbMode.SingleWriter, context.ConnectionMode);
     }
 
     [Fact]
@@ -288,6 +338,33 @@ public class DatabaseContextTests
         Assert.StartsWith(context.DataSourceInfo.ParameterMarker, name);
     }
 
+    [Fact]
+    public void MakeParameterName_DbParameter_UsesMarker()
+    {
+        var product = SupportedDatabase.PostgreSql;
+        var factory = new FakeDbFactory(product);
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
+        var p = context.CreateDbParameter("p", DbType.Int32, 1);
+        var name = context.MakeParameterName(p);
+        Assert.StartsWith(context.DataSourceInfo.ParameterMarker, name);
+    }
+
+    [Fact]
+    public void MakeParameterName_NullString_ReturnsMarker()
+    {
+        var factory = new FakeDbFactory(SupportedDatabase.PostgreSql);
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=PostgreSql", factory);
+        Assert.Equal(context.DataSourceInfo.ParameterMarker, context.MakeParameterName((string)null));
+    }
+
+    [Fact]
+    public void MakeParameterName_NullParameter_Throws()
+    {
+        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory);
+        Assert.Throws<NullReferenceException>(() => context.MakeParameterName((DbParameter)null!));
+    }
+
     [Theory]
     [InlineData(DbMode.Standard)]
     [InlineData(DbMode.KeepAlive)]
@@ -364,11 +441,11 @@ public class DatabaseContextTests
     [Fact]
     public void PinnedConnection_WithoutSessionSettings_DoesNotExecute()
     {
-        var factory = new RecordingFactory(SupportedDatabase.Firebird);
+        var factory = new RecordingFactory(SupportedDatabase.SqlServer);
         var config = new DatabaseContextConfiguration
         {
-            ConnectionString = "Data Source=test;EmulatedProduct=Firebird",
-            ProviderName = SupportedDatabase.Firebird.ToString(),
+            ConnectionString = "Data Source=test;EmulatedProduct=SqlServer",
+            ProviderName = SupportedDatabase.SqlServer.ToString(),
             DbMode = DbMode.SingleConnection
         };
 

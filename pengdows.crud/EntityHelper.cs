@@ -1,14 +1,20 @@
 #region
 
 using System.Collections.Concurrent;
+using System.Data;
 using System.Data.Common;
+using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Runtime.CompilerServices;
+using System.Globalization;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.attributes;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;
 using pengdows.crud.wrappers;
@@ -35,23 +41,28 @@ public class EntityHelper<TEntity, TRowID> :
     {
         ValidateRowIdType();
     }
+
     private readonly IAuditValueResolver? _auditValueResolver;
     private IDatabaseContext _context;
+    private ISqlDialect _dialect;
+    private readonly Guid _rootId;
 
     private IColumnInfo? _idColumn;
 
     // private readonly IServiceProvider _serviceProvider;
     private ITableInfo _tableInfo;
     private bool _hasAuditColumns;
-    private Type? _userFieldType = null;
 
     private IColumnInfo? _versionColumn;
+
+    private readonly Dictionary<IColumnInfo, Func<object?, object?>> _readerConverters = new();
 
     public EntityHelper(IDatabaseContext databaseContext,
         EnumParseFailureMode enumParseBehavior = EnumParseFailureMode.Throw
     )
     {
         _auditValueResolver = null;
+        _rootId = ((IContextIdentity)databaseContext).RootId;
         Initialize(databaseContext, enumParseBehavior);
     }
 
@@ -62,28 +73,23 @@ public class EntityHelper<TEntity, TRowID> :
     )
     {
         _auditValueResolver = auditValueResolver;
+        _rootId = ((IContextIdentity)databaseContext).RootId;
         Initialize(databaseContext, enumParseBehavior);
     }
 
     private void Initialize(IDatabaseContext databaseContext, EnumParseFailureMode enumParseBehavior)
     {
         _context = databaseContext;
+        _dialect = (databaseContext as ISqlDialectProvider)?.Dialect
+            ?? throw new InvalidOperationException(
+                "IDatabaseContext must implement ISqlDialectProvider and expose a non-null Dialect.");
         _tableInfo = _context.TypeMapRegistry.GetTableInfo<TEntity>() ??
                      throw new InvalidOperationException($"Type {typeof(TEntity).FullName} is not a table.");
         _hasAuditColumns = _tableInfo.HasAuditColumns;
 
-        var propertyInfoPropertyType = _tableInfo.Columns
-            .Values
-            .FirstOrDefault(c =>
-                c.PropertyInfo.GetCustomAttribute<CreatedByAttribute>() != null ||
-                c.PropertyInfo.GetCustomAttribute<LastUpdatedByAttribute>() != null
-            )?.PropertyInfo.PropertyType;
-
-        if (propertyInfoPropertyType != null) _userFieldType = propertyInfoPropertyType;
-
         WrappedTableName = (!string.IsNullOrEmpty(_tableInfo.Schema)
                                ? WrapObjectName(_tableInfo.Schema) +
-                                 _context.CompositeIdentifierSeparator
+                                 _dialect.CompositeIdentifierSeparator
                                : "")
                            + WrapObjectName(_tableInfo.Name);
 
@@ -98,6 +104,7 @@ public class EntityHelper<TEntity, TRowID> :
                 "Audit user columns detected for {EntityType} but no IAuditValueResolver provided. Database defaults will be used for those columns.",
                 typeof(TEntity).Name);
         }
+
         EnumParseBehavior = enumParseBehavior;
     }
 
@@ -105,10 +112,31 @@ public class EntityHelper<TEntity, TRowID> :
 
     public EnumParseFailureMode EnumParseBehavior { get; set; }
 
+    public string QuotePrefix => _dialect.QuotePrefix;
+
+    public string QuoteSuffix => _dialect.QuoteSuffix;
+
+    public string CompositeIdentifierSeparator => _dialect.CompositeIdentifierSeparator;
+
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void ValidateSameRoot(IDatabaseContext? context)
+    {
+        if (context == null)
+        {
+            return;
+        }
+
+        if (!Equals(((IContextIdentity)context).RootId, _rootId))
+        {
+            throw new InvalidOperationException(
+                "Context mismatch: must be the owning DatabaseContext or its TransactionContext.");
+        }
+    }
 
     public string MakeParameterName(DbParameter p)
     {
-        return _context.MakeParameterName(p);
+        return _dialect.MakeParameterName(p);
     }
 
     public TEntity MapReaderToObject(ITrackedReader reader)
@@ -120,14 +148,13 @@ public class EntityHelper<TEntity, TRowID> :
             var colName = reader.GetName(i);
             if (_tableInfo.Columns.TryGetValue(colName, out var column))
             {
-                var value = reader.IsDBNull(i) ? null : reader.GetValue(i);
-
-                var dbFieldType = reader.GetFieldType(i);
-                value = TypeCoercionHelper.Coerce(value, dbFieldType, column);
+                var raw = reader.IsDBNull(i) ? null : reader.GetValue(i);
+                var converter = GetOrCreateReaderConverter(column);
+                var coerced = converter(raw);
                 try
                 {
                     var setter = GetOrCreateSetter(column.PropertyInfo);
-                    setter(obj, value);
+                    setter(obj, coerced);
                 }
                 catch (Exception ex)
                 {
@@ -140,46 +167,176 @@ public class EntityHelper<TEntity, TRowID> :
         return obj;
     }
 
+    private Func<object?, object?> GetOrCreateReaderConverter(IColumnInfo column)
+    {
+        if (_readerConverters.TryGetValue(column, out var existing))
+        {
+            return existing;
+        }
+
+        Func<object?, object?> converter;
+
+        if (column.IsEnum && column.EnumType != null)
+        {
+            var enumType = column.EnumType;
+            var enumAsString = column.DbType == DbType.String;
+            var underlying = Enum.GetUnderlyingType(enumType);
+            if (enumAsString)
+            {
+                converter = value =>
+                {
+                    if (value == null || value is DBNull)
+                    {
+                        return null;
+                    }
+
+                    var s = value as string ?? value.ToString();
+                    try
+                    {
+                        return Enum.Parse(enumType, s!, false);
+                    }
+                    catch
+                    {
+                        switch (EnumParseBehavior)
+                        {
+                            case EnumParseFailureMode.Throw:
+                                throw;
+                            case EnumParseFailureMode.SetNullAndLog:
+                                Logger.LogWarning("Cannot convert '{Value}' to enum {EnumType}.", s, enumType);
+                                return null;
+                            case EnumParseFailureMode.SetDefaultValue:
+                                return Activator.CreateInstance(enumType);
+                            default:
+                                return null;
+                        }
+                    }
+                };
+            }
+            else
+            {
+                converter = value =>
+                {
+                    if (value == null || value is DBNull)
+                    {
+                        return null;
+                    }
+
+                    try
+                    {
+                        var boxed = Convert.ChangeType(value, underlying, CultureInfo.InvariantCulture);
+                        return Enum.ToObject(enumType, boxed!);
+                    }
+                    catch
+                    {
+                        switch (EnumParseBehavior)
+                        {
+                            case EnumParseFailureMode.Throw:
+                                throw;
+                            case EnumParseFailureMode.SetNullAndLog:
+                                Logger.LogWarning("Cannot convert '{Value}' to enum {EnumType}.", value, enumType);
+                                return null;
+                            case EnumParseFailureMode.SetDefaultValue:
+                                return Activator.CreateInstance(enumType);
+                            default:
+                                return null;
+                        }
+                    }
+                };
+            }
+
+            _readerConverters[column] = converter;
+            return converter;
+        }
+
+        if (column.IsJsonType)
+        {
+            var propType = column.PropertyInfo.PropertyType;
+            var opts = column.JsonSerializerOptions ?? new JsonSerializerOptions();
+            converter = value =>
+            {
+                if (value == null || value is DBNull)
+                {
+                    return null;
+                }
+
+                var s = value as string ?? value.ToString();
+                return JsonSerializer.Deserialize(s!, propType, opts);
+            };
+
+            _readerConverters[column] = converter;
+            return converter;
+        }
+
+        converter = value =>
+        {
+            if (value == null || value is DBNull)
+            {
+                return null;
+            }
+
+            var targetType = column.PropertyInfo.PropertyType;
+            var sourceType = value.GetType();
+
+            if (targetType.IsAssignableFrom(sourceType))
+            {
+                return value;
+            }
+
+            var underlying = Nullable.GetUnderlyingType(targetType) ?? targetType;
+
+            try
+            {
+                return Convert.ChangeType(value, underlying, CultureInfo.InvariantCulture);
+            }
+            catch
+            {
+                switch (column.DbType)
+                {
+                    case DbType.Decimal:
+                    case DbType.Currency:
+                    case DbType.VarNumeric:
+                        return Convert.ToDecimal(value, CultureInfo.InvariantCulture);
+                    default:
+                        return value;
+                }
+            }
+        };
+
+        _readerConverters[column] = converter;
+        return converter;
+    }
+
     public async Task<bool> CreateAsync(TEntity entity, IDatabaseContext context)
     {
+        ValidateSameRoot(context);
         var sc = BuildCreate(entity, context);
         return await sc.ExecuteNonQueryAsync() == 1;
     }
-    
+
     public ISqlContainer BuildCreate(TEntity objectToCreate, IDatabaseContext? context = null)
     {
         if (objectToCreate == null)
             throw new ArgumentNullException(nameof(objectToCreate));
-
+        ValidateSameRoot(context);
         var ctx = context ?? _context;
         var columns = new StringBuilder();
         var values = new StringBuilder();
         var parameters = new List<DbParameter>();
 
         var sc = ctx.CreateSqlContainer();
-        SetAuditFields(objectToCreate, false);
+        PrepareForInsertOrUpsert(objectToCreate);
 
-        // Initialize version to 1 if a version column exists and the current value is unset
-        if (_versionColumn != null)
-        {
-            var current = _versionColumn.PropertyInfo.GetValue(objectToCreate);
-            if (current == null || Utils.IsZeroNumeric(current))
-            {
-                var target = Nullable.GetUnderlyingType(_versionColumn.PropertyInfo.PropertyType) ??
-                             _versionColumn.PropertyInfo.PropertyType;
-
-                // Only set numeric version columns
-                if (Utils.IsZeroNumeric(Convert.ChangeType(0, target)))
-                {
-                    var one = Convert.ChangeType(1, target);
-                    _versionColumn.PropertyInfo.SetValue(objectToCreate, one);
-                }
-            }
-        }
         foreach (var column in _tableInfo.Columns.Values)
         {
-            if (column.IsNonInsertable) continue;
-            if (column.IsId && !column.IsIdIsWritable) continue;
+            if (column.IsNonInsertable)
+            {
+                continue;
+            }
+
+            if (column.IsId && !column.IsIdIsWritable)
+            {
+                continue;
+            }
 
             var value = column.MakeParameterValueFromField(objectToCreate);
 
@@ -188,7 +345,9 @@ public class EntityHelper<TEntity, TRowID> :
             if (_auditValueResolver == null &&
                 (column.IsCreatedBy || column.IsLastUpdatedBy) &&
                 Utils.IsNullOrDbNull(value))
+            {
                 continue;
+            }
 
             if (columns.Length > 0)
             {
@@ -228,31 +387,41 @@ public class EntityHelper<TEntity, TRowID> :
 
     public ISqlContainer BuildBaseRetrieve(string alias, IDatabaseContext? context = null)
     {
-        var wrappedAlias = "";
-        if (!string.IsNullOrWhiteSpace(alias))
-            wrappedAlias = WrapObjectName(alias) +
-                           _context.CompositeIdentifierSeparator;
+        ValidateSameRoot(context);
         var ctx = context ?? _context;
+
         var sc = ctx.CreateSqlContainer();
-        var sb = sc.Query;
-        sb.Append("SELECT ");
-        sb.Append(string.Join(", ", _tableInfo.Columns.Values.Select(col => string.Format("{0}{1}",
-            wrappedAlias,
-            WrapObjectName(col.Name)))));
-        sb.Append("\nFROM ").Append(WrappedTableName);
-        if (wrappedAlias.Length > 0) sb.Append($" {wrappedAlias.Substring(0, wrappedAlias.Length - 1)}");
+        var hasAlias = !string.IsNullOrWhiteSpace(alias);
+
+        sc.Query.Append("SELECT ");
+        var selectList = _tableInfo.Columns.Values
+            .OrderBy(c => c.Ordinal)
+            .Select(col => (hasAlias
+                ? _dialect.WrapObjectName(alias) + _dialect.CompositeIdentifierSeparator
+                : string.Empty) + _dialect.WrapObjectName(col.Name));
+        sc.Query.Append(string.Join(", ", selectList));
+
+        sc.Query.Append("\nFROM ").Append(WrappedTableName);
+        if (hasAlias)
+        {
+            sc.Query.Append(' ').Append(_dialect.WrapObjectName(alias));
+        }
 
         return sc;
     }
 
     public ISqlContainer BuildDelete(TRowID id, IDatabaseContext? context = null)
     {
+        ValidateSameRoot(context);
         var ctx = context ?? _context;
-        var sc = ctx.CreateSqlContainer();
-
         var idCol = _idColumn;
         if (idCol == null)
-            throw new InvalidOperationException($"row identity column for table {WrappedTableName} not found");
+        {
+            throw new NotSupportedException(
+                "Single-ID operations require a designated Id column; use composite-key helpers.");
+        }
+
+        var sc = ctx.CreateSqlContainer();
 
         var p = _context.CreateDbParameter(idCol.DbType, id);
         sc.AddParameter(p);
@@ -276,17 +445,25 @@ public class EntityHelper<TEntity, TRowID> :
 
     public async Task<int> DeleteAsync(TRowID id, IDatabaseContext? context = null)
     {
+        ValidateSameRoot(context);
         var sc = BuildDelete(id, context);
         return await sc.ExecuteNonQueryAsync();
     }
 
     public async Task<List<TEntity>> RetrieveAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null)
     {
-        if (ids == null) throw new ArgumentNullException(nameof(ids));
+        if (ids == null)
+        {
+            throw new ArgumentNullException(nameof(ids));
+        }
 
         var list = ids.Distinct().ToList();
-        if (list.Count == 0) return new List<TEntity>();
+        if (list.Count == 0)
+        {
+            return new List<TEntity>();
+        }
 
+        ValidateSameRoot(context);
         var ctx = context ?? _context;
         var sc = BuildRetrieve(list, ctx);
         return await LoadListAsync(sc);
@@ -294,21 +471,36 @@ public class EntityHelper<TEntity, TRowID> :
 
     public async Task<int> DeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null)
     {
-        if (ids == null) throw new ArgumentNullException(nameof(ids));
+        if (ids == null)
+        {
+            throw new ArgumentNullException(nameof(ids));
+        }
 
         var list = ids.Distinct().ToList();
-        if (list.Count == 0) return 0;
+        if (list.Count == 0)
+        {
+            return 0;
+        }
 
+        ValidateSameRoot(context);
         var ctx = context ?? _context;
+        if (_idColumn == null)
+        {
+            throw new NotSupportedException(
+                "Single-ID operations require a designated Id column; use composite-key helpers.");
+        }
+
         var sc = ctx.CreateSqlContainer();
         sc.Query.Append("DELETE FROM ").Append(WrappedTableName);
-        BuildWhere(WrapObjectName(_idColumn!.Name), list, sc);
+        BuildWhere(_dialect.WrapObjectName(_idColumn.Name), list, sc);
         return await sc.ExecuteNonQueryAsync();
     }
 
 
     public Action<object, object?> GetOrCreateSetter(PropertyInfo prop)
     {
+        // The generated setter casts directly; a database NULL assigned to a non-nullable property will throw.
+        // This fail-fast behavior surfaces unexpected schema mismatches immediately.
         return _propertySetters.GetOrAdd(prop, p =>
         {
             var objParam = Expression.Parameter(typeof(object));
@@ -328,16 +520,22 @@ public class EntityHelper<TEntity, TRowID> :
 
     public Task<TEntity?> RetrieveOneAsync(TEntity objectToRetrieve, IDatabaseContext? context = null)
     {
+        ValidateSameRoot(context);
         var ctx = context ?? _context;
-        //var id = (TRowID)_idColumn.PropertyInfo.GetValue(objectToRetrieve);
-        var list = new List<TEntity>() { objectToRetrieve };
-        var sc = BuildRetrieve(list, null, ctx);
+        var list = new List<TEntity> { objectToRetrieve };
+        var sc = BuildRetrieve(list, string.Empty, ctx);
         return LoadSingleAsync(sc);
     }
 
     public Task<TEntity?> RetrieveOneAsync(TRowID id, IDatabaseContext? context = null)
     {
+        ValidateSameRoot(context);
         var ctx = context ?? _context;
+        if (_idColumn == null)
+        {
+            throw new NotSupportedException(
+                "Single-ID operations require a designated Id column; use composite-key helpers.");
+        }
         var list = new List<TRowID> { id };
         var sc = BuildRetrieve(list, ctx);
         return LoadSingleAsync(sc);
@@ -360,27 +558,39 @@ public class EntityHelper<TEntity, TRowID> :
         while (await reader.ReadAsync().ConfigureAwait(false))
         {
             var obj = MapReaderToObject(reader);
-            if (obj != null) list.Add(obj);
+            if (obj != null)
+            {
+                list.Add(obj);
+            }
         }
 
         return list;
     }
 
-    public ISqlContainer BuildRetrieve(IReadOnlyCollection<TRowID>? listOfIds = null,
-        string alias = "a", IDatabaseContext? context = null)
+    public ISqlContainer BuildRetrieve(IReadOnlyCollection<TRowID>? listOfIds,
+        string alias, IDatabaseContext? context = null)
     {
+        ValidateSameRoot(context);
         var ctx = context ?? _context;
+        if (_idColumn == null)
+        {
+            throw new NotSupportedException(
+                "Single-ID operations require a designated Id column; use composite-key helpers.");
+        }
         var sc = BuildBaseRetrieve(alias, ctx);
         var wrappedAlias = "";
         if (!string.IsNullOrWhiteSpace(alias))
-            wrappedAlias = WrapObjectName(alias) +
-                           _context.CompositeIdentifierSeparator;
+        {
+            wrappedAlias = _dialect.WrapObjectName(alias) + _dialect.CompositeIdentifierSeparator;
+        }
 
-        var wrappedColumnName = wrappedAlias +
-                                WrapObjectName(_idColumn.Name);
+        var wrappedColumnName = wrappedAlias + _dialect.WrapObjectName(_idColumn.Name);
 
         if (listOfIds != null && listOfIds.Any(id => Utils.IsNullOrDbNull(id)))
+        {
             throw new ArgumentException("IDs cannot be null", nameof(listOfIds));
+        }
+
         BuildWhere(
             wrappedColumnName,
             listOfIds,
@@ -390,33 +600,30 @@ public class EntityHelper<TEntity, TRowID> :
         return sc;
     }
 
-    public ISqlContainer BuildRetrieve(IReadOnlyCollection<TEntity>? listOfObjects = null,
-        string alias = "a", IDatabaseContext? context = null)
+    public ISqlContainer BuildRetrieve(IReadOnlyCollection<TEntity>? listOfObjects,
+        string alias, IDatabaseContext? context = null)
     {
+        ValidateSameRoot(context);
         var ctx = context ?? _context;
         var sc = BuildBaseRetrieve(alias, ctx);
-        var wrappedAlias = "";
-        if (!string.IsNullOrWhiteSpace(alias))
-            wrappedAlias = WrapObjectName(alias) +
-                           _context.CompositeIdentifierSeparator;
-
-        var wrappedColumnName = wrappedAlias +
-                                WrapObjectName(_idColumn.Name);
         BuildWhereByPrimaryKey(
             listOfObjects,
-            sc);
+            sc,
+            alias);
 
         return sc;
     }
 
-    public ISqlContainer BuildRetrieve(IReadOnlyCollection<TRowID>? listOfIds = null, IDatabaseContext? context = null)
+    public ISqlContainer BuildRetrieve(IReadOnlyCollection<TRowID>? listOfIds, IDatabaseContext? context = null)
     {
-        return BuildRetrieve(listOfIds, null, context);
+        ValidateSameRoot(context);
+        return BuildRetrieve(listOfIds, "", context);
     }
 
-    public ISqlContainer BuildRetrieve(IReadOnlyCollection<TEntity>? listOfObjects = null,
+    public ISqlContainer BuildRetrieve(IReadOnlyCollection<TEntity>? listOfObjects,
         IDatabaseContext? context = null)
     {
+        ValidateSameRoot(context);
         return BuildRetrieve(listOfObjects, string.Empty, context);
     }
 
@@ -434,27 +641,43 @@ public class EntityHelper<TEntity, TRowID> :
 
         foreach (var entity in listOfObjects!)
         {
-            if (index++ > 0) sb.Append(" OR ");
+            if (index++ > 0)
+            {
+                sb.Append(" OR ");
+            }
+
             sb.Append(BuildPrimaryKeyClause(entity, keys, wrappedAlias, parameters));
         }
 
-        if (sb.Length == 0) return;
+        if (sb.Length == 0)
+        {
+            return;
+        }
 
         sc.AddParameters(parameters);
         AppendWherePrefix(sc);
         sc.Query.Append(sb);
     }
 
-    private void ValidateWhereInputs(IReadOnlyCollection<TEntity>? listOfObjects, ISqlContainer sc)
+    private void ValidateWhereInputs(IReadOnlyCollection<TEntity>? listOfObjects, ISqlContainer _)
     {
-        if (Utils.IsNullOrEmpty(listOfObjects) || sc == null)
-            throw new ArgumentException("List of objects cannot be null or empty.");
+        if (listOfObjects == null || listOfObjects.Count == 0)
+        {
+            throw new ArgumentException("List of objects cannot be null or empty.", nameof(listOfObjects));
+        }
     }
 
     private List<IColumnInfo> GetPrimaryKeys()
     {
-        var keys = _tableInfo.Columns.Values.Where(o => o.IsPrimaryKey).ToList();
-        if (keys.Count < 1) throw new Exception($"No primary keys found for type {typeof(TEntity).Name}");
+        var keys = _tableInfo.Columns.Values
+            .Where(o => o.IsPrimaryKey)
+            .OrderBy(k => k.PkOrder)
+            .ToList();
+        if (keys.Count < 1)
+        {
+            throw new Exception($"No primary keys found for type {typeof(TEntity).Name}");
+        }
+
         return keys;
     }
 
@@ -462,18 +685,25 @@ public class EntityHelper<TEntity, TRowID> :
     {
         var count = sc.ParameterCount + (toAdd ?? 0);
         if (count > _context.MaxParameterLimit)
+        {
+            // For large batches consider chunking inputs; this method fails fast when exceeding limits.
             throw new TooManyParametersException("Too many parameters", _context.MaxParameterLimit);
+        }
     }
 
     private static string BuildAliasPrefix(string alias) =>
         string.IsNullOrWhiteSpace(alias) ? string.Empty : alias + ".";
 
-    private string BuildPrimaryKeyClause(TEntity entity, IReadOnlyList<IColumnInfo> keys, string alias, List<DbParameter> parameters)
+    private string BuildPrimaryKeyClause(TEntity entity, IReadOnlyList<IColumnInfo> keys, string alias,
+        List<DbParameter> parameters)
     {
         var clause = new StringBuilder("(");
         for (var i = 0; i < keys.Count; i++)
         {
-            if (i > 0) clause.Append(" AND ");
+            if (i > 0)
+            {
+                clause.Append(" AND ");
+            }
 
             var pk = keys[i];
             var value = pk.MakeParameterValueFromField(entity);
@@ -500,16 +730,21 @@ public class EntityHelper<TEntity, TRowID> :
 
     private void AppendWherePrefix(ISqlContainer sc)
     {
-        var query = sc.Query.ToString();
-        if (!query.Contains("WHERE ", StringComparison.OrdinalIgnoreCase))
+        if (!sc.HasWhereAppended)
+        {
             sc.Query.Append("\n WHERE ");
+            sc.HasWhereAppended = true;
+        }
         else
+        {
             sc.Query.Append("\n AND ");
+        }
     }
 
 
     public Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null)
     {
+        ValidateSameRoot(context);
         var ctx = context ?? _context;
         return BuildUpdateAsync(objectToUpdate, _versionColumn != null, ctx);
     }
@@ -518,28 +753,39 @@ public class EntityHelper<TEntity, TRowID> :
         IDatabaseContext? context = null)
     {
         if (objectToUpdate == null)
+        {
             throw new ArgumentNullException(nameof(objectToUpdate));
+        }
 
-        context ??= _context;
-        var sc = context.CreateSqlContainer();
+        ValidateSameRoot(context);
+        var ctx = context ?? _context;
+        if (_idColumn == null)
+        {
+            throw new NotSupportedException(
+                "Single-ID operations require a designated Id column; use composite-key helpers.");
+        }
+        var sc = ctx.CreateSqlContainer();
 
         var original = loadOriginal ? await LoadOriginalAsync(objectToUpdate) : null;
         if (loadOriginal && original == null)
+        {
             throw new InvalidOperationException("Original record not found for update.");
+        }
 
-        // Determine if any non-audit fields have changed before modifying audit values
-        var (preClause, _) = BuildSetClause(objectToUpdate, original, context);
-        if (preClause.Length == 0)
-            throw new InvalidOperationException("No changes detected for update.");
-
-        // Apply audit field changes now that we know an update is required
         SetAuditFields(objectToUpdate, true);
 
-        var (setClause, parameters) = BuildSetClause(objectToUpdate, original, context);
+        var (setClause, parameters) = BuildSetClause(objectToUpdate, original);
+        if (setClause.Length == 0)
+        {
+            throw new InvalidOperationException("No changes detected for update.");
+        }
 
-        if (_versionColumn != null) IncrementVersion(setClause);
+        if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
+        {
+            IncrementVersion(setClause);
+        }
 
-        var pId = context.CreateDbParameter(_idColumn!.DbType,
+        var pId = _context.CreateDbParameter(_idColumn.DbType,
             _idColumn.PropertyInfo.GetValue(objectToUpdate)!);
         parameters.Add(pId);
 
@@ -548,13 +794,13 @@ public class EntityHelper<TEntity, TRowID> :
             .Append(" SET ")
             .Append(setClause)
             .Append(" WHERE ")
-            .Append(WrapObjectName(_idColumn.Name))
+            .Append(_dialect.WrapObjectName(_idColumn.Name))
             .Append($" = {MakeParameterName(pId)}");
 
         if (_versionColumn != null)
         {
             var versionValue = _versionColumn.MakeParameterValueFromField(objectToUpdate);
-            AppendVersionCondition(sc, versionValue, context, parameters);
+            AppendVersionCondition(sc, versionValue, parameters);
         }
 
         sc.AddParameters(parameters);
@@ -563,12 +809,14 @@ public class EntityHelper<TEntity, TRowID> :
 
     public Task<int> UpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null)
     {
+        ValidateSameRoot(context);
         var ctx = context ?? _context;
         return UpdateAsync(objectToUpdate, _versionColumn != null, ctx);
     }
 
     public async Task<int> UpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context = null)
     {
+        ValidateSameRoot(context);
         try
         {
             var sc = await BuildUpdateAsync(objectToUpdate, loadOriginal, context);
@@ -582,52 +830,146 @@ public class EntityHelper<TEntity, TRowID> :
 
     public async Task<int> UpsertAsync(TEntity entity, IDatabaseContext? context = null)
     {
-        if (entity == null) throw new ArgumentNullException(nameof(entity));
-
-        context ??= _context;
-
-        var idValue = _idColumn!.PropertyInfo.GetValue(entity);
-
-        if (IsDefaultId(idValue))
-            return await CreateAsync(entity, context) ? 1 : 0;
-
-        if (_idColumn.IsIdIsWritable)
+        if (entity == null)
         {
-            try
-            {
-                var sc = BuildUpsert(entity, context);
-                return await sc.ExecuteNonQueryAsync();
-            }
-            catch (NotSupportedException)
-            {
-                // fall back to update
-            }
+            throw new ArgumentNullException(nameof(entity));
         }
 
-        return await UpdateAsync(entity, context);
+        ValidateSameRoot(context);
+        var ctx = context ?? _context;
+
+        try
+        {
+            var sc = BuildUpsert(entity, ctx);
+            return await sc.ExecuteNonQueryAsync();
+        }
+        catch (NotSupportedException)
+        {
+            return await UpsertPortableAsync(entity, ctx);
+        }
     }
 
     public ISqlContainer BuildUpsert(TEntity entity, IDatabaseContext? context = null)
     {
-        if (entity == null) throw new ArgumentNullException(nameof(entity));
-
-        context ??= _context;
-
-        if (context.Product == SupportedDatabase.PostgreSql)
+        if (entity == null)
         {
-            if (TryParseMajorVersion(context.DataSourceInfo.DatabaseProductVersion, out var major) && major > 14)
-                return BuildUpsertMerge(entity, context);
-
-            return BuildUpsertOnConflict(entity, context);
+            throw new ArgumentNullException(nameof(entity));
         }
 
-        return context.Product switch
+        ValidateSameRoot(context);
+        var ctx = context ?? _context;
+        if (_idColumn == null && !_tableInfo.Columns.Values.Any(c => c.IsPrimaryKey))
         {
-            SupportedDatabase.CockroachDb or SupportedDatabase.Sqlite => BuildUpsertOnConflict(entity, context),
-            SupportedDatabase.MySql or SupportedDatabase.MariaDb => BuildUpsertOnDuplicate(entity, context),
-            SupportedDatabase.SqlServer => BuildUpsertMerge(entity, context),
-            _ => throw new NotSupportedException($"Upsert not supported for {context.Product}")
-        };
+            throw new NotSupportedException("Upsert requires an Id or a composite primary key.");
+        }
+
+        // Use dialect capabilities instead of hard-coded database switching
+        if (ctx.DataSourceInfo.SupportsMerge)
+        {
+            return BuildUpsertMerge(entity, ctx);
+        }
+
+        if (ctx.DataSourceInfo.SupportsInsertOnConflict)
+        {
+            return BuildUpsertOnConflict(entity, ctx);
+        }
+
+        if (ctx.DataSourceInfo.SupportsOnDuplicateKey)
+        {
+            return BuildUpsertOnDuplicate(entity, ctx);
+        }
+
+        throw new NotSupportedException($"Upsert not supported for {ctx.Product}");
+    }
+
+    private IReadOnlyList<IColumnInfo> ResolveUpsertKey()
+    {
+        if (_idColumn != null && _idColumn.IsIdIsWritable)
+        {
+            return new List<IColumnInfo> { _idColumn! };
+        }
+
+        var keys = _tableInfo.Columns.Values
+            .Where(c => c.IsPrimaryKey)
+            .OrderBy(c => c.PkOrder)
+            .ToList();
+
+        if (keys.Count > 0)
+        {
+            return keys;
+        }
+
+        throw new NotSupportedException("Upsert requires client-assigned Id or [PrimaryKey] attributes.");
+    }
+
+    private (string sql, List<DbParameter> parameters) BuildUpdateByKey(TEntity updated,
+        IReadOnlyList<IColumnInfo> keyCols)
+    {
+        SetAuditFields(updated, true);
+        var (setClause, parameters) = BuildSetClause(updated, null);
+        if (setClause.Length == 0)
+        {
+            throw new InvalidOperationException("No changes detected for update.");
+        }
+
+        if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
+        {
+            IncrementVersion(setClause);
+        }
+
+        var where = new StringBuilder();
+        for (var i = 0; i < keyCols.Count; i++)
+        {
+            if (i > 0)
+            {
+                where.Append(" AND ");
+            }
+
+            var key = keyCols[i];
+            var v = key.MakeParameterValueFromField(updated);
+            var p = _context.CreateDbParameter(key.DbType, v);
+            parameters.Add(p);
+            where.Append($"{WrapObjectName(key.Name)} = {MakeParameterName(p)}");
+        }
+
+        var sql = $"UPDATE {WrappedTableName} SET {setClause} WHERE {where}";
+        if (_versionColumn != null)
+        {
+            var vv = _versionColumn.MakeParameterValueFromField(updated);
+            var p = _context.CreateDbParameter(_versionColumn.DbType, vv);
+            parameters.Add(p);
+            sql += $" AND {WrapObjectName(_versionColumn.Name)} = {MakeParameterName(p)}";
+        }
+
+        return (sql, parameters);
+    }
+
+    private async Task<int> UpsertPortableAsync(TEntity entity, IDatabaseContext ctx)
+    {
+        var keyCols = ResolveUpsertKey();
+        var (updateSql, updateParams) = BuildUpdateByKey(entity, keyCols);
+        var scUpdate = ctx.CreateSqlContainer();
+        scUpdate.Query.Append(updateSql);
+        scUpdate.AddParameters(updateParams);
+        var rows = await scUpdate.ExecuteNonQueryAsync().ConfigureAwait(false);
+        if (rows > 0)
+        {
+            return rows;
+        }
+
+        var scInsert = BuildCreate(entity, ctx);
+
+        try
+        {
+            return await scInsert.ExecuteNonQueryAsync().ConfigureAwait(false);
+        }
+        catch (DbException ex) when (_dialect.IsUniqueViolation(ex))
+        {
+            var scUpdate2 = ctx.CreateSqlContainer();
+            scUpdate2.Query.Append(updateSql);
+            scUpdate2.AddParameters(updateParams);
+            return await scUpdate2.ExecuteNonQueryAsync().ConfigureAwait(false);
+        }
     }
 
     private async Task<TEntity?> LoadOriginalAsync(TEntity objectToUpdate)
@@ -639,7 +981,7 @@ public class EntityHelper<TEntity, TRowID> :
         return await RetrieveOneAsync((TRowID)idValue!);
     }
 
-    private (StringBuilder clause, List<DbParameter> parameters) BuildSetClause(TEntity updated, TEntity? original, IDatabaseContext context)
+    private (StringBuilder clause, List<DbParameter> parameters) BuildSetClause(TEntity updated, TEntity? original)
     {
         var clause = new StringBuilder();
         var parameters = new List<DbParameter>();
@@ -647,23 +989,35 @@ public class EntityHelper<TEntity, TRowID> :
         foreach (var column in _tableInfo.Columns.Values)
         {
             if (column.IsId || column.IsVersion || column.IsNonUpdateable || column.IsCreatedBy || column.IsCreatedOn)
+            {
                 continue;
+            }
 
             var newValue = column.MakeParameterValueFromField(updated);
             var originalValue = original != null ? column.MakeParameterValueFromField(original) : null;
 
-            if (original != null && Equals(newValue, originalValue))
+            if (_auditValueResolver == null && column.IsLastUpdatedBy && Utils.IsNullOrDbNull(newValue))
+            {
                 continue;
+            }
 
-            if (clause.Length > 0) clause.Append(", ");
+            if (original != null && ValuesAreEqual(newValue, originalValue, column.DbType))
+            {
+                continue;
+            }
 
-            if (newValue == null)
+            if (clause.Length > 0)
+            {
+                clause.Append(", ");
+            }
+
+            if (Utils.IsNullOrDbNull(newValue))
             {
                 clause.Append($"{WrapObjectName(column.Name)} = NULL");
             }
             else
             {
-                var param = context.CreateDbParameter(column.DbType, newValue);
+                var param = _context.CreateDbParameter(column.DbType, newValue);
                 parameters.Add(param);
                 clause.Append($"{WrapObjectName(column.Name)} = {MakeParameterName(param)}");
             }
@@ -672,12 +1026,45 @@ public class EntityHelper<TEntity, TRowID> :
         return (clause, parameters);
     }
 
+    private static bool ValuesAreEqual(object? newValue, object? originalValue, DbType dbType)
+    {
+        if (newValue == null && originalValue == null)
+        {
+            return true;
+        }
+
+        if (newValue == null || originalValue == null)
+        {
+            return false;
+        }
+
+        if (newValue is byte[] a && originalValue is byte[] b)
+        {
+            return a.SequenceEqual(b);
+        }
+
+        switch (dbType)
+        {
+            case DbType.Decimal:
+            case DbType.Currency:
+            case DbType.VarNumeric:
+                return decimal.Compare(Convert.ToDecimal(newValue), Convert.ToDecimal(originalValue)) == 0;
+            case DbType.DateTime:
+            case DbType.DateTime2:
+            case DbType.DateTimeOffset:
+                return DateTime.Compare(Convert.ToDateTime(newValue).ToUniversalTime(),
+                    Convert.ToDateTime(originalValue).ToUniversalTime()) == 0;
+            default:
+                return Equals(newValue, originalValue);
+        }
+    }
+
     private void IncrementVersion(StringBuilder setClause)
     {
         setClause.Append($", {WrapObjectName(_versionColumn!.Name)} = {WrapObjectName(_versionColumn.Name)} + 1");
     }
 
-    private void AppendVersionCondition(ISqlContainer sc, object? versionValue, IDatabaseContext context, List<DbParameter> parameters)
+    private void AppendVersionCondition(ISqlContainer sc, object? versionValue, List<DbParameter> parameters)
     {
         if (versionValue == null)
         {
@@ -685,30 +1072,35 @@ public class EntityHelper<TEntity, TRowID> :
         }
         else
         {
-            var pVersion = context.CreateDbParameter(_versionColumn!.DbType, versionValue);
+            var pVersion = _context.CreateDbParameter(_versionColumn!.DbType, versionValue);
             sc.Query.Append(" AND ").Append(WrapObjectName(_versionColumn.Name))
                 .Append($" = {MakeParameterName(pVersion)}");
             parameters.Add(pVersion);
         }
     }
 
+    private void PrepareForInsertOrUpsert(TEntity e)
+    {
+        SetAuditFields(e, updateOnly: false);
+        if (_versionColumn == null || _versionColumn.PropertyInfo.PropertyType == typeof(byte[]))
+        {
+            return;
+        }
+
+        var v = _versionColumn.PropertyInfo.GetValue(e);
+        if (v == null || Utils.IsZeroNumeric(v))
+        {
+            var t = Nullable.GetUnderlyingType(_versionColumn.PropertyInfo.PropertyType) ??
+                    _versionColumn.PropertyInfo.PropertyType;
+            _versionColumn.PropertyInfo.SetValue(e, Convert.ChangeType(1, t));
+        }
+    }
+
     private ISqlContainer BuildUpsertOnConflict(TEntity entity, IDatabaseContext context)
     {
-        SetAuditFields(entity, false);
-        if (_versionColumn != null)
-        {
-            var current = _versionColumn.PropertyInfo.GetValue(entity);
-            if (current == null || Utils.IsZeroNumeric(current))
-            {
-                var target = Nullable.GetUnderlyingType(_versionColumn.PropertyInfo.PropertyType) ??
-                             _versionColumn.PropertyInfo.PropertyType;
-                if (Utils.IsZeroNumeric(Convert.ChangeType(0, target)))
-                {
-                    var one = Convert.ChangeType(1, target);
-                    _versionColumn.PropertyInfo.SetValue(entity, one);
-                }
-            }
-        }
+        ValidateSameRoot(context);
+        var ctx = context ?? _context;
+        PrepareForInsertOrUpsert(entity);
 
         var columns = new List<string>();
         var values = new List<string>();
@@ -716,10 +1108,22 @@ public class EntityHelper<TEntity, TRowID> :
 
         foreach (var column in _tableInfo.Columns.Values)
         {
-            if (column.IsNonInsertable) continue;
-            if (column.IsId && !column.IsIdIsWritable) continue;
+            if (column.IsNonInsertable)
+            {
+                continue;
+            }
+
+            if (column.IsId && !column.IsIdIsWritable)
+            {
+                continue;
+            }
 
             var value = column.MakeParameterValueFromField(entity);
+
+            if (_auditValueResolver == null && (column.IsCreatedBy || column.IsLastUpdatedBy) && Utils.IsNullOrDbNull(value))
+            {
+                continue;
+            }
 
             columns.Add(WrapObjectName(column.Name));
             if (Utils.IsNullOrDbNull(value))
@@ -728,7 +1132,7 @@ public class EntityHelper<TEntity, TRowID> :
             }
             else
             {
-                var p = context.CreateDbParameter(column.DbType, value);
+                var p = _context.CreateDbParameter(column.DbType, value);
                 parameters.Add(p);
                 values.Add(MakeParameterName(p));
             }
@@ -738,16 +1142,39 @@ public class EntityHelper<TEntity, TRowID> :
         foreach (var column in _tableInfo.Columns.Values)
         {
             if (column.IsId || column.IsVersion || column.IsNonUpdateable || column.IsCreatedBy || column.IsCreatedOn)
+            {
                 continue;
+            }
 
-            if (updateSet.Length > 0) updateSet.Append(", ");
-            updateSet.Append($"{WrapObjectName(column.Name)} = EXCLUDED.{WrapObjectName(column.Name)}");
+            if (_auditValueResolver == null && column.IsLastUpdatedBy)
+            {
+                // Without a resolver we preserve existing LastUpdatedBy on conflict updates.
+                continue;
+            }
+
+            if (updateSet.Length > 0)
+            {
+                updateSet.Append(", ");
+            }
+
+            updateSet.Append($"{WrapObjectName(column.Name)} = {_dialect.UpsertIncomingColumn(column.Name)}");
         }
 
-        if (_versionColumn != null)
+        if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
+        {
             updateSet.Append($", {WrapObjectName(_versionColumn.Name)} = {WrapObjectName(_versionColumn.Name)} + 1");
+        }
 
-        var sc = context.CreateSqlContainer();
+        var keys = _tableInfo.Columns.Values.Where(c => c.IsPrimaryKey).OrderBy(c => c.PkOrder).ToList();
+        if (_idColumn == null && keys.Count == 0)
+        {
+            throw new NotSupportedException("Upsert requires an Id or a composite primary key.");
+        }
+
+        var conflictCols = (keys.Count > 0 ? keys : new List<IColumnInfo> { _idColumn! })
+            .Select(k => WrapObjectName(k.Name));
+
+        var sc = ctx.CreateSqlContainer();
         sc.Query.Append("INSERT INTO ")
             .Append(WrappedTableName)
             .Append(" (")
@@ -755,7 +1182,7 @@ public class EntityHelper<TEntity, TRowID> :
             .Append(") VALUES (")
             .Append(string.Join(", ", values))
             .Append(") ON CONFLICT (")
-            .Append(WrapObjectName(_idColumn!.Name))
+            .Append(string.Join(", ", conflictCols))
             .Append(") DO UPDATE SET ")
             .Append(updateSet);
 
@@ -765,21 +1192,10 @@ public class EntityHelper<TEntity, TRowID> :
 
     private ISqlContainer BuildUpsertOnDuplicate(TEntity entity, IDatabaseContext context)
     {
-        SetAuditFields(entity, false);
-        if (_versionColumn != null)
-        {
-            var current = _versionColumn.PropertyInfo.GetValue(entity);
-            if (current == null || Utils.IsZeroNumeric(current))
-            {
-                var target = Nullable.GetUnderlyingType(_versionColumn.PropertyInfo.PropertyType) ??
-                             _versionColumn.PropertyInfo.PropertyType;
-                if (Utils.IsZeroNumeric(Convert.ChangeType(0, target)))
-                {
-                    var one = Convert.ChangeType(1, target);
-                    _versionColumn.PropertyInfo.SetValue(entity, one);
-                }
-            }
-        }
+        ValidateSameRoot(context);
+        var ctx = context ?? _context;
+
+        PrepareForInsertOrUpsert(entity);
 
         var columns = new List<string>();
         var values = new List<string>();
@@ -787,8 +1203,15 @@ public class EntityHelper<TEntity, TRowID> :
 
         foreach (var column in _tableInfo.Columns.Values)
         {
-            if (column.IsNonInsertable) continue;
-            if (column.IsId && !column.IsIdIsWritable) continue;
+            if (column.IsNonInsertable)
+            {
+                continue;
+            }
+
+            if (column.IsId && !column.IsIdIsWritable)
+            {
+                continue;
+            }
 
             var value = column.MakeParameterValueFromField(entity);
 
@@ -799,7 +1222,7 @@ public class EntityHelper<TEntity, TRowID> :
             }
             else
             {
-                var p = context.CreateDbParameter(column.DbType, value);
+                var p = _context.CreateDbParameter(column.DbType, value);
                 parameters.Add(p);
                 values.Add(MakeParameterName(p));
             }
@@ -809,16 +1232,36 @@ public class EntityHelper<TEntity, TRowID> :
         foreach (var column in _tableInfo.Columns.Values)
         {
             if (column.IsId || column.IsVersion || column.IsNonUpdateable || column.IsCreatedBy || column.IsCreatedOn)
+            {
                 continue;
+            }
 
-            if (updateSet.Length > 0) updateSet.Append(", ");
-            updateSet.Append($"{WrapObjectName(column.Name)} = VALUES({WrapObjectName(column.Name)})");
+            if (_auditValueResolver == null && column.IsLastUpdatedBy)
+            {
+                // Without a resolver we preserve existing LastUpdatedBy on duplicate updates.
+                continue;
+            }
+
+            if (updateSet.Length > 0)
+            {
+                updateSet.Append(", ");
+            }
+
+            updateSet.Append($"{WrapObjectName(column.Name)} = {_dialect.UpsertIncomingColumn(column.Name)}");
         }
 
-        if (_versionColumn != null)
+        if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
+        {
             updateSet.Append($", {WrapObjectName(_versionColumn.Name)} = {WrapObjectName(_versionColumn.Name)} + 1");
+        }
 
-        var sc = context.CreateSqlContainer();
+        var keys = _tableInfo.Columns.Values.Where(c => c.IsPrimaryKey).OrderBy(c => c.PkOrder).ToList();
+        if (_idColumn == null && keys.Count == 0)
+        {
+            throw new NotSupportedException("Upsert requires an Id or a composite primary key.");
+        }
+
+        var sc = ctx.CreateSqlContainer();
         sc.Query.Append("INSERT INTO ")
             .Append(WrappedTableName)
             .Append(" (")
@@ -834,21 +1277,10 @@ public class EntityHelper<TEntity, TRowID> :
 
     private ISqlContainer BuildUpsertMerge(TEntity entity, IDatabaseContext context)
     {
-        SetAuditFields(entity, false);
-        if (_versionColumn != null)
-        {
-            var current = _versionColumn.PropertyInfo.GetValue(entity);
-            if (current == null || Utils.IsZeroNumeric(current))
-            {
-                var target = Nullable.GetUnderlyingType(_versionColumn.PropertyInfo.PropertyType) ??
-                             _versionColumn.PropertyInfo.PropertyType;
-                if (Utils.IsZeroNumeric(Convert.ChangeType(0, target)))
-                {
-                    var one = Convert.ChangeType(1, target);
-                    _versionColumn.PropertyInfo.SetValue(entity, one);
-                }
-            }
-        }
+        ValidateSameRoot(context);
+        var ctx = context ?? _context;
+
+        PrepareForInsertOrUpsert(entity);
 
         var srcColumns = new List<string>();
         var insertColumns = new List<string>();
@@ -865,7 +1297,7 @@ public class EntityHelper<TEntity, TRowID> :
             }
             else
             {
-                var p = context.CreateDbParameter(column.DbType, value);
+                var p = _context.CreateDbParameter(column.DbType, value);
                 parameters.Add(p);
                 placeholder = MakeParameterName(p);
             }
@@ -873,23 +1305,49 @@ public class EntityHelper<TEntity, TRowID> :
             srcColumns.Add(WrapObjectName(column.Name));
             values.Add(placeholder);
             if (!column.IsNonInsertable && (!column.IsId || column.IsIdIsWritable))
+            {
                 insertColumns.Add(WrapObjectName(column.Name));
+            }
         }
 
         var updateSet = new StringBuilder();
         foreach (var column in _tableInfo.Columns.Values)
         {
             if (column.IsId || column.IsVersion || column.IsNonUpdateable || column.IsCreatedBy || column.IsCreatedOn)
+            {
                 continue;
+            }
 
-            if (updateSet.Length > 0) updateSet.Append(", ");
+            if (_auditValueResolver == null && column.IsLastUpdatedBy)
+            {
+                // Without a resolver we preserve existing LastUpdatedBy on merge updates.
+                continue;
+            }
+
+            if (updateSet.Length > 0)
+            {
+                updateSet.Append(", ");
+            }
+
             updateSet.Append($"t.{WrapObjectName(column.Name)} = s.{WrapObjectName(column.Name)}");
         }
 
-        if (_versionColumn != null)
-            updateSet.Append($", t.{WrapObjectName(_versionColumn.Name)} = t.{WrapObjectName(_versionColumn.Name)} + 1");
+        if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
+        {
+            updateSet.Append(
+                $", t.{WrapObjectName(_versionColumn.Name)} = t.{WrapObjectName(_versionColumn.Name)} + 1");
+        }
 
-        var sc = context.CreateSqlContainer();
+        var keys = _tableInfo.Columns.Values.Where(c => c.IsPrimaryKey).OrderBy(c => c.PkOrder).ToList();
+        if (_idColumn == null && keys.Count == 0)
+        {
+            throw new NotSupportedException("Upsert requires an Id or a composite primary key.");
+        }
+
+        var join = string.Join(" AND ", (keys.Count > 0 ? keys : new List<IColumnInfo> { _idColumn! })
+            .Select(k => $"t.{WrapObjectName(k.Name)} = s.{WrapObjectName(k.Name)}"));
+
+        var sc = ctx.CreateSqlContainer();
         sc.Query.Append("MERGE INTO ")
             .Append(WrappedTableName)
             .Append(" AS t USING (VALUES (")
@@ -897,10 +1355,8 @@ public class EntityHelper<TEntity, TRowID> :
             .Append(")")
             .Append(" AS s (")
             .Append(string.Join(", ", srcColumns))
-            .Append(") ON t.")
-            .Append(WrapObjectName(_idColumn!.Name))
-            .Append(" = s.")
-            .Append(WrapObjectName(_idColumn.Name))
+            .Append(") ON ")
+            .Append(join)
             .Append(" WHEN MATCHED THEN UPDATE SET ")
             .Append(updateSet)
             .Append(" WHEN NOT MATCHED THEN INSERT (")
@@ -916,37 +1372,40 @@ public class EntityHelper<TEntity, TRowID> :
 
     public ISqlContainer BuildWhere(string wrappedColumnName, IEnumerable<TRowID> ids, ISqlContainer sqlContainer)
     {
-        var enumerable = ids?.Distinct().ToList();
-        if (Utils.IsNullOrEmpty(enumerable)) return sqlContainer;
+        var list = ids?.Distinct().ToList();
+        if (Utils.IsNullOrEmpty(list))
+        {
+            return sqlContainer;
+        }
 
+        CheckParameterLimit(sqlContainer, list.Count);
 
-        var hasNull = enumerable.Any(v => Utils.IsNullOrDbNull(v));
-        var sb = new StringBuilder();
+        if (list.Any(Utils.IsNullOrDbNull))
+        {
+            throw new ArgumentException("IDs cannot be null", nameof(ids));
+        }
+
+        var inList = new StringBuilder();
         var dbType = _idColumn!.DbType;
-        foreach (var id in enumerable)
-            if (!hasNull || !Utils.IsNullOrDbNull(id))
-            {
-                if (sb.Length > 0) sb.Append(", ");
 
-                var p = sqlContainer.AddParameterWithValue(dbType, id);
-                var name = MakeParameterName(p);
-                sb.Append(name);
+        foreach (var id in list)
+        {
+            if (inList.Length > 0)
+            {
+                inList.Append(", ");
             }
 
-        if (sb.Length > 0)
-        {
-            sb.Insert(0, wrappedColumnName + " IN (");
-            sb.Append(")  ");
+            var parameter = _context.CreateDbParameter(dbType, id);
+            sqlContainer.AddParameter(parameter);
+            inList.Append(_dialect.MakeParameterName(parameter));
         }
 
-        if (hasNull)
-        {
-            if (sb.Length > 0) sb.Append("\nOR ");
-            sb.Append(wrappedColumnName + " IS NULL");
-        }
+        AppendWherePrefix(sqlContainer);
+        sqlContainer.Query.Append(wrappedColumnName)
+            .Append(" IN (")
+            .Append(inList)
+            .Append(')');
 
-        sb.Insert(0, "\nWHERE ");
-        sqlContainer.Query.Append(sb);
         return sqlContainer;
     }
 
@@ -954,11 +1413,15 @@ public class EntityHelper<TEntity, TRowID> :
     private void SetAuditFields(TEntity obj, bool updateOnly)
     {
         if (obj == null)
+        {
             return;
+        }
 
         // Skip resolving audit values when no audit columns are present
         if (!_hasAuditColumns)
+        {
             return;
+        }
 
         var auditValues = _auditValueResolver?.Resolve();
 
@@ -968,16 +1431,23 @@ public class EntityHelper<TEntity, TRowID> :
         _tableInfo.LastUpdatedOn?.PropertyInfo?.SetValue(obj, utcNow);
         // If resolver is provided, also set user id
         if (auditValues != null)
+        {
             _tableInfo.LastUpdatedBy?.PropertyInfo?.SetValue(obj, auditValues.UserId);
+        }
 
-        if (updateOnly) return;
+        if (updateOnly)
+        {
+            return;
+        }
 
         // Only set Created fields if they are null or default
         if (_tableInfo.CreatedOn?.PropertyInfo != null)
         {
             var currentValue = _tableInfo.CreatedOn.PropertyInfo.GetValue(obj) as DateTime?;
             if (currentValue == null || currentValue == default(DateTime))
+            {
                 _tableInfo.CreatedOn.PropertyInfo.SetValue(obj, utcNow);
+            }
         }
 
         if (auditValues != null && _tableInfo.CreatedBy?.PropertyInfo != null)
@@ -987,13 +1457,15 @@ public class EntityHelper<TEntity, TRowID> :
                 || currentValue as string == string.Empty
                 || Utils.IsZeroNumeric(currentValue)
                 || (currentValue is Guid guid && guid == Guid.Empty))
+            {
                 _tableInfo.CreatedBy.PropertyInfo.SetValue(obj, auditValues.UserId);
+            }
         }
     }
 
     private string WrapObjectName(string objectName)
     {
-        return _context.WrapObjectName(objectName);
+        return _dialect.WrapObjectName(objectName);
     }
 
     private static bool IsDefaultId(object? value)
@@ -1014,22 +1486,6 @@ public class EntityHelper<TEntity, TRowID> :
             return true;
 
         return EqualityComparer<TRowID>.Default.Equals((TRowID)value!, default!);
-    }
-
-    private static bool TryParseMajorVersion(string version, out int major)
-    {
-        major = 0;
-        if (string.IsNullOrWhiteSpace(version))
-        {
-            return false;
-        }
-
-        var match = Regex.Match(version, "(\\d+)");
-        if (!match.Success)
-        {
-            return false;
-        }
-        return int.TryParse(match.Groups[1].Value, out major);
     }
 
     private static void ValidateRowIdType()

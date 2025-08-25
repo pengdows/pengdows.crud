@@ -1,8 +1,6 @@
 #region
 
 using System;
-using System.Data;
-using Microsoft.Data.Sqlite;
 using pengdows.crud.enums;
 using Xunit;
 
@@ -12,8 +10,6 @@ namespace pengdows.crud.Tests;
 
 public class ProcWrappingStyleTests
 {
-    private DatabaseContext _dbContext;
-
     [Theory]
     [InlineData("Call", ProcWrappingStyle.Call)]
     [InlineData("Exec", ProcWrappingStyle.Exec)]
@@ -40,60 +36,4 @@ public class ProcWrappingStyleTests
         Assert.Equal(new[] { "None", "Call", "Exec", "PostgreSQL", "Oracle", "ExecuteProcedure" }, names);
     }
 
-    private SqlContainer SetupParameterWrapTest()
-    {
-        if (_dbContext == null) _dbContext = new DatabaseContext("DataSource=:memory:", SqliteFactory.Instance);
-
-        var sc = _dbContext.CreateSqlContainer("dbo.Sqltest") as SqlContainer;
-        for (var i = 0; i < 10; i++) sc.AddParameterWithValue($"p{i}", DbType.Int32, i);
-
-        return sc;
-    }
-
-    [Fact]
-    public void WrapTestCall()
-    {
-        var sc = SetupParameterWrapTest();
-        _dbContext.ProcWrappingStyle = ProcWrappingStyle.Call;
-        var s = sc.WrapForStoredProc(ExecutionType.Read);
-        Assert.Equal("CALL dbo.Sqltest(@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9)", s);
-    }
-
-    [Fact]
-    public void WrapTestExec()
-    {
-        var sc = SetupParameterWrapTest();
-        _dbContext.ProcWrappingStyle = ProcWrappingStyle.Exec;
-        var s = sc.WrapForStoredProc(ExecutionType.Read);
-        Assert.Equal("EXEC dbo.Sqltest @p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9", s);
-    }
-
-    [Fact]
-    public void WrapTestExecute()
-    {
-        var sc = SetupParameterWrapTest();
-        _dbContext.ProcWrappingStyle = ProcWrappingStyle.ExecuteProcedure;
-        var s = sc.WrapForStoredProc(ExecutionType.Read);
-        Assert.Equal("EXECUTE PROCEDURE dbo.Sqltest(@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9)", s);
-    }
-
-    [Fact]
-    public void WrapTestPostgreSQL()
-    {
-        var sc = SetupParameterWrapTest();
-        _dbContext.ProcWrappingStyle = ProcWrappingStyle.PostgreSQL;
-        var s = sc.WrapForStoredProc(ExecutionType.Read);
-        Assert.Equal("SELECT * FROM dbo.Sqltest(@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9)", s);
-        s = sc.WrapForStoredProc(ExecutionType.Write);
-        Assert.Equal("CALL dbo.Sqltest(@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9)", s);
-    }
-
-    [Fact]
-    public void WrapTestOracle()
-    {
-        var sc = SetupParameterWrapTest();
-        _dbContext.ProcWrappingStyle = ProcWrappingStyle.Oracle;
-        var s = sc.WrapForStoredProc(ExecutionType.Read);
-        Assert.Equal("BEGIN\n\tdbo.Sqltest(@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9);\nEND;", s);
-    }
 }

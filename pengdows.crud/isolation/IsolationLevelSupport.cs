@@ -55,7 +55,8 @@ public class IsolationLevelSupport
             IsolationLevel.Snapshot,
             IsolationLevel.Serializable
         ],
-        [SupportedDatabase.CockroachDb] = [IsolationLevel.Serializable]
+        [SupportedDatabase.CockroachDb] = [IsolationLevel.Serializable],
+        [SupportedDatabase.DuckDB] = [IsolationLevel.Serializable]
     };
 
     public void Validate(SupportedDatabase db, IsolationLevel level)

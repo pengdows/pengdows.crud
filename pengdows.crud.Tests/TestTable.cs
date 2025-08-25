@@ -15,7 +15,7 @@ public class TestTable
     [Column("id", DbType.Int64)]
     public long Id { get; set; }
 
-    [PrimaryKey]
+    [PrimaryKey(1)]
     [Column("name", DbType.String)]
     [EnumColumn(typeof(NameEnum))]
     public NameEnum? Name { get; set; }

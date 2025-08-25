@@ -64,11 +64,15 @@ public abstract class TestContainer : ITestContainer
                 try
                 {
                     if (csb is not FbConnectionStringBuilder orig)
+                    {
                         throw new InvalidOperationException("Connection string builder is not valid.");
+                    }
 
                     var db = orig.Database;
                     if (string.IsNullOrWhiteSpace(db))
+                    {
                         throw new InvalidOperationException("Database path is not specified.");
+                    }
 
                     var csbTemp = new FbConnectionStringBuilder
                     {
@@ -102,7 +106,10 @@ public abstract class TestContainer : ITestContainer
             catch (Exception ex)
             {
                 var currentError = ex.Message;
-                if (currentError != lastError) Console.WriteLine(currentError);
+                if (currentError != lastError)
+                {
+                    Console.WriteLine(currentError);
+                }
 
                 lastError = currentError;
                 await Task.Delay(1000);
@@ -114,7 +121,10 @@ public abstract class TestContainer : ITestContainer
 
     public async ValueTask DisposeAsync()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
+            return;
+        }
 
         await DisposeAsyncCore();
         GC.SuppressFinalize(this);

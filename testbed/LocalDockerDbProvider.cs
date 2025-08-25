@@ -16,7 +16,7 @@
 //     public LocalDockerDbProvider(IServiceProvider services)
 //     {
 //         _services = services;
-//         _typeMap = services.GetRequiredService<ITypeMapRegistry>();
+//         _typeMap = null;
 //     }
 //
 //     public IDatabaseContext Get(string key) => key switch

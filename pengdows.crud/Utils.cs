@@ -44,4 +44,13 @@ public class Utils
         // Otherwise enumerate once
         return !collection.Any();
     }
+
+    public static bool IsNullOrDbNull<T>(T arg)
+    {
+        if (arg == null)
+        {
+            return true;
+        }
+        return arg is DBNull;
+    }
 }

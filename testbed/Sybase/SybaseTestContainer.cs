@@ -62,13 +62,15 @@ public class SybaseTestContainer : TestContainer, ITestContainer
     public override Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)
     {
         if (_connectionString is null)
+        {
             throw new InvalidOperationException("Container not started.");
+        }
 
         return Task.FromResult<IDatabaseContext>(
             new DatabaseContext(
                 _connectionString,
                 AseClientFactory.Instance,
-                services.GetRequiredService<ITypeMapRegistry>()));
+                null));
     }
 
     public async ValueTask DisposeAsync()
