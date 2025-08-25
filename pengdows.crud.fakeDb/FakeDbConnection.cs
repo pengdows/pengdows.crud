@@ -16,6 +16,13 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
     private ConnectionState _state = ConnectionState.Closed;
     private string _serverVersion = "1.0";
     private int? _maxParameterLimit;
+    private bool _shouldFailOnOpen;
+    private bool _shouldFailOnCommand;
+    private bool _shouldFailOnBeginTransaction;
+    private Exception? _customFailureException;
+    private int _openCallCount;
+    private int? _failAfterOpenCount;
+    private bool _isBroken;
     public override string DataSource => "FakeSource";
     public override string ServerVersion => GetEmulatedServerVersion();
 
@@ -57,6 +64,72 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
     public int? GetMaxParameterLimit()
     {
         return _maxParameterLimit;
+    }
+
+    /// <summary>
+    /// Sets the connection to fail on the next Open() or OpenAsync() call
+    /// </summary>
+    public void SetFailOnOpen(bool shouldFail = true)
+    {
+        _shouldFailOnOpen = shouldFail;
+    }
+
+    /// <summary>
+    /// Sets the connection to fail when creating commands
+    /// </summary>
+    public void SetFailOnCommand(bool shouldFail = true)
+    {
+        _shouldFailOnCommand = shouldFail;
+    }
+
+    /// <summary>
+    /// Sets the connection to fail when beginning transactions
+    /// </summary>
+    public void SetFailOnBeginTransaction(bool shouldFail = true)
+    {
+        _shouldFailOnBeginTransaction = shouldFail;
+    }
+
+    /// <summary>
+    /// Sets a custom exception to throw instead of the default InvalidOperationException
+    /// </summary>
+    public void SetCustomFailureException(Exception exception)
+    {
+        _customFailureException = exception;
+    }
+
+    /// <summary>
+    /// Sets the connection to fail after N successful open operations
+    /// </summary>
+    public void SetFailAfterOpenCount(int openCount)
+    {
+        _failAfterOpenCount = openCount;
+        _openCallCount = 0;
+    }
+
+    /// <summary>
+    /// Simulates a broken connection by setting state to Broken
+    /// </summary>
+    public void BreakConnection()
+    {
+        var original = _state;
+        _state = ConnectionState.Broken;
+        _isBroken = true;
+        RaiseStateChangedEvent(original);
+    }
+
+    /// <summary>
+    /// Resets all failure conditions
+    /// </summary>
+    public void ResetFailureConditions()
+    {
+        _shouldFailOnOpen = false;
+        _shouldFailOnCommand = false;
+        _shouldFailOnBeginTransaction = false;
+        _customFailureException = null;
+        _failAfterOpenCount = null;
+        _openCallCount = 0;
+        _isBroken = false;
     }
 
     private string GetEmulatedServerVersion()
@@ -108,18 +181,46 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
 
     public override ConnectionState State => _state;
 
+    private void ThrowConfiguredException(string defaultMessage)
+    {
+        throw _customFailureException ?? new InvalidOperationException(defaultMessage);
+    }
+
     public int OpenCount { get; private set; }
 
     public int OpenAsyncCount { get; private set; }
 
     public override void Open()
     {
+        if (_isBroken)
+        {
+            throw new InvalidOperationException("Connection is broken");
+        }
+
+        _openCallCount++;
+        
+        // Check if we should fail after a specific number of opens
+        if (_failAfterOpenCount.HasValue && _openCallCount > _failAfterOpenCount.Value)
+        {
+            var original = _state;
+            _state = ConnectionState.Broken;
+            _isBroken = true;
+            RaiseStateChangedEvent(original);
+            ThrowConfiguredException("Connection failed after " + _failAfterOpenCount.Value + " opens");
+        }
+
+        // Check if we should fail on open
+        if (_shouldFailOnOpen)
+        {
+            ThrowConfiguredException("Simulated connection open failure");
+        }
+
         OpenCount++;
         ParseEmulatedProduct(ConnectionString);
-        var original = _state;
+        var originalState = _state;
 
         _state = ConnectionState.Open;
-        RaiseStateChangedEvent(original);
+        RaiseStateChangedEvent(originalState);
     }
 
     public override void Close()
@@ -154,9 +255,22 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
 
     public override Task OpenAsync(CancellationToken cancellationToken)
     {
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return Task.FromCanceled(cancellationToken);
+        }
+
         OpenAsyncCount++;
-        Open();
-        return Task.CompletedTask;
+        
+        try
+        {
+            Open();
+            return Task.CompletedTask;
+        }
+        catch (Exception ex)
+        {
+            return Task.FromException(ex);
+        }
     }
 
     private SupportedDatabase ParseEmulatedProduct(string connStr)
@@ -189,11 +303,36 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
 
     protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel)
     {
+        if (_shouldFailOnBeginTransaction)
+        {
+            ThrowConfiguredException("Simulated transaction begin failure");
+        }
+
+        if (_isBroken)
+        {
+            throw new InvalidOperationException("Cannot begin transaction on broken connection");
+        }
+
+        if (_state != ConnectionState.Open)
+        {
+            throw new InvalidOperationException("Connection must be open to begin transaction");
+        }
+
         return new FakeDbTransaction(this, isolationLevel);
     }
 
     protected override DbCommand CreateDbCommand()
     {
+        if (_shouldFailOnCommand)
+        {
+            ThrowConfiguredException("Simulated command creation failure");
+        }
+
+        if (_isBroken)
+        {
+            throw new InvalidOperationException("Cannot create command on broken connection");
+        }
+
         return new FakeDbCommand(this);
     }
 

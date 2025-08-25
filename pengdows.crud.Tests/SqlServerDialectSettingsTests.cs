@@ -95,7 +95,7 @@ public class SqlServerDialectSettingsTests
             new Dictionary<string, object> { { "QUOTED_IDENTIFIER", "SET" } },
             new Dictionary<string, object> { { "NUMERIC_ROUNDABORT", "OFF" } }
         };
-        using var conn = BuildConnection(rows);
+        await using var conn = BuildConnection(rows);
         var factory = new FakeDbFactory(SupportedDatabase.SqlServer);
         var dialect = new SqlServerDialect(factory, NullLogger<SqlServerDialect>.Instance);
         await dialect.DetectDatabaseInfoAsync(conn);
@@ -116,7 +116,7 @@ public class SqlServerDialectSettingsTests
             new Dictionary<string, object> { { "QUOTED_IDENTIFIER", "OFF" } },
             new Dictionary<string, object> { { "NUMERIC_ROUNDABORT", "OFF" } }
         };
-        using var conn = BuildConnection(rows);
+        await using var conn = BuildConnection(rows);
         var factory = new FakeDbFactory(SupportedDatabase.SqlServer);
         var dialect = new SqlServerDialect(factory, NullLogger<SqlServerDialect>.Instance);
         await dialect.DetectDatabaseInfoAsync(conn);

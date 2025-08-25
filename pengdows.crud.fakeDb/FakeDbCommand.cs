@@ -11,6 +11,9 @@ namespace pengdows.crud.FakeDb;
 
 public class FakeDbCommand : DbCommand
 {
+    private bool _shouldFailOnExecute;
+    private Exception? _customExecuteException;
+    
     public FakeDbCommand(DbConnection connection)
     {
         Connection = connection;
@@ -45,9 +48,28 @@ public class FakeDbCommand : DbCommand
     }
 
     private FakeDbConnection? FakeConnection => Connection as FakeDbConnection;
+    
+    /// <summary>
+    /// Sets the command to fail on execute operations
+    /// </summary>
+    public void SetFailOnExecute(bool shouldFail = true, Exception? customException = null)
+    {
+        _shouldFailOnExecute = shouldFail;
+        _customExecuteException = customException;
+    }
+    
+    private void ThrowIfShouldFail(string operation)
+    {
+        if (_shouldFailOnExecute)
+        {
+            throw _customExecuteException ?? new InvalidOperationException($"Simulated {operation} failure");
+        }
+    }
 
     public override int ExecuteNonQuery()
     {
+        ThrowIfShouldFail(nameof(ExecuteNonQuery));
+        
         var conn = FakeConnection;
         if (conn != null && conn.NonQueryResults.Count > 0)
             return conn.NonQueryResults.Dequeue();
@@ -56,6 +78,8 @@ public class FakeDbCommand : DbCommand
 
     public override object? ExecuteScalar()
     {
+        ThrowIfShouldFail(nameof(ExecuteScalar));
+        
         var conn = FakeConnection;
         if (conn != null)
         {
@@ -117,6 +141,7 @@ public class FakeDbCommand : DbCommand
 
     protected override DbDataReader ExecuteDbDataReader(CommandBehavior _)
     {
+        ThrowIfShouldFail(nameof(ExecuteDbDataReader));
         var conn = FakeConnection;
         if (conn != null && conn.ReaderResults.Count > 0)
             return new FakeDbDataReader(conn.ReaderResults.Dequeue());
