@@ -47,7 +47,7 @@ public class PostgreSqlTestContainer : TestContainer
         }
 
         return new DatabaseContext(_connectionString, NpgsqlFactory.Instance,
-            services.GetRequiredService<ITypeMapRegistry>());
+            null);
     }
 
     public async ValueTask DisposeAsync()

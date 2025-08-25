@@ -53,7 +53,7 @@ public class MariaDbContainer : TestContainer
         }
 
         return new DatabaseContext(_connectionString, MySqlClientFactory.Instance,
-            services.GetRequiredService<ITypeMapRegistry>());
+            null);
     }
 
     public async ValueTask DisposeAsync()

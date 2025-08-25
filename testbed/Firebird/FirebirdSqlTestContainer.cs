@@ -84,7 +84,7 @@ public class FirebirdSqlTestContainer : TestContainer
         }
 
         return new DatabaseContext(_connectionString, _factory,
-            services.GetRequiredService<ITypeMapRegistry>());
+            null);
     }
 
     public async ValueTask DisposeAsync()

@@ -70,7 +70,7 @@ public class SybaseTestContainer : TestContainer, ITestContainer
             new DatabaseContext(
                 _connectionString,
                 AseClientFactory.Instance,
-                services.GetRequiredService<ITypeMapRegistry>()));
+                null));
     }
 
     public async ValueTask DisposeAsync()

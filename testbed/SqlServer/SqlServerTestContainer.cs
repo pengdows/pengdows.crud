@@ -71,7 +71,7 @@ public class SqlServerTestContainer : TestContainer
         }
 
         return new DatabaseContext(_connectionString, SqlClientFactory.Instance,
-            services.GetRequiredService<ITypeMapRegistry>());
+            null);
     }
 
     public async ValueTask DisposeAsync()

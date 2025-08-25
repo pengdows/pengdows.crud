@@ -66,7 +66,7 @@ public class OracleTestContainer : TestContainer
         }
 
         return new DatabaseContext(_connectionString, OracleClientFactory.Instance,
-            services.GetRequiredService<ITypeMapRegistry>());
+            null);
     }
 
     public async ValueTask DisposeAsync()
