@@ -93,7 +93,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             TypeCoercionHelper.Logger =
                 _loggerFactory.CreateLogger(nameof(TypeCoercionHelper));
             ReadWriteMode = configuration.ReadWriteMode;
-            TypeMapRegistry = typeMapRegistry ?? new TypeMapRegistry();
+            TypeMapRegistry = new TypeMapRegistry();
             ConnectionMode = configuration.DbMode;
             _factory = factory ?? throw new NullReferenceException(nameof(factory));
             _setDefaultSearchPath = configuration.SetDefaultSearchPath;
@@ -342,18 +342,13 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
                         UpdateMaxConnectionCount(now);
                         break;
                     }
-                    case ConnectionState.Closed:
-                        if (from == ConnectionState.Broken)
-                        {
-                            break;
-                        }
-                        _logger.LogDebug("Closed or broken connection: " + Name);
-                        Interlocked.Decrement(ref _connectionCount);
-                        break;
+                    case ConnectionState.Closed when from != ConnectionState.Broken:
                     case ConnectionState.Broken:
+                    {
                         _logger.LogDebug("Closed or broken connection: " + Name);
                         Interlocked.Decrement(ref _connectionCount);
                         break;
+                    }
                 }
             },
             onFirstOpen,
