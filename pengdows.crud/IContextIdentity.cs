@@ -1,6 +1,18 @@
+#region
+
+using System;
+
+#endregion
+
 namespace pengdows.crud;
 
-public interface IContextIdentity
+/// <summary>
+/// Represents an immutable identifier for the current execution context.
+/// </summary>
+internal interface IContextIdentity
 {
+    /// <summary>
+    /// Identifier for the root request or operation.
+    /// </summary>
     Guid RootId { get; }
 }

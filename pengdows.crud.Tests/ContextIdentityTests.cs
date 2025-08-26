@@ -16,6 +16,13 @@ public class ContextIdentityTests : SqlLiteContextTestBase
     }
 
     [Fact]
+    public void ContextIdentity_Interface_IsInternal()
+    {
+        Assert.False(typeof(IContextIdentity).IsPublic);
+        Assert.True(typeof(IContextIdentity).IsNotPublic);
+    }
+
+    [Fact]
     public void BuildBaseRetrieve_WithTransactionFromSameRoot_Succeeds()
     {
         using var tx = Context.BeginTransaction();

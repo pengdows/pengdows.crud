@@ -42,6 +42,7 @@
     </ItemGroup>
     <ItemGroup>
         <InternalsVisibleTo Include="pengdows.crud.Tests" />
+        <InternalsVisibleTo Include="DynamicProxyGenAssembly2" />
     </ItemGroup>
 
 </Project>
