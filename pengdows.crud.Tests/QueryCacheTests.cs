@@ -189,6 +189,48 @@ public class QueryCacheTests : SqlLiteContextTestBase
         Assert.NotSame(cache[$"Where:{wrapped}:1"], cache[$"Where:{wrapped}:2"]);
     }
 
+    [Fact]
+    public void BuildBaseRetrieve_WhenLimitExceeded_DropsOldEntries()
+    {
+        TypeMap.Register<CacheEntity>();
+        var helper = new EntityHelper<CacheEntity, int>(Context);
+
+        helper.BuildBaseRetrieve("a0");
+        var cache = GetQueryCache(helper);
+
+        var limit = (int)typeof(EntityHelper<CacheEntity, int>)
+            .GetField("MaxCacheSize", BindingFlags.NonPublic | BindingFlags.Static)!
+            .GetValue(null)!;
+
+        for (var i = 1; i <= limit; i++)
+        {
+            helper.BuildBaseRetrieve($"a{i}");
+        }
+
+        cache = GetQueryCache(helper);
+        Assert.False(cache.ContainsKey("BaseRetrieve:a0"));
+        Assert.True(cache.Count <= limit);
+    }
+
+    [Fact]
+    public void ClearCaches_RemovesAllEntries()
+    {
+        TypeMap.Register<CacheEntity>();
+        var helper = new EntityHelper<CacheEntity, int>(Context);
+
+        helper.BuildDelete(1);
+        var cache = GetQueryCache(helper);
+        Assert.True(cache.ContainsKey("DeleteById"));
+
+        helper.ClearCaches();
+        cache = GetQueryCache(helper);
+        Assert.Empty(cache);
+
+        helper.BuildDelete(2);
+        cache = GetQueryCache(helper);
+        Assert.True(cache.ContainsKey("DeleteById"));
+    }
+
     private static ConcurrentDictionary<string, string> GetQueryCache<TEntity, TId>(EntityHelper<TEntity, TId> helper)
         where TEntity : class, new()
     {

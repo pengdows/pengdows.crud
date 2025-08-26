@@ -63,6 +63,27 @@ public class EntityHelper<TEntity, TRowID> :
 
     private readonly ConcurrentDictionary<string, string[]> _whereParameterNames = new();
 
+    private const int MaxCacheSize = 100;
+
+    private static void TryAddWithLimit<TKey, TValue>(ConcurrentDictionary<TKey, TValue> cache, TKey key,
+        TValue value)
+    {
+        cache.TryAdd(key, value);
+        if (cache.Count > MaxCacheSize)
+        {
+            cache.Clear();
+            cache.TryAdd(key, value);
+        }
+    }
+
+    public void ClearCaches()
+    {
+        _readerConverters.Clear();
+        _columnListCache.Clear();
+        _queryCache.Clear();
+        _whereParameterNames.Clear();
+    }
+
     public EntityHelper(IDatabaseContext databaseContext,
         EnumParseFailureMode enumParseBehavior = EnumParseFailureMode.Throw
     )
@@ -153,7 +174,7 @@ public class EntityHelper<TEntity, TRowID> :
         }
 
         sql = factory();
-        _queryCache.TryAdd(key, sql);
+        TryAddWithLimit(_queryCache, key, sql);
         return sql;
     }
 
@@ -262,7 +283,7 @@ public class EntityHelper<TEntity, TRowID> :
                 };
             }
 
-            _readerConverters.TryAdd(column, converter);
+            TryAddWithLimit(_readerConverters, column, converter);
             return converter;
         }
 
@@ -281,7 +302,7 @@ public class EntityHelper<TEntity, TRowID> :
                 return JsonSerializer.Deserialize(s!, propType, opts);
             };
 
-            _readerConverters.TryAdd(column, converter);
+            TryAddWithLimit(_readerConverters, column, converter);
             return converter;
         }
 
@@ -320,7 +341,7 @@ public class EntityHelper<TEntity, TRowID> :
             }
         };
 
-        _readerConverters.TryAdd(column, converter);
+        TryAddWithLimit(_readerConverters, column, converter);
         return converter;
     }
 
@@ -712,7 +733,7 @@ public class EntityHelper<TEntity, TRowID> :
             .Where(c => !c.IsNonInsertable && (!c.IsId || c.IsIdIsWritable))
             .ToList();
 
-        _columnListCache.TryAdd("Insertable", insertable);
+        TryAddWithLimit(_columnListCache, "Insertable", insertable);
         return insertable;
     }
 
@@ -727,7 +748,7 @@ public class EntityHelper<TEntity, TRowID> :
             .Where(c => !(c.IsId || c.IsVersion || c.IsNonUpdateable || c.IsCreatedBy || c.IsCreatedOn))
             .ToList();
 
-        _columnListCache.TryAdd("Updatable", updatable);
+        TryAddWithLimit(_columnListCache, "Updatable", updatable);
         return updatable;
     }
 
@@ -1399,7 +1420,7 @@ public class EntityHelper<TEntity, TRowID> :
                 names[i] = _dialect.MakeParameterName($"p{i}");
             }
 
-            _whereParameterNames.TryAdd(key, names);
+            TryAddWithLimit(_whereParameterNames, key, names);
             return string.Concat(wrappedColumnName, " IN (", string.Join(", ", names), ")");
         });
 
