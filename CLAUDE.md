@@ -8,7 +8,7 @@ pengdows.crud is a SQL-first, strongly-typed, testable data access layer for .NE
 
 - `pengdows.crud` - Core library with EntityHelper, DatabaseContext, and SQL dialects
 - `pengdows.crud.abstractions` - Interfaces and enums
-- `pengdows.crud.fakeDb` - Testing framework with fake database providers
+- `pengdows.crud.fakeDb` - a complete .net DbProvider for mocking low level calls.
 - `pengdows.crud.Tests` - Comprehensive test suite
 - `testbed` - Integration testing with real databases
 
@@ -127,6 +127,8 @@ Connection failure modes include:
 
 ## API Reference and Patterns
 
+**IMPORTANT:** All interfaces in `pengdows.crud.abstractions` now include comprehensive XML documentation with detailed descriptions, parameter explanations, usage examples, and code samples. When working with these interfaces, refer to the XML comments for complete API documentation and implementation guidance.
+
 ### EntityHelper<TEntity, TRowID> Key Methods
 
 **CRUD Operations (All async, return Task):**
@@ -150,7 +152,9 @@ Connection failure modes include:
 - `LoadSingleAsync(ISqlContainer sc)` - Execute SQL and return single entity or null
 - `LoadListAsync(ISqlContainer sc)` - Execute SQL and return list of entities
 
-**IMPORTANT**: The interface defines `RetrieveOneAsync` methods but the implementation may not exist yet. Use `LoadSingleAsync` with custom SQL instead.
+**Single Entity Retrieval:**
+- `RetrieveOneAsync(TEntity objectToRetrieve, IDatabaseContext? context = null)` - Load by composite key values
+- `RetrieveOneAsync(TRowID id, IDatabaseContext? context = null)` - Load by row ID
 
 ### SqlContainer Key Methods
 
@@ -163,19 +167,33 @@ Connection failure modes include:
 - `AddParameterWithValue<T>(DbType type, T value)` - Add parameter, returns DbParameter
 - `AddParameterWithValue<T>(string? name, DbType type, T value)` - Add named parameter
 - `CreateDbParameter<T>(string? name, DbType type, T value)` - Create parameter without adding
+- `CreateDbParameter<T>(DbType type, T value)` - Create unnamed parameter
 - `AddParameter(DbParameter parameter)` - Add pre-constructed parameter
+- `AddParameters(IEnumerable<DbParameter> list)` - Add multiple parameters
 
 **Query Building:**
 - `Query` property - StringBuilder for building SQL
+- `HasWhereAppended` - Indicates if WHERE clause already exists
+- `ParameterCount` - Current count of parameters
 - `WrapObjectName(string name)` - Quote identifiers safely
 - `MakeParameterName(DbParameter dbParameter)` - Format parameter names
+- `MakeParameterName(string parameterName)` - Format raw parameter names
+
+**Command Management:**
+- `CreateCommand(ITrackedConnection conn)` - Create DbCommand for connection
+- `Clear()` - Clear query and parameters
+- `WrapForStoredProc(ExecutionType executionType, bool includeParameters = true)` - Wrap for stored procedure execution
 
 ### DatabaseContext Key Methods
 
 **Connection Management:**
 - `GetConnection(ExecutionType executionType, bool isShared = false)` - Get tracked connection
 - `CloseAndDisposeConnection(ITrackedConnection? conn)` - Return connection to pool
-- `BeginTransaction(IsolationLevel? isolationLevel = null, ExecutionType executionType = ExecutionType.Write)` - Start transaction
+- `CloseAndDisposeConnectionAsync(ITrackedConnection? conn)` - Async version of connection cleanup
+
+**Transaction Management:**
+- `BeginTransaction(IsolationLevel? isolationLevel = null, ExecutionType executionType = ExecutionType.Write)` - Start transaction with native isolation level
+- `BeginTransaction(IsolationProfile isolationProfile, ExecutionType executionType = ExecutionType.Write)` - Start transaction with portable isolation profile
 
 **SQL Container Creation:**
 - `CreateSqlContainer(string? query = null)` - Create new SQL builder
@@ -183,6 +201,70 @@ Connection failure modes include:
 **Parameter Creation:**
 - `CreateDbParameter<T>(string? name, DbType type, T value)` - Create named parameter
 - `CreateDbParameter<T>(DbType type, T value)` - Create positional parameter
+
+**Identifier Handling:**
+- `WrapObjectName(string name)` - Quote identifiers safely
+- `MakeParameterName(DbParameter dbParameter)` - Format parameter names
+- `MakeParameterName(string parameterName)` - Format raw parameter names
+
+**Connection Properties:**
+- `ConnectionMode` - Which DbMode this connection uses
+- `TypeMapRegistry` - Type mapping for compiled accessors and JSON handlers
+- `DataSourceInfo` - Metadata from connection.GetSchema and provider heuristics
+- `Product` - Detected database product (PostgreSQL, Oracle, etc.)
+- `NumberOfOpenConnections` - Current open connection count
+- `MaxNumberOfConnections` - Max observed concurrent connections
+
+### Transaction Context (ITransactionContext)
+
+Extends IDatabaseContext for transactional operations:
+
+**Transaction State:**
+- `WasCommitted` - Whether transaction was committed
+- `WasRolledBack` - Whether transaction was rolled back  
+- `IsCompleted` - Whether transaction is completed
+- `IsolationLevel` - Current isolation level
+
+**Transaction Control:**
+- `Commit()` - Commit transaction
+- `Rollback()` - Rollback transaction
+- `SavepointAsync(string name)` - Create savepoint
+- `RollbackToSavepointAsync(string name)` - Rollback to savepoint
+
+### Metadata Interfaces
+
+**ITableInfo:**
+- `Schema` - Table schema name
+- `Name` - Table name
+- `Columns` - Dictionary of column metadata
+- `Id`, `Version`, `LastUpdatedBy/On`, `CreatedBy/On` - Audit columns
+- `HasAuditColumns` - Whether audit columns are configured
+
+**IColumnInfo:**
+- `Name` - Column name and `PropertyInfo` - Property reflection info
+- `IsId`, `IsPrimaryKey`, `PkOrder` - Primary key configuration
+- `DbType` - Database type mapping
+- `IsNonUpdateable`, `IsNonInsertable` - Update/insert restrictions
+- `IsEnum`, `EnumType` - Enum handling configuration
+- `IsJsonType`, `JsonSerializerOptions` - JSON serialization support
+- `IsVersion`, `IsCreatedBy/On`, `IsLastUpdatedBy/On` - Audit field markers
+- `MakeParameterValueFromField<T>(T objectToCreate)` - Parameter value creation
+
+**ITypeMapRegistry:**
+- `GetTableInfo<T>()` - Get table metadata for entity type
+
+### Tracked Wrappers
+
+**ITrackedConnection:**
+Wraps IDbConnection with async support and locking:
+- All standard IDbConnection methods plus `OpenAsync()`
+- `GetLock()` - Returns async-compatible lock
+- `GetSchema()` overloads for metadata access
+
+**ITrackedReader:**
+Extends IDataReader with async support:
+- `ReadAsync()` - Async row reading
+- Implements `IAsyncDisposable` for proper cleanup
 
 ### Common Test Patterns
 
@@ -270,9 +352,9 @@ Assert.Throws<InvalidOperationException>(() => context.GetConnection(ExecutionTy
 - Entity classes need proper attributes: [Table], [Id], [Column] etc.
 
 **Common Mistakes to Avoid:**
-- Don't assume method names from interfaces exist in implementations
+- Don't assume method names from interfaces exist in implementations without verifying
 - Always check actual method signatures in implementation files
-- Use `RetrieveAsync` for multiple entities, `LoadSingleAsync` for single entity queries
+- Use `RetrieveAsync` for multiple entities, `RetrieveOneAsync` for single entities by ID, `LoadSingleAsync` for custom SQL queries
 - Don't forget to register entity types with TypeMapRegistry in tests
 - Use correct `ExecutionType` (Read vs Write) for connections
 
