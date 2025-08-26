@@ -20,7 +20,7 @@ public static class ConnectionFailureHelper
     /// </summary>
     public static IDatabaseContext CreateFailOnOpenContext(SupportedDatabase database = SupportedDatabase.Sqlite, Exception? customException = null)
     {
-        var factory = FakeDbFactory.CreateFailingFactory(database, ConnectionFailureMode.FailOnOpen, customException);
+        var factory = FakeDbFactory.CreateFailingFactoryWithSkip(database, ConnectionFailureMode.FailOnOpen, customException);
         return new DatabaseContext($"Data Source=test;EmulatedProduct={database}", factory);
     }
 
@@ -29,7 +29,7 @@ public static class ConnectionFailureHelper
     /// </summary>
     public static IDatabaseContext CreateFailOnCommandContext(SupportedDatabase database = SupportedDatabase.Sqlite, Exception? customException = null)
     {
-        var factory = FakeDbFactory.CreateFailingFactory(database, ConnectionFailureMode.FailOnCommand, customException);
+        var factory = FakeDbFactory.CreateFailingFactoryWithSkip(database, ConnectionFailureMode.FailOnCommand, customException);
         return new DatabaseContext($"Data Source=test;EmulatedProduct={database}", factory);
     }
 
@@ -38,7 +38,7 @@ public static class ConnectionFailureHelper
     /// </summary>
     public static IDatabaseContext CreateFailOnTransactionContext(SupportedDatabase database = SupportedDatabase.Sqlite, Exception? customException = null)
     {
-        var factory = FakeDbFactory.CreateFailingFactory(database, ConnectionFailureMode.FailOnTransaction, customException);
+        var factory = FakeDbFactory.CreateFailingFactoryWithSkip(database, ConnectionFailureMode.FailOnTransaction, customException);
         return new DatabaseContext($"Data Source=test;EmulatedProduct={database}", factory);
     }
 
@@ -47,7 +47,7 @@ public static class ConnectionFailureHelper
     /// </summary>
     public static IDatabaseContext CreateFailAfterCountContext(int failAfterCount, SupportedDatabase database = SupportedDatabase.Sqlite, Exception? customException = null)
     {
-        var factory = FakeDbFactory.CreateFailingFactory(database, ConnectionFailureMode.FailAfterCount, customException, failAfterCount);
+        var factory = FakeDbFactory.CreateFailingFactoryWithSkip(database, ConnectionFailureMode.FailAfterCount, customException, failAfterCount);
         return new DatabaseContext($"Data Source=test;EmulatedProduct={database}", factory);
     }
 
@@ -56,7 +56,7 @@ public static class ConnectionFailureHelper
     /// </summary>
     public static IDatabaseContext CreateBrokenConnectionContext(SupportedDatabase database = SupportedDatabase.Sqlite)
     {
-        var factory = FakeDbFactory.CreateFailingFactory(database, ConnectionFailureMode.Broken);
+        var factory = FakeDbFactory.CreateFailingFactoryWithSkip(database, ConnectionFailureMode.Broken);
         return new DatabaseContext($"Data Source=test;EmulatedProduct={database}", factory);
     }
 

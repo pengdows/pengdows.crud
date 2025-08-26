@@ -22,7 +22,12 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
     private Exception? _customFailureException;
     private int _openCallCount;
     private int? _failAfterOpenCount;
+    private FakeDbFactory? _sharedFactory;
+    private int? _sharedFailAfterOpenCount;
     private bool _isBroken;
+    private bool _skipFirstFailOnOpen;
+    private bool _skipFirstBreakConnection;
+    private FakeDbFactory? _factoryRef;
     public override string DataSource => "FakeSource";
     public override string ServerVersion => GetEmulatedServerVersion();
 
@@ -69,9 +74,10 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
     /// <summary>
     /// Sets the connection to fail on the next Open() or OpenAsync() call
     /// </summary>
-    public void SetFailOnOpen(bool shouldFail = true)
+    public void SetFailOnOpen(bool shouldFail = true, bool skipFirstOpen = false)
     {
         _shouldFailOnOpen = shouldFail;
+        _skipFirstFailOnOpen = skipFirstOpen;
     }
 
     /// <summary>
@@ -108,14 +114,39 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
     }
 
     /// <summary>
+    /// Sets the connection to fail after N successful open operations across the entire factory
+    /// </summary>
+    internal void SetSharedFailAfterOpenCount(FakeDbFactory factory, int openCount)
+    {
+        _sharedFactory = factory;
+        _sharedFailAfterOpenCount = openCount;
+    }
+
+    /// <summary>
+    /// Sets a reference to the factory for factory-level failure coordination
+    /// </summary>
+    internal void SetFactoryReference(FakeDbFactory factory)
+    {
+        _factoryRef = factory;
+    }
+
+    /// <summary>
     /// Simulates a broken connection by setting state to Broken
     /// </summary>
-    public void BreakConnection()
+    public void BreakConnection(bool skipFirst = false)
     {
-        var original = _state;
-        _state = ConnectionState.Broken;
-        _isBroken = true;
-        RaiseStateChangedEvent(original);
+        if (!skipFirst)
+        {
+            var original = _state;
+            _state = ConnectionState.Broken;
+            _isBroken = true;
+            RaiseStateChangedEvent(original);
+        }
+        else
+        {
+            // Mark as broken but don't change state yet - factory will control when it breaks
+            _isBroken = true;
+        }
     }
 
     /// <summary>
@@ -128,8 +159,13 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
         _shouldFailOnBeginTransaction = false;
         _customFailureException = null;
         _failAfterOpenCount = null;
+        _sharedFactory = null;
+        _sharedFailAfterOpenCount = null;
         _openCallCount = 0;
         _isBroken = false;
+        _skipFirstFailOnOpen = false;
+        _skipFirstBreakConnection = false;
+        _factoryRef = null;
     }
 
     private string GetEmulatedServerVersion()
@@ -199,8 +235,21 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
 
         _openCallCount++;
         
-        // Check if we should fail after a specific number of opens
-        if (_failAfterOpenCount.HasValue && _openCallCount > _failAfterOpenCount.Value)
+        // Check if we should use shared factory counter
+        if (_sharedFactory != null && _sharedFailAfterOpenCount.HasValue)
+        {
+            var sharedCount = _sharedFactory.IncrementSharedOpenCount();
+            if (sharedCount > _sharedFailAfterOpenCount.Value)
+            {
+                var original = _state;
+                _state = ConnectionState.Broken;
+                _isBroken = true;
+                RaiseStateChangedEvent(original);
+                ThrowConfiguredException("Connection failed after " + _sharedFailAfterOpenCount.Value + " opens");
+            }
+        }
+        // Check if we should fail after a specific number of opens (per connection)
+        else if (_failAfterOpenCount.HasValue && _openCallCount > _failAfterOpenCount.Value)
         {
             var original = _state;
             _state = ConnectionState.Broken;
@@ -212,7 +261,32 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
         // Check if we should fail on open
         if (_shouldFailOnOpen)
         {
-            ThrowConfiguredException("Simulated connection open failure");
+            if (_factoryRef?.ShouldSkipThisOpen() == true)
+            {
+                // Skip this open (factory-level first open)
+            }
+            else
+            {
+                ThrowConfiguredException("Simulated connection open failure");
+            }
+        }
+        
+        // Check if connection should be broken (factory decides)
+        if (_isBroken)
+        {
+            if (_factoryRef?.ShouldSkipThisOpen() == true)
+            {
+                // Allow this open, but mark as broken for future opens
+                _isBroken = false; // Temporarily allow this open
+                var original = _state;
+                _state = ConnectionState.Open;
+                RaiseStateChangedEvent(original);
+                return; // Exit early, don't do normal open logic
+            }
+            else
+            {
+                throw new InvalidOperationException("Connection is broken");
+            }
         }
 
         OpenCount++;

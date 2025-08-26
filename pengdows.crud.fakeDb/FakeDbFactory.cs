@@ -14,6 +14,9 @@ public sealed class FakeDbFactory : DbProviderFactory
     private readonly ConnectionFailureMode _failureMode;
     private readonly Exception? _customException;
     private readonly int? _failAfterCount;
+    private int _sharedOpenCount;
+    private bool _skipFirstOpen;
+    private bool _hasOpenedOnce;
 
     private FakeDbFactory()
     {
@@ -37,6 +40,16 @@ public sealed class FakeDbFactory : DbProviderFactory
         _failureMode = failureMode;
         _customException = customException;
         _failAfterCount = failAfterCount;
+        _skipFirstOpen = false; // Default to not skipping
+    }
+
+    private FakeDbFactory(SupportedDatabase pretendToBe, ConnectionFailureMode failureMode, Exception? customException, int? failAfterCount, bool skipFirstOpen)
+    {
+        _pretendToBe = pretendToBe;
+        _failureMode = failureMode;
+        _customException = customException;
+        _failAfterCount = failAfterCount;
+        _skipFirstOpen = skipFirstOpen;
     }
 
     public override DbCommand CreateCommand()
@@ -58,7 +71,8 @@ public sealed class FakeDbFactory : DbProviderFactory
         switch (_failureMode)
         {
             case ConnectionFailureMode.FailOnOpen:
-                c.SetFailOnOpen();
+                c.SetFailOnOpen(true);
+                c.SetFactoryReference(this);
                 break;
             case ConnectionFailureMode.FailOnCommand:
                 c.SetFailOnCommand();
@@ -67,10 +81,11 @@ public sealed class FakeDbFactory : DbProviderFactory
                 c.SetFailOnBeginTransaction();
                 break;
             case ConnectionFailureMode.FailAfterCount when _failAfterCount.HasValue:
-                c.SetFailAfterOpenCount(_failAfterCount.Value);
+                c.SetSharedFailAfterOpenCount(this, _failAfterCount.Value);
                 break;
             case ConnectionFailureMode.Broken:
-                c.BreakConnection();
+                c.SetFactoryReference(this);
+                c.BreakConnection(false); // Don't skip, factory will decide
                 break;
         }
         
@@ -83,11 +98,48 @@ public sealed class FakeDbFactory : DbProviderFactory
     }
     
     /// <summary>
+    /// Increments the shared open count and returns the new value, optionally skipping the first open
+    /// </summary>
+    internal int IncrementSharedOpenCount()
+    {
+        if (_skipFirstOpen)
+        {
+            _skipFirstOpen = false;
+            return 0; // Don't count the first open (context initialization)
+        }
+        return System.Threading.Interlocked.Increment(ref _sharedOpenCount);
+    }
+
+    /// <summary>
+    /// Checks if this is the first open across all connections from this factory
+    /// </summary>
+    internal bool ShouldSkipThisOpen()
+    {
+        if (_skipFirstOpen && !_hasOpenedOnce)
+        {
+            _hasOpenedOnce = true;
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
     /// Creates a factory that produces connections that fail on open
     /// </summary>
     public static FakeDbFactory CreateFailingFactory(SupportedDatabase pretendToBe, ConnectionFailureMode failureMode, Exception? customException = null, int? failAfterCount = null)
     {
         return new FakeDbFactory(pretendToBe, failureMode, customException, failAfterCount);
+    }
+
+    /// <summary>
+    /// Creates a factory for helper methods that skip the first open (for DatabaseContext initialization)
+    /// </summary>
+    internal static FakeDbFactory CreateFailingFactoryWithSkip(SupportedDatabase pretendToBe, ConnectionFailureMode failureMode, Exception? customException = null, int? failAfterCount = null)
+    {
+        bool skipFirst = failureMode == ConnectionFailureMode.FailOnOpen || 
+                        failureMode == ConnectionFailureMode.Broken ||
+                        failureMode == ConnectionFailureMode.FailAfterCount;
+        return new FakeDbFactory(pretendToBe, failureMode, customException, failAfterCount, skipFirst);
     }
 }
 
