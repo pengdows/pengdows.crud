@@ -114,6 +114,29 @@ public interface ISqlContainer :ISafeAsyncDisposableBase
     DbParameter AddParameterWithValue<T>(string? name, DbType type, T value);
 
     /// <summary>
+    /// Sets a parameter value for an existing parameter.
+    /// </summary>
+    /// <param name="parameterName">The name of the parameter to update.</param>
+    /// <param name="newValue">The new value to assign.</param>
+    void SetParameterValue(string parameterName, object? newValue);
+
+    /// <summary>
+    /// Retrieves the value of a parameter as an <see cref="object"/>.
+    /// </summary>
+    /// <param name="parameterName">The name of the parameter.</param>
+    /// <returns>The parameter value.</returns>
+    object? GetParameterValue(string parameterName);
+
+    /// <summary>
+    /// Retrieves the value of a parameter and coerces it to the specified type using
+    /// <see cref="TypeCoercionHelper"/>.
+    /// </summary>
+    /// <typeparam name="T">The expected type of the parameter value.</typeparam>
+    /// <param name="parameterName">The name of the parameter.</param>
+    /// <returns>The parameter value cast to <typeparamref name="T"/>.</returns>
+    T GetParameterValue<T>(string parameterName);
+
+    /// <summary>
     /// Executes the current query as a non-query command.
     /// </summary>
     /// <param name="commandType">Type of command to execute.</param>

@@ -89,10 +89,12 @@ public class TypeMapRegistryTests
         var registry = new TypeMapRegistry();
         var info = registry.GetTableInfo<OrderedEntity>();
 
-        var columns = info.Columns.Values.OrderBy(c => c.Ordinal).ToList();
-        Assert.Equal(new[] { "A", "B" }, columns.Select(c => c.Name));
+        var columns1 = info.OrderedColumns;
+        var columns2 = info.OrderedColumns;
+        Assert.Same(columns1, columns2);
+        Assert.Equal(new[] { "A", "B" }, columns1.Select(c => c.Name));
 
-        var pks = info.Columns.Values.Where(c => c.IsPrimaryKey).OrderBy(c => c.PkOrder).ToList();
+        var pks = info.PrimaryKeys;
         Assert.Equal(new[] { "A", "B" }, pks.Select(c => c.Name));
     }
 

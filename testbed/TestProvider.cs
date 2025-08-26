@@ -1,6 +1,9 @@
 #region
 
+using Microsoft.Extensions.DependencyInjection;
+using System.Threading;
 using pengdows.crud;
+using pengdows.crud.enums;
 
 #endregion
 
@@ -8,13 +11,17 @@ namespace testbed;
 
 public class TestProvider : IAsyncTestProvider
 {
+    private static long _nextId;
+
     private readonly IDatabaseContext _context;
     private readonly EntityHelper<TestTable, long> _helper;
 
     public TestProvider(IDatabaseContext databaseContext, IServiceProvider serviceProvider)
     {
-        _context = databaseContext; //serviceProvider.GetService<IAuditValueResolver>()
-        _helper = new EntityHelper<TestTable, long>(databaseContext, auditValueResolver: new StubAuditValueResolver("system"));
+        _context = databaseContext;
+        var resolver = serviceProvider.GetService<IAuditValueResolver>() ??
+                       new StubAuditValueResolver("system");
+        _helper = new EntityHelper<TestTable, long>(databaseContext, auditValueResolver: resolver);
     }
 
 
@@ -27,13 +34,28 @@ public class TestProvider : IAsyncTestProvider
             await CreateTable();
 
             Console.WriteLine("Running Insert rows");
+            var before = await CountTestRows();
             var id = await InsertTestRows();
-            Console.WriteLine("Running test count");
-            await CountTestRows();
+            var afterInsert = await CountTestRows();
+            if (afterInsert != before + 1)
+            {
+                throw new Exception("Insert did not affect expected row count");
+            }
+
             Console.WriteLine("Running retrieve rows");
             var obj = await RetrieveRows(id);
+            if (obj.Id != id)
+            {
+                throw new Exception("Retrieved row did not match inserted id");
+            }
+
             Console.WriteLine("Running delete rows");
             await DeletedRow(obj);
+            var afterDelete = await CountTestRows();
+            if (afterDelete != before)
+            {
+                throw new Exception("Delete did not affect expected row count");
+            }
             Console.WriteLine("Running Transaction rows");
             await TestTransactions();
         }
@@ -70,17 +92,17 @@ public class TestProvider : IAsyncTestProvider
 
     private async Task TestCommitTransaction()
     {
-        var transaction = _context.BeginTransaction();
+        await using var transaction = _context.BeginTransaction();
         var id = await InsertTestRows(transaction);
-        var count = await CountTestRows(transaction);
+        await CountTestRows(transaction);
         transaction.Commit();
     }
 
     private async Task TestRollbackTransaction()
     {
-        var transaction = _context.BeginTransaction();
+        await using var transaction = _context.BeginTransaction();
         var id = await InsertTestRows(transaction);
-        var count = await CountTestRows(transaction);
+        await CountTestRows(transaction);
         transaction.Rollback();
     }
 
@@ -111,50 +133,39 @@ public class TestProvider : IAsyncTestProvider
         }
 
         sqlContainer.Query.Clear();
-        sqlContainer.Query.AppendFormat(@"
-CREATE TABLE {0}test_table{1} (
-    {0}id{1} BIGINT  NOT NULL UNIQUE, 
-    {0}name{1} VARCHAR(100) NOT NULL,
-    {0}description{1} VARCHAR(1000) NOT NULL,
-    {0}created_at{1} DATETIME NOT NULL,
-    {0}created_by{1} VARCHAR(100) NOT NULL,
-    {0}updated_at{1} DATETIME NOT NULL,
-    {0}updated_by{1} VARCHAR(100) NOT NULL
-    
-); ", qp, qs);
-        try
-        {
-            await sqlContainer.ExecuteNonQueryAsync();
-        }
-        catch (Exception e)
-        {
-            try
-            {
-                sqlContainer.Query.Clear();
-                sqlContainer.Query.AppendFormat("TRUNCATE TABLE {0}test_table{1}", qp, qs);
-                await sqlContainer.ExecuteNonQueryAsync();
-            }
-            catch
-            {
-                //eat error quitely if it doesn't support truncate table
-            }
-
-            Console.WriteLine(e.Message + "\n --- Continuing anyways");
-        }
+        var dateType = GetDateTimeType(databaseContext.Product);
+        sqlContainer.Query.Append($@"
+CREATE TABLE {qp}test_table{qs} (
+    {qp}id{qs} BIGINT NOT NULL,
+    {qp}name{qs} VARCHAR(100) NOT NULL,
+    {qp}description{qs} VARCHAR(1000) NOT NULL,
+    {qp}created_at{qs} {dateType} NOT NULL,
+    {qp}created_by{qs} VARCHAR(100) NOT NULL,
+    {qp}updated_at{qs} {dateType} NOT NULL,
+    {qp}updated_by{qs} VARCHAR(100) NOT NULL,
+    PRIMARY KEY ({qp}id{qs})
+);");
+        await sqlContainer.ExecuteNonQueryAsync();
     }
 
     private async Task<long> InsertTestRows(IDatabaseContext? db = null)
     {
         var ctx = db ?? _context;
         var name = ctx is TransactionContext ? NameEnum.Test2 : NameEnum.Test;
+        var id = Interlocked.Increment(ref _nextId);
         var t = new TestTable
         {
-            Id = Random.Shared.Next(),
+            Id = id,
             Name = name,
             Description = ctx.GenerateRandomName()
         };
         var sq = _helper.BuildCreate(t, ctx);
-        await sq.ExecuteNonQueryAsync();
+        var rows = await sq.ExecuteNonQueryAsync();
+        if (rows != 1)
+        {
+            throw new Exception("Insert failed");
+        }
+
         return t.Id;
     }
 
@@ -180,5 +191,14 @@ CREATE TABLE {0}test_table{1} (
         {
             throw new Exception("Delete failed");
         }
+    }
+
+    private static string GetDateTimeType(SupportedDatabase product)
+    {
+        return product switch
+        {
+            SupportedDatabase.PostgreSql => "TIMESTAMP WITH TIME ZONE",
+            _ => "DATETIME"
+        };
     }
 }

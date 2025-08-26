@@ -26,13 +26,9 @@ builder.Services.AddScoped<IAuditValueResolver, StringAuditContextProvider>();
  
 var host = builder.Build();
 
-await using (var liteDb = new DatabaseContext("Data Source=mydb.sqlite", SqliteFactory.Instance,
-                 null))
-{
-    var lite = new TestProvider(liteDb, host.Services);
-    await lite.RunTest();
-    liteDb.Dispose();
-}
+await using var liteDb = new DatabaseContext("Data Source=mydb.sqlite", SqliteFactory.Instance, null);
+var lite = new TestProvider(liteDb, host.Services);
+await lite.RunTest();
 await using var duck = new DuckDbTestContainer();
 await duck.RunTestWithContainerAsync<TestProvider>(host.Services, (db, sp) => new TestProvider(db, sp));
 // var cs = $"DataSource=localhost;Port=5000;Database={0};Uid=sa;Pwd=MyStr0ngP@ssw0rd;";
@@ -66,17 +62,14 @@ await duck.RunTestWithContainerAsync<TestProvider>(host.Services, (db, sp) => ne
 await using var cockroach = new CockroachDbTestContainer();
 await cockroach.RunTestWithContainerAsync(host.Services, (db, sp) => new CockroachDbTestProvider(db, sp));
 
-await using (var my = new MySqlTestContainer())
-{
-    await my.RunTestWithContainerAsync<TestProvider>(host.Services, (db, sp) => new TestProvider(db, sp));
-}
-
-var maria = new MariaDbContainer();
+await using var my = new MySqlTestContainer();
+await my.RunTestWithContainerAsync<TestProvider>(host.Services, (db, sp) => new TestProvider(db, sp));
+await using var maria = new MariaDbContainer();
 await maria.RunTestWithContainerAsync<TestProvider>(host.Services, (db, sp) => new TestProvider(db, sp));
-var pg = new PostgreSqlTestContainer();
+await using var pg = new PostgreSqlTestContainer();
 await pg.RunTestWithContainerAsync<PostgreSQLTestProvider>(host.Services,
     (db, sp) => new PostgreSQLTestProvider(db, sp));
-var ms = new SqlServerTestContainer();
+await using var ms = new SqlServerTestContainer();
 await ms.RunTestWithContainerAsync<TestProvider>(host.Services, (db, sp) => new TestProvider(db, sp));
 // var o = new OracleTestContainer();
 // await o.RunTestWithContainerAsync<OracleTestProvider>(host.Services, (db, sp) => new OracleTestProvider(db, sp));
@@ -87,94 +80,8 @@ await ms.RunTestWithContainerAsync<TestProvider>(host.Services, (db, sp) => new 
 // await oracle.RunTest();
 
 
-var fb = new FirebirdSqlTestContainer();
+await using var fb = new FirebirdSqlTestContainer();
 await fb.RunTestWithContainerAsync(host.Services, (db, sp) => new FirebirdTestProvider(db, sp));
 
 
 Console.WriteLine("All tests complete.");
-
-async Task WaitForDbToStart(DbProviderFactory instance, string connectionString,
-    int numberOfSecondsToWait = 60)
-{
-    var csb = instance.CreateConnectionStringBuilder();
-    csb.ConnectionString = connectionString;
-
-    var timeout = TimeSpan.FromSeconds(numberOfSecondsToWait);
-    var startTime = DateTime.UtcNow;
-
-    var lastError = String.Empty;
-    while (DateTime.UtcNow - startTime < timeout)
-    {
-        await using var connection = instance.CreateConnection();
-        try
-        {
-            connection.ConnectionString = csb.ConnectionString;
-
-            await connection.OpenAsync();
-            await connection.CloseAsync();
-            return;
-        }
-        catch (OracleException ex)
-        {
-            Console.WriteLine(ex);
-            await Task.Delay(1000);
-        }
-        catch (FbException ex) when (ex.Message.Contains("I/O error"))
-        {
-            try
-            {
-                if (csb is not FbConnectionStringBuilder orig)
-                {
-                    throw new InvalidOperationException("Connection string builder is not valid.");
-                }
-
-                var db = orig.Database;
-                if (string.IsNullOrWhiteSpace(db))
-                {
-                    throw new InvalidOperationException("Database path is not specified.");
-                }
-
-                var csbTemp = new FbConnectionStringBuilder
-                {
-                    DataSource = orig.DataSource,
-                    Port = orig.Port,
-                    UserID = orig.UserID,
-                    Password = orig.Password,
-                    Charset = orig.Charset,
-                    Pooling = false
-                };
-
-                await using var createConn = instance.CreateConnection();
-                createConn.ConnectionString = csbTemp.ConnectionString;
-
-                await using var createCmd = createConn.CreateCommand();
-                createCmd.CommandText = $"CREATE DATABASE '{db}';";
-
-                await createConn.OpenAsync();
-                await createCmd.ExecuteNonQueryAsync();
-            }
-            catch (Exception ex1)
-            {
-                Console.WriteLine(ex1);
-            }
-        }
-        catch (AseException aseException)
-        {
-            Console.WriteLine(aseException);
-            await Task.Delay(1000);
-        }
-        catch (Exception ex)
-        {
-            var currentError = ex.Message;
-            if (currentError != lastError)
-            {
-                Console.WriteLine(currentError);
-            }
-
-            lastError = currentError;
-            await Task.Delay(1000);
-        }
-    }
-
-    throw new TimeoutException($"Could not connect after {numberOfSecondsToWait}s.");
-}

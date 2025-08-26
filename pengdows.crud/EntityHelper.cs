@@ -57,6 +57,12 @@ public class EntityHelper<TEntity, TRowID> :
 
     private readonly Dictionary<IColumnInfo, Func<object?, object?>> _readerConverters = new();
 
+    private readonly Dictionary<string, IReadOnlyList<IColumnInfo>> _columnListCache = new();
+
+    private readonly Dictionary<string, string> _queryCache = new();
+
+    private readonly Dictionary<string, string[]> _whereParameterNames = new();
+
     public EntityHelper(IDatabaseContext databaseContext,
         EnumParseFailureMode enumParseBehavior = EnumParseFailureMode.Throw
     )
@@ -137,6 +143,18 @@ public class EntityHelper<TEntity, TRowID> :
     public string MakeParameterName(DbParameter p)
     {
         return _dialect.MakeParameterName(p);
+    }
+
+    private string GetCachedQuery(string key, Func<string> factory)
+    {
+        if (_queryCache.TryGetValue(key, out var sql))
+        {
+            return sql;
+        }
+
+        sql = factory();
+        _queryCache[key] = sql;
+        return sql;
     }
 
     public TEntity MapReaderToObject(ITrackedReader reader)
@@ -326,18 +344,8 @@ public class EntityHelper<TEntity, TRowID> :
         var sc = ctx.CreateSqlContainer();
         PrepareForInsertOrUpsert(objectToCreate);
 
-        foreach (var column in _tableInfo.Columns.Values)
+        foreach (var column in GetCachedInsertableColumns())
         {
-            if (column.IsNonInsertable)
-            {
-                continue;
-            }
-
-            if (column.IsId && !column.IsIdIsWritable)
-            {
-                continue;
-            }
-
             var value = column.MakeParameterValueFromField(objectToCreate);
 
             // If no audit resolver is provided and the value is null for a user audit column,
@@ -391,22 +399,27 @@ public class EntityHelper<TEntity, TRowID> :
         var ctx = context ?? _context;
 
         var sc = ctx.CreateSqlContainer();
-        var hasAlias = !string.IsNullOrWhiteSpace(alias);
-
-        sc.Query.Append("SELECT ");
-        var selectList = _tableInfo.Columns.Values
-            .OrderBy(c => c.Ordinal)
-            .Select(col => (hasAlias
-                ? _dialect.WrapObjectName(alias) + _dialect.CompositeIdentifierSeparator
-                : string.Empty) + _dialect.WrapObjectName(col.Name));
-        sc.Query.Append(string.Join(", ", selectList));
-
-        sc.Query.Append("\nFROM ").Append(WrappedTableName);
-        if (hasAlias)
+        var sql = GetCachedQuery($"BaseRetrieve:{alias}", () =>
         {
-            sc.Query.Append(' ').Append(_dialect.WrapObjectName(alias));
-        }
+            var hasAlias = !string.IsNullOrWhiteSpace(alias);
+            var selectList = _tableInfo.OrderedColumns
+                .Select(col => (hasAlias
+                    ? _dialect.WrapObjectName(alias) + _dialect.CompositeIdentifierSeparator
+                    : string.Empty) + _dialect.WrapObjectName(col.Name));
+            var sb = new StringBuilder();
+            sb.Append("SELECT ")
+                .Append(string.Join(", ", selectList))
+                .Append("\nFROM ")
+                .Append(WrappedTableName);
+            if (hasAlias)
+            {
+                sb.Append(' ').Append(_dialect.WrapObjectName(alias));
+            }
 
+            return sb.ToString();
+        });
+
+        sc.Query.Append(sql);
         return sc;
     }
 
@@ -421,25 +434,35 @@ public class EntityHelper<TEntity, TRowID> :
                 "Single-ID operations require a designated Id column; use composite-key helpers.");
         }
 
+        var isNull = Utils.IsNullOrDbNull(id);
+        var key = isNull ? "DeleteById_Null" : "DeleteById";
+        var sql = GetCachedQuery(key, () =>
+        {
+            var sb = new StringBuilder();
+            sb.Append("DELETE FROM ")
+                .Append(WrappedTableName)
+                .Append(" WHERE ")
+                .Append(WrapObjectName(idCol.Name));
+            if (isNull)
+            {
+                sb.Append(" IS NULL");
+            }
+            else
+            {
+                sb.Append(" = ").Append(_dialect.MakeParameterName("p0"));
+            }
+
+            return sb.ToString();
+        });
+
         var sc = ctx.CreateSqlContainer();
-
-        var p = _context.CreateDbParameter(idCol.DbType, id);
-        sc.AddParameter(p);
-
-        sc.Query.Append("DELETE FROM ")
-            .Append(WrappedTableName)
-            .Append(" WHERE ")
-            .Append(WrapObjectName(idCol.Name));
-        if (Utils.IsNullOrDbNull(p.Value))
+        if (!isNull)
         {
-            sc.Query.Append(" IS NULL ");
-        }
-        else
-        {
-            sc.Query.Append(" = ");
-            sc.Query.Append(MakeParameterName(p));
+            var p = _context.CreateDbParameter("p0", idCol.DbType, id);
+            sc.AddParameter(p);
         }
 
+        sc.Query.Append(sql);
         return sc;
     }
 
@@ -667,18 +690,45 @@ public class EntityHelper<TEntity, TRowID> :
         }
     }
 
-    private List<IColumnInfo> GetPrimaryKeys()
+    private IReadOnlyList<IColumnInfo> GetPrimaryKeys()
     {
-        var keys = _tableInfo.Columns.Values
-            .Where(o => o.IsPrimaryKey)
-            .OrderBy(k => k.PkOrder)
-            .ToList();
+        var keys = _tableInfo.PrimaryKeys;
         if (keys.Count < 1)
         {
             throw new Exception($"No primary keys found for type {typeof(TEntity).Name}");
         }
 
         return keys;
+    }
+
+    private IReadOnlyList<IColumnInfo> GetCachedInsertableColumns()
+    {
+        if (_columnListCache.TryGetValue("Insertable", out var cached))
+        {
+            return cached;
+        }
+
+        var insertable = _tableInfo.OrderedColumns
+            .Where(c => !c.IsNonInsertable && (!c.IsId || c.IsIdIsWritable))
+            .ToList();
+
+        _columnListCache["Insertable"] = insertable;
+        return insertable;
+    }
+
+    private IReadOnlyList<IColumnInfo> GetCachedUpdatableColumns()
+    {
+        if (_columnListCache.TryGetValue("Updatable", out var cached))
+        {
+            return cached;
+        }
+
+        var updatable = _tableInfo.OrderedColumns
+            .Where(c => !(c.IsId || c.IsVersion || c.IsNonUpdateable || c.IsCreatedBy || c.IsCreatedOn))
+            .ToList();
+
+        _columnListCache["Updatable"] = updatable;
+        return updatable;
     }
 
     private void CheckParameterLimit(ISqlContainer sc, int? toAdd)
@@ -858,7 +908,7 @@ public class EntityHelper<TEntity, TRowID> :
 
         ValidateSameRoot(context);
         var ctx = context ?? _context;
-        if (_idColumn == null && !_tableInfo.Columns.Values.Any(c => c.IsPrimaryKey))
+        if (_idColumn == null && _tableInfo.PrimaryKeys.Count == 0)
         {
             throw new NotSupportedException("Upsert requires an Id or a composite primary key.");
         }
@@ -889,11 +939,7 @@ public class EntityHelper<TEntity, TRowID> :
             return new List<IColumnInfo> { _idColumn! };
         }
 
-        var keys = _tableInfo.Columns.Values
-            .Where(c => c.IsPrimaryKey)
-            .OrderBy(c => c.PkOrder)
-            .ToList();
-
+        var keys = _tableInfo.PrimaryKeys;
         if (keys.Count > 0)
         {
             return keys;
@@ -986,13 +1032,8 @@ public class EntityHelper<TEntity, TRowID> :
         var clause = new StringBuilder();
         var parameters = new List<DbParameter>();
 
-        foreach (var column in _tableInfo.Columns.Values)
+        foreach (var column in GetCachedUpdatableColumns())
         {
-            if (column.IsId || column.IsVersion || column.IsNonUpdateable || column.IsCreatedBy || column.IsCreatedOn)
-            {
-                continue;
-            }
-
             var newValue = column.MakeParameterValueFromField(updated);
             var originalValue = original != null ? column.MakeParameterValueFromField(original) : null;
 
@@ -1106,18 +1147,8 @@ public class EntityHelper<TEntity, TRowID> :
         var values = new List<string>();
         var parameters = new List<DbParameter>();
 
-        foreach (var column in _tableInfo.Columns.Values)
+        foreach (var column in GetCachedInsertableColumns())
         {
-            if (column.IsNonInsertable)
-            {
-                continue;
-            }
-
-            if (column.IsId && !column.IsIdIsWritable)
-            {
-                continue;
-            }
-
             var value = column.MakeParameterValueFromField(entity);
 
             if (_auditValueResolver == null && (column.IsCreatedBy || column.IsLastUpdatedBy) && Utils.IsNullOrDbNull(value))
@@ -1139,13 +1170,8 @@ public class EntityHelper<TEntity, TRowID> :
         }
 
         var updateSet = new StringBuilder();
-        foreach (var column in _tableInfo.Columns.Values)
+        foreach (var column in GetCachedUpdatableColumns())
         {
-            if (column.IsId || column.IsVersion || column.IsNonUpdateable || column.IsCreatedBy || column.IsCreatedOn)
-            {
-                continue;
-            }
-
             if (_auditValueResolver == null && column.IsLastUpdatedBy)
             {
                 // Without a resolver we preserve existing LastUpdatedBy on conflict updates.
@@ -1165,7 +1191,7 @@ public class EntityHelper<TEntity, TRowID> :
             updateSet.Append($", {WrapObjectName(_versionColumn.Name)} = {WrapObjectName(_versionColumn.Name)} + 1");
         }
 
-        var keys = _tableInfo.Columns.Values.Where(c => c.IsPrimaryKey).OrderBy(c => c.PkOrder).ToList();
+        var keys = _tableInfo.PrimaryKeys;
         if (_idColumn == null && keys.Count == 0)
         {
             throw new NotSupportedException("Upsert requires an Id or a composite primary key.");
@@ -1201,18 +1227,8 @@ public class EntityHelper<TEntity, TRowID> :
         var values = new List<string>();
         var parameters = new List<DbParameter>();
 
-        foreach (var column in _tableInfo.Columns.Values)
+        foreach (var column in GetCachedInsertableColumns())
         {
-            if (column.IsNonInsertable)
-            {
-                continue;
-            }
-
-            if (column.IsId && !column.IsIdIsWritable)
-            {
-                continue;
-            }
-
             var value = column.MakeParameterValueFromField(entity);
 
             columns.Add(WrapObjectName(column.Name));
@@ -1229,13 +1245,8 @@ public class EntityHelper<TEntity, TRowID> :
         }
 
         var updateSet = new StringBuilder();
-        foreach (var column in _tableInfo.Columns.Values)
+        foreach (var column in GetCachedUpdatableColumns())
         {
-            if (column.IsId || column.IsVersion || column.IsNonUpdateable || column.IsCreatedBy || column.IsCreatedOn)
-            {
-                continue;
-            }
-
             if (_auditValueResolver == null && column.IsLastUpdatedBy)
             {
                 // Without a resolver we preserve existing LastUpdatedBy on duplicate updates.
@@ -1255,7 +1266,7 @@ public class EntityHelper<TEntity, TRowID> :
             updateSet.Append($", {WrapObjectName(_versionColumn.Name)} = {WrapObjectName(_versionColumn.Name)} + 1");
         }
 
-        var keys = _tableInfo.Columns.Values.Where(c => c.IsPrimaryKey).OrderBy(c => c.PkOrder).ToList();
+        var keys = _tableInfo.PrimaryKeys;
         if (_idColumn == null && keys.Count == 0)
         {
             throw new NotSupportedException("Upsert requires an Id or a composite primary key.");
@@ -1283,11 +1294,10 @@ public class EntityHelper<TEntity, TRowID> :
         PrepareForInsertOrUpsert(entity);
 
         var srcColumns = new List<string>();
-        var insertColumns = new List<string>();
         var values = new List<string>();
         var parameters = new List<DbParameter>();
 
-        foreach (var column in _tableInfo.Columns.Values)
+        foreach (var column in _tableInfo.OrderedColumns)
         {
             var value = column.MakeParameterValueFromField(entity);
             string placeholder;
@@ -1304,20 +1314,15 @@ public class EntityHelper<TEntity, TRowID> :
 
             srcColumns.Add(WrapObjectName(column.Name));
             values.Add(placeholder);
-            if (!column.IsNonInsertable && (!column.IsId || column.IsIdIsWritable))
-            {
-                insertColumns.Add(WrapObjectName(column.Name));
-            }
         }
 
-        var updateSet = new StringBuilder();
-        foreach (var column in _tableInfo.Columns.Values)
-        {
-            if (column.IsId || column.IsVersion || column.IsNonUpdateable || column.IsCreatedBy || column.IsCreatedOn)
-            {
-                continue;
-            }
+        var insertColumns = GetCachedInsertableColumns()
+            .Select(c => WrapObjectName(c.Name))
+            .ToList();
 
+        var updateSet = new StringBuilder();
+        foreach (var column in GetCachedUpdatableColumns())
+        {
             if (_auditValueResolver == null && column.IsLastUpdatedBy)
             {
                 // Without a resolver we preserve existing LastUpdatedBy on merge updates.
@@ -1338,7 +1343,7 @@ public class EntityHelper<TEntity, TRowID> :
                 $", t.{WrapObjectName(_versionColumn.Name)} = t.{WrapObjectName(_versionColumn.Name)} + 1");
         }
 
-        var keys = _tableInfo.Columns.Values.Where(c => c.IsPrimaryKey).OrderBy(c => c.PkOrder).ToList();
+        var keys = _tableInfo.PrimaryKeys;
         if (_idColumn == null && keys.Count == 0)
         {
             throw new NotSupportedException("Upsert requires an Id or a composite primary key.");
@@ -1385,26 +1390,37 @@ public class EntityHelper<TEntity, TRowID> :
             throw new ArgumentException("IDs cannot be null", nameof(ids));
         }
 
-        var inList = new StringBuilder();
-        var dbType = _idColumn!.DbType;
-
-        foreach (var id in list)
+        var key = $"Where:{wrappedColumnName}:{list.Count}";
+        var sql = GetCachedQuery(key, () =>
         {
-            if (inList.Length > 0)
+            var names = new string[list.Count];
+            for (var i = 0; i < names.Length; i++)
             {
-                inList.Append(", ");
+                names[i] = _dialect.MakeParameterName($"p{i}");
             }
 
-            var parameter = _context.CreateDbParameter(dbType, id);
-            sqlContainer.AddParameter(parameter);
-            inList.Append(_dialect.MakeParameterName(parameter));
-        }
+            _whereParameterNames[key] = names;
+            return string.Concat(wrappedColumnName, " IN (", string.Join(", ", names), ")");
+        });
 
         AppendWherePrefix(sqlContainer);
-        sqlContainer.Query.Append(wrappedColumnName)
-            .Append(" IN (")
-            .Append(inList)
-            .Append(')');
+        sqlContainer.Query.Append(sql);
+
+        var dbType = _idColumn!.DbType;
+        var names = _whereParameterNames[key];
+        for (var i = 0; i < list.Count; i++)
+        {
+            var name = names[i];
+            try
+            {
+                sqlContainer.SetParameterValue(name, list[i]);
+            }
+            catch (KeyNotFoundException)
+            {
+                var parameter = _context.CreateDbParameter(name, dbType, list[i]);
+                sqlContainer.AddParameter(parameter);
+            }
+        }
 
         return sqlContainer;
     }

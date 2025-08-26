@@ -101,6 +101,36 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
         return parameter;
     }
 
+    public void SetParameterValue(string parameterName, object? newValue)
+    {
+        if (!_parameters.TryGetValue(parameterName, out var parameter))
+        {
+            throw new KeyNotFoundException($"Parameter '{parameterName}' not found.");
+        }
+
+        parameter.Value = newValue;
+    }
+
+    public object? GetParameterValue(string parameterName)
+    {
+        if (!_parameters.TryGetValue(parameterName, out var parameter))
+        {
+            throw new KeyNotFoundException($"Parameter '{parameterName}' not found.");
+        }
+
+        return parameter.Value;
+    }
+
+    public T GetParameterValue<T>(string parameterName)
+    {
+        var value = GetParameterValue(parameterName);
+        var sourceType = value?.GetType() ?? typeof(object);
+        var coerced = TypeCoercionHelper.Coerce(value, sourceType, typeof(T));
+
+        return (T)coerced!;
+    }
+
+
 
     public DbCommand CreateCommand(ITrackedConnection conn)
     {

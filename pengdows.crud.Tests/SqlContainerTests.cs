@@ -1,6 +1,7 @@
 #region
 
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Threading.Tasks;
 using pengdows.crud.enums;
@@ -86,6 +87,82 @@ public class SqlContainerTests : SqlLiteContextTestBase
 
         Assert.False(string.IsNullOrEmpty(param.ParameterName));
         Assert.Equal(1, container.ParameterCount);
+    }
+
+    [Fact]
+    public void SetParameterValue_UpdatesExistingParameter()
+    {
+        var container = Context.CreateSqlContainer();
+        var param = container.AddParameterWithValue(DbType.Int32, 1);
+
+        container.SetParameterValue(param.ParameterName, 5);
+
+        var value = container.GetParameterValue<int>(param.ParameterName);
+        Assert.Equal(5, value);
+    }
+
+    [Fact]
+    public void SetParameterValue_MissingParameter_Throws()
+    {
+        var container = Context.CreateSqlContainer();
+
+        Assert.Throws<KeyNotFoundException>(() => container.SetParameterValue("does_not_exist", 1));
+    }
+
+    [Fact]
+    public void GetParameterValue_ReturnsValue()
+    {
+        var container = Context.CreateSqlContainer();
+        var param = container.AddParameterWithValue(DbType.String, "abc");
+
+        var value = container.GetParameterValue<string>(param.ParameterName);
+        Assert.Equal("abc", value);
+    }
+
+    [Fact]
+    public void GetParameterValue_MissingParameter_Throws()
+    {
+        var container = Context.CreateSqlContainer();
+
+        Assert.Throws<KeyNotFoundException>(() => container.GetParameterValue<int>("missing"));
+    }
+
+    [Fact]
+    public void GetParameterValue_IntToString_Converts()
+    {
+        var container = Context.CreateSqlContainer();
+        var param = container.AddParameterWithValue(DbType.Int32, 1);
+
+        var value = container.GetParameterValue<string>(param.ParameterName);
+
+        Assert.Equal("1", value);
+    }
+
+    [Fact]
+    public void GetParameterValue_InvalidConversion_Throws()
+    {
+        var container = Context.CreateSqlContainer();
+        var param = container.AddParameterWithValue(DbType.String, "abc");
+
+        Assert.Throws<InvalidCastException>(() => container.GetParameterValue<int>(param.ParameterName));
+    }
+
+    [Fact]
+    public void GetParameterValue_Object_ReturnsValue()
+    {
+        var container = Context.CreateSqlContainer();
+        var param = container.AddParameterWithValue(DbType.Int32, 2);
+
+        var value = container.GetParameterValue(param.ParameterName);
+        Assert.Equal(2, value);
+    }
+
+    [Fact]
+    public void GetParameterValue_Object_MissingParameter_Throws()
+    {
+        var container = Context.CreateSqlContainer();
+
+        Assert.Throws<KeyNotFoundException>(() => container.GetParameterValue("missing"));
     }
 
     [Fact]
