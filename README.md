@@ -147,8 +147,11 @@ dotnet add package pengdows.crud.abstractions
 using System.Data.SqlClient;
 using pengdows.crud;
 
-var db = new DatabaseContext("your-connection-string", SqlClientFactory.Instance);
-var helper = new EntityHelper<MyEntity, long>(db);
+var context = new DatabaseContext("your-connection-string", SqlClientFactory.Instance);
+
+var sc = context.CreateSqlContainer();
+sc.Query.Append("SELECT CURRENT_TIMESTAMP()");
+var dt = sc.ExecuteScalar<DateTime>();
 ```
 
 For integration tests without a real database, use the `pengdows.crud.fakeDb` package:
