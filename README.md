@@ -159,3 +159,53 @@ For integration tests without a real database, use the `pengdows.crud.fakeDb` pa
 ```bash
 dotnet add package pengdows.crud.fakeDb
 ```
+
+You can also map database tables to entities using attributes and work through
+`EntityHelper<TEntity, TRowID>`:
+
+```csharp
+using System.Data;
+using System.Data.SqlClient;
+using pengdows.crud;
+using pengdows.crud.attributes;
+
+[Table("test_table")]
+public class TestTable
+{
+    [Id]
+    [Column("id", DbType.Int64)]
+    public long Id { get; set; }
+
+    [PrimaryKey(1)]
+    [Column("name", DbType.String)]
+    [EnumColumn(typeof(NameEnum))]
+    public NameEnum? Name { get; set; }
+
+    [Column("description", DbType.String)]
+    public string? Description { get; set; }
+}
+
+public enum NameEnum
+{
+    Test,
+    Test2
+}
+
+var context = new DatabaseContext("your-connection-string", SqlClientFactory.Instance);
+var helper = new EntityHelper<TestTable, long>(context);
+
+var row = new TestTable { Id = 1, Name = NameEnum.Test, Description = "demo" };
+
+// Build an INSERT without executing yet
+var insert = helper.BuildCreate(row);
+await insert.ExecuteNonQueryAsync();
+
+// Retrieve by ID
+var found = await helper.RetrieveOneAsync(row.Id);
+
+// Only override the context when running inside a TransactionContext
+using var tx = context.BeginTransaction();
+var sc = helper.BuildRetrieve(new[] { row.Id }, tx);
+var list = await helper.LoadListAsync(sc);
+tx.Commit();
+```
