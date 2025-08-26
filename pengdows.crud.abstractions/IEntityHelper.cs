@@ -50,14 +50,15 @@ public interface IEntityHelper<TEntity, TRowID> where TEntity : class, new()
     Task<bool> CreateAsync(TEntity entity, IDatabaseContext context);
 
     /// <summary>
-    /// Returns a SELECT clause with no WHERE clause, aliased.
+    /// Returns a SELECT clause with no WHERE clause.
     /// </summary>
     /// <remarks>
-    /// Useful as a starting point when composing more complex queries. The returned
-    /// container is not executed automatically; callers may append custom WHERE or
-    /// ORDER BY clauses before execution. Provide <paramref name="context"/> only
-    /// when the command will run within a transaction created from the parent
-    /// context.
+    /// Useful as a starting point when composing more complex queries. When
+    /// <paramref name="alias"/> is provided, all column references are qualified
+    /// with it; pass an empty string to omit aliasing. The returned container is
+    /// not executed automatically; callers may append custom WHERE or ORDER BY
+    /// clauses before execution. Provide <paramref name="context"/> only when the
+    /// command will run within a transaction created from the parent context.
     /// </remarks>
     /// <example>
     /// <code>
@@ -395,8 +396,10 @@ public interface IEntityHelper<TEntity, TRowID> where TEntity : class, new()
     /// Appends a composite primary key WHERE clause to the SQL container.
     /// </summary>
     /// <remarks>
-    /// Call when multiple key columns are required to identify rows. The method
-    /// only augments <paramref name="sc"/>; execution remains the caller's
+    /// Call when multiple key columns are required to identify rows. If
+    /// <paramref name="alias"/> is provided, each column reference is qualified
+    /// accordingly; otherwise the table name is used as-is. The method only
+    /// augments <paramref name="sc"/>; execution remains the caller's
     /// responsibility.
     /// </remarks>
     /// <example>
@@ -406,5 +409,5 @@ public interface IEntityHelper<TEntity, TRowID> where TEntity : class, new()
     /// var list = await helper.LoadListAsync(sc);
     /// </code>
     /// </example>
-    void BuildWhereByPrimaryKey(IReadOnlyCollection<TEntity>? listOfObjects, ISqlContainer sc, string alias = "a");
+    void BuildWhereByPrimaryKey(IReadOnlyCollection<TEntity>? listOfObjects, ISqlContainer sc, string alias = "");
 }
