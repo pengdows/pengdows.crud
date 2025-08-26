@@ -64,10 +64,13 @@ dotnet build -c Release
 # Restore packages
 dotnet restore
 
-# Pack projects for NuGet
+# Pack projects for NuGet (local development)
 dotnet pack pengdows.crud/pengdows.crud.csproj -c Release
 dotnet pack pengdows.crud.abstractions/pengdows.crud.abstractions.csproj -c Release
 dotnet pack pengdows.crud.fakeDb/pengdows.crud.fakeDb.csproj -c Release
+
+# Publishing is handled automatically by GitHub Actions on main branch pushes
+# See .github/workflows/deploy.yml for the automated build and publish process
 ```
 
 ### Testing Infrastructure
