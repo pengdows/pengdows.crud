@@ -55,13 +55,13 @@ public class EntityHelper<TEntity, TRowID> :
 
     private IColumnInfo? _versionColumn;
 
-    private readonly Dictionary<IColumnInfo, Func<object?, object?>> _readerConverters = new();
+    private readonly ConcurrentDictionary<IColumnInfo, Func<object?, object?>> _readerConverters = new();
 
-    private readonly Dictionary<string, IReadOnlyList<IColumnInfo>> _columnListCache = new();
+    private readonly ConcurrentDictionary<string, IReadOnlyList<IColumnInfo>> _columnListCache = new();
 
-    private readonly Dictionary<string, string> _queryCache = new();
+    private readonly ConcurrentDictionary<string, string> _queryCache = new();
 
-    private readonly Dictionary<string, string[]> _whereParameterNames = new();
+    private readonly ConcurrentDictionary<string, string[]> _whereParameterNames = new();
 
     public EntityHelper(IDatabaseContext databaseContext,
         EnumParseFailureMode enumParseBehavior = EnumParseFailureMode.Throw
@@ -153,7 +153,7 @@ public class EntityHelper<TEntity, TRowID> :
         }
 
         sql = factory();
-        _queryCache[key] = sql;
+        _queryCache.TryAdd(key, sql);
         return sql;
     }
 
@@ -262,7 +262,7 @@ public class EntityHelper<TEntity, TRowID> :
                 };
             }
 
-            _readerConverters[column] = converter;
+            _readerConverters.TryAdd(column, converter);
             return converter;
         }
 
@@ -281,7 +281,7 @@ public class EntityHelper<TEntity, TRowID> :
                 return JsonSerializer.Deserialize(s!, propType, opts);
             };
 
-            _readerConverters[column] = converter;
+            _readerConverters.TryAdd(column, converter);
             return converter;
         }
 
@@ -320,7 +320,7 @@ public class EntityHelper<TEntity, TRowID> :
             }
         };
 
-        _readerConverters[column] = converter;
+        _readerConverters.TryAdd(column, converter);
         return converter;
     }
 
@@ -712,7 +712,7 @@ public class EntityHelper<TEntity, TRowID> :
             .Where(c => !c.IsNonInsertable && (!c.IsId || c.IsIdIsWritable))
             .ToList();
 
-        _columnListCache["Insertable"] = insertable;
+        _columnListCache.TryAdd("Insertable", insertable);
         return insertable;
     }
 
@@ -727,7 +727,7 @@ public class EntityHelper<TEntity, TRowID> :
             .Where(c => !(c.IsId || c.IsVersion || c.IsNonUpdateable || c.IsCreatedBy || c.IsCreatedOn))
             .ToList();
 
-        _columnListCache["Updatable"] = updatable;
+        _columnListCache.TryAdd("Updatable", updatable);
         return updatable;
     }
 
@@ -1399,7 +1399,7 @@ public class EntityHelper<TEntity, TRowID> :
                 names[i] = _dialect.MakeParameterName($"p{i}");
             }
 
-            _whereParameterNames[key] = names;
+            _whereParameterNames.TryAdd(key, names);
             return string.Concat(wrappedColumnName, " IN (", string.Join(", ", names), ")");
         });
 

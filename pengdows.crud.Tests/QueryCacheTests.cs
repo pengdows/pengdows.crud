@@ -1,7 +1,9 @@
 #region
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data;
 using System.Reflection;
+using System.Threading.Tasks;
 using pengdows.crud;
 using pengdows.crud.attributes;
 using Xunit;
@@ -148,11 +150,50 @@ public class QueryCacheTests : SqlLiteContextTestBase
         Assert.Equal(3, sc.GetParameterValue<int>(p1));
     }
 
-    private static Dictionary<string, string> GetQueryCache<TEntity, TId>(EntityHelper<TEntity, TId> helper)
+    [Fact]
+    public async Task BuildDelete_ConcurrentCalls_ShareCache()
+    {
+        TypeMap.Register<CacheEntity>();
+        var helper = new EntityHelper<CacheEntity, int>(Context);
+
+        await Task.WhenAll(
+            Task.Run(() => helper.BuildDelete(1)),
+            Task.Run(() => helper.BuildDelete(2))
+        );
+
+        var cache = GetQueryCache(helper);
+        Assert.True(cache.ContainsKey("DeleteById"));
+    }
+
+    [Fact]
+    public async Task BuildWhere_ConcurrentDifferentCounts_SeparateCache()
+    {
+        TypeMap.Register<CacheEntity>();
+        var helper = new EntityHelper<CacheEntity, int>(Context);
+        var wrapped = Context.WrapObjectName("Id");
+
+        await Task.WhenAll(
+            Task.Run(() =>
+            {
+                var sc = Context.CreateSqlContainer();
+                helper.BuildWhere(wrapped, new[] { 1 }, sc);
+            }),
+            Task.Run(() =>
+            {
+                var sc = Context.CreateSqlContainer();
+                helper.BuildWhere(wrapped, new[] { 1, 2 }, sc);
+            })
+        );
+
+        var cache = GetQueryCache(helper);
+        Assert.NotSame(cache[$"Where:{wrapped}:1"], cache[$"Where:{wrapped}:2"]);
+    }
+
+    private static ConcurrentDictionary<string, string> GetQueryCache<TEntity, TId>(EntityHelper<TEntity, TId> helper)
         where TEntity : class, new()
     {
         var field = typeof(EntityHelper<TEntity, TId>).GetField("_queryCache", BindingFlags.NonPublic | BindingFlags.Instance);
-        return (Dictionary<string, string>)field!.GetValue(helper)!;
+        return (ConcurrentDictionary<string, string>)field!.GetValue(helper)!;
     }
 
     [Table("CacheEntity")]

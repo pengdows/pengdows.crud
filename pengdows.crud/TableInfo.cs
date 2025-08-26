@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 
 namespace pengdows.crud;
 
@@ -25,16 +26,42 @@ public class TableInfo : ITableInfo
     /// <summary>
     /// Columns sorted by their ordinal.
     /// </summary>
-    public IReadOnlyList<IColumnInfo> OrderedColumns =>
-        _orderedColumns ??= Columns.Values.OrderBy(c => c.Ordinal).ToList();
+    public IReadOnlyList<IColumnInfo> OrderedColumns
+    {
+        get
+        {
+            var existing = Volatile.Read(ref _orderedColumns);
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            var computed = Columns.Values.OrderBy(c => c.Ordinal).ToList();
+            Interlocked.CompareExchange(ref _orderedColumns, computed, null);
+            return _orderedColumns!;
+        }
+    }
 
     /// <summary>
     /// Columns marked as primary keys, ordered by PkOrder.
     /// </summary>
-    public IReadOnlyList<IColumnInfo> PrimaryKeys =>
-        _primaryKeys ??= Columns.Values.Where(c => c.IsPrimaryKey)
-            .OrderBy(k => k.PkOrder)
-            .ToList();
+    public IReadOnlyList<IColumnInfo> PrimaryKeys
+    {
+        get
+        {
+            var existing = Volatile.Read(ref _primaryKeys);
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            var computed = Columns.Values.Where(c => c.IsPrimaryKey)
+                .OrderBy(k => k.PkOrder)
+                .ToList();
+            Interlocked.CompareExchange(ref _primaryKeys, computed, null);
+            return _primaryKeys!;
+        }
+    }
 
     /// <summary>
     /// Indicates whether this table contains any audit columns.
