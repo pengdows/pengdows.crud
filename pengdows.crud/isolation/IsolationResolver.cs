@@ -25,12 +25,16 @@ public sealed class IsolationResolver : IIsolationResolver
     public IsolationLevel Resolve(IsolationProfile profile)
     {
         if (!_profileMap.TryGetValue(profile, out var level))
+        {
             throw new NotSupportedException($"Profile {profile} not supported for {_product}");
+        }
 
         if (!_rcsi && _product == SupportedDatabase.PostgreSql &&
             profile == IsolationProfile.SafeNonBlockingReads && level == IsolationLevel.ReadCommitted)
+        {
             throw new InvalidOperationException(
                 $"Tenant {_product} does not have RCSI enabled. Profile {profile} maps to blocking isolation level.");
+        }
 
         Validate(level);
         return level;
@@ -39,7 +43,9 @@ public sealed class IsolationResolver : IIsolationResolver
     public void Validate(IsolationLevel level)
     {
         if (!_supportedLevels.Contains(level))
+        {
             throw new InvalidOperationException($"Isolation level {level} not supported by {_product} (RCSI: {_rcsi})");
+        }
     }
 
     public IReadOnlySet<IsolationLevel> GetSupportedLevels()

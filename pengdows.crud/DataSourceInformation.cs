@@ -66,8 +66,16 @@ public class DataSourceInformation : IDataSourceInformation
 
     public static async Task<DataSourceInformation> CreateAsync(ITrackedConnection connection, DbProviderFactory factory, ILoggerFactory? loggerFactory = null)
     {
-        if (connection == null) throw new ArgumentNullException(nameof(connection));
-        if (factory == null) throw new ArgumentNullException(nameof(factory));
+        if (connection == null)
+        {
+            throw new ArgumentNullException(nameof(connection));
+        }
+
+        if (factory == null)
+        {
+            throw new ArgumentNullException(nameof(factory));
+        }
+
         loggerFactory ??= NullLoggerFactory.Instance;
 
         if (connection.State != ConnectionState.Open)

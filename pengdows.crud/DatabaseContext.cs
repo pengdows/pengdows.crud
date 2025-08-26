@@ -383,7 +383,9 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         {
             previous = Interlocked.Read(ref _maxNumberOfOpenConnections);
             if (current <= previous)
+            {
                 return; // no update needed
+            }
 
             // try to update only if no one else has changed it
         } while (Interlocked.CompareExchange(

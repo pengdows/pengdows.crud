@@ -50,7 +50,10 @@ public class FakeDbCommand : DbCommand
     {
         var conn = FakeConnection;
         if (conn != null && conn.NonQueryResults.Count > 0)
+        {
             return conn.NonQueryResults.Dequeue();
+        }
+
         return 1;
     }
 
@@ -61,19 +64,25 @@ public class FakeDbCommand : DbCommand
         {
             // Check for command-text-based result first
             if (!string.IsNullOrEmpty(CommandText) && conn.ScalarResultsByCommand.TryGetValue(CommandText, out var commandResult))
+            {
                 return commandResult;
-            
+            }
+
             // Handle version queries automatically based on emulated product
             if (!string.IsNullOrEmpty(CommandText))
             {
                 var versionResult = GetVersionQueryResult(CommandText, conn.EmulatedProduct);
                 if (versionResult != null)
+                {
                     return versionResult;
+                }
             }
             
             // Fall back to queued results
             if (conn.ScalarResults.Count > 0)
+            {
                 return conn.ScalarResults.Dequeue();
+            }
         }
         return 42;
     }
@@ -119,7 +128,10 @@ public class FakeDbCommand : DbCommand
     {
         var conn = FakeConnection;
         if (conn != null && conn.ReaderResults.Count > 0)
+        {
             return new FakeDbDataReader(conn.ReaderResults.Dequeue());
+        }
+
         return new FakeDbDataReader();
     }
 

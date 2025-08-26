@@ -3,6 +3,7 @@ using pengdows.crud.enums;
 using testbed;
 using Xunit;
 
+namespace pengdows.crud.Tests;
 public class GetDateTimeTypeTests
 {
     [Fact]

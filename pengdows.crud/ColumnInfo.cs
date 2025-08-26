@@ -38,11 +38,16 @@ public class ColumnInfo : IColumnInfo
         if (value != null)
         {
             if (EnumType != null)
+            {
                 value = DbType == DbType.String
                     ? value.ToString() // Save enum as string name
                     : Convert.ChangeType(value, Enum.GetUnderlyingType(EnumType)); // Save enum as int
+            }
 
-            if (IsJsonType) value = JsonSerializer.Serialize(value);
+            if (IsJsonType)
+            {
+                value = JsonSerializer.Serialize(value);
+            }
         }
 
         return value;

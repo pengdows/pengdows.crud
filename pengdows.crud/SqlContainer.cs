@@ -156,7 +156,9 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
         var procName = Query.ToString().Trim();
 
         if (string.IsNullOrWhiteSpace(procName))
+        {
             throw new InvalidOperationException("Procedure name is missing from the query.");
+        }
 
         var args = includeParameters ? BuildProcedureArguments() : string.Empty;
 
@@ -188,7 +190,9 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
         string BuildProcedureArguments()
         {
             if (_parameters.Count == 0)
+            {
                 return string.Empty;
+            }
 
             // Named parameter support check
             if (_context.SupportsNamedParameters)

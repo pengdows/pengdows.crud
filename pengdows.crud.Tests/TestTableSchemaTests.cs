@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using pengdows.crud;
 using testbed;
 using Xunit;
-
+namespace pengdows.crud.Tests;
 public class TestTableSchemaTests
 {
     [Fact]

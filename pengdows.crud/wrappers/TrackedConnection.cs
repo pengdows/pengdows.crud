@@ -54,7 +54,10 @@ public class TrackedConnection : ITrackedConnection, IAsyncDisposable
             _lockFactory = () => NoOpAsyncLocker.Instance;
         }
 
-        if (_onStateChange != null) _connection.StateChange += _onStateChange;
+        if (_onStateChange != null)
+        {
+            _connection.StateChange += _onStateChange;
+        }
     }
 
     public bool WasOpened => Interlocked.CompareExchange(ref _wasOpened, 0, 0) == 1;
@@ -79,7 +82,9 @@ public class TrackedConnection : ITrackedConnection, IAsyncDisposable
     public void Dispose()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
             return;
+        }
 
         _logger.LogDebug("Disposing connection {Name}", _name);
 
@@ -115,7 +120,10 @@ public class TrackedConnection : ITrackedConnection, IAsyncDisposable
 
     private void TriggerFirstOpen()
     {
-        if (Interlocked.Exchange(ref _wasOpened, 1) == 0) _onFirstOpen?.Invoke(_connection);
+        if (Interlocked.Exchange(ref _wasOpened, 1) == 0)
+        {
+            _onFirstOpen?.Invoke(_connection);
+        }
     }
 
     public async Task OpenAsync(CancellationToken cancellationToken = default)
@@ -138,11 +146,16 @@ public class TrackedConnection : ITrackedConnection, IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
             return;
+        }
 
         _logger.LogDebug("Async disposing connection {Name}", _name);
 
-        if (_isSharedConnection && _semaphoreSlim != null) await _semaphoreSlim.WaitAsync().ConfigureAwait(false);
+        if (_isSharedConnection && _semaphoreSlim != null)
+        {
+            await _semaphoreSlim.WaitAsync().ConfigureAwait(false);
+        }
 
         try
         {
@@ -157,7 +170,10 @@ public class TrackedConnection : ITrackedConnection, IAsyncDisposable
         }
         finally
         {
-            if (_isSharedConnection && _semaphoreSlim != null) _semaphoreSlim.Release();
+            if (_isSharedConnection && _semaphoreSlim != null)
+            {
+                _semaphoreSlim.Release();
+            }
         }
     }
 

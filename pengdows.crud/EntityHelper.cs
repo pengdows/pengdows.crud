@@ -355,7 +355,10 @@ public class EntityHelper<TEntity, TRowID> :
     public ISqlContainer BuildCreate(TEntity objectToCreate, IDatabaseContext? context = null)
     {
         if (objectToCreate == null)
+        {
             throw new ArgumentNullException(nameof(objectToCreate));
+        }
+
         ValidateSameRoot(context);
         var ctx = context ?? _context;
         var columns = new StringBuilder();
@@ -588,7 +591,10 @@ public class EntityHelper<TEntity, TRowID> :
     public async Task<TEntity?> LoadSingleAsync(ISqlContainer sc)
     {
         await using var reader = await sc.ExecuteReaderAsync().ConfigureAwait(false);
-        if (await reader.ReadAsync().ConfigureAwait(false)) return MapReaderToObject(reader);
+        if (await reader.ReadAsync().ConfigureAwait(false))
+        {
+            return MapReaderToObject(reader);
+        }
 
         return null;
     }
@@ -1043,7 +1049,9 @@ public class EntityHelper<TEntity, TRowID> :
     {
         var idValue = _idColumn!.PropertyInfo.GetValue(objectToUpdate);
         if (IsDefaultId(idValue))
+        {
             return null;
+        }
 
         return await RetrieveOneAsync((TRowID)idValue!);
     }
@@ -1508,19 +1516,27 @@ public class EntityHelper<TEntity, TRowID> :
     private static bool IsDefaultId(object? value)
     {
         if (Utils.IsNullOrDbNull(value))
+        {
             return true;
+        }
 
         var type = typeof(TRowID);
         var underlying = Nullable.GetUnderlyingType(type) ?? type;
 
         if (underlying == typeof(string))
+        {
             return value as string == string.Empty;
+        }
 
         if (underlying == typeof(Guid))
+        {
             return value is Guid g && g == Guid.Empty;
+        }
 
         if (Utils.IsZeroNumeric(value!))
+        {
             return true;
+        }
 
         return EqualityComparer<TRowID>.Default.Equals((TRowID)value!, default!);
     }
@@ -1552,7 +1568,9 @@ public class EntityHelper<TEntity, TRowID> :
         }
 
         if (!isValid)
+        {
             throw new NotSupportedException(
                 $"TRowID type '{type.FullName}' is not supported. Use string, Guid, or integer types.");
+        }
     }
 }
