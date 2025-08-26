@@ -1,6 +1,7 @@
 #region
 
 using System.Data;
+using System.Threading;
 using pengdows.crud.threading;
 #pragma warning disable CS0108, CS0114
 
@@ -8,9 +9,12 @@ using pengdows.crud.threading;
 
 namespace pengdows.crud.wrappers;
 
+/// <summary>
+/// Represents a connection that tracks usage and exposes additional helpers such as locking.
+/// </summary>
 public interface ITrackedConnection : IDbConnection
 {
-    string ConnectionString { get; set; }  
+    string ConnectionString { get; set; }
     int ConnectionTimeout { get; }
     string Database { get; }
     ConnectionState State { get; }
@@ -27,6 +31,13 @@ public interface ITrackedConnection : IDbConnection
     void Dispose();
     ValueTask DisposeAsync();
 
+    /// <summary>
+    /// Provides an asynchronous lock tied to this connection.
+    /// </summary>
     ILockerAsync GetLock();
+
+    /// <summary>
+    /// Retrieves schema information for the current connection.
+    /// </summary>
     DataTable GetSchema();
 }

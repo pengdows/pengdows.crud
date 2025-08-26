@@ -7,7 +7,10 @@ public class TableInfo : ITableInfo
     public Dictionary<string, IColumnInfo> Columns { get; } = new(StringComparer.OrdinalIgnoreCase);
     public string Schema { get; set; }
     public string Name { get; set; }
+
+    /// <inheritdoc />
     public IColumnInfo Id { get; set; }
+
     public IColumnInfo Version { get; set; }
     public IColumnInfo LastUpdatedBy { get; set; }
     public IColumnInfo LastUpdatedOn { get; set; }

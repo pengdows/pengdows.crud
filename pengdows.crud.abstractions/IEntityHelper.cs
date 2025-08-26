@@ -42,7 +42,7 @@ public interface IEntityHelper<TEntity, TRowID> where TEntity : class, new()
     ISqlContainer BuildBaseRetrieve(string alias, IDatabaseContext? context = null);
 
     /// <summary>
-    /// Builds a SQL SELECT for a list of row IDs.
+    /// Builds a SQL SELECT for a list of row IDs (pseudo keys).
     /// </summary>
     ISqlContainer BuildRetrieve(IReadOnlyCollection<TRowID>? listOfIds, string alias,
         IDatabaseContext? context = null);
@@ -54,7 +54,7 @@ public interface IEntityHelper<TEntity, TRowID> where TEntity : class, new()
         IDatabaseContext? context = null);
 
     /// <summary>
-    /// Overload for retrieving by ID without alias.
+    /// Overload for retrieving by row IDs (pseudo keys) without alias.
     /// </summary>
     ISqlContainer BuildRetrieve(IReadOnlyCollection<TRowID>? listOfIds, IDatabaseContext? context = null);
 
@@ -74,22 +74,22 @@ public interface IEntityHelper<TEntity, TRowID> where TEntity : class, new()
     Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context = null);
 
     /// <summary>
-    /// Builds a DELETE by primary key.
+    /// Builds a DELETE by row identifier (pseudo key).
     /// </summary>
     ISqlContainer BuildDelete(TRowID id, IDatabaseContext? context = null);
 
     /// <summary>
-    /// Executes a DELETE for the given primary key and returns the number of affected rows.
+    /// Executes a DELETE for the given row identifier (pseudo key) and returns the number of affected rows.
     /// </summary>
     Task<int> DeleteAsync(TRowID id, IDatabaseContext? context = null);
 
     /// <summary>
-    /// Loads all entities matching the provided IDs.
+    /// Loads all entities matching the provided row IDs (pseudo keys).
     /// </summary>
     Task<List<TEntity>> RetrieveAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null);
 
     /// <summary>
-    /// Executes a DELETE for all provided IDs and returns the number of affected rows.
+    /// Executes a DELETE for all provided row IDs (pseudo keys) and returns the number of affected rows.
     /// </summary>
     Task<int> DeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null);
 
