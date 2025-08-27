@@ -32,7 +32,7 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
     public override string ServerVersion => GetEmulatedServerVersion();
 
     internal readonly Queue<IEnumerable<Dictionary<string, object>>> ReaderResults = new();
-    internal readonly Queue<object?> ScalarResults = new();
+    public readonly Queue<object?> ScalarResults = new();
     public readonly Queue<int> NonQueryResults = new();
     internal readonly Dictionary<string, object?> ScalarResultsByCommand = new();
 

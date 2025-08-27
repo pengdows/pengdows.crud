@@ -155,22 +155,6 @@ public class EntityHelper<TEntity, TRowID> :
 
     public string CompositeIdentifierSeparator => _dialect.CompositeIdentifierSeparator;
 
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void ValidateSameRoot(IDatabaseContext? context)
-    {
-        if (context == null)
-        {
-            return;
-        }
-
-        if (!Equals(((IContextIdentity)context).RootId, _rootId))
-        {
-            throw new InvalidOperationException(
-                "Context mismatch: must be the owning DatabaseContext or its TransactionContext.");
-        }
-    }
-
     public string MakeParameterName(DbParameter p)
     {
         return _dialect.MakeParameterName(p);
@@ -357,7 +341,6 @@ public class EntityHelper<TEntity, TRowID> :
 
     public async Task<bool> CreateAsync(TEntity entity, IDatabaseContext context)
     {
-        ValidateSameRoot(context);
         var sc = BuildCreate(entity, context);
         return await sc.ExecuteNonQueryAsync() == 1;
     }
@@ -369,7 +352,6 @@ public class EntityHelper<TEntity, TRowID> :
             throw new ArgumentNullException(nameof(entity));
         }
 
-        ValidateSameRoot(context);
         var ctx = context ?? _context;
         var sc = ctx.CreateSqlContainer();
         SetAuditFields(entity, false);
@@ -424,7 +406,6 @@ public class EntityHelper<TEntity, TRowID> :
 
     public ISqlContainer BuildBaseRetrieve(string alias, IDatabaseContext? context = null)
     {
-        ValidateSameRoot(context);
         var ctx = context ?? _context;
 
         var sc = ctx.CreateSqlContainer();
@@ -454,7 +435,6 @@ public class EntityHelper<TEntity, TRowID> :
 
     public ISqlContainer BuildDelete(TRowID id, IDatabaseContext? context = null)
     {
-        ValidateSameRoot(context);
         var ctx = context ?? _context;
         var sc = ctx.CreateSqlContainer();
 
@@ -473,7 +453,6 @@ public class EntityHelper<TEntity, TRowID> :
 
     public async Task<int> DeleteAsync(TRowID id, IDatabaseContext? context = null)
     {
-        ValidateSameRoot(context);
         var sc = BuildDelete(id, context);
         return await sc.ExecuteNonQueryAsync();
     }
@@ -491,7 +470,6 @@ public class EntityHelper<TEntity, TRowID> :
             return new List<TEntity>();
         }
 
-        ValidateSameRoot(context);
         var ctx = context ?? _context;
         var sc = BuildRetrieve(list, ctx);
         return await LoadListAsync(sc);
@@ -509,8 +487,7 @@ public class EntityHelper<TEntity, TRowID> :
         {
             return 0;
         }
-
-        ValidateSameRoot(context);
+        
         var ctx = context ?? _context;
         if (_idColumn == null)
         {
@@ -548,7 +525,6 @@ public class EntityHelper<TEntity, TRowID> :
 
     public Task<TEntity?> RetrieveOneAsync(TEntity objectToRetrieve, IDatabaseContext? context = null)
     {
-        ValidateSameRoot(context);
         var ctx = context ?? _context;
         var list = new List<TEntity> { objectToRetrieve };
         var sc = BuildRetrieve(list, string.Empty, ctx);
@@ -557,7 +533,6 @@ public class EntityHelper<TEntity, TRowID> :
 
     public Task<TEntity?> RetrieveOneAsync(TRowID id, IDatabaseContext? context = null)
     {
-        ValidateSameRoot(context);
         var ctx = context ?? _context;
         if (_idColumn == null)
         {
@@ -601,7 +576,6 @@ public class EntityHelper<TEntity, TRowID> :
     public ISqlContainer BuildRetrieve(IReadOnlyCollection<TRowID>? listOfIds,
         string alias, IDatabaseContext? context = null)
     {
-        ValidateSameRoot(context);
         var ctx = context ?? _context;
         if (_idColumn == null)
         {
@@ -634,7 +608,6 @@ public class EntityHelper<TEntity, TRowID> :
     public ISqlContainer BuildRetrieve(IReadOnlyCollection<TEntity>? listOfObjects,
         string alias, IDatabaseContext? context = null)
     {
-        ValidateSameRoot(context);
         var ctx = context ?? _context;
         var sc = BuildBaseRetrieve(alias, ctx);
         BuildWhereByPrimaryKey(
@@ -647,14 +620,12 @@ public class EntityHelper<TEntity, TRowID> :
 
     public ISqlContainer BuildRetrieve(IReadOnlyCollection<TRowID>? listOfIds, IDatabaseContext? context = null)
     {
-        ValidateSameRoot(context);
         return BuildRetrieve(listOfIds, "", context);
     }
 
     public ISqlContainer BuildRetrieve(IReadOnlyCollection<TEntity>? listOfObjects,
         IDatabaseContext? context = null)
     {
-        ValidateSameRoot(context);
         return BuildRetrieve(listOfObjects, string.Empty, context);
     }
 
@@ -802,7 +773,6 @@ public class EntityHelper<TEntity, TRowID> :
 
     public Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null)
     {
-        ValidateSameRoot(context);
         var ctx = context ?? _context;
         return BuildUpdateAsync(objectToUpdate, _versionColumn != null, ctx);
     }
@@ -815,7 +785,6 @@ public class EntityHelper<TEntity, TRowID> :
             throw new ArgumentNullException(nameof(objectToUpdate));
         }
 
-        ValidateSameRoot(context);
         var ctx = context ?? _context;
         if (_idColumn == null)
         {
@@ -873,14 +842,13 @@ public class EntityHelper<TEntity, TRowID> :
 
     public Task<int> UpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null)
     {
-        ValidateSameRoot(context);
         var ctx = context ?? _context;
         return UpdateAsync(objectToUpdate, _versionColumn != null, ctx);
     }
 
     public async Task<int> UpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context = null)
     {
-        ValidateSameRoot(context);
+        
         try
         {
             var sc = await BuildUpdateAsync(objectToUpdate, loadOriginal, context);
@@ -899,7 +867,6 @@ public class EntityHelper<TEntity, TRowID> :
             throw new ArgumentNullException(nameof(entity));
         }
 
-        ValidateSameRoot(context);
         var ctx = context ?? _context;
 
         try
@@ -920,7 +887,6 @@ public class EntityHelper<TEntity, TRowID> :
             throw new ArgumentNullException(nameof(entity));
         }
 
-        ValidateSameRoot(context);
         var ctx = context ?? _context;
         if (_idColumn == null && _tableInfo.PrimaryKeys.Count == 0)
         {
@@ -1151,7 +1117,6 @@ public class EntityHelper<TEntity, TRowID> :
 
     private ISqlContainer BuildUpsertOnConflict(TEntity entity, IDatabaseContext context)
     {
-        ValidateSameRoot(context);
         var ctx = context ?? _context;
         PrepareForInsertOrUpsert(entity);
 
@@ -1230,7 +1195,6 @@ public class EntityHelper<TEntity, TRowID> :
 
     private ISqlContainer BuildUpsertOnDuplicate(TEntity entity, IDatabaseContext context)
     {
-        ValidateSameRoot(context);
         var ctx = context ?? _context;
 
         PrepareForInsertOrUpsert(entity);
@@ -1300,7 +1264,6 @@ public class EntityHelper<TEntity, TRowID> :
 
     private ISqlContainer BuildUpsertMerge(TEntity entity, IDatabaseContext context)
     {
-        ValidateSameRoot(context);
         var ctx = context ?? _context;
 
         PrepareForInsertOrUpsert(entity);
