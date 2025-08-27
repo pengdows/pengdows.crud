@@ -3,7 +3,6 @@ using System.IO;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
-using pengdows.crud;
 using testbed;
 using Xunit;
 namespace pengdows.crud.Tests;

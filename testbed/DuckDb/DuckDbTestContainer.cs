@@ -1,7 +1,6 @@
 #region
 
 using DuckDB.NET.Data;
-using Microsoft.Extensions.DependencyInjection;
 using pengdows.crud;
 
 #endregion

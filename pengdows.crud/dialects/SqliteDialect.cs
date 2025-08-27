@@ -1,6 +1,5 @@
 using System.Data;
 using System.Data.Common;
-using System.IO;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.wrappers;

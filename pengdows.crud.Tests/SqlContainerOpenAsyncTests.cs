@@ -1,6 +1,5 @@
 #region
 
-using System.Data;
 using System.Data.Common;
 using System.Threading.Tasks;
 using pengdows.crud.configuration;

@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using System.Data;
 using System.Threading.Tasks;
 using System.Reflection;
-using Moq;
 using pengdows.crud.enums;
 using pengdows.crud.FakeDb;
 using Xunit;

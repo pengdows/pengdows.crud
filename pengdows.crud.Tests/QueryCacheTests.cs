@@ -1,10 +1,8 @@
 #region
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Data;
 using System.Reflection;
 using System.Threading.Tasks;
-using pengdows.crud;
 using pengdows.crud.attributes;
 using Xunit;
 #endregion

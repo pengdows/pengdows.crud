@@ -1,7 +1,5 @@
 #region
 
-using System;
-
 #endregion
 
 namespace pengdows.crud.infrastructure;

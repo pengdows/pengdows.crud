@@ -1,17 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Data.Common;
-using System.Reflection;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.attributes;
-using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;
 using pengdows.crud.FakeDb;
-using pengdows.crud.wrappers;
 using Xunit;
 
 namespace pengdows.crud.Tests;

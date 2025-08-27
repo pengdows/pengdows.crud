@@ -4,7 +4,6 @@ using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.wrappers;
-using pengdows.crud;
 
 namespace pengdows.crud.dialects;
 

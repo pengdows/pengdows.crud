@@ -1,6 +1,4 @@
 using System.Data;
-using System.Data.Common;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;

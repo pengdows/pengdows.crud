@@ -7,7 +7,6 @@ using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.FakeDb;
 using pengdows.crud.Tests.Mocks;
-using pengdows.crud.wrappers;
 using Xunit;
 
 namespace pengdows.crud.Tests;

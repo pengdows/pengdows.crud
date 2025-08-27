@@ -3,7 +3,6 @@
 using System.Data;
 using System.Data.Common;
 using System.Text;
-using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;

@@ -3,13 +3,9 @@
 
 #region
 
-using System.Data.Common;
-using AdoNetCore.AseClient;
-using FirebirdSql.Data.FirebirdClient;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Oracle.ManagedDataAccess.Client;
 using pengdows.crud;
 using testbed;
 using testbed.Cockroach;

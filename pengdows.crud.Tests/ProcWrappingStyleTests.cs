@@ -2,7 +2,6 @@
 
 using System;
 using System.Data;
-using Microsoft.Data.Sqlite;
 using pengdows.crud.enums;
 using Xunit;
 

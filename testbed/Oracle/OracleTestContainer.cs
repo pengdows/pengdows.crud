@@ -1,7 +1,6 @@
 #region
 
 using DotNet.Testcontainers.Builders;
-using Microsoft.Extensions.DependencyInjection;
 using Oracle.ManagedDataAccess.Client;
 using pengdows.crud;
 using IContainer = DotNet.Testcontainers.Containers.IContainer;

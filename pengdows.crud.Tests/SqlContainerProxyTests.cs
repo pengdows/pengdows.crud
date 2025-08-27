@@ -1,7 +1,6 @@
 using System;
 using System.Data;
 using System.Data.Common;
-using pengdows.crud;
 using pengdows.crud.Tests.Mocks;
 using Xunit;
 

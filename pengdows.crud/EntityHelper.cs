@@ -3,7 +3,6 @@
 using System.Collections.Concurrent;
 using System.Data;
 using System.Data.Common;
-using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
@@ -13,7 +12,6 @@ using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using pengdows.crud.attributes;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;
