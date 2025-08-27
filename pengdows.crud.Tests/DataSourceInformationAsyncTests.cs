@@ -23,7 +23,7 @@ public class DataSourceInformationAsyncTests
             SupportedDatabase.PostgreSql, "PostgreSQL", "15.2", 
             "@p[0-9]+", "@{0}", 64, "@\\w+", "@\\w+", true, scalars);
 
-        using (tracked)
+        await using (tracked)
         {
             var info = await DataSourceInformation.CreateAsync(tracked, factory, NullLoggerFactory.Instance);
             Assert.Equal("PostgreSQL", info.DatabaseProductName);
@@ -36,7 +36,7 @@ public class DataSourceInformationAsyncTests
     {
         var factory = new FakeDbFactory(SupportedDatabase.SqlServer);
         var conn = new ThrowingConnection { ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}" };
-        using var tracked = new TrackedConnection(conn);
+        await using var tracked = new TrackedConnection(conn);
 
         var info = await DataSourceInformation.CreateAsync(tracked, factory, NullLoggerFactory.Instance);
         Assert.StartsWith("Error retrieving version", info.DatabaseProductVersion);

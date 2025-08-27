@@ -29,8 +29,8 @@ public class TrackedConnectionTests
     [Fact]
     public async Task GetLock_SharedConnection_ReturnsRealAsyncLocker()
     {
-        using var conn = new FakeDbConnection();
-        using var tracked = new TrackedConnection(conn, isSharedConnection: true);
+        await using var conn = new FakeDbConnection();
+        await using var tracked = new TrackedConnection(conn, isSharedConnection: true);
 
         await using var locker = tracked.GetLock();
 
@@ -71,9 +71,9 @@ public class TrackedConnectionTests
     [Fact]
     public async Task OpenAsync_InvokesOnFirstOpen_OnlyOnce()
     {
-        using var conn = new FakeDbConnection();
+        await using var conn = new FakeDbConnection();
         var count = 0;
-        using var tracked = new TrackedConnection(conn, onFirstOpen: _ => count++);
+        await using var tracked = new TrackedConnection(conn, onFirstOpen: _ => count++);
 
         await tracked.OpenAsync();
         await tracked.OpenAsync();
@@ -100,7 +100,7 @@ public class TrackedConnectionTests
     [Fact]
     public async Task DisposeAsync_ClosesConnection_Once()
     {
-        using var conn = new FakeDbConnection();
+        await using var conn = new FakeDbConnection();
         var disposeCount = 0;
         await using var tracked = new TrackedConnection(conn, onDispose: _ => disposeCount++);
 

@@ -16,6 +16,18 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
     private ConnectionState _state = ConnectionState.Closed;
     private string _serverVersion = "1.0";
     private int? _maxParameterLimit;
+    private bool _shouldFailOnOpen;
+    private bool _shouldFailOnCommand;
+    private bool _shouldFailOnBeginTransaction;
+    private Exception? _customFailureException;
+    private int _openCallCount;
+    private int? _failAfterOpenCount;
+    private FakeDbFactory? _sharedFactory;
+    private int? _sharedFailAfterOpenCount;
+    private bool _isBroken;
+    private bool _skipFirstFailOnOpen;
+    private bool _skipFirstBreakConnection;
+    private FakeDbFactory? _factoryRef;
     public override string DataSource => "FakeSource";
     public override string ServerVersion => GetEmulatedServerVersion();
 
@@ -57,6 +69,103 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
     public int? GetMaxParameterLimit()
     {
         return _maxParameterLimit;
+    }
+
+    /// <summary>
+    /// Sets the connection to fail on the next Open() or OpenAsync() call
+    /// </summary>
+    public void SetFailOnOpen(bool shouldFail = true, bool skipFirstOpen = false)
+    {
+        _shouldFailOnOpen = shouldFail;
+        _skipFirstFailOnOpen = skipFirstOpen;
+    }
+
+    /// <summary>
+    /// Sets the connection to fail when creating commands
+    /// </summary>
+    public void SetFailOnCommand(bool shouldFail = true)
+    {
+        _shouldFailOnCommand = shouldFail;
+    }
+
+    /// <summary>
+    /// Sets the connection to fail when beginning transactions
+    /// </summary>
+    public void SetFailOnBeginTransaction(bool shouldFail = true)
+    {
+        _shouldFailOnBeginTransaction = shouldFail;
+    }
+
+    /// <summary>
+    /// Sets a custom exception to throw instead of the default InvalidOperationException
+    /// </summary>
+    public void SetCustomFailureException(Exception exception)
+    {
+        _customFailureException = exception;
+    }
+
+    /// <summary>
+    /// Sets the connection to fail after N successful open operations
+    /// </summary>
+    public void SetFailAfterOpenCount(int openCount)
+    {
+        _failAfterOpenCount = openCount;
+        _openCallCount = 0;
+    }
+
+    /// <summary>
+    /// Sets the connection to fail after N successful open operations across the entire factory
+    /// </summary>
+    internal void SetSharedFailAfterOpenCount(FakeDbFactory factory, int openCount)
+    {
+        _sharedFactory = factory;
+        _sharedFailAfterOpenCount = openCount;
+    }
+
+    /// <summary>
+    /// Sets a reference to the factory for factory-level failure coordination
+    /// </summary>
+    internal void SetFactoryReference(FakeDbFactory factory)
+    {
+        _factoryRef = factory;
+    }
+
+    /// <summary>
+    /// Simulates a broken connection by setting state to Broken
+    /// </summary>
+    public void BreakConnection(bool skipFirst = false)
+    {
+        if (!skipFirst)
+        {
+            var original = _state;
+            _state = ConnectionState.Broken;
+            _isBroken = true;
+            RaiseStateChangedEvent(original);
+        }
+        else
+        {
+            // Mark as broken but don't change state yet - factory will control when it breaks
+            _isBroken = true;
+        }
+    }
+
+    /// <summary>
+    /// Resets all failure conditions
+    /// </summary>
+    public void ResetFailureConditions()
+    {
+        _shouldFailOnOpen = false;
+        _shouldFailOnCommand = false;
+        _shouldFailOnBeginTransaction = false;
+        _customFailureException = null;
+        _failAfterOpenCount = null;
+        _sharedFactory = null;
+        _sharedFailAfterOpenCount = null;
+        _openCallCount = 0;
+        _isBroken = false;
+        _skipFirstFailOnOpen = false;
+        _skipFirstBreakConnection = false;
+        _factoryRef = null;
     }
 
     private string GetEmulatedServerVersion()
@@ -108,18 +217,84 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
 
     public override ConnectionState State => _state;
 
+    private void ThrowConfiguredException(string defaultMessage)
+    {
+        throw _customFailureException ?? new InvalidOperationException(defaultMessage);
+    }
+
     public int OpenCount { get; private set; }
 
     public int OpenAsyncCount { get; private set; }
 
     public override void Open()
     {
+        if (_isBroken)
+        {
+            throw new InvalidOperationException("Connection is broken");
+        }
+
+        _openCallCount++;
+        
+        // Check if we should use shared factory counter
+        if (_sharedFactory != null && _sharedFailAfterOpenCount.HasValue)
+        {
+            var sharedCount = _sharedFactory.IncrementSharedOpenCount();
+            if (sharedCount > _sharedFailAfterOpenCount.Value)
+            {
+                var original = _state;
+                _state = ConnectionState.Broken;
+                _isBroken = true;
+                RaiseStateChangedEvent(original);
+                ThrowConfiguredException("Connection failed after " + _sharedFailAfterOpenCount.Value + " opens");
+            }
+        }
+        // Check if we should fail after a specific number of opens (per connection)
+        else if (_failAfterOpenCount.HasValue && _openCallCount > _failAfterOpenCount.Value)
+        {
+            var original = _state;
+            _state = ConnectionState.Broken;
+            _isBroken = true;
+            RaiseStateChangedEvent(original);
+            ThrowConfiguredException("Connection failed after " + _failAfterOpenCount.Value + " opens");
+        }
+
+        // Check if we should fail on open
+        if (_shouldFailOnOpen)
+        {
+            if (_factoryRef?.ShouldSkipThisOpen() == true)
+            {
+                // Skip this open (factory-level first open)
+            }
+            else
+            {
+                ThrowConfiguredException("Simulated connection open failure");
+            }
+        }
+        
+        // Check if connection should be broken (factory decides)
+        if (_isBroken)
+        {
+            if (_factoryRef?.ShouldSkipThisOpen() == true)
+            {
+                // Allow this open, but mark as broken for future opens
+                _isBroken = false; // Temporarily allow this open
+                var original = _state;
+                _state = ConnectionState.Open;
+                RaiseStateChangedEvent(original);
+                return; // Exit early, don't do normal open logic
+            }
+            else
+            {
+                throw new InvalidOperationException("Connection is broken");
+            }
+        }
+
         OpenCount++;
         ParseEmulatedProduct(ConnectionString);
-        var original = _state;
+        var originalState = _state;
 
         _state = ConnectionState.Open;
-        RaiseStateChangedEvent(original);
+        RaiseStateChangedEvent(originalState);
     }
 
     public override void Close()
@@ -154,9 +329,22 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
 
     public override Task OpenAsync(CancellationToken cancellationToken)
     {
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return Task.FromCanceled(cancellationToken);
+        }
+
         OpenAsyncCount++;
-        Open();
-        return Task.CompletedTask;
+        
+        try
+        {
+            Open();
+            return Task.CompletedTask;
+        }
+        catch (Exception ex)
+        {
+            return Task.FromException(ex);
+        }
     }
 
     private SupportedDatabase ParseEmulatedProduct(string connStr)
@@ -189,11 +377,36 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
 
     protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel)
     {
+        if (_shouldFailOnBeginTransaction)
+        {
+            ThrowConfiguredException("Simulated transaction begin failure");
+        }
+
+        if (_isBroken)
+        {
+            throw new InvalidOperationException("Cannot begin transaction on broken connection");
+        }
+
+        if (_state != ConnectionState.Open)
+        {
+            throw new InvalidOperationException("Connection must be open to begin transaction");
+        }
+
         return new FakeDbTransaction(this, isolationLevel);
     }
 
     protected override DbCommand CreateDbCommand()
     {
+        if (_shouldFailOnCommand)
+        {
+            ThrowConfiguredException("Simulated command creation failure");
+        }
+
+        if (_isBroken)
+        {
+            throw new InvalidOperationException("Cannot create command on broken connection");
+        }
+
         return new FakeDbCommand(this);
     }
 
