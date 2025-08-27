@@ -181,19 +181,26 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 
     public ITransactionContext BeginTransaction(IsolationProfile isolationProfile)
     {
+        if (_isolationResolver == null)
+        {
+            throw new NotSupportedException("Isolation profiles not supported for unknown database.");
+        }
+
         return new TransactionContext(this, _isolationResolver.Resolve(isolationProfile));
     }
 
 
     public string CompositeIdentifierSeparator => _dataSourceInfo.CompositeIdentifierSeparator;
-    public SupportedDatabase Product => _dataSourceInfo.Product;
+
+    public SupportedDatabase Product => _dataSourceInfo?.Product ?? SupportedDatabase.Unknown;
 
     public ISqlContainer CreateSqlContainer(string? query = null)
     {
         return new SqlContainer(this, query);
     }
 
-    public DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
+    public DbParameter CreateDbParameter<T>(string? name, DbType type, T value,
+        ParameterDirection direction = ParameterDirection.Input)
     {
         var p = _factory.CreateParameter() ?? throw new InvalidOperationException("Failed to create parameter.");
 
@@ -215,6 +222,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
             p.Size = Math.Max(s.Length, 1);
         }
 
+        p.Direction = direction;
         return p;
     }
 
@@ -252,9 +260,10 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     }
 
 
-    public DbParameter CreateDbParameter<T>(DbType type, T value)
+    public DbParameter CreateDbParameter<T>(DbType type, T value,
+        ParameterDirection direction = ParameterDirection.Input)
     {
-        return CreateDbParameter(null, type, value);
+        return CreateDbParameter(null, type, value, direction);
     }
 
     public void AssertIsReadConnection()
@@ -541,7 +550,11 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
                 ApplyConnectionSessionSettings(conn);
                 _connection = conn;
             }
-            _isolationResolver ??= new IsolationResolver(Product, RCSIEnabled);
+
+            if (Product != SupportedDatabase.Unknown)
+            {
+                _isolationResolver ??= new IsolationResolver(Product, RCSIEnabled);
+            }
         }
         catch(Exception ex){
             _logger.LogError(ex, ex.Message);
@@ -549,10 +562,16 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
         }
         finally
         {
-            _isolationResolver ??= new IsolationResolver(Product, RCSIEnabled);
+            if (Product != SupportedDatabase.Unknown)
+            {
+                _isolationResolver ??= new IsolationResolver(Product, RCSIEnabled);
+            }
+
             if (mode == DbMode.Standard)
+            {
                 //if it is standard mode, we can close it.
                 conn?.Dispose();
+            }
         }
     }
 
@@ -654,63 +673,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 
         return GetSingleConnection();
     }
-    //
-    // private int _disposed; // 0=false, 1=true
-    //
-    //
-    // public void Dispose()
-    // {
-    //     Dispose(disposing: true);
-    // }
-    //
-    // public async ValueTask DisposeAsync()
-    // {
-    //     await DisposeAsyncCore().ConfigureAwait(false);
-    //     Dispose(disposing: false); // Finalizer path for unmanaged cleanup (if any)
-    // }
-    //
-    // protected virtual async ValueTask DisposeAsyncCore()
-    // {
-    //     if (Interlocked.Exchange(ref _disposed, 1) != 0)
-    //         return; // Already disposed
-    //
-    //     if (_connection is IAsyncDisposable asyncDisposable)
-    //     {
-    //         await asyncDisposable.DisposeAsync().ConfigureAwait(false);
-    //     }
-    //     else
-    //     {
-    //         _connection?.Dispose();
-    //     }
-    //
-    //     _connection = null;
-    // }
-    //
-    //
-    // protected virtual void Dispose(bool disposing)
-    // {
-    //     if (Interlocked.Exchange(ref _disposed, 1) != 0)
-    //         return; // Already disposed
-    //
-    //     if (disposing)
-    //     {
-    //         try
-    //         {
-    //             _connection?.Dispose();
-    //         }
-    //         catch
-    //         {
-    //             // Optional: log or suppress
-    //         }
-    //         finally
-    //         {
-    //             _connection = null;
-    //             GC.SuppressFinalize(this); // Suppress only here
-    //         }
-    //     }
-    //
-    //     // unmanaged cleanup if needed (none currently)
-    // }
+   
 
     protected override void DisposeManaged()
     {

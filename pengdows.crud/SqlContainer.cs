@@ -75,17 +75,23 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
         _parameters.Add(parameter.ParameterName, parameter);
     }
 
-    public DbParameter AddParameterWithValue<T>(DbType type, T value)
+    public DbParameter AddParameterWithValue<T>(DbType type, T value,
+        ParameterDirection direction = ParameterDirection.Input)
     {
-        if (value is DbParameter) throw new ArgumentException("Parameter type can't be DbParameter.");
+        if (value is DbParameter)
+        {
+            throw new ArgumentException("Parameter type can't be DbParameter.");
+        }
 
-        return AddParameterWithValue(null, type, value);
+        return AddParameterWithValue(null, type, value, direction);
     }
 
-    public DbParameter AddParameterWithValue<T>(string? name, DbType type, T value)
+    public DbParameter AddParameterWithValue<T>(string? name, DbType type, T value,
+        ParameterDirection direction = ParameterDirection.Input)
     {
-        name ??= GenerateRandomName();
-        var parameter = _context.CreateDbParameter(name, type, value);
+        name ??= GenerateRandomName(); 
+        var parameter = _context.CreateDbParameter(name, type, value, direction);
+ 
         AddParameter(parameter);
         return parameter;
     }
@@ -109,12 +115,14 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
         _outputParameterCount = 0;
     }
 
-    public string WrapForStoredProc(ExecutionType executionType, bool includeParameters = true)
+    public string WrapForStoredProc(ExecutionType executionType, bool includeParameters = true, bool captureReturn = false)
     {
         var procName = Query.ToString().Trim();
 
         if (string.IsNullOrWhiteSpace(procName))
+        {
             throw new InvalidOperationException("Procedure name is missing from the query.");
+        }
 
         var args = includeParameters ? BuildProcedureArguments() : string.Empty;
 
@@ -129,13 +137,22 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
             ProcWrappingStyle.Oracle
                 => $"BEGIN\n\t{procName}{(string.IsNullOrEmpty(args) ? string.Empty : $"({args})")};\nEND;",
 
+            ProcWrappingStyle.Exec when captureReturn
+                => FormatExecWithReturn(),
+
             ProcWrappingStyle.Exec
                 => string.IsNullOrWhiteSpace(args)
                     ? $"EXEC {procName}"
                     : $"EXEC {procName} {args}",
 
+            ProcWrappingStyle.Call when captureReturn
+                => throw new NotSupportedException("Return value capture not implemented for this dialect."),
+
             ProcWrappingStyle.Call
                 => $"CALL {procName}({args})",
+
+            ProcWrappingStyle.ExecuteProcedure when captureReturn
+                => throw new NotSupportedException("Return value capture not implemented for this dialect."),
 
             ProcWrappingStyle.ExecuteProcedure
                 => $"EXECUTE PROCEDURE {procName}({args})",
@@ -143,19 +160,41 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
             _ => throw new NotSupportedException("Stored procedures are not supported by this database.")
         };
 
+        string FormatExecWithReturn()
+        {
+            var paramList = string.IsNullOrWhiteSpace(args) ? string.Empty : $" {args}";
+            return $"DECLARE @__ret INT;\nEXEC @__ret = {procName}{paramList};\nSELECT @__ret;";
+        }
+
         string BuildProcedureArguments()
         {
             if (_parameters.Count == 0)
+            {
                 return string.Empty;
+            }
 
-            // Named parameter support check
             if (_context.SupportsNamedParameters)
-                // Trust that dev has set correct names
+            {
                 return string.Join(", ", _parameters.Values.Select(p => _context.MakeParameterName(p)));
+            }
 
-            // Positional binding (e.g., SQLite, MySQL)
             return string.Join(", ", Enumerable.Repeat("?", _parameters.Count));
         }
+    }
+
+    public string WrapForCreateWithReturn(bool includeParameters = true)
+    {
+        return WrapForStoredProc(ExecutionType.Write, includeParameters, captureReturn: true);
+    }
+
+    public string WrapForUpdateWithReturn(bool includeParameters = true)
+    {
+        return WrapForStoredProc(ExecutionType.Write, includeParameters, captureReturn: true);
+    }
+
+    public string WrapForDeleteWithReturn(bool includeParameters = true)
+    {
+        return WrapForStoredProc(ExecutionType.Write, includeParameters, captureReturn: true);
     }
 
 

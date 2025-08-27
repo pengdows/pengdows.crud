@@ -11,4 +11,9 @@ public class TableInfo : ITableInfo
     public IColumnInfo LastUpdatedOn { get; set; }
     public IColumnInfo CreatedOn { get; set; }
     public IColumnInfo CreatedBy { get; set; }
+
+    /// <summary>
+    /// Indicates whether this table contains any audit columns.
+    /// </summary>
+    public bool HasAuditColumns { get; set; }
 }

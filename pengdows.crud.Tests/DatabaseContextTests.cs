@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Runtime.Serialization;
 using Moq;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
@@ -80,11 +81,37 @@ public class DatabaseContextTests
     {
         var factory = new FakeDbFactory(product);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
-        var result = context.CreateDbParameter("p1", DbType.Int32, 123);
+        var result = context.CreateDbParameter("p1", DbType.Int32, 123, ParameterDirection.Output);
 
         Assert.Equal("p1", result.ParameterName);
         Assert.Equal(DbType.Int32, result.DbType);
         Assert.Equal(123, result.Value);
+        Assert.Equal(ParameterDirection.Output, result.Direction);
+    }
+
+    [Theory]
+    [MemberData(nameof(AllSupportedProviders))]
+    public void CreateDbParameter_DefaultsDirectionToInput(SupportedDatabase product)
+    {
+        var factory = new FakeDbFactory(product);
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
+        var result = context.CreateDbParameter("p1", DbType.Int32, 123);
+
+        Assert.Equal(ParameterDirection.Input, result.Direction);
+    }
+
+    [Theory]
+    [InlineData("@foo", "foo")]
+    [InlineData(":bar", "bar")]
+    [InlineData("?baz", "baz")]
+    public void CreateDbParameter_RemovesPrefixesFromName(string input, string expected)
+    {
+        var product = SupportedDatabase.Sqlite;
+        var factory = new FakeDbFactory(product);
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
+        var result = context.CreateDbParameter(input, DbType.String, "v");
+
+        Assert.Equal(expected, result.ParameterName);
     }
 
     [Theory]
@@ -295,5 +322,25 @@ public class DatabaseContextTests
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
 
         Assert.Equal(context.DataSourceInfo.MaxOutputParameters, context.MaxOutputParameters);
+ 
+    }
+
+    [Fact]
+    public void Product_WhenInitialized_ReturnsProvidedProduct()
+    {
+        var product = SupportedDatabase.SqlServer;
+        var factory = new FakeDbFactory(product);
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
+
+        Assert.Equal(product, context.Product);
+    }
+
+    [Fact]
+    public void Product_WithoutDataSourceInfo_ReturnsUnknown()
+    {
+        var context = (DatabaseContext)FormatterServices.GetUninitializedObject(typeof(DatabaseContext));
+
+        Assert.Equal(SupportedDatabase.Unknown, context.Product);
+ 
     }
 }

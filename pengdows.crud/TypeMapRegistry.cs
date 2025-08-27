@@ -93,6 +93,11 @@ public class TypeMapRegistry : ITypeMapRegistry
                 }
             }
 
+            tableInfo.HasAuditColumns = tableInfo.CreatedBy != null ||
+                                        tableInfo.CreatedOn != null ||
+                                        tableInfo.LastUpdatedBy != null ||
+                                        tableInfo.LastUpdatedOn != null;
+
             _typeMap[type] = tableInfo;
         }
 

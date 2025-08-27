@@ -69,6 +69,15 @@ public class ProcWrappingStyleTests
     }
 
     [Fact]
+    public void WrapTestExecCaptureReturn()
+    {
+        var sc = SetupParameterWrapTest();
+        _dbContext.ProcWrappingStyle = ProcWrappingStyle.Exec;
+        var s = sc.WrapForStoredProc(ExecutionType.Read, captureReturn: true);
+        Assert.Equal("DECLARE @__ret INT;\nEXEC @__ret = dbo.Sqltest @p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9;\nSELECT @__ret;", s);
+    }
+
+    [Fact]
     public void WrapTestExecute()
     {
         var sc = SetupParameterWrapTest();
@@ -95,5 +104,13 @@ public class ProcWrappingStyleTests
         _dbContext.ProcWrappingStyle = ProcWrappingStyle.Oracle;
         var s = sc.WrapForStoredProc(ExecutionType.Read);
         Assert.Equal("BEGIN\n\tdbo.Sqltest(@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9);\nEND;", s);
+    }
+
+    [Fact]
+    public void CaptureReturn_UnsupportedStyle_ShouldThrow()
+    {
+        var sc = SetupParameterWrapTest();
+        _dbContext.ProcWrappingStyle = ProcWrappingStyle.Call;
+        Assert.Throws<NotSupportedException>(() => sc.WrapForStoredProc(ExecutionType.Read, captureReturn: true));
     }
 }
