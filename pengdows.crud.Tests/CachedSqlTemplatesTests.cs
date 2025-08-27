@@ -2,8 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Data.Common;
 using System.Reflection;
-using System.Threading.Tasks;
+using System.Threading.Tasks; 
 using Microsoft.Data.Sqlite;
+ 
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -61,17 +62,21 @@ public class CachedSqlTemplatesTests : SqlLiteContextTestBase
         var entity1 = new TestEntity { Id = 1, Name = "one" };
         var entity2 = new TestEntity { Id = 1, Name = "two" };
 
+ 
         await helper1.BuildUpdateAsync(entity1, loadOriginal: false);
+ 
         var field = typeof(EntityHelper<TestEntity, int>).GetField("_cachedSqlTemplates", BindingFlags.Static | BindingFlags.NonPublic)!;
         var lazy = field.GetValue(null)!;
         var valueProp = lazy.GetType().GetProperty("Value")!;
         var template1 = valueProp.GetValue(lazy);
-
+ 
         await helper2.BuildUpdateAsync(entity2, loadOriginal: false);
+ 
         var template2 = valueProp.GetValue(lazy);
 
         Assert.Same(template1, template2);
     }
+ 
 
     [Fact]
     public async Task BuildUpdateAsync_WhenLoadOriginalTrue_ThrowsIfTableMissing()
@@ -83,4 +88,5 @@ public class CachedSqlTemplatesTests : SqlLiteContextTestBase
         await Assert.ThrowsAsync<SqliteException>(async () =>
             await helper.BuildUpdateAsync(entity, loadOriginal: true));
     }
+ 
 }

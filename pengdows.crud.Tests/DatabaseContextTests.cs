@@ -115,6 +115,20 @@ public class DatabaseContextTests
     }
 
     [Theory]
+    [InlineData("@foo", "foo")]
+    [InlineData(":bar", "bar")]
+    [InlineData("?baz", "baz")]
+    public void CreateDbParameter_RemovesPrefixesFromName(string input, string expected)
+    {
+        var product = SupportedDatabase.Sqlite;
+        var factory = new FakeDbFactory(product);
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
+        var result = context.CreateDbParameter(input, DbType.String, "v");
+
+        Assert.Equal(expected, result.ParameterName);
+    }
+
+    [Theory]
     [MemberData(nameof(AllSupportedProviders))]
     public async Task CloseAndDisposeConnectionAsync_WithAsyncDisposable_DisposesCorrectly(SupportedDatabase product)
     {
@@ -308,6 +322,7 @@ public class DatabaseContextTests
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
 
         Assert.Equal(context.DataSourceInfo.MaxOutputParameters, context.MaxOutputParameters);
+ 
     }
 
     [Fact]
@@ -326,5 +341,6 @@ public class DatabaseContextTests
         var context = (DatabaseContext)FormatterServices.GetUninitializedObject(typeof(DatabaseContext));
 
         Assert.Equal(SupportedDatabase.Unknown, context.Product);
+ 
     }
 }
