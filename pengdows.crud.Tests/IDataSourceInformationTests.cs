@@ -19,5 +19,6 @@ public class IDataSourceInformationTests
         var info = DataSourceInformation.Create(tracked, SqliteFactory.Instance, NullLoggerFactory.Instance);
         Assert.False(string.IsNullOrWhiteSpace(info.CompositeIdentifierSeparator));
         Assert.False(string.IsNullOrWhiteSpace(info.ParameterMarker));
+        Assert.True(info.MaxOutputParameters >= 0);
     }
 }

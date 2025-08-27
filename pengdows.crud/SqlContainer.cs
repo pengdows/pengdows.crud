@@ -21,6 +21,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
 
     private readonly ILogger<ISqlContainer> _logger;
     private readonly Dictionary<string, DbParameter> _parameters = new();
+    private int _outputParameterCount;
 
     internal SqlContainer(IDatabaseContext context, string? query = "", ILogger<ISqlContainer>? logger = null)
     {
@@ -80,24 +81,47 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
             parameter.ParameterName = GenerateRandomName();
         }
 
+        var isOutput = parameter.Direction switch
+        {
+            ParameterDirection.Output => true,
+            ParameterDirection.InputOutput => true,
+            ParameterDirection.ReturnValue => true,
+            _ => false
+        };
+
+        if (isOutput)
+        {
+            var next = _outputParameterCount + 1;
+            if (next > _context.MaxOutputParameters)
+            {
+                throw new InvalidOperationException(
+                    $"Query exceeds the maximum output parameter limit of {_context.MaxOutputParameters} for {_context.DatabaseProductName}.");
+            }
+
+            _outputParameterCount = next;
+        }
+
         _parameters.Add(parameter.ParameterName, parameter);
     }
 
-    public DbParameter AddParameterWithValue<T>(DbType type, T value)
+    public DbParameter AddParameterWithValue<T>(DbType type, T value,
+        ParameterDirection direction = ParameterDirection.Input)
     {
         if (value is DbParameter)
         {
             throw new ArgumentException("Parameter type can't be DbParameter.");
         }
 
-        return AddParameterWithValue(null, type, value);
+        return AddParameterWithValue(null, type, value, direction);
     }
 
-    public DbParameter AddParameterWithValue<T>(string? name, DbType type, T value)
+    public DbParameter AddParameterWithValue<T>(string? name, DbType type, T value,
+        ParameterDirection direction = ParameterDirection.Input)
     {
-        name ??= GenerateRandomName();
-        var parameter = _context.CreateDbParameter(name, type, value);
-        _parameters.Add(name, parameter);
+        name ??= GenerateRandomName(); 
+        var parameter = _context.CreateDbParameter(name, type, value, direction);
+ 
+        AddParameter(parameter);
         return parameter;
     }
 
@@ -149,9 +173,10 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
     {
         Query.Clear();
         _parameters.Clear();
+        _outputParameterCount = 0;
     }
 
-    public string WrapForStoredProc(ExecutionType executionType, bool includeParameters = true)
+    public string WrapForStoredProc(ExecutionType executionType, bool includeParameters = true, bool captureReturn = false)
     {
         var procName = Query.ToString().Trim();
 
@@ -173,19 +198,34 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
             ProcWrappingStyle.Oracle
                 => $"BEGIN\n\t{procName}{(string.IsNullOrEmpty(args) ? string.Empty : $"({args})")};\nEND;",
 
+            ProcWrappingStyle.Exec when captureReturn
+                => FormatExecWithReturn(),
+
             ProcWrappingStyle.Exec
                 => string.IsNullOrWhiteSpace(args)
                     ? $"EXEC {procName}"
                     : $"EXEC {procName} {args}",
 
+            ProcWrappingStyle.Call when captureReturn
+                => throw new NotSupportedException("Return value capture not implemented for this dialect."),
+
             ProcWrappingStyle.Call
                 => $"CALL {procName}({args})",
+
+            ProcWrappingStyle.ExecuteProcedure when captureReturn
+                => throw new NotSupportedException("Return value capture not implemented for this dialect."),
 
             ProcWrappingStyle.ExecuteProcedure
                 => $"EXECUTE PROCEDURE {procName}({args})",
 
             _ => throw new NotSupportedException("Stored procedures are not supported by this database.")
         };
+
+        string FormatExecWithReturn()
+        {
+            var paramList = string.IsNullOrWhiteSpace(args) ? string.Empty : $" {args}";
+            return $"DECLARE @__ret INT;\nEXEC @__ret = {procName}{paramList};\nSELECT @__ret;";
+        }
 
         string BuildProcedureArguments()
         {
@@ -194,16 +234,29 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
                 return string.Empty;
             }
 
-            // Named parameter support check
             if (_context.SupportsNamedParameters)
             {
                 // Trust that dev has set correct names
-                return string.Join(", ", _parameters.Values.Select(p => _dialect.MakeParameterName(p)));
+                return string.Join(", ", _parameters.Values.Select(p => _context.MakeParameterName(p)));
             }
 
-            // Positional binding (e.g., SQLite, MySQL)
             return string.Join(", ", Enumerable.Repeat("?", _parameters.Count));
         }
+    }
+
+    public string WrapForCreateWithReturn(bool includeParameters = true)
+    {
+        return WrapForStoredProc(ExecutionType.Write, includeParameters, captureReturn: true);
+    }
+
+    public string WrapForUpdateWithReturn(bool includeParameters = true)
+    {
+        return WrapForStoredProc(ExecutionType.Write, includeParameters, captureReturn: true);
+    }
+
+    public string WrapForDeleteWithReturn(bool includeParameters = true)
+    {
+        return WrapForStoredProc(ExecutionType.Write, includeParameters, captureReturn: true);
     }
     private string GenerateRandomName()
     {
@@ -398,5 +451,6 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
 
         _parameters.Clear();
         Query.Clear();
+        _outputParameterCount = 0;
     }
 }

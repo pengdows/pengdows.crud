@@ -34,8 +34,12 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     private bool _isWriteConnection = true;
     private long _maxNumberOfOpenConnections;
     private readonly bool _setDefaultSearchPath;
+    private string _connectionSessionSettings;
+    private bool _applyConnectionSessionSettings;
 
     public Guid RootId { get; } = Guid.NewGuid();
+
+    private static readonly char[] _parameterPrefixes = { '@', '?', ':' };
 
     [Obsolete("Use the constructor that takes DatabaseContextConfiguration instead.")]
     public DatabaseContext(
@@ -234,17 +238,27 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         return BeginTransaction(level, executionType);
     }
 
-
+    public string CompositeIdentifierSeparator => _dataSourceInfo.CompositeIdentifierSeparator;
     public SupportedDatabase Product => _dataSourceInfo.Product;
+    public ProcWrappingStyle ProcWrappingStyle => _dataSourceInfo.ProcWrappingStyle;
+    public int MaxParameterLimit => _dataSourceInfo.MaxParameterLimit;
+    public int MaxOutputParameters => _dataSourceInfo.MaxOutputParameters;
+    public long MaxNumberOfConnections => Interlocked.Read(ref _maxNumberOfOpenConnections);
+    public long NumberOfOpenConnections => Interlocked.Read(ref _connectionCount);
+    public string QuotePrefix => _dialect.QuotePrefix;
+    public string QuoteSuffix => _dialect.QuoteSuffix;
 
     public ISqlContainer CreateSqlContainer(string? query = null)
     {
         return new SqlContainer(this, query);
     }
 
-    public DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
+    public DbParameter CreateDbParameter<T>(string? name, DbType type, T value,
+        ParameterDirection direction = ParameterDirection.Input)
     {
-        return _dialect.CreateDbParameter(name, type, value);
+        var p = _dialect.CreateDbParameter(name, type, value);
+        p.Direction = direction;
+        return p;
     }
 
 
@@ -259,9 +273,10 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     }
 
 
-    public DbParameter CreateDbParameter<T>(DbType type, T value)
+    public DbParameter CreateDbParameter<T>(DbType type, T value,
+        ParameterDirection direction = ParameterDirection.Input)
     {
-        return _dialect.CreateDbParameter(type, value);
+        return CreateDbParameter(null, type, value, direction);
     }
 
     public void AssertIsReadConnection()
@@ -287,21 +302,6 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     }
 
 
-    public ProcWrappingStyle ProcWrappingStyle => _dataSourceInfo.ProcWrappingStyle;
-
-    public int MaxParameterLimit => _dataSourceInfo.MaxParameterLimit;
-
-    public long MaxNumberOfConnections => Interlocked.Read(ref _maxNumberOfOpenConnections);
-
-    public long NumberOfOpenConnections => Interlocked.Read(ref _connectionCount);
-
-    public string QuotePrefix => _dialect.QuotePrefix;
-
-    public string QuoteSuffix => _dialect.QuoteSuffix;
-
-    public string CompositeIdentifierSeparator => _dialect.CompositeIdentifierSeparator;
-
- 
     public string WrapObjectName(string name)
     {
         return _dialect.WrapObjectName(name);
@@ -408,8 +408,53 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         {
             _isReadConnection = (ReadWriteMode & ReadWriteMode.ReadOnly) == ReadWriteMode.ReadOnly;
             _isWriteConnection = (ReadWriteMode & ReadWriteMode.WriteOnly) == ReadWriteMode.WriteOnly;
+            // this connection will be set as our single connection for any DbMode != DbMode.Standard
+            // so we set it to shared.
             conn = FactoryCreateConnection(connectionString, true, null);
-            conn.Open();
+            try
+            {
+                conn.Open();
+            }
+            catch (Exception ex)
+            {
+                throw new ConnectionFailedException(ex.Message);
+            }
+
+            _dataSourceInfo = DataSourceInformation.Create(conn, _factory, _loggerFactory);
+            SetupConnectionSessionSettingsForProvider(conn);
+            Name = _dataSourceInfo.DatabaseProductName;
+            if (_dataSourceInfo.Product == SupportedDatabase.Sqlite)
+            {
+                // Determine correct mode based on connection string
+                // ":memory:" needs a persistent connection to avoid data loss
+                // file-based SQLite requires a single writer to avoid lock conflicts
+                var csb = GetFactoryConnectionStringBuilder(String.Empty);
+                var ds = csb["Data Source"] as string;
+                ConnectionMode = ":memory:" == ds
+                    ? DbMode.SingleConnection
+                    : DbMode.SingleWriter;
+            }
+
+            if (config.DbMode != DbMode.Standard)
+            {
+                //
+                //Interlocked.Increment(ref _connectionCount);
+                // if the mode is anything but standard
+                // we store it as our minimal connection
+                ApplyConnectionSessionSettings(conn);
+                // Note: _connection field doesn't exist in current architecture
+            }
+
+            if (Product != SupportedDatabase.Unknown)
+            {
+                _isolationResolver ??= new IsolationResolver(Product, RCSIEnabled);
+            }
+
+            if (config.DbMode == DbMode.Standard)
+            {
+                //if it is standard mode, we can close it.
+                conn?.Dispose();
+            }
         }
         catch (Exception ex)
         {
@@ -426,7 +471,82 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         return csb;
     }
 
+    private void SetupConnectionSessionSettingsForProvider(ITrackedConnection conn)
+    {
+        switch (Product)
+        {
+            case SupportedDatabase.MySql:
+            case SupportedDatabase.MariaDb:
+                _connectionSessionSettings =
+                    "SET SESSION sql_mode = 'STRICT_ALL_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ENGINE_SUBSTITUTION,ANSI_QUOTES';\n";
+                break;
 
+            case SupportedDatabase.PostgreSql:
+            case SupportedDatabase.CockroachDb:
+                _connectionSessionSettings = @"
+                SET standard_conforming_strings = on;
+                SET client_min_messages = warning;
+                SET search_path = public;
+";
+                break;
+
+            case SupportedDatabase.Oracle:
+                _connectionSessionSettings = @"
+                ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD';
+";
+//                ALTER SESSION SET CURRENT_SCHEMA = your_schema;
+                break;
+
+            case SupportedDatabase.Sqlite:
+                _connectionSessionSettings = "PRAGMA foreign_keys = ON;";
+                break;
+
+            case SupportedDatabase.Firebird:
+                // _connectionSessionSettings = "SET NAMES UTF8;";
+                // has to be done in connection string, not session;
+                break;
+
+            //DB 2 can't be supported under modern .net 
+            //             case SupportedDatabase.Db2:
+            //                 _connectionSessionSettings = @"
+            //                  SET CURRENT DEGREE = 'ANY';
+            // ";
+            //                break;
+
+            default:
+                _connectionSessionSettings = string.Empty;
+                break;
+        }
+
+        _applyConnectionSessionSettings = _connectionSessionSettings?.Length > 0;
+    }
+
+
+    private void ApplyConnectionSessionSettings(IDbConnection connection)
+    {
+        _logger.LogInformation("Applying connection session settings");
+        if (_applyConnectionSessionSettings)
+            try
+            {
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = _connectionSessionSettings;
+                cmd.ExecuteNonQuery();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("Error setting session settings:" + ex.Message);
+                _applyConnectionSessionSettings = false;
+            }
+    }
+
+    private ITrackedConnection GetStandardConnection(bool isShared = false)
+    {
+        var conn = FactoryCreateConnection(null, isShared);
+        return conn;
+    }
+
+
+    // Note: These methods were removed as they referenced fields that don't exist in the new architecture
 
     protected override void DisposeManaged()
     {

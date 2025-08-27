@@ -175,6 +175,21 @@ public class DataSourceInformationTests
         // Assert: named parameters flags
         Assert.Equal(db != SupportedDatabase.Unknown, info.SupportsNamedParameters);
         Assert.Equal(expectedRequiresStoredProcParameterNameMatch, info.RequiresStoredProcParameterNameMatch);
+
+        // Assert: output parameter limits
+        var expectedOutputParams = db switch
+        {
+            SupportedDatabase.SqlServer => 1024,
+            SupportedDatabase.MySql => 65535,
+            SupportedDatabase.MariaDb => 65535,
+            SupportedDatabase.PostgreSql => 100,
+            SupportedDatabase.CockroachDb => 100,
+            SupportedDatabase.Oracle => 1024,
+            SupportedDatabase.Sqlite => 0,
+            SupportedDatabase.Firebird => 1499,
+            _ => 0
+        };
+        Assert.Equal(expectedOutputParams, info.MaxOutputParameters);
     }
 
     [Theory]

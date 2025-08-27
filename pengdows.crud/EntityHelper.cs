@@ -29,6 +29,18 @@ public class EntityHelper<TEntity, TRowID> :
     // Cache for compiled property setters
     private static readonly ConcurrentDictionary<PropertyInfo, Action<object, object?>> _propertySetters = new();
 
+    private static readonly Lazy<CachedSqlTemplates> _cachedSqlTemplates = new(BuildCachedSqlTemplates);
+
+    private class CachedSqlTemplates
+    {
+        public string InsertSql = null!;
+        public List<IColumnInfo> InsertColumns = null!;
+        public List<string> InsertParameterNames = null!;
+        public string DeleteSql = null!;
+        public string UpdateSql = null!;
+        public List<IColumnInfo> UpdateColumns = null!;
+    }
+
     private static ILogger _logger = NullLogger.Instance;
 
     public static ILogger Logger
@@ -352,28 +364,40 @@ public class EntityHelper<TEntity, TRowID> :
         return await sc.ExecuteNonQueryAsync() == 1;
     }
 
-    public ISqlContainer BuildCreate(TEntity objectToCreate, IDatabaseContext? context = null)
+    public ISqlContainer BuildCreate(TEntity entity, IDatabaseContext? context = null)
     {
-        if (objectToCreate == null)
+        if (entity == null)
         {
-            throw new ArgumentNullException(nameof(objectToCreate));
+            throw new ArgumentNullException(nameof(entity));
         }
 
         ValidateSameRoot(context);
         var ctx = context ?? _context;
-        var columns = new StringBuilder();
-        var values = new StringBuilder();
-        var parameters = new List<DbParameter>();
-
         var sc = ctx.CreateSqlContainer();
-        PrepareForInsertOrUpsert(objectToCreate);
+        SetAuditFields(entity, false);
 
-        foreach (var column in GetCachedInsertableColumns())
+        if (_versionColumn != null)
         {
-            var value = column.MakeParameterValueFromField(objectToCreate);
+            var current = _versionColumn.PropertyInfo.GetValue(entity);
+            if (current == null || Utils.IsZeroNumeric(current))
+            {
+                var target = Nullable.GetUnderlyingType(_versionColumn.PropertyInfo.PropertyType) ?? _versionColumn.PropertyInfo.PropertyType;
+                if (Utils.IsZeroNumeric(Convert.ChangeType(0, target)))
+                {
+                    var one = Convert.ChangeType(1, target);
+                    _versionColumn.PropertyInfo.SetValue(entity, one);
+                }
+            }
+        }
 
-            // If no audit resolver is provided and the value is null for a user audit column,
-            // skip including this column so database defaults will apply.
+        var template = _cachedSqlTemplates.Value;
+        var columns = new List<string>();
+        var placeholders = new List<string>();
+
+        for (var i = 0; i < template.InsertColumns.Count; i++)
+        {
+            var column = template.InsertColumns[i];
+            var value = column.MakeParameterValueFromField(entity);
             if (_auditValueResolver == null &&
                 (column.IsCreatedBy || column.IsLastUpdatedBy) &&
                 Utils.IsNullOrDbNull(value))
@@ -381,38 +405,21 @@ public class EntityHelper<TEntity, TRowID> :
                 continue;
             }
 
-            if (columns.Length > 0)
-            {
-                columns.Append(", ");
-                values.Append(", ");
-            }
-
-            var p = _context.CreateDbParameter(
-                column.DbType,
-                value
-            );
-
-            columns.Append(WrapObjectName(column.Name));
-            if (Utils.IsNullOrDbNull(value))
-            {
-                values.Append("NULL");
-            }
-            else
-            {
-                values.Append(MakeParameterName(p));
-                parameters.Add(p);
-            }
+            var paramName = template.InsertParameterNames[i];
+            var param = ctx.CreateDbParameter(paramName, column.DbType, value);
+            sc.AddParameter(param);
+            columns.Add(WrapObjectName(column.Name));
+            placeholders.Add(ctx.MakeParameterName(param));
         }
 
         sc.Query.Append("INSERT INTO ")
             .Append(WrappedTableName)
             .Append(" (")
-            .Append(columns)
+            .Append(string.Join(", ", columns))
             .Append(") VALUES (")
-            .Append(values)
+            .Append(string.Join(", ", placeholders))
             .Append(")");
 
-        sc.AddParameters(parameters);
         return sc;
     }
 
@@ -451,41 +458,17 @@ public class EntityHelper<TEntity, TRowID> :
     {
         ValidateSameRoot(context);
         var ctx = context ?? _context;
-        var idCol = _idColumn;
-        if (idCol == null)
-        {
-            throw new NotSupportedException(
-                "Single-ID operations require a designated Id column; use composite-key helpers.");
-        }
-
-        var isNull = Utils.IsNullOrDbNull(id);
-        var key = isNull ? "DeleteById_Null" : "DeleteById";
-        var sql = GetCachedQuery(key, () =>
-        {
-            var sb = new StringBuilder();
-            sb.Append("DELETE FROM ")
-                .Append(WrappedTableName)
-                .Append(" WHERE ")
-                .Append(WrapObjectName(idCol.Name));
-            if (isNull)
-            {
-                sb.Append(" IS NULL");
-            }
-            else
-            {
-                sb.Append(" = ").Append(_dialect.MakeParameterName("p0"));
-            }
-
-            return sb.ToString();
-        });
-
         var sc = ctx.CreateSqlContainer();
-        if (!isNull)
+
+        if (_idColumn == null)
         {
-            var p = _context.CreateDbParameter("p0", idCol.DbType, id);
-            sc.AddParameter(p);
+            throw new InvalidOperationException($"row identity column for table {WrappedTableName} not found");
         }
 
+        var param = ctx.CreateDbParameter(_idColumn.DbType, id);
+        sc.AddParameter(param);
+
+        var sql = string.Format(_cachedSqlTemplates.Value.DeleteSql, MakeParameterName(param));
         sc.Query.Append(sql);
         return sc;
     }
@@ -849,6 +832,13 @@ public class EntityHelper<TEntity, TRowID> :
             throw new InvalidOperationException("Original record not found for update.");
         }
 
+        // Determine if any non-audit fields have changed before modifying audit values
+        var template = _cachedSqlTemplates.Value;
+        var (preClause, _) = BuildSetClause(objectToUpdate, original);
+        if (preClause.Length == 0)
+            throw new InvalidOperationException("No changes detected for update.");
+
+        // Apply audit field changes now that we know an update is required
         SetAuditFields(objectToUpdate, true);
 
         var (setClause, parameters) = BuildSetClause(objectToUpdate, original);
@@ -866,18 +856,17 @@ public class EntityHelper<TEntity, TRowID> :
             _idColumn.PropertyInfo.GetValue(objectToUpdate)!);
         parameters.Add(pId);
 
-        sc.Query.Append("UPDATE ")
-            .Append(WrappedTableName)
-            .Append(" SET ")
-            .Append(setClause)
-            .Append(" WHERE ")
-            .Append(_dialect.WrapObjectName(_idColumn.Name))
-            .Append($" = {MakeParameterName(pId)}");
+        var sql = string.Format(template.UpdateSql, setClause, MakeParameterName(pId));
+        sc.Query.Append(sql);
 
         if (_versionColumn != null)
         {
             var versionValue = _versionColumn.MakeParameterValueFromField(objectToUpdate);
-            AppendVersionCondition(sc, versionValue, parameters);
+            var versionParam = AppendVersionCondition(sc, versionValue, context);
+            if (versionParam != null)
+            {
+                parameters.Add(versionParam);
+            }
         }
 
         sc.AddParameters(parameters);
@@ -1060,16 +1049,13 @@ public class EntityHelper<TEntity, TRowID> :
     {
         var clause = new StringBuilder();
         var parameters = new List<DbParameter>();
+        var template = _cachedSqlTemplates.Value;
 
-        foreach (var column in GetCachedUpdatableColumns())
+        for (var i = 0; i < template.UpdateColumns.Count; i++)
         {
+            var column = template.UpdateColumns[i];
             var newValue = column.MakeParameterValueFromField(updated);
             var originalValue = original != null ? column.MakeParameterValueFromField(original) : null;
-
-            if (_auditValueResolver == null && column.IsLastUpdatedBy && Utils.IsNullOrDbNull(newValue))
-            {
-                continue;
-            }
 
             if (original != null && ValuesAreEqual(newValue, originalValue, column.DbType))
             {
@@ -1134,19 +1120,18 @@ public class EntityHelper<TEntity, TRowID> :
         setClause.Append($", {WrapObjectName(_versionColumn!.Name)} = {WrapObjectName(_versionColumn.Name)} + 1");
     }
 
-    private void AppendVersionCondition(ISqlContainer sc, object? versionValue, List<DbParameter> parameters)
+    private DbParameter? AppendVersionCondition(ISqlContainer sc, object? versionValue, IDatabaseContext context)
     {
         if (versionValue == null)
         {
             sc.Query.Append(" AND ").Append(WrapObjectName(_versionColumn!.Name)).Append(" IS NULL");
+            return null;
         }
-        else
-        {
-            var pVersion = _context.CreateDbParameter(_versionColumn!.DbType, versionValue);
-            sc.Query.Append(" AND ").Append(WrapObjectName(_versionColumn.Name))
-                .Append($" = {MakeParameterName(pVersion)}");
-            parameters.Add(pVersion);
-        }
+
+        var pVersion = context.CreateDbParameter(_versionColumn!.DbType, versionValue);
+        sc.Query.Append(" AND ").Append(WrapObjectName(_versionColumn.Name))
+            .Append($" = {MakeParameterName(pVersion)}");
+        return pVersion;
     }
 
     private void PrepareForInsertOrUpsert(TEntity e)
@@ -1539,6 +1524,77 @@ public class EntityHelper<TEntity, TRowID> :
         }
 
         return EqualityComparer<TRowID>.Default.Equals((TRowID)value!, default!);
+    }
+
+
+    private static bool TryParseMajorVersion(string version, out int major)
+    {
+        major = 0;
+        if (string.IsNullOrWhiteSpace(version))
+        {
+            return false;
+        }
+
+        var match = Regex.Match(version, "(\\d+)");
+        if (!match.Success)
+        {
+            return false;
+        }
+        return int.TryParse(match.Groups[1].Value, out major);
+    }
+
+    private static CachedSqlTemplates BuildCachedSqlTemplates()
+    {
+        var typeMap = TypeMapRegistry.StaticInstance.GetTableInfo<TEntity>() ?? throw new InvalidOperationException($"Type {typeof(TEntity).FullName} is not registered in TypeMapRegistry.");
+
+        var idCol = typeMap.Columns.Values.FirstOrDefault(c => c.IsId) ?? throw new InvalidOperationException($"No ID column defined for {typeof(TEntity).Name}");
+
+        var insertColumns = typeMap.Columns.Values
+            .Where(c => !c.IsNonInsertable && (!c.IsId || c.IsIdIsWritable))
+            .Cast<IColumnInfo>()
+            .ToList();
+
+        var wrappedCols = new List<string>();
+        for (var i = 0; i < insertColumns.Count; i++)
+        {
+            wrappedCols.Add(QuoteWrap(insertColumns[i].Name));
+        }
+
+        var paramNames = new List<string>();
+        var valuePlaceholders = new List<string>();
+        for (var i = 0; i < insertColumns.Count; i++)
+        {
+            var name = $"p{i}";
+            paramNames.Add(name);
+            valuePlaceholders.Add($"@{name}");
+        }
+
+        var insertSql = $"INSERT INTO {BuildWrappedTableName(typeMap)} ({string.Join(", ", wrappedCols)}) VALUES ({string.Join(", ", valuePlaceholders)})";
+        var deleteSql = $"DELETE FROM {BuildWrappedTableName(typeMap)} WHERE {QuoteWrap(idCol.Name)} = {{0}}";
+
+        var updateColumns = typeMap.Columns.Values
+            .Where(c => !c.IsId && !c.IsVersion && !c.IsNonUpdateable && !c.IsCreatedBy && !c.IsCreatedOn)
+            .Cast<IColumnInfo>()
+            .ToList();
+
+        var updateSql = $"UPDATE {BuildWrappedTableName(typeMap)} SET {{0}} WHERE {QuoteWrap(idCol.Name)} = {{1}}";
+
+        return new CachedSqlTemplates
+        {
+            InsertSql = insertSql,
+            InsertColumns = insertColumns,
+            InsertParameterNames = paramNames,
+            DeleteSql = deleteSql,
+            UpdateSql = updateSql,
+            UpdateColumns = updateColumns
+        };
+
+        static string QuoteWrap(string name) => '"' + name + '"';
+
+        static string BuildWrappedTableName(ITableInfo info)
+        {
+            return (string.IsNullOrWhiteSpace(info.Schema) ? string.Empty : QuoteWrap(info.Schema) + ".") + QuoteWrap(info.Name);
+        }
     }
 
     private static void ValidateRowIdType()

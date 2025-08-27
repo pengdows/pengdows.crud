@@ -417,9 +417,18 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
             return _schemaTable;
         }
 
-        if (_emulatedProduct is null or SupportedDatabase.Unknown)
+        if (_emulatedProduct is null)
         {
             throw new InvalidOperationException("EmulatedProduct must be configured via connection string.");
+        }
+
+        if (_emulatedProduct == SupportedDatabase.Unknown)
+        {
+            _schemaTable = new DataTable();
+            _schemaTable.Columns.Add("DataSourceProductName", typeof(string));
+            _schemaTable.Columns.Add("DataSourceProductVersion", typeof(string));
+            _schemaTable.Rows.Add("UnknownDb", "1");
+            return _schemaTable;
         }
 
         var resourceName = $"pengdows.crud.fakeDb.xml.{_emulatedProduct}.schema.xml";
@@ -441,9 +450,18 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
             return _schemaTable;
         }
 
-        if (_emulatedProduct is null or SupportedDatabase.Unknown)
+        if (_emulatedProduct is null)
         {
             throw new InvalidOperationException("EmulatedProduct must be configured via connection string.");
+        }
+
+        if (_emulatedProduct == SupportedDatabase.Unknown)
+        {
+            _schemaTable = new DataTable();
+            _schemaTable.Columns.Add("DataSourceProductName", typeof(string));
+            _schemaTable.Columns.Add("DataSourceProductVersion", typeof(string));
+            _schemaTable.Rows.Add("UnknownDb", "1");
+            return _schemaTable;
         }
 
         var resourceName = $"pengdows.crud.fakeDb.xml.{_emulatedProduct}.schema.xml";

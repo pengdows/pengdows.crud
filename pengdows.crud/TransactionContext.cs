@@ -73,6 +73,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
     public bool IsReadOnlyConnection => _context.IsReadOnlyConnection;
     public bool RCSIEnabled => _context.RCSIEnabled;
     public int MaxParameterLimit => _context.MaxParameterLimit;
+    public int MaxOutputParameters => _context.MaxOutputParameters;
     public DbMode ConnectionMode => DbMode.SingleConnection;
     public ITypeMapRegistry TypeMapRegistry => _context.TypeMapRegistry;
     public IDataSourceInformation DataSourceInfo => _context.DataSourceInfo;
@@ -99,14 +100,16 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         return new SqlContainer(this, query);
     }
 
-    public DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
+    public DbParameter CreateDbParameter<T>(string? name, DbType type, T value,
+        ParameterDirection direction = ParameterDirection.Input)
     {
-        return _context.CreateDbParameter(name, type, value);
+        return _context.CreateDbParameter(name, type, value, direction);
     }
 
-    public DbParameter CreateDbParameter<T>(DbType type, T value)
+    public DbParameter CreateDbParameter<T>(DbType type, T value,
+        ParameterDirection direction = ParameterDirection.Input)
     {
-        return _context.CreateDbParameter(type, value);
+        return _context.CreateDbParameter(type, value, direction);
     }
 
     public ITrackedConnection GetConnection(ExecutionType type, bool isShared = false)

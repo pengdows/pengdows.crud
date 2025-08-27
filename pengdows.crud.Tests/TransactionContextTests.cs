@@ -307,6 +307,26 @@ public class TransactionContextTests
     }
 
     [Fact]
+    public void CreateDbParameter_ForwardsDirection()
+    {
+        var context = (DatabaseContext)CreateContext(SupportedDatabase.Sqlite);
+        using var tx = context.BeginTransaction();
+        var param = tx.CreateDbParameter("p1", DbType.String, "v", ParameterDirection.Output);
+
+        Assert.Equal(ParameterDirection.Output, param.Direction);
+    }
+
+    [Fact]
+    public void CreateDbParameter_DefaultsDirectionToInput()
+    {
+        var context = (DatabaseContext)CreateContext(SupportedDatabase.Sqlite);
+        using var tx = context.BeginTransaction();
+        var param = tx.CreateDbParameter("p1", DbType.String, "v");
+
+        Assert.Equal(ParameterDirection.Input, param.Direction);
+    }
+
+    [Fact]
     public void GetLock_AfterCompletion_Throws()
     {
         var context = CreateContext(SupportedDatabase.Sqlite);
@@ -353,7 +373,7 @@ public class TransactionContextTests
     }
 
     [Fact]
-    public void ProcWrappingStyle_GetMatchesContext()
+    public void ProcWrappingStyle_GetMatchesContext_SetterThrows()
     {
         var context = (DatabaseContext)CreateContext(SupportedDatabase.Sqlite);
         using var tx = context.BeginTransaction();

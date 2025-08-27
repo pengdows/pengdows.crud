@@ -101,7 +101,8 @@ public interface ISqlContainer :ISafeAsyncDisposableBase
     /// <param name="type">Database type of the parameter.</param>
     /// <param name="value">The value to assign.</param>
     /// <returns>The created parameter.</returns>
-    DbParameter AddParameterWithValue<T>(DbType type, T value);
+    DbParameter AddParameterWithValue<T>(DbType type, T value,
+        ParameterDirection direction = ParameterDirection.Input);
 
     /// <summary>
     /// Adds a named parameter by type and value.
@@ -111,7 +112,8 @@ public interface ISqlContainer :ISafeAsyncDisposableBase
     /// <param name="type">Database type of the parameter.</param>
     /// <param name="value">The value to assign.</param>
     /// <returns>The created parameter.</returns>
-    DbParameter AddParameterWithValue<T>(string? name, DbType type, T value);
+    DbParameter AddParameterWithValue<T>(string? name, DbType type, T value,
+        ParameterDirection direction = ParameterDirection.Input);
 
     /// <summary>
     /// Sets a parameter value for an existing parameter.
@@ -181,7 +183,29 @@ public interface ISqlContainer :ISafeAsyncDisposableBase
     /// </summary>
     /// <param name="executionType">The procedure execution type.</param>
     /// <param name="includeParameters">Whether to include parameters in the wrapper.</param>
+    /// <param name="captureReturn">Whether to capture a return value.</param>
     /// <returns>The wrapped command text.</returns>
-    string WrapForStoredProc(ExecutionType executionType, bool includeParameters = true);
+    string WrapForStoredProc(ExecutionType executionType, bool includeParameters = true, bool captureReturn = false);
+
+    /// <summary>
+    /// Wraps the query for execution as a CREATE-like stored procedure and captures a return value.
+    /// </summary>
+    /// <param name="includeParameters">Whether to include parameters in the wrapper.</param>
+    /// <returns>The wrapped command text.</returns>
+    string WrapForCreateWithReturn(bool includeParameters = true);
+
+    /// <summary>
+    /// Wraps the query for execution as an UPDATE-like stored procedure and captures a return value.
+    /// </summary>
+    /// <param name="includeParameters">Whether to include parameters in the wrapper.</param>
+    /// <returns>The wrapped command text.</returns>
+    string WrapForUpdateWithReturn(bool includeParameters = true);
+
+    /// <summary>
+    /// Wraps the query for execution as a DELETE-like stored procedure and captures a return value.
+    /// </summary>
+    /// <param name="includeParameters">Whether to include parameters in the wrapper.</param>
+    /// <returns>The wrapped command text.</returns>
+    string WrapForDeleteWithReturn(bool includeParameters = true);
 
 }

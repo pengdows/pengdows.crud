@@ -4,6 +4,8 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Threading.Tasks;
+using System.Reflection;
+using Moq;
 using pengdows.crud.enums;
 using pengdows.crud.FakeDb;
 using Xunit;
@@ -176,6 +178,33 @@ public class SqlContainerTests : SqlLiteContextTestBase
 
         Assert.Equal(string.Empty, container.Query.ToString());
         Assert.Equal(0, container.ParameterCount);
+    }
+
+    [Fact]
+    public void AddParameterWithValue_UnsupportedDirectionThrows()
+    {
+        var container = Context.CreateSqlContainer();
+
+        Assert.Throws<ArgumentException>(() =>
+            container.AddParameterWithValue("p1", DbType.Int32, 1, ParameterDirection.Output));
+    }
+
+    [Fact]
+    public void AddParameterWithValue_SetsExplicitInputDirection()
+    {
+        var container = Context.CreateSqlContainer();
+        var param = container.AddParameterWithValue("p1", DbType.Int32, 1, ParameterDirection.Input);
+
+        Assert.Equal(ParameterDirection.Input, param.Direction);
+    }
+
+    [Fact]
+    public void AddParameterWithValue_DefaultsDirectionToInput()
+    {
+        var container = Context.CreateSqlContainer();
+        var param = container.AddParameterWithValue("p1", DbType.Int32, 1);
+
+        Assert.Equal(ParameterDirection.Input, param.Direction);
     }
 
     [Fact]
@@ -377,5 +406,42 @@ public class SqlContainerTests : SqlLiteContextTestBase
         var container = ctx.CreateSqlContainer("my_proc");
 
         Assert.Throws<NotSupportedException>(() => container.WrapForStoredProc(ExecutionType.Read));
+    }
+
+    [Fact]
+    public void AddParameter_OutputWithinLimit_Succeeds()
+    {
+        var info = (DataSourceInformation)Context.DataSourceInfo;
+        var prop = typeof(DataSourceInformation).GetProperty("MaxOutputParameters", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+        var original = info.MaxOutputParameters;
+        prop!.SetValue(info, 1);
+
+        var container = Context.CreateSqlContainer();
+        var param = new FakeDbParameter { ParameterName = "p0", DbType = DbType.Int32, Direction = ParameterDirection.Output };
+
+        container.AddParameter(param);
+
+        Assert.Equal(1, container.ParameterCount);
+
+        prop.SetValue(info, original);
+    }
+
+    [Fact]
+    public void AddParameter_OutputExceedsLimit_Throws()
+    {
+        var info = (DataSourceInformation)Context.DataSourceInfo;
+        var prop = typeof(DataSourceInformation).GetProperty("MaxOutputParameters", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+        var original = info.MaxOutputParameters;
+        prop!.SetValue(info, 1);
+
+        var container = Context.CreateSqlContainer();
+        var p1 = new FakeDbParameter { ParameterName = "p0", DbType = DbType.Int32, Direction = ParameterDirection.Output };
+        container.AddParameter(p1);
+
+        var p2 = new FakeDbParameter { ParameterName = "p1", DbType = DbType.Int32, Direction = ParameterDirection.Output };
+
+        Assert.Throws<InvalidOperationException>(() => container.AddParameter(p2));
+
+        prop.SetValue(info, original);
     }
 }

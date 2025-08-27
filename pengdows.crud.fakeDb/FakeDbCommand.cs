@@ -30,8 +30,10 @@ public class FakeDbCommand : DbCommand
     public override bool DesignTimeVisible { get; set; }
     public override UpdateRowSource UpdatedRowSource { get; set; }
 
+    [AllowNull]
     public new DbConnection Connection { get; set; }
     protected override DbConnection? DbConnection { get; set; }
+    [AllowNull]
     public new DbTransaction Transaction { get; set; }
 
     protected override DbParameterCollection DbParameterCollection
@@ -108,6 +110,7 @@ public class FakeDbCommand : DbCommand
                 return conn.ScalarResults.Dequeue();
             }
         }
+
         return 42;
     }
 

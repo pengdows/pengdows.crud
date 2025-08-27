@@ -108,6 +108,36 @@ public class EntityHelperNegativeTests : SqlLiteContextTestBase
             entityHelper.BuildUpsert(testEntity));
     }
 
+    [Fact]
+    public void BuildCreate_NullEntity_Throws()
+    {
+        Assert.Throws<ArgumentNullException>(() => helper.BuildCreate(null!));
+    }
+
+    [Fact]
+    public void BuildDelete_NoIdColumn_Throws()
+    {
+        TypeMap.Register<EntityWithoutId>();
+        var local = new EntityHelper<EntityWithoutId, int>(Context);
+        Assert.Throws<InvalidOperationException>(() => local.BuildDelete(1));
+    }
+
+    [Fact]
+    public void BuildCreate_NoIdColumn_Throws()
+    {
+        TypeMap.Register<EntityWithoutId>();
+        var local = new EntityHelper<EntityWithoutId, int>(Context);
+        var entity = new EntityWithoutId { Name = "foo" };
+        Assert.Throws<InvalidOperationException>(() => local.BuildCreate(entity));
+    }
+
+    [Table("NoIdTable")]
+    private class EntityWithoutId
+    {
+        [Column("Name", DbType.String)]
+        public string Name { get; set; } = string.Empty;
+    }
+
     private async Task BuildTestTable()
     {
         var qp = Context.QuotePrefix;
