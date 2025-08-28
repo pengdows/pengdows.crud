@@ -1,75 +1,238 @@
 #region
 
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Linq.Expressions;
 using System.Reflection;
+using System.Runtime.CompilerServices;
+using pengdows.crud.attributes;
 
 #endregion
 
 namespace pengdows.crud;
 
-public static class DataReaderMapper
+public sealed class DataReaderMapper : IDataReaderMapper
 {
-    public static async Task<List<T>> LoadObjectsFromDataReaderAsync<T>(
+    public static readonly IDataReaderMapper Instance = new DataReaderMapper();
+
+    public DataReaderMapper()
+    {
+    }
+
+    private static readonly ConcurrentDictionary<PropertyInfo, Action<object, object?>> _setterCache = new();
+    private static readonly ConcurrentDictionary<(Type Type, string Schema, MapperOptions Options), MapperPlan> _planCache = new();
+
+    public static Task<List<T>> LoadObjectsFromDataReaderAsync<T>(
         IDataReader reader,
-        CancellationToken cancellationToken = default
-    ) where T : class, new()
+        CancellationToken cancellationToken = default)
+        where T : class, new()
+    {
+        return Instance.LoadObjectsFromDataReaderAsync<T>(reader, cancellationToken);
+    }
+
+    public static Task<List<T>> LoadAsync<T>(
+        IDataReader reader,
+        MapperOptions options,
+        CancellationToken cancellationToken = default)
+        where T : class, new()
+    {
+        return Instance.LoadAsync<T>(reader, options, cancellationToken);
+    }
+
+    public static IAsyncEnumerable<T> StreamAsync<T>(
+        IDataReader reader,
+        CancellationToken cancellationToken = default)
+        where T : class, new()
+    {
+        return Instance.StreamAsync<T>(reader, MapperOptions.Default, cancellationToken);
+    }
+
+    public static IAsyncEnumerable<T> StreamAsync<T>(
+        IDataReader reader,
+        MapperOptions options,
+        CancellationToken cancellationToken = default)
+        where T : class, new()
+    {
+        return Instance.StreamAsync<T>(reader, options, cancellationToken);
+    }
+
+    Task<List<T>> IDataReaderMapper.LoadObjectsFromDataReaderAsync<T>(
+        IDataReader reader,
+        CancellationToken cancellationToken)
+    {
+        return LoadInternalAsync<T>(reader, MapperOptions.Default, cancellationToken);
+    }
+
+    Task<List<T>> IDataReaderMapper.LoadAsync<T>(
+        IDataReader reader,
+        MapperOptions options,
+        CancellationToken cancellationToken)
+    {
+        return LoadInternalAsync<T>(reader, options, cancellationToken);
+    }
+
+    IAsyncEnumerable<T> IDataReaderMapper.StreamAsync<T>(
+        IDataReader reader,
+        MapperOptions options,
+        CancellationToken cancellationToken)
+    {
+        return StreamInternalAsync<T>(reader, options, cancellationToken);
+    }
+
+    private async Task<List<T>> LoadInternalAsync<T>(
+        IDataReader reader,
+        MapperOptions options,
+        CancellationToken cancellationToken)
+        where T : class, new()
+    {
+        var result = new List<T>();
+        await foreach (var item in StreamInternalAsync<T>(reader, options, cancellationToken))
+        {
+            result.Add(item);
+        }
+
+        return result;
+    }
+
+    private async IAsyncEnumerable<T> StreamInternalAsync<T>(
+        IDataReader reader,
+        MapperOptions options,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+        where T : class, new()
     {
         ArgumentNullException.ThrowIfNull(reader);
-        var rdr = reader as DbDataReader;
-        if (reader is not DbDataReader)
+
+        if (reader is not DbDataReader rdr)
         {
             throw new ArgumentException("reader must be DbDataReader", nameof(reader));
         }
-        
-        var result = new List<T>();
-        var type = typeof(T);
 
-        // Precompute matching columns to properties
-        var propertyMap = new List<(int Ordinal, PropertyInfo Property)>();
-        var props = type.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.SetProperty)
-            .ToDictionary(p => p.Name, StringComparer.OrdinalIgnoreCase);
+        options ??= MapperOptions.Default;
 
-        for (var i = 0; i < reader.FieldCount; i++)
-        {
-            var name = reader.GetName(i);
-            if (props.TryGetValue(name, out var prop))
-            {
-                propertyMap.Add((i, prop));
-            }
-        }
+        var schemaHash = BuildSchemaHash(rdr);
+        var planKey = (typeof(T), schemaHash, options);
+
+        var plan = _planCache.GetOrAdd(planKey, _ => BuildPlan<T>(rdr, options));
 
         while (await rdr.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
             var obj = new T();
-
-            foreach (var (ordinal, prop) in propertyMap)
+            for (var i = 0; i < plan.Ordinals.Length; i++)
             {
-                if (await rdr.IsDBNullAsync(ordinal, cancellationToken)
-                        .ConfigureAwait(false))
+                var ordinal = plan.Ordinals[i];
+                if (await rdr.IsDBNullAsync(ordinal, cancellationToken).ConfigureAwait(false))
                 {
                     continue;
                 }
 
                 try
                 {
-                    var value = await rdr.GetFieldValueAsync<object>(ordinal, cancellationToken)
+                    var raw = await rdr.GetFieldValueAsync<object>(ordinal, cancellationToken)
                         .ConfigureAwait(false);
-                    value = Utils.IsNullOrDbNull(value)
-                        ? null
-                        : TypeCoercionHelper.Coerce(value, value.GetType(), prop.PropertyType);
-
-                    prop.SetValue(obj, value);
+                    var coerced = plan.Coercers[i](raw);
+                    plan.Setters[i](obj, coerced);
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Swallow assignment issues (type mismatch, etc.)
+                    if (options.Strict)
+                    {
+                        throw new InvalidOperationException(
+                            $"Failed to map column '{rdr.GetName(ordinal)}' to property '{plan.Properties[i].Name}'.",
+                            ex);
+                    }
                 }
             }
 
-            result.Add(obj);
+            yield return obj;
+        }
+    }
+
+    private static MapperPlan BuildPlan<T>(DbDataReader reader, MapperOptions options)
+    {
+        var type = typeof(T);
+        var props = type.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.SetProperty);
+
+        IEnumerable<PropertyInfo> candidates = props;
+        if (options.ColumnsOnly)
+        {
+            candidates = candidates.Where(p => p.GetCustomAttribute<ColumnAttribute>() != null);
         }
 
-        return result;
+        var propertyLookup = options.ColumnsOnly
+            ? candidates.ToDictionary(
+                p => p.GetCustomAttribute<ColumnAttribute>()!.Name,
+                StringComparer.OrdinalIgnoreCase)
+            : candidates.ToDictionary(p => p.Name, StringComparer.OrdinalIgnoreCase);
+
+        var ordinals = new List<int>();
+        var setters = new List<Action<object, object?>>();
+        var coercers = new List<Func<object, object?>>();
+        var properties = new List<PropertyInfo>();
+
+        for (var i = 0; i < reader.FieldCount; i++)
+        {
+            var name = reader.GetName(i);
+
+            if (!options.ColumnsOnly && options.NamePolicy != null)
+            {
+                name = options.NamePolicy(name);
+            }
+
+            if (propertyLookup.TryGetValue(name, out var prop))
+            {
+                ordinals.Add(i);
+                setters.Add(GetOrCreateSetter(prop));
+                coercers.Add(value =>
+                    Utils.IsNullOrDbNull(value)
+                        ? null
+                        : TypeCoercionHelper.Coerce(value, value.GetType(), prop.PropertyType));
+                properties.Add(prop);
+            }
+        }
+
+        return new MapperPlan(
+            ordinals.ToArray(),
+            properties.ToArray(),
+            setters.ToArray(),
+            coercers.ToArray());
     }
+
+    private static string BuildSchemaHash(IDataRecord reader)
+    {
+        var names = new string[reader.FieldCount];
+        for (var i = 0; i < reader.FieldCount; i++)
+        {
+            names[i] = reader.GetName(i);
+        }
+
+        return string.Join("|", names);
+    }
+
+    private static Action<object, object?> GetOrCreateSetter(PropertyInfo prop)
+    {
+        return _setterCache.GetOrAdd(prop, p =>
+        {
+            var objParam = Expression.Parameter(typeof(object));
+            var valueParam = Expression.Parameter(typeof(object));
+
+            var castObj = Expression.Convert(objParam, p.DeclaringType!);
+            var castValue = Expression.Convert(valueParam, p.PropertyType);
+
+            var propertyAccess = Expression.Property(castObj, p);
+            var assignment = Expression.Assign(propertyAccess, castValue);
+
+            var lambda = Expression.Lambda<Action<object, object?>>(assignment, objParam, valueParam);
+            return lambda.Compile();
+        });
+    }
+
+    private sealed record MapperPlan(
+        int[] Ordinals,
+        PropertyInfo[] Properties,
+        Action<object, object?>[] Setters,
+        Func<object, object?>[] Coercers);
 }
+
