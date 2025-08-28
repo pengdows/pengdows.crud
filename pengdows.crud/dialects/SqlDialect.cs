@@ -162,6 +162,15 @@ public abstract class SqlDialect:ISqlDialect
             return "?";
         }
 
+        if (parameterName is null)
+        {
+            return ParameterMarker;
+        }
+
+        parameterName = parameterName.Replace("@", string.Empty)
+                                     .Replace(":", string.Empty)
+                                     .Replace("?", string.Empty);
+
         return string.Concat(ParameterMarker, parameterName);
     }
 
@@ -182,6 +191,10 @@ public abstract class SqlDialect:ISqlDialect
         if (string.IsNullOrWhiteSpace(name))
         {
             name = GenerateRandomName(5, ParameterNameMaxLength);
+        }
+        else if (SupportsNamedParameters)
+        {
+            name = name.TrimStart('@', ':', '?');
         }
 
         var valueIsNull = Utils.IsNullOrDbNull(value);
