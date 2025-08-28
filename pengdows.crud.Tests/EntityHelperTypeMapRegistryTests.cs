@@ -1,8 +1,9 @@
 using System;
-using pengdows.crud;
 using Microsoft.Data.Sqlite;
-using pengdows.crud.enums;
+using pengdows.crud;
 using Xunit;
+
+namespace pengdows.crud.Tests;
 
 public class EntityHelperTypeMapRegistryTests
 {
