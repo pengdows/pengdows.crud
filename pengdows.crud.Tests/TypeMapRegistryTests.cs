@@ -14,6 +14,25 @@ namespace pengdows.crud.Tests;
 public class TypeMapRegistryTests
 {
     [Fact]
+    public void Instance_ReturnsSameRegistry()
+    {
+        TypeMapRegistry.Instance.Clear();
+        var first = TypeMapRegistry.Instance;
+        var second = TypeMapRegistry.Instance;
+        Assert.Same(first, second);
+    }
+
+    [Fact]
+    public void NewInstance_DoesNotAffectSingleton()
+    {
+        TypeMapRegistry.Instance.Clear();
+        var custom = new TypeMapRegistry();
+        var customInfo = custom.GetTableInfo<MyEntity>();
+        customInfo.Name = "Changed";
+        var singletonInfo = TypeMapRegistry.Instance.GetTableInfo<MyEntity>();
+        Assert.Equal("MyEntity", singletonInfo.Name);
+    }
+    [Fact]
     public void Register_AddsAndRetrievesTableInfo()
     {
         var registry = new TypeMapRegistry();
@@ -187,6 +206,21 @@ public class TypeMapRegistryTests
     {
         var registry = new TypeMapRegistry();
         Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<DuplicateOrdinalEntity>());
+    }
+
+    [Fact]
+    public void Registries_DoNotShareTableInfo()
+    {
+        var registry1 = new TypeMapRegistry();
+        var registry2 = new TypeMapRegistry();
+
+        var info1 = registry1.GetTableInfo<MyEntity>();
+        info1.Name = "Changed";
+
+        var info2 = registry2.GetTableInfo<MyEntity>();
+
+        Assert.Equal("Changed", info1.Name);
+        Assert.Equal("MyEntity", info2.Name);
     }
 
     [Table("MultipleVersions")]

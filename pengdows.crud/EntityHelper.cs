@@ -27,7 +27,7 @@ public class EntityHelper<TEntity, TRowID> :
     // Cache for compiled property setters
     private static readonly ConcurrentDictionary<PropertyInfo, Action<object, object?>> _propertySetters = new();
 
-    private static readonly Lazy<CachedSqlTemplates> _cachedSqlTemplates = new(BuildCachedSqlTemplates);
+    private readonly Lazy<CachedSqlTemplates> _cachedSqlTemplates;
 
     private class CachedSqlTemplates
     {
@@ -55,7 +55,6 @@ public class EntityHelper<TEntity, TRowID> :
     private readonly IAuditValueResolver? _auditValueResolver;
     private IDatabaseContext _context;
     private ISqlDialect _dialect;
-    private readonly Guid _rootId;
 
     private IColumnInfo? _idColumn;
 
@@ -99,8 +98,8 @@ public class EntityHelper<TEntity, TRowID> :
     )
     {
         _auditValueResolver = null;
-        _rootId = ((IContextIdentity)databaseContext).RootId;
         Initialize(databaseContext, enumParseBehavior);
+        _cachedSqlTemplates = new Lazy<CachedSqlTemplates>(BuildCachedSqlTemplates);
     }
 
     [Obsolete("Use the constructor without IServiceProvider instead")]
@@ -110,8 +109,8 @@ public class EntityHelper<TEntity, TRowID> :
     )
     {
         _auditValueResolver = auditValueResolver;
-        _rootId = ((IContextIdentity)databaseContext).RootId;
         Initialize(databaseContext, enumParseBehavior);
+        _cachedSqlTemplates = new Lazy<CachedSqlTemplates>(BuildCachedSqlTemplates);
     }
 
     private void Initialize(IDatabaseContext databaseContext, EnumParseFailureMode enumParseBehavior)
@@ -158,6 +157,26 @@ public class EntityHelper<TEntity, TRowID> :
     public string MakeParameterName(DbParameter p)
     {
         return _dialect.MakeParameterName(p);
+    }
+
+    public string ReplaceDialectTokens(string sql, string quotePrefix, string quoteSuffix, string parameterMarker)
+    {
+        if (sql == null)
+        {
+            throw new ArgumentNullException(nameof(sql));
+        }
+
+        var temp = sql
+            .Replace(_dialect.QuotePrefix, "\u0001")
+            .Replace(_dialect.QuoteSuffix, "\u0002")
+            .Replace(_dialect.ParameterMarker, "\u0003");
+
+        var replaced = temp
+            .Replace("\u0001", quotePrefix)
+            .Replace("\u0002", quoteSuffix)
+            .Replace("\u0003", parameterMarker);
+
+        return replaced;
     }
 
     private string GetCachedQuery(string key, Func<string> factory)
@@ -1504,13 +1523,12 @@ public class EntityHelper<TEntity, TRowID> :
         return int.TryParse(match.Groups[1].Value, out major);
     }
 
-    private static CachedSqlTemplates BuildCachedSqlTemplates()
+    private CachedSqlTemplates BuildCachedSqlTemplates()
     {
-        var typeMap = TypeMapRegistry.StaticInstance.GetTableInfo<TEntity>() ?? throw new InvalidOperationException($"Type {typeof(TEntity).FullName} is not registered in TypeMapRegistry.");
+        var idCol = _tableInfo.Columns.Values.FirstOrDefault(c => c.IsId)
+                     ?? throw new InvalidOperationException($"No ID column defined for {typeof(TEntity).Name}");
 
-        var idCol = typeMap.Columns.Values.FirstOrDefault(c => c.IsId) ?? throw new InvalidOperationException($"No ID column defined for {typeof(TEntity).Name}");
-
-        var insertColumns = typeMap.Columns.Values
+        var insertColumns = _tableInfo.Columns.Values
             .Where(c => !c.IsNonInsertable && (!c.IsId || c.IsIdIsWritable))
             .Cast<IColumnInfo>()
             .ToList();
@@ -1518,7 +1536,7 @@ public class EntityHelper<TEntity, TRowID> :
         var wrappedCols = new List<string>();
         for (var i = 0; i < insertColumns.Count; i++)
         {
-            wrappedCols.Add(QuoteWrap(insertColumns[i].Name));
+            wrappedCols.Add(_dialect.WrapObjectName(insertColumns[i].Name));
         }
 
         var paramNames = new List<string>();
@@ -1527,18 +1545,21 @@ public class EntityHelper<TEntity, TRowID> :
         {
             var name = $"p{i}";
             paramNames.Add(name);
-            valuePlaceholders.Add($"@{name}");
+            valuePlaceholders.Add(_dialect.MakeParameterName(name));
         }
 
-        var insertSql = $"INSERT INTO {BuildWrappedTableName(typeMap)} ({string.Join(", ", wrappedCols)}) VALUES ({string.Join(", ", valuePlaceholders)})";
-        var deleteSql = $"DELETE FROM {BuildWrappedTableName(typeMap)} WHERE {QuoteWrap(idCol.Name)} = {{0}}";
+        var insertSql =
+            $"INSERT INTO {BuildWrappedTableName(_tableInfo)} ({string.Join(", ", wrappedCols)}) VALUES ({string.Join(", ", valuePlaceholders)})";
+        var deleteSql =
+            $"DELETE FROM {BuildWrappedTableName(_tableInfo)} WHERE {_dialect.WrapObjectName(idCol.Name)} = {{0}}";
 
-        var updateColumns = typeMap.Columns.Values
+        var updateColumns = _tableInfo.Columns.Values
             .Where(c => !c.IsId && !c.IsVersion && !c.IsNonUpdateable && !c.IsCreatedBy && !c.IsCreatedOn)
             .Cast<IColumnInfo>()
             .ToList();
 
-        var updateSql = $"UPDATE {BuildWrappedTableName(typeMap)} SET {{0}} WHERE {QuoteWrap(idCol.Name)} = {{1}}";
+        var updateSql =
+            $"UPDATE {BuildWrappedTableName(_tableInfo)} SET {{0}} WHERE {_dialect.WrapObjectName(idCol.Name)} = {{1}}";
 
         return new CachedSqlTemplates
         {
@@ -1550,11 +1571,18 @@ public class EntityHelper<TEntity, TRowID> :
             UpdateColumns = updateColumns
         };
 
-        static string QuoteWrap(string name) => '"' + name + '"';
-
-        static string BuildWrappedTableName(ITableInfo info)
+        string BuildWrappedTableName(ITableInfo info)
         {
-            return (string.IsNullOrWhiteSpace(info.Schema) ? string.Empty : QuoteWrap(info.Schema) + ".") + QuoteWrap(info.Name);
+            if (string.IsNullOrWhiteSpace(info.Schema))
+            {
+                return _dialect.WrapObjectName(info.Name);
+            }
+
+            var sb = new StringBuilder();
+            sb.Append(_dialect.WrapObjectName(info.Schema));
+            sb.Append(_dialect.CompositeIdentifierSeparator);
+            sb.Append(_dialect.WrapObjectName(info.Name));
+            return sb.ToString();
         }
     }
 

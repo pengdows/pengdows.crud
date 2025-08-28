@@ -129,11 +129,12 @@ public class DataSourceInformationTests
         Assert.Equal(expectedMajor, info.ParsedVersion?.Major);
 
         // Assert: merge support
-        var canMerge = db == SupportedDatabase.SqlServer
+        var canMerge = (db == SupportedDatabase.SqlServer && info.ParsedVersion?.Major >= 10)
                        || db == SupportedDatabase.Oracle
                        || (db == SupportedDatabase.Firebird && info.ParsedVersion?.Major >= 2)
                        || (db == SupportedDatabase.PostgreSql && info.ParsedVersion?.Major > 14);
         Assert.Equal(canMerge, info.SupportsMerge);
+        Assert.NotEqual(!canMerge, info.SupportsMerge);
 
         // Assert: insert-on-conflict support
         var canConflict = (new[]
@@ -159,7 +160,7 @@ public class DataSourceInformationTests
             SupportedDatabase.Oracle => ProcWrappingStyle.Oracle,
             SupportedDatabase.MySql or SupportedDatabase.MariaDb => ProcWrappingStyle.Call,
             SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb => ProcWrappingStyle.PostgreSQL,
-            SupportedDatabase.Firebird => ProcWrappingStyle.Call,
+            SupportedDatabase.Firebird => ProcWrappingStyle.ExecuteProcedure,
             _ => ProcWrappingStyle.None
         };
         var expectedRequiresStoredProcParameterNameMatch = db switch

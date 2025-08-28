@@ -22,7 +22,7 @@ public class DialectPropertyTests
                 true,
                 65535,
                 63,
-                ProcWrappingStyle.Call,
+                ProcWrappingStyle.ExecuteProcedure,
                 "\"",
                 "\"",
                 false,
@@ -32,7 +32,7 @@ public class DialectPropertyTests
                 false,
                 false,
                 true,
-                true)
+                false)
         };
 
         yield return new object[]
@@ -115,7 +115,7 @@ public class DialectPropertyTests
                 "\"",
                 false,
                 false,
-                true,
+                false,
                 false,
                 true,
                 true,

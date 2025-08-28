@@ -2,8 +2,8 @@
 
 using System;
 using System.Data;
-using Microsoft.Data.Sqlite;
 using pengdows.crud.enums;
+using pengdows.crud.FakeDb;
 using Xunit;
 
 #endregion
@@ -14,13 +14,9 @@ public class WriteProcWithReturnTests
 {
     private DatabaseContext _dbContext;
 
-    private SqlContainer SetupContainer()
+    private SqlContainer SetupContainer(SupportedDatabase product)
     {
-        if (_dbContext == null)
-        {
-            _dbContext = new DatabaseContext("DataSource=:memory:", SqliteFactory.Instance);
-        }
-
+        _dbContext = new DatabaseContext($"DataSource=:memory:;EmulatedProduct={product}", new FakeDbFactory(product));
         var sc = _dbContext.CreateSqlContainer("dbo.Sqltest") as SqlContainer;
         for (var i = 0; i < 2; i++)
         {
@@ -33,8 +29,7 @@ public class WriteProcWithReturnTests
     [Fact]
     public void WrapForCreateWithReturn_ExecStyle_GeneratesSql()
     {
-        var sc = SetupContainer();
-        _dbContext.ProcWrappingStyle = ProcWrappingStyle.Exec;
+        var sc = SetupContainer(SupportedDatabase.SqlServer);
         var s = sc.WrapForCreateWithReturn();
         Assert.Equal("DECLARE @__ret INT;\nEXEC @__ret = dbo.Sqltest @p0, @p1;\nSELECT @__ret;", s);
     }
@@ -42,16 +37,14 @@ public class WriteProcWithReturnTests
     [Fact]
     public void WrapForCreateWithReturn_UnsupportedStyle_ShouldThrow()
     {
-        var sc = SetupContainer();
-        _dbContext.ProcWrappingStyle = ProcWrappingStyle.Call;
+        var sc = SetupContainer(SupportedDatabase.MySql);
         Assert.Throws<NotSupportedException>(() => sc.WrapForCreateWithReturn());
     }
 
     [Fact]
     public void WrapForUpdateWithReturn_ExecStyle_GeneratesSql()
     {
-        var sc = SetupContainer();
-        _dbContext.ProcWrappingStyle = ProcWrappingStyle.Exec;
+        var sc = SetupContainer(SupportedDatabase.SqlServer);
         var s = sc.WrapForUpdateWithReturn();
         Assert.Equal("DECLARE @__ret INT;\nEXEC @__ret = dbo.Sqltest @p0, @p1;\nSELECT @__ret;", s);
     }
@@ -59,16 +52,14 @@ public class WriteProcWithReturnTests
     [Fact]
     public void WrapForUpdateWithReturn_UnsupportedStyle_ShouldThrow()
     {
-        var sc = SetupContainer();
-        _dbContext.ProcWrappingStyle = ProcWrappingStyle.Call;
+        var sc = SetupContainer(SupportedDatabase.MySql);
         Assert.Throws<NotSupportedException>(() => sc.WrapForUpdateWithReturn());
     }
 
     [Fact]
     public void WrapForDeleteWithReturn_ExecStyle_GeneratesSql()
     {
-        var sc = SetupContainer();
-        _dbContext.ProcWrappingStyle = ProcWrappingStyle.Exec;
+        var sc = SetupContainer(SupportedDatabase.SqlServer);
         var s = sc.WrapForDeleteWithReturn();
         Assert.Equal("DECLARE @__ret INT;\nEXEC @__ret = dbo.Sqltest @p0, @p1;\nSELECT @__ret;", s);
     }
@@ -76,8 +67,7 @@ public class WriteProcWithReturnTests
     [Fact]
     public void WrapForDeleteWithReturn_UnsupportedStyle_ShouldThrow()
     {
-        var sc = SetupContainer();
-        _dbContext.ProcWrappingStyle = ProcWrappingStyle.Call;
+        var sc = SetupContainer(SupportedDatabase.MySql);
         Assert.Throws<NotSupportedException>(() => sc.WrapForDeleteWithReturn());
     }
 }

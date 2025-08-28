@@ -189,11 +189,21 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
 
         return _context.ProcWrappingStyle switch
         {
-            ProcWrappingStyle.PostgreSQL when executionType == ExecutionType.Read
+            ProcWrappingStyle.PostgreSQL when captureReturn
+                => throw new NotSupportedException("Return value capture not implemented for this dialect."),
+
+            ProcWrappingStyle.ExecuteProcedure when captureReturn
+                => throw new NotSupportedException("Return value capture not implemented for this dialect."),
+
+            ProcWrappingStyle.PostgreSQL or ProcWrappingStyle.ExecuteProcedure
+                when executionType == ExecutionType.Read
                 => $"SELECT * FROM {procName}({args})",
 
             ProcWrappingStyle.PostgreSQL
                 => $"CALL {procName}({args})",
+
+            ProcWrappingStyle.ExecuteProcedure
+                => $"EXECUTE PROCEDURE {procName}({args})",
 
             ProcWrappingStyle.Oracle
                 => $"BEGIN\n\t{procName}{(string.IsNullOrEmpty(args) ? string.Empty : $"({args})")};\nEND;",
@@ -211,12 +221,6 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
 
             ProcWrappingStyle.Call
                 => $"CALL {procName}({args})",
-
-            ProcWrappingStyle.ExecuteProcedure when captureReturn
-                => throw new NotSupportedException("Return value capture not implemented for this dialect."),
-
-            ProcWrappingStyle.ExecuteProcedure
-                => $"EXECUTE PROCEDURE {procName}({args})",
 
             _ => throw new NotSupportedException("Stored procedures are not supported by this database.")
         };

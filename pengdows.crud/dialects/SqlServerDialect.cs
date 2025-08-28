@@ -39,12 +39,10 @@ public class SqlServerDialect : SqlDialect
     public override SqlStandardLevel MaxSupportedStandard =>
         IsInitialized ? base.MaxSupportedStandard : DetermineStandardCompliance(null);
 
-    public override string QuotePrefix => "\"";
-    public override string QuoteSuffix => "\"";
     public override bool SupportsNamespaces => true;
 
     // Version-specific overrides
-    public override bool SupportsMerge => true;
+    public override bool SupportsMerge => IsInitialized && ProductInfo.ParsedVersion?.Major >= 10;
     public override bool SupportsJsonTypes => IsInitialized && ProductInfo.ParsedVersion?.Major >= 13;
 
     public override string GetVersionQuery() => "SELECT @@VERSION";
