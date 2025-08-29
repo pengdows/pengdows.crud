@@ -50,7 +50,7 @@ public class UpsertPortableTests : SqlLiteContextTestBase
     {
         var qp = Context.QuotePrefix;
         var qs = Context.QuoteSuffix;
-        var sql = string.Format(@"CREATE TABLE IF NOT EXISTS {0}Test{1} ({0}Id{1} INTEGER PRIMARY KEY,
+        var sql = string.Format(@"CREATE TABLE IF NOT EXISTS {0}Test{1} ({0}Id{1} INTEGER PRIMARY KEY AUTOINCREMENT,
 {0}Name{1} TEXT UNIQUE NOT NULL,
 {0}CreatedBy{1} TEXT NOT NULL DEFAULT 'system',
 {0}CreatedOn{1} TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -65,8 +65,8 @@ public class UpsertPortableTests : SqlLiteContextTestBase
     {
         var qp = Context.QuotePrefix;
         var qs = Context.QuoteSuffix;
-        var sql = string.Format(@"CREATE TABLE IF NOT EXISTS {0}NoKey{1} ({0}Id{1} INTEGER PRIMARY KEY,
-{0}Value{1} TEXT NOT NULL)", qp, qs);
+        var sql = string.Format(@"CREATE TABLE IF NOT EXISTS {0}NoKey{1} ({0}Id{1} INTEGER PRIMARY KEY AUTOINCREMENT,
+        {0}Value{1} TEXT NOT NULL)", qp, qs);
         var container = Context.CreateSqlContainer(sql);
         await container.ExecuteNonQueryAsync();
     }

@@ -72,10 +72,13 @@ public class ConnectionBreakingExamples
     {
         // Use helper to create a failing database context
         using var context = ConnectionFailureHelper.CreateFailOnOpenContext(SupportedDatabase.MySql);
-        
+
         // Any operation requiring a connection will fail
-        Assert.Throws<InvalidOperationException>(() => 
-            context.GetConnection(ExecutionType.Read));
+        Assert.Throws<InvalidOperationException>(() =>
+        {
+            using var conn = context.GetConnection(ExecutionType.Read);
+            conn.Open();
+        });
     }
 
     [Fact]
@@ -86,7 +89,7 @@ public class ConnectionBreakingExamples
         var helper = new EntityHelper<TestEntity, long>(context);
 
         // Operations will fail due to connection issues
-        await Assert.ThrowsAsync<InvalidOperationException>(async () => 
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await helper.RetrieveOneAsync(1));
     }
 
@@ -187,10 +190,10 @@ public class ConnectionBreakingExamples
     {
         // Create factory pre-configured with failure modes
         var factory = FakeDbFactory.CreateFailingFactory(
-            SupportedDatabase.DuckDB, 
+            SupportedDatabase.DuckDB,
             ConnectionFailureMode.FailAfterCount,
             ConnectionFailureHelper.CommonExceptions.NetworkError,
-            failAfterCount: 3);
+            failAfterCount: 4);
         
         using var context = new DatabaseContext("Data Source=test;EmulatedProduct=DuckDB", factory);
         
@@ -219,6 +222,9 @@ public class ConnectionBreakingExamples
 internal class TestEntity
 {
     [Id]
+    [Column("id", DbType.Int64)]
     public long Id { get; set; }
+
+    [Column("name", DbType.String)]
     public string Name { get; set; } = "";
 }

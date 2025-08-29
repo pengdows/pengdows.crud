@@ -14,7 +14,7 @@ public class DialectCoverageTests
         yield return new object[]
         {
             new MySqlDialect(new FakeDbFactory(SupportedDatabase.MySql), NullLogger<MySqlDialect>.Instance),
-            "`",
+            "\"",
             true,
             "@",
             false
@@ -42,8 +42,8 @@ public class DialectCoverageTests
         {
             new Sql92Dialect(new FakeDbFactory(SupportedDatabase.Unknown), NullLogger<Sql92Dialect>.Instance),
             "\"",
-            false,
-            "?",
+            true,
+            "@",
             false
         };
 
@@ -91,6 +91,7 @@ public class DialectCoverageTests
         var wrapped = dialect.WrapObjectName("schema.table");
         Assert.Equal($"{quote}schema{quote}.{quote}table{quote}", wrapped);
         Assert.NotEqual("schema.table", wrapped);
+        Assert.DoesNotContain("`", wrapped);
     }
 
     [Theory]

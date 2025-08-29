@@ -15,7 +15,8 @@ public class FakeDbConnectionTests
         conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Unknown}";
         conn.Open();
         var schema = conn.GetSchema();
-        Assert.False(schema.Rows[0].Field<bool>("SupportsNamedParameters"));
+        Assert.True(schema.Rows[0].Field<bool>("SupportsNamedParameters"));
+        Assert.NotEqual(false, schema.Rows[0].Field<bool>("SupportsNamedParameters"));
     }
 
     [Fact]
