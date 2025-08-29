@@ -46,8 +46,8 @@ public class SqlDialectDefaultsTests
         Assert.Equal("?", dialect.ParameterMarker);
         Assert.NotEqual("@", dialect.ParameterMarker);
 
-        Assert.False(dialect.SupportsNamedParameters);
-        Assert.NotEqual(true, dialect.SupportsNamedParameters);
+        Assert.True(dialect.SupportsNamedParameters);
+        Assert.NotEqual(false, dialect.SupportsNamedParameters);
 
         Assert.Equal(255, dialect.MaxParameterLimit);
         Assert.NotEqual(256, dialect.MaxParameterLimit);

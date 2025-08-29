@@ -30,6 +30,7 @@
   - UTC timestamps
 - Built-in **audit tracking** per entity and per field.
 - **Safe SQL generation** with strict parameterization (`@`, `:`, or `?` depending on provider).
+- ANSI-compliant double-quote identifiers and named parameters across all dialects.
 - Connection lifecycle modes: `New`, `Shared`, `KeepAlive`.
 - **Scoped transactions** via `TransactionContext`.
 - Works cleanly with DI and ADO.NET—**no leaky abstractions**.

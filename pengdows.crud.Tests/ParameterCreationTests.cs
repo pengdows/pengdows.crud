@@ -1,5 +1,6 @@
 using System;
 using System.Data;
+using System.Data.Common;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
@@ -56,11 +57,18 @@ public class ParameterCreationTests
         Assert.Equal(DBNull.Value, p.Value);
     }
 
+    private sealed class PositionalDialect : Sql92Dialect
+    {
+        public PositionalDialect(DbProviderFactory factory) : base(factory, NullLogger.Instance) { }
+        public override bool SupportsNamedParameters => false;
+        public override string ParameterMarker => "?";
+    }
+
     [Fact]
     public void CreateDbParameter_Positional_ClearsNameAndConverts()
     {
         var factory = new FakeDbFactory(SupportedDatabase.Unknown);
-        var dialect = new Sql92Dialect(factory, NullLogger.Instance);
+        var dialect = new PositionalDialect(factory);
         var p = dialect.CreateDbParameter("flag", DbType.Boolean, true);
 
         Assert.Equal(string.Empty, p.ParameterName);

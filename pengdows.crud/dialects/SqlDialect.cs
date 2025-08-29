@@ -39,7 +39,7 @@ public abstract class SqlDialect:ISqlDialect
     public abstract SupportedDatabase DatabaseType { get; }
     public virtual string ParameterMarker => "?";
     public virtual string ParameterMarkerAt(int ordinal) => ParameterMarker;
-    public virtual bool SupportsNamedParameters => false;
+    public virtual bool SupportsNamedParameters => true;
     public virtual int MaxParameterLimit => 255;
     public virtual int MaxOutputParameters => 0;
     public virtual int ParameterNameMaxLength => 18;
@@ -401,12 +401,14 @@ public abstract class SqlDialect:ISqlDialect
         var versionQueries = new[]
             {
                 GetVersionQuery(),
+                "SELECT CURRENT_VERSION",
                 "SELECT version()",
                 "SELECT @@version",
                 "SELECT * FROM v$version WHERE rownum = 1"
             }
             .Where(q => !string.IsNullOrWhiteSpace(q));
 
+        Exception? lastException = null;
         foreach (var query in versionQueries)
         {
             try
@@ -419,10 +421,15 @@ public abstract class SqlDialect:ISqlDialect
                     return result.ToString()!;
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                continue;
+                lastException = ex;
             }
+        }
+
+        if (lastException != null)
+        {
+            return $"Error retrieving version: {lastException.Message}";
         }
 
         return "Unknown Version (SQL-92 Compatible)";

@@ -386,17 +386,6 @@ public class DatabaseContextTests
     }
 
     [Fact]
-    public void MakeParameterName_NoNamedParameters_ReturnsQuestionMark()
-    {
-        var product = SupportedDatabase.Unknown;
-        var factory = new FakeDbFactory(product);
-        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
-        Assert.Equal("?", context.MakeParameterName("foo"));
-        Assert.Equal("?", context.MakeParameterName("@foo"));
-        Assert.Equal("?", context.MakeParameterName(":foo"));
-    }
-
-    [Fact]
     public void MakeParameterName_DbParameter_StripsPrefixes()
     {
         var product = SupportedDatabase.Sqlite;
@@ -409,16 +398,6 @@ public class DatabaseContextTests
         Assert.Equal(context.DataSourceInfo.ParameterMarker + "foo", name);
     }
 
-    [Fact]
-    public void MakeParameterName_DbParameter_NoNamedParameters_ReturnsQuestionMark()
-    {
-        var product = SupportedDatabase.Unknown;
-        var factory = new FakeDbFactory(product);
-        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
-        var param = new FakeDbParameter { ParameterName = "@foo", DbType = DbType.String, Value = "x" };
-
-        Assert.Equal("?", context.MakeParameterName(param));
-    }
 
     [Fact]
     public void MaxOutputParameters_ExposedViaContext()

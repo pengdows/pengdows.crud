@@ -47,9 +47,7 @@
         <DataSourceProductVersion>11.7.2-MariaDB-ubu2404</DataSourceProductVersion>
         <DataSourceProductVersionNormalized>11.7.2</DataSourceProductVersionNormalized>
         <GroupByBehavior>2</GroupByBehavior>
-        <IdentifierPattern>(^\`\p{Lo}\p{Lu}\p{Ll}_@#][\p{Lo}\p{Lu}\p{Ll}\p{Nd}@$#_]*$)|(^\`[^\`\0]|\`\`+\`$)|(^\" +
-            [^\"\0]|\"\"+\"$)
-        </IdentifierPattern>
+        <IdentifierPattern>(^[\p{Lo}\p{Lu}\p{Ll}_@#][\p{Lo}\p{Lu}\p{Ll}\p{Nd}@$#_]*$)|(^\"[^\"\0]|\"\"+\"$)</IdentifierPattern>
         <IdentifierCase>1</IdentifierCase>
         <OrderByColumnsInSelect>false</OrderByColumnsInSelect>
         <ParameterMarkerFormat>{0}</ParameterMarkerFormat>
@@ -57,7 +55,7 @@
         <ParameterNameMaxLength>128</ParameterNameMaxLength>
         <ParameterNamePattern>^[\p{Lo}\p{Lu}\p{Ll}\p{Lm}_@#][\p{Lo}\p{Lu}\p{Ll}\p{Lm}\p{Nd}\uff3f_@#\$]*(?=\s+|$)
         </ParameterNamePattern>
-        <QuotedIdentifierPattern>(([^\`]|\`\`)*)</QuotedIdentifierPattern>
+        <QuotedIdentifierPattern>"(([^\"]|\"\")*)"</QuotedIdentifierPattern>
         <QuotedIdentifierCase>2</QuotedIdentifierCase>
         <StatementSeparatorPattern>;</StatementSeparatorPattern>
         <StringLiteralPattern>'(([^']|'')*)'</StringLiteralPattern>
@@ -69,9 +67,7 @@
         <DataSourceProductVersion>11.7.2-MariaDB-ubu2404</DataSourceProductVersion>
         <DataSourceProductVersionNormalized>11.7.2</DataSourceProductVersionNormalized>
         <GroupByBehavior>2</GroupByBehavior>
-        <IdentifierPattern>(^\`\p{Lo}\p{Lu}\p{Ll}_@#][\p{Lo}\p{Lu}\p{Ll}\p{Nd}@$#_]*$)|(^\`[^\`\0]|\`\`+\`$)|(^\" +
-            [^\"\0]|\"\"+\"$)
-        </IdentifierPattern>
+        <IdentifierPattern>(^[\p{Lo}\p{Lu}\p{Ll}_@#][\p{Lo}\p{Lu}\p{Ll}\p{Nd}@$#_]*$)|(^\"[^\"\0]|\"\"+\"$)</IdentifierPattern>
         <IdentifierCase>1</IdentifierCase>
         <OrderByColumnsInSelect>false</OrderByColumnsInSelect>
         <ParameterMarkerFormat>{0}</ParameterMarkerFormat>
@@ -79,7 +75,7 @@
         <ParameterNameMaxLength>128</ParameterNameMaxLength>
         <ParameterNamePattern>^[\p{Lo}\p{Lu}\p{Ll}\p{Lm}_@#][\p{Lo}\p{Lu}\p{Ll}\p{Lm}\p{Nd}\uff3f_@#\$]*(?=\s+|$)
         </ParameterNamePattern>
-        <QuotedIdentifierPattern>(([^\`]|\`\`)*)</QuotedIdentifierPattern>
+        <QuotedIdentifierPattern>"(([^\"]|\"\")*)"</QuotedIdentifierPattern>
         <QuotedIdentifierCase>2</QuotedIdentifierCase>
         <StatementSeparatorPattern>;</StatementSeparatorPattern>
         <StringLiteralPattern>'(([^']|'')*)'</StringLiteralPattern>
