@@ -33,6 +33,9 @@
     <EmbeddedResource Include="xml\*.schema.xml"/>
   </ItemGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="pengdows.crud.Tests" />
+  </ItemGroup>
+  <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="" />
   </ItemGroup>
 </Project>

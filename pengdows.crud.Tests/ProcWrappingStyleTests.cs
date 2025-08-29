@@ -3,6 +3,7 @@
 using System;
 using System.Data;
 using pengdows.crud.enums;
+using pengdows.crud.FakeDb;
 using Xunit;
 
 #endregion
@@ -11,7 +12,6 @@ namespace pengdows.crud.Tests;
 
 public class ProcWrappingStyleTests
 {
-    private DatabaseContext? _dbContext;
     [Theory]
     [InlineData("Call", ProcWrappingStyle.Call)]
     [InlineData("Exec", ProcWrappingStyle.Exec)]
@@ -38,12 +38,14 @@ public class ProcWrappingStyleTests
         Assert.Equal(new[] { "None", "Call", "Exec", "PostgreSQL", "Oracle", "ExecuteProcedure" }, names);
     }
 
-    private SqlContainer SetupParameterWrapTest()
+    private SqlContainer SetupParameterWrapTest(SupportedDatabase product)
     {
-        if (_dbContext == null) _dbContext = new DatabaseContext("DataSource=:memory:", Microsoft.Data.Sqlite.SqliteFactory.Instance);
-
-        var sc = _dbContext.CreateSqlContainer("dbo.Sqltest") as SqlContainer;
-        for (var i = 0; i < 10; i++) sc.AddParameterWithValue($"p{i}", DbType.Int32, i);
+        var ctx = new DatabaseContext($"DataSource=:memory:;EmulatedProduct={product}", new FakeDbFactory(product));
+        var sc = ctx.CreateSqlContainer("dbo.Sqltest") as SqlContainer;
+        for (var i = 0; i < 10; i++)
+        {
+            sc.AddParameterWithValue($"p{i}", DbType.Int32, i);
+        }
 
         return sc;
     }
@@ -51,8 +53,7 @@ public class ProcWrappingStyleTests
     [Fact]
     public void WrapTestCall()
     {
-        var sc = SetupParameterWrapTest();
-        _dbContext.ProcWrappingStyle = ProcWrappingStyle.Call;
+        var sc = SetupParameterWrapTest(SupportedDatabase.MySql);
         var s = sc.WrapForStoredProc(ExecutionType.Read);
         Assert.Equal("CALL dbo.Sqltest(@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9)", s);
     }
@@ -60,8 +61,7 @@ public class ProcWrappingStyleTests
     [Fact]
     public void WrapTestExec()
     {
-        var sc = SetupParameterWrapTest();
-        _dbContext.ProcWrappingStyle = ProcWrappingStyle.Exec;
+        var sc = SetupParameterWrapTest(SupportedDatabase.SqlServer);
         var s = sc.WrapForStoredProc(ExecutionType.Read);
         Assert.Equal("EXEC dbo.Sqltest @p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9", s);
     }
@@ -69,8 +69,7 @@ public class ProcWrappingStyleTests
     [Fact]
     public void WrapTestExecCaptureReturn()
     {
-        var sc = SetupParameterWrapTest();
-        _dbContext.ProcWrappingStyle = ProcWrappingStyle.Exec;
+        var sc = SetupParameterWrapTest(SupportedDatabase.SqlServer);
         var s = sc.WrapForStoredProc(ExecutionType.Read, captureReturn: true);
         Assert.Equal("DECLARE @__ret INT;\nEXEC @__ret = dbo.Sqltest @p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9;\nSELECT @__ret;", s);
     }
@@ -78,37 +77,49 @@ public class ProcWrappingStyleTests
     [Fact]
     public void WrapTestExecute()
     {
-        var sc = SetupParameterWrapTest();
-        _dbContext.ProcWrappingStyle = ProcWrappingStyle.ExecuteProcedure;
+        var sc = SetupParameterWrapTest(SupportedDatabase.Firebird);
         var s = sc.WrapForStoredProc(ExecutionType.Read);
+        Assert.Equal("SELECT * FROM dbo.Sqltest(@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9)", s);
+        s = sc.WrapForStoredProc(ExecutionType.Write);
         Assert.Equal("EXECUTE PROCEDURE dbo.Sqltest(@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9)", s);
+    }
+
+    [Fact]
+    public void WrapTestExecute_CaptureReturn_Throws()
+    {
+        var sc = SetupParameterWrapTest(SupportedDatabase.Firebird);
+        Assert.Throws<NotSupportedException>(() => sc.WrapForStoredProc(ExecutionType.Read, captureReturn: true));
     }
 
     [Fact]
     public void WrapTestPostgreSQL()
     {
-        var sc = SetupParameterWrapTest();
-        _dbContext.ProcWrappingStyle = ProcWrappingStyle.PostgreSQL;
+        var sc = SetupParameterWrapTest(SupportedDatabase.PostgreSql);
         var s = sc.WrapForStoredProc(ExecutionType.Read);
-        Assert.Equal("SELECT * FROM dbo.Sqltest(@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9)", s);
+        Assert.Equal("SELECT * FROM dbo.Sqltest(:p0, :p1, :p2, :p3, :p4, :p5, :p6, :p7, :p8, :p9)", s);
         s = sc.WrapForStoredProc(ExecutionType.Write);
-        Assert.Equal("CALL dbo.Sqltest(@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9)", s);
+        Assert.Equal("CALL dbo.Sqltest(:p0, :p1, :p2, :p3, :p4, :p5, :p6, :p7, :p8, :p9)", s);
+    }
+
+    [Fact]
+    public void WrapTestPostgreSQL_CaptureReturn_Throws()
+    {
+        var sc = SetupParameterWrapTest(SupportedDatabase.PostgreSql);
+        Assert.Throws<NotSupportedException>(() => sc.WrapForStoredProc(ExecutionType.Read, captureReturn: true));
     }
 
     [Fact]
     public void WrapTestOracle()
     {
-        var sc = SetupParameterWrapTest();
-        _dbContext.ProcWrappingStyle = ProcWrappingStyle.Oracle;
+        var sc = SetupParameterWrapTest(SupportedDatabase.Oracle);
         var s = sc.WrapForStoredProc(ExecutionType.Read);
-        Assert.Equal("BEGIN\n\tdbo.Sqltest(@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9);\nEND;", s);
+        Assert.Equal("BEGIN\n\tdbo.Sqltest(:p0, :p1, :p2, :p3, :p4, :p5, :p6, :p7, :p8, :p9);\nEND;", s);
     }
 
     [Fact]
     public void CaptureReturn_UnsupportedStyle_ShouldThrow()
     {
-        var sc = SetupParameterWrapTest();
-        _dbContext.ProcWrappingStyle = ProcWrappingStyle.Call;
+        var sc = SetupParameterWrapTest(SupportedDatabase.MySql);
         Assert.Throws<NotSupportedException>(() => sc.WrapForStoredProc(ExecutionType.Read, captureReturn: true));
     }
 }

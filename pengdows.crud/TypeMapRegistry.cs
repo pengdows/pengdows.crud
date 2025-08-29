@@ -14,13 +14,17 @@ namespace pengdows.crud;
 
 public sealed class TypeMapRegistry : ITypeMapRegistry
 {
-    public static TypeMapRegistry StaticInstance { get; private set; } = new();
-
     private readonly ConcurrentDictionary<Type, TableInfo> _typeMap = new();
+
+    public static TypeMapRegistry Instance { get; } = new();
 
     public TypeMapRegistry()
     {
-        StaticInstance = this;
+    }
+
+    public void Clear()
+    {
+        _typeMap.Clear();
     }
 
     public ITableInfo GetTableInfo<T>()
