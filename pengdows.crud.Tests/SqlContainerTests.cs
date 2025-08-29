@@ -388,6 +388,40 @@ public class SqlContainerTests : SqlLiteContextTestBase
     }
 
     [Fact]
+    public void WrapForStoredProc_PostgreSqlCaptureReturn_Throws()
+    {
+        var factory = new FakeDbFactory(SupportedDatabase.PostgreSql);
+        var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.PostgreSql}", factory);
+        var container = ctx.CreateSqlContainer("my_proc");
+
+        Assert.Throws<NotSupportedException>(() => container.WrapForStoredProc(ExecutionType.Read, captureReturn: true));
+    }
+
+    [Fact]
+    public void WrapForStoredProc_FirebirdRead_UsesSelectSyntax()
+    {
+        var factory = new FakeDbFactory(SupportedDatabase.Firebird);
+        var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.Firebird}", factory);
+        var container = ctx.CreateSqlContainer("dbo.my_proc");
+        var param = container.AddParameterWithValue(DbType.Int32, 1);
+        var expectedName = ctx.MakeParameterName(param);
+
+        var result = container.WrapForStoredProc(ExecutionType.Read);
+
+        Assert.Equal($"SELECT * FROM dbo.my_proc({expectedName})", result);
+    }
+
+    [Fact]
+    public void WrapForStoredProc_FirebirdCaptureReturn_Throws()
+    {
+        var factory = new FakeDbFactory(SupportedDatabase.Firebird);
+        var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.Firebird}", factory);
+        var container = ctx.CreateSqlContainer("dbo.my_proc");
+
+        Assert.Throws<NotSupportedException>(() => container.WrapForStoredProc(ExecutionType.Read, captureReturn: true));
+    }
+
+    [Fact]
     public void WrapForStoredProc_NoProcedureName_Throws()
     {
         var factory = new FakeDbFactory(SupportedDatabase.SqlServer);

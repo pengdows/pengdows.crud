@@ -1,0 +1,66 @@
+using System.Data;
+using System.Threading.Tasks;
+using pengdows.crud;
+using pengdows.crud.enums;
+using pengdows.crud.FakeDb;
+using Xunit;
+
+namespace pengdows.crud.Tests;
+
+public class ContextParameterUsageTests
+{
+    private static TypeMapRegistry SetupRegistry()
+    {
+        var map = new TypeMapRegistry();
+        map.Register<TestEntity>();
+        return map;
+    }
+
+    private static TestEntity CreateEntity()
+    {
+        return new TestEntity
+        {
+            Id = 1,
+            Name = "foo",
+            version = 1,
+            CreatedBy = "u",
+            CreatedOn = System.DateTime.UtcNow,
+            LastUpdatedBy = "u",
+            LastUpdatedOn = System.DateTime.UtcNow
+        };
+    }
+
+    [Fact]
+    public async Task BuildUpdateAsync_UsesProvidedContextSqlContainer()
+    {
+        var map = SetupRegistry();
+        using var defaultCtx = new DatabaseContext(
+            "Data Source=:memory:;EmulatedProduct=Sqlite",
+            new FakeDbFactory(SupportedDatabase.Sqlite),
+            map);
+        var helper = new EntityHelper<TestEntity, int>(defaultCtx);
+        var entity = CreateEntity();
+
+        using var otherCtx = new DatabaseContext(
+            "Data Source=:memory:;EmulatedProduct=MySql",
+            new FakeDbFactory(SupportedDatabase.MySql),
+            map);
+        var sc = await helper.BuildUpdateAsync(entity, false, otherCtx);
+        Assert.Equal("`", sc.QuotePrefix);
+    }
+
+    [Fact]
+    public async Task BuildUpdateAsync_DefaultContextWhenNull()
+    {
+        var map = SetupRegistry();
+        using var defaultCtx = new DatabaseContext(
+            "Data Source=:memory:;EmulatedProduct=Sqlite",
+            new FakeDbFactory(SupportedDatabase.Sqlite),
+            map);
+        var helper = new EntityHelper<TestEntity, int>(defaultCtx);
+        var entity = CreateEntity();
+
+        var sc = await helper.BuildUpdateAsync(entity, false);
+        Assert.Equal("\"", sc.QuotePrefix);
+    }
+}

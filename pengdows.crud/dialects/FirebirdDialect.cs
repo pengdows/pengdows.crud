@@ -22,18 +22,13 @@ public class FirebirdDialect : SqlDialect
     public override bool SupportsSavepoints => true;
     public override int MaxParameterLimit => 65535;
     public override int ParameterNameMaxLength => 63;
-    public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.Call;
-
-    public override string QuotePrefix => "\"";
-    public override string QuoteSuffix => "\"";
+    public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.ExecuteProcedure;
 
     public override bool SupportsMerge => IsInitialized && ProductInfo.ParsedVersion?.Major >= 2;
-    public override bool SupportsInsertOnConflict => false;
     public override bool SupportsWindowFunctions => IsInitialized && ProductInfo.ParsedVersion?.Major >= 3;
     public override bool SupportsCommonTableExpressions => IsInitialized && ProductInfo.ParsedVersion?.Major >= 2;
     public override bool SupportsJsonTypes => false;
     public override bool SupportsArrayTypes => true;
-    public override bool SupportsNamespaces => true;
 
     public override string GetVersionQuery() => "SELECT rdb$get_context('SYSTEM', 'ENGINE_VERSION') FROM rdb$database";
 

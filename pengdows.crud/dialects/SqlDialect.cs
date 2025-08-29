@@ -1,5 +1,6 @@
 using System.Data;
 using System.Data.Common;
+using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
@@ -161,6 +162,15 @@ public abstract class SqlDialect:ISqlDialect
             return "?";
         }
 
+        if (parameterName is null)
+        {
+            return ParameterMarker;
+        }
+
+        parameterName = parameterName.Replace("@", string.Empty)
+                                     .Replace(":", string.Empty)
+                                     .Replace("?", string.Empty);
+
         return string.Concat(ParameterMarker, parameterName);
     }
 
@@ -182,11 +192,49 @@ public abstract class SqlDialect:ISqlDialect
         {
             name = GenerateRandomName(5, ParameterNameMaxLength);
         }
+        else if (SupportsNamedParameters)
+        {
+            name = name.TrimStart('@', ':', '?');
+        }
 
         var valueIsNull = Utils.IsNullOrDbNull(value);
         p.ParameterName = name;
         p.DbType = type;
         p.Value = valueIsNull ? DBNull.Value : value!;
+
+        if (!SupportsNamedParameters)
+        {
+            p.ParameterName = string.Empty;
+
+            if (!valueIsNull)
+            {
+                switch (p.DbType)
+                {
+                    case DbType.Guid:
+                        p.DbType = DbType.String;
+                        if (value is Guid guidValue)
+                        {
+                            p.Value = guidValue.ToString();
+                            p.Size = 36;
+                        }
+                        break;
+                    case DbType.Boolean:
+                        p.DbType = DbType.Int16;
+                        if (value is bool boolValue)
+                        {
+                            p.Value = boolValue ? (short)1 : (short)0;
+                        }
+                        break;
+                    case DbType.DateTimeOffset:
+                        p.DbType = DbType.DateTime;
+                        if (value is DateTimeOffset dtoValue)
+                        {
+                            p.Value = dtoValue.DateTime;
+                        }
+                        break;
+                }
+            }
+        }
 
         if (!valueIsNull)
         {
@@ -224,28 +272,33 @@ public abstract class SqlDialect:ISqlDialect
 
     public virtual string GetDatabaseVersion(ITrackedConnection connection)
     {
-        try
-        {
-            var versionQuery = GetVersionQuery();
-            if (string.IsNullOrWhiteSpace(versionQuery))
-            {
-                return "Unknown Database Version";
-            }
-
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = versionQuery;
-            var version = cmd.ExecuteScalar()?.ToString();
-            return version ?? "Unknown Version";
-        }
-        catch (Exception ex)
-        {
-            return "Error retrieving version: " + ex.Message;
-        }
+        return GetDatabaseVersionAsync(connection).GetAwaiter().GetResult();
     }
 
     public virtual DataTable GetDataSourceInformationSchema(ITrackedConnection connection)
     {
-        return connection.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
+        try
+        {
+            var schema = connection.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
+            if (schema.Rows.Count > 0)
+            {
+                return schema;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "Data source information schema unavailable; using SQL-92 defaults");
+        }
+
+        return DataSourceInformation.BuildEmptySchema(
+            "Unknown Database (SQL-92 Compatible)",
+            "Unknown Version",
+            Regex.Escape(ParameterMarker),
+            ParameterMarker,
+            ParameterNameMaxLength,
+            ParameterNamePattern.ToString(),
+            ParameterNamePattern.ToString(),
+            SupportsNamedParameters);
     }
 
     public virtual string GetConnectionSessionSettings()
@@ -344,24 +397,34 @@ public abstract class SqlDialect:ISqlDialect
 
     protected virtual async Task<string> GetDatabaseVersionAsync(ITrackedConnection connection)
     {
-        try
-        {
-            var versionQuery = GetVersionQuery();
-            if (string.IsNullOrEmpty(versionQuery))
+        var versionQueries = new[]
             {
-                return "Unknown Version";
+                GetVersionQuery(),
+                "SELECT version()",
+                "SELECT @@version",
+                "SELECT * FROM v$version WHERE rownum = 1"
             }
+            .Where(q => !string.IsNullOrWhiteSpace(q));
 
-            await using var cmd = (DbCommand)connection.CreateCommand();
-            cmd.CommandText = versionQuery;
-            var result = await cmd.ExecuteScalarAsync();
-            return result?.ToString() ?? "Unknown Version";
-        }
-        catch (Exception ex)
+        foreach (var query in versionQueries)
         {
-            Logger.LogWarning(ex, "Failed to get database version using query: {Query}", GetVersionQuery());
-            return "Error retrieving version: " + ex.Message;
+            try
+            {
+                await using var cmd = (DbCommand)connection.CreateCommand();
+                cmd.CommandText = query;
+                var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
+                if (result != null && !string.IsNullOrEmpty(result.ToString()))
+                {
+                    return result.ToString()!;
+                }
+            }
+            catch
+            {
+                continue;
+            }
         }
+
+        return "Unknown Version (SQL-92 Compatible)";
     }
 
     protected virtual async Task<string?> GetProductNameAsync(ITrackedConnection connection)
@@ -371,12 +434,29 @@ public abstract class SqlDialect:ISqlDialect
             var schema = connection.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
             if (schema.Rows.Count > 0)
             {
-                return schema.Rows[0].Field<string>("DataSourceProductName");
+                var productName = schema.Rows[0].Field<string>("DataSourceProductName");
+                if (!string.IsNullOrEmpty(productName))
+                {
+                    if (DatabaseType == SupportedDatabase.Unknown)
+                    {
+                        Logger.LogWarning(
+                            "Using SQL-92 fallback dialect for detected database: {ProductName}",
+                            productName);
+                    }
+
+                    return productName;
+                }
             }
         }
         catch (Exception ex)
         {
             Logger.LogDebug(ex, "Could not get product name from schema metadata");
+        }
+
+        if (DatabaseType == SupportedDatabase.Unknown)
+        {
+            Logger.LogWarning(
+                "Using SQL-92 fallback dialect for unknown database product");
         }
 
         return null;
@@ -426,7 +506,7 @@ public abstract class SqlDialect:ISqlDialect
             return "Firebird";
         }
 
-        return "Unknown Database";
+        return "Unknown Database (SQL-92 Compatible)";
     }
 
     protected virtual SupportedDatabase InferDatabaseTypeFromInfo(string productName, string versionString)

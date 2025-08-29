@@ -25,7 +25,6 @@ public class MySqlDialect : SqlDialect
     public override string QuoteSuffix => "`";
     public override bool SupportsNamespaces => true;
 
-    public override bool SupportsInsertOnConflict => false; // MySQL uses ON DUPLICATE KEY, not ON CONFLICT
     public override bool SupportsOnDuplicateKey => true; // Available since MySQL 4.1 (2004) - safe to assume
     public override bool SupportsMerge => false;
     public override bool SupportsJsonTypes => IsInitialized && ProductInfo.ParsedVersion?.Major >= 5;

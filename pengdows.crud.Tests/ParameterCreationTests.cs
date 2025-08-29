@@ -55,4 +55,27 @@ public class ParameterCreationTests
         Assert.Equal(DbType.String, p.DbType);
         Assert.Equal(DBNull.Value, p.Value);
     }
+
+    [Fact]
+    public void CreateDbParameter_Positional_ClearsNameAndConverts()
+    {
+        var factory = new FakeDbFactory(SupportedDatabase.Unknown);
+        var dialect = new Sql92Dialect(factory, NullLogger.Instance);
+        var p = dialect.CreateDbParameter("flag", DbType.Boolean, true);
+
+        Assert.Equal(string.Empty, p.ParameterName);
+        Assert.Equal(DbType.Int16, p.DbType);
+        Assert.Equal((short)1, p.Value);
+    }
+
+    [Fact]
+    public void CreateDbParameter_NamedParameters_RetainsNameAndType()
+    {
+        var dialect = CreateDialect();
+        var p = dialect.CreateDbParameter("flag", DbType.Boolean, true);
+
+        Assert.Equal("flag", p.ParameterName);
+        Assert.Equal(DbType.Boolean, p.DbType);
+        Assert.Equal(true, p.Value);
+    }
 }
