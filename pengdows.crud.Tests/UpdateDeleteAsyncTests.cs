@@ -1,6 +1,6 @@
 #region
 using System;
-using System.Linq;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Xunit;
 #endregion
@@ -23,8 +23,9 @@ public class UpdateDeleteAsyncTests : SqlLiteContextTestBase
     {
         var e = new TestEntity { Name = Guid.NewGuid().ToString() };
         await helper.CreateAsync(e, Context);
-        var loaded = (await helper.LoadListAsync(helper.BuildBaseRetrieve("a"))).First();
-        loaded.Name = Guid.NewGuid().ToString();
+        var loaded = await helper.RetrieveOneAsync(e);
+        Assert.NotNull(loaded);
+        loaded!.Name = Guid.NewGuid().ToString();
         var count = await helper.UpdateAsync(loaded);
         Assert.Equal(1, count);
     }
@@ -34,8 +35,9 @@ public class UpdateDeleteAsyncTests : SqlLiteContextTestBase
     {
         var e = new TestEntity { Name = Guid.NewGuid().ToString() };
         await helper.CreateAsync(e, Context);
-        var loaded = (await helper.LoadListAsync(helper.BuildBaseRetrieve("a"))).First();
-        var originalUpdated = loaded.LastUpdatedOn;
+        var loaded = await helper.RetrieveOneAsync(e);
+        Assert.NotNull(loaded);
+        var originalUpdated = loaded!.LastUpdatedOn;
         var count = await helper.UpdateAsync(loaded);
         Assert.Equal(1, count);
         Assert.NotEqual(originalUpdated, loaded.LastUpdatedOn);
@@ -46,8 +48,9 @@ public class UpdateDeleteAsyncTests : SqlLiteContextTestBase
     {
         var e = new TestEntity { Name = Guid.NewGuid().ToString() };
         await helper.CreateAsync(e, Context);
-        var loaded = (await helper.LoadListAsync(helper.BuildBaseRetrieve("a"))).First();
-        var affected = await helper.DeleteAsync(loaded.Id);
+        var loaded = await helper.RetrieveOneAsync(e);
+        Assert.NotNull(loaded);
+        var affected = await helper.DeleteAsync(loaded!.Id);
         Assert.Equal(1, affected);
     }
 
@@ -60,7 +63,7 @@ public class UpdateDeleteAsyncTests : SqlLiteContextTestBase
         await helper.CreateAsync(e1, Context);
         await helper.CreateAsync(e2, Context);
 
-        var ids = (await helper.LoadListAsync(helper.BuildBaseRetrieve("a"))).Select(x => x.Id).ToList();
+        var ids = new List<int> { e1.Id, e2.Id };
         var result = await helper.RetrieveAsync(ids);
         Assert.Equal(ids.Count, result.Count);
     }
@@ -74,7 +77,7 @@ public class UpdateDeleteAsyncTests : SqlLiteContextTestBase
         await helper.CreateAsync(e1, Context);
         await helper.CreateAsync(e2, Context);
 
-        var ids = (await helper.LoadListAsync(helper.BuildBaseRetrieve("a"))).Select(x => x.Id).ToList();
+        var ids = new List<int> { e1.Id, e2.Id };
         var affected = await helper.DeleteAsync(ids);
         Assert.Equal(ids.Count, affected);
     }
@@ -86,11 +89,10 @@ public class UpdateDeleteAsyncTests : SqlLiteContextTestBase
         var entity = new TestEntity { Name = Guid.NewGuid().ToString() };
         await helper.CreateAsync(entity, Context);
 
-        var loaded = (await helper.LoadListAsync(helper.BuildBaseRetrieve("a"))).First();
-        var result = await helper.RetrieveOneAsync(loaded.Id);
+        var result = await helper.RetrieveOneAsync(entity.Id);
 
         Assert.NotNull(result);
-        Assert.Equal(loaded.Id, result!.Id);
+        Assert.Equal(entity.Id, result!.Id);
     }
 
     [Fact]
@@ -100,11 +102,10 @@ public class UpdateDeleteAsyncTests : SqlLiteContextTestBase
         var entity = new TestEntity { Name = Guid.NewGuid().ToString() };
         await helper.CreateAsync(entity, Context);
 
-        var loaded = (await helper.LoadListAsync(helper.BuildBaseRetrieve("a"))).First();
-        var result = await helper.RetrieveOneAsync(loaded);
+        var result = await helper.RetrieveOneAsync(entity);
 
         Assert.NotNull(result);
-        Assert.Equal(loaded.Id, result!.Id);
+        Assert.Equal(entity.Id, result!.Id);
     }
 
     [Fact]
@@ -113,8 +114,9 @@ public class UpdateDeleteAsyncTests : SqlLiteContextTestBase
         await BuildTestTable();
         var e = new TestEntity { Name = Guid.NewGuid().ToString() };
         await helper.CreateAsync(e, Context);
-        var loaded = (await helper.LoadListAsync(helper.BuildBaseRetrieve("a"))).First();
-        var sc = await helper.BuildUpdateAsync(loaded, true);
+        var loaded = await helper.RetrieveOneAsync(e);
+        Assert.NotNull(loaded);
+        var sc = await helper.BuildUpdateAsync(loaded!, true);
         var sql = sc.Query.ToString();
         Assert.Contains(Context.WrapObjectName("LastUpdatedOn"), sql);
     }

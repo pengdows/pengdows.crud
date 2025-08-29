@@ -44,9 +44,10 @@ public class EntityHelperNegativeTests : SqlLiteContextTestBase
         await BuildNoAuditTable();
         var e = new NoAuditEntity { Name = Guid.NewGuid().ToString() };
         await noAuditHelper.CreateAsync(e, Context);
-        var loaded = (await noAuditHelper.LoadListAsync(noAuditHelper.BuildBaseRetrieve("a")))[0];
+        var loaded = await noAuditHelper.RetrieveOneAsync(e);
+        Assert.NotNull(loaded);
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await noAuditHelper.BuildUpdateAsync(loaded, true));
+            await noAuditHelper.BuildUpdateAsync(loaded!, true));
     }
 
     [Fact]

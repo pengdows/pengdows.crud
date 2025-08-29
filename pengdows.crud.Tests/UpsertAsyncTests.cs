@@ -1,6 +1,5 @@
 #region
 using System;
-using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
 #endregion
@@ -24,8 +23,9 @@ public class UpsertAsyncTests : SqlLiteContextTestBase
         var e = new TestEntity { Name = Guid.NewGuid().ToString() };
         var affected = await helper.UpsertAsync(e);
         Assert.Equal(1, affected);
-        var list = await helper.LoadListAsync(helper.BuildBaseRetrieve("a"));
-        Assert.Contains(list, x => x.Name == e.Name);
+        var loaded = await helper.RetrieveOneAsync(e);
+        Assert.NotNull(loaded);
+        Assert.Equal(e.Name, loaded!.Name);
     }
 
     [Fact]
@@ -33,13 +33,15 @@ public class UpsertAsyncTests : SqlLiteContextTestBase
     {
         var e = new TestEntity { Name = Guid.NewGuid().ToString() };
         await helper.CreateAsync(e, Context);
-        var loaded = (await helper.LoadListAsync(helper.BuildBaseRetrieve("a"))).First();
-        var originalUpdated = loaded.LastUpdatedOn;
+        var loaded = await helper.RetrieveOneAsync(e);
+        Assert.NotNull(loaded);
+        var originalUpdated = loaded!.LastUpdatedOn;
 
         var affected = await helper.UpsertAsync(loaded);
         Assert.Equal(1, affected);
-        var reloaded = (await helper.LoadListAsync(helper.BuildBaseRetrieve("a"))).First(x => x.Id == loaded.Id);
-        Assert.True(reloaded.LastUpdatedOn >= originalUpdated);
+        var reloaded = await helper.RetrieveOneAsync(loaded.Id);
+        Assert.NotNull(reloaded);
+        Assert.True(reloaded!.LastUpdatedOn >= originalUpdated);
     }
 
     private async Task BuildTestTable()
