@@ -126,7 +126,7 @@ public class UpdateDeleteAsyncTests : SqlLiteContextTestBase
         var qp = Context.QuotePrefix;
         var qs = Context.QuoteSuffix;
         var sql = string.Format(
-            @"CREATE TABLE IF NOT EXISTS {0}Test{1} ({0}Id{1} INTEGER PRIMARY KEY,
+            @"CREATE TABLE IF NOT EXISTS {0}Test{1} ({0}Id{1} INTEGER PRIMARY KEY AUTOINCREMENT,
 {0}Name{1} TEXT UNIQUE NOT NULL,
     {0}CreatedBy{1} TEXT NOT NULL DEFAULT 'system',
     {0}CreatedOn{1} TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

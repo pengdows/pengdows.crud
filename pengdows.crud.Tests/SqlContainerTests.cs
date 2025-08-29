@@ -278,7 +278,7 @@ public class SqlContainerTests : SqlLiteContextTestBase
         var qs = Context.QuoteSuffix;
         var sql = string.Format(
             @"CREATE TABLE IF NOT EXISTS
-{0}Test{1} ({0}Id{1} INTEGER PRIMARY KEY, 
+{0}Test{1} ({0}Id{1} INTEGER PRIMARY KEY AUTOINCREMENT,
 {0}Name{1} TEXT,
 {0}Version{1} INTEGER NOT NULL DEFAULT 0)", qp, qs);
         var container = Context.CreateSqlContainer(sql);
