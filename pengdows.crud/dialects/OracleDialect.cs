@@ -18,6 +18,7 @@ public class OracleDialect : SqlDialect
     public override string ParameterMarker => ":";
     public override bool SupportsNamedParameters => true;
     public override int MaxParameterLimit => 1000;
+    public override int MaxOutputParameters => 1024;
     public override int ParameterNameMaxLength => 30;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.Oracle;
     public override bool RequiresStoredProcParameterNameMatch => true;

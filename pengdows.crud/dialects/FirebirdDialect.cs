@@ -21,6 +21,7 @@ public class FirebirdDialect : SqlDialect
     public override bool SupportsNamedParameters => true;
     public override bool SupportsSavepoints => true;
     public override int MaxParameterLimit => 65535;
+    public override int MaxOutputParameters => 1499;
     public override int ParameterNameMaxLength => 63;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.ExecuteProcedure;
 

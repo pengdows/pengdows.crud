@@ -18,6 +18,7 @@ public class PostgreSqlDialect : SqlDialect
     public override string ParameterMarker => ":";
     public override bool SupportsNamedParameters => true;
     public override int MaxParameterLimit => 65535;
+    public override int MaxOutputParameters => 100;
     public override int ParameterNameMaxLength => 63;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.PostgreSQL;
     public override bool RequiresStoredProcParameterNameMatch => true;

@@ -373,7 +373,10 @@ public class EntityHelper<TEntity, TRowID> :
 
         var ctx = context ?? _context;
         var sc = ctx.CreateSqlContainer();
-        SetAuditFields(entity, false);
+        if (_auditValueResolver != null)
+        {
+            SetAuditFields(entity, false);
+        }
 
         if (_versionColumn != null)
         {
@@ -397,12 +400,6 @@ public class EntityHelper<TEntity, TRowID> :
         {
             var column = template.InsertColumns[i];
             var value = column.MakeParameterValueFromField(entity);
-            if (_auditValueResolver == null &&
-                (column.IsCreatedBy || column.IsLastUpdatedBy) &&
-                Utils.IsNullOrDbNull(value))
-            {
-                continue;
-            }
 
             var paramName = template.InsertParameterNames[i];
             var param = ctx.CreateDbParameter(paramName, column.DbType, value);
@@ -465,7 +462,7 @@ public class EntityHelper<TEntity, TRowID> :
         var param = ctx.CreateDbParameter(_idColumn.DbType, id);
         sc.AddParameter(param);
 
-        var sql = string.Format(_cachedSqlTemplates.Value.DeleteSql, MakeParameterName(param));
+        var sql = GetCachedQuery("DeleteById", () => string.Format(_cachedSqlTemplates.Value.DeleteSql, MakeParameterName(param)));
         sc.Query.Append(sql);
         return sc;
     }
@@ -838,7 +835,7 @@ public class EntityHelper<TEntity, TRowID> :
             IncrementVersion(setClause);
         }
 
-        var pId = _context.CreateDbParameter(_idColumn.DbType,
+        var pId = ctx.CreateDbParameter(_idColumn.DbType,
             _idColumn.PropertyInfo.GetValue(objectToUpdate)!);
         parameters.Add(pId);
 
@@ -848,7 +845,7 @@ public class EntityHelper<TEntity, TRowID> :
         if (_versionColumn != null)
         {
             var versionValue = _versionColumn.MakeParameterValueFromField(objectToUpdate);
-            var versionParam = AppendVersionCondition(sc, versionValue, context);
+            var versionParam = AppendVersionCondition(sc, versionValue, ctx);
             if (versionParam != null)
             {
                 parameters.Add(versionParam);
@@ -1119,7 +1116,10 @@ public class EntityHelper<TEntity, TRowID> :
 
     private void PrepareForInsertOrUpsert(TEntity e)
     {
-        SetAuditFields(e, updateOnly: false);
+        if (_auditValueResolver != null)
+        {
+            SetAuditFields(e, updateOnly: false);
+        }
         if (_versionColumn == null || _versionColumn.PropertyInfo.PropertyType == typeof(byte[]))
         {
             return;
@@ -1530,6 +1530,7 @@ public class EntityHelper<TEntity, TRowID> :
 
         var insertColumns = _tableInfo.Columns.Values
             .Where(c => !c.IsNonInsertable && (!c.IsId || c.IsIdIsWritable))
+            .Where(c => _auditValueResolver != null || (!c.IsCreatedBy && !c.IsLastUpdatedBy))
             .Cast<IColumnInfo>()
             .ToList();
 

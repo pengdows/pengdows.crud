@@ -36,6 +36,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     private readonly bool _setDefaultSearchPath;
     private string _connectionSessionSettings;
     private bool _applyConnectionSessionSettings;
+    private readonly DbMode _originalUserMode;
 
     public Guid RootId { get; } = Guid.NewGuid();
 
@@ -99,6 +100,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             ReadWriteMode = configuration.ReadWriteMode;
             TypeMapRegistry = typeMapRegistry ?? global::pengdows.crud.TypeMapRegistry.Instance;
             ConnectionMode = configuration.DbMode;
+            _originalUserMode = configuration.DbMode;
             _factory = factory ?? throw new NullReferenceException(nameof(factory));
             _setDefaultSearchPath = configuration.SetDefaultSearchPath;
 
@@ -108,8 +110,8 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             Name = _dataSourceInfo.DatabaseProductName;
 
             RCSIEnabled = _dialect.IsReadCommittedSnapshotOn(initialConnection);
-            if (ConnectionMode != DbMode.Standard && 
-                !(_dataSourceInfo.Product == SupportedDatabase.SqlServer && ConnectionMode == DbMode.SingleConnection))
+            if (_originalUserMode != DbMode.Standard && 
+                !(_dataSourceInfo.Product == SupportedDatabase.SqlServer && _originalUserMode == DbMode.SingleConnection))
             {
                 _dialect.ApplyConnectionSettings(initialConnection);
             }
@@ -239,7 +241,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     }
 
     public string CompositeIdentifierSeparator => _dataSourceInfo.CompositeIdentifierSeparator;
-    public SupportedDatabase Product => _dataSourceInfo.Product;
+    public SupportedDatabase Product => _dataSourceInfo?.Product ?? SupportedDatabase.Unknown;
     public ProcWrappingStyle ProcWrappingStyle => _dataSourceInfo.ProcWrappingStyle;
     public int MaxParameterLimit => _dataSourceInfo.MaxParameterLimit;
     public int MaxOutputParameters => _dataSourceInfo.MaxOutputParameters;
@@ -441,7 +443,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
                 //Interlocked.Increment(ref _connectionCount);
                 // if the mode is anything but standard
                 // we store it as our minimal connection
-                ApplyConnectionSessionSettings(conn);
+                // Session settings will be applied in the main constructor
                 // Note: _connection field doesn't exist in current architecture
             }
 

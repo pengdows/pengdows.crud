@@ -18,6 +18,7 @@ public class MySqlDialect : SqlDialect
     public override string ParameterMarker => "@";
     public override bool SupportsNamedParameters => true;
     public override int MaxParameterLimit => 65535;
+    public override int MaxOutputParameters => 65535;
     public override int ParameterNameMaxLength => 64;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.Call;
 

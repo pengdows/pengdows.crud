@@ -12,6 +12,7 @@ namespace pengdows.crud;
 public class DataSourceInformation : IDataSourceInformation
 {
     private readonly SqlDialect _dialect;
+    private int? _maxOutputParameters;
 
     public DataSourceInformation(SqlDialect dialect)
     {
@@ -42,7 +43,11 @@ public class DataSourceInformation : IDataSourceInformation
     public bool PrepareStatements => _dialect.PrepareStatements;
     public ProcWrappingStyle ProcWrappingStyle => _dialect.ProcWrappingStyle;
     public int MaxParameterLimit => _dialect.MaxParameterLimit;
-    public int MaxOutputParameters => 0; // Placeholder - this would need to be implemented in dialect
+    public int MaxOutputParameters 
+    { 
+        get => _maxOutputParameters ?? _dialect.MaxOutputParameters;
+        set => _maxOutputParameters = value;
+    }
     public bool SupportsMerge => _dialect.SupportsMerge;
     public bool SupportsInsertOnConflict => _dialect.SupportsInsertOnConflict;
     public bool SupportsOnDuplicateKey => _dialect.SupportsOnDuplicateKey;
