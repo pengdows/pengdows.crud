@@ -166,17 +166,42 @@ public class EntityHelper<TEntity, TRowID> :
             throw new ArgumentNullException(nameof(sql));
         }
 
-        var temp = sql
-            .Replace(_dialect.QuotePrefix, "\u0001")
-            .Replace(_dialect.QuoteSuffix, "\u0002")
-            .Replace(_dialect.ParameterMarker, "\u0003");
+        var dialectPrefix = _dialect.QuotePrefix;
+        var dialectSuffix = _dialect.QuoteSuffix;
+        var dialectMarker = _dialect.ParameterMarker;
 
-        var replaced = temp
-            .Replace("\u0001", quotePrefix)
-            .Replace("\u0002", quoteSuffix)
-            .Replace("\u0003", parameterMarker);
+        var sb = new StringBuilder(sql.Length);
+        var inQuote = false;
 
-        return replaced;
+        for (var i = 0; i < sql.Length; i++)
+        {
+            if (!inQuote && sql.AsSpan(i).StartsWith(dialectPrefix))
+            {
+                sb.Append(quotePrefix);
+                i += dialectPrefix.Length - 1;
+                inQuote = true;
+                continue;
+            }
+
+            if (inQuote && sql.AsSpan(i).StartsWith(dialectSuffix))
+            {
+                sb.Append(quoteSuffix);
+                i += dialectSuffix.Length - 1;
+                inQuote = false;
+                continue;
+            }
+
+            if (sql.AsSpan(i).StartsWith(dialectMarker))
+            {
+                sb.Append(parameterMarker);
+                i += dialectMarker.Length - 1;
+                continue;
+            }
+
+            sb.Append(sql[i]);
+        }
+
+        return sb.ToString();
     }
 
     private string GetCachedQuery(string key, Func<string> factory)
@@ -815,13 +840,8 @@ public class EntityHelper<TEntity, TRowID> :
             throw new InvalidOperationException("Original record not found for update.");
         }
 
-        // Determine if any non-audit fields have changed before modifying audit values
         var template = _cachedSqlTemplates.Value;
-        var (preClause, _) = BuildSetClause(objectToUpdate, original);
-        if (preClause.Length == 0)
-            throw new InvalidOperationException("No changes detected for update.");
 
-        // Apply audit field changes now that we know an update is required
         SetAuditFields(objectToUpdate, true);
 
         var (setClause, parameters) = BuildSetClause(objectToUpdate, original);
@@ -1439,10 +1459,17 @@ public class EntityHelper<TEntity, TRowID> :
 
         // Always update last-modified timestamp
         _tableInfo.LastUpdatedOn?.PropertyInfo?.SetValue(obj, utcNow);
-        // If resolver is provided, also set user id
         if (auditValues != null)
         {
             _tableInfo.LastUpdatedBy?.PropertyInfo?.SetValue(obj, auditValues.UserId);
+        }
+        else if (_tableInfo.LastUpdatedBy?.PropertyInfo != null)
+        {
+            var current = _tableInfo.LastUpdatedBy.PropertyInfo.GetValue(obj) as string;
+            if (string.IsNullOrEmpty(current))
+            {
+                _tableInfo.LastUpdatedBy.PropertyInfo.SetValue(obj, "system");
+            }
         }
 
         if (updateOnly)
@@ -1460,7 +1487,7 @@ public class EntityHelper<TEntity, TRowID> :
             }
         }
 
-        if (auditValues != null && _tableInfo.CreatedBy?.PropertyInfo != null)
+        if (_tableInfo.CreatedBy?.PropertyInfo != null)
         {
             var currentValue = _tableInfo.CreatedBy.PropertyInfo.GetValue(obj);
             if (currentValue == null
@@ -1468,7 +1495,8 @@ public class EntityHelper<TEntity, TRowID> :
                 || Utils.IsZeroNumeric(currentValue)
                 || (currentValue is Guid guid && guid == Guid.Empty))
             {
-                _tableInfo.CreatedBy.PropertyInfo.SetValue(obj, auditValues.UserId);
+                var userId = auditValues?.UserId ?? "system";
+                _tableInfo.CreatedBy.PropertyInfo.SetValue(obj, userId);
             }
         }
     }

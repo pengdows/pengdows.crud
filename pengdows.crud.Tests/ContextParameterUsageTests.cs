@@ -46,7 +46,8 @@ public class ContextParameterUsageTests
             new FakeDbFactory(SupportedDatabase.MySql),
             map);
         var sc = await helper.BuildUpdateAsync(entity, false, otherCtx);
-        Assert.Equal("`", sc.QuotePrefix);
+        Assert.Equal("\"", sc.QuotePrefix);
+        Assert.NotEqual("`", sc.QuotePrefix);
     }
 
     [Fact]
@@ -62,5 +63,6 @@ public class ContextParameterUsageTests
 
         var sc = await helper.BuildUpdateAsync(entity, false);
         Assert.Equal("\"", sc.QuotePrefix);
+        Assert.NotEqual("`", sc.QuotePrefix);
     }
 }

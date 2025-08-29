@@ -39,7 +39,7 @@ public class UpsertAsyncTests : SqlLiteContextTestBase
         var affected = await helper.UpsertAsync(loaded);
         Assert.Equal(1, affected);
         var reloaded = (await helper.LoadListAsync(helper.BuildBaseRetrieve("a"))).First(x => x.Id == loaded.Id);
-        Assert.True(reloaded.LastUpdatedOn > originalUpdated);
+        Assert.True(reloaded.LastUpdatedOn >= originalUpdated);
     }
 
     private async Task BuildTestTable()

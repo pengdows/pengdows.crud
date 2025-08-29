@@ -427,7 +427,13 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
             _schemaTable = new DataTable();
             _schemaTable.Columns.Add("DataSourceProductName", typeof(string));
             _schemaTable.Columns.Add("DataSourceProductVersion", typeof(string));
-            _schemaTable.Rows.Add("UnknownDb", "1");
+            _schemaTable.Columns.Add("ParameterMarkerPattern", typeof(string));
+            _schemaTable.Columns.Add("ParameterMarkerFormat", typeof(string));
+            _schemaTable.Columns.Add("ParameterNameMaxLength", typeof(int));
+            _schemaTable.Columns.Add("ParameterNamePattern", typeof(string));
+            _schemaTable.Columns.Add("ParameterNamePatternRegex", typeof(string));
+            _schemaTable.Columns.Add("SupportsNamedParameters", typeof(bool));
+            _schemaTable.Rows.Add("UnknownDb", "1", "@p[0-9]+", "@{0}", 64, "@\\w+", "@\\w+", true);
             return _schemaTable;
         }
 
@@ -460,7 +466,13 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
             _schemaTable = new DataTable();
             _schemaTable.Columns.Add("DataSourceProductName", typeof(string));
             _schemaTable.Columns.Add("DataSourceProductVersion", typeof(string));
-            _schemaTable.Rows.Add("UnknownDb", "1");
+            _schemaTable.Columns.Add("ParameterMarkerPattern", typeof(string));
+            _schemaTable.Columns.Add("ParameterMarkerFormat", typeof(string));
+            _schemaTable.Columns.Add("ParameterNameMaxLength", typeof(int));
+            _schemaTable.Columns.Add("ParameterNamePattern", typeof(string));
+            _schemaTable.Columns.Add("ParameterNamePatternRegex", typeof(string));
+            _schemaTable.Columns.Add("SupportsNamedParameters", typeof(bool));
+            _schemaTable.Rows.Add("UnknownDb", "1", "@p[0-9]+", "@{0}", 64, "@\\w+", "@\\w+", true);
             return _schemaTable;
         }
 

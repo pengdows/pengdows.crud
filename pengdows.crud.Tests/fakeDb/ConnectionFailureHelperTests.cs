@@ -4,6 +4,7 @@ using System;
 using System.Data;
 using pengdows.crud.enums;
 using pengdows.crud.FakeDb;
+using pengdows.crud.exceptions;
 using Xunit;
 
 #endregion
@@ -16,9 +17,12 @@ public class ConnectionFailureHelperTests
     public void CreateFailOnOpenContext_ThrowsOnConnectionOpen()
     {
         using var context = ConnectionFailureHelper.CreateFailOnOpenContext();
-        
-        Assert.Throws<InvalidOperationException>(() => 
-            context.GetConnection(ExecutionType.Read));
+
+        Assert.Throws<InvalidOperationException>(() =>
+        {
+            using var conn = context.GetConnection(ExecutionType.Read);
+            conn.Open();
+        });
     }
 
     [Fact]
@@ -62,12 +66,7 @@ public class ConnectionFailureHelperTests
     [Fact]
     public void CreateBrokenConnectionContext_HasBrokenConnection()
     {
-        using var context = ConnectionFailureHelper.CreateBrokenConnectionContext();
-        
-        using var conn = context.GetConnection(ExecutionType.Read);
-        Assert.Equal(ConnectionState.Broken, conn.State);
-        
-        Assert.Throws<InvalidOperationException>(() => conn.Open());
+        Assert.Throws<ConnectionFailedException>(() => ConnectionFailureHelper.CreateBrokenConnectionContext());
     }
 
     [Fact]
@@ -75,9 +74,12 @@ public class ConnectionFailureHelperTests
     {
         var customException = new TimeoutException("Custom timeout");
         using var context = ConnectionFailureHelper.CreateFailOnOpenContext(customException: customException);
-        
-        var thrownException = Assert.Throws<TimeoutException>(() => 
-            context.GetConnection(ExecutionType.Read));
+
+        var thrownException = Assert.Throws<TimeoutException>(() =>
+        {
+            using var conn = context.GetConnection(ExecutionType.Read);
+            conn.Open();
+        });
         Assert.Equal("Custom timeout", thrownException.Message);
     }
 
@@ -89,9 +91,12 @@ public class ConnectionFailureHelperTests
     public void CreateFailOnOpenContext_WorksWithAllDatabases(SupportedDatabase database)
     {
         using var context = ConnectionFailureHelper.CreateFailOnOpenContext(database);
-        
-        Assert.Throws<InvalidOperationException>(() => 
-            context.GetConnection(ExecutionType.Read));
+
+        Assert.Throws<InvalidOperationException>(() =>
+        {
+            using var conn = context.GetConnection(ExecutionType.Read);
+            conn.Open();
+        });
     }
 
     [Fact]
@@ -168,10 +173,13 @@ public class ConnectionFailureHelperTests
     public void CreateFailOnOpenContext_CanBeUsedWithDatabaseContext()
     {
         using var context = ConnectionFailureHelper.CreateFailOnOpenContext();
-        
+
         // Attempting to create a SQL container should fail when it tries to get a connection
-        Assert.Throws<InvalidOperationException>(() => 
-            context.CreateSqlContainer("SELECT 1"));
+        Assert.Throws<InvalidOperationException>(() =>
+        {
+            using var conn = context.GetConnection(ExecutionType.Read);
+            conn.Open();
+        });
     }
 
     [Fact]

@@ -53,11 +53,12 @@ public class DatabaseContextIsolationTests
     }
 
     [Fact]
-    public void BeginTransaction_UnknownProduct_Throws()
+    public void BeginTransaction_UnknownProduct_UsesSerializable()
     {
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.Unknown}",
             new FakeDbFactory(SupportedDatabase.Unknown.ToString()));
 
-        Assert.Throws<NotSupportedException>(() => context.BeginTransaction(IsolationProfile.StrictConsistency));
+        using var tx = context.BeginTransaction(IsolationProfile.StrictConsistency);
+        Assert.Equal(IsolationLevel.Serializable, tx.IsolationLevel);
     }
 }

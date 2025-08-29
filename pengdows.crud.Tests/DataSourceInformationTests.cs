@@ -174,7 +174,8 @@ public class DataSourceInformationTests
         Assert.Equal(expectedWrap, info.ProcWrappingStyle);
 
         // Assert: named parameters flags
-        Assert.Equal(db != SupportedDatabase.Unknown, info.SupportsNamedParameters);
+        Assert.True(info.SupportsNamedParameters);
+        Assert.NotEqual(false, info.SupportsNamedParameters);
         Assert.Equal(expectedRequiresStoredProcParameterNameMatch, info.RequiresStoredProcParameterNameMatch);
 
         // Assert: output parameter limits

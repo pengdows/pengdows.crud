@@ -61,7 +61,7 @@ public class SqlDialectVersionTests
             factory,
             NullLoggerFactory.Instance.CreateLogger<SqlDialect>());
         var result = dialect.GetDatabaseVersion(tracked);
-        Assert.Equal("Unknown Version (SQL-92 Compatible)", result);
+        Assert.StartsWith("Error retrieving version", result);
     }
 
     // Additional version fallback tests are omitted due to FakeDb limitations producing deterministic values

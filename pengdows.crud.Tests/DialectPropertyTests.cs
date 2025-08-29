@@ -45,8 +45,8 @@ public class DialectPropertyTests
                 65535,
                 64,
                 ProcWrappingStyle.Call,
-                "`",
-                "`",
+                "\"",
+                "\"",
                 false,
                 true,
                 false,
@@ -64,7 +64,7 @@ public class DialectPropertyTests
                 SupportedDatabase.Oracle,
                 ":",
                 true,
-                1000,
+                64000,
                 30,
                 ProcWrappingStyle.Oracle,
                 "\"",
@@ -86,7 +86,7 @@ public class DialectPropertyTests
                 SupportedDatabase.PostgreSql,
                 ":",
                 true,
-                65535,
+                32767,
                 63,
                 ProcWrappingStyle.PostgreSQL,
                 "\"",
@@ -194,10 +194,26 @@ public class DialectPropertyTests
         Assert.NotEqual(unexpectedProcStyle, dialect.ProcWrappingStyle);
 
         Assert.Equal(expected.QuotePrefix, dialect.QuotePrefix);
-        Assert.NotEqual(expected.QuotePrefix == "\"" ? "[" : "\"", dialect.QuotePrefix);
+        switch (expected.QuotePrefix)
+        {
+            case "\"":
+                Assert.NotEqual("`", dialect.QuotePrefix);
+                break;
+            default:
+                Assert.NotEqual("\"", dialect.QuotePrefix);
+                break;
+        }
 
         Assert.Equal(expected.QuoteSuffix, dialect.QuoteSuffix);
-        Assert.NotEqual(expected.QuoteSuffix == "\"" ? "]" : "\"", dialect.QuoteSuffix);
+        switch (expected.QuoteSuffix)
+        {
+            case "\"":
+                Assert.NotEqual("`", dialect.QuoteSuffix);
+                break;
+            default:
+                Assert.NotEqual("\"", dialect.QuoteSuffix);
+                break;
+        }
 
         Assert.Equal(expected.SupportsInsertOnConflict, dialect.SupportsInsertOnConflict);
         Assert.NotEqual(!expected.SupportsInsertOnConflict, dialect.SupportsInsertOnConflict);

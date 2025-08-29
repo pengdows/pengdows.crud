@@ -22,8 +22,6 @@ public class MySqlDialect : SqlDialect
     public override int ParameterNameMaxLength => 64;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.Call;
 
-    public override string QuotePrefix => "`";
-    public override string QuoteSuffix => "`";
     public override bool SupportsNamespaces => true;
 
     public override bool SupportsOnDuplicateKey => true; // Available since MySQL 4.1 (2004) - safe to assume
