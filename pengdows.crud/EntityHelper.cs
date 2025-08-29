@@ -1521,6 +1521,14 @@ public class EntityHelper<TEntity, TRowID> :
             // We know auditValues is not null because we validated above
             _tableInfo.LastUpdatedBy.PropertyInfo.SetValue(obj, auditValues!.UserId);
         }
+        else if (_tableInfo.LastUpdatedBy?.PropertyInfo != null)
+        {
+            var current = _tableInfo.LastUpdatedBy.PropertyInfo.GetValue(obj) as string;
+            if (string.IsNullOrEmpty(current))
+            {
+                _tableInfo.LastUpdatedBy.PropertyInfo.SetValue(obj, "system");
+            }
+        }
 
         if (updateOnly)
         {
