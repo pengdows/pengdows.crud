@@ -125,9 +125,15 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
         return parameter;
     }
 
+    private string NormalizeParameterName(string parameterName)
+    {
+        return _dialect.SupportsNamedParameters ? parameterName.TrimStart('@', ':', '?') : parameterName;
+    }
+
     public void SetParameterValue(string parameterName, object? newValue)
     {
-        if (!_parameters.TryGetValue(parameterName, out var parameter))
+        var normalizedName = NormalizeParameterName(parameterName);
+        if (!_parameters.TryGetValue(normalizedName, out var parameter))
         {
             throw new KeyNotFoundException($"Parameter '{parameterName}' not found.");
         }
@@ -137,7 +143,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
 
     public object? GetParameterValue(string parameterName)
     {
-        if (!_parameters.TryGetValue(parameterName, out var parameter))
+        var normalizedName = NormalizeParameterName(parameterName);
+        if (!_parameters.TryGetValue(normalizedName, out var parameter))
         {
             throw new KeyNotFoundException($"Parameter '{parameterName}' not found.");
         }

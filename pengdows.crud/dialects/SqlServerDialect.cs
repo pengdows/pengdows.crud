@@ -34,6 +34,7 @@ public class SqlServerDialect : SqlDialect
     public override string ParameterMarker => "@";
     public override bool SupportsNamedParameters => true;
     public override int MaxParameterLimit => 2100;
+    public override int MaxOutputParameters => 1024;
     public override int ParameterNameMaxLength => 128;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.Exec;
     public override SqlStandardLevel MaxSupportedStandard =>

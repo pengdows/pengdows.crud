@@ -111,18 +111,13 @@ public class EntityHelperNegativeTests : SqlLiteContextTestBase
     [Fact]
     public void BuildDelete_NoIdColumn_Throws()
     {
-        TypeMap.Register<EntityWithoutId>();
-        var local = new EntityHelper<EntityWithoutId, int>(Context);
-        Assert.Throws<InvalidOperationException>(() => local.BuildDelete(1));
+        Assert.Throws<InvalidOperationException>(() => TypeMap.Register<EntityWithoutId>());
     }
 
     [Fact]
     public void BuildCreate_NoIdColumn_Throws()
     {
-        TypeMap.Register<EntityWithoutId>();
-        var local = new EntityHelper<EntityWithoutId, int>(Context);
-        var entity = new EntityWithoutId { Name = "foo" };
-        Assert.Throws<InvalidOperationException>(() => local.BuildCreate(entity));
+        Assert.Throws<InvalidOperationException>(() => TypeMap.Register<EntityWithoutId>());
     }
 
     [Table("NoIdTable")]
