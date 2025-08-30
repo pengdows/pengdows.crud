@@ -43,7 +43,7 @@ public class DataReaderMapperNegativeTests
             }
         };
 
-        var reader = new FakeDbDataReader(rows);
+        var reader = new fakeDbDataReader(rows);
         var options = new MapperOptions(Strict: true);
         IDataReaderMapper mapper = new DataReaderMapper();
 
@@ -64,7 +64,7 @@ public class DataReaderMapperNegativeTests
             }
         };
 
-        var reader = new FakeDbDataReader(rows);
+        var reader = new fakeDbDataReader(rows);
         var options = new MapperOptions(Strict: true);
         var stream = DataReaderMapper.StreamAsync<SampleEntity>(reader, options);
 

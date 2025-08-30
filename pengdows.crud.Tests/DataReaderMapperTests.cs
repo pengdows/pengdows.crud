@@ -17,7 +17,7 @@ public class DataReaderMapperTests
     [Fact]
     public async Task LoadObjectsFromDataReaderAsync_MapsMatchingFields()
     {
-        var reader = new FakeDbDataReader(new[]
+        var reader = new fakeDbDataReader(new[]
         {
             new Dictionary<string, object>
             {
@@ -38,7 +38,7 @@ public class DataReaderMapperTests
     [Fact]
     public async Task LoadObjectsFromDataReaderAsync_IgnoresUnmappedFields()
     {
-        var reader = new FakeDbDataReader(new[]
+        var reader = new fakeDbDataReader(new[]
         {
             new Dictionary<string, object>
             {
@@ -56,7 +56,7 @@ public class DataReaderMapperTests
     [Fact]
     public async Task LoadObjectsFromDataReaderAsync_Interface_MapsFields()
     {
-        var reader = new FakeDbDataReader(new[]
+        var reader = new fakeDbDataReader(new[]
         {
             new Dictionary<string, object>
             {
@@ -78,7 +78,7 @@ public class DataReaderMapperTests
     [Fact]
     public async Task LoadObjectsFromDataReaderAsync_HandlesDbNullsGracefully()
     {
-        var reader = new FakeDbDataReader(new[]
+        var reader = new fakeDbDataReader(new[]
         {
             new Dictionary<string, object>
             {
@@ -99,7 +99,7 @@ public class DataReaderMapperTests
     [Fact]
     public async Task StreamAsync_StreamsObjects()
     {
-        var reader = new FakeDbDataReader(new[]
+        var reader = new fakeDbDataReader(new[]
         {
             new Dictionary<string, object>
             {
