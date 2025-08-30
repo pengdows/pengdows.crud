@@ -488,3 +488,4 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
         return _schemaTable;
     }
 }
+

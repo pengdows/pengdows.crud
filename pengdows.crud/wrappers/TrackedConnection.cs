@@ -201,7 +201,8 @@ public class TrackedConnection : ITrackedConnection, IAsyncDisposable
 
     public IDbCommand CreateCommand()
     {
-        return _connection.CreateCommand();
+        var inner = (DbCommand)_connection.CreateCommand();
+        return new WrappedDbCommand(inner, _connection);
     }
 
     public string Database => _connection.Database;

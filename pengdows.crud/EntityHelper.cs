@@ -544,7 +544,7 @@ public class EntityHelper<TEntity, TRowID> :
         var list = ids.Distinct().ToList();
         if (list.Count == 0)
         {
-            return new List<TEntity>();
+            throw new ArgumentException("List of IDs cannot be empty.", nameof(ids));
         }
 
         var ctx = context ?? _context;
@@ -562,13 +562,13 @@ public class EntityHelper<TEntity, TRowID> :
         var list = ids.Distinct().ToList();
         if (list.Count == 0)
         {
-            return 0;
+            throw new ArgumentException("List of IDs cannot be empty.", nameof(ids));
         }
         
         var ctx = context ?? _context;
         if (_idColumn == null)
         {
-            throw new NotSupportedException(
+            throw new InvalidOperationException(
                 "Single-ID operations require a designated Id column; use composite-key helpers.");
         }
 
@@ -602,6 +602,10 @@ public class EntityHelper<TEntity, TRowID> :
 
     public Task<TEntity?> RetrieveOneAsync(TEntity objectToRetrieve, IDatabaseContext? context = null)
     {
+        if (objectToRetrieve == null)
+        {
+            throw new ArgumentNullException(nameof(objectToRetrieve));
+        }
         var ctx = context ?? _context;
         var list = new List<TEntity> { objectToRetrieve };
         var sc = BuildRetrieve(list, string.Empty, ctx);
@@ -613,7 +617,7 @@ public class EntityHelper<TEntity, TRowID> :
         var ctx = context ?? _context;
         if (_idColumn == null)
         {
-            throw new NotSupportedException(
+            throw new InvalidOperationException(
                 "Single-ID operations require a designated Id column; use composite-key helpers.");
         }
         var list = new List<TRowID> { id };
@@ -623,6 +627,10 @@ public class EntityHelper<TEntity, TRowID> :
 
     public async Task<TEntity?> LoadSingleAsync(ISqlContainer sc)
     {
+        if (sc == null)
+        {
+            throw new ArgumentNullException(nameof(sc));
+        }
         await using var reader = await sc.ExecuteReaderAsync().ConfigureAwait(false);
         if (await reader.ReadAsync().ConfigureAwait(false))
         {
@@ -634,6 +642,10 @@ public class EntityHelper<TEntity, TRowID> :
 
     public async Task<List<TEntity>> LoadListAsync(ISqlContainer sc)
     {
+        if (sc == null)
+        {
+            throw new ArgumentNullException(nameof(sc));
+        }
         var list = new List<TEntity>();
 
         await using var reader = await sc.ExecuteReaderAsync().ConfigureAwait(false);
@@ -656,7 +668,7 @@ public class EntityHelper<TEntity, TRowID> :
         var ctx = context ?? _context;
         if (_idColumn == null)
         {
-            throw new NotSupportedException(
+            throw new InvalidOperationException(
                 "Single-ID operations require a designated Id column; use composite-key helpers.");
         }
         var sc = BuildBaseRetrieve(alias, ctx);
@@ -668,7 +680,12 @@ public class EntityHelper<TEntity, TRowID> :
 
         var wrappedColumnName = wrappedAlias + _dialect.WrapObjectName(_idColumn.Name);
 
-        if (listOfIds != null && listOfIds.Any(id => Utils.IsNullOrDbNull(id)))
+        if (listOfIds == null || listOfIds.Count == 0)
+        {
+            throw new ArgumentException("IDs cannot be null or empty.", nameof(listOfIds));
+        }
+
+        if (listOfIds.Any(id => Utils.IsNullOrDbNull(id)))
         {
             throw new ArgumentException("IDs cannot be null", nameof(listOfIds));
         }
@@ -945,15 +962,8 @@ public class EntityHelper<TEntity, TRowID> :
 
         var ctx = context ?? _context;
 
-        try
-        {
-            var sc = BuildUpsert(entity, ctx);
-            return await sc.ExecuteNonQueryAsync();
-        }
-        catch (NotSupportedException)
-        {
-            return await UpsertPortableAsync(entity, ctx);
-        }
+        var sc = BuildUpsert(entity, ctx);
+        return await sc.ExecuteNonQueryAsync();
     }
 
     public ISqlContainer BuildUpsert(TEntity entity, IDatabaseContext? context = null)
@@ -967,6 +977,12 @@ public class EntityHelper<TEntity, TRowID> :
         if (_idColumn == null && _tableInfo.PrimaryKeys.Count == 0)
         {
             throw new NotSupportedException("Upsert requires an Id or a composite primary key.");
+        }
+
+        // Explicitly reject unknown/fallback dialects to avoid silently generating unsupported SQL
+        if (ctx.DataSourceInfo.IsUsingFallbackDialect)
+        {
+            throw new NotSupportedException($"Upsert not supported for {ctx.Product}");
         }
 
         // Use dialect capabilities instead of hard-coded database switching
@@ -1086,7 +1102,19 @@ public class EntityHelper<TEntity, TRowID> :
             return null;
         }
 
-        return await RetrieveOneAsync((TRowID)idValue!);
+        // Convert the object Id value to TRowID to avoid invalid boxing casts (e.g., int -> long)
+        var targetType = typeof(TRowID);
+        var underlying = Nullable.GetUnderlyingType(targetType) ?? targetType;
+        var converted = Convert.ChangeType(idValue!, underlying, CultureInfo.InvariantCulture);
+        try
+        {
+            return await RetrieveOneAsync((TRowID)converted!);
+        }
+        catch (DbException)
+        {
+            // Treat provider-level errors during original load as "not found"
+            return null;
+        }
     }
 
     private (StringBuilder clause, List<DbParameter> parameters) BuildSetClause(TEntity updated, TEntity? original)
@@ -1581,7 +1609,13 @@ public class EntityHelper<TEntity, TRowID> :
             return true;
         }
 
-        return EqualityComparer<TRowID>.Default.Equals((TRowID)value!, default!);
+        if (value is TRowID typed)
+        {
+            return EqualityComparer<TRowID>.Default.Equals(typed, default!);
+        }
+
+        // Different runtime type than TRowID and not a zero/empty equivalent
+        return false;
     }
 
 

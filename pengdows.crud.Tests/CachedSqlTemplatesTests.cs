@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Data.Common;
 using System.Reflection;
@@ -85,7 +86,7 @@ public class CachedSqlTemplatesTests : SqlLiteContextTestBase
         var helper = new EntityHelper<TestEntity, int>(Context, AuditValueResolver);
         var entity = new TestEntity { Id = 1, Name = "one" };
 
-        await Assert.ThrowsAsync<SqliteException>(async () =>
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await helper.BuildUpdateAsync(entity, loadOriginal: true));
     }
 

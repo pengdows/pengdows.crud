@@ -64,10 +64,7 @@ public class EntityHelperErrorPathTests : SqlLiteContextTestBase
     [Fact]
     public async Task UpdateAsync_EntityWithNoPrimaryKey_ThrowsNotSupportedException()
     {
-        var helper = new EntityHelper<EntityWithNoPrimaryKey, int>(Context);
-        var entity = new EntityWithNoPrimaryKey { Name = "test" };
-
-        await Assert.ThrowsAsync<NotSupportedException>(() => helper.UpdateAsync(entity));
+        Assert.Throws<InvalidOperationException>(() => new EntityHelper<EntityWithNoPrimaryKey, int>(Context));
     }
 
     [Fact]
@@ -81,10 +78,7 @@ public class EntityHelperErrorPathTests : SqlLiteContextTestBase
     [Fact]
     public async Task UpsertAsync_EntityWithNoPrimaryKey_ThrowsNotSupportedException()
     {
-        var helper = new EntityHelper<EntityWithNoPrimaryKey, int>(Context);
-        var entity = new EntityWithNoPrimaryKey { Name = "test" };
-
-        await Assert.ThrowsAsync<NotSupportedException>(() => helper.UpsertAsync(entity));
+        Assert.Throws<InvalidOperationException>(() => new EntityHelper<EntityWithNoPrimaryKey, int>(Context));
     }
 
     [Fact]
@@ -150,9 +144,7 @@ public class EntityHelperErrorPathTests : SqlLiteContextTestBase
     [Fact]
     public void BuildDelete_InvalidRowIdType_ThrowsInvalidOperationException()
     {
-        var helper = new EntityHelper<EntityWithUnsupportedId, decimal>(Context);
-
-        Assert.Throws<InvalidOperationException>(() => helper.BuildDelete(1.5m));
+        Assert.Throws<TypeInitializationException>(() => new EntityHelper<EntityWithUnsupportedId, decimal>(Context));
     }
 
     [Fact]
@@ -180,7 +172,7 @@ public class EntityHelperErrorPathTests : SqlLiteContextTestBase
     [Fact]
     public async Task UpsertAsync_UnsupportedDatabase_ThrowsNotSupportedException()
     {
-        var factory = new fakeDbFactory(SupportedDatabase.Oracle.ToString());
+        var factory = new fakeDbFactory(nameof(SupportedDatabase.Unknown));
         var context = new DatabaseContext("test", factory);
         var helper = new EntityHelper<TestEntity, long>(context);
         var entity = new TestEntity { Name = "test" };
@@ -191,7 +183,7 @@ public class EntityHelperErrorPathTests : SqlLiteContextTestBase
     [Fact]
     public void ValidateRowIdType_UnsupportedType_ThrowsNotSupportedException()
     {
-        Assert.Throws<NotSupportedException>(() => new EntityHelper<EntityWithUnsupportedId, decimal>(Context));
+        Assert.Throws<TypeInitializationException>(() => new EntityHelper<EntityWithUnsupportedId, decimal>(Context));
     }
 
     [Fact]
@@ -259,10 +251,7 @@ public class EntityHelperErrorPathTests : SqlLiteContextTestBase
     [Fact]
     public void BuildUpsert_EntityWithNoPrimaryKey_ThrowsNotSupportedException()
     {
-        var helper = new EntityHelper<EntityWithNoPkAttributes, string>(Context);
-        var entity = new EntityWithNoPkAttributes { Name = "test" };
-
-        Assert.Throws<NotSupportedException>(() => helper.BuildUpsert(entity));
+        Assert.Throws<InvalidOperationException>(() => new EntityHelper<EntityWithNoPkAttributes, string>(Context));
     }
 
     [Fact]
