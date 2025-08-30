@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Threading.Tasks;
 using pengdows.crud.fakeDb;
+using pengdows.crud.attributes;
 using Xunit;
 
 #endregion
@@ -16,7 +17,7 @@ public class DataReaderMapperTests
     [Fact]
     public async Task LoadObjectsFromDataReaderAsync_MapsMatchingFields()
     {
-        var reader = new fakeDbDataReader(new[]
+        var reader = new FakeDbDataReader(new[]
         {
             new Dictionary<string, object>
             {
@@ -37,7 +38,7 @@ public class DataReaderMapperTests
     [Fact]
     public async Task LoadObjectsFromDataReaderAsync_IgnoresUnmappedFields()
     {
-        var reader = new fakeDbDataReader(new[]
+        var reader = new FakeDbDataReader(new[]
         {
             new Dictionary<string, object>
             {
@@ -53,9 +54,31 @@ public class DataReaderMapperTests
     }
 
     [Fact]
+    public async Task LoadObjectsFromDataReaderAsync_Interface_MapsFields()
+    {
+        var reader = new FakeDbDataReader(new[]
+        {
+            new Dictionary<string, object>
+            {
+                ["Name"] = "John",
+                ["Age"] = 30,
+                ["IsActive"] = true
+            }
+        });
+
+        IDataReaderMapper mapper = new DataReaderMapper();
+        var result = await mapper.LoadObjectsFromDataReaderAsync<SampleEntity>(reader);
+
+        Assert.Single(result);
+        Assert.Equal("John", result[0].Name);
+        Assert.Equal(30, result[0].Age);
+        Assert.True(result[0].IsActive);
+    }
+
+    [Fact]
     public async Task LoadObjectsFromDataReaderAsync_HandlesDbNullsGracefully()
     {
-        var reader = new fakeDbDataReader(new[]
+        var reader = new FakeDbDataReader(new[]
         {
             new Dictionary<string, object>
             {
@@ -72,52 +95,119 @@ public class DataReaderMapperTests
         Assert.Equal(0, result[0].Age); // default(int)
         Assert.False(result[0].IsActive); // default(bool)
     }
-  [Fact]
-    public async Task LoadObjectsFromDataReaderAsync_ThrowsForNonDbDataReader()
+
+    [Fact]
+    public async Task StreamAsync_StreamsObjects()
     {
-        var reader = new NonDbDataReader();
-        await Assert.ThrowsAsync<ArgumentException>(async () =>
-            await DataReaderMapper.LoadObjectsFromDataReaderAsync<SampleEntity>(reader));
+        var reader = new FakeDbDataReader(new[]
+        {
+            new Dictionary<string, object>
+            {
+                ["Name"] = "John",
+                ["Age"] = 30,
+                ["IsActive"] = true
+            },
+            new Dictionary<string, object>
+            {
+                ["Name"] = "Jane",
+                ["Age"] = 25,
+                ["IsActive"] = false
+            }
+        });
+
+        var results = new List<SampleEntity>();
+        await foreach (var item in DataReaderMapper.StreamAsync<SampleEntity>(reader))
+        {
+            results.Add(item);
+        }
+
+        Assert.Equal(2, results.Count);
+        Assert.Equal("John", results[0].Name);
+        Assert.Equal("Jane", results[1].Name);
+    }
+    [Fact]
+    public async Task LoadAsync_WithNamePolicy_MapsSnakeCaseFields()
+    {
+        var reader = new FakeDbDataReader(new[]
+        {
+            new Dictionary<string, object>
+            {
+                ["first_name"] = "John"
+            }
+        });
+
+        Func<string, string> snakeToPascal = name =>
+        {
+            var parts = name.Split('_', StringSplitOptions.RemoveEmptyEntries);
+            var result = string.Empty;
+            foreach (var part in parts)
+            {
+                result += char.ToUpperInvariant(part[0]) + part.Substring(1);
+            }
+
+            return result;
+        };
+
+        var options = new MapperOptions(NamePolicy: snakeToPascal);
+        var result = await DataReaderMapper.LoadAsync<SnakeEntity>(reader, options);
+
+        Assert.Single(result);
+        Assert.Equal("John", result[0].FirstName);
     }
 
-    private class NonDbDataReader : IDataReader
+    [Fact]
+    public async Task LoadObjectsFromDataReaderAsync_WithoutNamePolicy_IgnoresSnakeCaseFields()
     {
-        public int FieldCount => 0;
-        public bool IsClosed => false;
-        public int RecordsAffected => 0;
-        public int Depth => 0;
+        var reader = new FakeDbDataReader(new[]
+        {
+            new Dictionary<string, object>
+            {
+                ["first_name"] = "John"
+            }
+        });
 
-        public void Close() { }
-        public DataTable GetSchemaTable() => throw new NotImplementedException();
-        public bool NextResult() => false;
-        public bool Read() => false;
+        var result = await DataReaderMapper.LoadObjectsFromDataReaderAsync<SnakeEntity>(reader);
 
-        public void Dispose() { }
-        public string GetName(int i) => string.Empty;
-        public string GetDataTypeName(int i) => string.Empty;
-        public Type GetFieldType(int i) => typeof(object);
-        public object GetValue(int i) => null;
-        public int GetValues(object[] values) => 0;
-        public int GetOrdinal(string name) => -1;
-        public bool GetBoolean(int i) => false;
-        public byte GetByte(int i) => 0;
-        public long GetBytes(int i, long fieldOffset, byte[]? buffer, int bufferOffset, int length) => 0;
-        public char GetChar(int i) => '\0';
-        public long GetChars(int i, long fieldOffset, char[]? buffer, int bufferOffset, int length) => 0;
-        public Guid GetGuid(int i) => Guid.Empty;
-        public short GetInt16(int i) => 0;
-        public int GetInt32(int i) => 0;
-        public long GetInt64(int i) => 0;
-        public float GetFloat(int i) => 0;
-        public double GetDouble(int i) => 0;
-        public string GetString(int i) => string.Empty;
-        public decimal GetDecimal(int i) => 0;
-        public DateTime GetDateTime(int i) => DateTime.MinValue;
-        public IDataReader GetData(int i) => this;
-        public bool IsDBNull(int i) => true;
+        Assert.Single(result);
+        Assert.Null(result[0].FirstName);
+    }
 
-        public object this[int i] => null;
-        public object this[string name] => null;
+    [Fact]
+    public async Task LoadAsync_ColumnsOnly_MapsAnnotatedProperty()
+    {
+        var reader = new FakeDbDataReader(new[]
+        {
+            new Dictionary<string, object>
+            {
+                ["Name"] = "Jane",
+                ["Age"] = 25
+            }
+        });
+
+        var options = new MapperOptions(ColumnsOnly: true);
+        var result = await DataReaderMapper.LoadAsync<ColumnsOnlyEntity>(reader, options);
+
+        Assert.Single(result);
+        Assert.Equal("Jane", result[0].Name);
+    }
+
+    [Fact]
+    public async Task LoadAsync_ColumnsOnly_IgnoresNonAnnotatedProperty()
+    {
+        var reader = new FakeDbDataReader(new[]
+        {
+            new Dictionary<string, object>
+            {
+                ["Name"] = "Jane",
+                ["Age"] = 25
+            }
+        });
+
+        var options = new MapperOptions(ColumnsOnly: true);
+        var result = await DataReaderMapper.LoadAsync<ColumnsOnlyEntity>(reader, options);
+
+        Assert.Single(result);
+        Assert.Equal(0, result[0].Age);
     }
 
     private class SampleEntity
@@ -125,5 +215,17 @@ public class DataReaderMapperTests
         public string Name { get; set; }
         public int Age { get; set; }
         public bool IsActive { get; set; }
+    }
+    private class SnakeEntity
+    {
+        public string? FirstName { get; set; }
+    }
+
+    private class ColumnsOnlyEntity
+    {
+        [Column("Name", DbType.String)]
+        public string? Name { get; set; }
+
+        public int Age { get; set; }
     }
 }
