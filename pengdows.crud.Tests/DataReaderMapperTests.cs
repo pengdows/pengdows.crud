@@ -128,7 +128,7 @@ public class DataReaderMapperTests
     [Fact]
     public async Task LoadAsync_WithNamePolicy_MapsSnakeCaseFields()
     {
-        var reader = new FakeDbDataReader(new[]
+        var reader = new fakeDbDataReader(new[]
         {
             new Dictionary<string, object>
             {
@@ -158,7 +158,7 @@ public class DataReaderMapperTests
     [Fact]
     public async Task LoadObjectsFromDataReaderAsync_WithoutNamePolicy_IgnoresSnakeCaseFields()
     {
-        var reader = new FakeDbDataReader(new[]
+        var reader = new fakeDbDataReader(new[]
         {
             new Dictionary<string, object>
             {
@@ -175,7 +175,7 @@ public class DataReaderMapperTests
     [Fact]
     public async Task LoadAsync_ColumnsOnly_MapsAnnotatedProperty()
     {
-        var reader = new FakeDbDataReader(new[]
+        var reader = new fakeDbDataReader(new[]
         {
             new Dictionary<string, object>
             {
@@ -194,7 +194,7 @@ public class DataReaderMapperTests
     [Fact]
     public async Task LoadAsync_ColumnsOnly_IgnoresNonAnnotatedProperty()
     {
-        var reader = new FakeDbDataReader(new[]
+        var reader = new fakeDbDataReader(new[]
         {
             new Dictionary<string, object>
             {
