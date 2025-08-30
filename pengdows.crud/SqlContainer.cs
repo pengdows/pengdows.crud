@@ -195,43 +195,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
 
         var args = includeParameters ? BuildProcedureArguments() : string.Empty;
 
-        return _context.ProcWrappingStyle switch
-        {
-            ProcWrappingStyle.PostgreSQL when captureReturn
-                => throw new NotSupportedException("Return value capture not implemented for this dialect."),
-
-            ProcWrappingStyle.ExecuteProcedure when captureReturn
-                => throw new NotSupportedException("Return value capture not implemented for this dialect."),
-
-            ProcWrappingStyle.PostgreSQL or ProcWrappingStyle.ExecuteProcedure
-                when executionType == ExecutionType.Read
-                => $"SELECT * FROM {procName}({args})",
-
-            ProcWrappingStyle.PostgreSQL
-                => $"CALL {procName}({args})",
-
-            ProcWrappingStyle.ExecuteProcedure
-                => $"EXECUTE PROCEDURE {procName}({args})",
-
-            ProcWrappingStyle.Oracle
-                => $"BEGIN\n\t{procName}{(string.IsNullOrEmpty(args) ? string.Empty : $"({args})")};\nEND;",
-
-            ProcWrappingStyle.Exec when captureReturn
-                => FormatExecWithReturn(),
-
-            ProcWrappingStyle.Exec
-                => string.IsNullOrWhiteSpace(args)
-                    ? $"EXEC {procName}"
-                    : $"EXEC {procName} {args}",
-
-            ProcWrappingStyle.Call when captureReturn
-                => throw new NotSupportedException("Return value capture not implemented for this dialect."),
-
-            ProcWrappingStyle.Call
-                => $"CALL {procName}({args})",
-
-            _ => throw new NotSupportedException("Stored procedures are not supported by this database.")
-        };
+        return _context.ProcWrappingStrategy.Wrap(procName, executionType, args);
 
         string FormatExecWithReturn()
         {
@@ -254,6 +218,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
 
             return string.Join(", ", Enumerable.Repeat("?", _parameters.Count));
         }
+    }
     }
 
     public string WrapForCreateWithReturn(bool includeParameters = true)

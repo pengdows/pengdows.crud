@@ -13,6 +13,8 @@ using pengdows.crud.infrastructure;
 using pengdows.crud.isolation;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
+using pengdows.crud.strategies;
+using System.Threading.Tasks;
 
 #endregion
 
@@ -23,7 +25,10 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     private readonly DbProviderFactory _factory;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<IDatabaseContext> _logger;
-    private readonly IConnectionStrategy _connectionStrategy;
+    private strategies.IConnectionStrategy _connectionStrategy = null!;
+    private strategies.IProcWrappingStrategy _procWrappingStrategy = null!;
+    private bool _applyConnectionSessionSettings;
+    private ITrackedConnection? _connection = null;
 
     private long _connectionCount;
     private string _connectionString;
@@ -35,7 +40,6 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     private long _maxNumberOfOpenConnections;
     private readonly bool _setDefaultSearchPath;
     private string _connectionSessionSettings;
-    private bool _applyConnectionSessionSettings;
     private readonly DbMode _originalUserMode;
 
     public Guid RootId { get; } = Guid.NewGuid();
@@ -335,6 +339,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     {
         return _dialect.WrapObjectName(name);
     }
+    }
 
     public string MakeParameterName(DbParameter dbParameter)
     {
@@ -411,6 +416,33 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         }
     }
 
+    public ProcWrappingStyle ProcWrappingStyle
+    {
+        get => _dataSourceInfo.ProcWrappingStyle;
+        set
+        {
+            _dataSourceInfo.ProcWrappingStyle = value;
+            _procWrappingStrategy = ProcWrappingStrategyFactory.Create(value);
+        }
+    }
+
+    internal IProcWrappingStrategy ProcWrappingStrategy => _procWrappingStrategy;
+
+    public int MaxParameterLimit => _dataSourceInfo.MaxParameterLimit;
+
+    public long MaxNumberOfConnections => Interlocked.Read(ref _maxNumberOfOpenConnections);
+
+    public long NumberOfOpenConnections => Interlocked.Read(ref _connectionCount);
+
+    public string QuotePrefix => DataSourceInfo.QuotePrefix;
+
+    public string QuoteSuffix => DataSourceInfo.QuoteSuffix;
+
+    internal ITrackedConnection FactoryCreateConnection(string? connectionString = null, bool isSharedConnection = false)
+    {
+        return FactoryCreateConnection(connectionString, isSharedConnection, null);
+    }
+
 
     private void UpdateMaxConnectionCount(long current)
     {
@@ -430,9 +462,9 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
                      previous) != previous);
     }
 
-    public ValueTask CloseAndDisposeConnectionAsync(ITrackedConnection? connection)
+    public async ValueTask CloseAndDisposeConnectionAsync(ITrackedConnection? connection)
     {
-        return _connectionStrategy.ReleaseConnectionAsync(connection);
+        await _connectionStrategy.ReleaseConnectionAsync(connection).ConfigureAwait(false);
     }
 
     private ITrackedConnection? InitializeInternals(IDatabaseContextConfiguration config)
@@ -471,26 +503,18 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
                     : DbMode.SingleWriter;
             }
 
-            if (config.DbMode != DbMode.Standard)
-            {
-                //
-                //Interlocked.Increment(ref _connectionCount);
-                // if the mode is anything but standard
-                // we store it as our minimal connection
-                // Session settings will be applied in the main constructor
-                // Note: _connection field doesn't exist in current architecture
-            }
-
-            if (Product != SupportedDatabase.Unknown)
-            {
-                _isolationResolver ??= new IsolationResolver(Product, RCSIEnabled);
-            }
-
-            if (config.DbMode == DbMode.Standard)
-            {
-                //if it is standard mode, we can close it.
-                conn?.Dispose();
-            }
+            _isolationResolver ??= new IsolationResolver(Product, RCSIEnabled);
+        }
+        catch(Exception ex){
+            _logger.LogError(ex, ex.Message);
+            throw;
+        }
+        finally
+        {
+            _isolationResolver ??= new IsolationResolver(Product, RCSIEnabled);
+            _connectionStrategy = ConnectionStrategyFactory.Create(this, ConnectionMode);
+            _procWrappingStrategy = ProcWrappingStrategyFactory.Create(ProcWrappingStyle);
+            _connectionStrategy.PostInitialize(conn);
         }
         catch (Exception ex)
         {
@@ -580,7 +604,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     }
 
 
-    private void ApplyConnectionSessionSettings(IDbConnection connection)
+    internal void ApplyConnectionSessionSettings(IDbConnection connection)
     {
         _logger.LogInformation("Applying connection session settings");
         if (_applyConnectionSessionSettings)
@@ -597,14 +621,88 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             }
     }
 
-    private ITrackedConnection GetStandardConnection(bool isShared = false)
+    internal ITrackedConnection GetStandardConnection(bool isShared = false)
     {
         var conn = FactoryCreateConnection(null, isShared);
         return conn;
     }
 
 
-    // Note: These methods were removed as they referenced fields that don't exist in the new architecture
+    internal ITrackedConnection GetSingleConnection()
+    {
+        return Connection;
+    }
+
+    internal ITrackedConnection GetSingleWriterConnection(ExecutionType type, bool isShared = false)
+    {
+        if (ExecutionType.Read == type) return GetStandardConnection(isShared);
+
+        return GetSingleConnection();
+    }
+
+    internal ITrackedConnection? PersistentConnection => _connection;
+
+    internal void SetPersistentConnection(ITrackedConnection? connection)
+    {
+        _connection = connection;
+    }
+    //
+    // private int _disposed; // 0=false, 1=true
+    //
+    //
+    // public void Dispose()
+    // {
+    //     Dispose(disposing: true);
+    // }
+    //
+    // public async ValueTask DisposeAsync()
+    // {
+    //     await DisposeAsyncCore().ConfigureAwait(false);
+    //     Dispose(disposing: false); // Finalizer path for unmanaged cleanup (if any)
+    // }
+    //
+    // protected virtual async ValueTask DisposeAsyncCore()
+    // {
+    //     if (Interlocked.Exchange(ref _disposed, 1) != 0)
+    //         return; // Already disposed
+    //
+    //     if (_connection is IAsyncDisposable asyncDisposable)
+    //     {
+    //         await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+    //     }
+    //     else
+    //     {
+    //         _connection?.Dispose();
+    //     }
+    //
+    //     _connection = null;
+    // }
+    //
+    //
+    // protected virtual void Dispose(bool disposing)
+    // {
+    //     if (Interlocked.Exchange(ref _disposed, 1) != 0)
+    //         return; // Already disposed
+    //
+    //     if (disposing)
+    //     {
+    //         try
+    //         {
+    //             _connection?.Dispose();
+    //         }
+    //         catch
+    //         {
+    //             // Optional: log or suppress
+    //         }
+    //         finally
+    //         {
+    //             _connection = null;
+    //             GC.SuppressFinalize(this); // Suppress only here
+    //         }
+    //     }
+    //
+    //     // unmanaged cleanup if needed (none currently)
+    // }
 
     protected override void DisposeManaged()
     {
