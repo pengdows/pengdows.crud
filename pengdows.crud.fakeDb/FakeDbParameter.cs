@@ -6,9 +6,9 @@ using System.Diagnostics.CodeAnalysis;
 
 #endregion
 
-namespace pengdows.crud.FakeDb;
+namespace pengdows.crud.fakeDb;
 
-public class FakeDbParameter : DbParameter, IDbDataParameter
+public class fakeDbParameter : DbParameter, IDbDataParameter
 {
     public override bool SourceColumnNullMapping { get; set; }
     public override DbType DbType { get; set; }

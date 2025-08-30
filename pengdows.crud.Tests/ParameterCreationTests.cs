@@ -4,7 +4,7 @@ using System.Data.Common;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -13,7 +13,7 @@ public class ParameterCreationTests
 {
     private static SqlDialect CreateDialect()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.SqlServer);
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         return new SqlServerDialect(factory, NullLogger.Instance);
     }
 
@@ -67,7 +67,7 @@ public class ParameterCreationTests
     [Fact]
     public void CreateDbParameter_Positional_ClearsNameAndConverts()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.Unknown);
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         var dialect = new PositionalDialect(factory);
         var p = dialect.CreateDbParameter("flag", DbType.Boolean, true);
 

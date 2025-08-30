@@ -14,7 +14,7 @@ public class UpsertPortableTests : SqlLiteContextTestBase
     public UpsertPortableTests()
     {
         TypeMap.Register<TestEntity>();
-        _helper = new EntityHelper<TestEntity, int>(Context);
+        _helper = new EntityHelper<TestEntity, int>(Context, AuditValueResolver);
         BuildTestTable().Wait();
     }
 

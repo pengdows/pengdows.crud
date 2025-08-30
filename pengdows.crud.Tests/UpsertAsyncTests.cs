@@ -13,7 +13,7 @@ public class UpsertAsyncTests : SqlLiteContextTestBase
     public UpsertAsyncTests()
     {
         TypeMap.Register<TestEntity>();
-        helper = new EntityHelper<TestEntity, int>(Context);
+        helper = new EntityHelper<TestEntity, int>(Context, AuditValueResolver);
         BuildTestTable().Wait();
     }
 

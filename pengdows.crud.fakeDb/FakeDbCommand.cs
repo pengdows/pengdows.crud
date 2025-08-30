@@ -7,19 +7,19 @@ using pengdows.crud.enums;
 
 #endregion
 
-namespace pengdows.crud.FakeDb;
+namespace pengdows.crud.fakeDb;
 
-public class FakeDbCommand : DbCommand
+public class fakeDbCommand : DbCommand
 {
     private bool _shouldFailOnExecute;
     private Exception? _customExecuteException;
-    
-    public FakeDbCommand(DbConnection connection)
+
+    public fakeDbCommand(DbConnection connection)
     {
         Connection = connection;
     }
 
-    public FakeDbCommand()
+    public fakeDbCommand()
     {
     }
 
@@ -49,8 +49,8 @@ public class FakeDbCommand : DbCommand
     {
     }
 
-    private FakeDbConnection? FakeConnection => Connection as FakeDbConnection;
-    
+    private fakeDbConnection? FakeConnection => Connection as fakeDbConnection;
+
     /// <summary>
     /// Sets the command to fail on execute operations
     /// </summary>
@@ -59,7 +59,7 @@ public class FakeDbCommand : DbCommand
         _shouldFailOnExecute = shouldFail;
         _customExecuteException = customException;
     }
-    
+
     private void ThrowIfShouldFail(string operation)
     {
         if (_shouldFailOnExecute)
@@ -71,7 +71,7 @@ public class FakeDbCommand : DbCommand
     public override int ExecuteNonQuery()
     {
         ThrowIfShouldFail(nameof(ExecuteNonQuery));
-        
+
         var conn = FakeConnection;
         if (conn != null && conn.NonQueryResults.Count > 0)
         {
@@ -84,7 +84,7 @@ public class FakeDbCommand : DbCommand
     public override object? ExecuteScalar()
     {
         ThrowIfShouldFail(nameof(ExecuteScalar));
-        
+
         var conn = FakeConnection;
         if (conn != null)
         {
@@ -103,7 +103,7 @@ public class FakeDbCommand : DbCommand
                     return versionResult;
                 }
             }
-            
+
             // Fall back to queued results
             if (conn.ScalarResults.Count > 0)
             {
@@ -120,21 +120,21 @@ public class FakeDbCommand : DbCommand
 
         return emulatedProduct switch
         {
-            SupportedDatabase.SqlServer when normalizedCommand == "SELECT @@VERSION" 
+            SupportedDatabase.SqlServer when normalizedCommand == "SELECT @@VERSION"
                 => "Microsoft SQL Server 2019 (RTM) - 15.0.2000.5",
-            
-            SupportedDatabase.PostgreSql when normalizedCommand == "SELECT VERSION()" 
+
+            SupportedDatabase.PostgreSql when normalizedCommand == "SELECT VERSION()"
                 => "PostgreSQL 15.0 on x86_64-pc-linux-gnu",
-            
-            SupportedDatabase.MySql when normalizedCommand == "SELECT VERSION()" 
+
+            SupportedDatabase.MySql when normalizedCommand == "SELECT VERSION()"
                 => "8.0.33",
-            
-            SupportedDatabase.MariaDb when normalizedCommand == "SELECT VERSION()" 
+
+            SupportedDatabase.MariaDb when normalizedCommand == "SELECT VERSION()"
                 => "10.11.0-MariaDB",
-            
-            SupportedDatabase.Sqlite when normalizedCommand == "SELECT SQLITE_VERSION()" 
+
+            SupportedDatabase.Sqlite when normalizedCommand == "SELECT SQLITE_VERSION()"
                 => "3.42.0",
-            
+
             SupportedDatabase.Oracle when normalizedCommand.Contains("SELECT * FROM V$VERSION")
                 => "Oracle Database 19c Enterprise Edition Release 19.0.0.0.0",
 
@@ -157,13 +157,13 @@ public class FakeDbCommand : DbCommand
         var conn = FakeConnection;
         if (conn != null && conn.ReaderResults.Count > 0)
         {
-            return new FakeDbDataReader(conn.ReaderResults.Dequeue());
+            return new fakeDbDataReader(conn.ReaderResults.Dequeue());
         }
 
-        return new FakeDbDataReader();
+        return new fakeDbDataReader();
     }
 
-    // **Async overrides**  
+    // **Async overrides**
     public override Task<int> ExecuteNonQueryAsync(CancellationToken ct)
     {
         return Task.FromResult(ExecuteNonQuery());
@@ -188,6 +188,6 @@ public class FakeDbCommand : DbCommand
 
     protected override DbParameter CreateDbParameter()
     {
-        return new FakeDbParameter();
+        return new fakeDbParameter();
     }
 }

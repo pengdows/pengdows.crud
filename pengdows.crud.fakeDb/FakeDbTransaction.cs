@@ -5,11 +5,11 @@ using System.Data.Common;
 
 #endregion
 
-namespace pengdows.crud.FakeDb;
+namespace pengdows.crud.fakeDb;
 
-public class FakeDbTransaction : DbTransaction, IDbTransaction
+public class fakeDbTransaction : DbTransaction, IDbTransaction
 {
-    public FakeDbTransaction(FakeDbConnection fakeDbConnection, IsolationLevel level)
+    public fakeDbTransaction(fakeDbConnection fakeDbConnection, IsolationLevel level)
     {
         DbConnection = fakeDbConnection;
         IsolationLevel = level;

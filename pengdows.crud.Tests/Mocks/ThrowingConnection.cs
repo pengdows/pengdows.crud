@@ -3,11 +3,11 @@ using System.Data;
 using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 
 namespace pengdows.crud.Tests.Mocks;
 
-public sealed class ThrowingConnection : FakeDbConnection
+public sealed class ThrowingConnection : fakeDbConnection
 {
     protected override DbCommand CreateDbCommand() => new ThrowingCommand(this);
 
@@ -32,6 +32,6 @@ public sealed class ThrowingConnection : FakeDbConnection
         public override void Prepare() { }
         protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) => throw new InvalidOperationException();
         protected override Task<DbDataReader> ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken) => throw new InvalidOperationException();
-        protected override DbParameter CreateDbParameter() => new FakeDbParameter();
+        protected override DbParameter CreateDbParameter() => new fakeDbParameter();
     }
 }

@@ -3,14 +3,14 @@ using System.Linq;
 using System.Data.Common;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests;
 
 public class MySqlSessionSettingsTests
 {
-    private sealed class RecordingConnection : FakeDbConnection
+    private sealed class RecordingConnection : fakeDbConnection
     {
         public List<string> ExecutedCommands { get; } = new();
 
@@ -20,11 +20,11 @@ public class MySqlSessionSettingsTests
         }
     }
 
-    private sealed class RecordingCommand : FakeDbCommand
+    private sealed class RecordingCommand : fakeDbCommand
     {
         private readonly List<string> _record;
 
-        public RecordingCommand(FakeDbConnection connection, List<string> record) : base(connection)
+        public RecordingCommand(fakeDbConnection connection, List<string> record) : base(connection)
         {
             _record = record;
         }
@@ -48,12 +48,12 @@ public class MySqlSessionSettingsTests
 
         public override DbCommand CreateCommand()
         {
-            return new FakeDbCommand();
+            return new fakeDbCommand();
         }
 
         public override DbParameter CreateParameter()
         {
-            return new FakeDbParameter();
+            return new fakeDbParameter();
         }
     }
 

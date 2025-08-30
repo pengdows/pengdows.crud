@@ -14,7 +14,7 @@ public class UpdateDeleteAsyncTests : SqlLiteContextTestBase
     public UpdateDeleteAsyncTests()
     {
         TypeMap.Register<TestEntity>();
-        helper = new EntityHelper<TestEntity, int>(Context);
+        helper = new EntityHelper<TestEntity, int>(Context, AuditValueResolver);
         BuildTestTable();
     }
 
@@ -128,10 +128,10 @@ public class UpdateDeleteAsyncTests : SqlLiteContextTestBase
         var sql = string.Format(
             @"CREATE TABLE IF NOT EXISTS {0}Test{1} ({0}Id{1} INTEGER PRIMARY KEY AUTOINCREMENT,
 {0}Name{1} TEXT UNIQUE NOT NULL,
-    {0}CreatedBy{1} TEXT NOT NULL DEFAULT 'system',
-    {0}CreatedOn{1} TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    {0}LastUpdatedBy{1} TEXT NOT NULL DEFAULT 'system',
-    {0}LastUpdatedOn{1} TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    {0}CreatedBy{1} TEXT NOT NULL,
+    {0}CreatedOn{1} TIMESTAMP NOT NULL,
+    {0}LastUpdatedBy{1} TEXT NOT NULL,
+    {0}LastUpdatedOn{1} TIMESTAMP NULL,
 {0}Version{1} INTEGER NOT NULL DEFAULT 0)", qp, qs);
         var container = Context.CreateSqlContainer(sql);
         await container.ExecuteNonQueryAsync();

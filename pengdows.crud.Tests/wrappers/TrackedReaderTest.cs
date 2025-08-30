@@ -6,7 +6,7 @@ using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
 using Moq;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using pengdows.crud.wrappers;
 using Xunit;
 
@@ -19,7 +19,7 @@ public class TrackedReaderTests
     [Fact]
     public async Task ReadAsync_ReturnsFalseAndDisposes_WhenDone()
     {
-        var reader = new Mock<FakeDbDataReader>();
+        var reader = new Mock<fakeDbDataReader>();
         reader.SetupSequence(r => r.ReadAsync(CancellationToken.None))
             .ReturnsAsync(false);
 
@@ -131,7 +131,7 @@ public class TrackedReaderTests
     [Fact]
     public async Task ReadAsync_DisposesAfterLastRow()
     {
-        var reader = new Mock<FakeDbDataReader>();
+        var reader = new Mock<fakeDbDataReader>();
         reader.SetupSequence(r => r.ReadAsync(CancellationToken.None))
             .ReturnsAsync(true)
             .ReturnsAsync(false);
@@ -239,7 +239,7 @@ public class TrackedReaderTests
             ["Date"] = new DateTime(2025, 1, 1)
         };
 
-        using var reader = new FakeDbDataReader(new[] { row });
+        using var reader = new fakeDbDataReader(new[] { row });
         reader.Read();
 
         var tracked = new TrackedReader(reader, Mock.Of<ITrackedConnection>(), Mock.Of<IAsyncDisposable>(), false);

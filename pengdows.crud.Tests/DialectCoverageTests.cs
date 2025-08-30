@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -13,7 +13,7 @@ public class DialectCoverageTests
     {
         yield return new object[]
         {
-            new MySqlDialect(new FakeDbFactory(SupportedDatabase.MySql), NullLogger<MySqlDialect>.Instance),
+            new MySqlDialect(new fakeDbFactory(SupportedDatabase.MySql), NullLogger<MySqlDialect>.Instance),
             "\"",
             true,
             "@",
@@ -22,7 +22,7 @@ public class DialectCoverageTests
 
         yield return new object[]
         {
-            new OracleDialect(new FakeDbFactory(SupportedDatabase.Oracle), NullLogger<OracleDialect>.Instance),
+            new OracleDialect(new fakeDbFactory(SupportedDatabase.Oracle), NullLogger<OracleDialect>.Instance),
             "\"",
             true,
             ":",
@@ -31,7 +31,7 @@ public class DialectCoverageTests
 
         yield return new object[]
         {
-            new DuckDbDialect(new FakeDbFactory(SupportedDatabase.DuckDB), NullLogger<DuckDbDialect>.Instance),
+            new DuckDbDialect(new fakeDbFactory(SupportedDatabase.DuckDB), NullLogger<DuckDbDialect>.Instance),
             "\"",
             true,
             "$",
@@ -40,7 +40,7 @@ public class DialectCoverageTests
 
         yield return new object[]
         {
-            new Sql92Dialect(new FakeDbFactory(SupportedDatabase.Unknown), NullLogger<Sql92Dialect>.Instance),
+            new Sql92Dialect(new fakeDbFactory(SupportedDatabase.Unknown), NullLogger<Sql92Dialect>.Instance),
             "\"",
             true,
             "@",
@@ -49,7 +49,7 @@ public class DialectCoverageTests
 
         yield return new object[]
         {
-            new PostgreSqlDialect(new FakeDbFactory(SupportedDatabase.PostgreSql), NullLogger<PostgreSqlDialect>.Instance),
+            new PostgreSqlDialect(new fakeDbFactory(SupportedDatabase.PostgreSql), NullLogger<PostgreSqlDialect>.Instance),
             "\"",
             true,
             ":",
@@ -58,7 +58,7 @@ public class DialectCoverageTests
 
         yield return new object[]
         {
-            new SqlServerDialect(new FakeDbFactory(SupportedDatabase.SqlServer), NullLogger<SqlServerDialect>.Instance),
+            new SqlServerDialect(new fakeDbFactory(SupportedDatabase.SqlServer), NullLogger<SqlServerDialect>.Instance),
             "\"",
             true,
             "@",
@@ -67,7 +67,7 @@ public class DialectCoverageTests
 
         yield return new object[]
         {
-            new SqliteDialect(new FakeDbFactory(SupportedDatabase.Sqlite), NullLogger<SqliteDialect>.Instance),
+            new SqliteDialect(new fakeDbFactory(SupportedDatabase.Sqlite), NullLogger<SqliteDialect>.Instance),
             "\"",
             true,
             "@",
@@ -76,7 +76,7 @@ public class DialectCoverageTests
 
         yield return new object[]
         {
-            new FirebirdDialect(new FakeDbFactory(SupportedDatabase.Firebird), NullLogger<FirebirdDialect>.Instance),
+            new FirebirdDialect(new fakeDbFactory(SupportedDatabase.Firebird), NullLogger<FirebirdDialect>.Instance),
             "\"",
             true,
             "@",

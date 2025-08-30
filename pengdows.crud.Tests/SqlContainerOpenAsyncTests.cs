@@ -4,7 +4,7 @@ using System.Data.Common;
 using System.Threading.Tasks;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 #endregion
@@ -64,16 +64,16 @@ public class SqlContainerOpenAsyncTests
 
         public override DbCommand CreateCommand()
         {
-            return new FakeDbCommand();
+            return new fakeDbCommand();
         }
 
         public override DbParameter CreateParameter()
         {
-            return new FakeDbParameter();
+            return new fakeDbParameter();
         }
     }
 
-    private sealed class CountingConnection : FakeDbConnection
+    private sealed class CountingConnection : fakeDbConnection
     {
     }
 }

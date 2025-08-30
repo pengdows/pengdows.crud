@@ -1,7 +1,7 @@
 using System;
 using System.Data;
 using pengdows.crud.enums;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using pengdows.crud.attributes;
 using Xunit;
 
@@ -47,7 +47,7 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
     [Fact]
     public void BuildUpsert_OnDuplicate_BumpsVersion()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.MySql);
+        var factory = new fakeDbFactory(SupportedDatabase.MySql);
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=MySql", factory);
         TypeMap.Register<TestEntity>();
         var helper = new EntityHelper<TestEntity, int>(context);
@@ -61,7 +61,7 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
     [Fact]
     public void BuildUpsert_Merge_BumpsVersion()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.SqlServer);
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory);
         TypeMap.Register<TestEntity>();
         var helper = new EntityHelper<TestEntity, int>(context);

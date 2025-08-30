@@ -6,7 +6,7 @@ using System.Data;
 using System.Threading.Tasks;
 using System.Reflection;
 using pengdows.crud.enums;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 #endregion
@@ -65,7 +65,7 @@ public class SqlContainerTests : SqlLiteContextTestBase
     public void AddParameterWithValue_DbParameter_Throws()
     {
         var container = Context.CreateSqlContainer();
-        var param = new FakeDbParameter();
+        var param = new fakeDbParameter();
 
         Assert.Throws<ArgumentException>(() => container.AddParameterWithValue(DbType.Int32, param));
     }
@@ -83,7 +83,7 @@ public class SqlContainerTests : SqlLiteContextTestBase
     public void AddParameter_AssignsGeneratedName_WhenMissing()
     {
         var container = Context.CreateSqlContainer();
-        var param = new FakeDbParameter { DbType = DbType.Int32, Value = 1 };
+        var param = new fakeDbParameter { DbType = DbType.Int32, Value = 1 };
         container.AddParameter(param);
 
         Assert.False(string.IsNullOrEmpty(param.ParameterName));
@@ -311,7 +311,7 @@ public class SqlContainerTests : SqlLiteContextTestBase
     public void Dispose_ClearsQueryAndParameters()
     {
         var container = Context.CreateSqlContainer();
-        var param = new FakeDbParameter { ParameterName = "p", DbType = DbType.Int32, Value = 1 };
+        var param = new fakeDbParameter { ParameterName = "p", DbType = DbType.Int32, Value = 1 };
         container.AddParameter(param);
         container.Query.Append("SELECT 1");
 
@@ -326,7 +326,7 @@ public class SqlContainerTests : SqlLiteContextTestBase
     public async Task DisposeAsync_ClearsQueryAndParameters()
     {
         var container = Context.CreateSqlContainer();
-        var param = new FakeDbParameter { ParameterName = "p", DbType = DbType.Int32, Value = 1 };
+        var param = new fakeDbParameter { ParameterName = "p", DbType = DbType.Int32, Value = 1 };
         container.AddParameter(param);
         container.Query.Append("SELECT 1");
 
@@ -362,7 +362,7 @@ public class SqlContainerTests : SqlLiteContextTestBase
     [Fact]
     public void WrapForStoredProc_ExecStyle_IncludesParameters()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.SqlServer);
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}", factory);
         var container = ctx.CreateSqlContainer("dbo.my_proc");
         var param = container.AddParameterWithValue(DbType.Int32, 1);
@@ -376,7 +376,7 @@ public class SqlContainerTests : SqlLiteContextTestBase
     [Fact]
     public void WrapForStoredProc_PostgreSqlRead_UsesSelectSyntax()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.PostgreSql);
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.PostgreSql}", factory);
         var container = ctx.CreateSqlContainer("my_proc");
         var param = container.AddParameterWithValue(DbType.Int32, 1);
@@ -390,7 +390,7 @@ public class SqlContainerTests : SqlLiteContextTestBase
     [Fact]
     public void WrapForStoredProc_PostgreSqlCaptureReturn_Throws()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.PostgreSql);
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.PostgreSql}", factory);
         var container = ctx.CreateSqlContainer("my_proc");
 
@@ -400,7 +400,7 @@ public class SqlContainerTests : SqlLiteContextTestBase
     [Fact]
     public void WrapForStoredProc_FirebirdRead_UsesSelectSyntax()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.Firebird);
+        var factory = new fakeDbFactory(SupportedDatabase.Firebird);
         var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.Firebird}", factory);
         var container = ctx.CreateSqlContainer("dbo.my_proc");
         var param = container.AddParameterWithValue(DbType.Int32, 1);
@@ -414,7 +414,7 @@ public class SqlContainerTests : SqlLiteContextTestBase
     [Fact]
     public void WrapForStoredProc_FirebirdCaptureReturn_Throws()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.Firebird);
+        var factory = new fakeDbFactory(SupportedDatabase.Firebird);
         var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.Firebird}", factory);
         var container = ctx.CreateSqlContainer("dbo.my_proc");
 
@@ -424,7 +424,7 @@ public class SqlContainerTests : SqlLiteContextTestBase
     [Fact]
     public void WrapForStoredProc_NoProcedureName_Throws()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.SqlServer);
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}", factory);
         var container = ctx.CreateSqlContainer();
 
@@ -434,7 +434,7 @@ public class SqlContainerTests : SqlLiteContextTestBase
     [Fact]
     public void WrapForStoredProc_UnsupportedStyle_Throws()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}", factory);
         var container = ctx.CreateSqlContainer("my_proc");
 
@@ -450,7 +450,7 @@ public class SqlContainerTests : SqlLiteContextTestBase
         prop!.SetValue(info, 1);
 
         var container = Context.CreateSqlContainer();
-        var param = new FakeDbParameter { ParameterName = "p0", DbType = DbType.Int32, Direction = ParameterDirection.Output };
+        var param = new fakeDbParameter { ParameterName = "p0", DbType = DbType.Int32, Direction = ParameterDirection.Output };
 
         container.AddParameter(param);
 
@@ -468,10 +468,10 @@ public class SqlContainerTests : SqlLiteContextTestBase
         prop!.SetValue(info, 1);
 
         var container = Context.CreateSqlContainer();
-        var p1 = new FakeDbParameter { ParameterName = "p0", DbType = DbType.Int32, Direction = ParameterDirection.Output };
+        var p1 = new fakeDbParameter { ParameterName = "p0", DbType = DbType.Int32, Direction = ParameterDirection.Output };
         container.AddParameter(p1);
 
-        var p2 = new FakeDbParameter { ParameterName = "p1", DbType = DbType.Int32, Direction = ParameterDirection.Output };
+        var p2 = new fakeDbParameter { ParameterName = "p1", DbType = DbType.Int32, Direction = ParameterDirection.Output };
 
         Assert.Throws<InvalidOperationException>(() => container.AddParameter(p2));
 

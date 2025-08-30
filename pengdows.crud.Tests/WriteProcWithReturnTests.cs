@@ -3,7 +3,7 @@
 using System;
 using System.Data;
 using pengdows.crud.enums;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 #endregion
@@ -16,7 +16,7 @@ public class WriteProcWithReturnTests
 
     private SqlContainer SetupContainer(SupportedDatabase product)
     {
-        _dbContext = new DatabaseContext($"DataSource=:memory:;EmulatedProduct={product}", new FakeDbFactory(product));
+        _dbContext = new DatabaseContext($"DataSource=:memory:;EmulatedProduct={product}", new fakeDbFactory(product));
         var sc = _dbContext.CreateSqlContainer("dbo.Sqltest") as SqlContainer;
         for (var i = 0; i < 2; i++)
         {

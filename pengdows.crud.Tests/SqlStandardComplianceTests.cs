@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.enums;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using pengdows.crud.dialects;
 using Xunit;
 
@@ -29,8 +29,8 @@ public class SqlStandardComplianceTests
         {
             ["SELECT @@VERSION"] = banner
         };
-        var factory = new FakeDbFactory(SupportedDatabase.SqlServer);
-        var conn = (FakeDbConnection)factory.CreateConnection();
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var conn = (fakeDbConnection)factory.CreateConnection();
         conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}";
         var tracked = new FakeTrackedConnection(conn, schema, scalars);
         var dialect = SqlDialectFactory.CreateDialectForType(

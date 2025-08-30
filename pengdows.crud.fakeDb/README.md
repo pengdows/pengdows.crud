@@ -4,25 +4,25 @@
 
 ## Usage
 
-In the `pengdows.crud.Tests` project the fake provider is used to spin up a `DatabaseContext` without touching a real database. The key pieces are `FakeDbFactory` and an `EmulatedProduct` value in the connection string:
+In the `pengdows.crud.Tests` project the fake provider is used to spin up a `DatabaseContext` without touching a real database. The key pieces are `fakeDbFactory` and an `EmulatedProduct` value in the connection string:
 
 ```csharp
 using pengdows.crud;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 
-var factory = new FakeDbFactory(SupportedDatabase.Sqlite.ToString());
+var factory = new fakeDbFactory(SupportedDatabase.Sqlite.ToString());
 var context = new DatabaseContext(
     "Data Source=test;EmulatedProduct=Sqlite",
     factory);
 ```
 
-You can also use the fake provider without `DatabaseContext`. Create a `FakeDbConnection`
+You can also use the fake provider without `DatabaseContext`. Create a `fakeDbConnection`
 directly and work with it using normal ADO.NET APIs:
 
 ```csharp
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 
-using var connection = new FakeDbConnection("Data Source=ignored;EmulatedProduct=Sqlite");
+using var connection = new fakeDbConnection("Data Source=ignored;EmulatedProduct=Sqlite");
 await connection.OpenAsync();
 using var command = connection.CreateCommand();
 command.CommandText = "SELECT 1";
@@ -34,15 +34,15 @@ This makes `pengdows.crud.fakeDb` handy for testing any code that relies on
 
 ## Connection Breaking for Testing
 
-The enhanced `FakeDbConnection` supports sophisticated connection breaking functionality for testing error scenarios and connection failures.
+The enhanced `fakeDbConnection` supports sophisticated connection breaking functionality for testing error scenarios and connection failures.
 
 ### Connection Failure Modes
 
-The `FakeDbConnection` can be configured to fail in various ways:
+The `fakeDbConnection` can be configured to fail in various ways:
 
 - **FailOnOpen**: Connection fails when `Open()` or `OpenAsync()` is called
 - **FailOnCommand**: Connection fails when creating commands
-- **FailOnTransaction**: Connection fails when beginning transactions  
+- **FailOnTransaction**: Connection fails when beginning transactions
 - **FailAfterCount**: Connection works for N operations then fails
 - **Broken**: Connection is permanently broken
 
@@ -50,19 +50,19 @@ The `FakeDbConnection` can be configured to fail in various ways:
 
 ```csharp
 // Create a connection that fails on open
-var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
-var connection = (FakeDbConnection)factory.CreateConnection();
+var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+var connection = (fakeDbConnection)factory.CreateConnection();
 connection.SetFailOnOpen();
 
 // This will throw InvalidOperationException
-try { connection.Open(); } 
+try { connection.Open(); }
 catch (InvalidOperationException) { /* Handle connection failure */ }
 ```
 
 ### Custom Exceptions
 
 ```csharp
-var connection = (FakeDbConnection)factory.CreateConnection();
+var connection = (fakeDbConnection)factory.CreateConnection();
 var timeoutException = new TimeoutException("Connection timed out");
 connection.SetCustomFailureException(timeoutException);
 connection.SetFailOnOpen();
@@ -73,11 +73,11 @@ connection.Open(); // throws TimeoutException with custom message
 ### Fail After Count
 
 ```csharp
-var connection = (FakeDbConnection)factory.CreateConnection();
+var connection = (fakeDbConnection)factory.CreateConnection();
 connection.SetFailAfterOpenCount(2);
 
 connection.Open(); connection.Close(); // Works (1st)
-connection.Open(); connection.Close(); // Works (2nd) 
+connection.Open(); connection.Close(); // Works (2nd)
 connection.Open(); // Throws! (3rd attempt fails)
 ```
 
@@ -85,8 +85,8 @@ connection.Open(); // Throws! (3rd attempt fails)
 
 ```csharp
 // Create factory that produces failing connections
-var factory = FakeDbFactory.CreateFailingFactory(
-    SupportedDatabase.PostgreSql, 
+var factory = fakeDbFactory.CreateFailingFactory(
+    SupportedDatabase.PostgreSql,
     ConnectionFailureMode.FailOnOpen,
     new TimeoutException("Custom timeout"));
 
@@ -97,21 +97,21 @@ connection.Open(); // Throws TimeoutException
 ### Command Execution Failures
 
 ```csharp
-var connection = (FakeDbConnection)factory.CreateConnection();
+var connection = (fakeDbConnection)factory.CreateConnection();
 connection.Open();
 
-var command = (FakeDbCommand)connection.CreateCommand();
+var command = (fakeDbCommand)connection.CreateCommand();
 command.SetFailOnExecute(true, new TimeoutException("Query timeout"));
 
 command.ExecuteNonQuery(); // Throws TimeoutException
-command.ExecuteScalar();   // Throws TimeoutException  
+command.ExecuteScalar();   // Throws TimeoutException
 command.ExecuteReader();   // Throws TimeoutException
 ```
 
 ### Resetting Failure Conditions
 
 ```csharp
-var connection = (FakeDbConnection)factory.CreateConnection();
+var connection = (fakeDbConnection)factory.CreateConnection();
 
 // Set multiple failure modes
 connection.SetFailOnOpen();
@@ -126,11 +126,11 @@ connection.Open(); // Succeeds
 
 ### Preloading Results
 
-`FakeDbConnection` can queue up results that will be returned the next time a
+`fakeDbConnection` can queue up results that will be returned the next time a
 command is executed. This allows tests to simulate query responses:
 
 ```csharp
-var conn = new FakeDbConnection("Data Source=:memory:;EmulatedProduct=Sqlite");
+var conn = new fakeDbConnection("Data Source=:memory:;EmulatedProduct=Sqlite");
 conn.EnqueueScalarResult(5);
 conn.EnqueueReaderResult(new[] { new Dictionary<string, object>{{"Name", "Jane"}} });
 conn.Open();

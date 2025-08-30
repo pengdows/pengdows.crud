@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using pengdows.crud.wrappers;
 using Xunit;
 
@@ -15,7 +15,7 @@ public class SqlServerMergeSupportTests
     [InlineData("SQL Server 10.0", true)]
     public void SupportsMerge_Depends_On_Version(string versionString, bool expected)
     {
-        var factory = new FakeDbFactory(SupportedDatabase.SqlServer.ToString());
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer.ToString());
         var conn = factory.CreateConnection();
         conn.ConnectionString = "Data Source=test;EmulatedProduct=SqlServer";
         var versionSql = "SELECT @@VERSION";

@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -19,7 +19,7 @@ public class DataReaderMapperNegativeTests
                 ["IsActive"] = true
             }
         };
-        var reader = new FakeDbDataReader(rows);
+        var reader = new fakeDbDataReader(rows);
 
         var result = await DataReaderMapper.LoadObjectsFromDataReaderAsync<SampleEntity>(reader);
 

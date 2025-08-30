@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using pengdows.crud.wrappers;
 using Xunit;
 
@@ -25,8 +25,8 @@ public class DataSourceInformationCapabilityTests
             "[a-zA-Z][a-zA-Z0-9_]*",
             "[a-zA-Z][a-zA-Z0-9_]*",
             false);
-        var factory = new FakeDbFactory(SupportedDatabase.Unknown);
-        var conn = (FakeDbConnection)factory.CreateConnection();
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
+        var conn = (fakeDbConnection)factory.CreateConnection();
         conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Unknown}";
         var tracked = new FakeTrackedConnection(conn, schema, new Dictionary<string, object>());
 
@@ -54,8 +54,8 @@ public class DataSourceInformationCapabilityTests
         {
             ["SELECT @@VERSION"] = "Microsoft SQL Server 15.0"
         };
-        var factory = new FakeDbFactory(SupportedDatabase.SqlServer);
-        var conn = (FakeDbConnection)factory.CreateConnection();
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var conn = (fakeDbConnection)factory.CreateConnection();
         conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}";
         var tracked = new FakeTrackedConnection(conn, schema, scalars);
 
@@ -86,7 +86,7 @@ public class DataSourceInformationCapabilityTests
     [Fact]
     public void HasBasicCompatibility_ReturnsFalse_WhenStandardBelowSql92()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.Unknown);
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         var dialect = new LowStandardDialect(factory, NullLogger.Instance);
         using var tracked = new TrackedConnection(factory.CreateConnection());
         dialect.DetectDatabaseInfo(tracked);

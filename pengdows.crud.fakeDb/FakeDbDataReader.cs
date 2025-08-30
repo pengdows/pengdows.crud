@@ -6,20 +6,20 @@ using System.Data.Common;
 
 #endregion
 
-namespace pengdows.crud.FakeDb;
+namespace pengdows.crud.fakeDb;
 
-public class FakeDbDataReader : DbDataReader
+public class fakeDbDataReader : DbDataReader
 {
     private readonly List<Dictionary<string, object>> _rows;
     private int _index = -1;
 
-    public FakeDbDataReader(
+    public fakeDbDataReader(
         IEnumerable<Dictionary<string, object>>? rows = null)
     {
         _rows = rows?.ToList() ?? new List<Dictionary<string, object>>();
     }
 
-    public FakeDbDataReader() : this(new List<Dictionary<string, object>>())
+    public fakeDbDataReader() : this(new List<Dictionary<string, object>>())
     {
     }
 

@@ -1,15 +1,15 @@
 using System.Threading.Tasks;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class FakeDbNullabilityTests
+public class fakeDbNullabilityTests
 {
     [Fact]
-    public void FakeDbParameter_PropertiesAllowNull()
+    public void fakeDbParameter_PropertiesAllowNull()
     {
-        var p = new FakeDbParameter
+        var p = new fakeDbParameter
         {
             ParameterName = null,
             SourceColumn = null,
@@ -30,16 +30,16 @@ public class FakeDbNullabilityTests
     }
 
     [Fact]
-    public async Task FakeDbCommand_CommandTextAllowsNullAndExecuteScalarAsync()
+    public async Task fakeDbCommand_CommandTextAllowsNullAndExecuteScalarAsync()
     {
-        var cmd = new FakeDbCommand();
+        var cmd = new fakeDbCommand();
         cmd.CommandText = null;
         Assert.Null(cmd.CommandText);
         cmd.CommandText = "SELECT 1";
         Assert.Equal("SELECT 1", cmd.CommandText);
 
-        var conn = new FakeDbConnection();
-        var cmdWithConn = new FakeDbCommand(conn);
+        var conn = new fakeDbConnection();
+        var cmdWithConn = new fakeDbCommand(conn);
 
         var defaultResult = await cmdWithConn.ExecuteScalarAsync(default);
         Assert.Equal(42, defaultResult);
