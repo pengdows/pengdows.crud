@@ -3,13 +3,13 @@
 using System;
 using System.Data;
 using pengdows.crud.enums;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using pengdows.crud.exceptions;
 using Xunit;
 
 #endregion
 
-namespace pengdows.crud.Tests.FakeDb;
+namespace pengdows.crud.Tests.fakeDb;
 
 public class ConnectionFailureHelperTests
 {
@@ -39,8 +39,8 @@ public class ConnectionFailureHelperTests
     public void CreateFailOnTransactionContext_ThrowsOnBeginTransaction()
     {
         using var context = ConnectionFailureHelper.CreateFailOnTransactionContext();
-        
-        Assert.Throws<InvalidOperationException>(() => 
+
+        Assert.Throws<InvalidOperationException>(() =>
             context.BeginTransaction());
     }
 
@@ -48,15 +48,15 @@ public class ConnectionFailureHelperTests
     public void CreateFailAfterCountContext_FailsAfterSpecifiedCount()
     {
         using var context = ConnectionFailureHelper.CreateFailAfterCountContext(1);
-        
+
         // First connection should succeed
         using var conn1 = context.GetConnection(ExecutionType.Read);
         conn1.Open();
         Assert.Equal(ConnectionState.Open, conn1.State);
         conn1.Close();
-        
+
         // Second connection should fail
-        Assert.Throws<InvalidOperationException>(() => 
+        Assert.Throws<InvalidOperationException>(() =>
         {
             using var conn2 = context.GetConnection(ExecutionType.Read);
             conn2.Open();
@@ -102,28 +102,28 @@ public class ConnectionFailureHelperTests
     [Fact]
     public void ConfigureConnectionFailure_ConfiguresExistingConnection()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
-        var connection = (FakeDbConnection)factory.CreateConnection();
-        
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var connection = (fakeDbConnection)factory.CreateConnection();
+
         ConnectionFailureHelper.ConfigureConnectionFailure(
-            connection, 
+            connection,
             ConnectionFailureMode.FailOnOpen);
-        
+
         Assert.Throws<InvalidOperationException>(() => connection.Open());
     }
 
     [Fact]
     public void ConfigureConnectionFailure_WithCustomException_UsesCustomException()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
-        var connection = (FakeDbConnection)factory.CreateConnection();
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var connection = (fakeDbConnection)factory.CreateConnection();
         var customException = new UnauthorizedAccessException("Access denied");
-        
+
         ConnectionFailureHelper.ConfigureConnectionFailure(
-            connection, 
+            connection,
             ConnectionFailureMode.FailOnOpen,
             customException);
-        
+
         var thrownException = Assert.Throws<UnauthorizedAccessException>(() => connection.Open());
         Assert.Equal("Access denied", thrownException.Message);
     }
@@ -131,20 +131,20 @@ public class ConnectionFailureHelperTests
     [Fact]
     public void ConfigureConnectionFailure_WithFailAfterCount_ConfiguresCorrectly()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
-        var connection = (FakeDbConnection)factory.CreateConnection();
-        
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var connection = (fakeDbConnection)factory.CreateConnection();
+
         ConnectionFailureHelper.ConfigureConnectionFailure(
-            connection, 
+            connection,
             ConnectionFailureMode.FailAfterCount,
             failAfterCount: 2);
-        
+
         // First two opens should succeed
         connection.Open();
         connection.Close();
         connection.Open();
         connection.Close();
-        
+
         // Third should fail
         Assert.Throws<InvalidOperationException>(() => connection.Open());
     }
@@ -163,7 +163,7 @@ public class ConnectionFailureHelperTests
     public void CommonExceptions_CreateDbException_CreatesDbException()
     {
         var dbException = ConnectionFailureHelper.CommonExceptions.CreateDbException("Database error");
-        
+
         Assert.NotNull(dbException);
         Assert.Equal("Database error", dbException.Message);
         Assert.Equal(-1, dbException.ErrorCode);
@@ -186,7 +186,7 @@ public class ConnectionFailureHelperTests
     public async System.Threading.Tasks.Task CreateFailOnCommandContext_FailsOnSqlContainerOperations()
     {
         await using var context = ConnectionFailureHelper.CreateFailOnCommandContext();
-        
+
         // Creating the container succeeds, but executing commands fails
         await using var container = context.CreateSqlContainer("SELECT 1");
 

@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using pengdows.crud.wrappers;
 using Xunit;
 
@@ -27,7 +27,7 @@ public class SqlDialectVersionTests
             "@\\w+",
             true);
         var scalars = new Dictionary<string, object> { ["SELECT @@VERSION"] = "Microsoft SQL Server 15.0" };
-        var factory = new FakeDbFactory(SupportedDatabase.SqlServer);
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var conn = factory.CreateConnection();
         conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}";
         var tracked = new FakeTrackedConnection(conn, schema, scalars);
@@ -39,12 +39,12 @@ public class SqlDialectVersionTests
         Assert.Contains("Microsoft SQL Server 15.0", result);
     }
 
-    private sealed class ThrowingConnection : FakeDbConnection
+    private sealed class ThrowingConnection : fakeDbConnection
     {
         protected override DbCommand CreateDbCommand() => new ThrowingCommand(this);
     }
 
-    private sealed class ThrowingCommand : FakeDbCommand
+    private sealed class ThrowingCommand : fakeDbCommand
     {
         public ThrowingCommand(DbConnection connection) : base(connection) { }
         public override object ExecuteScalar() => throw new InvalidOperationException("fail");
@@ -53,7 +53,7 @@ public class SqlDialectVersionTests
     [Fact]
     public void GetDatabaseVersion_CommandFails_ReturnsErrorMessage()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.SqlServer);
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var conn = new ThrowingConnection { ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}" };
         using var tracked = new TrackedConnection(conn);
         var dialect = SqlDialectFactory.CreateDialectForType(
@@ -64,5 +64,5 @@ public class SqlDialectVersionTests
         Assert.StartsWith("Error retrieving version", result);
     }
 
-    // Additional version fallback tests are omitted due to FakeDb limitations producing deterministic values
+    // Additional version fallback tests are omitted due to fakeDb limitations producing deterministic values
 }

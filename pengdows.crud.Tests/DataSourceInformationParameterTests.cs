@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using pengdows.crud.enums;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using pengdows.crud.wrappers;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -12,8 +12,8 @@ public class DataSourceInformationParameterTests
 {
     private static ITrackedConnection BuildSqliteConnection()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
-        var conn = (FakeDbConnection)factory.CreateConnection();
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var conn = (fakeDbConnection)factory.CreateConnection();
         conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}";
 
         var row = new Dictionary<string, object> { { "version", "3.0" } };
@@ -31,7 +31,7 @@ public class DataSourceInformationParameterTests
         var tracked = BuildSqliteConnection();
         var info = DataSourceInformation.Create(
             tracked,
-            new FakeDbFactory(SupportedDatabase.Sqlite),
+            new fakeDbFactory(SupportedDatabase.Sqlite),
             NullLoggerFactory.Instance);
 
         // ParameterMarkerPattern defaults to empty
@@ -52,7 +52,7 @@ public class DataSourceInformationParameterTests
     [Fact]
     public void Create_Throws_OnNullArguments()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
 
         Assert.Throws<ArgumentNullException>(
             () => DataSourceInformation.Create(null!, factory, NullLoggerFactory.Instance));

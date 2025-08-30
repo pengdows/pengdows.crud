@@ -3,11 +3,11 @@
 using System;
 using System.Data.Common;
 using pengdows.crud.enums;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 
 #endregion
 
-namespace pengdows.crud.Tests.FakeDb;
+namespace pengdows.crud.Tests.fakeDb;
 
 /// <summary>
 /// Helper class for configuring connection failure scenarios in tests
@@ -19,7 +19,7 @@ public static class ConnectionFailureHelper
     /// </summary>
     public static IDatabaseContext CreateFailOnOpenContext(SupportedDatabase database = SupportedDatabase.Sqlite, Exception? customException = null)
     {
-        var factory = FakeDbFactory.CreateFailingFactoryWithSkip(database, ConnectionFailureMode.FailOnOpen, customException);
+        var factory = fakeDbFactory.CreateFailingFactoryWithSkip(database, ConnectionFailureMode.FailOnOpen, customException);
         return new DatabaseContext($"Data Source=test;EmulatedProduct={database}", factory);
     }
 
@@ -28,7 +28,7 @@ public static class ConnectionFailureHelper
     /// </summary>
     public static IDatabaseContext CreateFailOnCommandContext(SupportedDatabase database = SupportedDatabase.Sqlite, Exception? customException = null)
     {
-        var factory = FakeDbFactory.CreateFailingFactoryWithSkip(database, ConnectionFailureMode.FailOnCommand, customException);
+        var factory = fakeDbFactory.CreateFailingFactoryWithSkip(database, ConnectionFailureMode.FailOnCommand, customException);
         return new DatabaseContext($"Data Source=test;EmulatedProduct={database}", factory);
     }
 
@@ -37,7 +37,7 @@ public static class ConnectionFailureHelper
     /// </summary>
     public static IDatabaseContext CreateFailOnTransactionContext(SupportedDatabase database = SupportedDatabase.Sqlite, Exception? customException = null)
     {
-        var factory = FakeDbFactory.CreateFailingFactoryWithSkip(database, ConnectionFailureMode.FailOnTransaction, customException);
+        var factory = fakeDbFactory.CreateFailingFactoryWithSkip(database, ConnectionFailureMode.FailOnTransaction, customException);
         return new DatabaseContext($"Data Source=test;EmulatedProduct={database}", factory);
     }
 
@@ -46,7 +46,7 @@ public static class ConnectionFailureHelper
     /// </summary>
     public static IDatabaseContext CreateFailAfterCountContext(int failAfterCount, SupportedDatabase database = SupportedDatabase.Sqlite, Exception? customException = null)
     {
-        var factory = FakeDbFactory.CreateFailingFactoryWithSkip(database, ConnectionFailureMode.FailAfterCount, customException, failAfterCount);
+        var factory = fakeDbFactory.CreateFailingFactoryWithSkip(database, ConnectionFailureMode.FailAfterCount, customException, failAfterCount);
         return new DatabaseContext($"Data Source=test;EmulatedProduct={database}", factory);
     }
 
@@ -55,14 +55,14 @@ public static class ConnectionFailureHelper
     /// </summary>
     public static IDatabaseContext CreateBrokenConnectionContext(SupportedDatabase database = SupportedDatabase.Sqlite)
     {
-        var factory = FakeDbFactory.CreateFailingFactoryWithSkip(database, ConnectionFailureMode.Broken);
+        var factory = fakeDbFactory.CreateFailingFactoryWithSkip(database, ConnectionFailureMode.Broken);
         return new DatabaseContext($"Data Source=test;EmulatedProduct={database}", factory);
     }
 
     /// <summary>
-    /// Configures an existing FakeDbConnection with failure modes
+    /// Configures an existing fakeDbConnection with failure modes
     /// </summary>
-    public static void ConfigureConnectionFailure(FakeDbConnection connection, ConnectionFailureMode mode, Exception? customException = null, int? failAfterCount = null)
+    public static void ConfigureConnectionFailure(fakeDbConnection connection, ConnectionFailureMode mode, Exception? customException = null, int? failAfterCount = null)
     {
         if (customException != null)
         {
@@ -99,7 +99,7 @@ public static class ConnectionFailureHelper
         public static Exception AuthenticationError => new UnauthorizedAccessException("Authentication failed");
         public static Exception DatabaseUnavailable => new InvalidOperationException("Database unavailable");
         public static Exception InvalidConnectionString => new ArgumentException("Invalid connection string");
-        
+
         public static DbException CreateDbException(string message)
         {
             // Since DbException is abstract and has protected constructors,
@@ -114,7 +114,7 @@ public static class ConnectionFailureHelper
     private class TestDbException : DbException
     {
         public TestDbException(string message) : base(message) { }
-        
+
         public override int ErrorCode => -1;
     }
 }

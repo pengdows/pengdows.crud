@@ -5,6 +5,7 @@ using System.Data.Common;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using pengdows.crud.collections;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
@@ -20,7 +21,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
     private readonly ISqlDialect _dialect;
 
     private readonly ILogger<ISqlContainer> _logger;
-    private readonly Dictionary<string, DbParameter> _parameters = new();
+    private readonly IDictionary<string, DbParameter> _parameters = new OrderedDictionary<string, DbParameter>();
     private int _outputParameterCount;
 
     internal SqlContainer(IDatabaseContext context, string? query = "", ILogger<ISqlContainer>? logger = null)
@@ -118,9 +119,9 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
     public DbParameter AddParameterWithValue<T>(string? name, DbType type, T value,
         ParameterDirection direction = ParameterDirection.Input)
     {
-        name ??= GenerateRandomName(); 
+        name ??= GenerateRandomName();
         var parameter = _context.CreateDbParameter(name, type, value, direction);
- 
+
         AddParameter(parameter);
         return parameter;
     }
@@ -280,8 +281,13 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
             }
         }
     }
-    
+
     public async Task<int> ExecuteNonQueryAsync(CommandType commandType = CommandType.Text)
+    {
+        return await ExecuteNonQueryAsync(commandType, CancellationToken.None).ConfigureAwait(false);
+    }
+
+    public async Task<int> ExecuteNonQueryAsync(CommandType commandType, CancellationToken cancellationToken)
     {
         _context.AssertIsWriteConnection();
         ITrackedConnection? conn = null;
@@ -289,14 +295,14 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
         try
         {
             await using var contextLocker = _context.GetLock();
-            await contextLocker.LockAsync().ConfigureAwait(false);
+            await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             var isTransaction = _context is ITransactionContext;
             conn = _context.GetConnection(ExecutionType.Write, isTransaction);
             await using var connectionLocker = conn.GetLock();
-            await connectionLocker.LockAsync().ConfigureAwait(false);
-            cmd = await PrepareCommandAsync(conn, commandType, ExecutionType.Write).ConfigureAwait(false);
+            await connectionLocker.LockAsync(cancellationToken).ConfigureAwait(false);
+            cmd = await PrepareCommandAsync(conn, commandType, ExecutionType.Write, cancellationToken).ConfigureAwait(false);
 
-            return await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
+            return await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -306,9 +312,14 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
 
     public async Task<T?> ExecuteScalarAsync<T>(CommandType commandType = CommandType.Text)
     {
+        return await ExecuteScalarAsync<T>(commandType, CancellationToken.None).ConfigureAwait(false);
+    }
+
+    public async Task<T?> ExecuteScalarAsync<T>(CommandType commandType, CancellationToken cancellationToken)
+    {
         _context.AssertIsReadConnection();
 
-        await using var reader = await ExecuteReaderAsync(commandType);
+        await using var reader = await ExecuteReaderAsync(commandType, cancellationToken).ConfigureAwait(false);
         if (await reader.ReadAsync().ConfigureAwait(false))
         {
             var value = reader.GetValue(0); // always returns object
@@ -321,6 +332,11 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
 
     public async Task<ITrackedReader> ExecuteReaderAsync(CommandType commandType = CommandType.Text)
     {
+        return await ExecuteReaderAsync(commandType, CancellationToken.None).ConfigureAwait(false);
+    }
+
+    public async Task<ITrackedReader> ExecuteReaderAsync(CommandType commandType, CancellationToken cancellationToken)
+    {
         _context.AssertIsReadConnection();
 
         ITrackedConnection conn;
@@ -328,12 +344,12 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
         try
         {
             await using var contextLocker = _context.GetLock();
-            await contextLocker.LockAsync().ConfigureAwait(false);
+            await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             var isTransaction = _context is ITransactionContext;
             conn = _context.GetConnection(ExecutionType.Read, isTransaction);
             var connectionLocker = conn.GetLock();
-            await connectionLocker.LockAsync().ConfigureAwait(false);
-            cmd = await PrepareCommandAsync(conn, commandType, ExecutionType.Read).ConfigureAwait(false);
+            await connectionLocker.LockAsync(cancellationToken).ConfigureAwait(false);
+            cmd = await PrepareCommandAsync(conn, commandType, ExecutionType.Read, cancellationToken).ConfigureAwait(false);
 
             // unless the databaseContext is in a transaction or SingleConnection mode,
             // a new connection is returned for every READ operation, therefore, we
@@ -350,7 +366,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
             //or sqlCe mode, or single connection mode, we will NOT close the connection.
             // otherwise, we will have the connection set to autoclose so that we
             //close the underlying connection when the DbDataReader is closed;
-            var dr = await cmd.ExecuteReaderAsync(behavior).ConfigureAwait(false);
+            var dr = await cmd.ExecuteReaderAsync(behavior, cancellationToken).ConfigureAwait(false);
             return new TrackedReader(dr, conn, connectionLocker, behavior == CommandBehavior.CloseConnection);
         }
         finally
@@ -373,7 +389,11 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
     }
 
 
-    private async Task<DbCommand> PrepareCommandAsync(ITrackedConnection conn, CommandType commandType, ExecutionType executionType)
+    private async Task<DbCommand> PrepareCommandAsync(
+        ITrackedConnection conn,
+        CommandType commandType,
+        ExecutionType executionType,
+        CancellationToken cancellationToken)
     {
         if (commandType == CommandType.TableDirect)
         {
@@ -385,7 +405,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
             throw new InvalidOperationException("SQL query is empty.");
         }
 
-        await OpenConnectionAsync(conn).ConfigureAwait(false);
+        await OpenConnectionAsync(conn, cancellationToken).ConfigureAwait(false);
         var cmd = CreateCommand(conn);
         cmd.CommandType = CommandType.Text;
         _logger.LogInformation("Executing SQL: {Sql}", Query.ToString());
@@ -417,11 +437,11 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
         return cmd;
     }
 
-    private Task OpenConnectionAsync(ITrackedConnection conn)
+    private Task OpenConnectionAsync(ITrackedConnection conn, CancellationToken cancellationToken)
     {
         if (conn.State != ConnectionState.Open)
         {
-            return conn.OpenAsync();
+            return conn.OpenAsync(cancellationToken);
         }
 
         return Task.CompletedTask;

@@ -5,11 +5,11 @@ using pengdows.crud.enums;
 
 #endregion
 
-namespace pengdows.crud.FakeDb;
+namespace pengdows.crud.fakeDb;
 
-public sealed class FakeDbFactory : DbProviderFactory
+public sealed class fakeDbFactory : DbProviderFactory
 {
-    public static readonly FakeDbFactory Instance = new();
+    public static readonly fakeDbFactory Instance = new();
     private readonly SupportedDatabase _pretendToBe;
     private readonly ConnectionFailureMode _failureMode;
     private readonly Exception? _customException;
@@ -18,23 +18,23 @@ public sealed class FakeDbFactory : DbProviderFactory
     private bool _skipFirstOpen;
     private bool _hasOpenedOnce;
 
-    private FakeDbFactory()
+    private fakeDbFactory()
     {
         _pretendToBe = SupportedDatabase.Unknown;
     }
 
-    public FakeDbFactory(string pretendToBe)
+    public fakeDbFactory(string pretendToBe)
     {
         _pretendToBe = Enum.Parse<SupportedDatabase>(pretendToBe);
     }
 
-    public FakeDbFactory(SupportedDatabase pretendToBe)
+    public fakeDbFactory(SupportedDatabase pretendToBe)
     {
         _pretendToBe = pretendToBe;
         _failureMode = ConnectionFailureMode.None;
     }
 
-    public FakeDbFactory(SupportedDatabase pretendToBe, ConnectionFailureMode failureMode, Exception? customException = null, int? failAfterCount = null)
+    public fakeDbFactory(SupportedDatabase pretendToBe, ConnectionFailureMode failureMode, Exception? customException = null, int? failAfterCount = null)
     {
         _pretendToBe = pretendToBe;
         _failureMode = failureMode;
@@ -43,7 +43,7 @@ public sealed class FakeDbFactory : DbProviderFactory
         _skipFirstOpen = false; // Default to not skipping
     }
 
-    private FakeDbFactory(SupportedDatabase pretendToBe, ConnectionFailureMode failureMode, Exception? customException, int? failAfterCount, bool skipFirstOpen)
+    private fakeDbFactory(SupportedDatabase pretendToBe, ConnectionFailureMode failureMode, Exception? customException, int? failAfterCount, bool skipFirstOpen)
     {
         _pretendToBe = pretendToBe;
         _failureMode = failureMode;
@@ -54,20 +54,20 @@ public sealed class FakeDbFactory : DbProviderFactory
 
     public override DbCommand CreateCommand()
     {
-        return new FakeDbCommand();
+        return new fakeDbCommand();
     }
 
     public override DbConnection CreateConnection()
     {
-        var c = new FakeDbConnection();
+        var c = new fakeDbConnection();
         c.EmulatedProduct = _pretendToBe;
-        
+
         // Configure failure modes based on factory settings
         if (_customException != null)
         {
             c.SetCustomFailureException(_customException);
         }
-        
+
         switch (_failureMode)
         {
             case ConnectionFailureMode.FailOnOpen:
@@ -88,15 +88,15 @@ public sealed class FakeDbFactory : DbProviderFactory
                 c.BreakConnection(false); // Don't skip, factory will decide
                 break;
         }
-        
+
         return c;
     }
 
     public override DbParameter CreateParameter()
     {
-        return new FakeDbParameter();
+        return new fakeDbParameter();
     }
-    
+
     /// <summary>
     /// Increments the shared open count and returns the new value, optionally skipping the first open
     /// </summary>
@@ -126,20 +126,20 @@ public sealed class FakeDbFactory : DbProviderFactory
     /// <summary>
     /// Creates a factory that produces connections that fail on open
     /// </summary>
-    public static FakeDbFactory CreateFailingFactory(SupportedDatabase pretendToBe, ConnectionFailureMode failureMode, Exception? customException = null, int? failAfterCount = null)
+    public static fakeDbFactory CreateFailingFactory(SupportedDatabase pretendToBe, ConnectionFailureMode failureMode, Exception? customException = null, int? failAfterCount = null)
     {
-        return new FakeDbFactory(pretendToBe, failureMode, customException, failAfterCount);
+        return new fakeDbFactory(pretendToBe, failureMode, customException, failAfterCount);
     }
 
     /// <summary>
     /// Creates a factory for helper methods that skip the first open (for DatabaseContext initialization)
     /// </summary>
-    internal static FakeDbFactory CreateFailingFactoryWithSkip(SupportedDatabase pretendToBe, ConnectionFailureMode failureMode, Exception? customException = null, int? failAfterCount = null)
+    internal static fakeDbFactory CreateFailingFactoryWithSkip(SupportedDatabase pretendToBe, ConnectionFailureMode failureMode, Exception? customException = null, int? failAfterCount = null)
     {
-        bool skipFirst = failureMode == ConnectionFailureMode.FailOnOpen || 
+        bool skipFirst = failureMode == ConnectionFailureMode.FailOnOpen ||
                         failureMode == ConnectionFailureMode.Broken ||
                         failureMode == ConnectionFailureMode.FailAfterCount;
-        return new FakeDbFactory(pretendToBe, failureMode, customException, failAfterCount, skipFirst);
+        return new fakeDbFactory(pretendToBe, failureMode, customException, failAfterCount, skipFirst);
     }
 }
 

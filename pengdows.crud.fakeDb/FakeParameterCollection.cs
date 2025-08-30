@@ -5,7 +5,7 @@ using System.Data.Common;
 
 #endregion
 
-namespace pengdows.crud.FakeDb;
+namespace pengdows.crud.fakeDb;
 
 public class FakeParameterCollection : DbParameterCollection
 {

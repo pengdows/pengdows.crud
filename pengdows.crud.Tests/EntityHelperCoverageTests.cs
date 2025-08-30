@@ -1,6 +1,6 @@
 using System;
 using pengdows.crud.enums;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -10,7 +10,7 @@ public class EntityHelperCoverageTests
     [Fact]
     public void BuildUpsert_UsesDuplicate_ForMySql()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.MySql);
+        var factory = new fakeDbFactory(SupportedDatabase.MySql);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.MySql}", factory);
            var helper = new EntityHelper<TestEntity, int>(context);
         var entity = new TestEntity { Id = 1, Name = "foo" };

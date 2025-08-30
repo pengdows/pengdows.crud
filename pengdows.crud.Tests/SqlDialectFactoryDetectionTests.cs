@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using pengdows.crud.wrappers;
 using Xunit;
 
@@ -12,7 +12,7 @@ public class SqlDialectFactoryDetectionTests
     [Fact]
     public void CreateDialect_DetectsFromConnection()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.PostgreSql);
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         using var conn = factory.CreateConnection();
         conn.ConnectionString = "EmulatedProduct=PostgreSql";
         conn.Open();
@@ -24,7 +24,7 @@ public class SqlDialectFactoryDetectionTests
     [Fact]
     public void CreateDialect_DetectsDuckDBFromConnection()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.DuckDB);
+        var factory = new fakeDbFactory(SupportedDatabase.DuckDB);
         using var conn = factory.CreateConnection();
         conn.ConnectionString = "EmulatedProduct=DuckDB";
         conn.Open();
@@ -36,7 +36,7 @@ public class SqlDialectFactoryDetectionTests
     [Fact]
     public void CreateDialect_UnknownProduct_ReturnsSql92Dialect()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.Unknown);
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         using var conn = factory.CreateConnection();
         conn.ConnectionString = "EmulatedProduct=Unknown";
         conn.Open();

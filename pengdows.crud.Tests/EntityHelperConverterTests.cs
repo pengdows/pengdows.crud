@@ -5,7 +5,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using pengdows.crud.attributes;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using pengdows.crud.wrappers;
 using Xunit;
 
@@ -127,7 +127,7 @@ public class EntityHelperConverterTests : SqlLiteContextTestBase
         public string Name { get; set; } = string.Empty;
     }
 
-    private sealed class FakeTrackedReader : FakeDbDataReader, ITrackedReader
+    private sealed class FakeTrackedReader : fakeDbDataReader, ITrackedReader
     {
         public FakeTrackedReader(IEnumerable<Dictionary<string, object>> rows) : base(rows)
         {

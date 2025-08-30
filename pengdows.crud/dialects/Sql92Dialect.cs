@@ -15,5 +15,6 @@ public class Sql92Dialect : SqlDialect
     }
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.Unknown;
+    public override string ParameterMarker => "@";
 }
 

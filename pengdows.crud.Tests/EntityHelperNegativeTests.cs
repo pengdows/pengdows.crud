@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -70,7 +70,7 @@ public class EntityHelperNegativeTests : SqlLiteContextTestBase
         // For this test, we need to test the behavior when a database has low parameter limits
         // Since we can't easily change MaxParameterLimit at runtime, we'll use a different approach:
         // Create a condition where we have more parameters than typical limits would allow
-        
+
         var list = new List<TestEntity>();
         // Create enough entities to exceed typical parameter limits
         for (int i = 1; i <= 1000; i++)
@@ -79,7 +79,7 @@ public class EntityHelperNegativeTests : SqlLiteContextTestBase
         }
 
         var sc = Context.CreateSqlContainer();
-        
+
         // This should throw because we're exceeding reasonable parameter limits
         Assert.Throws<TooManyParametersException>(() => helper.BuildWhereByPrimaryKey(list, sc));
     }
@@ -93,13 +93,13 @@ public class EntityHelperNegativeTests : SqlLiteContextTestBase
     [Fact]
     public void BuildUpsert_UnsupportedDatabase_Throws()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.Unknown);
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         var context = new DatabaseContext("Data Source=:memory:;EmulatedProduct=Unknown", factory);
-        
+
         // BuildUpsert should throw NotSupportedException for unknown database types
         var entityHelper = new EntityHelper<TestEntity, int>(context);
         var testEntity = new TestEntity { Id = 1, Name = "Test" };
-        Assert.Throws<NotSupportedException>(() => 
+        Assert.Throws<NotSupportedException>(() =>
             entityHelper.BuildUpsert(testEntity));
     }
 
@@ -161,6 +161,7 @@ public class EntityHelperNegativeTests : SqlLiteContextTestBase
         [Column("Id", DbType.Int32)]
         public int Id { get; set; }
 
+        [PrimaryKey(1)]
         [Column("Name", DbType.String)]
         public string Name { get; set; } = string.Empty;
     }

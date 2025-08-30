@@ -20,7 +20,7 @@ public class EntityHelper_IntegrationTests : SqlLiteContextTestBase
         // _connection = new SqliteConnection("Data Source=:memory:");
         // _connection.Open();
         TypeMap.Register<TestEntity>();
-        entityHelper = new EntityHelper<TestEntity, int>(Context, null);
+        entityHelper = new EntityHelper<TestEntity, int>(Context, AuditValueResolver);
 
         Assert.Equal(DbMode.SingleConnection, Context.ConnectionMode);
         BuildTestTable();

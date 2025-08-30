@@ -22,4 +22,4 @@ TestResults/
 coverage-report/
 
 .claude/
-
+mydb.sqlite

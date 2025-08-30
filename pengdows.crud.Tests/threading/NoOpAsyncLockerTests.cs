@@ -11,7 +11,8 @@ namespace pengdows.crud.Tests.threading
         [Fact]
         public async Task TryLockAsync_AlwaysReturnsTrue()
         {
-            var result = await NoOpAsyncLocker.Instance.TryLockAsync(TimeSpan.FromMilliseconds(1)).ConfigureAwait(false);
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var result = await NoOpAsyncLocker.Instance.TryLockAsync(TimeSpan.FromMilliseconds(1), cts.Token);
             Assert.True(result);
         }
 
@@ -20,7 +21,7 @@ namespace pengdows.crud.Tests.threading
         {
             using var cts = new CancellationTokenSource();
             cts.Cancel();
-            var result = await NoOpAsyncLocker.Instance.TryLockAsync(TimeSpan.Zero, cts.Token).ConfigureAwait(false);
+            var result = await NoOpAsyncLocker.Instance.TryLockAsync(TimeSpan.Zero, cts.Token);
             Assert.True(result);
         }
 
@@ -29,14 +30,15 @@ namespace pengdows.crud.Tests.threading
         {
             using var cts = new CancellationTokenSource();
             cts.Cancel();
-            await NoOpAsyncLocker.Instance.LockAsync(cts.Token).ConfigureAwait(false);
+            await NoOpAsyncLocker.Instance.LockAsync(cts.Token);
         }
 
         [Fact]
         public async Task DisposeAsync_IsNoOp()
         {
-            await NoOpAsyncLocker.Instance.DisposeAsync().ConfigureAwait(false);
-            await NoOpAsyncLocker.Instance.LockAsync().ConfigureAwait(false);
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            await NoOpAsyncLocker.Instance.DisposeAsync();
+            await NoOpAsyncLocker.Instance.LockAsync(cts.Token);
         }
     }
 }

@@ -102,7 +102,6 @@ public class EntityHelper<TEntity, TRowID> :
         _cachedSqlTemplates = new Lazy<CachedSqlTemplates>(BuildCachedSqlTemplates);
     }
 
-    [Obsolete("Use the constructor without IServiceProvider instead")]
     public EntityHelper(IDatabaseContext databaseContext,
         IAuditValueResolver auditValueResolver,
         EnumParseFailureMode enumParseBehavior = EnumParseFailureMode.Throw
@@ -132,14 +131,8 @@ public class EntityHelper<TEntity, TRowID> :
         _idColumn = _tableInfo.Columns.Values.FirstOrDefault(itm => itm.IsId);
         _versionColumn = _tableInfo.Columns.Values.FirstOrDefault(itm => itm.IsVersion);
 
-        if (_auditValueResolver == null &&
-            (_tableInfo.CreatedBy != null ||
-             _tableInfo.LastUpdatedBy != null))
-        {
-            Logger.LogWarning(
-                "Audit user columns detected for {EntityType} but no IAuditValueResolver provided. Database defaults will be used for those columns.",
-                typeof(TEntity).Name);
-        }
+        // Note: Validation for missing audit resolver with user fields is now handled 
+        // in SetAuditFields method where it throws InvalidOperationException
 
         EnumParseBehavior = enumParseBehavior;
     }
@@ -386,7 +379,48 @@ public class EntityHelper<TEntity, TRowID> :
     public async Task<bool> CreateAsync(TEntity entity, IDatabaseContext context)
     {
         var sc = BuildCreate(entity, context);
-        return await sc.ExecuteNonQueryAsync() == 1;
+        var rowsAffected = await sc.ExecuteNonQueryAsync();
+        
+        // For non-writable ID columns, retrieve the generated ID and populate it on the entity
+        if (rowsAffected == 1 && _idColumn != null && !_idColumn.IsIdIsWritable)
+        {
+            await PopulateGeneratedIdAsync(entity, context);
+        }
+        
+        return rowsAffected == 1;
+    }
+
+    private async Task PopulateGeneratedIdAsync(TEntity entity, IDatabaseContext context)
+    {
+        if (_idColumn == null) return;
+        
+        // Get the database-specific query for retrieving the last inserted ID
+        var lastIdQuery = GetLastInsertedIdQuery(context);
+        if (string.IsNullOrEmpty(lastIdQuery)) return;
+        
+        var sc = context.CreateSqlContainer(lastIdQuery);
+        var generatedId = await sc.ExecuteScalarAsync<object>();
+        
+        if (generatedId != null)
+        {
+            // Convert the ID to the appropriate type and set it on the entity
+            var convertedId = Convert.ChangeType(generatedId, _idColumn.PropertyInfo.PropertyType);
+            _idColumn.PropertyInfo.SetValue(entity, convertedId);
+        }
+    }
+
+    private string GetLastInsertedIdQuery(IDatabaseContext context)
+    {
+        // Return database-specific query to get the last inserted ID
+        return context.Product switch
+        {
+            SupportedDatabase.Sqlite => "SELECT last_insert_rowid()",
+            SupportedDatabase.SqlServer => "SELECT SCOPE_IDENTITY()",
+            SupportedDatabase.MySql => "SELECT LAST_INSERT_ID()",
+            SupportedDatabase.PostgreSql => "SELECT lastval()",
+            SupportedDatabase.Oracle => "SELECT @@IDENTITY",
+            _ => string.Empty
+        };
     }
 
     public ISqlContainer BuildCreate(TEntity entity, IDatabaseContext? context = null)
@@ -398,7 +432,9 @@ public class EntityHelper<TEntity, TRowID> :
 
         var ctx = context ?? _context;
         var sc = ctx.CreateSqlContainer();
-        if (_auditValueResolver != null)
+        
+        // Always attempt to set audit fields if they exist - validation will happen inside SetAuditFields
+        if (_hasAuditColumns)
         {
             SetAuditFields(entity, false);
         }
@@ -842,7 +878,11 @@ public class EntityHelper<TEntity, TRowID> :
 
         var template = _cachedSqlTemplates.Value;
 
-        SetAuditFields(objectToUpdate, true);
+        // Always attempt to set audit fields if they exist - validation will happen inside SetAuditFields
+        if (_hasAuditColumns)
+        {
+            SetAuditFields(objectToUpdate, true);
+        }
 
         var (setClause, parameters) = BuildSetClause(objectToUpdate, original);
         if (setClause.Length == 0)
@@ -967,7 +1007,11 @@ public class EntityHelper<TEntity, TRowID> :
     private (string sql, List<DbParameter> parameters) BuildUpdateByKey(TEntity updated,
         IReadOnlyList<IColumnInfo> keyCols)
     {
-        SetAuditFields(updated, true);
+        // Always attempt to set audit fields if they exist - validation will happen inside SetAuditFields
+        if (_hasAuditColumns)
+        {
+            SetAuditFields(updated, true);
+        }
         var (setClause, parameters) = BuildSetClause(updated, null);
         if (setClause.Length == 0)
         {
@@ -1453,23 +1497,29 @@ public class EntityHelper<TEntity, TRowID> :
             return;
         }
 
+   
+        
+        // Check if we have user-based audit fields (non-time fields)
+        var hasUserAuditFields = _tableInfo.CreatedBy != null || _tableInfo.LastUpdatedBy != null;
+        var hasTimeAuditFields = _tableInfo.CreatedOn != null || _tableInfo.LastUpdatedOn != null;
         var auditValues = _auditValueResolver?.Resolve();
-
+        if (auditValues == null && hasUserAuditFields)
+        {
+            throw new InvalidOperationException("No AuditValues could be found by the resolver.");
+        }
+        // Use resolved time or UTC now for time fields
         var utcNow = auditValues?.UtcNow ?? DateTime.UtcNow;
 
-        // Always update last-modified timestamp
-        _tableInfo.LastUpdatedOn?.PropertyInfo?.SetValue(obj, utcNow);
-        if (auditValues != null)
+        // Handle LastUpdated fields
+        if (_tableInfo.LastUpdatedOn?.PropertyInfo != null)
         {
-            _tableInfo.LastUpdatedBy?.PropertyInfo?.SetValue(obj, auditValues.UserId);
+            _tableInfo.LastUpdatedOn.PropertyInfo.SetValue(obj, utcNow);
         }
-        else if (_tableInfo.LastUpdatedBy?.PropertyInfo != null)
+        
+        if (_tableInfo.LastUpdatedBy?.PropertyInfo != null && auditValues != null)
         {
-            var current = _tableInfo.LastUpdatedBy.PropertyInfo.GetValue(obj) as string;
-            if (string.IsNullOrEmpty(current))
-            {
-                _tableInfo.LastUpdatedBy.PropertyInfo.SetValue(obj, "system");
-            }
+            // We know auditValues is not null because we validated above
+            _tableInfo.LastUpdatedBy.PropertyInfo.SetValue(obj, auditValues!.UserId);
         }
 
         if (updateOnly)
@@ -1477,7 +1527,7 @@ public class EntityHelper<TEntity, TRowID> :
             return;
         }
 
-        // Only set Created fields if they are null or default
+        // Handle Created fields (only for new entities)
         if (_tableInfo.CreatedOn?.PropertyInfo != null)
         {
             var currentValue = _tableInfo.CreatedOn.PropertyInfo.GetValue(obj) as DateTime?;
@@ -1495,8 +1545,8 @@ public class EntityHelper<TEntity, TRowID> :
                 || Utils.IsZeroNumeric(currentValue)
                 || (currentValue is Guid guid && guid == Guid.Empty))
             {
-                var userId = auditValues?.UserId ?? "system";
-                _tableInfo.CreatedBy.PropertyInfo.SetValue(obj, userId);
+                // We know auditValues is not null because we validated above
+                _tableInfo.CreatedBy.PropertyInfo.SetValue(obj, auditValues!.UserId);
             }
         }
     }

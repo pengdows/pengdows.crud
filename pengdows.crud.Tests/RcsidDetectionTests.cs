@@ -3,7 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using pengdows.crud.wrappers;
 using Xunit;
 
@@ -13,7 +13,7 @@ public class RcsidDetectionTests
 {
     private static ITrackedConnection BuildConnection(int rcsiFlag)
     {
-        var inner = new FakeDbConnection
+        var inner = new fakeDbConnection
         {
             ConnectionString = $"Data Source=:memory:;EmulatedProduct={SupportedDatabase.SqlServer}"
         };
@@ -25,7 +25,7 @@ public class RcsidDetectionTests
     [Fact]
     public void SqlServerDialect_ReturnsTrueWhenRCSIEnabled()
     {
-        var dialect = new SqlServerDialect(new FakeDbFactory(SupportedDatabase.SqlServer),
+        var dialect = new SqlServerDialect(new fakeDbFactory(SupportedDatabase.SqlServer),
             NullLoggerFactory.Instance.CreateLogger<SqlServerDialect>());
         var conn = BuildConnection(1);
         var result = dialect.IsReadCommittedSnapshotOn(conn);
@@ -35,7 +35,7 @@ public class RcsidDetectionTests
     [Fact]
     public void SqlServerDialect_ReturnsFalseWhenRCSIDisabled()
     {
-        var dialect = new SqlServerDialect(new FakeDbFactory(SupportedDatabase.SqlServer),
+        var dialect = new SqlServerDialect(new fakeDbFactory(SupportedDatabase.SqlServer),
             NullLoggerFactory.Instance.CreateLogger<SqlServerDialect>());
         var conn = BuildConnection(0);
         var result = dialect.IsReadCommittedSnapshotOn(conn);
@@ -45,7 +45,7 @@ public class RcsidDetectionTests
     [Fact]
     public void Sql92Dialect_RCSICheckAlwaysFalse()
     {
-        var dialect = new Sql92Dialect(new FakeDbFactory(SupportedDatabase.Unknown),
+        var dialect = new Sql92Dialect(new fakeDbFactory(SupportedDatabase.Unknown),
             NullLoggerFactory.Instance.CreateLogger<Sql92Dialect>());
         var conn = BuildConnection(1);
         var result = dialect.IsReadCommittedSnapshotOn(conn);
@@ -63,7 +63,7 @@ public class RcsidDetectionTests
 
         public override DbConnection CreateConnection()
         {
-            var conn = new FakeDbConnection
+            var conn = new fakeDbConnection
             {
                 ConnectionString = $"Data Source=:memory:;EmulatedProduct={SupportedDatabase.SqlServer}"
             };
@@ -71,8 +71,8 @@ public class RcsidDetectionTests
             return conn;
         }
 
-        public override DbCommand CreateCommand() => new FakeDbCommand();
-        public override DbParameter CreateParameter() => new FakeDbParameter();
+        public override DbCommand CreateCommand() => new fakeDbCommand();
+        public override DbParameter CreateParameter() => new fakeDbParameter();
     }
 
     [Fact]

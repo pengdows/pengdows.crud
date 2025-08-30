@@ -4,7 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Threading.Tasks;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 #endregion
@@ -16,7 +16,7 @@ public class DataReaderMapperTests
     [Fact]
     public async Task LoadObjectsFromDataReaderAsync_MapsMatchingFields()
     {
-        var reader = new FakeDbDataReader(new[]
+        var reader = new fakeDbDataReader(new[]
         {
             new Dictionary<string, object>
             {
@@ -37,7 +37,7 @@ public class DataReaderMapperTests
     [Fact]
     public async Task LoadObjectsFromDataReaderAsync_IgnoresUnmappedFields()
     {
-        var reader = new FakeDbDataReader(new[]
+        var reader = new fakeDbDataReader(new[]
         {
             new Dictionary<string, object>
             {
@@ -55,7 +55,7 @@ public class DataReaderMapperTests
     [Fact]
     public async Task LoadObjectsFromDataReaderAsync_HandlesDbNullsGracefully()
     {
-        var reader = new FakeDbDataReader(new[]
+        var reader = new fakeDbDataReader(new[]
         {
             new Dictionary<string, object>
             {

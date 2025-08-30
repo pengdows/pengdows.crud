@@ -6,9 +6,9 @@ using pengdows.crud.enums;
 
 #endregion
 
-namespace pengdows.crud.FakeDb;
+namespace pengdows.crud.fakeDb;
 
-public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsyncDisposable
+public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsyncDisposable
 {
     private string _connectionString = string.Empty;
     private SupportedDatabase? _emulatedProduct;
@@ -22,12 +22,12 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
     private Exception? _customFailureException;
     private int _openCallCount;
     private int? _failAfterOpenCount;
-    private FakeDbFactory? _sharedFactory;
+    private fakeDbFactory? _sharedFactory;
     private int? _sharedFailAfterOpenCount;
     private bool _isBroken;
     private bool _skipFirstFailOnOpen;
     private bool _skipFirstBreakConnection;
-    private FakeDbFactory? _factoryRef;
+    private fakeDbFactory? _factoryRef;
     public override string DataSource => "FakeSource";
     public override string ServerVersion => GetEmulatedServerVersion();
 
@@ -116,7 +116,7 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
     /// <summary>
     /// Sets the connection to fail after N successful open operations across the entire factory
     /// </summary>
-    internal void SetSharedFailAfterOpenCount(FakeDbFactory factory, int openCount)
+    internal void SetSharedFailAfterOpenCount(fakeDbFactory factory, int openCount)
     {
         _sharedFactory = factory;
         _sharedFailAfterOpenCount = openCount;
@@ -125,7 +125,7 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
     /// <summary>
     /// Sets a reference to the factory for factory-level failure coordination
     /// </summary>
-    internal void SetFactoryReference(FakeDbFactory factory)
+    internal void SetFactoryReference(fakeDbFactory factory)
     {
         _factoryRef = factory;
     }
@@ -234,7 +234,7 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
         }
 
         _openCallCount++;
-        
+
         // Check if we should use shared factory counter
         if (_sharedFactory != null && _sharedFailAfterOpenCount.HasValue)
         {
@@ -270,7 +270,7 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
                 ThrowConfiguredException("Simulated connection open failure");
             }
         }
-        
+
         // Check if connection should be broken (factory decides)
         if (_isBroken)
         {
@@ -335,7 +335,7 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
         }
 
         OpenAsyncCount++;
-        
+
         try
         {
             Open();
@@ -392,7 +392,7 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
             throw new InvalidOperationException("Connection must be open to begin transaction");
         }
 
-        return new FakeDbTransaction(this, isolationLevel);
+        return new fakeDbTransaction(this, isolationLevel);
     }
 
     protected override DbCommand CreateDbCommand()
@@ -407,7 +407,7 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
             throw new InvalidOperationException("Cannot create command on broken connection");
         }
 
-        return new FakeDbCommand(this);
+        return new fakeDbCommand(this);
     }
 
     public override DataTable GetSchema()
@@ -439,7 +439,7 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
 
         var resourceName = $"pengdows.crud.fakeDb.xml.{_emulatedProduct}.schema.xml";
 
-        using var stream = typeof(FakeDbConnection).Assembly
+        using var stream = typeof(fakeDbConnection).Assembly
                                .GetManifestResourceStream(resourceName)
                            ?? throw new FileNotFoundException($"Embedded schema not found: {resourceName}");
 
@@ -478,7 +478,7 @@ public class FakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
 
         var resourceName = $"pengdows.crud.fakeDb.xml.{_emulatedProduct}.schema.xml";
 
-        using var stream = typeof(FakeDbConnection).Assembly
+        using var stream = typeof(fakeDbConnection).Assembly
                                .GetManifestResourceStream(resourceName)
                            ?? throw new FileNotFoundException($"Embedded schema not found: {resourceName}");
 

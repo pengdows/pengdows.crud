@@ -3,7 +3,7 @@
 using System;
 using System.Data;
 using pengdows.crud.enums;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 #endregion
@@ -40,7 +40,7 @@ public class ProcWrappingStyleTests
 
     private SqlContainer SetupParameterWrapTest(SupportedDatabase product)
     {
-        var ctx = new DatabaseContext($"DataSource=:memory:;EmulatedProduct={product}", new FakeDbFactory(product));
+        var ctx = new DatabaseContext($"DataSource=:memory:;EmulatedProduct={product}", new fakeDbFactory(product));
         var sc = ctx.CreateSqlContainer("dbo.Sqltest") as SqlContainer;
         for (var i = 0; i < 10; i++)
         {

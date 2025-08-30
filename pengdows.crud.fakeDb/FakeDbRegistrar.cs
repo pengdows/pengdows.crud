@@ -1,12 +1,12 @@
 using System.Data.Common;
 
-namespace pengdows.crud.FakeDb;
+namespace pengdows.crud.fakeDb;
 
-public class FakeDbRegistrar
+public class fakeDbRegistrar
 {
     private readonly DbProviderFactory _factory;
 
-    public FakeDbRegistrar(DbProviderFactory factory)
+    public fakeDbRegistrar(DbProviderFactory factory)
     {
         _factory = factory ?? throw new ArgumentNullException(nameof(factory));
     }
@@ -14,7 +14,7 @@ public class FakeDbRegistrar
     public void Register(string providerInvariantName, DbProviderFactory providerFactory)
     {
         var key = string.IsNullOrEmpty(providerInvariantName)
-            ? "pengdows.crud.FakeDb"
+            ? "pengdows.crud.fakeDb"
             : providerInvariantName;
         DbProviderFactories.RegisterFactory(key, providerFactory);
     }
@@ -28,7 +28,7 @@ public class FakeDbRegistrar
 
         foreach (var kvp in providerFactories)
         {
-            DbProviderFactories.RegisterFactory(kvp.Key, new FakeDbFactory(kvp.Value));
+            DbProviderFactories.RegisterFactory(kvp.Key, new fakeDbFactory(kvp.Value));
         }
     }
 }

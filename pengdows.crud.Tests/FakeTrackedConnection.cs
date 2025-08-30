@@ -26,7 +26,7 @@ public class FakeTrackedConnection : TrackedConnection, ITrackedConnection
     {
         _schema = schema;
 
-        if (connection is pengdows.crud.FakeDb.FakeDbConnection fake && scalars.Count > 0)
+        if (connection is pengdows.crud.fakeDb.fakeDbConnection fake && scalars.Count > 0)
         {
             var value = scalars.Values.First();
             var isSqlite = scalars.Keys.Any(k => k.Equals("SELECT sqlite_version()", StringComparison.OrdinalIgnoreCase));

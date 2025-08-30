@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.enums;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 
 namespace pengdows.crud.Tests.Mocks;
 
@@ -12,7 +12,7 @@ public static class DataSourceInformationTestHelper
         var schema = DataSourceInformation.BuildEmptySchema(
             "PostgreSQL", version, "@p[0-9]+", ":{0}", 64, "@\\w+", "[@:]\\w+", true);
         var scalars = new Dictionary<string, object> { ["SELECT version()"] = $"PostgreSQL {version}" };
-        var factory = new FakeDbFactory(SupportedDatabase.PostgreSql);
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         var conn = factory.CreateConnection();
         conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.PostgreSql}";
         using var tracked = new FakeTrackedConnection(conn, schema, scalars);
@@ -25,7 +25,7 @@ public static class DataSourceInformationTestHelper
         var schema = DataSourceInformation.BuildEmptySchema(
             "MySQL", version, "@[0-9]+", "@{0}", 64, "@\\w+", "@\\w+", true);
         var scalars = new Dictionary<string, object> { ["SELECT VERSION()"] = version };
-        var factory = new FakeDbFactory(SupportedDatabase.MySql);
+        var factory = new fakeDbFactory(SupportedDatabase.MySql);
         var conn = factory.CreateConnection();
         conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.MySql}";
         using var tracked = new FakeTrackedConnection(conn, schema, scalars);
@@ -38,7 +38,7 @@ public static class DataSourceInformationTestHelper
         var schema = DataSourceInformation.BuildEmptySchema(
             "Microsoft SQL Server", version, "@[0-9]+", "@{0}", 128, "@\\w+", "@\\w+", true);
         var scalars = new Dictionary<string, object> { ["SELECT @@VERSION"] = $"Microsoft SQL Server {version}" };
-        var factory = new FakeDbFactory(SupportedDatabase.SqlServer);
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var conn = factory.CreateConnection();
         conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}";
         using var tracked = new FakeTrackedConnection(conn, schema, scalars);
@@ -46,9 +46,9 @@ public static class DataSourceInformationTestHelper
         return DataSourceInformation.Create(tracked, factory, NullLoggerFactory.Instance);
     }
 
-    public static (FakeTrackedConnection TrackedConnection, FakeDbFactory Factory) CreateTestConnection(
-        SupportedDatabase database, 
-        string productName, 
+    public static (FakeTrackedConnection TrackedConnection, fakeDbFactory Factory) CreateTestConnection(
+        SupportedDatabase database,
+        string productName,
         string version,
         string parameterPattern = "@[0-9]+",
         string parameterFormat = "@{0}",
@@ -61,7 +61,7 @@ public static class DataSourceInformationTestHelper
         var schema = DataSourceInformation.BuildEmptySchema(
             productName, version, parameterPattern, parameterFormat, maxLength, namePattern, namePatternRegex, supportsNamed);
         var scalars = additionalScalars ?? new Dictionary<string, object>();
-        var factory = new FakeDbFactory(database);
+        var factory = new fakeDbFactory(database);
         var conn = factory.CreateConnection();
         conn.ConnectionString = $"Data Source=test;EmulatedProduct={database}";
         var tracked = new FakeTrackedConnection(conn, schema, scalars);
