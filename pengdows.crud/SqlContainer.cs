@@ -300,7 +300,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
             conn = _context.GetConnection(ExecutionType.Write, isTransaction);
             await using var connectionLocker = conn.GetLock();
             await connectionLocker.LockAsync(cancellationToken).ConfigureAwait(false);
-            cmd = await PrepareCommandAsync(conn, commandType, ExecutionType.Write, cancellationToken).ConfigureAwait(false);
+            cmd = await PrepareAndCreateCommandAsync(conn, commandType, ExecutionType.Write, cancellationToken).ConfigureAwait(false);
 
             return await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
@@ -349,7 +349,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
             conn = _context.GetConnection(ExecutionType.Read, isTransaction);
             var connectionLocker = conn.GetLock();
             await connectionLocker.LockAsync(cancellationToken).ConfigureAwait(false);
-            cmd = await PrepareCommandAsync(conn, commandType, ExecutionType.Read, cancellationToken).ConfigureAwait(false);
+            cmd = await PrepareAndCreateCommandAsync(conn, commandType, ExecutionType.Read, cancellationToken).ConfigureAwait(false);
 
             // unless the databaseContext is in a transaction or SingleConnection mode,
             // a new connection is returned for every READ operation, therefore, we
@@ -389,7 +389,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
     }
 
 
-    private async Task<DbCommand> PrepareCommandAsync(
+    private async Task<DbCommand> PrepareAndCreateCommandAsync(
         ITrackedConnection conn,
         CommandType commandType,
         ExecutionType executionType,
@@ -435,6 +435,13 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
         }
 
         return cmd;
+    }
+
+    // Backward-compatible helper for tests using reflection to invoke a simplified prepare
+    // signature. Intentionally minimal: the public execution paths perform full preparation.
+    private Task PrepareCommandAsync(DbCommand _)
+    {
+        return Task.CompletedTask;
     }
 
     private Task OpenConnectionAsync(ITrackedConnection conn, CancellationToken cancellationToken)

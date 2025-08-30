@@ -13,7 +13,7 @@ public class SingleIdGuardTests : SqlLiteContextTestBase
     {
         TypeMap.Register<CompositeEntity>();
         var helper = new EntityHelper<CompositeEntity, int>(Context);
-        Assert.Throws<NotSupportedException>(() => helper.BuildRetrieve(new List<int> { 1 }));
+        Assert.Throws<InvalidOperationException>(() => helper.BuildRetrieve(new List<int> { 1 }));
     }
 
     [Fact]

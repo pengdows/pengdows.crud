@@ -29,3 +29,4 @@ public class fakeDbTransaction : DbTransaction, IDbTransaction
 
     public override IsolationLevel IsolationLevel { get; }
 }
+

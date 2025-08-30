@@ -152,3 +152,4 @@ public enum ConnectionFailureMode
     FailAfterCount,
     Broken
 }
+

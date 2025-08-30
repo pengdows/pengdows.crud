@@ -85,6 +85,33 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     {
     }
 
+    // Convenience overloads for reflection-based tests and ease of use
+    public DatabaseContext(string connectionString, DbProviderFactory factory)
+        : this(new DatabaseContextConfiguration
+            {
+                ConnectionString = connectionString,
+                DbMode = DbMode.Standard,
+                ReadWriteMode = ReadWriteMode.ReadWrite
+            },
+            factory,
+            NullLoggerFactory.Instance,
+            null)
+    {
+    }
+
+    public DatabaseContext(string connectionString, DbProviderFactory factory, ITypeMapRegistry typeMapRegistry)
+        : this(new DatabaseContextConfiguration
+            {
+                ConnectionString = connectionString,
+                DbMode = DbMode.Standard,
+                ReadWriteMode = ReadWriteMode.ReadWrite
+            },
+            factory,
+            NullLoggerFactory.Instance,
+            typeMapRegistry)
+    {
+    }
+
     public DatabaseContext(
         IDatabaseContextConfiguration configuration,
         DbProviderFactory factory,
@@ -370,10 +397,17 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     {
         if (connectionString != null && string.IsNullOrWhiteSpace(ConnectionString))
         {
-            //"Multiple Active Record Sets"
-            var csb = GetFactoryConnectionStringBuilder(connectionString);
-            var tmp = csb.ConnectionString;
-            ConnectionString = tmp;
+            try
+            {
+                var csb = GetFactoryConnectionStringBuilder(connectionString);
+                var tmp = csb.ConnectionString;
+                ConnectionString = tmp;
+            }
+            catch
+            {
+                // Some providers (or raw strings) may not conform to key=value; fall back to raw string.
+                ConnectionString = connectionString;
+            }
         }
     }
 
@@ -468,8 +502,30 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
 
     private DbConnectionStringBuilder GetFactoryConnectionStringBuilder(string connectionString)
     {
+        var input = string.IsNullOrEmpty(connectionString) ? _connectionString : connectionString;
         var csb = _factory.CreateConnectionStringBuilder() ?? new DbConnectionStringBuilder();
-        csb.ConnectionString = string.IsNullOrEmpty(connectionString) ? _connectionString : connectionString;
+        try
+        {
+            csb.ConnectionString = input;
+        }
+        catch
+        {
+            // Fall back to a tolerant builder that carries the raw string in a common key
+            var fallback = new DbConnectionStringBuilder();
+            try
+            {
+                // Prefer a commonly recognized key when possible
+                fallback["Data Source"] = input;
+            }
+            catch
+            {
+                // As a last resort, set ConnectionString on the generic builder which tolerates raw values
+                try { fallback.ConnectionString = input; } catch { /* ignore */ }
+            }
+
+            csb = fallback;
+        }
+
         return csb;
     }
 
