@@ -3,7 +3,6 @@
 using System;
 using System.Data;
 using pengdows.crud.attributes;
-using pengdows.crud.enums;
 using Xunit;
 
 #endregion

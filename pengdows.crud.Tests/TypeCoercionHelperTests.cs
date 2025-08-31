@@ -56,7 +56,7 @@ public class TypeCoercionHelperTests
     public void Coerce_ValidEnumString_ReturnsEnum()
     {
         var column = new ColumnInfo
-            { EnumType = typeof(TestEnum), PropertyInfo = typeof(TestEnum).GetProperty("HasFlag") };
+            { EnumType = typeof(TestEnum), PropertyInfo = typeof(TestEntityWithEnum).GetProperty(nameof(TestEntityWithEnum.Status)) };
         var result = TypeCoercionHelper.Coerce("Two", typeof(string), column);
         Assert.Equal(TestEnum.Two, result);
     }
@@ -65,7 +65,7 @@ public class TypeCoercionHelperTests
     public void Coerce_InvalidEnumString_ThrowMode_Throws()
     {
         var column = new ColumnInfo
-            { EnumType = typeof(TestEnum), PropertyInfo = typeof(TestEnum).GetProperty("HasFlag") };
+            { EnumType = typeof(TestEnum), PropertyInfo = typeof(TestEntityWithEnum).GetProperty(nameof(TestEntityWithEnum.Status)) };
         Assert.Throws<ArgumentException>(() =>
             TypeCoercionHelper.Coerce("Invalid", typeof(string), column, EnumParseFailureMode.Throw));
     }
@@ -138,6 +138,11 @@ public class TypeCoercionHelperTests
         One,
         Two,
         Three
+    }
+
+    private class TestEntityWithEnum
+    {
+        public TestEnum Status { get; set; }
     }
 
     private class CustomEntity

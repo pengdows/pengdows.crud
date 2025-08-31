@@ -1,6 +1,5 @@
 using System;
 using Microsoft.Data.Sqlite;
-using pengdows.crud;
 using Xunit;
 
 namespace pengdows.crud.Tests;

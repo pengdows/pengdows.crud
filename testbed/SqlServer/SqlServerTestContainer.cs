@@ -62,19 +62,19 @@ public class SqlServerTestContainer : TestContainer
         await connection.CloseAsync();
     }
 
-    public override async Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)
+    public override Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)
     {
         if (_connectionString is null)
         {
             throw new InvalidOperationException("Container not started yet.");
         }
 
-        return new DatabaseContext(_connectionString, SqlClientFactory.Instance,
-            null);
+        return Task.FromResult<IDatabaseContext>(
+            new DatabaseContext(_connectionString, SqlClientFactory.Instance, null!));
     }
 
-    public async ValueTask DisposeAsync()
+    protected override ValueTask DisposeAsyncCore()
     {
-          await _container.DisposeAsync();
+        return _container.DisposeAsync();
     }
 }

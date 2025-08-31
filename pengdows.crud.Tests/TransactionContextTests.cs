@@ -395,7 +395,7 @@ public class TransactionContextTests
     }
 
     [Fact]
-    public void Commit_RaceOnlyOneSucceeds()
+    public async Task Commit_RaceOnlyOneSucceeds()
     {
         var context = (DatabaseContext)CreateContext(SupportedDatabase.Sqlite);
 
@@ -431,7 +431,7 @@ public class TransactionContextTests
             }
         });
 
-        Task.WaitAll(t1, t2);
+        await Task.WhenAll(t1, t2);
 
         Assert.True((e1 is null) ^ (e2 is null));
         Assert.IsType<InvalidOperationException>(e1 ?? e2!);
@@ -439,7 +439,7 @@ public class TransactionContextTests
     }
 
     [Fact]
-    public void CommitAndRollback_RaceOnlyOneSucceeds()
+    public async Task CommitAndRollback_RaceOnlyOneSucceeds()
     {
         var context = (DatabaseContext)CreateContext(SupportedDatabase.Sqlite);
 
@@ -475,7 +475,7 @@ public class TransactionContextTests
             }
         });
 
-        Task.WaitAll(t1, t2);
+        await Task.WhenAll(t1, t2);
 
         Assert.True((e1 is null) ^ (e2 is null));
         Assert.IsType<InvalidOperationException>(e1 ?? e2!);

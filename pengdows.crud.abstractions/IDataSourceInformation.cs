@@ -80,7 +80,7 @@ public interface IDataSourceInformation
     int MaxParameterLimit { get; }
 
     /// <summary>
-    /// Gets the maximum number of output parameters supported in a command.
+    /// Gets the maximum number of output parameters allowed per command.
     /// </summary>
     int MaxOutputParameters { get; }
 

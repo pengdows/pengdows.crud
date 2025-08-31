@@ -91,7 +91,6 @@ public class DialectCoverageTests
         var wrapped = dialect.WrapObjectName("schema.table");
         Assert.Equal($"{quote}schema{quote}.{quote}table{quote}", wrapped);
         Assert.NotEqual("schema.table", wrapped);
-        Assert.DoesNotContain("`", wrapped);
     }
 
     [Theory]

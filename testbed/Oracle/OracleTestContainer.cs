@@ -57,19 +57,19 @@ public class OracleTestContainer : TestContainer
         await WaitForDbToStart(OracleClientFactory.Instance, _connectionString, _container, 300);
     }
 
-    public override async Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)
+    public override Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)
     {
         if (_connectionString is null)
         {
             throw new InvalidOperationException("Container not started yet.");
         }
 
-        return new DatabaseContext(_connectionString, OracleClientFactory.Instance,
-            null);
+        return Task.FromResult<IDatabaseContext>(
+            new DatabaseContext(_connectionString, OracleClientFactory.Instance, null!));
     }
 
-    public async ValueTask DisposeAsync()
+    protected override ValueTask DisposeAsyncCore()
     {
-          await _container.DisposeAsync();
+        return _container.DisposeAsync();
     }
 }

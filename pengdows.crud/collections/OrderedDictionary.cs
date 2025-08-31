@@ -6,7 +6,7 @@ namespace pengdows.crud.collections;
 
 /// <summary>
 /// Highly optimized ordered dictionary for database parameters.
-/// Maximum capacity: 65,535 items. Optimized for .NET 8.
+/// Optimized for .NET 8. No artificial capacity ceiling beyond array limits.
 /// Guarantees insertion order during enumeration.
 /// This class is NOT thread-safe.
 /// </summary>
@@ -16,27 +16,26 @@ namespace pengdows.crud.collections;
 public sealed class OrderedDictionary<TKey, TValue> : IDictionary<TKey, TValue>, IReadOnlyDictionary<TKey, TValue>
     where TKey : notnull
 {
-    private const int MaxCapacity = 65535;
-    private const int MaxBucketSize = 65521; // Largest prime ≤ 65535
+    // No artificial MaxCapacity/MaxBucketSize
     private const int DefaultCapacity = 16;
 
     // Use struct for better cache locality and reduced allocations
     private struct Entry
     {
         public uint HashCode;
-        public ushort Next;     // 0 = end of chain, else index+1
+        public int Next;     // 0 = end of chain, else index+1
         public TKey Key;
         public TValue Value;
     }
 
-    private Entry[] _entries;
-    private ushort[] _buckets;        // stores index+1, 0 = empty
-    private ushort[] _insertionOrder; // stores index+1
-    private ushort _count;
-    private ushort _freeList;         // 0 = none, else index+1
-    private ushort _freeCount;
+    private Entry[] _entries = Array.Empty<Entry>();
+    private int[] _buckets = Array.Empty<int>();        // stores index+1, 0 = empty
+    private int[] _insertionOrder = Array.Empty<int>(); // stores index+1
+    private int _count;
+    private int _freeList;         // 0 = none, else index+1
+    private int _freeCount;
     private int _version;
-    private IEqualityComparer<TKey> _comparer;
+    private IEqualityComparer<TKey> _comparer = EqualityComparer<TKey>.Default;
 
     public OrderedDictionary() : this(DefaultCapacity, null) { }
 
@@ -47,7 +46,6 @@ public sealed class OrderedDictionary<TKey, TValue> : IDictionary<TKey, TValue>,
     public OrderedDictionary(int capacity, IEqualityComparer<TKey>? comparer)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(capacity);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(capacity, MaxCapacity);
 
         if (capacity > 0)
         {
@@ -86,10 +84,11 @@ public sealed class OrderedDictionary<TKey, TValue> : IDictionary<TKey, TValue>,
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void Initialize(int capacity)
     {
-        var size = Math.Min(GetPrime(capacity), MaxBucketSize);
-        _buckets = new ushort[size];              // zero-initialized (0 = empty)
-        _entries = new Entry[Math.Min(capacity, MaxCapacity)];
-        _insertionOrder = new ushort[Math.Min(capacity, MaxCapacity)];
+        var size = GetPrime(Math.Max(capacity, 1));
+        _buckets = new int[size];              // zero-initialized (0 = empty)
+        var entryCapacity = Math.Max(capacity, 1); // Ensure at least 1
+        _entries = new Entry[entryCapacity];
+        _insertionOrder = new int[entryCapacity];
         _freeList = 0;                            // 0 = none
     }
 
@@ -161,7 +160,7 @@ public sealed class OrderedDictionary<TKey, TValue> : IDictionary<TKey, TValue>,
             var comparer = _comparer;
             var hashCode = (uint)comparer.GetHashCode(key);
             var bucket = hashCode % (uint)_buckets.Length;
-            ushort iPlus1 = _buckets[bucket];
+            int iPlus1 = _buckets[bucket];
 
             while (iPlus1 != 0)
             {
@@ -182,7 +181,7 @@ public sealed class OrderedDictionary<TKey, TValue> : IDictionary<TKey, TValue>,
     {
         ArgumentNullException.ThrowIfNull(key);
 
-        if (_buckets == null)
+        if (_buckets == null || _buckets.Length == 0)
         {
             Initialize(DefaultCapacity);
         }
@@ -191,7 +190,7 @@ public sealed class OrderedDictionary<TKey, TValue> : IDictionary<TKey, TValue>,
         var comparer = _comparer;
         var hashCode = (uint)comparer.GetHashCode(key);
         var bucket = hashCode % (uint)_buckets.Length;
-        ushort iPlus1 = _buckets[bucket];
+        int iPlus1 = _buckets[bucket];
 
         // Check if key already exists
         while (iPlus1 != 0)
@@ -217,25 +216,21 @@ public sealed class OrderedDictionary<TKey, TValue> : IDictionary<TKey, TValue>,
         }
 
         // Add new entry
-        ushort index;
+        int index;
         var logicalCount = Count; // Current logical count for insertion order
 
         if (_freeCount != 0)
         {
             // Reuse from free list
-            ushort indexPlus1 = _freeList;
+            int indexPlus1 = _freeList;
             int i = indexPlus1 - 1;
             _freeList = _entries[i].Next;        // might be 0
             _freeCount--;
-            index = (ushort)i;
+            index = i;
         }
         else
         {
             // Need a new slot
-            if (_count == MaxCapacity)
-            {
-                throw new InvalidOperationException($"Dictionary has reached maximum capacity of {MaxCapacity} items.");
-            }
             if (_count == _entries.Length)
             {
                 Resize();
@@ -252,11 +247,11 @@ public sealed class OrderedDictionary<TKey, TValue> : IDictionary<TKey, TValue>,
         // Link into bucket chain
         var head = _buckets[bucket];
         newEntry.Next = head;                    // 0 if none
-        _buckets[bucket] = (ushort)(index + 1);
+        _buckets[bucket] = (index + 1);
 
         // Record insertion order
         Debug.Assert(_insertionOrder[logicalCount] == 0, "Insertion order slot should be empty");
-        _insertionOrder[logicalCount] = (ushort)(index + 1);
+        _insertionOrder[logicalCount] = (index + 1);
 
         _version++;
         return true;
@@ -273,8 +268,8 @@ public sealed class OrderedDictionary<TKey, TValue> : IDictionary<TKey, TValue>,
             var comparer = _comparer;
             var hashCode = (uint)comparer.GetHashCode(key);
             var bucket = hashCode % (uint)_buckets.Length;
-            ushort lastPlus1 = 0;
-            ushort iPlus1 = _buckets[bucket];
+            int lastPlus1 = 0;
+            int iPlus1 = _buckets[bucket];
 
             while (iPlus1 != 0)
             {
@@ -294,14 +289,14 @@ public sealed class OrderedDictionary<TKey, TValue> : IDictionary<TKey, TValue>,
                     }
 
                     // Remove from insertion order and compact
-                    RemoveFromInsertionOrder((ushort)(i + 1));
+                    RemoveFromInsertionOrder((i + 1));
 
                     // Clear entry and add to free list
                     entry.HashCode = 0;
                     entry.Key = default!;
                     entry.Value = default!;
                     entry.Next = _freeList;            // 0 if none
-                    _freeList = (ushort)(i + 1);
+                    _freeList = (i + 1);
                     _freeCount++;
                     _version++;
                     return true;
@@ -315,7 +310,7 @@ public sealed class OrderedDictionary<TKey, TValue> : IDictionary<TKey, TValue>,
         return false;
     }
 
-    private void RemoveFromInsertionOrder(ushort indexPlus1)
+    private void RemoveFromInsertionOrder(int indexPlus1)
     {
         var currentCount = Count; // logical count BEFORE incrementing _freeCount
 
@@ -374,7 +369,7 @@ public sealed class OrderedDictionary<TKey, TValue> : IDictionary<TKey, TValue>,
         ArgumentOutOfRangeException.ThrowIfNegative(capacity);
         if (capacity > (_entries?.Length ?? 0))
         {
-            Resize(Math.Min(capacity, MaxCapacity)); // Let Resize pick bucket prime
+            Resize(capacity); // Let Resize pick bucket prime
         }
     }
 
@@ -401,18 +396,18 @@ public sealed class OrderedDictionary<TKey, TValue> : IDictionary<TKey, TValue>,
 
     private void Resize()
     {
-        var newSize = GetPrime(_count * 2);
+        var newSize = GetPrime(Math.Max(_count * 2, DefaultCapacity));
         Resize(newSize);
     }
 
     private void Resize(int targetSize)
     {
-        var newSize = Math.Min(targetSize, MaxCapacity);
-        var newBucketSize = Math.Min(GetPrime(newSize), MaxBucketSize);
+        var newSize = Math.Max(targetSize, 1);
+        var newBucketSize = GetPrime(newSize);
 
-        var newBuckets = new ushort[newBucketSize];    // zero-initialized (0 = empty)
+        var newBuckets = new int[newBucketSize];    // zero-initialized (0 = empty)
         var newEntries = new Entry[newSize];
-        var newInsertionOrder = new ushort[newSize];
+        var newInsertionOrder = new int[newSize];
 
         // Rebuild from insertion order - only copy active entries
         int activeCount = Count;
@@ -432,9 +427,9 @@ public sealed class OrderedDictionary<TKey, TValue> : IDictionary<TKey, TValue>,
             var bucket = newEntry.HashCode % (uint)newBucketSize;
             var head = newBuckets[bucket];
             newEntry.Next = head;                      // 0 if none
-            newBuckets[bucket] = (ushort)(newIndex + 1);
+            newBuckets[bucket] = (newIndex + 1);
 
-            newInsertionOrder[k] = (ushort)(newIndex + 1);
+            newInsertionOrder[k] = (newIndex + 1);
         }
 
         // Update arrays and reset free list
@@ -443,7 +438,7 @@ public sealed class OrderedDictionary<TKey, TValue> : IDictionary<TKey, TValue>,
         _insertionOrder = newInsertionOrder;
         _freeList = 0;                                 // 0 = none
         _freeCount = 0;
-        _count = (ushort)activeCount;
+        _count = activeCount;
     }
 
     // Optimized prime calculation up to 65521
@@ -451,7 +446,8 @@ public sealed class OrderedDictionary<TKey, TValue> : IDictionary<TKey, TValue>,
     {
         ReadOnlySpan<int> primes = stackalloc int[]
         {
-            17, 37, 79, 163, 331, 673, 1361, 2729, 5471, 10949, 21911, 43853, 65521
+            17, 37, 79, 163, 331, 673, 1361, 2729, 5471, 10949, 21911, 43853,
+            87313, 139901, 223729, 357913, 573343, 917513, 1468007, 2359297
         };
 
         foreach (var prime in primes)
@@ -462,14 +458,12 @@ public sealed class OrderedDictionary<TKey, TValue> : IDictionary<TKey, TValue>,
             }
         }
 
-        // For larger sizes, clamp at 65521
-        if (min > 65521)
+        // Fallback calculation: find next odd prime without upper clamp
+        if ((min & 1) == 0)
         {
-            return 65521;
+            min++;
         }
-
-        // Fallback calculation, capped at 65521
-        for (int candidate = min | 1; candidate <= 65521; candidate += 2)
+        for (int candidate = min; candidate < int.MaxValue - 2; candidate += 2)
         {
             if (IsPrime(candidate))
             {
@@ -477,7 +471,7 @@ public sealed class OrderedDictionary<TKey, TValue> : IDictionary<TKey, TValue>,
             }
         }
 
-        return 65521;
+        return min;
     }
 
     private static bool IsPrime(int candidate)

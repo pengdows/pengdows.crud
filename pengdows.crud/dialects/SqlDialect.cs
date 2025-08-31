@@ -1,6 +1,5 @@
 using System.Data;
 using System.Data.Common;
-using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
@@ -95,6 +94,11 @@ public abstract class SqlDialect:ISqlDialect
 
     // SQL:2023 features
     public virtual bool SupportsPropertyGraphQueries => MaxSupportedStandard >= SqlStandardLevel.Sql2023;
+
+    // Modern SQL/JSON feature gates (safe defaults)
+    public virtual bool SupportsSqlJsonConstructors => false;
+    public virtual bool SupportsJsonTable => false;
+    public virtual bool SupportsMergeReturning => false;
 
     // Database-specific extensions (override as needed)
     public virtual bool SupportsInsertOnConflict => false; // PostgreSQL, SQLite extension
@@ -195,7 +199,11 @@ public abstract class SqlDialect:ISqlDialect
         }
         else if (SupportsNamedParameters)
         {
-            name = name.TrimStart('@', ':', '?');
+            // Trim any leading marker characters from provided names so
+            // DbParameter.ParameterName is the raw identifier the provider expects.
+            // Some providers (e.g., DuckDB) use '$' in SQL text but expect the
+            // underlying parameter name without the marker.
+            name = name.TrimStart('@', ':', '?', '$');
         }
 
         var valueIsNull = Utils.IsNullOrDbNull(value);
@@ -435,7 +443,7 @@ public abstract class SqlDialect:ISqlDialect
         return "Unknown Version (SQL-92 Compatible)";
     }
 
-    protected virtual async Task<string?> GetProductNameAsync(ITrackedConnection connection)
+    protected virtual Task<string?> GetProductNameAsync(ITrackedConnection connection)
     {
         try
         {
@@ -452,7 +460,7 @@ public abstract class SqlDialect:ISqlDialect
                             productName);
                     }
 
-                    return productName;
+                    return Task.FromResult<string?>(productName);
                 }
             }
         }
@@ -467,7 +475,7 @@ public abstract class SqlDialect:ISqlDialect
                 "Using SQL-92 fallback dialect for unknown database product");
         }
 
-        return null;
+        return Task.FromResult<string?>(null);
     }
 
     protected virtual string ExtractProductNameFromVersion(string versionString)
@@ -617,6 +625,24 @@ public abstract class SqlDialect:ISqlDialect
         return new string(buffer);
     }
 
+    /// <summary>
+    /// Gets the database-specific query for retrieving the last inserted identity value.
+    /// Base implementation returns empty string. Override in dialect-specific classes.
+    /// </summary>
+    /// <returns>SQL query to get the last inserted identity value, or empty string if not supported.</returns>
+    public virtual string GetLastInsertedIdQuery()
+    {
+        return DatabaseType switch
+        {
+            SupportedDatabase.Sqlite => "SELECT last_insert_rowid()",
+            SupportedDatabase.SqlServer => "SELECT SCOPE_IDENTITY()",
+            SupportedDatabase.MySql => "SELECT LAST_INSERT_ID()",
+            SupportedDatabase.PostgreSql => "SELECT lastval()",
+            SupportedDatabase.Oracle => "SELECT @@IDENTITY",
+            _ => string.Empty
+        };
+    }
+
     // ---- Legacy utility helpers (kept for test compatibility) ----
     // These helpers are intentionally private to match historical usage in tests via reflection.
     private static bool TryParseMajorVersion(string? version, out int major)
@@ -637,19 +663,34 @@ public abstract class SqlDialect:ISqlDialect
 
     private static bool IsPrime(int n)
     {
-        if (n < 2) return false;
-        if (n % 2 == 0) return n == 2;
+        if (n < 2)
+        {
+            return false;
+        }
+
+        if (n % 2 == 0)
+        {
+            return n == 2;
+        }
+
         var limit = (int)Math.Sqrt(n);
         for (var i = 3; i <= limit; i += 2)
         {
-            if (n % i == 0) return false;
+            if (n % i == 0)
+            {
+                return false;
+            }
         }
         return true;
     }
 
     private static int GetPrime(int min)
     {
-        if (min <= 2) return 2;
+        if (min <= 2)
+        {
+            return 2;
+        }
+
         var candidate = (min % 2 == 0) ? min + 1 : min;
         while (!IsPrime(candidate))
         {
@@ -658,4 +699,3 @@ public abstract class SqlDialect:ISqlDialect
         return candidate;
     }
 }
-

@@ -100,8 +100,7 @@ public interface ISqlContainer :ISafeAsyncDisposableBase
     /// <param name="type">Database type of the parameter.</param>
     /// <param name="value">The value to assign.</param>
     /// <returns>The created parameter.</returns>
-    DbParameter AddParameterWithValue<T>(DbType type, T value,
-        ParameterDirection direction = ParameterDirection.Input);
+    DbParameter AddParameterWithValue<T>(DbType type, T value);
 
     /// <summary>
     /// Adds a named parameter by type and value.
@@ -111,31 +110,45 @@ public interface ISqlContainer :ISafeAsyncDisposableBase
     /// <param name="type">Database type of the parameter.</param>
     /// <param name="value">The value to assign.</param>
     /// <returns>The created parameter.</returns>
-    DbParameter AddParameterWithValue<T>(string? name, DbType type, T value,
-        ParameterDirection direction = ParameterDirection.Input);
+    DbParameter AddParameterWithValue<T>(string? name, DbType type, T value);
 
     /// <summary>
-    /// Sets a parameter value for an existing parameter.
+    /// Adds a parameter by type and value with an explicit direction, returning the created parameter.
     /// </summary>
-    /// <param name="parameterName">The name of the parameter to update.</param>
-    /// <param name="newValue">The new value to assign.</param>
+    /// <typeparam name="T">The type of the parameter value.</typeparam>
+    /// <param name="type">Database type of the parameter.</param>
+    /// <param name="value">The value to assign.</param>
+    /// <param name="direction">The parameter direction.</param>
+    /// <returns>The created parameter.</returns>
+    DbParameter AddParameterWithValue<T>(DbType type, T value, ParameterDirection direction);
+
+    /// <summary>
+    /// Adds a named parameter by type and value with an explicit direction.
+    /// </summary>
+    /// <typeparam name="T">The type of the parameter value.</typeparam>
+    /// <param name="name">Parameter name or <c>null</c> for an auto-generated name.</param>
+    /// <param name="type">Database type of the parameter.</param>
+    /// <param name="value">The value to assign.</param>
+    /// <param name="direction">The parameter direction.</param>
+    /// <returns>The created parameter.</returns>
+    DbParameter AddParameterWithValue<T>(string? name, DbType type, T value, ParameterDirection direction);
+
+    /// <summary>
+    /// Sets an existing parameter's value by name.
+    /// </summary>
     void SetParameterValue(string parameterName, object? newValue);
 
     /// <summary>
-    /// Retrieves the value of a parameter as an <see cref="object"/>.
+    /// Gets a parameter's value by name.
     /// </summary>
-    /// <param name="parameterName">The name of the parameter.</param>
-    /// <returns>The parameter value.</returns>
     object? GetParameterValue(string parameterName);
 
     /// <summary>
-    /// Retrieves the value of a parameter and coerces it to the specified type using
-    /// <see cref="TypeCoercionHelper"/>.
+    /// Gets a parameter's value by name and coerces it to type <typeparamref name="T"/>.
     /// </summary>
-    /// <typeparam name="T">The expected type of the parameter value.</typeparam>
-    /// <param name="parameterName">The name of the parameter.</param>
-    /// <returns>The parameter value cast to <typeparamref name="T"/>.</returns>
     T GetParameterValue<T>(string parameterName);
+
+    // Parameter inspection helpers are intentionally not part of the public interface for compatibility
 
     /// <summary>
     /// Executes the current query as a non-query command.
@@ -178,33 +191,11 @@ public interface ISqlContainer :ISafeAsyncDisposableBase
     void Clear();
 
     /// <summary>
-    /// Wraps the query for execution as a stored procedure.
+    /// Wraps the query for execution as a stored procedure with optional return capture when supported.
     /// </summary>
     /// <param name="executionType">The procedure execution type.</param>
     /// <param name="includeParameters">Whether to include parameters in the wrapper.</param>
-    /// <param name="captureReturn">Whether to capture a return value.</param>
-    /// <returns>The wrapped command text.</returns>
+    /// <param name="captureReturn">Whether to capture the procedure return value when supported.</param>
     string WrapForStoredProc(ExecutionType executionType, bool includeParameters = true, bool captureReturn = false);
-
-    /// <summary>
-    /// Wraps the query for execution as a CREATE-like stored procedure and captures a return value.
-    /// </summary>
-    /// <param name="includeParameters">Whether to include parameters in the wrapper.</param>
-    /// <returns>The wrapped command text.</returns>
-    string WrapForCreateWithReturn(bool includeParameters = true);
-
-    /// <summary>
-    /// Wraps the query for execution as an UPDATE-like stored procedure and captures a return value.
-    /// </summary>
-    /// <param name="includeParameters">Whether to include parameters in the wrapper.</param>
-    /// <returns>The wrapped command text.</returns>
-    string WrapForUpdateWithReturn(bool includeParameters = true);
-
-    /// <summary>
-    /// Wraps the query for execution as a DELETE-like stored procedure and captures a return value.
-    /// </summary>
-    /// <param name="includeParameters">Whether to include parameters in the wrapper.</param>
-    /// <returns>The wrapped command text.</returns>
-    string WrapForDeleteWithReturn(bool includeParameters = true);
 
 }

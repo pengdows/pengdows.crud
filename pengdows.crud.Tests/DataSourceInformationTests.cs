@@ -63,7 +63,7 @@ public static class DataSourceTestData
             {
                 SupportedDatabase.SqlServer => new SqlServerDialect(factory, NullLogger.Instance),
                 SupportedDatabase.MySql => new MySqlDialect(factory, NullLogger.Instance),
-                SupportedDatabase.MariaDb => new MySqlDialect(factory, NullLogger.Instance),
+                SupportedDatabase.MariaDb => new MariaDbDialect(factory, NullLogger.Instance),
                 SupportedDatabase.PostgreSql => new PostgreSqlDialect(factory, NullLogger.Instance),
                 SupportedDatabase.CockroachDb => new PostgreSqlDialect(factory, NullLogger.Instance),
                 SupportedDatabase.Sqlite => new SqliteDialect(factory, NullLogger.Instance),

@@ -58,7 +58,7 @@ public static class SqlDialectFactory
             SupportedDatabase.PostgreSql => new PostgreSqlDialect(factory, logger),
             SupportedDatabase.CockroachDb => new PostgreSqlDialect(factory, logger),
             SupportedDatabase.MySql => new MySqlDialect(factory, logger),
-            SupportedDatabase.MariaDb => new MySqlDialect(factory, logger),
+            SupportedDatabase.MariaDb => new MariaDbDialect(factory, logger),
             SupportedDatabase.Sqlite => new SqliteDialect(factory, logger),
             SupportedDatabase.Oracle => new OracleDialect(factory, logger),
             SupportedDatabase.Firebird => new FirebirdDialect(factory, logger),
@@ -84,7 +84,7 @@ public static class SqlDialectFactory
         };
     }
 
-    private static async Task<SupportedDatabase> InferDatabaseTypeFromConnectionAsync(
+    private static Task<SupportedDatabase> InferDatabaseTypeFromConnectionAsync(
         ITrackedConnection connection,
         ILogger logger)
     {
@@ -94,7 +94,7 @@ public static class SqlDialectFactory
             if (schema.Rows.Count > 0)
             {
                 var name = schema.Rows[0].Field<string>("DataSourceProductName") ?? string.Empty;
-                return InferDatabaseTypeFromName(name);
+                return Task.FromResult(InferDatabaseTypeFromName(name));
             }
         }
         catch (Exception ex)
@@ -102,7 +102,7 @@ public static class SqlDialectFactory
             logger.LogDebug(ex, "Failed to infer database type from connection");
         }
 
-        return SupportedDatabase.Unknown;
+        return Task.FromResult(SupportedDatabase.Unknown);
     }
 
     private static SupportedDatabase InferDatabaseTypeFromName(string name)

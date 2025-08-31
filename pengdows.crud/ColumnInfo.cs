@@ -11,8 +11,8 @@ namespace pengdows.crud;
 public class ColumnInfo : IColumnInfo
 {
     public Type? EnumType { get; set; }
-    public string Name { get; init; }
-    public PropertyInfo PropertyInfo { get; init; }
+    public string Name { get; init; } = null!;
+    public PropertyInfo PropertyInfo { get; init; } = null!;
     public bool IsId { get; init; } = false;
     public DbType DbType { get; set; }
     public bool IsNonUpdateable { get; set; }
@@ -29,7 +29,7 @@ public class ColumnInfo : IColumnInfo
     public bool IsLastUpdatedBy { get; set; }
     public bool IsLastUpdatedOn { get; set; }
     public int Ordinal { get; set; }
-    public Type EnumUnderlyingType { get; set; }
+    public Type EnumUnderlyingType { get; set; } = null!;
     public bool EnumAsString { get; set; }
 
     public object? MakeParameterValueFromField<T>(T objectToCreate)

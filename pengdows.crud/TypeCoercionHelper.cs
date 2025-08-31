@@ -30,7 +30,7 @@ public static class TypeCoercionHelper
             return null;
         }
 
-        var targetType = columnInfo?.PropertyInfo?.PropertyType;
+        var targetType = columnInfo.PropertyInfo.PropertyType;
 
         if (dbFieldType == targetType)
         {
@@ -38,9 +38,9 @@ public static class TypeCoercionHelper
         }
 
         // Enum coercion
-        if (columnInfo?.EnumType != null)
+        if (columnInfo.EnumType != null)
         {
-            if (Enum.TryParse(columnInfo.EnumType, value.ToString(), true, out var result))
+            if (Enum.TryParse(columnInfo.EnumType, value?.ToString() ?? string.Empty, true, out var result))
             {
                 return result;
             }
@@ -77,7 +77,7 @@ public static class TypeCoercionHelper
             throw new ArgumentException($"Cannot deserialize JSON value '{value}' to type {targetType}.");
         }
 
-        return CoerceCore(value, dbFieldType, targetType);
+        return CoerceCore(value!, dbFieldType, targetType);
     }
 
     public static object? Coerce(
@@ -95,7 +95,7 @@ public static class TypeCoercionHelper
             return value;
         }
 
-        return CoerceCore(value, sourceType, targetType);
+        return CoerceCore(value!, sourceType, targetType);
     }
 
     private static object? CoerceCore(object value, Type sourceType, Type targetType)

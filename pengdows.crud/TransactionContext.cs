@@ -22,6 +22,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
     private readonly ILogger<TransactionContext> _logger;
     private readonly SemaphoreSlim _semaphoreSlim;
     private readonly IDbTransaction _transaction;
+    private readonly IsolationLevel _resolvedIsolationLevel;
 
     private volatile bool _committed;
     private volatile bool _rolledBack;
@@ -37,7 +38,10 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
     {
         _logger = logger ?? new NullLogger<TransactionContext>();
         _context = context ?? throw new ArgumentNullException(nameof(context));
-        _dialect = (context as ISqlDialectProvider).Dialect;
+        var provider = context as ISqlDialectProvider
+                       ?? throw new InvalidOperationException(
+                           "IDatabaseContext must implement ISqlDialectProvider and expose a non-null Dialect.");
+        _dialect = provider.Dialect;
         RootId = ((IContextIdentity)_context).RootId;
 
         executionType ??= _context.IsReadOnlyConnection ? ExecutionType.Read : ExecutionType.Write;
@@ -56,7 +60,13 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         EnsureConnectionIsOpen();
         _semaphoreSlim = new SemaphoreSlim(1, 1);
 
-        _transaction = _connection.BeginTransaction(isolationLevel);
+        _resolvedIsolationLevel = isolationLevel;
+
+        // DuckDB's ADO.NET provider rejects explicit IsolationLevel values. Use provider default,
+        // but preserve the resolved isolation level for reporting and logic.
+        _transaction = _context.Product == SupportedDatabase.DuckDB
+            ? _connection.BeginTransaction()
+            : _connection.BeginTransaction(isolationLevel);
     }
 
     public Guid TransactionId { get; } = Guid.NewGuid();
@@ -65,7 +75,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
     public bool WasCommitted => _completedState == 1 && _committed;
     public bool WasRolledBack => _completedState == 1 && _rolledBack;
     public bool IsCompleted => Interlocked.CompareExchange(ref _completedState, 0, 0) != 0;
-    public IsolationLevel IsolationLevel => _transaction.IsolationLevel;
+    public IsolationLevel IsolationLevel => _resolvedIsolationLevel;
 
     public long NumberOfOpenConnections => _context.NumberOfOpenConnections;
     public SupportedDatabase Product => _context.Product;
@@ -73,7 +83,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
     public bool IsReadOnlyConnection => _context.IsReadOnlyConnection;
     public bool RCSIEnabled => _context.RCSIEnabled;
     public int MaxParameterLimit => _context.MaxParameterLimit;
-    public int MaxOutputParameters => _context.MaxOutputParameters;
+    public int MaxOutputParameters => (_dialect as pengdows.crud.dialects.SqlDialect)?.MaxOutputParameters ?? 0;
     public DbMode ConnectionMode => DbMode.SingleConnection;
     public ITypeMapRegistry TypeMapRegistry => _context.TypeMapRegistry;
     public IDataSourceInformation DataSourceInfo => _context.DataSourceInfo;
@@ -103,13 +113,29 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
     public DbParameter CreateDbParameter<T>(string? name, DbType type, T value,
         ParameterDirection direction = ParameterDirection.Input)
     {
-        return _context.CreateDbParameter(name, type, value, direction);
+        var p = _context.CreateDbParameter(name, type, value);
+        p.Direction = direction;
+        return p;
+    }
+
+    // Back-compat overloads (interface surface)
+    public DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
+    {
+        return _context.CreateDbParameter(name, type, value);
     }
 
     public DbParameter CreateDbParameter<T>(DbType type, T value,
         ParameterDirection direction = ParameterDirection.Input)
     {
-        return _context.CreateDbParameter(type, value, direction);
+        var p = _context.CreateDbParameter(type, value);
+        p.Direction = direction;
+        return p;
+    }
+
+    // Back-compat overload (interface surface)
+    public DbParameter CreateDbParameter<T>(DbType type, T value)
+    {
+        return _context.CreateDbParameter(type, value);
     }
 
     public ITrackedConnection GetConnection(ExecutionType type, bool isShared = false)

@@ -188,6 +188,22 @@ public interface ISqlDialect
     /// </summary>
     bool SupportsPropertyGraphQueries { get; }
 
+    // PostgreSQL and modern SQL feature gates
+    /// <summary>
+    /// Indicates support for SQL/JSON constructors and functions per newer SQL standards.
+    /// </summary>
+    bool SupportsSqlJsonConstructors { get; }
+
+    /// <summary>
+    /// Indicates support for JSON_TABLE or equivalent SQL/JSON table mapping features.
+    /// </summary>
+    bool SupportsJsonTable { get; }
+
+    /// <summary>
+    /// Indicates MERGE supports RETURNING (or equivalent) to fetch affected rows.
+    /// </summary>
+    bool SupportsMergeReturning { get; }
+
     /// <summary>
     /// True when INSERT ... ON CONFLICT syntax is available.
     /// </summary>
@@ -362,4 +378,10 @@ public interface ISqlDialect
     /// <param name="parameterNameMaxLength">Maximum allowed name length.</param>
     /// <returns>Randomly generated name.</returns>
     string GenerateRandomName(int length, int parameterNameMaxLength);
+
+    /// <summary>
+    /// Gets the database-specific query for retrieving the last inserted identity value.
+    /// </summary>
+    /// <returns>SQL query to get the last inserted identity value, or empty string if not supported.</returns>
+    string GetLastInsertedIdQuery();
 }

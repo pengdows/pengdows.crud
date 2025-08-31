@@ -31,6 +31,17 @@ public class SqlDialectFactoryTests
     }
 
     [Fact]
+    public void CreateDialectForType_MariaDb_ReturnsMariaDbDialect()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.MariaDb);
+        var dialect = SqlDialectFactory.CreateDialectForType(
+            SupportedDatabase.MariaDb,
+            factory,
+            NullLogger<SqlDialect>.Instance);
+        Assert.IsType<MariaDbDialect>(dialect);
+    }
+
+    [Fact]
     public void CreateDialectForType_PostgreSql_ReturnsPostgreSqlDialect()
     {
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);

@@ -27,7 +27,9 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
     internal SqlContainer(IDatabaseContext context, string? query = "", ILogger<ISqlContainer>? logger = null)
     {
         _context = context;
-        _dialect = (context as ISqlDialectProvider)?.Dialect;
+        _dialect = (context as ISqlDialectProvider)?.Dialect
+                   ?? throw new InvalidOperationException(
+                       "IDatabaseContext must implement ISqlDialectProvider and expose a non-null Dialect.");
         _logger = logger ?? NullLogger<ISqlContainer>.Instance;
         Query = new StringBuilder(query ?? string.Empty);
     }
@@ -93,10 +95,11 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
         if (isOutput)
         {
             var next = _outputParameterCount + 1;
-            if (next > _context.MaxOutputParameters)
+            var maxOut = _context.DataSourceInfo.MaxOutputParameters;
+            if (next > maxOut)
             {
                 throw new InvalidOperationException(
-                    $"Query exceeds the maximum output parameter limit of {_context.MaxOutputParameters} for {_context.DatabaseProductName}.");
+                    $"Query exceeds the maximum output parameter limit of {maxOut} for {_context.DatabaseProductName}.");
             }
 
             _outputParameterCount = next;
@@ -120,15 +123,31 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
         ParameterDirection direction = ParameterDirection.Input)
     {
         name ??= GenerateRandomName();
-        var parameter = _context.CreateDbParameter(name, type, value, direction);
+        var parameter = _context.CreateDbParameter(name, type, value);
+        parameter.Direction = direction;
 
         AddParameter(parameter);
         return parameter;
     }
 
+    // Back-compat overloads (interface surface)
+    public DbParameter AddParameterWithValue<T>(DbType type, T value)
+    {
+        return AddParameterWithValue(type, value, ParameterDirection.Input);
+    }
+
+    public DbParameter AddParameterWithValue<T>(string? name, DbType type, T value)
+    {
+        return AddParameterWithValue(name, type, value, ParameterDirection.Input);
+    }
+
     private string NormalizeParameterName(string parameterName)
     {
-        return _dialect.SupportsNamedParameters ? parameterName.TrimStart('@', ':', '?') : parameterName;
+        // Normalize so lookups work with or without a leading marker
+        // (e.g., @p0, :p0, ?p0, $p0 -> p0) for named providers.
+        return _dialect.SupportsNamedParameters
+            ? parameterName.TrimStart('@', ':', '?', '$')
+            : parameterName;
     }
 
     public void SetParameterValue(string parameterName, object? newValue)
@@ -193,9 +212,27 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
             throw new InvalidOperationException("Procedure name is missing from the query.");
         }
 
+        if (_context.ProcWrappingStyle == ProcWrappingStyle.None)
+        {
+            throw new NotSupportedException(
+                $"Stored procedures are not supported for {_context.Product}.");
+        }
+
         var args = includeParameters ? BuildProcedureArguments() : string.Empty;
 
-        return _context.ProcWrappingStrategy.Wrap(procName, executionType, args);
+        if (captureReturn)
+        {
+            // Only Exec style (e.g., SQL Server) supports capturing a return value in our abstraction
+            if (_context.ProcWrappingStyle != ProcWrappingStyle.Exec)
+            {
+                throw new NotSupportedException("Capturing return value is not supported for this provider.");
+            }
+
+            return FormatExecWithReturn();
+        }
+
+        var strategy = pengdows.crud.strategies.ProcWrappingStrategyFactory.Create(_context.ProcWrappingStyle);
+        return strategy.Wrap(procName, executionType, args);
 
         string FormatExecWithReturn()
         {
@@ -219,6 +256,11 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
             return string.Join(", ", Enumerable.Repeat("?", _parameters.Count));
         }
     }
+
+    // Overload without defaults to avoid ambiguity with the 3-arg version
+    public string WrapForStoredProc(ExecutionType executionType, bool includeParameters)
+    {
+        return WrapForStoredProc(executionType, includeParameters, captureReturn: false);
     }
 
     public string WrapForCreateWithReturn(bool includeParameters = true)
@@ -305,7 +347,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
         _context.AssertIsReadConnection();
 
         ITrackedConnection conn;
-        DbCommand cmd = null;
+        DbCommand? cmd = null;
         try
         {
             await using var contextLocker = _context.GetLock();
@@ -381,7 +423,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
             _logger.LogDebug("Parameters: {Parameters}", paramDump);
         }
         cmd.CommandText = (commandType == CommandType.StoredProcedure)
-            ? WrapForStoredProc(executionType)
+            ? WrapForStoredProc(executionType, includeParameters: true)
             : Query.ToString();
         if (_parameters.Count > _context.MaxParameterLimit)
         {

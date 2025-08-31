@@ -30,6 +30,9 @@ public class PostgreSqlDialect : SqlDialect
     public override bool SupportsInsertOnConflict => true;
     public override bool SupportsMerge => IsInitialized && ProductInfo.ParsedVersion?.Major >= 15;
     public override bool SupportsJsonTypes => IsInitialized && ProductInfo.ParsedVersion?.Major >= 9;
+    public override bool SupportsSqlJsonConstructors => IsInitialized && ProductInfo.ParsedVersion?.Major >= 18;
+    public override bool SupportsJsonTable => IsInitialized && ProductInfo.ParsedVersion?.Major >= 18;
+    public override bool SupportsMergeReturning => IsInitialized && ProductInfo.ParsedVersion?.Major >= 18;
 
     public override string GetVersionQuery() => "SELECT version()";
 

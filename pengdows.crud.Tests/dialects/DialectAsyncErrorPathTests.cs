@@ -2,13 +2,9 @@
 
 using System;
 using System.Data;
-using System.Data.Common;
-using System.Threading.Tasks;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
-using pengdows.crud.Tests.Mocks;
-using pengdows.crud.wrappers;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 

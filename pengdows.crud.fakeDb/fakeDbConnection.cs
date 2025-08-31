@@ -2,6 +2,7 @@
 
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using pengdows.crud.enums;
 
 #endregion
@@ -10,7 +11,7 @@ namespace pengdows.crud.fakeDb;
 
 public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsyncDisposable
 {
-    private string _connectionString = string.Empty;
+    private string? _connectionString;
     private SupportedDatabase? _emulatedProduct;
     private DataTable? _schemaTable;
     private ConnectionState _state = ConnectionState.Closed;
@@ -35,6 +36,7 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
     public readonly Queue<object?> ScalarResults = new();
     public readonly Queue<int> NonQueryResults = new();
     internal readonly Dictionary<string, object?> ScalarResultsByCommand = new();
+    public readonly List<string> ExecutedNonQueryTexts = new();
 
     public void EnqueueReaderResult(IEnumerable<Dictionary<string, object>> rows)
     {
@@ -206,9 +208,10 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
         }
     }
 
+    [AllowNull]
     public override string ConnectionString
     {
-        get => _connectionString;
+        get => _connectionString!;
         set => _connectionString = value;
     }
 
@@ -317,7 +320,7 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
 
     public override async ValueTask DisposeAsync()
     {
-        CloseAsync();
+        await CloseAsync();
         await base.DisposeAsync();
     }
 
@@ -488,4 +491,3 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
         return _schemaTable;
     }
 }
-

@@ -1,6 +1,4 @@
 using System.Data;
-using System.Threading;
-using System.Threading.Tasks;
 using pengdows.crud.wrappers;
 
 namespace pengdows.crud;
@@ -14,7 +12,11 @@ public static class SqlContainerExtensions
 {
     public static ISqlContainer AppendQuery(this ISqlContainer container, string sql)
     {
-        if (container is null) throw new ArgumentNullException(nameof(container));
+        if (container is null)
+        {
+            throw new ArgumentNullException(nameof(container));
+        }
+
         if (!string.IsNullOrEmpty(sql))
         {
             container.Query.Append(sql);

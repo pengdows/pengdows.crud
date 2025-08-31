@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.Data.Common;
 using System.Reflection;
 using System.Threading.Tasks;
-using Microsoft.Data.Sqlite;
-
 using Xunit;
 
 namespace pengdows.crud.Tests;

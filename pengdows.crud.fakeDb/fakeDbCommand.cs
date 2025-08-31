@@ -17,6 +17,7 @@ public class fakeDbCommand : DbCommand
     public fakeDbCommand(DbConnection connection)
     {
         Connection = connection;
+        DbConnection = connection;
     }
 
     public fakeDbCommand()
@@ -30,8 +31,6 @@ public class fakeDbCommand : DbCommand
     public override bool DesignTimeVisible { get; set; }
     public override UpdateRowSource UpdatedRowSource { get; set; }
 
-    [AllowNull]
-    public new DbConnection Connection { get; set; }
     protected override DbConnection? DbConnection { get; set; }
     [AllowNull]
     public new DbTransaction Transaction { get; set; }
@@ -73,6 +72,10 @@ public class fakeDbCommand : DbCommand
         ThrowIfShouldFail(nameof(ExecuteNonQuery));
 
         var conn = FakeConnection;
+        if (conn != null && !string.IsNullOrWhiteSpace(CommandText))
+        {
+            conn.ExecutedNonQueryTexts.Add(CommandText);
+        }
         if (conn != null && conn.NonQueryResults.Count > 0)
         {
             return conn.NonQueryResults.Dequeue();
@@ -191,4 +194,3 @@ public class fakeDbCommand : DbCommand
         return new fakeDbParameter();
     }
 }
-

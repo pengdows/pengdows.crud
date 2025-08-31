@@ -38,13 +38,20 @@ public static class ReflectionSerializer
         {
             var result = new Dictionary<string, object?>();
             foreach (DictionaryEntry entry in dict)
+            {
                 result[entry.Key.ToString() ?? string.Empty] = Serialize(entry.Value);
+            }
+
             return result;
         }
         if (obj is IEnumerable enumerable)
         {
             var list = new List<object?>();
-            foreach (var item in enumerable) list.Add(Serialize(item));
+            foreach (var item in enumerable)
+            {
+                list.Add(Serialize(item));
+            }
+
             return list;
         }
 
@@ -93,7 +100,10 @@ public static class ReflectionSerializer
         {
             var dict = (IDictionary)Activator.CreateInstance(targetType)!;
             foreach (var kvp in dictData)
+            {
                 dict[kvp.Key] = Deserialize(targetType.GetGenericArguments()[1], kvp.Value);
+            }
+
             return dict;
         }
         if (typeof(IEnumerable).IsAssignableFrom(targetType) && data is IEnumerable enumerableData)
@@ -104,7 +114,10 @@ public static class ReflectionSerializer
             var listType = typeof(List<>).MakeGenericType(elementType);
             var list = (IList)Activator.CreateInstance(listType)!;
             foreach (var item in enumerableData)
+            {
                 list.Add(Deserialize(elementType, item));
+            }
+
             if (targetType.IsArray)
             {
                 var array = Array.CreateInstance(elementType, list.Count);

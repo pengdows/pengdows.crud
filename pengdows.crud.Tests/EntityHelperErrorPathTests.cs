@@ -3,13 +3,11 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Data.Common;
 using System.Threading.Tasks;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;
 using pengdows.crud.fakeDb;
-using pengdows.crud.Tests.Mocks;
 using Xunit;
 
 #endregion

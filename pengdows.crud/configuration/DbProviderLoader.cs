@@ -65,7 +65,7 @@ public class DbProviderLoader : IDbProviderLoader
     private DbProviderFactory LoadProviderFactory(string providerKey, DatabaseProviderConfig config)
     {
         // Step 1: Load assembly if specified
-        Assembly providerAssembly = null;
+        Assembly? providerAssembly = null;
         if (!string.IsNullOrEmpty(config.AssemblyPath))
         {
             var fullPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, config.AssemblyPath);

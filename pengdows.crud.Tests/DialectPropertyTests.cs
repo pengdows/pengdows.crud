@@ -258,4 +258,3 @@ public class DialectPropertyTests
         bool SupportsArrayTypes,
         bool SupportsNamespaces);
 }
-

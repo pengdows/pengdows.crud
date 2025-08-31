@@ -22,7 +22,7 @@ builder.Services.AddScoped<IAuditValueResolver, StringAuditContextProvider>();
  
 var host = builder.Build();
 
-await using var liteDb = new DatabaseContext("Data Source=mydb.sqlite", SqliteFactory.Instance, null);
+await using var liteDb = new DatabaseContext("Data Source=mydb.sqlite", SqliteFactory.Instance, null!);
 var lite = new TestProvider(liteDb, host.Services);
 await lite.RunTest();
 await using var duck = new DuckDbTestContainer();

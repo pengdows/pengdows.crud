@@ -3,10 +3,19 @@ namespace pengdows.crud.collections;
 using System;
 using System.Collections.Generic;
 using System.Data.Common;
+using Microsoft.Extensions.Logging;
 
 // Extension methods for common DB parameter scenarios
 public static class OrderedDictionaryExtensions
 {
+    // Optional logger for visibility into property access failures
+    // Defaults to no-op; set via OrderedDictionaryExtensions.Logger if desired.
+    private static Microsoft.Extensions.Logging.ILogger _logger = Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance;
+    public static Microsoft.Extensions.Logging.ILogger Logger
+    {
+        get => _logger;
+        set => _logger = value ?? Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance;
+    }
     /// <summary>
     /// Creates a DB parameter dictionary from an object's properties
     /// </summary>
@@ -32,9 +41,11 @@ public static class OrderedDictionaryExtensions
             {
                 value = prop.GetValue(obj);
             }
-            catch
+            catch (Exception ex)
             {
-                continue; // Skip properties that throw on access
+                // Log and skip properties that throw on access to avoid breaking caller scenarios
+                _logger.LogWarning(ex, "Failed to read property {Property} on {Type}", prop.Name, typeof(T));
+                continue;
             }
 
             dict[prop.Name] = value;
