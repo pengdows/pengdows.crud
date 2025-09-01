@@ -11,7 +11,7 @@ using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 using pengdows.crud.Tests.Mocks;
-using pengdows.crud.connection;
+using pengdows.crud.strategies.connection;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
 using pengdows.crud.infrastructure;

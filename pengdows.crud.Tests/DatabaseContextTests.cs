@@ -500,11 +500,11 @@ public class DatabaseContextTests
     [Fact]
     public void StandardConnection_DoesNotApplySessionSettings()
     {
-        var factory = new RecordingFactory(SupportedDatabase.Sqlite);
+        var factory = new RecordingFactory(SupportedDatabase.SqlServer);
         var config = new DatabaseContextConfiguration
         {
-            ConnectionString = "Data Source=test;EmulatedProduct=Sqlite",
-            ProviderName = SupportedDatabase.Sqlite.ToString(),
+            ConnectionString = "Data Source=test;EmulatedProduct=SqlServer",
+            ProviderName = SupportedDatabase.SqlServer.ToString(),
             DbMode = DbMode.Standard
         };
 

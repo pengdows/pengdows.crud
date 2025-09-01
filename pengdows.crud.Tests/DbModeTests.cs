@@ -24,7 +24,7 @@ public class DbModeTests
         var qs = context.QuoteSuffix;
         var sql = string.Format(@"CREATE TABLE IF NOT EXISTS
 {0}Users{1} (
-    {0}Id{1} INTEGER PRIMARY KEY,
+    {0}Id{1} INTEGER PRIMARY KEY AUTOINCREMENT,
     {0}Email{1} TEXT UNIQUE,
     {0}Version{1} INTEGER,
     {0}Name{1} TEXT
@@ -52,7 +52,7 @@ public class DbModeTests
 
         var helper = new EntityHelper<User, int>(context, auditValueResolver: null);
         var users = Enumerable.Range(1, 20)
-            .Select(i => new User { Id = i, Email = $"test{i}@example.com", Name = $"Test{i}", Version = 1 })
+            .Select(i => new User { Email = $"test{i}@example.com", Name = $"Test{i}", Version = 1 })
             .ToList();
 
         var tasks = users.Select(u => Task.Run(async () =>
@@ -74,9 +74,10 @@ public class DbModeTests
         var typeMap = new TypeMapRegistry();
         typeMap.Register<User>();
 
+        var dbFile = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"crud_{Guid.NewGuid():N}.db");
         var cfg = new DatabaseContextConfiguration
         {
-            ConnectionString = "Data Source=test.db",
+            ConnectionString = $"Data Source={dbFile}",
             DbMode = DbMode.SingleWriter,
             ReadWriteMode = ReadWriteMode.ReadWrite
         };
@@ -86,7 +87,7 @@ public class DbModeTests
 
         var helper = new EntityHelper<User, int>(context, auditValueResolver: null);
         var users = Enumerable.Range(1, 20)
-            .Select(i => new User { Id = i, Email = $"test{i}@example.com", Name = $"Test{i}", Version = 1 })
+            .Select(i => new User { Email = $"test{i}@example.com", Name = $"Test{i}", Version = 1 })
             .ToList();
 
         var tasks = users.Select(u => Task.Run(async () =>
@@ -100,13 +101,16 @@ public class DbModeTests
         var scRead = context.CreateSqlContainer("SELECT COUNT(*) FROM Users");
         var count = await scRead.ExecuteScalarAsync<int>();
         Assert.Equal(20, count);
+
+        // Cleanup the temp file
+        try { System.IO.File.Delete(dbFile); } catch { }
     }
 
     // Minimal entity definition to exercise helper
     [Table("Users")]
     private class User
     {
-        [Id]
+        [Id(false)]
         [Column("Id", DbType.Int32)]
         public int Id { get; set; }
 
@@ -122,4 +126,3 @@ public class DbModeTests
         public string Name { get; set; } = string.Empty;
     }
 }
-

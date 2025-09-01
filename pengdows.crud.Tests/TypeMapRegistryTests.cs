@@ -203,6 +203,9 @@ public class TypeMapRegistryTests
         var info = registry.GetTableInfo<ZeroPkOrder>();
         Assert.Single(info.PrimaryKeys);
         Assert.Equal(1, info.PrimaryKeys[0].PkOrder);
+
+        // Duplicate explicit orders (> 0) should throw
+        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<DuplicateExplicitPkOrder>());
     }
 
     [Fact]
@@ -389,6 +392,18 @@ public class TypeMapRegistryTests
         [PrimaryKey(0)]
         [Column("A", DbType.Int32)]
         public int A { get; set; }
+    }
+
+    [Table("DuplicateExplicitPkOrder")]
+    private class DuplicateExplicitPkOrder
+    {
+        [PrimaryKey(1)]
+        [Column("A", DbType.Int32)]
+        public int A { get; set; }
+
+        [PrimaryKey(1)]
+        [Column("B", DbType.Int32)]
+        public int B { get; set; }
     }
 
     [Table("DuplicateOrdinal")]

@@ -1,4 +1,4 @@
-namespace pengdows.crud.strategies;
+namespace pengdows.crud.strategies.proc;
 
 using pengdows.crud.enums;
 

@@ -10,6 +10,7 @@ using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
+using pengdows.crud.strategies.proc;
 
 #endregion
 
@@ -231,7 +232,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
             return FormatExecWithReturn();
         }
 
-        var strategy = pengdows.crud.strategies.ProcWrappingStrategyFactory.Create(_context.ProcWrappingStyle);
+        var strategy = ProcWrappingStrategyFactory.Create(_context.ProcWrappingStyle);
         return strategy.Wrap(procName, executionType, args);
 
         string FormatExecWithReturn()

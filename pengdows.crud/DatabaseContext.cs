@@ -3,18 +3,19 @@
 using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
-using System.Linq;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;
-// using pengdows.crud.connection; // superseded by strategies namespace
+// using pengdows.crud.strategies.connection; // superseded by strategies namespace
 using pengdows.crud.dialects;
 using pengdows.crud.infrastructure;
 using pengdows.crud.isolation;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
 using pengdows.crud.strategies;
+using pengdows.crud.strategies.connection;
+using pengdows.crud.strategies.proc;
 
 #endregion
 
@@ -25,8 +26,8 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     private readonly DbProviderFactory _factory;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<IDatabaseContext> _logger;
-    private connection.IConnectionStrategy _connectionStrategy = null!;
-    private strategies.IProcWrappingStrategy _procWrappingStrategy = null!;
+    private IConnectionStrategy _connectionStrategy = null!;
+    private IProcWrappingStrategy _procWrappingStrategy = null!;
     private ProcWrappingStyle _procWrappingStyle;
     private bool _applyConnectionSessionSettings;
     private ITrackedConnection? _connection = null;
@@ -136,37 +137,36 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             _factory = factory ?? throw new NullReferenceException(nameof(factory));
             _setDefaultSearchPath = configuration.SetDefaultSearchPath;
 
-            // Pre-infer connection mode for in-memory providers before initialization
-            ConnectionMode = configuration.DbMode;
+            // Pre-infer connection mode for in-memory providers only when the user did not
+            // explicitly choose a non-standard mode. Respect explicit choices.
             try
             {
-                var factoryName = _factory.GetType().Name.ToLowerInvariant();
-                var connStr = configuration.ConnectionString ?? string.Empty;
-                var connStrLower = connStr.ToLowerInvariant();
-
-                string? dsPre = null;
-                foreach (var key in new[] { "data source=", "datasource=" })
+                if (configuration.DbMode == DbMode.Standard)
                 {
-                    var idx = connStrLower.IndexOf(key, StringComparison.Ordinal);
-                    if (idx >= 0)
+                    var factoryName = _factory.GetType().Name.ToLowerInvariant();
+                    var connStr = configuration.ConnectionString ?? string.Empty;
+                    var connStrLower = connStr.ToLowerInvariant();
+
+                    string? dsPre = null;
+                    foreach (var key in new[] { "data source=", "datasource=" })
                     {
-                        var start = idx + key.Length;
-                        var end = connStrLower.IndexOf(';', start);
-                        dsPre = connStrLower.Substring(start, end >= 0 ? end - start : connStrLower.Length - start).Trim();
-                        break;
+                        var idx = connStrLower.IndexOf(key, StringComparison.Ordinal);
+                        if (idx >= 0)
+                        {
+                            var start = idx + key.Length;
+                            var end = connStrLower.IndexOf(';', start);
+                            dsPre = connStrLower.Substring(start, end >= 0 ? end - start : connStrLower.Length - start).Trim();
+                            break;
+                        }
                     }
-                }
 
-                var isDuck = factoryName.Contains("duckdb") || connStrLower.Contains("emulatedproduct=duckdb");
-                var isSqlite = factoryName.Contains("sqlite") || connStrLower.Contains("emulatedproduct=sqlite");
+                    var isDuck = factoryName.Contains("duckdb") || connStrLower.Contains("emulatedproduct=duckdb");
+                    var isSqlite = factoryName.Contains("sqlite") || connStrLower.Contains("emulatedproduct=sqlite");
 
-                if (isDuck)
-                {
-                    ConnectionMode = dsPre == ":memory:" ? DbMode.SingleConnection : DbMode.SingleWriter;
-                }
-                else if (isSqlite && dsPre == ":memory:")
-                {
-                    ConnectionMode = DbMode.SingleConnection;
+                    if (isDuck || isSqlite)
+                    {
+                        ConnectionMode = dsPre == ":memory:" ? DbMode.SingleConnection : DbMode.SingleWriter;
+                    }
                 }
             }
             catch { /* ignore pre-infer failures */ }
@@ -179,16 +179,21 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
 
             RCSIEnabled = _dialect.IsReadCommittedSnapshotOn(initialConnection!);
 
-            // Ensure DuckDB defaults are applied even when provider factory is opaque
-            if (_dataSourceInfo.Product == SupportedDatabase.DuckDB)
+            switch (_dataSourceInfo.Product)
             {
-                try
-                {
-                    var csb2 = GetFactoryConnectionStringBuilder(configuration.ConnectionString ?? string.Empty);
-                    var ds2 = csb2["Data Source"] as string;
-                    ConnectionMode = ":memory:" == ds2 ? DbMode.SingleConnection : DbMode.SingleWriter;
-                }
-                catch { /* ignore */ }
+                // Ensure DuckDB defaults are applied even when provider factory is opaque,
+                // but only if the user did not explicitly choose a non-standard mode.
+                case SupportedDatabase.DuckDB:
+                case SupportedDatabase.Sqlite:
+                    try
+                    {
+                        var csb2 = GetFactoryConnectionStringBuilder(configuration.ConnectionString ?? string.Empty);
+                        var ds2 = csb2["Data Source"] as string;
+                        ConnectionMode = ":memory:" == ds2 ? DbMode.SingleConnection : DbMode.SingleWriter;
+                    }
+                    catch { /* ignore */ }
+
+                    break;
             }
 
             _isolationResolver = new IsolationResolver(Product, RCSIEnabled);
@@ -201,7 +206,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             throw;
         }
     }
-    
+
 
     public ReadWriteMode ReadWriteMode { get; set; }
 
@@ -406,6 +411,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         {
             try
             {
+                // Apply session settings for all connection modes.
                 // Prefer dialect-provided settings when available; fall back to precomputed string.
                 var settings = (_dialect != null ? _dialect.GetConnectionSessionSettings() : _connectionSessionSettings) ?? string.Empty;
                 if (!string.IsNullOrWhiteSpace(settings))
@@ -651,7 +657,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
                 // has to be done in connection string, not session;
                 break;
 
-            //DB 2 can't be supported under modern .net 
+            //DB 2 can't be supported under modern .net
             //             case SupportedDatabase.Db2:
             //                 _connectionSessionSettings = @"
             //                  SET CURRENT DEGREE = 'ANY';
@@ -706,7 +712,10 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     {
         if (ExecutionType.Read == type)
         {
-            return GetStandardConnection(isShared);
+            // For transaction-scoped reads (shared=true), reuse the persistent connection
+            // to avoid opening an extra ephemeral connection under SingleWriter mode.
+            // For ad-hoc reads (shared=false), use a standard ephemeral connection.
+            return isShared ? GetSingleConnection() : GetStandardConnection(isShared);
         }
 
         return GetSingleConnection();

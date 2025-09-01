@@ -5,6 +5,9 @@ using System.Collections.Generic;
 using System.Data;
 using System.Threading.Tasks;
 using System.Reflection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Data.Sqlite;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 using Xunit;
@@ -374,66 +377,46 @@ public class SqlContainerTests : SqlLiteContextTestBase
         Assert.NotEqual("/", container.CompositeIdentifierSeparator);
     }
 
-    [Fact]
-    public void WrapForStoredProc_ExecStyle_IncludesParameters()
+    [Theory]
+    [InlineData(SupportedDatabase.SqlServer, "dbo.my_proc", ExecutionType.Write, "EXEC {0} {1}")]
+    [InlineData(SupportedDatabase.PostgreSql, "my_proc", ExecutionType.Read, "SELECT * FROM {0}({1})")]
+    [InlineData(SupportedDatabase.Firebird, "dbo.my_proc", ExecutionType.Read, "SELECT * FROM {0}({1})")]
+    public void WrapForStoredProc_ByProvider_FormatsCorrectly(
+        SupportedDatabase product,
+        string procName,
+        ExecutionType executionType,
+        string format)
     {
-        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
-        var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}", factory);
-        var container = ctx.CreateSqlContainer("dbo.my_proc");
+        var factory = new fakeDbFactory(product);
+        var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
+        var container = ctx.CreateSqlContainer(procName);
         var param = container.AddParameterWithValue(DbType.Int32, 1);
         var expectedName = ctx.MakeParameterName(param);
 
-        var result = container.WrapForStoredProc(ExecutionType.Write);
-
-        Assert.Equal($"EXEC dbo.my_proc {expectedName}", result);
+        var result = container.WrapForStoredProc(executionType);
+        var expected = string.Format(format, procName, expectedName);
+        Assert.Equal(expected, result);
     }
 
-    [Fact]
-    public void WrapForStoredProc_PostgreSqlRead_UsesSelectSyntax()
+    [Theory]
+    [InlineData(SupportedDatabase.PostgreSql)]
+    [InlineData(SupportedDatabase.Firebird)]
+    public void WrapForStoredProc_CaptureReturn_ThrowsForNonExec(SupportedDatabase product)
     {
-        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
-        var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.PostgreSql}", factory);
+        var factory = new fakeDbFactory(product);
+        var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
         var container = ctx.CreateSqlContainer("my_proc");
-        var param = container.AddParameterWithValue(DbType.Int32, 1);
-        var expectedName = ctx.MakeParameterName(param);
-
-        var result = container.WrapForStoredProc(ExecutionType.Read);
-
-        Assert.Equal($"SELECT * FROM my_proc({expectedName})", result);
-    }
-
-    [Fact]
-    public void WrapForStoredProc_PostgreSqlCaptureReturn_Throws()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
-        var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.PostgreSql}", factory);
-        var container = ctx.CreateSqlContainer("my_proc");
-
         Assert.Throws<NotSupportedException>(() => container.WrapForStoredProc(ExecutionType.Read, captureReturn: true));
     }
 
-    [Fact]
-    public void WrapForStoredProc_FirebirdRead_UsesSelectSyntax()
+    [Theory]
+    [InlineData(SupportedDatabase.Sqlite)]
+    public void WrapForStoredProc_Unsupported_Throws(SupportedDatabase product)
     {
-        var factory = new fakeDbFactory(SupportedDatabase.Firebird);
-        var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.Firebird}", factory);
-        var container = ctx.CreateSqlContainer("dbo.my_proc");
-        var param = container.AddParameterWithValue(DbType.Int32, 1);
-        var expectedName = ctx.MakeParameterName(param);
-
-        var result = container.WrapForStoredProc(ExecutionType.Read);
-
-        Assert.Equal($"SELECT * FROM dbo.my_proc({expectedName})", result);
-    }
-
-    [Fact]
-    public void WrapForStoredProc_FirebirdCaptureReturn_Throws()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.Firebird);
-        var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.Firebird}", factory);
-        var container = ctx.CreateSqlContainer("dbo.my_proc");
-
-        Assert.Throws<NotSupportedException>(() => container.WrapForStoredProc(ExecutionType.Read, captureReturn: true));
+        var factory = new fakeDbFactory(product);
+        var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
+        var container = ctx.CreateSqlContainer("my_proc");
+        Assert.Throws<NotSupportedException>(() => container.WrapForStoredProc(ExecutionType.Read));
     }
 
     [Fact]
@@ -442,18 +425,7 @@ public class SqlContainerTests : SqlLiteContextTestBase
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}", factory);
         var container = ctx.CreateSqlContainer();
-
         Assert.Throws<InvalidOperationException>(() => container.WrapForStoredProc(ExecutionType.Read));
-    }
-
-    [Fact]
-    public void WrapForStoredProc_UnsupportedStyle_Throws()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}", factory);
-        var container = ctx.CreateSqlContainer("my_proc");
-
-        Assert.Throws<NotSupportedException>(() => container.WrapForStoredProc(ExecutionType.Read));
     }
 
     [Fact]
@@ -491,5 +463,81 @@ public class SqlContainerTests : SqlLiteContextTestBase
         Assert.Throws<InvalidOperationException>(() => container.AddParameter(p2));
 
         prop.SetValue(info, original);
+    }
+
+    [Fact]
+    public async Task ExecuteReaderAsync_WithLoggingDisabled_DoesNotLogSql()
+    {
+        var mockLogger = new TestLogger();
+        mockLogger.SetLogLevel(LogLevel.Critical); // Disable info logging
+        var loggerFactory = new TestLoggerFactory(mockLogger);
+        
+        await using var context = new DatabaseContext("Data Source=:memory:", SqliteFactory.Instance, TypeMap, DbMode.Standard, ReadWriteMode.ReadWrite, loggerFactory);
+        await using var container = context.CreateSqlContainer("SELECT 1");
+        await using var reader = await container.ExecuteReaderAsync();
+        
+        Assert.Empty(mockLogger.LogEntries);
+    }
+
+    [Fact]
+    public async Task ExecuteReaderAsync_WithLoggingEnabled_LogsSqlExecution()
+    {
+        var mockLogger = new TestLogger();
+        mockLogger.SetLogLevel(LogLevel.Information); // Enable info logging
+        var loggerFactory = new TestLoggerFactory(mockLogger);
+        
+        await using var context = new DatabaseContext("Data Source=:memory:", SqliteFactory.Instance, TypeMap, DbMode.Standard, ReadWriteMode.ReadWrite, loggerFactory);
+        await using var container = context.CreateSqlContainer("SELECT 42");
+        await using var reader = await container.ExecuteReaderAsync();
+        // Multiple info logs can occur during initialization; just ensure something was logged at Info level
+        Assert.True(mockLogger.LogEntries.Count >= 1);
+    }
+
+    [Fact]
+    public async Task ExecuteNonQueryAsync_WithStoredProcedure_OnSqlite_ThrowsNotSupported()
+    {
+        var mockLogger = new TestLogger();
+        mockLogger.SetLogLevel(LogLevel.Information);
+        var loggerFactory = new TestLoggerFactory(mockLogger);
+
+        await using var context = new DatabaseContext("Data Source=:memory:", SqliteFactory.Instance, TypeMap, DbMode.Standard, ReadWriteMode.ReadWrite, loggerFactory);
+        await using var container = context.CreateSqlContainer("MyStoredProc");
+        container.AddParameterWithValue("param1", DbType.String, "value1");
+
+        await Assert.ThrowsAsync<NotSupportedException>(() => container.ExecuteNonQueryAsync(CommandType.StoredProcedure));
+    }
+
+    // removed: consolidated with parameterized tests above
+
+    private class TestLogger : ILogger
+    {
+        public List<string> LogEntries { get; } = new();
+        private LogLevel _minLogLevel = LogLevel.Information;
+
+        public void SetLogLevel(LogLevel level) => _minLogLevel = level;
+
+        public IDisposable BeginScope<TState>(TState state) => null!;
+        public bool IsEnabled(LogLevel logLevel) => logLevel >= _minLogLevel;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            if (IsEnabled(logLevel))
+            {
+                LogEntries.Add(formatter(state, exception));
+            }
+        }
+    }
+
+    private class TestLoggerFactory : ILoggerFactory
+    {
+        private readonly ILogger _logger;
+
+        public TestLoggerFactory(ILogger logger)
+        {
+            _logger = logger;
+        }
+
+        public void Dispose() { }
+        public ILogger CreateLogger(string categoryName) => _logger;
+        public void AddProvider(ILoggerProvider provider) { }
     }
 }
