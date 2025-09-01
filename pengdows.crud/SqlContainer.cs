@@ -426,16 +426,21 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
         await OpenConnectionAsync(conn, cancellationToken).ConfigureAwait(false);
         var cmd = CreateCommand(conn);
         cmd.CommandType = CommandType.Text;
-        _logger.LogInformation("Executing SQL: {Sql}", Query.ToString());
+        // Compute command text once to avoid double ToString() and guard logging
+        var cmdText = (commandType == CommandType.StoredProcedure)
+            ? WrapForStoredProc(executionType, includeParameters: true)
+            : Query.ToString();
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation("Executing SQL: {Sql}", cmdText);
+        }
         if (_parameters.Count > 0 && _logger.IsEnabled(LogLevel.Debug))
         {
             var paramDump = string.Join(", ",
                 _parameters.Values.Select(p => $"{p.ParameterName}={p.Value ?? "NULL"}"));
             _logger.LogDebug("Parameters: {Parameters}", paramDump);
         }
-        cmd.CommandText = (commandType == CommandType.StoredProcedure)
-            ? WrapForStoredProc(executionType, includeParameters: true)
-            : Query.ToString();
+        cmd.CommandText = cmdText;
         if (_parameters.Count > _context.MaxParameterLimit)
         {
             throw new InvalidOperationException(

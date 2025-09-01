@@ -194,11 +194,15 @@ public class TypeMapRegistryTests
     }
 
     [Fact]
-    public void GetTableInfo_ThrowsOnInvalidPrimaryKeyOrder()
+    public void GetTableInfo_ThrowsOnInvalidPrimaryKeyOrder_AndRenumbersZeros()
     {
         var registry = new TypeMapRegistry();
         Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<BadPkOrder>());
-        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<ZeroPkOrder>());
+
+        // Zero order should be accepted and auto-renumbered starting at 1
+        var info = registry.GetTableInfo<ZeroPkOrder>();
+        Assert.Single(info.PrimaryKeys);
+        Assert.Equal(1, info.PrimaryKeys[0].PkOrder);
     }
 
     [Fact]
