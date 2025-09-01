@@ -154,21 +154,42 @@ public class TrackedConnection : ITrackedConnection, IAsyncDisposable
 
         if (_isSharedConnection && _semaphoreSlim != null)
         {
-            await _semaphoreSlim.WaitAsync().ConfigureAwait(false);
-            try
+            // Avoid long waits during disposal to prevent hangs in tests/teardown
+            var acquired = _semaphoreSlim.Wait(0);
+            if (acquired)
             {
-                if (_connection.State != ConnectionState.Closed)
+                try
                 {
-                    _logger.LogWarning("Connection {Name} was still open during DisposeAsync. Closing.", _name);
-                    _connection.Close(); // Safe sync close
-                }
+                    if (_connection.State != ConnectionState.Closed)
+                    {
+                        _logger.LogWarning("Connection {Name} was still open during DisposeAsync. Closing.", _name);
+                        _connection.Close(); // Safe sync close
+                    }
 
-                _onDispose?.Invoke(_connection);
-                await _connection.DisposeAsync().ConfigureAwait(false);
+                    _onDispose?.Invoke(_connection);
+                    await _connection.DisposeAsync().ConfigureAwait(false);
+                }
+                finally
+                {
+                    _semaphoreSlim.Release();
+                }
             }
-            finally
+            else
             {
-                _semaphoreSlim.Release();
+                _logger.LogError("TrackedConnection.DisposeAsync could not acquire lock; disposing without semaphore.");
+                try
+                {
+                    if (_connection.State != ConnectionState.Closed)
+                    {
+                        _connection.Close();
+                    }
+                    _onDispose?.Invoke(_connection);
+                    await _connection.DisposeAsync().ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error disposing connection without lock.");
+                }
             }
         }
         else

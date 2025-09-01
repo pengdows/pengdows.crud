@@ -7,7 +7,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class UpsertPortableTests : SqlLiteContextTestBase
+public class UpsertPortableTests : SqlLiteContextTestBase, IAsyncLifetime
 {
     private readonly EntityHelper<TestEntity, int> _helper;
 
@@ -15,8 +15,14 @@ public class UpsertPortableTests : SqlLiteContextTestBase
     {
         TypeMap.Register<TestEntity>();
         _helper = new EntityHelper<TestEntity, int>(Context, AuditValueResolver);
-        BuildTestTable().Wait();
     }
+
+    public async Task InitializeAsync()
+    {
+        await BuildTestTable();
+    }
+
+    public Task DisposeAsync() => Task.CompletedTask;
 
     [Fact]
     public async Task UpsertAsync_PortableInsertAndUpdate()

@@ -171,4 +171,18 @@ public class RealAsyncLockerTests
 
         Assert.Equal(1, semaphore.CurrentCount);
     }
+
+    [Fact]
+    public async Task Dispose_Sync_ReleasesSemaphoreAndPreventsReuse()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var semaphore = new SemaphoreSlim(1, 1);
+        var locker = new RealAsyncLocker(semaphore);
+
+        await locker.LockAsync(cts.Token);
+        locker.Dispose(); // synchronous dispose path
+
+        Assert.Equal(1, semaphore.CurrentCount);
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => locker.LockAsync(cts.Token));
+    }
 }
