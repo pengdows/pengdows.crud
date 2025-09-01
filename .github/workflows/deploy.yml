@@ -41,9 +41,7 @@ jobs:
             --blame-hang --blame-hang-timeout 120s \
             --collect:"XPlat Code Coverage" \
             --results-directory ./TestResults \
-            -- RunConfiguration.TestSessionTimeout=120000 \
-            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Include="[pengdows.crud]*" \
-            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Exclude="[pengdows.crud.Tests]*;[pengdows.crud.abstractions]*;[pengdows.crud.fakeDb]*;[testbed]*"
+            --settings coverage.runsettings
 
       - name: Generate coverage report
         run: |
@@ -100,6 +98,7 @@ jobs:
           files: TestResults/**/coverage.cobertura.xml
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
+          disable_file_fixes: true
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
