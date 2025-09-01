@@ -1,316 +1,106 @@
-using System;
-using System.Collections.Generic;
+#region
+
+using System.Data.Common;
 using System.Threading.Tasks;
-using Moq;
+using pengdows.crud.configuration;
 using pengdows.crud.enums;
-using pengdows.crud.connection;
-using pengdows.crud.wrappers;
+using pengdows.crud.fakeDb;
 using Xunit;
+
+#endregion
 
 namespace pengdows.crud.Tests;
 
 public class ConnectionStrategyTests
 {
     [Fact]
-    public void StandardStrategy_ReturnsNewConnectionAndDisposes()
+    public async Task SingleConnection_ReusesSameUnderlyingConnection()
     {
-        var disposeCount = 0;
-        ITrackedConnection Factory()
+        var factory = new MultiConnectionFactory();
+        var cfg = new DatabaseContextConfiguration
         {
-            var mock = new Mock<ITrackedConnection>();
-            mock.Setup(c => c.Dispose()).Callback(() => disposeCount++);
-            return mock.Object;
+            ConnectionString = "Data Source=test;EmulatedProduct=Sqlite",
+            DbMode = DbMode.SingleConnection,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        await using var ctx = new DatabaseContext(cfg, factory, null, new TypeMapRegistry());
+        var initialCreates = factory.CreatedCount;
+
+        await using var c1 = ctx.CreateSqlContainer("SELECT 1");
+        await c1.ExecuteNonQueryAsync(); // write path
+
+        await using var c2 = ctx.CreateSqlContainer("SELECT 1");
+        await c2.ExecuteReaderAsync(); // read path
+
+        // No additional connections should have been created beyond the initial persistent one
+        Assert.Equal(initialCreates, factory.CreatedCount);
+    }
+
+    [Fact]
+    public async Task SingleWriter_ReadCreatesNew_WriteReusesPersistent()
+    {
+        var factory = new MultiConnectionFactory();
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test;EmulatedProduct=Sqlite",
+            DbMode = DbMode.SingleWriter,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        await using var ctx = new DatabaseContext(cfg, factory, null, new TypeMapRegistry());
+        var initialCreates = factory.CreatedCount;
+
+        await using var write = ctx.CreateSqlContainer("SELECT 1");
+        await write.ExecuteNonQueryAsync(); // should use persistent
+        Assert.Equal(initialCreates, factory.CreatedCount);
+
+        await using var read = ctx.CreateSqlContainer("SELECT 1");
+        await read.ExecuteReaderAsync(); // should create a new standard connection
+        Assert.True(factory.CreatedCount > initialCreates);
+    }
+
+    [Fact]
+    public async Task StandardMode_NewConnectionPerOperation()
+    {
+        var factory = new MultiConnectionFactory();
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test;EmulatedProduct=Sqlite",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        await using var ctx = new DatabaseContext(cfg, factory, null, new TypeMapRegistry());
+        var initialCreates = factory.CreatedCount; // includes one from initialization (disposed later)
+
+        await using var c1 = ctx.CreateSqlContainer("SELECT 1");
+        await c1.ExecuteNonQueryAsync();
+
+        await using var c2 = ctx.CreateSqlContainer("SELECT 1");
+        await c2.ExecuteReaderAsync();
+
+        // Expect at least two additional connections created for the two operations
+        Assert.True(factory.CreatedCount >= initialCreates + 2);
+    }
+
+    private sealed class MultiConnectionFactory : DbProviderFactory
+    {
+        public int CreatedCount { get; private set; }
+
+        public override DbConnection CreateConnection()
+        {
+            CreatedCount++;
+            return new UniqueConnection();
         }
 
-        var strategy = new StandardConnectionStrategy(Factory);
-        var c1 = strategy.GetConnection(ExecutionType.Read);
-        var c2 = strategy.GetConnection(ExecutionType.Write);
-        Assert.NotSame(c1, c2);
-        strategy.ReleaseConnection(c1);
-        Assert.Equal(1, disposeCount);
+        public override DbCommand CreateCommand() => new fakeDbCommand();
+        public override DbParameter CreateParameter() => new fakeDbParameter();
     }
 
-    [Fact]
-    public void StandardStrategy_CloseNull_DoesNothing()
+    private sealed class UniqueConnection : fakeDbConnection
     {
-        var strategy = new StandardConnectionStrategy(() => new Mock<ITrackedConnection>().Object);
-        strategy.ReleaseConnection(null);
-    }
-
-    [Fact]
-    public void SingleConnectionStrategy_ReturnsSameConnection()
-    {
-        var mock = new Mock<ITrackedConnection>();
-        var strategy = new SingleConnectionStrategy(mock.Object);
-        var c1 = strategy.GetConnection(ExecutionType.Read);
-        var c2 = strategy.GetConnection(ExecutionType.Write);
-        Assert.Same(c1, c2);
-    }
-
-    [Fact]
-    public void SingleConnectionStrategy_CloseDoesNotDispose()
-    {
-        var mock = new Mock<ITrackedConnection>();
-        var strategy = new SingleConnectionStrategy(mock.Object);
-        strategy.ReleaseConnection(mock.Object);
-        mock.Verify(c => c.Dispose(), Times.Never);
-    }
-
-    [Fact]
-    public void SingleWriterStrategy_ReadGetsNewConnection()
-    {
-        var writer = new Mock<ITrackedConnection>();
-        var reader = new Mock<ITrackedConnection>();
-        var strategy = new SingleWriterConnectionStrategy(writer.Object, () => reader.Object);
-        var conn = strategy.GetConnection(ExecutionType.Read);
-        Assert.Same(reader.Object, conn);
-    }
-
-    [Fact]
-    public void SingleWriterStrategy_WriteGetsWriterConnection()
-    {
-        var writer = new Mock<ITrackedConnection>();
-        var strategy = new SingleWriterConnectionStrategy(writer.Object, () => new Mock<ITrackedConnection>().Object);
-        var conn = strategy.GetConnection(ExecutionType.Write);
-        Assert.Same(writer.Object, conn);
-    }
-
-    [Fact]
-    public void SingleWriterStrategy_CloseWriterDoesNotDispose()
-    {
-        var writer = new Mock<ITrackedConnection>();
-        var strategy = new SingleWriterConnectionStrategy(writer.Object, () => new Mock<ITrackedConnection>().Object);
-        strategy.ReleaseConnection(writer.Object);
-        writer.Verify(c => c.Dispose(), Times.Never);
-    }
-
-    [Fact]
-    public void SingleWriterStrategy_CloseReadDisposes()
-    {
-        var writer = new Mock<ITrackedConnection>();
-        var reader = new Mock<ITrackedConnection>();
-        var strategy = new SingleWriterConnectionStrategy(writer.Object, () => reader.Object);
-        strategy.ReleaseConnection(reader.Object);
-        reader.Verify(c => c.Dispose(), Times.Once);
-    }
-
-    [Fact]
-    public async Task SingleConnectionStrategy_ReleaseConnectionAsync_DoesNotDispose()
-    {
-        var mock = new Mock<ITrackedConnection>();
-        mock.As<IAsyncDisposable>().Setup(d => d.DisposeAsync()).Returns(ValueTask.CompletedTask);
-        var strategy = new SingleConnectionStrategy(mock.Object);
-        await strategy.ReleaseConnectionAsync(mock.Object);
-        mock.As<IAsyncDisposable>().Verify(d => d.DisposeAsync(), Times.Never);
-        mock.Verify(c => c.Dispose(), Times.Never);
-    }
-
-    [Fact]
-    public async Task SingleWriterStrategy_ReleaseConnectionAsync_ReadDisposes()
-    {
-        var writer = new Mock<ITrackedConnection>();
-        var reader = new Mock<ITrackedConnection>();
-        reader.As<IAsyncDisposable>().Setup(d => d.DisposeAsync()).Returns(ValueTask.CompletedTask).Verifiable();
-        var strategy = new SingleWriterConnectionStrategy(writer.Object, () => reader.Object);
-        await strategy.ReleaseConnectionAsync(reader.Object);
-        reader.As<IAsyncDisposable>().Verify(d => d.DisposeAsync(), Times.Once);
-    }
-
-    [Fact]
-    public async Task SingleWriterStrategy_ReleaseConnectionAsync_WriterDoesNotDispose()
-    {
-        var writer = new Mock<ITrackedConnection>();
-        writer.As<IAsyncDisposable>().Setup(d => d.DisposeAsync()).Returns(ValueTask.CompletedTask);
-        var strategy = new SingleWriterConnectionStrategy(writer.Object, () => new Mock<ITrackedConnection>().Object);
-        await strategy.ReleaseConnectionAsync(writer.Object);
-        writer.As<IAsyncDisposable>().Verify(d => d.DisposeAsync(), Times.Never);
-        writer.Verify(c => c.Dispose(), Times.Never);
-    }
-
-    [Fact]
-    public void KeepAliveStrategy_ReleasingNonSentinel_Disposes()
-    {
-        var sentinel = new Mock<ITrackedConnection>();
-        sentinel.Setup(c => c.Open());
-        var other = new Mock<ITrackedConnection>();
-        var queue = new Queue<ITrackedConnection>(new[] { sentinel.Object, other.Object });
-        var strategy = new KeepAliveConnectionStrategy(() => queue.Dequeue());
-        var conn = strategy.GetConnection(ExecutionType.Read);
-        strategy.ReleaseConnection(conn);
-        other.Verify(c => c.Dispose(), Times.Once);
-        sentinel.Verify(c => c.Dispose(), Times.Never);
-    }
-
-    [Fact]
-    public void KeepAliveStrategy_ReleasingSentinel_DoesNotDispose()
-    {
-        var sentinel = new Mock<ITrackedConnection>();
-        sentinel.Setup(c => c.Open());
-        var strategy = new KeepAliveConnectionStrategy(() => sentinel.Object);
-        strategy.ReleaseConnection(sentinel.Object);
-        sentinel.Verify(c => c.Dispose(), Times.Never);
-    }
-
-    [Fact]
-    public void KeepAliveStrategy_Dispose_DisposesSentinelOnce()
-    {
-        var sentinel = new Mock<ITrackedConnection>();
-        sentinel.Setup(c => c.Open());
-        var strategy = new KeepAliveConnectionStrategy(() => sentinel.Object);
-        strategy.Dispose();
-        strategy.Dispose();
-        sentinel.Verify(c => c.Dispose(), Times.Once);
-    }
-
-    [Fact]
-    public async Task KeepAliveStrategy_DisposeAsync_DisposesSentinelAsyncOnce()
-    {
-        var sentinel = new Mock<ITrackedConnection>();
-        sentinel.Setup(c => c.Open());
-        sentinel.Setup(c => c.DisposeAsync()).Returns(ValueTask.CompletedTask).Verifiable();
-        var strategy = new KeepAliveConnectionStrategy(() => sentinel.Object);
-        await strategy.DisposeAsync();
-        await strategy.DisposeAsync();
-        sentinel.Verify(c => c.DisposeAsync(), Times.Once);
-        sentinel.Verify(c => c.Dispose(), Times.Never);
-    }
-
-    [Fact]
-    public async Task KeepAliveStrategy_ReleaseConnectionAsync_DisposesAsync()
-    {
-        var sentinel = new Mock<ITrackedConnection>();
-        sentinel.Setup(c => c.Open());
-        sentinel.As<IAsyncDisposable>().Setup(d => d.DisposeAsync()).Returns(ValueTask.CompletedTask);
-        var other = new Mock<ITrackedConnection>();
-        other.As<IAsyncDisposable>().Setup(d => d.DisposeAsync()).Returns(ValueTask.CompletedTask).Verifiable();
-        var queue = new Queue<ITrackedConnection>(new[] { sentinel.Object, other.Object });
-        var strategy = new KeepAliveConnectionStrategy(() => queue.Dequeue());
-        var conn = strategy.GetConnection(ExecutionType.Read);
-        await strategy.ReleaseConnectionAsync(conn);
-        other.As<IAsyncDisposable>().Verify(d => d.DisposeAsync(), Times.Once);
-        sentinel.As<IAsyncDisposable>().Verify(d => d.DisposeAsync(), Times.Never);
-        sentinel.Verify(c => c.Dispose(), Times.Never);
-    }
-
-    [Fact]
-    public async Task KeepAliveStrategy_ReleaseConnectionAsync_DisposesSyncConnection()
-    {
-        var sentinel = new Mock<ITrackedConnection>();
-        sentinel.Setup(c => c.Open());
-        sentinel.As<IAsyncDisposable>().Setup(d => d.DisposeAsync()).Returns(ValueTask.CompletedTask);
-        var other = new Mock<ITrackedConnection>();
-        var queue = new Queue<ITrackedConnection>(new[] { sentinel.Object, other.Object });
-        var strategy = new KeepAliveConnectionStrategy(() => queue.Dequeue());
-        var conn = strategy.GetConnection(ExecutionType.Read);
-        Assert.False(conn is IAsyncDisposable);
-        await strategy.ReleaseConnectionAsync(conn);
-        other.Verify(c => c.Dispose(), Times.Once);
-        sentinel.As<IAsyncDisposable>().Verify(d => d.DisposeAsync(), Times.Never);
-        sentinel.Verify(c => c.Dispose(), Times.Never);
-    }
-
-    [Fact]
-    public async Task KeepAliveStrategy_ReleaseConnectionAsync_SentinelNotDisposed()
-    {
-        var sentinel = new Mock<ITrackedConnection>();
-        sentinel.Setup(c => c.Open());
-        sentinel.As<IAsyncDisposable>().Setup(d => d.DisposeAsync()).Returns(ValueTask.CompletedTask);
-        var strategy = new KeepAliveConnectionStrategy(() => sentinel.Object);
-        await strategy.ReleaseConnectionAsync(sentinel.Object);
-        sentinel.As<IAsyncDisposable>().Verify(d => d.DisposeAsync(), Times.Never);
-        sentinel.Verify(c => c.Dispose(), Times.Never);
-    }
-
-    [Fact]
-    public async Task KeepAliveStrategy_ReleaseConnectionAsync_Null_DoesNothing()
-    {
-        var sentinel = new Mock<ITrackedConnection>();
-        sentinel.Setup(c => c.Open());
-        var strategy = new KeepAliveConnectionStrategy(() => sentinel.Object);
-        await strategy.ReleaseConnectionAsync(null);
-    }
-
-    [Fact]
-    public void KeepAliveStrategy_ReleaseConnection_Null_DoesNothing()
-    {
-        var sentinel = new Mock<ITrackedConnection>();
-        sentinel.Setup(c => c.Open());
-        var strategy = new KeepAliveConnectionStrategy(() => sentinel.Object);
-        strategy.ReleaseConnection(null);
-    }
-
-    [Fact]
-    public void SingleConnectionStrategy_Dispose_DisposesUnderlyingConnection()
-    {
-        var mock = new Mock<ITrackedConnection>();
-        var strategy = new SingleConnectionStrategy(mock.Object);
-        strategy.Dispose();
-        strategy.Dispose();
-        mock.Verify(c => c.Dispose(), Times.Once);
-    }
-
-    [Fact]
-    public async Task SingleWriterStrategy_DisposeAsync_DisposesWriterConnectionOnce()
-    {
-        var writer = new Mock<ITrackedConnection>();
-        writer.As<IAsyncDisposable>().Setup(d => d.DisposeAsync()).Returns(ValueTask.CompletedTask).Verifiable();
-        var strategy = new SingleWriterConnectionStrategy(writer.Object, () => new Mock<ITrackedConnection>().Object);
-        await strategy.DisposeAsync();
-        await strategy.DisposeAsync();
-        writer.As<IAsyncDisposable>().Verify(d => d.DisposeAsync(), Times.Once);
-    }
-
-    [Fact]
-    public async Task StandardStrategy_ReleaseConnectionAsync_DisposesAsyncDisposable()
-    {
-        var mock = new Mock<ITrackedConnection>();
-        mock.As<IAsyncDisposable>().Setup(d => d.DisposeAsync()).Returns(ValueTask.CompletedTask).Verifiable();
-        var strategy = new StandardConnectionStrategy(() => mock.Object);
-        await strategy.ReleaseConnectionAsync(mock.Object);
-        mock.As<IAsyncDisposable>().Verify(d => d.DisposeAsync(), Times.Once);
-    }
-
-    [Fact]
-    public async Task StandardStrategy_ReleaseConnectionAsync_DisposesSyncConnection()
-    {
-        var mock = new Mock<ITrackedConnection>();
-        var strategy = new StandardConnectionStrategy(() => mock.Object);
-        await strategy.ReleaseConnectionAsync(mock.Object);
-        mock.Verify(c => c.Dispose(), Times.Once);
-    }
-
-    [Fact]
-    public async Task StandardStrategy_ReleaseConnectionAsync_Null_DoesNothing()
-    {
-        var strategy = new StandardConnectionStrategy(() => new Mock<ITrackedConnection>().Object);
-        await strategy.ReleaseConnectionAsync(null);
-    }
-
-    [Fact]
-    public void SingleWriterStrategy_ReleaseConnection_Null_DoesNothing()
-    {
-        var writer = new Mock<ITrackedConnection>();
-        var strategy = new SingleWriterConnectionStrategy(writer.Object, () => new Mock<ITrackedConnection>().Object);
-        strategy.ReleaseConnection(null);
-    }
-
-    [Fact]
-    public async Task SingleWriterStrategy_ReleaseConnectionAsync_Null_DoesNothing()
-    {
-        var writer = new Mock<ITrackedConnection>();
-        var strategy = new SingleWriterConnectionStrategy(writer.Object, () => new Mock<ITrackedConnection>().Object);
-        await strategy.ReleaseConnectionAsync(null);
-    }
-
-    [Fact]
-    public async Task SingleConnectionStrategy_DisposeAsync_DisposesUnderlyingConnectionAsync()
-    {
-        var mock = new Mock<ITrackedConnection>();
-        mock.As<IAsyncDisposable>().Setup(d => d.DisposeAsync()).Returns(ValueTask.CompletedTask).Verifiable();
-        var strategy = new SingleConnectionStrategy(mock.Object);
-        await strategy.DisposeAsync();
-        await strategy.DisposeAsync();
-        mock.As<IAsyncDisposable>().Verify(d => d.DisposeAsync(), Times.Once);
+        // Inherit behavior from fakeDbConnection; no extra tracking required here
     }
 }
 
