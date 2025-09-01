@@ -29,13 +29,12 @@ public class SqlServerTestContainer : TestContainer
             .WithEnvironment("ACCEPT_EULA", "Y")
             .WithPortBinding(1433, true)
             .Build();
-        _container.StartAsync().Wait();
     }
 
 
     public override async Task StartAsync()
     {
-        //await _container.StartAsync();
+        await _container.StartAsync();
         var hostPort = _container.GetMappedPublicPort(1433);
         var host = _container.IpAddress;
         var tmp =

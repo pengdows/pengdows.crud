@@ -551,8 +551,9 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
 
             _isolationResolver ??= new IsolationResolver(Product, RCSIEnabled);
         }
-        catch(Exception ex){
-            _logger.LogError(ex, ex.Message);
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to initialize DatabaseContext: {Message}", ex.Message);
             throw;
         }
         finally

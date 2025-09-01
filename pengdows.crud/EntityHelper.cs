@@ -100,9 +100,14 @@ public class EntityHelper<TEntity, TRowID> :
         TValue value)
         where TKey : notnull
     {
-        cache.TryAdd(key, value);
+        // Use GetOrAdd to ensure we don't lose the value if already present
+        cache.GetOrAdd(key, value);
+        
+        // Check cache size and trigger eviction when limit is exceeded
         if (cache.Count > MaxCacheSize)
         {
+            // For predictable behavior, clear the cache and keep only the current item
+            // This ensures that old items are evicted when the limit is exceeded
             cache.Clear();
             cache.TryAdd(key, value);
         }
@@ -444,11 +449,18 @@ public class EntityHelper<TEntity, TRowID> :
         var sc = ctx.CreateSqlContainer(lastIdQuery);
         var generatedId = await sc.ExecuteScalarAsync<object>();
 
-        if (generatedId != null)
+        if (generatedId != null && generatedId != DBNull.Value)
         {
-            // Convert the ID to the appropriate type and set it on the entity
-            var convertedId = Convert.ChangeType(generatedId, _idColumn.PropertyInfo.PropertyType);
-            _idColumn.PropertyInfo.SetValue(entity, convertedId);
+            try
+            {
+                // Convert the ID to the appropriate type and set it on the entity
+                var convertedId = Convert.ChangeType(generatedId, _idColumn.PropertyInfo.PropertyType);
+                _idColumn.PropertyInfo.SetValue(entity, convertedId);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Failed to convert generated ID '{generatedId}' to type {_idColumn.PropertyInfo.PropertyType.Name}: {ex.Message}", ex);
+            }
         }
     }
 
@@ -1147,10 +1159,20 @@ public class EntityHelper<TEntity, TRowID> :
         // Convert the object Id value to TRowID to avoid invalid boxing casts (e.g., int -> long)
         var targetType = typeof(TRowID);
         var underlying = Nullable.GetUnderlyingType(targetType) ?? targetType;
-        var converted = Convert.ChangeType(idValue!, underlying, CultureInfo.InvariantCulture);
+        
         try
         {
-            return await RetrieveOneAsync((TRowID)converted!);
+            var converted = Convert.ChangeType(idValue!, underlying, CultureInfo.InvariantCulture);
+            if (converted == null)
+            {
+                return null;
+            }
+            
+            return await RetrieveOneAsync((TRowID)converted);
+        }
+        catch (InvalidCastException ex)
+        {
+            throw new InvalidOperationException($"Cannot convert ID value '{idValue}' of type {idValue!.GetType().Name} to {targetType.Name}: {ex.Message}", ex);
         }
         catch (DbException)
         {
@@ -1593,6 +1615,8 @@ public class EntityHelper<TEntity, TRowID> :
         var hasUserAuditFields = _tableInfo.CreatedBy != null || _tableInfo.LastUpdatedBy != null;
         var hasTimeAuditFields = _tableInfo.CreatedOn != null || _tableInfo.LastUpdatedOn != null;
         var auditValues = _auditValueResolver?.Resolve();
+        
+        // Require resolver only for user-based audit fields
         if (auditValues == null && hasUserAuditFields)
         {
             throw new InvalidOperationException("No AuditValues could be found by the resolver.");

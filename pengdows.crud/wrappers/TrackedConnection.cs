@@ -155,9 +155,23 @@ public class TrackedConnection : ITrackedConnection, IAsyncDisposable
         if (_isSharedConnection && _semaphoreSlim != null)
         {
             await _semaphoreSlim.WaitAsync().ConfigureAwait(false);
-        }
+            try
+            {
+                if (_connection.State != ConnectionState.Closed)
+                {
+                    _logger.LogWarning("Connection {Name} was still open during DisposeAsync. Closing.", _name);
+                    _connection.Close(); // Safe sync close
+                }
 
-        try
+                _onDispose?.Invoke(_connection);
+                await _connection.DisposeAsync().ConfigureAwait(false);
+            }
+            finally
+            {
+                _semaphoreSlim.Release();
+            }
+        }
+        else
         {
             if (_connection.State != ConnectionState.Closed)
             {
@@ -167,13 +181,6 @@ public class TrackedConnection : ITrackedConnection, IAsyncDisposable
 
             _onDispose?.Invoke(_connection);
             await _connection.DisposeAsync().ConfigureAwait(false);
-        }
-        finally
-        {
-            if (_isSharedConnection && _semaphoreSlim != null)
-            {
-                _semaphoreSlim.Release();
-            }
         }
     }
 

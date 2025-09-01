@@ -22,62 +22,68 @@ builder.Services.AddScoped<IAuditValueResolver, StringAuditContextProvider>();
  
 var host = builder.Build();
 
-await using var liteDb = new DatabaseContext("Data Source=mydb.sqlite", SqliteFactory.Instance, null!);
-var lite = new TestProvider(liteDb, host.Services);
-await lite.RunTest();
-await using var duck = new DuckDbTestContainer();
-await duck.RunTestWithContainerAsync<TestProvider>(host.Services, (db, sp) => new TestProvider(db, sp));
-// var cs = $"DataSource=localhost;Port=5000;Database={0};Uid=sa;Pwd=MyStr0ngP@ssw0rd;";
-//
-// // wait for ASE to be ready
-// //await using (var mc = new DatabaseContext(string.Format(cs, "master"), AseClientFactory.Instance))
-// {
-//     // for(var time = DateT;DateTime.UtcNow-time >
-//
-//     await using var conn = AseClientFactory.Instance.CreateConnection();
-//     conn.ConnectionString = cs;
-//
-//     await conn.OpenAsync();
-//
-//     await using var cmd = conn.CreateCommand();
-//     cmd.CommandText = $"IF NOT EXISTS (SELECT name FROM sysdatabases WHERE name = 'testdb') " +
-//                       $"CREATE DATABASE testdb";
-//     await cmd.ExecuteNonQueryAsync();
-// }
-//
-// ;
+Console.WriteLine($"Starting parallel database testing at {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+Console.WriteLine();
 
-// await using (var sybase = new DatabaseContext(string.Format(cs, "testdb"), AseClientFactory.Instance))
-// {
-//     var sy = new TestProvider(sybase, host.Services);
-//     await sy.RunTest();
-// }
-// await using var sybase = new SybaseTestContainer();
-// await sybase.RunTestWithContainerAsync(host.Services, (db, sp) => new SybaseTestProvider(db, sp));
+// Use the new parallel orchestrator (Oracle can be enabled via INCLUDE_ORACLE=true)
+var includeOracle = Environment.GetEnvironmentVariable("INCLUDE_ORACLE")?.ToLower() == "true";
+var orchestrator = new ParallelTestOrchestrator(host.Services, includeOracle);
 
-await using var cockroach = new CockroachDbTestContainer();
-await cockroach.RunTestWithContainerAsync(host.Services, (db, sp) => new CockroachDbTestProvider(db, sp));
+// Optional filtering: --only A,B or --exclude X,Y or env TESTBED_ONLY/TESTBED_EXCLUDE
+static ISet<string> ParseList(string? csv)
+{
+    return string.IsNullOrWhiteSpace(csv)
+        ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        : csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+}
 
-await using var my = new MySqlTestContainer();
-await my.RunTestWithContainerAsync<TestProvider>(host.Services, (db, sp) => new TestProvider(db, sp));
-await using var maria = new MariaDbContainer();
-await maria.RunTestWithContainerAsync<TestProvider>(host.Services, (db, sp) => new TestProvider(db, sp));
-await using var pg = new PostgreSqlTestContainer();
-await pg.RunTestWithContainerAsync<PostgreSQLTestProvider>(host.Services,
-    (db, sp) => new PostgreSQLTestProvider(db, sp));
-await using var ms = new SqlServerTestContainer();
-await ms.RunTestWithContainerAsync<TestProvider>(host.Services, (db, sp) => new TestProvider(db, sp));
-// var o = new OracleTestContainer();
-// await o.RunTestWithContainerAsync<OracleTestProvider>(host.Services, (db, sp) => new OracleTestProvider(db, sp));
-// var oracleConnectionString = "User Id=system;Password=mysecurepassword; Data Source=localhost:51521/XEPDB1;";
-// var oracleDb = new DatabaseContext(oracleConnectionString, OracleClientFactory.Instance,
-//     null);
-// var oracle = new OracleTestProvider(oracleDb, host.Services);
-// await oracle.RunTest();
+string? GetArg(string name)
+{
+    // poor-man's arg parsing: --name value or --name=value
+    foreach (var a in args)
+    {
+        if (a.StartsWith($"--{name}=", StringComparison.OrdinalIgnoreCase))
+        {
+            return a[(name.Length + 3)..];
+        }
+    }
 
+    for (var i = 0; i < args.Length - 1; i++)
+    {
+        if (string.Equals(args[i], $"--{name}", StringComparison.OrdinalIgnoreCase))
+        {
+            return args[i + 1];
+        }
+    }
+    return null;
+}
 
-await using var fb = new FirebirdSqlTestContainer();
-await fb.RunTestWithContainerAsync(host.Services, (db, sp) => new FirebirdTestProvider(db, sp));
+var only = ParseList(GetArg("only") ?? Environment.GetEnvironmentVariable("TESTBED_ONLY"));
+var exclude = ParseList(GetArg("exclude") ?? Environment.GetEnvironmentVariable("TESTBED_EXCLUDE"));
 
+if (only.Count > 0)
+{
+    Console.WriteLine($"Filter: only => {string.Join(",", only)}");
+}
+if (exclude.Count > 0)
+{
+    Console.WriteLine($"Filter: exclude => {string.Join(",", exclude)}");
+}
 
-Console.WriteLine("All tests complete.");
+var results = await orchestrator.RunAllTestsAsync(only, exclude);
+
+// Optional: Export results for CI/CD
+var successCount = results.Count(r => r.Success);
+var totalCount = results.Count;
+
+if (successCount == totalCount)
+{
+    Console.WriteLine("🎉 All tests passed!");
+    Environment.Exit(0);
+}
+else
+{
+    Console.WriteLine($"❌ {totalCount - successCount} out of {totalCount} tests failed");
+    Environment.Exit(1);
+}

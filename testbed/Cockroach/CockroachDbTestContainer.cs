@@ -26,7 +26,6 @@ public class CockroachDbTestContainer : TestContainer
             .Build();
 
         await _container.StartAsync();
-        await Task.Delay(5000); // Allow some time for startup
 
         // Create the test database
         var connectionString = "Host=localhost;Port=26257;Username=root;SSL Mode=disable;";

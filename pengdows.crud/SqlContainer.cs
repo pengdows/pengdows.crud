@@ -279,7 +279,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
     }
     private string GenerateRandomName()
     {
-        while (true)
+        const int maxAttempts = 1000;
+        for (var attempt = 0; attempt < maxAttempts; attempt++)
         {
             var name = _context.GenerateRandomName();
             if (!_parameters.ContainsKey(name))
@@ -287,6 +288,9 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
                 return name;
             }
         }
+        
+        // Fallback: use timestamp-based name to guarantee uniqueness
+        return $"p_{DateTimeOffset.UtcNow.Ticks}_{Guid.NewGuid():N}".Substring(0, 30);
     }
 
     public async Task<int> ExecuteNonQueryAsync(CommandType commandType = CommandType.Text)
@@ -332,6 +336,13 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
             var value = reader.GetValue(0); // always returns object
             var targetType = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
             return (T?)TypeCoercionHelper.Coerce(value, reader.GetFieldType(0), targetType);
+        }
+
+        // Return default for nullable types, throw for non-nullable types (following ADO.NET ExecuteScalar behavior)
+        var isNullable = !typeof(T).IsValueType || Nullable.GetUnderlyingType(typeof(T)) != null;
+        if (isNullable)
+        {
+            return default(T);
         }
 
         throw new InvalidOperationException("ExecuteScalarAsync expected at least one row but found none.");

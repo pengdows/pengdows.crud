@@ -279,7 +279,12 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
 
     private void CompleteTransactionWithWait(Action action, bool markCommitted)
     {
-        _semaphoreSlim.Wait();
+        // Use sync Wait with timeout to avoid indefinite blocking
+        if (!_semaphoreSlim.Wait(TimeSpan.FromSeconds(30)))
+        {
+            throw new InvalidOperationException("Transaction completion timed out waiting for lock.");
+        }
+        
         try
         {
             CompleteTransaction(action, markCommitted);
