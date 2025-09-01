@@ -35,6 +35,9 @@ jobs:
       - name: Install coverage tools
         run: dotnet tool install --global dotnet-reportgenerator-globaltool
 
+      - name: Clean previous coverage results
+        run: rm -rf ./TestResults
+
       - name: Run tests and collect coverage (2m hang watchdog)
         run: |
           dotnet test --no-build --configuration Release \

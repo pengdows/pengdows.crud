@@ -23,7 +23,6 @@
           <!-- Additional Coverlet-specific settings -->
           <Format>cobertura</Format>
           <SkipAutoProps>true</SkipAutoProps>
-          <DeterministicReport>true</DeterministicReport>
         </Configuration>
       </DataCollector>
     </DataCollectors>
