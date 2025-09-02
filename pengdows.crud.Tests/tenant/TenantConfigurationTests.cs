@@ -67,7 +67,7 @@ public class TenantConfigurationTests
         {
             ConnectionString = "Server=remote;Database=multitenant;",
             ProviderName = "Npgsql",
-            DbMode = DbMode.Shared,
+            DbMode = DbMode.KeepAlive,
             ReadWriteMode = ReadWriteMode.ReadOnly
         };
         
@@ -78,7 +78,7 @@ public class TenantConfigurationTests
         Assert.Same(dbConfig, config.DatabaseContextConfiguration);
         Assert.Equal("Server=remote;Database=multitenant;", config.DatabaseContextConfiguration.ConnectionString);
         Assert.Equal("Npgsql", config.DatabaseContextConfiguration.ProviderName);
-        Assert.Equal(DbMode.Shared, config.DatabaseContextConfiguration.DbMode);
+        Assert.Equal(DbMode.KeepAlive, config.DatabaseContextConfiguration.DbMode);
         Assert.Equal(ReadWriteMode.ReadOnly, config.DatabaseContextConfiguration.ReadWriteMode);
     }
 

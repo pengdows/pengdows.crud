@@ -595,4 +595,92 @@ public class DatabaseContextTests
             return base.ExecuteNonQuery();
         }
     }
+
+    [Fact]
+    public void Constructor_StandardMode_DisposesInitializationConnection()
+    {
+        var factory = new DisposalTrackingFactory(SupportedDatabase.SqlServer);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test;EmulatedProduct=SqlServer",
+            ProviderName = SupportedDatabase.SqlServer.ToString(),
+            DbMode = DbMode.Standard
+        };
+
+        // Create DatabaseContext which should dispose the initialization connection
+        using var context = new DatabaseContext(config, factory);
+
+        // Verify that the initialization connection was disposed
+        Assert.True(factory.InitializationConnection.WasDisposed, 
+            "Initialization connection should be disposed after DatabaseContext construction in Standard mode");
+        
+        // Verify context was created successfully despite connection disposal
+        Assert.Equal(DbMode.Standard, context.ConnectionMode);
+        Assert.Equal(SupportedDatabase.SqlServer, context.Product);
+    }
+
+    [Fact]
+    public void Constructor_NonStandardMode_DoesNotDisposeInitializationConnection()
+    {
+        var factory = new DisposalTrackingFactory(SupportedDatabase.Sqlite);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:;EmulatedProduct=Sqlite",
+            ProviderName = SupportedDatabase.Sqlite.ToString(),
+            DbMode = DbMode.SingleConnection
+        };
+
+        // Create DatabaseContext which should NOT dispose the initialization connection in non-Standard modes
+        using var context = new DatabaseContext(config, factory);
+
+        // Verify that the initialization connection was NOT disposed (it becomes the persistent connection)
+        Assert.False(factory.InitializationConnection.WasDisposed, 
+            "Initialization connection should not be disposed in non-Standard modes as it becomes the persistent connection");
+        
+        // Verify context was created successfully
+        Assert.Equal(DbMode.SingleConnection, context.ConnectionMode);
+        Assert.Equal(SupportedDatabase.Sqlite, context.Product);
+    }
+
+    private sealed class DisposalTrackingFactory : DbProviderFactory
+    {
+        public DisposalTrackingConnection InitializationConnection { get; }
+
+        public DisposalTrackingFactory(SupportedDatabase product)
+        {
+            InitializationConnection = new DisposalTrackingConnection { EmulatedProduct = product };
+        }
+
+        public override DbConnection CreateConnection()
+        {
+            return InitializationConnection;
+        }
+
+        public override DbCommand CreateCommand()
+        {
+            return new fakeDbCommand();
+        }
+
+        public override DbParameter CreateParameter()
+        {
+            return new fakeDbParameter();
+        }
+    }
+
+    private sealed class DisposalTrackingConnection : fakeDbConnection
+    {
+        public bool WasDisposed { get; private set; }
+
+        protected override void Dispose(bool disposing)
+        {
+            WasDisposed = true;
+            base.Dispose(disposing);
+        }
+
+        public override async ValueTask DisposeAsync()
+        {
+            WasDisposed = true;
+            await base.DisposeAsync();
+        }
+    }
 }

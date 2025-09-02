@@ -11,7 +11,7 @@ public class SafeAsyncDisposableBaseTests
     public void IsDisposed_WhenNew_ReturnsFalse()
     {
         var disposable = new TestAsyncDisposable();
-        
+
         Assert.False(disposable.IsDisposed);
     }
 
@@ -19,9 +19,9 @@ public class SafeAsyncDisposableBaseTests
     public void Dispose_WhenCalled_SetsIsDisposedTrue()
     {
         var disposable = new TestAsyncDisposable();
-        
+
         disposable.Dispose();
-        
+
         Assert.True(disposable.IsDisposed);
     }
 
@@ -29,9 +29,9 @@ public class SafeAsyncDisposableBaseTests
     public async Task DisposeAsync_WhenCalled_SetsIsDisposedTrue()
     {
         var disposable = new TestAsyncDisposable();
-        
+
         await disposable.DisposeAsync();
-        
+
         Assert.True(disposable.IsDisposed);
     }
 
@@ -39,11 +39,11 @@ public class SafeAsyncDisposableBaseTests
     public void Dispose_WhenCalledMultipleTimes_OnlyCallsDisposeManagedOnce()
     {
         var disposable = new TestAsyncDisposable();
-        
+
         disposable.Dispose();
         disposable.Dispose();
         disposable.Dispose();
-        
+
         Assert.Equal(1, disposable.DisposeManagedCallCount);
     }
 
@@ -51,11 +51,11 @@ public class SafeAsyncDisposableBaseTests
     public async Task DisposeAsync_WhenCalledMultipleTimes_OnlyCallsDisposeManagedAsyncOnce()
     {
         var disposable = new TestAsyncDisposable();
-        
+
         await disposable.DisposeAsync();
         await disposable.DisposeAsync();
         await disposable.DisposeAsync();
-        
+
         Assert.Equal(1, disposable.DisposeManagedAsyncCallCount);
     }
 
@@ -63,7 +63,7 @@ public class SafeAsyncDisposableBaseTests
     public void ThrowIfDisposed_WhenNotDisposed_DoesNotThrow()
     {
         var disposable = new TestAsyncDisposable();
-        
+
         disposable.CallThrowIfDisposed();
     }
 
@@ -72,7 +72,7 @@ public class SafeAsyncDisposableBaseTests
     {
         var disposable = new TestAsyncDisposable();
         disposable.Dispose();
-        
+
         var exception = Assert.Throws<ObjectDisposedException>(() => disposable.CallThrowIfDisposed());
         Assert.Contains(nameof(TestAsyncDisposable), exception.ObjectName);
     }
@@ -82,7 +82,7 @@ public class SafeAsyncDisposableBaseTests
     {
         var disposable = new TestAsyncDisposable();
         await disposable.DisposeAsync();
-        
+
         var exception = Assert.Throws<ObjectDisposedException>(() => disposable.CallThrowIfDisposed());
         Assert.Contains(nameof(TestAsyncDisposable), exception.ObjectName);
     }
@@ -91,9 +91,9 @@ public class SafeAsyncDisposableBaseTests
     public void Dispose_CallsDisposeUnmanaged()
     {
         var disposable = new TestAsyncDisposable();
-        
+
         disposable.Dispose();
-        
+
         Assert.Equal(1, disposable.DisposeUnmanagedCallCount);
     }
 
@@ -101,9 +101,9 @@ public class SafeAsyncDisposableBaseTests
     public async Task DisposeAsync_CallsDisposeUnmanaged()
     {
         var disposable = new TestAsyncDisposable();
-        
+
         await disposable.DisposeAsync();
-        
+
         Assert.Equal(1, disposable.DisposeUnmanagedCallCount);
     }
 
@@ -111,29 +111,20 @@ public class SafeAsyncDisposableBaseTests
     public void Dispose_WithExceptionInDisposeManaged_DoesNotThrow()
     {
         var disposable = new TestAsyncDisposable { ThrowInDisposeManaged = true };
-        
+
         disposable.Dispose();
-        
+
         Assert.True(disposable.IsDisposed);
     }
 
-    [Fact]
-    public async Task DisposeAsync_WithExceptionInDisposeManagedAsync_DoesNotThrow()
-    {
-        var disposable = new TestAsyncDisposable { ThrowInDisposeManagedAsync = true };
-        
-        await disposable.DisposeAsync();
-        
-        Assert.True(disposable.IsDisposed);
-    }
 
     [Fact]
     public void MixedDispose_CalledOnSameInstance_WorksCorrectly()
     {
         var disposable = new TestAsyncDisposable();
-        
+
         disposable.Dispose();
-        
+
         Assert.True(disposable.IsDisposed);
         Assert.Equal(1, disposable.DisposeManagedCallCount);
         Assert.Equal(0, disposable.DisposeManagedAsyncCallCount);

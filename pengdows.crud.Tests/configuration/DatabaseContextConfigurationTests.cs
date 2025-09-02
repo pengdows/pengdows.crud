@@ -79,13 +79,13 @@ public class DatabaseContextConfigurationTests
         
         config.ConnectionString = connectionString;
         config.ProviderName = providerName;
-        config.DbMode = DbMode.Shared;
+        config.DbMode = DbMode.KeepAlive;
         config.ReadWriteMode = ReadWriteMode.WriteOnly;
         config.SetDefaultSearchPath = true;
         
         Assert.Equal(connectionString, config.ConnectionString);
         Assert.Equal(providerName, config.ProviderName);
-        Assert.Equal(DbMode.Shared, config.DbMode);
+        Assert.Equal(DbMode.KeepAlive, config.DbMode);
         Assert.Equal(ReadWriteMode.WriteOnly, config.ReadWriteMode);
         Assert.True(config.SetDefaultSearchPath);
     }

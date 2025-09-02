@@ -179,6 +179,12 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
 
             RCSIEnabled = _dialect.IsReadCommittedSnapshotOn(initialConnection!);
 
+            // For Standard mode, dispose the connection after dialect initialization is complete
+            if (ConnectionMode == DbMode.Standard && initialConnection != null)
+            {
+                initialConnection.Dispose();
+            }
+
             switch (_dataSourceInfo.Product)
             {
                 // Ensure DuckDB defaults are applied even when provider factory is opaque,
@@ -571,7 +577,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             switch (ConnectionMode)
             {
                 case DbMode.Standard:
-                    conn?.Dispose();
+                    // Don't dispose here - let the constructor handle disposal after dialect initialization
                     break;
                 case DbMode.KeepAlive:
                 case DbMode.SingleConnection:
@@ -584,7 +590,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
                     SetPersistentConnection(conn);
                     break;
                 default:
-                    conn?.Dispose();
+                    // Don't dispose here - let the constructor handle disposal after dialect initialization
                     break;
             }
         }

@@ -1,3 +1,4 @@
+using System;
 using pengdows.crud.exceptions;
 using Xunit;
 
@@ -22,7 +23,7 @@ public class CompleteExceptionTests
     {
         const string message = "Test invalid value";
         
-        var exception = Assert.Throws<InvalidValueException>(() => throw new InvalidValueException(message));
+        var exception = Assert.Throws<InvalidValueException>(new Action(() => throw new InvalidValueException(message)));
         
         Assert.Equal(message, exception.Message);
     }
@@ -44,7 +45,7 @@ public class CompleteExceptionTests
     {
         const string message = "Test no columns";
         
-        var exception = Assert.Throws<NoColumnsFoundException>(() => throw new NoColumnsFoundException(message));
+        var exception = Assert.Throws<NoColumnsFoundException>(new Action(() => throw new NoColumnsFoundException(message)));
         
         Assert.Equal(message, exception.Message);
     }
@@ -66,7 +67,7 @@ public class CompleteExceptionTests
     {
         const string message = "Test too many columns";
         
-        var exception = Assert.Throws<TooManyColumns>(() => throw new TooManyColumns(message));
+        var exception = Assert.Throws<TooManyColumns>(new Action(() => throw new TooManyColumns(message)));
         
         Assert.Equal(message, exception.Message);
     }
@@ -88,7 +89,7 @@ public class CompleteExceptionTests
     {
         const string message = "Test connection failed";
         
-        var exception = Assert.Throws<ConnectionFailedException>(() => throw new ConnectionFailedException(message));
+        var exception = Assert.Throws<ConnectionFailedException>(new Action(() => throw new ConnectionFailedException(message)));
         
         Assert.Equal(message, exception.Message);
     }
