@@ -8,11 +8,11 @@
     <DataCollectors>
       <DataCollector friendlyName="XPlat Code Coverage">
         <Configuration>
-          <!-- Include only the main project -->
+          <!-- Include ONLY the main pengdows.crud assembly -->
           <Include>[pengdows.crud]*</Include>
           
-          <!-- Exclude test projects, abstractions, fakeDb, and testbed -->
-          <Exclude>[pengdows.crud.Tests]*;[pengdows.crud.abstractions]*;[pengdows.crud.fakeDb]*;[testbed]*</Exclude>
+          <!-- Exclude ALL other assemblies -->
+          <Exclude>[pengdows.crud.Tests]*;[pengdows.crud.abstractions]*;[pengdows.crud.fakeDb]*;[testbed]*;[*.Tests]*;[*Test*]*;[*Mock*]*</Exclude>
           
           <!-- Exclude generated code and common non-testable patterns -->
           <ExcludeByFile>**/obj/**;**/bin/**;**/*.Designer.cs;**/*.g.cs;**/*.g.i.cs</ExcludeByFile>

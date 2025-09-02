@@ -52,7 +52,8 @@ jobs:
             -reports:TestResults/**/coverage.cobertura.xml \
             -targetdir:coverage-report \
             -reporttypes:HtmlSummary \
-            -assemblyfilters:+pengdows.crud
+            -assemblyfilters:+pengdows.crud;-pengdows.crud.Tests;-pengdows.crud.abstractions;-pengdows.crud.fakeDb;-testbed \
+            -classfilters:-*Test*;-*Mock*
 
       - name: Enforce visual coverage from HTML report
         run: |
