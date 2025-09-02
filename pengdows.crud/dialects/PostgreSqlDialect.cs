@@ -17,7 +17,8 @@ public class PostgreSqlDialect : SqlDialect
     public override SupportedDatabase DatabaseType => SupportedDatabase.PostgreSql;
     public override string ParameterMarker => ":";
     public override bool SupportsNamedParameters => true;
-    public override int MaxParameterLimit => 65535;
+    public override int MaxParameterLimit => 32767;
+    public override int MaxOutputParameters => 100;
     public override int ParameterNameMaxLength => 63;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.PostgreSQL;
     public override bool RequiresStoredProcParameterNameMatch => true;
@@ -29,6 +30,9 @@ public class PostgreSqlDialect : SqlDialect
     public override bool SupportsInsertOnConflict => true;
     public override bool SupportsMerge => IsInitialized && ProductInfo.ParsedVersion?.Major >= 15;
     public override bool SupportsJsonTypes => IsInitialized && ProductInfo.ParsedVersion?.Major >= 9;
+    public override bool SupportsSqlJsonConstructors => IsInitialized && ProductInfo.ParsedVersion?.Major >= 18;
+    public override bool SupportsJsonTable => IsInitialized && ProductInfo.ParsedVersion?.Major >= 18;
+    public override bool SupportsMergeReturning => IsInitialized && ProductInfo.ParsedVersion?.Major >= 18;
 
     public override string GetVersionQuery() => "SELECT version()";
 

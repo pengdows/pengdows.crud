@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <RunConfiguration>
+    <TestSessionTimeout>120000</TestSessionTimeout>
+  </RunConfiguration>
+  
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat Code Coverage">
+        <Configuration>
+          <!-- Include ONLY the main pengdows.crud assembly -->
+          <Include>[pengdows.crud]*</Include>
+          
+          <!-- Exclude ALL other assemblies -->
+          <Exclude>[pengdows.crud.Tests]*;[pengdows.crud.abstractions]*;[pengdows.crud.fakeDb]*;[testbed]*;[*.Tests]*;[*Test*]*;[*Mock*]*</Exclude>
+          
+          <!-- Exclude generated code and common non-testable patterns -->
+          <ExcludeByFile>**/obj/**;**/bin/**;**/*.Designer.cs;**/*.g.cs;**/*.g.i.cs</ExcludeByFile>
+          
+          <!-- Exclude code marked with attributes -->
+          <ExcludeByAttribute>ExcludeFromCodeCoverageAttribute;GeneratedCodeAttribute;CompilerGeneratedAttribute</ExcludeByAttribute>
+          
+          <!-- Additional Coverlet-specific settings -->
+          <Format>cobertura</Format>
+          <SkipAutoProps>true</SkipAutoProps>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>

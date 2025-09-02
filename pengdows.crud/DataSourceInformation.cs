@@ -12,6 +12,7 @@ namespace pengdows.crud;
 public class DataSourceInformation : IDataSourceInformation
 {
     private readonly SqlDialect _dialect;
+    private int? _maxOutputParameters;
 
     public DataSourceInformation(SqlDialect dialect)
     {
@@ -42,6 +43,11 @@ public class DataSourceInformation : IDataSourceInformation
     public bool PrepareStatements => _dialect.PrepareStatements;
     public ProcWrappingStyle ProcWrappingStyle => _dialect.ProcWrappingStyle;
     public int MaxParameterLimit => _dialect.MaxParameterLimit;
+    public int MaxOutputParameters 
+    { 
+        get => _maxOutputParameters ?? _dialect.MaxOutputParameters;
+        set => _maxOutputParameters = value;
+    }
     public bool SupportsMerge => _dialect.SupportsMerge;
     public bool SupportsInsertOnConflict => _dialect.SupportsInsertOnConflict;
     public bool SupportsOnDuplicateKey => _dialect.SupportsOnDuplicateKey;
@@ -66,8 +72,16 @@ public class DataSourceInformation : IDataSourceInformation
 
     public static async Task<DataSourceInformation> CreateAsync(ITrackedConnection connection, DbProviderFactory factory, ILoggerFactory? loggerFactory = null)
     {
-        if (connection == null) throw new ArgumentNullException(nameof(connection));
-        if (factory == null) throw new ArgumentNullException(nameof(factory));
+        if (connection == null)
+        {
+            throw new ArgumentNullException(nameof(connection));
+        }
+
+        if (factory == null)
+        {
+            throw new ArgumentNullException(nameof(factory));
+        }
+
         loggerFactory ??= NullLoggerFactory.Instance;
 
         if (connection.State != ConnectionState.Open)

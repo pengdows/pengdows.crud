@@ -1,6 +1,5 @@
 using System.Data;
 using System.Data.Common;
-using System.IO;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.wrappers;
@@ -22,7 +21,6 @@ public class SqliteDialect : SqlDialect
     public override bool SupportsNamedParameters => true;
     public override int MaxParameterLimit => 999;
     public override int ParameterNameMaxLength => 255;
-    public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.None;
 
     public override bool SupportsInsertOnConflict => true;
     public override bool SupportsMerge => false;

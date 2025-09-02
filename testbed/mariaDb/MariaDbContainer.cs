@@ -2,7 +2,6 @@
 
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
-using Microsoft.Extensions.DependencyInjection;
 using MySql.Data.MySqlClient;
 using pengdows.crud;
 
@@ -45,19 +44,19 @@ public class MariaDbContainer : TestContainer
         await WaitForDbToStart(MySqlClientFactory.Instance, _connectionString, _container);
     }
 
-    public override async Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)
+    public override Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)
     {
         if (_connectionString is null)
         {
             throw new InvalidOperationException("Container not started yet.");
         }
 
-        return new DatabaseContext(_connectionString, MySqlClientFactory.Instance,
-            null);
+        return Task.FromResult<IDatabaseContext>(
+            new DatabaseContext(_connectionString, MySqlClientFactory.Instance, null!));
     }
 
-    public async ValueTask DisposeAsync()
+    protected override ValueTask DisposeAsyncCore()
     {
-         await _container.DisposeAsync();
+        return _container.DisposeAsync();
     }
 }

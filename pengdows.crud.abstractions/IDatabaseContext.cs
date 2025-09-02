@@ -2,7 +2,6 @@
 
 using System.Data;
 using System.Data.Common;
-using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.threading;
@@ -48,6 +47,15 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// The hard limit of parameters this provider supports per statement.
     /// </summary>
     int MaxParameterLimit { get; }
+
+    /// <summary>
+    /// The hard limit of output parameters this provider supports per statement.
+    /// </summary>
+    /// <remarks>
+    /// Intentionally not part of the public interface to preserve compatibility.
+    /// Query the active dialect for limits when needed.
+    /// </remarks>
+    // int MaxOutputParameters { get; }
 
     /// <summary>
     /// Current number of open connections. Usually 0 for DbMode.Standard, 1 otherwise.
@@ -136,6 +144,11 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// Creates a named DbParameter.
     /// </summary>
     DbParameter CreateDbParameter<T>(string? name, DbType type, T value);
+
+    /// <summary>
+    /// Creates a named DbParameter with an explicit direction.
+    /// </summary>
+    DbParameter CreateDbParameter<T>(string? name, DbType type, T value, ParameterDirection direction);
 
     /// <summary>
     /// Creates a positional DbParameter (no name specified).

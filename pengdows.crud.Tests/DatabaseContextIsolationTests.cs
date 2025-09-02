@@ -3,7 +3,7 @@
 using System;
 using System.Data;
 using pengdows.crud.enums;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 #endregion
@@ -26,7 +26,7 @@ public class DatabaseContextIsolationTests
         IsolationLevel expected)
     {
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}",
-            new FakeDbFactory(product.ToString()));
+            new fakeDbFactory(product.ToString()));
         using var tx = context.BeginTransaction(profile);
 
         Assert.Equal(expected, tx.IsolationLevel);
@@ -36,7 +36,7 @@ public class DatabaseContextIsolationTests
     public void BeginTransaction_ProfileRequiresRcsi_Throws()
     {
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.PostgreSql}",
-            new FakeDbFactory(SupportedDatabase.PostgreSql.ToString()));
+            new fakeDbFactory(SupportedDatabase.PostgreSql.ToString()));
         Assert.Throws<InvalidOperationException>(() => context.BeginTransaction(IsolationProfile.SafeNonBlockingReads));
     }
 
@@ -44,11 +44,21 @@ public class DatabaseContextIsolationTests
     public void BeginTransaction_ProfileUnsupported_Throws()
     {
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.CockroachDb}",
-            new FakeDbFactory(SupportedDatabase.CockroachDb.ToString()));
+            new fakeDbFactory(SupportedDatabase.CockroachDb.ToString()));
         Assert.Throws<NotSupportedException>(() => context.BeginTransaction(IsolationProfile.FastWithRisks));
 
         context = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.DuckDB}",
-            new FakeDbFactory(SupportedDatabase.DuckDB.ToString()));
+            new fakeDbFactory(SupportedDatabase.DuckDB.ToString()));
         Assert.Throws<NotSupportedException>(() => context.BeginTransaction(IsolationProfile.FastWithRisks));
+    }
+
+    [Fact]
+    public void BeginTransaction_UnknownProduct_UsesSerializable()
+    {
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.Unknown}",
+            new fakeDbFactory(SupportedDatabase.Unknown.ToString()));
+
+        using var tx = context.BeginTransaction(IsolationProfile.StrictConsistency);
+        Assert.Equal(IsolationLevel.Serializable, tx.IsolationLevel);
     }
 }

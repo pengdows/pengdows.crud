@@ -21,10 +21,6 @@ public class DuckDbDialect : SqlDialect
     public override bool SupportsNamedParameters => true;
     public override int MaxParameterLimit => 65535;
     public override int ParameterNameMaxLength => 255;
-    public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.None;
-
-    public override string QuotePrefix => "\"";
-    public override string QuoteSuffix => "\"";
 
     // DuckDB has excellent SQL standard compliance and modern features
     public override bool SupportsMerge => false; // DuckDB doesn't support MERGE yet
@@ -36,17 +32,10 @@ public class DuckDbDialect : SqlDialect
     public override bool SupportsNamespaces => true; // Schema support
     public override bool SupportsXmlTypes => false; // No XML support
     public override bool SupportsTemporalData => false; // No temporal tables yet
-    public override bool SupportsEnhancedWindowFunctions => true;
     public override bool SupportsRowPatternMatching => false; // Not yet supported
     public override bool SupportsMultidimensionalArrays => true; // Nested structures
-    public override bool SupportsPropertyGraphQueries => false; // Not supported
 
     public override string GetVersionQuery() => "SELECT version()";
-
-    public override string GetConnectionSessionSettings()
-    {
-        return string.Empty;
-    }
     protected override async Task<string?> GetProductNameAsync(ITrackedConnection connection)
     {
         try
@@ -201,23 +190,8 @@ public class DuckDbDialect : SqlDialect
         return parameter;
     }
 
-    /// <summary>
-    /// DuckDB supports advanced SQL features and analytical queries
-    /// </summary>
     public override bool SupportsRegularExpressions => true;
-    
-    /// <summary>
-    /// DuckDB has excellent subquery optimization
-    /// </summary>
     public override bool SupportsSubqueries => true;
-    
-    /// <summary>
-    /// DuckDB supports all standard JOIN types
-    /// </summary>
     public override bool SupportsOuterJoins => true;
-    
-    /// <summary>
-    /// DuckDB supports UNION and UNION ALL
-    /// </summary>
     public override bool SupportsUnion => true;
 }

@@ -20,11 +20,13 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
     private readonly IDatabaseContext _context;
     private readonly ISqlDialect _dialect;
     private readonly ILogger<TransactionContext> _logger;
-    private readonly SemaphoreSlim _semaphoreSlim;
+    private readonly SemaphoreSlim _userLock;
+    private readonly SemaphoreSlim _completionLock;
     private readonly IDbTransaction _transaction;
+    private readonly IsolationLevel _resolvedIsolationLevel;
 
-    private volatile bool _committed;
-    private volatile bool _rolledBack;
+    private int _committed; // 0 = no, 1 = yes
+    private int _rolledBack; // 0 = no, 1 = yes
     private int _completedState;
 
     public Guid RootId { get; }
@@ -37,7 +39,10 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
     {
         _logger = logger ?? new NullLogger<TransactionContext>();
         _context = context ?? throw new ArgumentNullException(nameof(context));
-        _dialect = (context as ISqlDialectProvider).Dialect;
+        var provider = context as ISqlDialectProvider
+                       ?? throw new InvalidOperationException(
+                           "IDatabaseContext must implement ISqlDialectProvider and expose a non-null Dialect.");
+        _dialect = provider.Dialect;
         RootId = ((IContextIdentity)_context).RootId;
 
         executionType ??= _context.IsReadOnlyConnection ? ExecutionType.Read : ExecutionType.Write;
@@ -54,18 +59,27 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
 
         _connection = _context.GetConnection(executionType.Value, true);
         EnsureConnectionIsOpen();
-        _semaphoreSlim = new SemaphoreSlim(1, 1);
+        _userLock = new SemaphoreSlim(1, 1);
+        _completionLock = new SemaphoreSlim(1, 1);
 
-        _transaction = _connection.BeginTransaction(isolationLevel);
+        _resolvedIsolationLevel = isolationLevel;
+
+        // DuckDB's ADO.NET provider rejects explicit IsolationLevel values. Use provider default,
+        // but preserve the resolved isolation level for reporting and logic.
+        _transaction = _context.Product == SupportedDatabase.DuckDB
+            ? _connection.BeginTransaction()
+            : _connection.BeginTransaction(isolationLevel);
     }
 
     public Guid TransactionId { get; } = Guid.NewGuid();
     internal IDbTransaction Transaction => _transaction;
 
-    public bool WasCommitted => _completedState == 1 && _committed;
-    public bool WasRolledBack => _completedState == 1 && _rolledBack;
+    public bool WasCommitted => Interlocked.CompareExchange(ref _completedState, 0, 0) != 0
+                                 && Interlocked.CompareExchange(ref _committed, 0, 0) != 0;
+    public bool WasRolledBack => Interlocked.CompareExchange(ref _completedState, 0, 0) != 0
+                                  && Interlocked.CompareExchange(ref _rolledBack, 0, 0) != 0;
     public bool IsCompleted => Interlocked.CompareExchange(ref _completedState, 0, 0) != 0;
-    public IsolationLevel IsolationLevel => _transaction.IsolationLevel;
+    public IsolationLevel IsolationLevel => _resolvedIsolationLevel;
 
     public long NumberOfOpenConnections => _context.NumberOfOpenConnections;
     public SupportedDatabase Product => _context.Product;
@@ -73,6 +87,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
     public bool IsReadOnlyConnection => _context.IsReadOnlyConnection;
     public bool RCSIEnabled => _context.RCSIEnabled;
     public int MaxParameterLimit => _context.MaxParameterLimit;
+    public int MaxOutputParameters => (_dialect as pengdows.crud.dialects.SqlDialect)?.MaxOutputParameters ?? 0;
     public DbMode ConnectionMode => DbMode.SingleConnection;
     public ITypeMapRegistry TypeMapRegistry => _context.TypeMapRegistry;
     public IDataSourceInformation DataSourceInfo => _context.DataSourceInfo;
@@ -86,7 +101,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
             throw new InvalidOperationException("Transaction already completed.");
         }
 
-        return new RealAsyncLocker(_semaphoreSlim);
+        return new RealAsyncLocker(_userLock);
     }
 
     public ISqlContainer CreateSqlContainer(string? query = null)
@@ -99,11 +114,29 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         return new SqlContainer(this, query);
     }
 
+    public DbParameter CreateDbParameter<T>(string? name, DbType type, T value,
+        ParameterDirection direction = ParameterDirection.Input)
+    {
+        var p = _context.CreateDbParameter(name, type, value);
+        p.Direction = direction;
+        return p;
+    }
+
+    // Back-compat overloads (interface surface)
     public DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
         return _context.CreateDbParameter(name, type, value);
     }
 
+    public DbParameter CreateDbParameter<T>(DbType type, T value,
+        ParameterDirection direction = ParameterDirection.Input)
+    {
+        var p = _context.CreateDbParameter(type, value);
+        p.Direction = direction;
+        return p;
+    }
+
+    // Back-compat overload (interface surface)
     public DbParameter CreateDbParameter<T>(DbType type, T value)
     {
         return _context.CreateDbParameter(type, value);
@@ -199,16 +232,42 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
     public void Commit()
     {
         ThrowIfDisposed();
-        CompleteTransactionWithWait(() => _transaction.Commit(), true);
+        // Use async core for consistent semaphore behavior
+        CommitAsync().GetAwaiter().GetResult();
+    }
+
+    public Task CommitAsync(CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        return CompleteTransactionWithWaitAsync(() =>
+        {
+            _transaction.Commit();
+            return Task.CompletedTask;
+        }, true, cancellationToken);
     }
 
     public void Rollback()
     {
         ThrowIfDisposed();
-        CompleteTransactionWithWait(() => _transaction.Rollback(), false);
+        RollbackAsync().GetAwaiter().GetResult();
     }
 
-    public async Task SavepointAsync(string name)
+    public Task RollbackAsync(CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        return CompleteTransactionWithWaitAsync(() =>
+        {
+            _transaction.Rollback();
+            return Task.CompletedTask;
+        }, false, cancellationToken);
+    }
+
+    public Task SavepointAsync(string name)
+    {
+        return SavepointAsync(name, default);
+    }
+
+    public async Task SavepointAsync(string name, CancellationToken cancellationToken = default)
     {
         if (!_dialect.SupportsSavepoints)
         {
@@ -220,7 +279,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         cmd.CommandText = $"SAVEPOINT {name}";
         if (cmd is DbCommand db)
         {
-            await db.ExecuteNonQueryAsync().ConfigureAwait(false);
+            await db.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
         else
         {
@@ -228,7 +287,12 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         }
     }
 
-    public async Task RollbackToSavepointAsync(string name)
+    public Task RollbackToSavepointAsync(string name)
+    {
+        return RollbackToSavepointAsync(name, default);
+    }
+
+    public async Task RollbackToSavepointAsync(string name, CancellationToken cancellationToken = default)
     {
         if (!_dialect.SupportsSavepoints)
         {
@@ -240,7 +304,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         cmd.CommandText = $"ROLLBACK TO SAVEPOINT {name}";
         if (cmd is DbCommand db)
         {
-            await db.ExecuteNonQueryAsync().ConfigureAwait(false);
+            await db.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
         else
         {
@@ -250,27 +314,32 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
 
     private void CompleteTransactionWithWait(Action action, bool markCommitted)
     {
-        _semaphoreSlim.Wait();
+        // Use internal completion lock only; do not contend with user lock
+        if (!_completionLock.Wait(TimeSpan.FromSeconds(30)))
+        {
+            throw new InvalidOperationException("Transaction completion timed out waiting for internal lock.");
+        }
+
         try
         {
             CompleteTransaction(action, markCommitted);
         }
         finally
         {
-            _semaphoreSlim.Release();
+            _completionLock.Release();
         }
     }
 
-    private async Task CompleteTransactionWithWaitAsync(Func<Task> action, bool markCommitted)
+    private async Task CompleteTransactionWithWaitAsync(Func<Task> action, bool markCommitted, CancellationToken cancellationToken = default)
     {
-        await _semaphoreSlim.WaitAsync().ConfigureAwait(false);
+        await _completionLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await CompleteTransactionAsync(action, markCommitted).ConfigureAwait(false);
         }
         finally
         {
-            _semaphoreSlim.Release();
+            _completionLock.Release();
         }
     }
 
@@ -285,11 +354,11 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
 
         if (markCommitted)
         {
-            _committed = true;
+            Interlocked.Exchange(ref _committed, 1);
         }
         else
         {
-            _rolledBack = true;
+            Interlocked.Exchange(ref _rolledBack, 1);
         }
 
         _context.CloseAndDisposeConnection(_connection);
@@ -306,24 +375,18 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
 
         if (markCommitted)
         {
-            _committed = true;
+            Interlocked.Exchange(ref _committed, 1);
         }
         else
         {
-            _rolledBack = true;
+            Interlocked.Exchange(ref _rolledBack, 1);
         }
 
         await _context.CloseAndDisposeConnectionAsync(_connection).ConfigureAwait(false);
     }
 
-    private Task RollbackAsync()
-    {
-        return CompleteTransactionWithWaitAsync(() =>
-        {
-            _transaction.Rollback();
-            return Task.CompletedTask;
-        }, false);
-    }
+    // Kept for backward compatibility with existing internal calls
+    private Task RollbackAsync() => RollbackAsync(default);
 
     protected override void DisposeManaged()
     {
@@ -331,7 +394,22 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         {
             try
             {
-                CompleteTransactionWithWait(() => _transaction.Rollback(), false);
+                // Attempt immediate rollback using internal completion lock
+                if (_completionLock.Wait(0))
+                {
+                    try
+                    {
+                        CompleteTransaction(() => _transaction.Rollback(), false);
+                    }
+                    finally
+                    {
+                        _completionLock.Release();
+                    }
+                }
+                else
+                {
+                    _logger.LogError("TransactionContext.Dispose could not acquire lock; skipping explicit rollback.");
+                }
             }
             catch (Exception ex)
             {
@@ -340,7 +418,8 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         }
 
         _transaction.Dispose();
-        _semaphoreSlim.Dispose();
+        _userLock.Dispose();
+        _completionLock.Dispose();
     }
 
     protected override async ValueTask DisposeManagedAsync()
@@ -349,11 +428,27 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         {
             try
             {
-                await CompleteTransactionWithWaitAsync(() =>
+                // Avoid any wait on disposal to prevent hangs; rely on provider dispose if busy
+                var acquired = _completionLock.Wait(0);
+                if (acquired)
                 {
-                    _transaction.Rollback();
-                    return Task.CompletedTask;
-                }, false).ConfigureAwait(false);
+                    try
+                    {
+                        await CompleteTransactionAsync(() =>
+                        {
+                            _transaction.Rollback();
+                            return Task.CompletedTask;
+                        }, false).ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        _completionLock.Release();
+                    }
+                }
+                else
+                {
+                    _logger.LogError("TransactionContext.DisposeAsync could not acquire lock; skipping explicit rollback.");
+                }
             }
             catch (Exception ex)
             {
@@ -370,7 +465,8 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
             _transaction.Dispose();
         }
 
-        _semaphoreSlim.Dispose();
+        _userLock.Dispose();
+        _completionLock.Dispose();
     }
 
     private void EnsureConnectionIsOpen()

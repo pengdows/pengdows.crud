@@ -11,7 +11,7 @@ namespace pengdows.crud.Tests;
 [Table("Test")]
 public class TestEntity
 {
-    [Id(false)]
+    [Id(writable: false)]
     [Column("Id", DbType.Int32)]
     public int Id { get; set; }
 

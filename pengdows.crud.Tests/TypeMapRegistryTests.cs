@@ -14,6 +14,25 @@ namespace pengdows.crud.Tests;
 public class TypeMapRegistryTests
 {
     [Fact]
+    public void Instance_ReturnsSameRegistry()
+    {
+        TypeMapRegistry.Instance.Clear();
+        var first = TypeMapRegistry.Instance;
+        var second = TypeMapRegistry.Instance;
+        Assert.Same(first, second);
+    }
+
+    [Fact]
+    public void NewInstance_DoesNotAffectSingleton()
+    {
+        TypeMapRegistry.Instance.Clear();
+        var custom = new TypeMapRegistry();
+        var customInfo = custom.GetTableInfo<MyEntity>();
+        customInfo.Name = "Changed";
+        var singletonInfo = TypeMapRegistry.Instance.GetTableInfo<MyEntity>();
+        Assert.Equal("MyEntity", singletonInfo.Name);
+    }
+    [Fact]
     public void Register_AddsAndRetrievesTableInfo()
     {
         var registry = new TypeMapRegistry();
@@ -89,10 +108,12 @@ public class TypeMapRegistryTests
         var registry = new TypeMapRegistry();
         var info = registry.GetTableInfo<OrderedEntity>();
 
-        var columns = info.Columns.Values.OrderBy(c => c.Ordinal).ToList();
-        Assert.Equal(new[] { "A", "B" }, columns.Select(c => c.Name));
+        var columns1 = info.OrderedColumns;
+        var columns2 = info.OrderedColumns;
+        Assert.Same(columns1, columns2);
+        Assert.Equal(new[] { "A", "B" }, columns1.Select(c => c.Name));
 
-        var pks = info.Columns.Values.Where(c => c.IsPrimaryKey).OrderBy(c => c.PkOrder).ToList();
+        var pks = info.PrimaryKeys;
         Assert.Equal(new[] { "A", "B" }, pks.Select(c => c.Name));
     }
 
@@ -173,11 +194,18 @@ public class TypeMapRegistryTests
     }
 
     [Fact]
-    public void GetTableInfo_ThrowsOnInvalidPrimaryKeyOrder()
+    public void GetTableInfo_ThrowsOnInvalidPrimaryKeyOrder_AndRenumbersZeros()
     {
         var registry = new TypeMapRegistry();
         Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<BadPkOrder>());
-        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<ZeroPkOrder>());
+
+        // Zero order should be accepted and auto-renumbered starting at 1
+        var info = registry.GetTableInfo<ZeroPkOrder>();
+        Assert.Single(info.PrimaryKeys);
+        Assert.Equal(1, info.PrimaryKeys[0].PkOrder);
+
+        // Duplicate explicit orders (> 0) should throw
+        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<DuplicateExplicitPkOrder>());
     }
 
     [Fact]
@@ -185,6 +213,21 @@ public class TypeMapRegistryTests
     {
         var registry = new TypeMapRegistry();
         Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<DuplicateOrdinalEntity>());
+    }
+
+    [Fact]
+    public void Registries_DoNotShareTableInfo()
+    {
+        var registry1 = new TypeMapRegistry();
+        var registry2 = new TypeMapRegistry();
+
+        var info1 = registry1.GetTableInfo<MyEntity>();
+        info1.Name = "Changed";
+
+        var info2 = registry2.GetTableInfo<MyEntity>();
+
+        Assert.Equal("Changed", info1.Name);
+        Assert.Equal("MyEntity", info2.Name);
     }
 
     [Table("MultipleVersions")]
@@ -349,6 +392,18 @@ public class TypeMapRegistryTests
         [PrimaryKey(0)]
         [Column("A", DbType.Int32)]
         public int A { get; set; }
+    }
+
+    [Table("DuplicateExplicitPkOrder")]
+    private class DuplicateExplicitPkOrder
+    {
+        [PrimaryKey(1)]
+        [Column("A", DbType.Int32)]
+        public int A { get; set; }
+
+        [PrimaryKey(1)]
+        [Column("B", DbType.Int32)]
+        public int B { get; set; }
     }
 
     [Table("DuplicateOrdinal")]

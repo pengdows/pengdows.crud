@@ -38,8 +38,9 @@ public abstract class SqlDialect:ISqlDialect
     public abstract SupportedDatabase DatabaseType { get; }
     public virtual string ParameterMarker => "?";
     public virtual string ParameterMarkerAt(int ordinal) => ParameterMarker;
-    public virtual bool SupportsNamedParameters => false;
+    public virtual bool SupportsNamedParameters => true;
     public virtual int MaxParameterLimit => 255;
+    public virtual int MaxOutputParameters => 0;
     public virtual int ParameterNameMaxLength => 18;
     public virtual ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.None;
 
@@ -93,6 +94,11 @@ public abstract class SqlDialect:ISqlDialect
 
     // SQL:2023 features
     public virtual bool SupportsPropertyGraphQueries => MaxSupportedStandard >= SqlStandardLevel.Sql2023;
+
+    // Modern SQL/JSON feature gates (safe defaults)
+    public virtual bool SupportsSqlJsonConstructors => false;
+    public virtual bool SupportsJsonTable => false;
+    public virtual bool SupportsMergeReturning => false;
 
     // Database-specific extensions (override as needed)
     public virtual bool SupportsInsertOnConflict => false; // PostgreSQL, SQLite extension
@@ -161,6 +167,15 @@ public abstract class SqlDialect:ISqlDialect
             return "?";
         }
 
+        if (parameterName is null)
+        {
+            return ParameterMarker;
+        }
+
+        parameterName = parameterName.Replace("@", string.Empty)
+                                     .Replace(":", string.Empty)
+                                     .Replace("?", string.Empty);
+
         return string.Concat(ParameterMarker, parameterName);
     }
 
@@ -182,11 +197,53 @@ public abstract class SqlDialect:ISqlDialect
         {
             name = GenerateRandomName(5, ParameterNameMaxLength);
         }
+        else if (SupportsNamedParameters)
+        {
+            // Trim any leading marker characters from provided names so
+            // DbParameter.ParameterName is the raw identifier the provider expects.
+            // Some providers (e.g., DuckDB) use '$' in SQL text but expect the
+            // underlying parameter name without the marker.
+            name = name.TrimStart('@', ':', '?', '$');
+        }
 
         var valueIsNull = Utils.IsNullOrDbNull(value);
         p.ParameterName = name;
         p.DbType = type;
         p.Value = valueIsNull ? DBNull.Value : value!;
+
+        if (!SupportsNamedParameters)
+        {
+            p.ParameterName = string.Empty;
+
+            if (!valueIsNull)
+            {
+                switch (p.DbType)
+                {
+                    case DbType.Guid:
+                        p.DbType = DbType.String;
+                        if (value is Guid guidValue)
+                        {
+                            p.Value = guidValue.ToString();
+                            p.Size = 36;
+                        }
+                        break;
+                    case DbType.Boolean:
+                        p.DbType = DbType.Int16;
+                        if (value is bool boolValue)
+                        {
+                            p.Value = boolValue ? (short)1 : (short)0;
+                        }
+                        break;
+                    case DbType.DateTimeOffset:
+                        p.DbType = DbType.DateTime;
+                        if (value is DateTimeOffset dtoValue)
+                        {
+                            p.Value = dtoValue.DateTime;
+                        }
+                        break;
+                }
+            }
+        }
 
         if (!valueIsNull)
         {
@@ -224,28 +281,33 @@ public abstract class SqlDialect:ISqlDialect
 
     public virtual string GetDatabaseVersion(ITrackedConnection connection)
     {
-        try
-        {
-            var versionQuery = GetVersionQuery();
-            if (string.IsNullOrWhiteSpace(versionQuery))
-            {
-                return "Unknown Database Version";
-            }
-
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = versionQuery;
-            var version = cmd.ExecuteScalar()?.ToString();
-            return version ?? "Unknown Version";
-        }
-        catch (Exception ex)
-        {
-            return "Error retrieving version: " + ex.Message;
-        }
+        return GetDatabaseVersionAsync(connection).GetAwaiter().GetResult();
     }
 
     public virtual DataTable GetDataSourceInformationSchema(ITrackedConnection connection)
     {
-        return connection.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
+        try
+        {
+            var schema = connection.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
+            if (schema.Rows.Count > 0)
+            {
+                return schema;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "Data source information schema unavailable; using SQL-92 defaults");
+        }
+
+        return DataSourceInformation.BuildEmptySchema(
+            "Unknown Database (SQL-92 Compatible)",
+            "Unknown Version",
+            Regex.Escape(ParameterMarker),
+            ParameterMarker,
+            ParameterNameMaxLength,
+            ParameterNamePattern.ToString(),
+            ParameterNamePattern.ToString(),
+            SupportsNamedParameters);
     }
 
     public virtual string GetConnectionSessionSettings()
@@ -344,34 +406,62 @@ public abstract class SqlDialect:ISqlDialect
 
     protected virtual async Task<string> GetDatabaseVersionAsync(ITrackedConnection connection)
     {
-        try
-        {
-            var versionQuery = GetVersionQuery();
-            if (string.IsNullOrEmpty(versionQuery))
+        var versionQueries = new[]
             {
-                return "Unknown Version";
+                GetVersionQuery(),
+                "SELECT CURRENT_VERSION",
+                "SELECT version()",
+                "SELECT @@version",
+                "SELECT * FROM v$version WHERE rownum = 1"
             }
+            .Where(q => !string.IsNullOrWhiteSpace(q));
 
-            await using var cmd = (DbCommand)connection.CreateCommand();
-            cmd.CommandText = versionQuery;
-            var result = await cmd.ExecuteScalarAsync();
-            return result?.ToString() ?? "Unknown Version";
-        }
-        catch (Exception ex)
+        Exception? lastException = null;
+        foreach (var query in versionQueries)
         {
-            Logger.LogWarning(ex, "Failed to get database version using query: {Query}", GetVersionQuery());
-            return "Error retrieving version: " + ex.Message;
+            try
+            {
+                await using var cmd = (DbCommand)connection.CreateCommand();
+                cmd.CommandText = query;
+                var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
+                if (result != null && !string.IsNullOrEmpty(result.ToString()))
+                {
+                    return result.ToString()!;
+                }
+            }
+            catch (Exception ex)
+            {
+                lastException = ex;
+            }
         }
+
+        if (lastException != null)
+        {
+            return $"Error retrieving version: {lastException.Message}";
+        }
+
+        return "Unknown Version (SQL-92 Compatible)";
     }
 
-    protected virtual async Task<string?> GetProductNameAsync(ITrackedConnection connection)
+    protected virtual Task<string?> GetProductNameAsync(ITrackedConnection connection)
     {
         try
         {
             var schema = connection.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
             if (schema.Rows.Count > 0)
             {
-                return schema.Rows[0].Field<string>("DataSourceProductName");
+                var productName = schema.Rows[0].Field<string>("DataSourceProductName");
+                if (!string.IsNullOrEmpty(productName))
+                {
+                    if (DatabaseType == SupportedDatabase.Unknown)
+                    {
+                        Logger.LogWarning(
+                            "Using SQL-92 fallback dialect for detected database: {ProductName}",
+                            productName);
+                    }
+
+                    return Task.FromResult<string?>(productName);
+                }
             }
         }
         catch (Exception ex)
@@ -379,7 +469,13 @@ public abstract class SqlDialect:ISqlDialect
             Logger.LogDebug(ex, "Could not get product name from schema metadata");
         }
 
-        return null;
+        if (DatabaseType == SupportedDatabase.Unknown)
+        {
+            Logger.LogWarning(
+                "Using SQL-92 fallback dialect for unknown database product");
+        }
+
+        return Task.FromResult<string?>(null);
     }
 
     protected virtual string ExtractProductNameFromVersion(string versionString)
@@ -426,7 +522,7 @@ public abstract class SqlDialect:ISqlDialect
             return "Firebird";
         }
 
-        return "Unknown Database";
+        return "Unknown Database (SQL-92 Compatible)";
     }
 
     protected virtual SupportedDatabase InferDatabaseTypeFromInfo(string productName, string versionString)
@@ -528,6 +624,78 @@ public abstract class SqlDialect:ISqlDialect
 
         return new string(buffer);
     }
+
+    /// <summary>
+    /// Gets the database-specific query for retrieving the last inserted identity value.
+    /// Base implementation returns empty string. Override in dialect-specific classes.
+    /// </summary>
+    /// <returns>SQL query to get the last inserted identity value, or empty string if not supported.</returns>
+    public virtual string GetLastInsertedIdQuery()
+    {
+        return DatabaseType switch
+        {
+            SupportedDatabase.Sqlite => "SELECT last_insert_rowid()",
+            SupportedDatabase.SqlServer => "SELECT SCOPE_IDENTITY()",
+            SupportedDatabase.MySql => "SELECT LAST_INSERT_ID()",
+            SupportedDatabase.PostgreSql => "SELECT lastval()",
+            SupportedDatabase.Oracle => "SELECT @@IDENTITY",
+            _ => string.Empty
+        };
+    }
+
+    // ---- Legacy utility helpers (kept for test compatibility) ----
+    // These helpers are intentionally private to match historical usage in tests via reflection.
+    private static bool TryParseMajorVersion(string? version, out int major)
+    {
+        major = 0;
+        if (string.IsNullOrWhiteSpace(version))
+        {
+            return false;
+        }
+
+        var match = Regex.Match(version, "(\\d+)");
+        if (!match.Success)
+        {
+            return false;
+        }
+        return int.TryParse(match.Groups[1].Value, out major);
+    }
+
+    private static bool IsPrime(int n)
+    {
+        if (n < 2)
+        {
+            return false;
+        }
+
+        if (n % 2 == 0)
+        {
+            return n == 2;
+        }
+
+        var limit = (int)Math.Sqrt(n);
+        for (var i = 3; i <= limit; i += 2)
+        {
+            if (n % i == 0)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static int GetPrime(int min)
+    {
+        if (min <= 2)
+        {
+            return 2;
+        }
+
+        var candidate = (min % 2 == 0) ? min + 1 : min;
+        while (!IsPrime(candidate))
+        {
+            candidate += 2;
+        }
+        return candidate;
+    }
 }
-
-

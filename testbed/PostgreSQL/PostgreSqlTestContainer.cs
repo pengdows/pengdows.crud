@@ -2,7 +2,6 @@
 
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
-using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using pengdows.crud;
 
@@ -28,30 +27,30 @@ public class PostgreSqlTestContainer : TestContainer
             .WithEnvironment("POSTGRES_DB", _database)
             .WithPortBinding(_port, true)
             .Build();
-        _container.StartAsync().Wait();
     }
 
     public override async Task StartAsync()
     {
-         var hostPort = _container.GetMappedPublicPort(_port);
+        await _container.StartAsync();
+        var hostPort = _container.GetMappedPublicPort(_port);
         _connectionString =
             $@"Host=localhost;Port={hostPort};Username={_username};Password={_password};Database={_database};Pooling=true;Minimum Pool Size=1;Maximum Pool Size=20;Timeout=15;CommandTimeout=30;";
         await WaitForDbToStart(NpgsqlFactory.Instance, _connectionString, _container);
     }
 
-    public override async Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)
+    public override Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)
     {
         if (_connectionString is null)
         {
             throw new InvalidOperationException("Container not started yet.");
         }
 
-        return new DatabaseContext(_connectionString, NpgsqlFactory.Instance,
-            null);
+        return Task.FromResult<IDatabaseContext>(
+            new DatabaseContext(_connectionString, NpgsqlFactory.Instance, null!));
     }
 
-    public async ValueTask DisposeAsync()
+    protected override ValueTask DisposeAsyncCore()
     {
-          await _container.DisposeAsync();
+        return _container.DisposeAsync();
     }
 }

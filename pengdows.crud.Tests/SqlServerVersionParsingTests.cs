@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -14,7 +14,7 @@ public class SqlServerVersionParsingTests
     [InlineData("Microsoft SQL Server (unknown)", null)]
     public void ParseVersion_ExtractsProductVersion(string banner, string? expected)
     {
-        var factory = new FakeDbFactory(SupportedDatabase.SqlServer);
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var dialect = new SqlServerDialect(factory, NullLogger<SqlServerDialect>.Instance);
 
         var parsed = dialect.ParseVersion(banner);

@@ -1,7 +1,6 @@
 #region
 
 using DotNet.Testcontainers.Builders;
-using Microsoft.Extensions.DependencyInjection;
 using Oracle.ManagedDataAccess.Client;
 using pengdows.crud;
 using IContainer = DotNet.Testcontainers.Containers.IContainer;
@@ -14,7 +13,7 @@ public class OracleTestContainer : TestContainer
 {
     private const string _password = "mysecurepassword";
     private const string _username = "system";
-    private const string _sid = "XE"; // confirmed from inspect (ORACLE_SID=XE)
+    private const string _sid = "XEPDB1"; // Oracle 18c XE uses pluggable database
     private const int _port = 1521;
     private readonly IContainer _container;
     private string? _connectionString;
@@ -23,13 +22,13 @@ public class OracleTestContainer : TestContainer
     {
         _container = new ContainerBuilder()
             .WithImage("oracle/database:18.4.0-xe")
-            .WithEnvironment("ACCEPT_LICENSE_AGREEMENT", "Y")
             .WithEnvironment("ORACLE_PWD", _password)
+            .WithEnvironment("ORACLE_CHARACTERSET", "AL32UTF8")
             .WithExposedPort(_port)
             .WithPortBinding(_port, true) // dynamic host binding
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilPortIsAvailable(1521))
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilPortIsAvailable(_port))
+            .WithStartupCallback((container, ct) => Task.Delay(TimeSpan.FromMinutes(2), ct)) // Wait for Oracle initialization
             .Build();
-        throw new Exception("won't start");
     }
 
     public override async Task StartAsync()
@@ -38,15 +37,8 @@ public class OracleTestContainer : TestContainer
 
         var hostPort = _container.GetMappedPublicPort(_port);
 
-        // Fully qualified TNS format — safest and matches official documentation
-        //         _connectionString = $@"
-        // User Id={_username};
-        // Password={_password};
-        // Data Source=(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=localhost)(PORT={hostPort}))
-        // (CONNECT_DATA=(SERVICE_NAME={_sid})))";
-        var csb = OracleClientFactory.Instance.CreateConnectionStringBuilder();
-        csb.ConnectionString = $"User Id={_username};Password={_password}; Data Source=localhost:{hostPort}/{_sid};";
-        _connectionString = csb.ConnectionString;
+        // Use TNS format for Oracle 18c XE with pluggable database
+        _connectionString = $@"User Id={_username};Password={_password};Data Source=(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=localhost)(PORT={hostPort}))(CONNECT_DATA=(SERVICE_NAME={_sid})));";
         // // Optional: print logs to debug
         // Console.WriteLine(await _container.());
 
@@ -54,23 +46,24 @@ public class OracleTestContainer : TestContainer
         // {
         //     await Task.Delay(1000);
         // }
-        // Wait until the DB is accepting connections and SELECT 1 succeeds
-        await WaitForDbToStart(OracleClientFactory.Instance, _connectionString, _container, 300);
+        // The wait strategy should have already ensured database is ready
+        // But add minimal additional wait for connection stability 
+        await Task.Delay(5000);
     }
 
-    public override async Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)
+    public override Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)
     {
         if (_connectionString is null)
         {
             throw new InvalidOperationException("Container not started yet.");
         }
 
-        return new DatabaseContext(_connectionString, OracleClientFactory.Instance,
-            null);
+        return Task.FromResult<IDatabaseContext>(
+            new DatabaseContext(_connectionString, OracleClientFactory.Instance, null!));
     }
 
-    public async ValueTask DisposeAsync()
+    protected override ValueTask DisposeAsyncCore()
     {
-          await _container.DisposeAsync();
+        return _container.DisposeAsync();
     }
 }

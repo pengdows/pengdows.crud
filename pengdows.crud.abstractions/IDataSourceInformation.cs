@@ -80,6 +80,11 @@ public interface IDataSourceInformation
     int MaxParameterLimit { get; }
 
     /// <summary>
+    /// Gets the maximum number of output parameters allowed per command.
+    /// </summary>
+    int MaxOutputParameters { get; }
+
+    /// <summary>
     /// Gets the detected database product as an enumeration value.
     /// </summary>
     SupportedDatabase Product { get; }

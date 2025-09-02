@@ -1,0 +1,34 @@
+# Codecov configuration to only show pengdows.crud project coverage
+coverage:
+  status:
+    project:
+      default:
+        target: 83%
+        threshold: 1%
+        # Only include the main pengdows.crud project
+        paths:
+          - "pengdows.crud/"
+        # Exclude all other projects  
+        ignore:
+          - "pengdows.crud.Tests/**/*"
+          - "pengdows.crud.abstractions/**/*"
+          - "pengdows.crud.fakeDb/**/*"
+          - "testbed/**/*"
+          - "**/*Test*"
+          - "**/*Mock*"
+
+# Comment configuration
+comment:
+  layout: "diff, flags, files"
+  behavior: default
+  require_changes: false
+  
+# Ignore these paths completely
+ignore:
+  - "pengdows.crud.Tests/**/*"
+  - "pengdows.crud.abstractions/**/*" 
+  - "pengdows.crud.fakeDb/**/*"
+  - "testbed/**/*"
+  - "**/*.csproj"
+  - "**/obj/**/*"
+  - "**/bin/**/*"

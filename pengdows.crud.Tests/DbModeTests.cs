@@ -1,6 +1,13 @@
 #region
 
 using System;
+using System.Data;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Logging.Abstractions;
+using pengdows.crud.attributes;
+using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using Xunit;
 
@@ -8,29 +15,114 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
+[Collection("SqliteSerial")]
 public class DbModeTests
 {
-    [Theory]
-    [InlineData("KeepAlive", DbMode.KeepAlive)]
-    [InlineData("SingleConnection", DbMode.SingleConnection)]
-    [InlineData("SingleWriter", DbMode.SingleWriter)]
-    [InlineData("Standard", DbMode.Standard)]
-    public void EnumParse_ShouldReturnCorrectValue(string input, DbMode expected)
+    private static async Task BuildUsersTableAsync(IDatabaseContext context)
     {
-        var result = Enum.Parse<DbMode>(input, true);
-        Assert.Equal(expected, result);
+        var qp = context.QuotePrefix;
+        var qs = context.QuoteSuffix;
+        var sql = string.Format(@"CREATE TABLE IF NOT EXISTS
+{0}Users{1} (
+    {0}Id{1} INTEGER PRIMARY KEY AUTOINCREMENT,
+    {0}Email{1} TEXT UNIQUE,
+    {0}Version{1} INTEGER,
+    {0}Name{1} TEXT
+)", qp, qs);
+
+        var sc = context.CreateSqlContainer(sql);
+        await sc.ExecuteNonQueryAsync();
     }
 
     [Fact]
-    public void DbModeEnumParse_InvalidValue_ShouldThrow()
+    public async Task SingleConnection_SerializesMultithreadedOperations_InMemory()
     {
-        Assert.Throws<ArgumentException>(() => Enum.Parse<DbMode>("NotADbMode"));
+        var typeMap = new TypeMapRegistry();
+        typeMap.Register<User>();
+
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:",
+            DbMode = DbMode.SingleConnection,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        await using var context = new DatabaseContext(cfg, SqliteFactory.Instance, NullLoggerFactory.Instance, typeMap);
+        await BuildUsersTableAsync(context);
+
+        var helper = new EntityHelper<User, int>(context, auditValueResolver: null);
+        var users = Enumerable.Range(1, 20)
+            .Select(i => new User { Email = $"test{i}@example.com", Name = $"Test{i}", Version = 1 })
+            .ToList();
+
+        var tasks = users.Select(u => Task.Run(async () =>
+        {
+            var sc = helper.BuildCreate(u);
+            await sc.ExecuteNonQueryAsync();
+        })).ToArray();
+
+        await Task.WhenAll(tasks);
+
+        var scSelect = context.CreateSqlContainer("SELECT COUNT(*) FROM Users");
+        var count = await scSelect.ExecuteScalarAsync<int>();
+        Assert.Equal(20, count);
     }
 
     [Fact]
-    public void DbMode_ShouldContainExpectedValues()
+    public async Task SingleWriter_SerializesMultithreadedWrites_FileBased()
     {
-        var names = Enum.GetNames(typeof(DbMode));
-        Assert.Equal(new[] { "Standard", "KeepAlive", "SingleWriter", "SingleConnection" }, names);
+        var typeMap = new TypeMapRegistry();
+        typeMap.Register<User>();
+
+        var dbFile = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"crud_{Guid.NewGuid():N}.db");
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = $"Data Source={dbFile}",
+            DbMode = DbMode.SingleWriter,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        await using var context = new DatabaseContext(cfg, SqliteFactory.Instance, NullLoggerFactory.Instance, typeMap);
+        await BuildUsersTableAsync(context);
+
+        var helper = new EntityHelper<User, int>(context, auditValueResolver: null);
+        var users = Enumerable.Range(1, 20)
+            .Select(i => new User { Email = $"test{i}@example.com", Name = $"Test{i}", Version = 1 })
+            .ToList();
+
+        var tasks = users.Select(u => Task.Run(async () =>
+        {
+            var sc = helper.BuildCreate(u);
+            await sc.ExecuteNonQueryAsync();
+        })).ToArray();
+
+        await Task.WhenAll(tasks);
+
+        var scRead = context.CreateSqlContainer("SELECT COUNT(*) FROM Users");
+        var count = await scRead.ExecuteScalarAsync<int>();
+        Assert.Equal(20, count);
+
+        // Cleanup the temp file
+        try { System.IO.File.Delete(dbFile); } catch { }
+    }
+
+    // Minimal entity definition to exercise helper
+    [Table("Users")]
+    private class User
+    {
+        [Id(false)]
+        [Column("Id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [PrimaryKey]
+        [Column("Email", DbType.String)]
+        public string Email { get; set; } = string.Empty;
+
+        [Version]
+        [Column("Version", DbType.Int32)]
+        public int Version { get; set; }
+
+        [Column("Name", DbType.String)]
+        public string Name { get; set; } = string.Empty;
     }
 }

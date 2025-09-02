@@ -2,7 +2,6 @@
 
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
-using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using pengdows.crud;
 
@@ -27,7 +26,6 @@ public class CockroachDbTestContainer : TestContainer
             .Build();
 
         await _container.StartAsync();
-        await Task.Delay(5000); // Allow some time for startup
 
         // Create the test database
         var connectionString = "Host=localhost;Port=26257;Username=root;SSL Mode=disable;";
@@ -41,7 +39,7 @@ public class CockroachDbTestContainer : TestContainer
     public override Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)
     {
         var cs = "Host=localhost;Port=26257;Username=root;Database=testdb;SSL Mode=disable;";
-        var ctx = new DatabaseContext(cs, NpgsqlFactory.Instance, null);
+        var ctx = new DatabaseContext(cs, NpgsqlFactory.Instance, null!);
         return Task.FromResult<IDatabaseContext>(ctx);
     }
 

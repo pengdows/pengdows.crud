@@ -2,6 +2,7 @@
 
 using pengdows.crud.exceptions;
 using Xunit;
+using System.Threading.Tasks;
 
 #endregion
 
@@ -23,7 +24,7 @@ public class NoColumnsFoundExceptionTests
     }
 
     [Fact]
-    public async void CanBeThrownAndCaught()
+    public async Task CanBeThrownAndCaught()
     {
         // Arrange
         var message = "Something went wrong";

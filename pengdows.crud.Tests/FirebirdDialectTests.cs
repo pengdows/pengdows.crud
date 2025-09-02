@@ -1,10 +1,8 @@
 using System.Data;
-using System.Data.Common;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -14,7 +12,7 @@ public class FirebirdDialectTests
     [Fact]
     public void QuotePrefixSuffix_AreDoubleQuotes()
     {
-        var dialect = new FirebirdDialect(new FakeDbFactory(SupportedDatabase.Firebird), NullLogger<FirebirdDialect>.Instance);
+        var dialect = new FirebirdDialect(new fakeDbFactory(SupportedDatabase.Firebird), NullLogger<FirebirdDialect>.Instance);
         Assert.Equal("\"", dialect.QuotePrefix);
         Assert.Equal("\"", dialect.QuoteSuffix);
     }
@@ -22,7 +20,7 @@ public class FirebirdDialectTests
     [Fact]
     public void CreateDbParameter_BooleanMapsToInt16()
     {
-        var dialect = new FirebirdDialect(new FakeDbFactory(SupportedDatabase.Firebird), NullLogger<FirebirdDialect>.Instance);
+        var dialect = new FirebirdDialect(new fakeDbFactory(SupportedDatabase.Firebird), NullLogger<FirebirdDialect>.Instance);
         var paramTrue = dialect.CreateDbParameter("p", DbType.Boolean, true);
         Assert.Equal(DbType.Int16, paramTrue.DbType);
         Assert.Equal((short)1, paramTrue.Value);
@@ -37,8 +35,8 @@ public class FirebirdDialectTests
     [Fact]
     public void ApplyConnectionSettings_WithScript_ExecutesCommand()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.Firebird);
-        var conn = (FakeDbConnection)factory.CreateConnection();
+        var factory = new fakeDbFactory(SupportedDatabase.Firebird);
+        var conn = (fakeDbConnection)factory.CreateConnection();
         conn.Open();
         conn.EnqueueNonQueryResult(1);
         var dialect = new FirebirdDialect(factory, NullLogger<FirebirdDialect>.Instance);
@@ -49,8 +47,8 @@ public class FirebirdDialectTests
     [Fact]
     public void ApplyConnectionSettings_WithSettings_ExecutesCommand()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.Firebird);
-        var conn = (FakeDbConnection)factory.CreateConnection();
+        var factory = new fakeDbFactory(SupportedDatabase.Firebird);
+        var conn = (fakeDbConnection)factory.CreateConnection();
         conn.Open();
         conn.EnqueueNonQueryResult(1);
         var dialect = new FirebirdDialect(factory, NullLogger<FirebirdDialect>.Instance);

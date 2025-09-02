@@ -1,7 +1,5 @@
 #region
 
-using System.Collections.Generic;
-
 #endregion
 
 namespace pengdows.crud;
@@ -25,6 +23,16 @@ public interface ITableInfo
     /// Collection of columns keyed by property name.
     /// </summary>
     Dictionary<string, IColumnInfo> Columns { get; }
+
+    /// <summary>
+    /// Columns sorted by their <see cref="IColumnInfo.Ordinal"/>.
+    /// </summary>
+    IReadOnlyList<IColumnInfo> OrderedColumns { get; }
+
+    /// <summary>
+    /// Columns marked with <see cref="IColumnInfo.IsPrimaryKey"/>, ordered by <see cref="IColumnInfo.PkOrder"/>.
+    /// </summary>
+    IReadOnlyList<IColumnInfo> PrimaryKeys { get; }
 
     /// <summary>
     /// Column representing the pseudo key used to uniquely identify a row.

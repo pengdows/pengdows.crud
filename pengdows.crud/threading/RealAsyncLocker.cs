@@ -54,15 +54,24 @@ internal sealed class RealAsyncLocker : SafeAsyncDisposableBase, ILockerAsync
         return acquired;
     }
 
-    protected override ValueTask DisposeManagedAsync()
+    private void ReleaseIfHeld()
     {
         if (Interlocked.CompareExchange(ref _lockState, 0, 1) == 1)
         {
             _semaphore.Release();
             _logger.LogTrace("Lock released");
         }
+    }
 
+    protected override void DisposeManaged()
+    {
+        // Ensure synchronous disposal releases the semaphore as well.
+        ReleaseIfHeld();
+    }
+
+    protected override ValueTask DisposeManagedAsync()
+    {
+        ReleaseIfHeld();
         return ValueTask.CompletedTask;
     }
 }
-

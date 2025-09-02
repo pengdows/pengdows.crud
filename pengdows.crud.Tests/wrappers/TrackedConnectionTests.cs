@@ -1,7 +1,7 @@
 #region
 using System.Data;
 using System.Threading.Tasks;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using pengdows.crud.enums;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
@@ -16,7 +16,7 @@ public class TrackedConnectionTests
     [Fact]
     public void GetLock_NoSharedConnection_ReturnsNoOpInstance()
     {
-        using var conn = new FakeDbConnection();
+        using var conn = new fakeDbConnection();
         using var tracked = new TrackedConnection(conn);
 
         var locker1 = tracked.GetLock();
@@ -29,8 +29,8 @@ public class TrackedConnectionTests
     [Fact]
     public async Task GetLock_SharedConnection_ReturnsRealAsyncLocker()
     {
-        using var conn = new FakeDbConnection();
-        using var tracked = new TrackedConnection(conn, isSharedConnection: true);
+        await using var conn = new fakeDbConnection();
+        await using var tracked = new TrackedConnection(conn, isSharedConnection: true);
 
         await using var locker = tracked.GetLock();
 
@@ -42,7 +42,7 @@ public class TrackedConnectionTests
     [Fact]
     public void GetLock_SharedConnection_ReturnsNewInstanceEachTime()
     {
-        using var conn = new FakeDbConnection();
+        using var conn = new fakeDbConnection();
         using var tracked = new TrackedConnection(conn, isSharedConnection: true);
 
         var first = tracked.GetLock();
@@ -56,7 +56,7 @@ public class TrackedConnectionTests
     [Fact]
     public void Open_InvokesOnFirstOpen_OnlyOnce()
     {
-        using var conn = new FakeDbConnection();
+        using var conn = new fakeDbConnection();
         var count = 0;
         using var tracked = new TrackedConnection(conn, onFirstOpen: _ => count++);
 
@@ -71,9 +71,9 @@ public class TrackedConnectionTests
     [Fact]
     public async Task OpenAsync_InvokesOnFirstOpen_OnlyOnce()
     {
-        using var conn = new FakeDbConnection();
+        await using var conn = new fakeDbConnection();
         var count = 0;
-        using var tracked = new TrackedConnection(conn, onFirstOpen: _ => count++);
+        await using var tracked = new TrackedConnection(conn, onFirstOpen: _ => count++);
 
         await tracked.OpenAsync();
         await tracked.OpenAsync();
@@ -85,7 +85,7 @@ public class TrackedConnectionTests
     [Fact]
     public void Dispose_ClosesConnection_Once()
     {
-        using var conn = new FakeDbConnection();
+        using var conn = new fakeDbConnection();
         var disposeCount = 0;
         var tracked = new TrackedConnection(conn, onDispose: _ => disposeCount++);
 
@@ -100,7 +100,7 @@ public class TrackedConnectionTests
     [Fact]
     public async Task DisposeAsync_ClosesConnection_Once()
     {
-        using var conn = new FakeDbConnection();
+        await using var conn = new fakeDbConnection();
         var disposeCount = 0;
         await using var tracked = new TrackedConnection(conn, onDispose: _ => disposeCount++);
 
@@ -115,7 +115,7 @@ public class TrackedConnectionTests
     [Fact]
     public void Properties_DelegateToUnderlyingConnection()
     {
-        using var conn = new FakeDbConnection();
+        using var conn = new fakeDbConnection();
         conn.EmulatedProduct = SupportedDatabase.SqlServer;
         conn.SetServerVersion("2.0");
         using var tracked = new TrackedConnection(conn);
@@ -130,7 +130,7 @@ public class TrackedConnectionTests
     [Fact]
     public void ConnectionString_GetSet_Passthrough()
     {
-        using var conn = new FakeDbConnection();
+        using var conn = new fakeDbConnection();
         using var tracked = new TrackedConnection(conn);
 
         tracked.ConnectionString = "Data Source=test";
@@ -143,7 +143,7 @@ public class TrackedConnectionTests
     [Fact]
     public void State_ReflectsUnderlyingConnectionState()
     {
-        using var conn = new FakeDbConnection();
+        using var conn = new fakeDbConnection();
         using var tracked = new TrackedConnection(conn);
 
         Assert.Equal(ConnectionState.Closed, tracked.State);

@@ -4,7 +4,6 @@ using System.Data.Common;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using FirebirdSql.Data.FirebirdClient;
-using Microsoft.Extensions.DependencyInjection;
 using pengdows.crud;
 
 #endregion
@@ -76,19 +75,19 @@ public class FirebirdSqlTestContainer : TestContainer
         }
     }
 
-    public override async Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)
+    public override Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)
     {
         if (_connectionString is null)
         {
             throw new InvalidOperationException("Container not started yet.");
         }
 
-        return new DatabaseContext(_connectionString, _factory,
-            null);
+        return Task.FromResult<IDatabaseContext>(
+            new DatabaseContext(_connectionString, _factory, null!));
     }
 
-    public async ValueTask DisposeAsync()
+    protected override ValueTask DisposeAsyncCore()
     {
-        await _container.DisposeAsync();
+        return _container.DisposeAsync();
     }
 }

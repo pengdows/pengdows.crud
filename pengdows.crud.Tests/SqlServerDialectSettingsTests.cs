@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using pengdows.crud.wrappers;
 using Xunit;
 
@@ -16,9 +16,9 @@ public class SqlServerDialectSettingsTests
     private sealed class UserOptionsCommand : DbCommand
     {
         private readonly DbConnection _connection;
-        private readonly FakeDbDataReader _reader;
+        private readonly fakeDbDataReader _reader;
 
-        public UserOptionsCommand(DbConnection connection, FakeDbDataReader reader)
+        public UserOptionsCommand(DbConnection connection, fakeDbDataReader reader)
         {
             _connection = connection;
             _reader = reader;
@@ -47,17 +47,17 @@ public class SqlServerDialectSettingsTests
 
         protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) => _reader;
 
-        protected override DbParameter CreateDbParameter() => new FakeDbParameter();
+        protected override DbParameter CreateDbParameter() => new fakeDbParameter();
     }
 
-    private sealed class UserOptionsConnection : FakeDbConnection
+    private sealed class UserOptionsConnection : fakeDbConnection
     {
-        private readonly FakeDbDataReader _reader;
+        private readonly fakeDbDataReader _reader;
 
         public UserOptionsConnection(IEnumerable<Dictionary<string, object>> rows)
         {
             EmulatedProduct = SupportedDatabase.SqlServer;
-            _reader = new FakeDbDataReader(rows);
+            _reader = new fakeDbDataReader(rows);
         }
 
         protected override DbCommand CreateDbCommand() => new UserOptionsCommand(this, _reader);
@@ -76,7 +76,7 @@ public class SqlServerDialectSettingsTests
     [Fact]
     public void QuotePrefix_IsDoubleQuotes()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.SqlServer);
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var dialect = new SqlServerDialect(factory, NullLogger<SqlServerDialect>.Instance);
         Assert.Equal("\"", dialect.QuotePrefix);
         Assert.Equal("\"", dialect.QuoteSuffix);
@@ -95,8 +95,8 @@ public class SqlServerDialectSettingsTests
             new Dictionary<string, object> { { "QUOTED_IDENTIFIER", "SET" } },
             new Dictionary<string, object> { { "NUMERIC_ROUNDABORT", "OFF" } }
         };
-        using var conn = BuildConnection(rows);
-        var factory = new FakeDbFactory(SupportedDatabase.SqlServer);
+        await using var conn = BuildConnection(rows);
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var dialect = new SqlServerDialect(factory, NullLogger<SqlServerDialect>.Instance);
         await dialect.DetectDatabaseInfoAsync(conn);
         dialect.ApplyConnectionSettings(conn);
@@ -116,8 +116,8 @@ public class SqlServerDialectSettingsTests
             new Dictionary<string, object> { { "QUOTED_IDENTIFIER", "OFF" } },
             new Dictionary<string, object> { { "NUMERIC_ROUNDABORT", "OFF" } }
         };
-        using var conn = BuildConnection(rows);
-        var factory = new FakeDbFactory(SupportedDatabase.SqlServer);
+        await using var conn = BuildConnection(rows);
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var dialect = new SqlServerDialect(factory, NullLogger<SqlServerDialect>.Instance);
         await dialect.DetectDatabaseInfoAsync(conn);
         dialect.ApplyConnectionSettings(conn);

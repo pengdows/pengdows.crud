@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.enums;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using pengdows.crud.dialects;
 using Xunit;
 
@@ -26,8 +26,8 @@ public class SqlDialectFeatureTests
         {
             ["SELECT @@VERSION"] = "Microsoft SQL Server 15.0"
         };
-        var factory = new FakeDbFactory(SupportedDatabase.SqlServer);
-        var conn = (FakeDbConnection)factory.CreateConnection();
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var conn = (fakeDbConnection)factory.CreateConnection();
         conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}";
         var tracked = new FakeTrackedConnection(conn, schema, scalars);
         var dialect = SqlDialectFactory.CreateDialectForType(
@@ -54,8 +54,8 @@ public class SqlDialectFeatureTests
         {
             ["SELECT @@VERSION"] = "Microsoft SQL Server 8.0"
         };
-        var factory = new FakeDbFactory(SupportedDatabase.SqlServer);
-        var conn = (FakeDbConnection)factory.CreateConnection();
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var conn = (fakeDbConnection)factory.CreateConnection();
         conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}";
         var tracked = new FakeTrackedConnection(conn, schema, scalars);
         var dialect = SqlDialectFactory.CreateDialectForType(

@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -15,14 +15,14 @@ public class DialectPropertyTests
 
         yield return new object[]
         {
-            new FirebirdDialect(new FakeDbFactory(SupportedDatabase.Firebird), logger),
+            new FirebirdDialect(new fakeDbFactory(SupportedDatabase.Firebird), logger),
             new DialectProps(
                 SupportedDatabase.Firebird,
                 "@",
                 true,
                 65535,
                 63,
-                ProcWrappingStyle.Call,
+                ProcWrappingStyle.ExecuteProcedure,
                 "\"",
                 "\"",
                 false,
@@ -32,12 +32,12 @@ public class DialectPropertyTests
                 false,
                 false,
                 true,
-                true)
+                false)
         };
 
         yield return new object[]
         {
-            new MySqlDialect(new FakeDbFactory(SupportedDatabase.MySql), logger),
+            new MySqlDialect(new fakeDbFactory(SupportedDatabase.MySql), logger),
             new DialectProps(
                 SupportedDatabase.MySql,
                 "@",
@@ -45,8 +45,8 @@ public class DialectPropertyTests
                 65535,
                 64,
                 ProcWrappingStyle.Call,
-                "`",
-                "`",
+                "\"",
+                "\"",
                 false,
                 true,
                 false,
@@ -59,12 +59,12 @@ public class DialectPropertyTests
 
         yield return new object[]
         {
-            new OracleDialect(new FakeDbFactory(SupportedDatabase.Oracle), logger),
+            new OracleDialect(new fakeDbFactory(SupportedDatabase.Oracle), logger),
             new DialectProps(
                 SupportedDatabase.Oracle,
                 ":",
                 true,
-                1000,
+                64000,
                 30,
                 ProcWrappingStyle.Oracle,
                 "\"",
@@ -81,12 +81,12 @@ public class DialectPropertyTests
 
         yield return new object[]
         {
-            new PostgreSqlDialect(new FakeDbFactory(SupportedDatabase.PostgreSql), logger),
+            new PostgreSqlDialect(new fakeDbFactory(SupportedDatabase.PostgreSql), logger),
             new DialectProps(
                 SupportedDatabase.PostgreSql,
                 ":",
                 true,
-                65535,
+                32767,
                 63,
                 ProcWrappingStyle.PostgreSQL,
                 "\"",
@@ -103,7 +103,7 @@ public class DialectPropertyTests
 
         yield return new object[]
         {
-            new SqlServerDialect(new FakeDbFactory(SupportedDatabase.SqlServer), logger),
+            new SqlServerDialect(new fakeDbFactory(SupportedDatabase.SqlServer), logger),
             new DialectProps(
                 SupportedDatabase.SqlServer,
                 "@",
@@ -115,7 +115,7 @@ public class DialectPropertyTests
                 "\"",
                 false,
                 false,
-                true,
+                false,
                 false,
                 true,
                 true,
@@ -125,7 +125,7 @@ public class DialectPropertyTests
 
         yield return new object[]
         {
-            new SqliteDialect(new FakeDbFactory(SupportedDatabase.Sqlite), logger),
+            new SqliteDialect(new fakeDbFactory(SupportedDatabase.Sqlite), logger),
             new DialectProps(
                 SupportedDatabase.Sqlite,
                 "@",
@@ -147,7 +147,7 @@ public class DialectPropertyTests
 
         yield return new object[]
         {
-            new DuckDbDialect(new FakeDbFactory(SupportedDatabase.DuckDB), logger),
+            new DuckDbDialect(new fakeDbFactory(SupportedDatabase.DuckDB), logger),
             new DialectProps(
                 SupportedDatabase.DuckDB,
                 "$",
@@ -194,10 +194,26 @@ public class DialectPropertyTests
         Assert.NotEqual(unexpectedProcStyle, dialect.ProcWrappingStyle);
 
         Assert.Equal(expected.QuotePrefix, dialect.QuotePrefix);
-        Assert.NotEqual(expected.QuotePrefix == "\"" ? "[" : "\"", dialect.QuotePrefix);
+        switch (expected.QuotePrefix)
+        {
+            case "\"":
+                Assert.NotEqual("`", dialect.QuotePrefix);
+                break;
+            default:
+                Assert.NotEqual("\"", dialect.QuotePrefix);
+                break;
+        }
 
         Assert.Equal(expected.QuoteSuffix, dialect.QuoteSuffix);
-        Assert.NotEqual(expected.QuoteSuffix == "\"" ? "]" : "\"", dialect.QuoteSuffix);
+        switch (expected.QuoteSuffix)
+        {
+            case "\"":
+                Assert.NotEqual("`", dialect.QuoteSuffix);
+                break;
+            default:
+                Assert.NotEqual("\"", dialect.QuoteSuffix);
+                break;
+        }
 
         Assert.Equal(expected.SupportsInsertOnConflict, dialect.SupportsInsertOnConflict);
         Assert.NotEqual(!expected.SupportsInsertOnConflict, dialect.SupportsInsertOnConflict);
@@ -242,4 +258,3 @@ public class DialectPropertyTests
         bool SupportsArrayTypes,
         bool SupportsNamespaces);
 }
-

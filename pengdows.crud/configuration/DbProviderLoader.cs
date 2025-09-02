@@ -33,7 +33,9 @@ public class DbProviderLoader : IDbProviderLoader
             var providerKey = kvp.Key;
 
             if (string.IsNullOrEmpty(kvp.Value.ProviderName))
+            {
                 throw new InvalidOperationException($"ProviderName is missing for provider '{providerKey}'.");
+            }
 
             _logger.LogInformation("Loading DbProviderFactory for provider '{ProviderKey}'", providerKey);
 
@@ -63,7 +65,7 @@ public class DbProviderLoader : IDbProviderLoader
     private DbProviderFactory LoadProviderFactory(string providerKey, DatabaseProviderConfig config)
     {
         // Step 1: Load assembly if specified
-        Assembly providerAssembly = null;
+        Assembly? providerAssembly = null;
         if (!string.IsNullOrEmpty(config.AssemblyPath))
         {
             var fullPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, config.AssemblyPath);
@@ -79,6 +81,7 @@ public class DbProviderLoader : IDbProviderLoader
             lock (_lock)
             {
                 if (!_loadedAssemblies.TryGetValue(fullPath, out providerAssembly))
+                {
                     try
                     {
                         providerAssembly = Assembly.LoadFrom(fullPath);
@@ -95,6 +98,7 @@ public class DbProviderLoader : IDbProviderLoader
                             ex
                         );
                     }
+                }
             }
         }
         else if (!string.IsNullOrEmpty(config.AssemblyName))
@@ -102,6 +106,7 @@ public class DbProviderLoader : IDbProviderLoader
             lock (_lock)
             {
                 if (!_loadedAssemblies.TryGetValue(config.AssemblyName, out providerAssembly))
+                {
                     try
                     {
                         providerAssembly = Assembly.Load(config.AssemblyName);
@@ -118,6 +123,7 @@ public class DbProviderLoader : IDbProviderLoader
                             ex
                         );
                     }
+                }
             }
         }
 

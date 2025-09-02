@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Threading.Tasks;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -21,7 +21,7 @@ public class DataReaderMapperNegativeTests
                 ["IsActive"] = true
             }
         };
-        var reader = new FakeDbDataReader(rows);
+        var reader = new fakeDbDataReader(rows);
 
         var result = await DataReaderMapper.LoadObjectsFromDataReaderAsync<SampleEntity>(reader);
 
@@ -43,7 +43,7 @@ public class DataReaderMapperNegativeTests
             }
         };
 
-        var reader = new FakeDbDataReader(rows);
+        var reader = new fakeDbDataReader(rows);
         var options = new MapperOptions(Strict: true);
         IDataReaderMapper mapper = new DataReaderMapper();
 
@@ -64,7 +64,7 @@ public class DataReaderMapperNegativeTests
             }
         };
 
-        var reader = new FakeDbDataReader(rows);
+        var reader = new fakeDbDataReader(rows);
         var options = new MapperOptions(Strict: true);
         var stream = DataReaderMapper.StreamAsync<SampleEntity>(reader, options);
 

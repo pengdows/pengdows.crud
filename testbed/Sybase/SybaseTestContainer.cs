@@ -3,7 +3,6 @@
 using AdoNetCore.AseClient;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
-using Microsoft.Extensions.DependencyInjection;
 using pengdows.crud;
 
 #endregion
@@ -70,11 +69,11 @@ public class SybaseTestContainer : TestContainer, ITestContainer
             new DatabaseContext(
                 _connectionString,
                 AseClientFactory.Instance,
-                null));
+                null!));
     }
 
-    public async ValueTask DisposeAsync()
+    protected override ValueTask DisposeAsyncCore()
     {
-        await _container.DisposeAsync();
+        return _container.DisposeAsync();
     }
 }

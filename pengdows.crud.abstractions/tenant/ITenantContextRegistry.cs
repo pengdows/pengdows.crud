@@ -1,7 +1,5 @@
 #region
 
-using pengdows.crud;
-
 #endregion
 
 namespace pengdows.crud.tenant;

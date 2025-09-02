@@ -1,17 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Data.Common;
-using System.Reflection;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.attributes;
-using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;
-using pengdows.crud.FakeDb;
-using pengdows.crud.wrappers;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -50,9 +44,10 @@ public class EntityHelperNegativeTests : SqlLiteContextTestBase
         await BuildNoAuditTable();
         var e = new NoAuditEntity { Name = Guid.NewGuid().ToString() };
         await noAuditHelper.CreateAsync(e, Context);
-        var loaded = (await noAuditHelper.LoadListAsync(noAuditHelper.BuildBaseRetrieve("a")))[0];
+        var loaded = await noAuditHelper.RetrieveOneAsync(e);
+        Assert.NotNull(loaded);
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await noAuditHelper.BuildUpdateAsync(loaded, true));
+            await noAuditHelper.BuildUpdateAsync(loaded!, true));
     }
 
     [Fact]
@@ -75,7 +70,7 @@ public class EntityHelperNegativeTests : SqlLiteContextTestBase
         // For this test, we need to test the behavior when a database has low parameter limits
         // Since we can't easily change MaxParameterLimit at runtime, we'll use a different approach:
         // Create a condition where we have more parameters than typical limits would allow
-        
+
         var list = new List<TestEntity>();
         // Create enough entities to exceed typical parameter limits
         for (int i = 1; i <= 1000; i++)
@@ -84,7 +79,7 @@ public class EntityHelperNegativeTests : SqlLiteContextTestBase
         }
 
         var sc = Context.CreateSqlContainer();
-        
+
         // This should throw because we're exceeding reasonable parameter limits
         Assert.Throws<TooManyParametersException>(() => helper.BuildWhereByPrimaryKey(list, sc));
     }
@@ -98,14 +93,39 @@ public class EntityHelperNegativeTests : SqlLiteContextTestBase
     [Fact]
     public void BuildUpsert_UnsupportedDatabase_Throws()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.Unknown);
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         var context = new DatabaseContext("Data Source=:memory:;EmulatedProduct=Unknown", factory);
-        
+
         // BuildUpsert should throw NotSupportedException for unknown database types
         var entityHelper = new EntityHelper<TestEntity, int>(context);
         var testEntity = new TestEntity { Id = 1, Name = "Test" };
-        Assert.Throws<NotSupportedException>(() => 
+        Assert.Throws<NotSupportedException>(() =>
             entityHelper.BuildUpsert(testEntity));
+    }
+
+    [Fact]
+    public void BuildCreate_NullEntity_Throws()
+    {
+        Assert.Throws<ArgumentNullException>(() => helper.BuildCreate(null!));
+    }
+
+    [Fact]
+    public void BuildDelete_NoIdColumn_Throws()
+    {
+        Assert.Throws<InvalidOperationException>(() => TypeMap.Register<EntityWithoutId>());
+    }
+
+    [Fact]
+    public void BuildCreate_NoIdColumn_Throws()
+    {
+        Assert.Throws<InvalidOperationException>(() => TypeMap.Register<EntityWithoutId>());
+    }
+
+    [Table("NoIdTable")]
+    private class EntityWithoutId
+    {
+        [Column("Name", DbType.String)]
+        public string Name { get; set; } = string.Empty;
     }
 
     private async Task BuildTestTable()
@@ -113,7 +133,7 @@ public class EntityHelperNegativeTests : SqlLiteContextTestBase
         var qp = Context.QuotePrefix;
         var qs = Context.QuoteSuffix;
         var sql = string.Format(
-            @"CREATE TABLE IF NOT EXISTS {0}Test{1} ({0}Id{1} INTEGER PRIMARY KEY,
+            @"CREATE TABLE IF NOT EXISTS {0}Test{1} ({0}Id{1} INTEGER PRIMARY KEY AUTOINCREMENT,
 {0}Name{1} TEXT UNIQUE NOT NULL,
     {0}CreatedBy{1} TEXT NOT NULL DEFAULT 'system',
     {0}CreatedOn{1} TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -129,7 +149,7 @@ public class EntityHelperNegativeTests : SqlLiteContextTestBase
         var qp = Context.QuotePrefix;
         var qs = Context.QuoteSuffix;
         var sql = string.Format(
-            @"CREATE TABLE IF NOT EXISTS {0}NoAudit{1} ({0}Id{1} INTEGER PRIMARY KEY,{0}Name{1} TEXT NOT NULL)", qp, qs);
+            @"CREATE TABLE IF NOT EXISTS {0}NoAudit{1} ({0}Id{1} INTEGER PRIMARY KEY AUTOINCREMENT,{0}Name{1} TEXT NOT NULL)", qp, qs);
         var container = Context.CreateSqlContainer(sql);
         await container.ExecuteNonQueryAsync();
     }
@@ -141,6 +161,7 @@ public class EntityHelperNegativeTests : SqlLiteContextTestBase
         [Column("Id", DbType.Int32)]
         public int Id { get; set; }
 
+        [PrimaryKey(1)]
         [Column("Name", DbType.String)]
         public string Name { get; set; } = string.Empty;
     }

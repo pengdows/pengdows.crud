@@ -1,9 +1,9 @@
-#region
+#nullable enable
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using pengdows.crud.infrastructure;
 using Xunit;
-#endregion
 
 namespace pengdows.crud.Tests;
 
@@ -45,31 +45,54 @@ public class SafeAsyncDisposableBaseTests
         }
     }
 
+    // Deterministic async throw; avoids Task.Yield() runner quirks
     private sealed class AsyncThrowsDisposable : SafeAsyncDisposableBase
     {
-        protected override async ValueTask DisposeManagedAsync()
+        protected override ValueTask DisposeManagedAsync()
+            => ValueTask.FromException(new InvalidOperationException("async"));
+        // For older TFMs:
+        // => new ValueTask(Task.FromException(new InvalidOperationException("async")));
+    }
+
+    private sealed class BothAsyncThrowDisposable : SafeAsyncDisposableBase
+    {
+        public List<(Exception ex, string phase)> Logged { get; } = new();
+
+        protected override ValueTask DisposeManagedAsync()
+            => ValueTask.FromException(new InvalidOperationException("managed"));
+
+        protected override ValueTask DisposeUnmanagedAsync()
+            => ValueTask.FromException(new InvalidOperationException("unmanaged"));
+
+        protected override void OnDisposeException(Exception ex, string phase)
+            => Logged.Add((ex, phase));
+    }
+
+    private sealed class ExplicitSwallowDisposable : SafeAsyncDisposableBase
+    {
+        protected override ValueTask DisposeManagedAsync()
         {
-            await Task.Yield();
-            throw new InvalidOperationException("async");
+            try
+            {
+                throw new InvalidOperationException("expected");
+            }
+            catch
+            {
+                // eat error quietly
+            }
+            return ValueTask.CompletedTask;
         }
     }
 
     private sealed class ThrowIfDisposedDisposable : SafeAsyncDisposableBase
     {
-        public void Use()
-        {
-            ThrowIfDisposed();
-        }
+        public void Use() => ThrowIfDisposed();
     }
 
     private sealed class SyncOnlyDisposable : SafeAsyncDisposableBase
     {
         public int ManagedCount { get; private set; }
-
-        protected override void DisposeManaged()
-        {
-            ManagedCount++;
-        }
+        protected override void DisposeManaged() => ManagedCount++;
     }
 
     [Fact]
@@ -143,7 +166,7 @@ public class SafeAsyncDisposableBaseTests
     {
         var d = new AsyncThrowsDisposable();
 
-        await Assert.ThrowsAsync<InvalidOperationException>(async () => await d.DisposeAsync());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => d.DisposeAsync().AsTask());
         Assert.True(d.IsDisposed);
     }
 
@@ -166,6 +189,45 @@ public class SafeAsyncDisposableBaseTests
         await d.DisposeAsync();
 
         Assert.Equal(1, d.ManagedCount);
+        Assert.True(d.IsDisposed);
+    }
+
+    [Fact]
+    public async Task DisposeAsync_FirstFailureWins_SecondIsLogged()
+    {
+        var d = new BothAsyncThrowDisposable();
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => d.DisposeAsync().AsTask());
+        Assert.Equal("managed", ex.Message);                     // first failure wins
+        Assert.Single(d.Logged);                                 // second is logged, not thrown
+        Assert.Equal("DisposeUnmanagedAsync", d.Logged[0].phase);
+        Assert.Equal("unmanaged", d.Logged[0].ex.Message);
+        Assert.True(d.IsDisposed);
+    }
+
+    [Fact]
+    public async Task DisposeAsync_ConcurrentCalls_OnlyRunsOnce()
+    {
+        var d = new TestDisposable();
+
+        await Task.WhenAll(
+            d.DisposeAsync().AsTask(),
+            d.DisposeAsync().AsTask(),
+            d.DisposeAsync().AsTask());
+
+        Assert.True(d.IsDisposed);
+        Assert.Equal(0, d.ManagedCount);
+        Assert.Equal(1, d.ManagedAsyncCount);
+        Assert.Equal(1, d.UnmanagedCount);
+    }
+
+    [Fact]
+    public async Task DisposeAsync_ExplicitSwallow_DoesNotThrow()
+    {
+        var d = new ExplicitSwallowDisposable();
+
+        await d.DisposeAsync(); // intentionally swallowed in override
+
+        Assert.True(d.IsDisposed);
     }
 }
-

@@ -33,23 +33,29 @@ jobs:
         run: dotnet build --no-restore --configuration Release
 
       - name: Install coverage tools
-        run: dotnet tool install --global dotnet-reportgenerator-globaltool
+        run: |
+            dotnet tool install --global dotnet-reportgenerator-globaltool
+            echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
 
-      - name: Run tests and collect coverage
+      - name: Clean previous coverage results
+        run: rm -rf ./TestResults
+
+      - name: Run tests and collect coverage (2m hang watchdog)
         run: |
           dotnet test --no-build --configuration Release \
+            --blame-hang --blame-hang-timeout 120s \
             --collect:"XPlat Code Coverage" \
             --results-directory ./TestResults \
-            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Include="[pengdows.crud]*" \
-            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Exclude="[pengdows.crud.Tests]*;[pengdows.crud.abstractions]*;[pengdows.crud.fakeDb]*;[testbed]*"
+            --settings coverage.runsettings
 
       - name: Generate coverage report
         run: |
-          reportgenerator \
-            -reports:TestResults/**/coverage.cobertura.xml \
-            -targetdir:coverage-report \
-            -reporttypes:HtmlSummary \
-            -assemblyfilters:+pengdows.crud
+            reportgenerator \
+              -reports:"TestResults/**/coverage.cobertura.xml" \
+              -targetdir:"coverage-report" \
+              -reporttypes:"Html;Cobertura" \
+              -assemblyfilters:"+pengdows.crud;-pengdows.crud.Tests;-pengdows.crud.abstractions;-pengdows.crud.fakeDb;-testbed" \
+              -classfilters:"-*Test*;-*Mock*"
 
       - name: Enforce visual coverage from HTML report
         run: |
@@ -98,6 +104,7 @@ jobs:
           files: TestResults/**/coverage.cobertura.xml
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
+          disable_file_fixes: true
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
@@ -192,4 +199,3 @@ jobs:
           body: Automated release for version v${{ steps.version.outputs.version_short }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-

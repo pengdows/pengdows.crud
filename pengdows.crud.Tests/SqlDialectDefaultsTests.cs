@@ -3,7 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -39,15 +39,15 @@ public class SqlDialectDefaultsTests
     [Fact]
     public void Defaults_are_sql92()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var logger = NullLoggerFactory.Instance.CreateLogger<SqlDialect>();
         var dialect = new DefaultDialect(factory, logger);
 
         Assert.Equal("?", dialect.ParameterMarker);
         Assert.NotEqual("@", dialect.ParameterMarker);
 
-        Assert.False(dialect.SupportsNamedParameters);
-        Assert.NotEqual(true, dialect.SupportsNamedParameters);
+        Assert.True(dialect.SupportsNamedParameters);
+        Assert.NotEqual(false, dialect.SupportsNamedParameters);
 
         Assert.Equal(255, dialect.MaxParameterLimit);
         Assert.NotEqual(256, dialect.MaxParameterLimit);
@@ -65,7 +65,7 @@ public class SqlDialectDefaultsTests
     [Fact]
     public void Overrides_replace_sql92_defaults()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var logger = NullLoggerFactory.Instance.CreateLogger<SqlDialect>();
         var dialect = new OverrideDialect(factory, logger);
 

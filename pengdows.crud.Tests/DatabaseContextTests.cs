@@ -7,10 +7,11 @@ using System.Data;
 using System.Data.Common;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Runtime.Serialization;
 using Moq;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using pengdows.crud.Tests.Mocks;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
@@ -33,7 +34,7 @@ public class DatabaseContextTests
     [MemberData(nameof(AllSupportedProviders))]
     public void CanInitializeContext_ForEachSupportedProvider(SupportedDatabase product)
     {
-        var factory = new FakeDbFactory(product);
+        var factory = new fakeDbFactory(product);
         var config = new DatabaseContextConfiguration
         {
             DbMode = DbMode.SingleWriter,
@@ -62,7 +63,7 @@ public class DatabaseContextTests
     [MemberData(nameof(AllSupportedProviders))]
     public void WrapObjectName_SplitsAndWrapsCorrectly(SupportedDatabase product)
     {
-        var factory = new FakeDbFactory(product);
+        var factory = new fakeDbFactory(product);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
         var wrapped = context.WrapObjectName("schema.table");
         Assert.Contains(".", wrapped);
@@ -71,7 +72,7 @@ public class DatabaseContextTests
     [Fact]
     public void WrapObjectName_Null_ReturnsEmpty()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory);
         var result = context.WrapObjectName(null);
         Assert.Equal(string.Empty, result);
@@ -81,7 +82,7 @@ public class DatabaseContextTests
     [MemberData(nameof(AllSupportedProviders))]
     public void QuoteProperties_DelegateToDialect(SupportedDatabase product)
     {
-        var factory = new FakeDbFactory(product);
+        var factory = new fakeDbFactory(product);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
         Assert.Equal(context.DataSourceInfo.QuotePrefix, context.QuotePrefix);
         Assert.Equal(context.DataSourceInfo.QuoteSuffix, context.QuoteSuffix);
@@ -95,7 +96,7 @@ public class DatabaseContextTests
     [MemberData(nameof(AllSupportedProviders))]
     public void GenerateRandomName_ValidatesFirstChar(SupportedDatabase product)
     {
-        var factory = new FakeDbFactory(product);
+        var factory = new fakeDbFactory(product);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
         var name = context.GenerateRandomName(10);
         Assert.True(char.IsLetter(name[0]));
@@ -105,13 +106,39 @@ public class DatabaseContextTests
     [MemberData(nameof(AllSupportedProviders))]
     public void CreateDbParameter_SetsPropertiesCorrectly(SupportedDatabase product)
     {
-        var factory = new FakeDbFactory(product);
+        var factory = new fakeDbFactory(product);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
-        var result = context.CreateDbParameter("p1", DbType.Int32, 123);
+        var result = context.CreateDbParameter("p1", DbType.Int32, 123, ParameterDirection.Output);
 
         Assert.Equal("p1", result.ParameterName);
         Assert.Equal(DbType.Int32, result.DbType);
         Assert.Equal(123, result.Value);
+        Assert.Equal(ParameterDirection.Output, result.Direction);
+    }
+
+    [Theory]
+    [MemberData(nameof(AllSupportedProviders))]
+    public void CreateDbParameter_DefaultsDirectionToInput(SupportedDatabase product)
+    {
+        var factory = new fakeDbFactory(product);
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
+        var result = context.CreateDbParameter("p1", DbType.Int32, 123);
+
+        Assert.Equal(ParameterDirection.Input, result.Direction);
+    }
+
+    [Theory]
+    [InlineData("@foo", "foo")]
+    [InlineData(":bar", "bar")]
+    [InlineData("?baz", "baz")]
+    public void CreateDbParameter_RemovesPrefixesFromName(string input, string expected)
+    {
+        var product = SupportedDatabase.Sqlite;
+        var factory = new fakeDbFactory(product);
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
+        var result = context.CreateDbParameter(input, DbType.String, "v");
+
+        Assert.Equal(expected, result.ParameterName);
     }
 
     [Fact]
@@ -131,7 +158,7 @@ public class DatabaseContextTests
         mockTracked.As<IAsyncDisposable>().Setup(d => d.DisposeAsync())
             .Returns(ValueTask.CompletedTask).Verifiable();
 
-        var factory = new FakeDbFactory(product);
+        var factory = new fakeDbFactory(product);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
         await context.CloseAndDisposeConnectionAsync(mockTracked.Object);
 
@@ -141,7 +168,7 @@ public class DatabaseContextTests
     [Fact]
     public async Task CloseAndDisposeConnectionAsync_Null_DoesNothing()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory);
         await context.CloseAndDisposeConnectionAsync(null);
     }
@@ -149,7 +176,7 @@ public class DatabaseContextTests
     [Fact]
     public void CloseAndDisposeConnection_Null_DoesNothing()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory);
         context.CloseAndDisposeConnection(null);
     }
@@ -158,7 +185,7 @@ public class DatabaseContextTests
     [MemberData(nameof(AllSupportedProviders))]
     public void AssertIsWriteConnection_WhenFalse_Throws(SupportedDatabase product)
     {
-        var factory = new FakeDbFactory(product);
+        var factory = new fakeDbFactory(product);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory,
             readWriteMode: ReadWriteMode.ReadOnly);
         Assert.Throws<InvalidOperationException>(() => context.AssertIsWriteConnection());
@@ -168,7 +195,7 @@ public class DatabaseContextTests
     [MemberData(nameof(AllSupportedProviders))]
     public void AssertIsReadConnection_WhenFalse_Throws(SupportedDatabase product)
     {
-        var factory = new FakeDbFactory(product);
+        var factory = new fakeDbFactory(product);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory,
             readWriteMode: ReadWriteMode.WriteOnly);
         Assert.Throws<InvalidOperationException>(() => context.AssertIsReadConnection());
@@ -194,20 +221,24 @@ public class DatabaseContextTests
     [MemberData(nameof(ProvidersWithSettings))]
     public void SessionSettingsPreamble_CorrectPerProvider(SupportedDatabase product, bool expectSettings)
     {
-        var factory = new FakeDbFactory(product);
+        var factory = new fakeDbFactory(product);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
         var preamble = context.SessionSettingsPreamble;
         if (expectSettings)
+        {
             Assert.False(string.IsNullOrWhiteSpace(preamble));
+        }
         else
+        {
             Assert.True(string.IsNullOrWhiteSpace(preamble));
+        }
     }
 
     [Fact]
     public void CloseAndDisposeConnection_StandardMode_ClosesConnection()
     {
         var product = SupportedDatabase.SqlServer;
-        var factory = new FakeDbFactory(product);
+        var factory = new fakeDbFactory(product);
         var context =
             new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory, mode: DbMode.Standard);
         Assert.Equal(DbMode.Standard, context.ConnectionMode);
@@ -228,7 +259,7 @@ public class DatabaseContextTests
             ProviderName = product.ToString(),
             DbMode = DbMode.SingleConnection
         };
-        var factory = new FakeDbFactory(product);
+        var factory = new fakeDbFactory(product);
         var context = new DatabaseContext(config, factory);
         Assert.Equal(DbMode.SingleConnection, context.ConnectionMode);
         var conn = context.GetConnection(ExecutionType.Read);
@@ -244,7 +275,7 @@ public class DatabaseContextTests
     [Fact]
     public void DuckDBInMemory_SetsSingleConnectionMode()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.DuckDB);
+        var factory = new fakeDbFactory(SupportedDatabase.DuckDB);
         using var context = new DatabaseContext("Data Source=:memory:;EmulatedProduct=DuckDB", factory);
         Assert.Equal(DbMode.SingleConnection, context.ConnectionMode);
     }
@@ -252,7 +283,7 @@ public class DatabaseContextTests
     [Fact]
     public void DuckDBFile_SetsSingleWriterMode()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.DuckDB);
+        var factory = new fakeDbFactory(SupportedDatabase.DuckDB);
         using var context = new DatabaseContext("Data Source=test;EmulatedProduct=DuckDB", factory);
         Assert.Equal(DbMode.SingleWriter, context.ConnectionMode);
     }
@@ -261,7 +292,7 @@ public class DatabaseContextTests
     public void BeginTransaction_ReadOnly_InvalidIsolation_Throws()
     {
         var product = SupportedDatabase.Sqlite;
-        var factory = new FakeDbFactory(product);
+        var factory = new fakeDbFactory(product);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
         Assert.Throws<InvalidOperationException>(
             () => context.BeginTransaction(IsolationLevel.ReadCommitted, ExecutionType.Read));
@@ -271,7 +302,7 @@ public class DatabaseContextTests
     public void BeginTransaction_WriteOnReadOnlyContext_Throws()
     {
         var product = SupportedDatabase.Sqlite;
-        var factory = new FakeDbFactory(product);
+        var factory = new fakeDbFactory(product);
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = $"Data Source=test;EmulatedProduct={product}",
@@ -292,7 +323,7 @@ public class DatabaseContextTests
             ProviderName = product.ToString(),
             DbMode = DbMode.SingleWriter
         };
-        var factory = new FakeDbFactory(product);
+        var factory = new fakeDbFactory(product);
         var context = new DatabaseContext(config, factory);
         Assert.Equal(1, context.NumberOfOpenConnections);
 
@@ -308,7 +339,7 @@ public class DatabaseContextTests
     public void MaxNumberOfConnections_TracksPeakUsage()
     {
         var product = SupportedDatabase.SqlServer;
-        var factory = new FakeDbFactory(product);
+        var factory = new fakeDbFactory(product);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
         var c1 = context.GetConnection(ExecutionType.Read);
         var c2 = context.GetConnection(ExecutionType.Read);
@@ -323,7 +354,7 @@ public class DatabaseContextTests
     [Fact]
     public void RCSIEnabled_DefaultIsFalse()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}", factory);
         Assert.False(context.RCSIEnabled);
     }
@@ -332,17 +363,77 @@ public class DatabaseContextTests
     public void MakeParameterName_UsesDatabaseMarker()
     {
         var product = SupportedDatabase.PostgreSql;
-        var factory = new FakeDbFactory(product);
+        var factory = new fakeDbFactory(product);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
         var name = context.MakeParameterName("foo");
-        Assert.StartsWith(context.DataSourceInfo.ParameterMarker, name);
+        var expected = context.DataSourceInfo.ParameterMarker + "foo";
+        Assert.Equal(expected, name);
+    }
+
+    [Theory]
+    [InlineData("@foo")]
+    [InlineData(":foo")]
+    [InlineData("?foo")]
+    [InlineData("@:foo?")]
+    public void MakeParameterName_StripsExistingPrefixes(string input)
+    {
+        var product = SupportedDatabase.Sqlite;
+        var factory = new fakeDbFactory(product);
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
+        var name = context.MakeParameterName(input);
+        var expected = context.DataSourceInfo.ParameterMarker + "foo";
+        Assert.Equal(expected, name);
+    }
+
+    [Fact]
+    public void MakeParameterName_DbParameter_StripsPrefixes()
+    {
+        var product = SupportedDatabase.Sqlite;
+        var factory = new fakeDbFactory(product);
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
+        var param = new fakeDbParameter { ParameterName = ":foo", DbType = DbType.String, Value = "x" };
+
+        var name = context.MakeParameterName(param);
+
+        Assert.Equal(context.DataSourceInfo.ParameterMarker + "foo", name);
+    }
+
+
+    [Fact]
+    public void MaxOutputParameters_ExposedViaContext()
+    {
+        var product = SupportedDatabase.SqlServer;
+        var factory = new fakeDbFactory(product);
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
+
+        Assert.Equal(context.DataSourceInfo.MaxOutputParameters, context.MaxOutputParameters);
+
+    }
+
+    [Fact]
+    public void Product_WhenInitialized_ReturnsProvidedProduct()
+    {
+        var product = SupportedDatabase.SqlServer;
+        var factory = new fakeDbFactory(product);
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
+
+        Assert.Equal(product, context.Product);
+    }
+
+    [Fact]
+    public void Product_WithoutDataSourceInfo_ReturnsUnknown()
+    {
+        var context = (DatabaseContext)FormatterServices.GetUninitializedObject(typeof(DatabaseContext));
+
+        Assert.Equal(SupportedDatabase.Unknown, context.Product);
+
     }
 
     [Fact]
     public void MakeParameterName_DbParameter_UsesMarker()
     {
         var product = SupportedDatabase.PostgreSql;
-        var factory = new FakeDbFactory(product);
+        var factory = new fakeDbFactory(product);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
         var p = context.CreateDbParameter("p", DbType.Int32, 1);
         var name = context.MakeParameterName(p);
@@ -352,7 +443,7 @@ public class DatabaseContextTests
     [Fact]
     public void MakeParameterName_NullString_ReturnsMarker()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.PostgreSql);
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=PostgreSql", factory);
         Assert.Equal(context.DataSourceInfo.ParameterMarker, context.MakeParameterName((string)null));
     }
@@ -360,7 +451,7 @@ public class DatabaseContextTests
     [Fact]
     public void MakeParameterName_NullParameter_Throws()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory);
         Assert.Throws<NullReferenceException>(() => context.MakeParameterName((DbParameter)null!));
     }
@@ -379,7 +470,7 @@ public class DatabaseContextTests
             ProviderName = product.ToString(),
             DbMode = mode
         };
-        var factory = new FakeDbFactory(product);
+        var factory = new fakeDbFactory(product);
         using var context = new DatabaseContext(config, factory);
 
         var first = context.GetLock();
@@ -399,7 +490,7 @@ public class DatabaseContextTests
             ProviderName = product.ToString(),
             DbMode = DbMode.Standard
         };
-        var factory = new FakeDbFactory(product);
+        var factory = new fakeDbFactory(product);
         var context = new DatabaseContext(config, factory);
         context.Dispose();
 
@@ -409,11 +500,11 @@ public class DatabaseContextTests
     [Fact]
     public void StandardConnection_DoesNotApplySessionSettings()
     {
-        var factory = new RecordingFactory(SupportedDatabase.Sqlite);
+        var factory = new RecordingFactory(SupportedDatabase.SqlServer);
         var config = new DatabaseContextConfiguration
         {
-            ConnectionString = "Data Source=test;EmulatedProduct=Sqlite",
-            ProviderName = SupportedDatabase.Sqlite.ToString(),
+            ConnectionString = "Data Source=test;EmulatedProduct=SqlServer",
+            ProviderName = SupportedDatabase.SqlServer.ToString(),
             DbMode = DbMode.Standard
         };
 
@@ -470,16 +561,16 @@ public class DatabaseContextTests
 
         public override DbCommand CreateCommand()
         {
-            return new FakeDbCommand();
+            return new fakeDbCommand();
         }
 
         public override DbParameter CreateParameter()
         {
-            return new FakeDbParameter();
+            return new fakeDbParameter();
         }
     }
 
-    private sealed class RecordingConnection : FakeDbConnection
+    private sealed class RecordingConnection : fakeDbConnection
     {
         public List<string> ExecutedCommands { get; } = new();
 
@@ -489,11 +580,11 @@ public class DatabaseContextTests
         }
     }
 
-    private sealed class RecordingCommand : FakeDbCommand
+    private sealed class RecordingCommand : fakeDbCommand
     {
         private readonly List<string> _record;
 
-        public RecordingCommand(FakeDbConnection connection, List<string> record) : base(connection)
+        public RecordingCommand(fakeDbConnection connection, List<string> record) : base(connection)
         {
             _record = record;
         }
@@ -502,6 +593,94 @@ public class DatabaseContextTests
         {
             _record.Add(CommandText);
             return base.ExecuteNonQuery();
+        }
+    }
+
+    [Fact]
+    public void Constructor_StandardMode_DisposesInitializationConnection()
+    {
+        var factory = new DisposalTrackingFactory(SupportedDatabase.SqlServer);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test;EmulatedProduct=SqlServer",
+            ProviderName = SupportedDatabase.SqlServer.ToString(),
+            DbMode = DbMode.Standard
+        };
+
+        // Create DatabaseContext which should dispose the initialization connection
+        using var context = new DatabaseContext(config, factory);
+
+        // Verify that the initialization connection was disposed
+        Assert.True(factory.InitializationConnection.WasDisposed, 
+            "Initialization connection should be disposed after DatabaseContext construction in Standard mode");
+        
+        // Verify context was created successfully despite connection disposal
+        Assert.Equal(DbMode.Standard, context.ConnectionMode);
+        Assert.Equal(SupportedDatabase.SqlServer, context.Product);
+    }
+
+    [Fact]
+    public void Constructor_NonStandardMode_DoesNotDisposeInitializationConnection()
+    {
+        var factory = new DisposalTrackingFactory(SupportedDatabase.Sqlite);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:;EmulatedProduct=Sqlite",
+            ProviderName = SupportedDatabase.Sqlite.ToString(),
+            DbMode = DbMode.SingleConnection
+        };
+
+        // Create DatabaseContext which should NOT dispose the initialization connection in non-Standard modes
+        using var context = new DatabaseContext(config, factory);
+
+        // Verify that the initialization connection was NOT disposed (it becomes the persistent connection)
+        Assert.False(factory.InitializationConnection.WasDisposed, 
+            "Initialization connection should not be disposed in non-Standard modes as it becomes the persistent connection");
+        
+        // Verify context was created successfully
+        Assert.Equal(DbMode.SingleConnection, context.ConnectionMode);
+        Assert.Equal(SupportedDatabase.Sqlite, context.Product);
+    }
+
+    private sealed class DisposalTrackingFactory : DbProviderFactory
+    {
+        public DisposalTrackingConnection InitializationConnection { get; }
+
+        public DisposalTrackingFactory(SupportedDatabase product)
+        {
+            InitializationConnection = new DisposalTrackingConnection { EmulatedProduct = product };
+        }
+
+        public override DbConnection CreateConnection()
+        {
+            return InitializationConnection;
+        }
+
+        public override DbCommand CreateCommand()
+        {
+            return new fakeDbCommand();
+        }
+
+        public override DbParameter CreateParameter()
+        {
+            return new fakeDbParameter();
+        }
+    }
+
+    private sealed class DisposalTrackingConnection : fakeDbConnection
+    {
+        public bool WasDisposed { get; private set; }
+
+        protected override void Dispose(bool disposing)
+        {
+            WasDisposed = true;
+            base.Dispose(disposing);
+        }
+
+        public override async ValueTask DisposeAsync()
+        {
+            WasDisposed = true;
+            await base.DisposeAsync();
         }
     }
 }

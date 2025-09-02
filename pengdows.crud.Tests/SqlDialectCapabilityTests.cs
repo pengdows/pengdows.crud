@@ -5,9 +5,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using pengdows.crud.Tests.Mocks;
-using pengdows.crud.wrappers;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -53,7 +52,7 @@ public class SqlDialectCapabilityTests
             "@\\w+",
             true);
         var scalars = new Dictionary<string, object> { ["SELECT @@VERSION"] = "Microsoft SQL Server 15.0" };
-        var factory = new FakeDbFactory(SupportedDatabase.SqlServer);
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var conn = factory.CreateConnection();
         conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}";
         var tracked = new FakeTrackedConnection(conn, schema, scalars);
@@ -79,7 +78,7 @@ public class SqlDialectCapabilityTests
             "@\\w+",
             true);
         var modernScalars = new Dictionary<string, object> { ["SELECT @@VERSION"] = "Microsoft SQL Server 15.0" };
-        var modernFactory = new FakeDbFactory(SupportedDatabase.SqlServer);
+        var modernFactory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var modernConn = modernFactory.CreateConnection();
         modernConn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}";
         var modernTracked = new FakeTrackedConnection(modernConn, modernSchema, modernScalars);
@@ -99,7 +98,7 @@ public class SqlDialectCapabilityTests
             "@\\w+",
             true);
         var legacyScalars = new Dictionary<string, object> { ["SELECT VERSION()"] = "5.0" };
-        var legacyFactory = new FakeDbFactory(SupportedDatabase.MySql);
+        var legacyFactory = new fakeDbFactory(SupportedDatabase.MySql);
         var legacyConn = legacyFactory.CreateConnection();
         legacyConn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.MySql}";
         var legacyTracked = new FakeTrackedConnection(legacyConn, legacySchema, legacyScalars);
@@ -132,7 +131,7 @@ public class SqlDialectCapabilityTests
             "@\\w+",
             true);
         var compliantScalars = new Dictionary<string, object> { ["SELECT VERSION()"] = "5.0" };
-        var compliantFactory = new FakeDbFactory(SupportedDatabase.MySql);
+        var compliantFactory = new fakeDbFactory(SupportedDatabase.MySql);
         var compliantConn = compliantFactory.CreateConnection();
         compliantConn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.MySql}";
         var compliantTracked = new FakeTrackedConnection(compliantConn, compliantSchema, compliantScalars);
@@ -146,7 +145,7 @@ public class SqlDialectCapabilityTests
         {
             ["SELECT 'SQL-92 Compatible Database' AS version"] = "SQL-92 Compatible Database"
         };
-        var factory = new FakeDbFactory(SupportedDatabase.Unknown);
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         var conn = factory.CreateConnection();
         conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Unknown}";
         var tracked = new FakeTrackedConnection(

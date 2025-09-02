@@ -16,6 +16,17 @@ public sealed class TypeMapRegistry : ITypeMapRegistry
 {
     private readonly ConcurrentDictionary<Type, TableInfo> _typeMap = new();
 
+    public static TypeMapRegistry Instance { get; } = new();
+
+    public TypeMapRegistry()
+    {
+    }
+
+    public void Clear()
+    {
+        _typeMap.Clear();
+    }
+
     public ITableInfo GetTableInfo<T>()
     {
         var type = typeof(T);
@@ -90,8 +101,8 @@ public sealed class TypeMapRegistry : ITypeMapRegistry
 
         var isId = idAttr != null;
         var isIdWritable = idAttr?.Writable ?? true;
-        
-        
+
+
         var ci = new ColumnInfo
         {
             Name               = colAttr.Name,
@@ -111,7 +122,7 @@ public sealed class TypeMapRegistry : ITypeMapRegistry
             IsLastUpdatedOn    = lon != null,
             // Only treat as enum when [EnumColumn] is present; plain enum properties are allowed but not special-cased.
             IsEnum             = enumAttr != null,
-            EnumType           = enumAttr?.EnumType,     
+            EnumType           = enumAttr?.EnumType,
             IsJsonType         = jsonAttr != null,
             JsonSerializerOptions = jsonAttr?.SerializerOptions != null
                 ? new JsonSerializerOptions(jsonAttr.SerializerOptions)
@@ -220,14 +231,25 @@ public sealed class TypeMapRegistry : ITypeMapRegistry
             return;
         }
 
-        var seen = new HashSet<int>();
-        foreach (var pk in pks)
+        // Reject duplicate explicitly assigned orders (> 0)
+        var dupSpecified = pks.Where(k => k.PkOrder > 0)
+            .GroupBy(k => k.PkOrder)
+            .Any(g => g.Count() > 1);
+        if (dupSpecified)
         {
-            if (pk.PkOrder <= 0 || !seen.Add(pk.PkOrder))
-            {
-                throw new InvalidOperationException(
-                    $"Type {entityType.FullName} has invalid PrimaryKey order values (must be unique and > 0).");
-            }
+            throw new InvalidOperationException(
+                $"Type {entityType.FullName} has invalid PrimaryKey order values (must be unique and > 0).");
+        }
+
+        // Sort by explicit order first; unspecified (0) retain their discovery order via stable sort
+        var sorted = pks
+            .OrderBy(k => k.PkOrder == 0 ? int.MaxValue : k.PkOrder)
+            .ToList();
+
+        // Renumber sequentially from 1 to N to normalize ordering
+        for (var i = 0; i < sorted.Count; i++)
+        {
+            sorted[i].PkOrder = i + 1;
         }
     }
 

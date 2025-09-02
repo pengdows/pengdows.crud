@@ -2,18 +2,18 @@ using System;
 using System.Data;
 using System.Threading;
 using System.Threading.Tasks;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using pengdows.crud.enums;
 using Xunit;
 
 namespace pengdows.crud.Tests.fakeDb;
 
-public class FakeDbTests
+public class fakeDbTests
 {
     [Fact]
-    public void FakeDbParameter_AllowsNullValues()
+    public void fakeDbParameter_AllowsNullValues()
     {
-        var param = new FakeDbParameter
+        var param = new fakeDbParameter
         {
             ParameterName = null,
             SourceColumn = null,
@@ -30,18 +30,18 @@ public class FakeDbTests
     }
 
     [Fact]
-    public void FakeDbParameter_DefaultPrecisionAndScale_AreZero()
+    public void fakeDbParameter_DefaultPrecisionAndScale_AreZero()
     {
-        var param = new FakeDbParameter();
+        var param = new fakeDbParameter();
 
         Assert.Equal((byte)0, param.Precision);
         Assert.Equal((byte)0, param.Scale);
     }
 
     [Fact]
-    public void FakeDbParameter_PrecisionAndScale_CanBeSet()
+    public void fakeDbParameter_PrecisionAndScale_CanBeSet()
     {
-        var param = new FakeDbParameter
+        var param = new fakeDbParameter
         {
             Precision = 5,
             Scale = 2
@@ -52,19 +52,19 @@ public class FakeDbTests
     }
 
     [Fact]
-    public void FakeDbFactory_CreateParameter_ReturnsFakeDbParameter()
+    public void fakeDbFactory_CreateParameter_ReturnsfakeDbParameter()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.SqlServer);
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var param = factory.CreateParameter();
 
-        Assert.IsType<FakeDbParameter>(param);
+        Assert.IsType<fakeDbParameter>(param);
     }
 
     [Fact]
-    public void FakeDbFactory_CreateParameter_PrecisionAndScale_CanBeSet()
+    public void fakeDbFactory_CreateParameter_PrecisionAndScale_CanBeSet()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.SqlServer);
-        var param = (FakeDbParameter)factory.CreateParameter();
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var param = (fakeDbParameter)factory.CreateParameter();
 
         Assert.Equal((byte)0, param.Precision);
         Assert.Equal((byte)0, param.Scale);
@@ -77,25 +77,25 @@ public class FakeDbTests
     }
 
     [Fact]
-    public void FakeDbDataReader_NullRows_InitializesEmpty()
+    public void fakeDbDataReader_NullRows_InitializesEmpty()
     {
-        var reader = new FakeDbDataReader(null);
+        var reader = new fakeDbDataReader(null);
 
         Assert.False(reader.HasRows);
         Assert.Equal(0, reader.FieldCount);
     }
 
     [Fact]
-    public void FakeDbDataReader_GetBytes_Throws()
+    public void fakeDbDataReader_GetBytes_Throws()
     {
-        var reader = new FakeDbDataReader();
+        var reader = new fakeDbDataReader();
         Assert.Throws<NotSupportedException>(() => reader.GetBytes(0, 0, null, 0, 0));
     }
 
     [Fact]
-    public async Task FakeDbCommand_CommandText_AllowsNullAsync()
+    public async Task fakeDbCommand_CommandText_AllowsNullAsync()
     {
-        var command = new FakeDbCommand();
+        var command = new fakeDbCommand();
         command.CommandText = null;
 
         var result = await command.ExecuteScalarAsync(CancellationToken.None);

@@ -34,17 +34,16 @@ public class SqlServerDialect : SqlDialect
     public override string ParameterMarker => "@";
     public override bool SupportsNamedParameters => true;
     public override int MaxParameterLimit => 2100;
+    public override int MaxOutputParameters => 1024;
     public override int ParameterNameMaxLength => 128;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.Exec;
     public override SqlStandardLevel MaxSupportedStandard =>
         IsInitialized ? base.MaxSupportedStandard : DetermineStandardCompliance(null);
 
-    public override string QuotePrefix => "\"";
-    public override string QuoteSuffix => "\"";
     public override bool SupportsNamespaces => true;
 
     // Version-specific overrides
-    public override bool SupportsMerge => true;
+    public override bool SupportsMerge => IsInitialized && ProductInfo.ParsedVersion?.Major >= 10;
     public override bool SupportsJsonTypes => IsInitialized && ProductInfo.ParsedVersion?.Major >= 13;
 
     public override string GetVersionQuery() => "SELECT @@VERSION";

@@ -1,7 +1,6 @@
-using System;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.enums;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using pengdows.crud.dialects;
 using Xunit;
 
@@ -12,7 +11,7 @@ public class SqlDialectFactoryTests
     [Fact]
     public void CreateDialectForType_SqlServer_ReturnsSqlServerDialect()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.SqlServer);
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var dialect = SqlDialectFactory.CreateDialectForType(
             SupportedDatabase.SqlServer,
             factory,
@@ -23,7 +22,7 @@ public class SqlDialectFactoryTests
     [Fact]
     public void CreateDialectForType_MySql_ReturnsMySqlDialect()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.MySql);
+        var factory = new fakeDbFactory(SupportedDatabase.MySql);
         var dialect = SqlDialectFactory.CreateDialectForType(
             SupportedDatabase.MySql,
             factory,
@@ -32,9 +31,20 @@ public class SqlDialectFactoryTests
     }
 
     [Fact]
+    public void CreateDialectForType_MariaDb_ReturnsMariaDbDialect()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.MariaDb);
+        var dialect = SqlDialectFactory.CreateDialectForType(
+            SupportedDatabase.MariaDb,
+            factory,
+            NullLogger<SqlDialect>.Instance);
+        Assert.IsType<MariaDbDialect>(dialect);
+    }
+
+    [Fact]
     public void CreateDialectForType_PostgreSql_ReturnsPostgreSqlDialect()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.PostgreSql);
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         var dialect = SqlDialectFactory.CreateDialectForType(
             SupportedDatabase.PostgreSql,
             factory,
@@ -45,7 +55,7 @@ public class SqlDialectFactoryTests
     [Fact]
     public void CreateDialectForType_Oracle_ReturnsOracleDialect()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.Oracle);
+        var factory = new fakeDbFactory(SupportedDatabase.Oracle);
         var dialect = SqlDialectFactory.CreateDialectForType(
             SupportedDatabase.Oracle,
             factory,
@@ -56,7 +66,7 @@ public class SqlDialectFactoryTests
     [Fact]
     public void CreateDialectForType_Sqlite_ReturnsSqliteDialect()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var dialect = SqlDialectFactory.CreateDialectForType(
             SupportedDatabase.Sqlite,
             factory,
@@ -67,7 +77,7 @@ public class SqlDialectFactoryTests
     [Fact]
     public void CreateDialectForType_Firebird_ReturnsFirebirdDialect()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.Firebird);
+        var factory = new fakeDbFactory(SupportedDatabase.Firebird);
         var dialect = SqlDialectFactory.CreateDialectForType(
             SupportedDatabase.Firebird,
             factory,
@@ -78,7 +88,7 @@ public class SqlDialectFactoryTests
     [Fact]
     public void CreateDialectForType_DuckDB_ReturnsDuckDbDialect()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.DuckDB);
+        var factory = new fakeDbFactory(SupportedDatabase.DuckDB);
         var dialect = SqlDialectFactory.CreateDialectForType(
             SupportedDatabase.DuckDB,
             factory,
@@ -89,7 +99,7 @@ public class SqlDialectFactoryTests
     [Fact]
     public void CreateDialectForType_Unknown_ReturnsSql92Dialect()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.Unknown);
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         var dialect = SqlDialectFactory.CreateDialectForType(
             SupportedDatabase.Unknown,
             factory,

@@ -1,13 +1,16 @@
 #nullable enable
+using System;
 using System.Runtime.CompilerServices;
+using System.Runtime.ExceptionServices;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace pengdows.crud.infrastructure;
 
 public abstract class SafeAsyncDisposableBase : ISafeAsyncDisposableBase, IDisposable, IAsyncDisposable
 {
-    // 0 = active, 1 = disposed
+    // 0 = active, 1 = disposed (or disposing)
     private int _disposed;
-
     public bool IsDisposed => Volatile.Read(ref _disposed) != 0;
 
     public void Dispose()
@@ -20,11 +23,19 @@ public abstract class SafeAsyncDisposableBase : ISafeAsyncDisposableBase, IDispo
         try
         {
             DisposeManaged();
+        }
+        catch (Exception ex)
+        {
+            OnDisposeException(ex, nameof(DisposeManaged));
+        }
+
+        try
+        {
             DisposeUnmanaged();
         }
-        catch
+        catch (Exception ex)
         {
-            // Non-throwing by policy; derived classes should log if needed.
+            OnDisposeException(ex, nameof(DisposeUnmanaged));
         }
         finally
         {
@@ -39,35 +50,66 @@ public abstract class SafeAsyncDisposableBase : ISafeAsyncDisposableBase, IDispo
             return;
         }
 
+        Exception? first = null;
+
         try
         {
             await DisposeManagedAsync().ConfigureAwait(false);
-            DisposeUnmanaged();
+        }
+        catch (Exception ex)
+        {
+            first = ex; // capture but continue to unmanaged cleanup
+        }
+
+        try
+        {
+            await DisposeUnmanagedAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            if (first is null)
+            {
+                first = ex; // propagate unmanaged failure if managed succeeded
+            }
+            else
+            {
+                OnDisposeException(ex, nameof(DisposeUnmanagedAsync)); // don't mask the first
+            }
         }
         finally
         {
-            // Even if async cleanup throws, object is considered disposed.
             GC.SuppressFinalize(this);
+        }
+
+        if (first is not null)
+        {
+            ExceptionDispatchInfo.Capture(first).Throw();
         }
     }
 
+    // ---- Overridables (minimal surface area) ----
     /// <summary>Override for synchronous managed cleanup. Default no-op.</summary>
     protected virtual void DisposeManaged() { }
 
-    /// <summary>
-    /// Override for asynchronous managed cleanup. Default bridges to DisposeManaged().
-    /// Prefer overriding this when you hold IAsyncDisposable resources.
-    /// </summary>
+    /// <summary>Override for asynchronous managed cleanup. Defaults to sync bridge.</summary>
     protected virtual ValueTask DisposeManagedAsync()
     {
         DisposeManaged();
         return ValueTask.CompletedTask;
     }
 
-    /// <summary>
-    /// Override for unmanaged cleanup. Prefer SafeHandle; no finalizer provided.
-    /// </summary>
+    /// <summary>Override for synchronous unmanaged cleanup. Prefer SafeHandle.</summary>
     protected virtual void DisposeUnmanaged() { }
+
+    /// <summary>Override for asynchronous unmanaged cleanup. Defaults to sync bridge.</summary>
+    protected virtual ValueTask DisposeUnmanagedAsync()
+    {
+        DisposeUnmanaged();
+        return ValueTask.CompletedTask;
+    }
+
+    /// <summary>Optional visibility hook for swallowed exceptions. Default no-op.</summary>
+    protected virtual void OnDisposeException(Exception ex, string phase) { }
 
     /// <summary>Throw ObjectDisposedException if already disposed.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -86,4 +128,3 @@ public abstract class SafeAsyncDisposableBase : ISafeAsyncDisposableBase, IDispo
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private bool TryBeginDispose() => Interlocked.Exchange(ref _disposed, 1) == 0;
 }
-

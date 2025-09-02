@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using pengdows.crud.enums;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.wrappers;
 using pengdows.crud.dialects;
@@ -57,13 +57,13 @@ public static class DataSourceTestData
                 db != SupportedDatabase.Sqlite
             );
 
-            var factory = new FakeDbFactory(db.ToString());
+            var factory = new fakeDbFactory(db.ToString());
 
             SqlDialect dialect = db switch
             {
                 SupportedDatabase.SqlServer => new SqlServerDialect(factory, NullLogger.Instance),
                 SupportedDatabase.MySql => new MySqlDialect(factory, NullLogger.Instance),
-                SupportedDatabase.MariaDb => new MySqlDialect(factory, NullLogger.Instance),
+                SupportedDatabase.MariaDb => new MariaDbDialect(factory, NullLogger.Instance),
                 SupportedDatabase.PostgreSql => new PostgreSqlDialect(factory, NullLogger.Instance),
                 SupportedDatabase.CockroachDb => new PostgreSqlDialect(factory, NullLogger.Instance),
                 SupportedDatabase.Sqlite => new SqliteDialect(factory, NullLogger.Instance),
@@ -100,7 +100,7 @@ public class DataSourceInformationTests
         DataTable schema,
         Dictionary<string, object> scalars)
     {
-        var factory = new FakeDbFactory(db.ToString());
+        var factory = new fakeDbFactory(db.ToString());
         // Arrange
         var x = factory.CreateConnection();
         x.ConnectionString = $"Data Source=test;Data Source=test;EmulatedProduct={db}";
@@ -129,11 +129,12 @@ public class DataSourceInformationTests
         Assert.Equal(expectedMajor, info.ParsedVersion?.Major);
 
         // Assert: merge support
-        var canMerge = db == SupportedDatabase.SqlServer
+        var canMerge = (db == SupportedDatabase.SqlServer && info.ParsedVersion?.Major >= 10)
                        || db == SupportedDatabase.Oracle
                        || (db == SupportedDatabase.Firebird && info.ParsedVersion?.Major >= 2)
                        || (db == SupportedDatabase.PostgreSql && info.ParsedVersion?.Major > 14);
         Assert.Equal(canMerge, info.SupportsMerge);
+        Assert.NotEqual(!canMerge, info.SupportsMerge);
 
         // Assert: insert-on-conflict support
         var canConflict = (new[]
@@ -159,7 +160,7 @@ public class DataSourceInformationTests
             SupportedDatabase.Oracle => ProcWrappingStyle.Oracle,
             SupportedDatabase.MySql or SupportedDatabase.MariaDb => ProcWrappingStyle.Call,
             SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb => ProcWrappingStyle.PostgreSQL,
-            SupportedDatabase.Firebird => ProcWrappingStyle.Call,
+            SupportedDatabase.Firebird => ProcWrappingStyle.ExecuteProcedure,
             _ => ProcWrappingStyle.None
         };
         var expectedRequiresStoredProcParameterNameMatch = db switch
@@ -173,15 +174,31 @@ public class DataSourceInformationTests
         Assert.Equal(expectedWrap, info.ProcWrappingStyle);
 
         // Assert: named parameters flags
-        Assert.Equal(db != SupportedDatabase.Unknown, info.SupportsNamedParameters);
+        Assert.True(info.SupportsNamedParameters);
+        Assert.NotEqual(false, info.SupportsNamedParameters);
         Assert.Equal(expectedRequiresStoredProcParameterNameMatch, info.RequiresStoredProcParameterNameMatch);
+
+        // Assert: output parameter limits
+        var expectedOutputParams = db switch
+        {
+            SupportedDatabase.SqlServer => 1024,
+            SupportedDatabase.MySql => 65535,
+            SupportedDatabase.MariaDb => 65535,
+            SupportedDatabase.PostgreSql => 100,
+            SupportedDatabase.CockroachDb => 100,
+            SupportedDatabase.Oracle => 1024,
+            SupportedDatabase.Sqlite => 0,
+            SupportedDatabase.Firebird => 1499,
+            _ => 0
+        };
+        Assert.Equal(expectedOutputParams, info.MaxOutputParameters);
     }
 
     [Theory]
     [MemberData(nameof(DataSourceTestData.AllDatabases), MemberType = typeof(DataSourceTestData))]
     public void GetDatabaseVersion_Returns_Version(SupportedDatabase db, DataTable schema, Dictionary<string, object> scalars)
     {
-        var factory = new FakeDbFactory(db.ToString());
+        var factory = new fakeDbFactory(db.ToString());
         var connection = factory.CreateConnection();
         connection.ConnectionString = $"Data Source=test;EmulatedProduct={db}";
         var tracked = new FakeTrackedConnection(connection, schema, scalars);
@@ -196,8 +213,8 @@ public class DataSourceInformationTests
 
     private static ITrackedConnection BuildSqliteConnectionMock()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
-        var conn = (FakeDbConnection)factory.CreateConnection();
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var conn = (fakeDbConnection)factory.CreateConnection();
         conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}";
 
         var row = new Dictionary<string, object> { { "version", "3.0" } };
@@ -214,7 +231,7 @@ public class DataSourceInformationTests
     public void GetSchema_UsesEmbeddedForSqlite()
     {
         var tracked = BuildSqliteConnectionMock();
-        var info = DataSourceInformation.Create(tracked, new FakeDbFactory(SupportedDatabase.Sqlite), NullLoggerFactory.Instance);
+        var info = DataSourceInformation.Create(tracked, new fakeDbFactory(SupportedDatabase.Sqlite), NullLoggerFactory.Instance);
 
         var schema = info.GetSchema(tracked);
         Assert.Equal("SQLite", schema.Rows[0].Field<string>("DataSourceProductName"));
@@ -224,7 +241,7 @@ public class DataSourceInformationTests
     [Fact]
     public void GetSchema_NonSqlite_UsesConnectionSchema()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.SqlServer);
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var conn = factory.CreateConnection();
         conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}";
         using var tracked = new TrackedConnection(conn);

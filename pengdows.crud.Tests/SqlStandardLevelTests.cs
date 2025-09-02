@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using pengdows.crud.enums;
-using pengdows.crud.FakeDb;
-using pengdows.crud.wrappers;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -24,8 +23,8 @@ public class SqlStandardLevelTests
         {
             ["SELECT @@VERSION"] = "Microsoft SQL Server 15.0"
         };
-        var factory = new FakeDbFactory(SupportedDatabase.SqlServer);
-        var conn = (FakeDbConnection)factory.CreateConnection();
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var conn = (fakeDbConnection)factory.CreateConnection();
         conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}";
         var tracked = new FakeTrackedConnection(conn, schema, scalars);
         var info = DataSourceInformation.Create(tracked, factory);
@@ -48,8 +47,8 @@ public class SqlStandardLevelTests
         {
             ["SELECT @@VERSION"] = "Microsoft SQL Server 8.0"
         };
-        var factory = new FakeDbFactory(SupportedDatabase.SqlServer);
-        var conn = (FakeDbConnection)factory.CreateConnection();
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var conn = (fakeDbConnection)factory.CreateConnection();
         conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}";
         var tracked = new FakeTrackedConnection(conn, schema, scalars);
         var info = DataSourceInformation.Create(tracked, factory);

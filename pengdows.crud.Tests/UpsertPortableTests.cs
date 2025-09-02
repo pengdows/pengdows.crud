@@ -1,25 +1,28 @@
 #region
 using System;
-using System.Data;
 using System.Reflection;
 using System.Threading.Tasks;
-using pengdows.crud.enums;
-using pengdows.crud.wrappers;
 using Xunit;
 #endregion
 
 namespace pengdows.crud.Tests;
 
-public class UpsertPortableTests : SqlLiteContextTestBase
+public class UpsertPortableTests : SqlLiteContextTestBase, IAsyncLifetime
 {
     private readonly EntityHelper<TestEntity, int> _helper;
 
     public UpsertPortableTests()
     {
         TypeMap.Register<TestEntity>();
-        _helper = new EntityHelper<TestEntity, int>(Context);
-        BuildTestTable().Wait();
+        _helper = new EntityHelper<TestEntity, int>(Context, AuditValueResolver);
     }
+
+    public async Task InitializeAsync()
+    {
+        await BuildTestTable();
+    }
+
+    public Task DisposeAsync() => Task.CompletedTask;
 
     [Fact]
     public async Task UpsertAsync_PortableInsertAndUpdate()
@@ -53,7 +56,7 @@ public class UpsertPortableTests : SqlLiteContextTestBase
     {
         var qp = Context.QuotePrefix;
         var qs = Context.QuoteSuffix;
-        var sql = string.Format(@"CREATE TABLE IF NOT EXISTS {0}Test{1} ({0}Id{1} INTEGER PRIMARY KEY,
+        var sql = string.Format(@"CREATE TABLE IF NOT EXISTS {0}Test{1} ({0}Id{1} INTEGER PRIMARY KEY AUTOINCREMENT,
 {0}Name{1} TEXT UNIQUE NOT NULL,
 {0}CreatedBy{1} TEXT NOT NULL DEFAULT 'system',
 {0}CreatedOn{1} TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -68,8 +71,8 @@ public class UpsertPortableTests : SqlLiteContextTestBase
     {
         var qp = Context.QuotePrefix;
         var qs = Context.QuoteSuffix;
-        var sql = string.Format(@"CREATE TABLE IF NOT EXISTS {0}NoKey{1} ({0}Id{1} INTEGER PRIMARY KEY,
-{0}Value{1} TEXT NOT NULL)", qp, qs);
+        var sql = string.Format(@"CREATE TABLE IF NOT EXISTS {0}NoKey{1} ({0}Id{1} INTEGER PRIMARY KEY AUTOINCREMENT,
+        {0}Value{1} TEXT NOT NULL)", qp, qs);
         var container = Context.CreateSqlContainer(sql);
         await container.ExecuteNonQueryAsync();
     }

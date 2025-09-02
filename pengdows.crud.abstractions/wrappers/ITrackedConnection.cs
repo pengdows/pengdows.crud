@@ -1,7 +1,6 @@
 #region
 
 using System.Data;
-using System.Threading;
 using pengdows.crud.threading;
 #pragma warning disable CS0108, CS0114
 

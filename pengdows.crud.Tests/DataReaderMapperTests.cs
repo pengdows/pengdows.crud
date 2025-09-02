@@ -4,7 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Threading.Tasks;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using pengdows.crud.attributes;
 using Xunit;
 
@@ -17,7 +17,7 @@ public class DataReaderMapperTests
     [Fact]
     public async Task LoadObjectsFromDataReaderAsync_MapsMatchingFields()
     {
-        var reader = new FakeDbDataReader(new[]
+        var reader = new fakeDbDataReader(new[]
         {
             new Dictionary<string, object>
             {
@@ -38,7 +38,7 @@ public class DataReaderMapperTests
     [Fact]
     public async Task LoadObjectsFromDataReaderAsync_IgnoresUnmappedFields()
     {
-        var reader = new FakeDbDataReader(new[]
+        var reader = new fakeDbDataReader(new[]
         {
             new Dictionary<string, object>
             {
@@ -56,7 +56,7 @@ public class DataReaderMapperTests
     [Fact]
     public async Task LoadObjectsFromDataReaderAsync_Interface_MapsFields()
     {
-        var reader = new FakeDbDataReader(new[]
+        var reader = new fakeDbDataReader(new[]
         {
             new Dictionary<string, object>
             {
@@ -78,7 +78,7 @@ public class DataReaderMapperTests
     [Fact]
     public async Task LoadObjectsFromDataReaderAsync_HandlesDbNullsGracefully()
     {
-        var reader = new FakeDbDataReader(new[]
+        var reader = new fakeDbDataReader(new[]
         {
             new Dictionary<string, object>
             {
@@ -99,7 +99,7 @@ public class DataReaderMapperTests
     [Fact]
     public async Task StreamAsync_StreamsObjects()
     {
-        var reader = new FakeDbDataReader(new[]
+        var reader = new fakeDbDataReader(new[]
         {
             new Dictionary<string, object>
             {
@@ -128,7 +128,7 @@ public class DataReaderMapperTests
     [Fact]
     public async Task LoadAsync_WithNamePolicy_MapsSnakeCaseFields()
     {
-        var reader = new FakeDbDataReader(new[]
+        var reader = new fakeDbDataReader(new[]
         {
             new Dictionary<string, object>
             {
@@ -158,7 +158,7 @@ public class DataReaderMapperTests
     [Fact]
     public async Task LoadObjectsFromDataReaderAsync_WithoutNamePolicy_IgnoresSnakeCaseFields()
     {
-        var reader = new FakeDbDataReader(new[]
+        var reader = new fakeDbDataReader(new[]
         {
             new Dictionary<string, object>
             {
@@ -175,7 +175,7 @@ public class DataReaderMapperTests
     [Fact]
     public async Task LoadAsync_ColumnsOnly_MapsAnnotatedProperty()
     {
-        var reader = new FakeDbDataReader(new[]
+        var reader = new fakeDbDataReader(new[]
         {
             new Dictionary<string, object>
             {
@@ -194,7 +194,7 @@ public class DataReaderMapperTests
     [Fact]
     public async Task LoadAsync_ColumnsOnly_IgnoresNonAnnotatedProperty()
     {
-        var reader = new FakeDbDataReader(new[]
+        var reader = new fakeDbDataReader(new[]
         {
             new Dictionary<string, object>
             {
@@ -216,7 +216,6 @@ public class DataReaderMapperTests
         public int Age { get; set; }
         public bool IsActive { get; set; }
     }
-
     private class SnakeEntity
     {
         public string? FirstName { get; set; }

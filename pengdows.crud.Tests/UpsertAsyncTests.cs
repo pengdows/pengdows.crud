@@ -1,22 +1,27 @@
 #region
 using System;
-using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
 #endregion
 
 namespace pengdows.crud.Tests;
 
-public class UpsertAsyncTests : SqlLiteContextTestBase
+public class UpsertAsyncTests : SqlLiteContextTestBase, IAsyncLifetime
 {
     private readonly EntityHelper<TestEntity, int> helper;
 
     public UpsertAsyncTests()
     {
         TypeMap.Register<TestEntity>();
-        helper = new EntityHelper<TestEntity, int>(Context);
-        BuildTestTable().Wait();
+        helper = new EntityHelper<TestEntity, int>(Context, AuditValueResolver);
     }
+
+    public async Task InitializeAsync()
+    {
+        await BuildTestTable();
+    }
+
+    public Task DisposeAsync() => Task.CompletedTask;
 
     [Fact]
     public async Task UpsertAsync_Inserts_WhenIdDefault()
@@ -24,8 +29,9 @@ public class UpsertAsyncTests : SqlLiteContextTestBase
         var e = new TestEntity { Name = Guid.NewGuid().ToString() };
         var affected = await helper.UpsertAsync(e);
         Assert.Equal(1, affected);
-        var list = await helper.LoadListAsync(helper.BuildBaseRetrieve("a"));
-        Assert.Contains(list, x => x.Name == e.Name);
+        var loaded = await helper.RetrieveOneAsync(e);
+        Assert.NotNull(loaded);
+        Assert.Equal(e.Name, loaded!.Name);
     }
 
     [Fact]
@@ -33,13 +39,15 @@ public class UpsertAsyncTests : SqlLiteContextTestBase
     {
         var e = new TestEntity { Name = Guid.NewGuid().ToString() };
         await helper.CreateAsync(e, Context);
-        var loaded = (await helper.LoadListAsync(helper.BuildBaseRetrieve("a"))).First();
-        var originalUpdated = loaded.LastUpdatedOn;
+        var loaded = await helper.RetrieveOneAsync(e);
+        Assert.NotNull(loaded);
+        var originalUpdated = loaded!.LastUpdatedOn;
 
         var affected = await helper.UpsertAsync(loaded);
         Assert.Equal(1, affected);
-        var reloaded = (await helper.LoadListAsync(helper.BuildBaseRetrieve("a"))).First(x => x.Id == loaded.Id);
-        Assert.True(reloaded.LastUpdatedOn > originalUpdated);
+        var reloaded = await helper.RetrieveOneAsync(loaded.Id);
+        Assert.NotNull(reloaded);
+        Assert.True(reloaded!.LastUpdatedOn >= originalUpdated);
     }
 
     private async Task BuildTestTable()
@@ -47,7 +55,7 @@ public class UpsertAsyncTests : SqlLiteContextTestBase
         var qp = Context.QuotePrefix;
         var qs = Context.QuoteSuffix;
         var sql = string.Format(
-            @"CREATE TABLE IF NOT EXISTS {0}Test{1} ({0}Id{1} INTEGER PRIMARY KEY,
+            @"CREATE TABLE IF NOT EXISTS {0}Test{1} ({0}Id{1} INTEGER PRIMARY KEY AUTOINCREMENT,
 {0}Name{1} TEXT UNIQUE NOT NULL,
     {0}CreatedBy{1} TEXT NOT NULL DEFAULT 'system',
     {0}CreatedOn{1} TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

@@ -9,9 +9,9 @@ using System.Reflection;
 using System.Threading.Tasks;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using pengdows.crud.Tests.Mocks;
-using pengdows.crud.connection;
+using pengdows.crud.strategies.connection;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
 using pengdows.crud.infrastructure;
@@ -25,7 +25,7 @@ public class TransactionContextTests
 {
     private IDatabaseContext CreateContext(SupportedDatabase supportedDatabase)
     {
-        var factory = new FakeDbFactory(supportedDatabase);
+        var factory = new fakeDbFactory(supportedDatabase);
         var config = new DatabaseContextConfiguration
         {
             DbMode = DbMode.SingleWriter,
@@ -99,7 +99,7 @@ public class TransactionContextTests
     [MemberData(nameof(AllSupportedProviders))]
     public void Commit_MarksAsCommitted(SupportedDatabase product)
     {
-        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", new FakeDbFactory(product.ToString()));
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", new fakeDbFactory(product.ToString()));
         var tx = context.BeginTransaction();
         tx.Commit();
 
@@ -111,7 +111,7 @@ public class TransactionContextTests
     [MemberData(nameof(AllSupportedProviders))]
     public void Rollback_MarksAsRolledBack(SupportedDatabase product)
     {
-        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", new FakeDbFactory(product.ToString()));
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", new fakeDbFactory(product.ToString()));
         using var tx = context.BeginTransaction();
 
         tx.Rollback();
@@ -124,7 +124,7 @@ public class TransactionContextTests
     [MemberData(nameof(AllSupportedProviders))]
     public async Task DisposeAsync_RollsBackUncommittedTransaction(SupportedDatabase product)
     {
-        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", new FakeDbFactory(product.ToString()));
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", new fakeDbFactory(product.ToString()));
         await using var tx = context.BeginTransaction();
 
         await tx.DisposeAsync();
@@ -136,7 +136,7 @@ public class TransactionContextTests
     [MemberData(nameof(AllSupportedProviders))]
     public void CreateSqlContainer_AfterCompletion_Throws(SupportedDatabase product)
     {
-        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", new FakeDbFactory(product.ToString()));
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", new fakeDbFactory(product.ToString()));
         using var tx = context.BeginTransaction();
 
         tx.Rollback();
@@ -148,7 +148,7 @@ public class TransactionContextTests
     [MemberData(nameof(AllSupportedProviders))]
     public void GenerateRandomName_StartsWithLetter(SupportedDatabase product)
     {
-        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", new FakeDbFactory(product.ToString()));
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", new fakeDbFactory(product.ToString()));
         using var tx = context.BeginTransaction();
         var name = tx.GenerateRandomName(10);
 
@@ -244,7 +244,7 @@ public class TransactionContextTests
     [MemberData(nameof(AllSupportedProviders))]
     public void NestedTransactionsFail(SupportedDatabase product)
     {
-        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", new FakeDbFactory(product.ToString()));
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", new fakeDbFactory(product.ToString()));
         using var tx = context.BeginTransaction();
         var name = tx.GenerateRandomName(10);
 
@@ -307,6 +307,26 @@ public class TransactionContextTests
     }
 
     [Fact]
+    public void CreateDbParameter_ForwardsDirection()
+    {
+        var context = (DatabaseContext)CreateContext(SupportedDatabase.Sqlite);
+        using var tx = context.BeginTransaction();
+        var param = tx.CreateDbParameter("p1", DbType.String, "v", ParameterDirection.Output);
+
+        Assert.Equal(ParameterDirection.Output, param.Direction);
+    }
+
+    [Fact]
+    public void CreateDbParameter_DefaultsDirectionToInput()
+    {
+        var context = (DatabaseContext)CreateContext(SupportedDatabase.Sqlite);
+        using var tx = context.BeginTransaction();
+        var param = tx.CreateDbParameter("p1", DbType.String, "v");
+
+        Assert.Equal(ParameterDirection.Input, param.Direction);
+    }
+
+    [Fact]
     public void GetLock_AfterCompletion_Throws()
     {
         var context = CreateContext(SupportedDatabase.Sqlite);
@@ -353,7 +373,7 @@ public class TransactionContextTests
     }
 
     [Fact]
-    public void ProcWrappingStyle_GetMatchesContext()
+    public void ProcWrappingStyle_GetMatchesContext_SetterThrows()
     {
         var context = (DatabaseContext)CreateContext(SupportedDatabase.Sqlite);
         using var tx = context.BeginTransaction();
@@ -375,7 +395,7 @@ public class TransactionContextTests
     }
 
     [Fact]
-    public void Commit_RaceOnlyOneSucceeds()
+    public async Task Commit_RaceOnlyOneSucceeds()
     {
         var context = (DatabaseContext)CreateContext(SupportedDatabase.Sqlite);
 
@@ -411,7 +431,7 @@ public class TransactionContextTests
             }
         });
 
-        Task.WaitAll(t1, t2);
+        await Task.WhenAll(t1, t2);
 
         Assert.True((e1 is null) ^ (e2 is null));
         Assert.IsType<InvalidOperationException>(e1 ?? e2!);
@@ -419,7 +439,7 @@ public class TransactionContextTests
     }
 
     [Fact]
-    public void CommitAndRollback_RaceOnlyOneSucceeds()
+    public async Task CommitAndRollback_RaceOnlyOneSucceeds()
     {
         var context = (DatabaseContext)CreateContext(SupportedDatabase.Sqlite);
 
@@ -455,7 +475,7 @@ public class TransactionContextTests
             }
         });
 
-        Task.WaitAll(t1, t2);
+        await Task.WhenAll(t1, t2);
 
         Assert.True((e1 is null) ^ (e2 is null));
         Assert.IsType<InvalidOperationException>(e1 ?? e2!);
@@ -530,7 +550,7 @@ public class TransactionContextTests
 
         public CountingConnectionStrategy()
         {
-            var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
+            var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
             _conn = new TrackedConnection(factory.CreateConnection());
         }
 
@@ -563,5 +583,77 @@ public class TransactionContextTests
                 }
             }
         }
+    }
+
+    [Fact]
+    public async Task SavepointAsync_WithSupportedDialect_ExecutesCommand()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        using var tx = context.BeginTransaction();
+
+        await tx.SavepointAsync("test_savepoint");
+
+        Assert.False(tx.IsCompleted);
+    }
+
+    [Fact]
+    public async Task SavepointAsync_WithUnsupportedDialect_DoesNothing()
+    {
+        var context = CreateContext(SupportedDatabase.SqlServer);
+        using var tx = context.BeginTransaction();
+
+        await tx.SavepointAsync("test_savepoint");
+
+        Assert.False(tx.IsCompleted);
+    }
+
+    [Fact]
+    public async Task RollbackToSavepointAsync_WithSupportedDialect_ExecutesCommand()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        using var tx = context.BeginTransaction();
+
+        await tx.SavepointAsync("test_savepoint");
+        await tx.RollbackToSavepointAsync("test_savepoint");
+
+        Assert.False(tx.IsCompleted);
+    }
+
+    [Fact]
+    public async Task RollbackToSavepointAsync_WithUnsupportedDialect_DoesNothing()
+    {
+        var context = CreateContext(SupportedDatabase.SqlServer);
+        using var tx = context.BeginTransaction();
+
+        await tx.RollbackToSavepointAsync("test_savepoint");
+
+        Assert.False(tx.IsCompleted);
+    }
+
+    [Fact]
+    public async Task SavepointAsync_WithFirebirdDialect_ExecutesCommand()
+    {
+        var context = CreateContext(SupportedDatabase.Firebird);
+        using var tx = context.BeginTransaction();
+
+        await tx.SavepointAsync("firebird_savepoint");
+
+        Assert.False(tx.IsCompleted);
+    }
+
+    [Fact]
+    public async Task SavepointWorkflow_FullCycle_WorksCorrectly()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        using var tx = context.BeginTransaction();
+
+        await tx.SavepointAsync("sp1");
+        await tx.SavepointAsync("sp2");
+        await tx.RollbackToSavepointAsync("sp1");
+
+        Assert.False(tx.IsCompleted);
+
+        tx.Commit();
+        Assert.True(tx.WasCommitted);
     }
 }

@@ -3,7 +3,6 @@
 using System.Data;
 using System.Data.Common;
 using System.Text;
-using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
@@ -114,6 +113,44 @@ public interface ISqlContainer :ISafeAsyncDisposableBase
     DbParameter AddParameterWithValue<T>(string? name, DbType type, T value);
 
     /// <summary>
+    /// Adds a parameter by type and value with an explicit direction, returning the created parameter.
+    /// </summary>
+    /// <typeparam name="T">The type of the parameter value.</typeparam>
+    /// <param name="type">Database type of the parameter.</param>
+    /// <param name="value">The value to assign.</param>
+    /// <param name="direction">The parameter direction.</param>
+    /// <returns>The created parameter.</returns>
+    DbParameter AddParameterWithValue<T>(DbType type, T value, ParameterDirection direction);
+
+    /// <summary>
+    /// Adds a named parameter by type and value with an explicit direction.
+    /// </summary>
+    /// <typeparam name="T">The type of the parameter value.</typeparam>
+    /// <param name="name">Parameter name or <c>null</c> for an auto-generated name.</param>
+    /// <param name="type">Database type of the parameter.</param>
+    /// <param name="value">The value to assign.</param>
+    /// <param name="direction">The parameter direction.</param>
+    /// <returns>The created parameter.</returns>
+    DbParameter AddParameterWithValue<T>(string? name, DbType type, T value, ParameterDirection direction);
+
+    /// <summary>
+    /// Sets an existing parameter's value by name.
+    /// </summary>
+    void SetParameterValue(string parameterName, object? newValue);
+
+    /// <summary>
+    /// Gets a parameter's value by name.
+    /// </summary>
+    object? GetParameterValue(string parameterName);
+
+    /// <summary>
+    /// Gets a parameter's value by name and coerces it to type <typeparamref name="T"/>.
+    /// </summary>
+    T GetParameterValue<T>(string parameterName);
+
+    // Parameter inspection helpers are intentionally not part of the public interface for compatibility
+
+    /// <summary>
     /// Executes the current query as a non-query command.
     /// </summary>
     /// <param name="commandType">Type of command to execute.</param>
@@ -154,11 +191,11 @@ public interface ISqlContainer :ISafeAsyncDisposableBase
     void Clear();
 
     /// <summary>
-    /// Wraps the query for execution as a stored procedure.
+    /// Wraps the query for execution as a stored procedure with optional return capture when supported.
     /// </summary>
     /// <param name="executionType">The procedure execution type.</param>
     /// <param name="includeParameters">Whether to include parameters in the wrapper.</param>
-    /// <returns>The wrapped command text.</returns>
-    string WrapForStoredProc(ExecutionType executionType, bool includeParameters = true);
+    /// <param name="captureReturn">Whether to capture the procedure return value when supported.</param>
+    string WrapForStoredProc(ExecutionType executionType, bool includeParameters = true, bool captureReturn = false);
 
 }
