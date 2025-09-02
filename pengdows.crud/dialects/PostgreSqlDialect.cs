@@ -1,3 +1,5 @@
+using System;
+using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
@@ -36,11 +38,34 @@ public class PostgreSqlDialect : SqlDialect
 
     public override string GetVersionQuery() => "SELECT version()";
 
+    public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
+    {
+        var baseSettings = GetConnectionSessionSettings();
+        if (readOnly)
+        {
+            return $"{baseSettings}\nSET default_transaction_read_only = on;";
+        }
+
+        return baseSettings;
+    }
+
+    [Obsolete]
     public override string GetConnectionSessionSettings()
     {
         return @"SET standard_conforming_strings = on;
 SET client_min_messages = warning;
 SET search_path = public;";
+    }
+
+    public override void ApplyConnectionSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)
+    {
+        var cs = context.ConnectionString;
+        if (readOnly)
+        {
+            cs = $"{cs};Options='-c default_transaction_read_only=on'";
+        }
+
+        connection.ConnectionString = cs;
     }
 
     protected override SqlStandardLevel DetermineStandardCompliance(Version? version)

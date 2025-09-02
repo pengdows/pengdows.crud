@@ -1,3 +1,4 @@
+using System;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
@@ -38,6 +39,18 @@ public class MariaDbDialect : SqlDialect
 
     public override string GetVersionQuery() => "SELECT VERSION()";
 
+    public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
+    {
+        var baseSettings = GetConnectionSessionSettings();
+        if (readOnly)
+        {
+            return $"{baseSettings}\nSET SESSION TRANSACTION READ ONLY;";
+        }
+
+        return baseSettings;
+    }
+
+    [Obsolete]
     public override string GetConnectionSessionSettings()
     {
         // Align with ANSI quoting and predictable behavior similar to MySQL settings

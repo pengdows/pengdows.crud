@@ -36,6 +36,38 @@ public class DuckDbDialect : SqlDialect
     public override bool SupportsMultidimensionalArrays => true; // Nested structures
 
     public override string GetVersionQuery() => "SELECT version()";
+
+    public override void ApplyConnectionSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)
+    {
+        var cs = context.ConnectionString;
+        if (readOnly && !IsMemoryConnection(cs))
+        {
+            cs = $"{cs};access_mode=READ_ONLY";
+        }
+
+        connection.ConnectionString = cs;
+    }
+
+    public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
+    {
+        return readOnly ? "PRAGMA read_only = 1;" : string.Empty;
+    }
+
+    [Obsolete]
+    public override string GetConnectionSessionSettings()
+    {
+        return string.Empty;
+    }
+
+    private static bool IsMemoryConnection(string connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            return false;
+        }
+
+        return connectionString.Contains(":memory:", StringComparison.OrdinalIgnoreCase);
+    }
     protected override async Task<string?> GetProductNameAsync(ITrackedConnection connection)
     {
         try

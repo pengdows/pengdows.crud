@@ -1,3 +1,4 @@
+using System;
 using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
@@ -33,6 +34,12 @@ public class FirebirdDialect : SqlDialect
 
     public override string GetVersionQuery() => "SELECT rdb$get_context('SYSTEM', 'ENGINE_VERSION') FROM rdb$database";
 
+    public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
+    {
+        return GetConnectionSessionSettings();
+    }
+
+    [Obsolete]
     public override string GetConnectionSessionSettings()
     {
         return "SET TRANSACTION ISOLATION LEVEL READ COMMITTED;\nSET SQL DIALECT 3;";

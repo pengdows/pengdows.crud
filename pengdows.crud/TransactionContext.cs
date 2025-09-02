@@ -24,6 +24,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
     private readonly SemaphoreSlim _completionLock;
     private readonly IDbTransaction _transaction;
     private readonly IsolationLevel _resolvedIsolationLevel;
+    private readonly bool _isReadOnly;
 
     private int _committed; // 0 = no, 1 = yes
     private int _rolledBack; // 0 = no, 1 = yes
@@ -35,19 +36,21 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         IDatabaseContext context,
         IsolationLevel isolationLevel = IsolationLevel.Unspecified,
         ExecutionType? executionType = null,
+        bool isReadOnly = false,
         ILogger<TransactionContext>? logger = null)
     {
         _logger = logger ?? new NullLogger<TransactionContext>();
         _context = context ?? throw new ArgumentNullException(nameof(context));
+        _isReadOnly = isReadOnly;
         var provider = context as ISqlDialectProvider
                        ?? throw new InvalidOperationException(
                            "IDatabaseContext must implement ISqlDialectProvider and expose a non-null Dialect.");
         _dialect = provider.Dialect;
         RootId = ((IContextIdentity)_context).RootId;
 
-        executionType ??= _context.IsReadOnlyConnection ? ExecutionType.Read : ExecutionType.Write;
+        executionType ??= (_context.IsReadOnlyConnection || _isReadOnly) ? ExecutionType.Read : ExecutionType.Write;
 
-        if (_context.IsReadOnlyConnection && executionType != ExecutionType.Read)
+        if ((_context.IsReadOnlyConnection || _isReadOnly) && executionType != ExecutionType.Read)
         {
             throw new NotSupportedException("DatabaseContext is read-only");
         }
@@ -57,7 +60,14 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
             isolationLevel = IsolationLevel.Serializable;
         }
 
-        _connection = _context.GetConnection(executionType.Value, true);
+        if (_isReadOnly && _context.ConnectionMode == DbMode.SingleWriter)
+        {
+            _connection = ((DatabaseContext)_context).FactoryCreateConnection(null, true, true);
+        }
+        else
+        {
+            _connection = _context.GetConnection(executionType.Value, true);
+        }
         EnsureConnectionIsOpen();
         _userLock = new SemaphoreSlim(1, 1);
         _completionLock = new SemaphoreSlim(1, 1);
@@ -69,6 +79,11 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         _transaction = _context.Product == SupportedDatabase.DuckDB
             ? _connection.BeginTransaction()
             : _connection.BeginTransaction(isolationLevel);
+
+        if (_isReadOnly)
+        {
+            _dialect.TryEnterReadOnlyTransaction(this);
+        }
     }
 
     public Guid TransactionId { get; } = Guid.NewGuid();
@@ -84,8 +99,9 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
     public long NumberOfOpenConnections => _context.NumberOfOpenConnections;
     public SupportedDatabase Product => _context.Product;
     public long MaxNumberOfConnections => _context.MaxNumberOfConnections;
-    public bool IsReadOnlyConnection => _context.IsReadOnlyConnection;
+    public bool IsReadOnlyConnection => _context.IsReadOnlyConnection || _isReadOnly;
     public bool RCSIEnabled => _context.RCSIEnabled;
+    public string ConnectionString => _context.ConnectionString;
     public int MaxParameterLimit => _context.MaxParameterLimit;
     public int MaxOutputParameters => (_dialect as pengdows.crud.dialects.SqlDialect)?.MaxOutputParameters ?? 0;
     public DbMode ConnectionMode => DbMode.SingleConnection;
@@ -159,6 +175,10 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
 
     public void AssertIsWriteConnection()
     {
+        if (_isReadOnly)
+        {
+            throw new InvalidOperationException("Transaction is read-only.");
+        }
         _context.AssertIsWriteConnection();
     }
 
@@ -187,12 +207,12 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
 
     ProcWrappingStyle IDatabaseContext.ProcWrappingStyle => _context.ProcWrappingStyle;
 
-    ITransactionContext IDatabaseContext.BeginTransaction(IsolationProfile isolationProfile, ExecutionType executionType)
+    ITransactionContext IDatabaseContext.BeginTransaction(IsolationProfile isolationProfile, ExecutionType executionType, bool? readOnly)
     {
         throw new InvalidOperationException("Cannot begin a nested transaction from TransactionContext.");
     }
 
-    ITransactionContext IDatabaseContext.BeginTransaction(IsolationLevel? isolationLevel, ExecutionType executionType)
+    ITransactionContext IDatabaseContext.BeginTransaction(IsolationLevel? isolationLevel, ExecutionType executionType, bool? readOnly)
     {
         throw new InvalidOperationException("Cannot begin a nested transaction from TransactionContext.");
     }

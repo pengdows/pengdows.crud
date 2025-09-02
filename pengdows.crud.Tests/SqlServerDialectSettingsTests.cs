@@ -3,6 +3,7 @@ using System.Data;
 using System.Data.Common;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
+using pengdows.crud;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
@@ -83,7 +84,7 @@ public class SqlServerDialectSettingsTests
     }
 
     [Fact]
-    public async Task ApplyConnectionSettings_OptimalSettings_CachesEmpty()
+    public async Task GetConnectionSessionSettings_OptimalSettings_ReturnsEmpty()
     {
         var rows = new[]
         {
@@ -99,12 +100,13 @@ public class SqlServerDialectSettingsTests
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var dialect = new SqlServerDialect(factory, NullLogger<SqlServerDialect>.Instance);
         await dialect.DetectDatabaseInfoAsync(conn);
-        dialect.ApplyConnectionSettings(conn);
-        Assert.Equal(string.Empty, dialect.GetConnectionSessionSettings());
+        using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory);
+        var settings = dialect.GetConnectionSessionSettings(ctx, false);
+        Assert.Equal(string.Empty, settings);
     }
 
     [Fact]
-    public async Task ApplyConnectionSettings_QuotedIdentifierOff_BuildsSettingsScript()
+    public async Task GetConnectionSessionSettings_QuotedIdentifierOff_BuildsSettingsScript()
     {
         var rows = new[]
         {
@@ -120,8 +122,8 @@ public class SqlServerDialectSettingsTests
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var dialect = new SqlServerDialect(factory, NullLogger<SqlServerDialect>.Instance);
         await dialect.DetectDatabaseInfoAsync(conn);
-        dialect.ApplyConnectionSettings(conn);
-        var settings = dialect.GetConnectionSessionSettings();
+        using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory);
+        var settings = dialect.GetConnectionSessionSettings(ctx, false);
         Assert.Contains("SET QUOTED_IDENTIFIER ON", settings);
         Assert.StartsWith("SET NOCOUNT ON", settings);
     }

@@ -310,6 +310,12 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
             await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             var isTransaction = _context is ITransactionContext;
             conn = _context.GetConnection(ExecutionType.Write, isTransaction);
+            if (_context.ConnectionMode == DbMode.SingleWriter &&
+                _context is DatabaseContext dbCtx &&
+                !ReferenceEquals(conn, dbCtx.PersistentConnection))
+            {
+                throw new InvalidOperationException("SingleWriter: writes must use the shared writer connection.");
+            }
             await using var connectionLocker = conn.GetLock();
             await connectionLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             cmd = await PrepareAndCreateCommandAsync(conn, commandType, ExecutionType.Write, cancellationToken).ConfigureAwait(false);

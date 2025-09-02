@@ -1,3 +1,4 @@
+using System;
 using System.Data;
 using System.Data.Common;
 using System.Text.RegularExpressions;
@@ -320,14 +321,38 @@ public interface ISqlDialect
     /// <summary>
     /// Returns dialect-specific session settings to apply to a connection.
     /// </summary>
+    /// <param name="context">The database context requesting settings.</param>
+    /// <param name="readOnly">True when the session should be read-only.</param>
     /// <returns>Command text configuring session options.</returns>
+    string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly);
+
+    /// <summary>
+    /// Legacy accessor for session settings without context information.
+    /// </summary>
+    /// <returns>Command text configuring session options.</returns>
+    [Obsolete("Use the overload accepting context and readOnly.")]
     string GetConnectionSessionSettings();
 
     /// <summary>
-    /// Applies session settings to the provided connection.
+    /// Applies connection-string or provider-specific settings to the provided connection.
     /// </summary>
     /// <param name="connection">Connection to configure.</param>
+    /// <param name="context">Database context requesting the settings.</param>
+    /// <param name="readOnly">True when the connection should be read-only.</param>
+    void ApplyConnectionSettings(IDbConnection connection, IDatabaseContext context, bool readOnly);
+
+    /// <summary>
+    /// Legacy overload for connection settings without context information.
+    /// </summary>
+    /// <param name="connection">Connection to configure.</param>
+    [Obsolete("Use the overload accepting context and readOnly.")]
     void ApplyConnectionSettings(IDbConnection connection);
+
+    /// <summary>
+    /// Attempts to enter a read-only transaction. Implementations may be a no-op.
+    /// </summary>
+    /// <param name="transaction">Transaction context.</param>
+    void TryEnterReadOnlyTransaction(ITransactionContext transaction);
 
     /// <summary>
     /// Determines whether READ_COMMITTED_SNAPSHOT is enabled.

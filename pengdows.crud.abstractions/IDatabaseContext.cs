@@ -24,6 +24,11 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     DbMode ConnectionMode { get; }
 
     /// <summary>
+    /// Gets the base connection string for this context.
+    /// </summary>
+    string ConnectionString { get; }
+
+    /// <summary>
     /// Type mapping registry for compiled accessors, enum coercions, and JSON handlers.
     /// </summary>
     ITypeMapRegistry TypeMapRegistry { get; }
@@ -168,14 +173,16 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// </summary>
     ITransactionContext BeginTransaction(
         IsolationLevel? isolationLevel = null,
-        ExecutionType executionType = ExecutionType.Write);
+        ExecutionType executionType = ExecutionType.Write,
+        bool? readOnly = null);
 
     /// <summary>
     /// Begins a transaction using a portable IsolationProfile abstraction.
     /// </summary>
     ITransactionContext BeginTransaction(
         IsolationProfile isolationProfile,
-        ExecutionType executionType = ExecutionType.Write);
+        ExecutionType executionType = ExecutionType.Write,
+        bool? readOnly = null);
 
     /// <summary>
     /// Returns a randomly generated, collision-safe parameter/alias name.

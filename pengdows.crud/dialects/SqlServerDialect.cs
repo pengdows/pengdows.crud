@@ -1,3 +1,4 @@
+using System;
 using System.Data;
 using System.Data.Common;
 using System.Text;
@@ -48,6 +49,12 @@ public class SqlServerDialect : SqlDialect
 
     public override string GetVersionQuery() => "SELECT @@VERSION";
 
+    public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
+    {
+        return GetConnectionSessionSettings();
+    }
+
+    [Obsolete]
     public override string GetConnectionSessionSettings()
     {
         return _sessionSettings ?? string.Empty;
@@ -61,6 +68,17 @@ public class SqlServerDialect : SqlDialect
         var val = cmd.ExecuteScalar();
         var v = val is int i ? i : Convert.ToInt32(val ?? 0);
         return v == 1;
+    }
+
+    public override void ApplyConnectionSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)
+    {
+        var cs = context.ConnectionString;
+        if (readOnly)
+        {
+            cs = $"{cs};ApplicationIntent=ReadOnly";
+        }
+
+        connection.ConnectionString = cs;
     }
 
     public override async Task<IDatabaseProductInfo> DetectDatabaseInfoAsync(ITrackedConnection connection)

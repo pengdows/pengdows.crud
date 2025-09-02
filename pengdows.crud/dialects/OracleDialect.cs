@@ -1,3 +1,4 @@
+using System;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
@@ -32,6 +33,18 @@ public class OracleDialect : SqlDialect
 
     public override string GetVersionQuery() => "SELECT * FROM v$version WHERE banner LIKE 'Oracle%'";
 
+    public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
+    {
+        var baseSettings = GetConnectionSessionSettings();
+        if (readOnly)
+        {
+            return $"{baseSettings}\nALTER SESSION SET READ ONLY;";
+        }
+
+        return baseSettings;
+    }
+
+    [Obsolete]
     public override string GetConnectionSessionSettings()
     {
         return "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD';";

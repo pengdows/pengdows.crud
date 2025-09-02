@@ -1,3 +1,4 @@
+using System;
 using System.Data;
 using System.Data.Common;
 using System.Text;
@@ -310,29 +311,28 @@ public abstract class SqlDialect:ISqlDialect
             SupportsNamedParameters);
     }
 
+    [Obsolete("Use GetConnectionSessionSettings(IDatabaseContext,bool).")] 
     public virtual string GetConnectionSessionSettings()
     {
         return string.Empty;
     }
 
+    public virtual string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
+    {
+        return GetConnectionSessionSettings();
+    }
+
+    public virtual void ApplyConnectionSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)
+    {
+    }
+
+    [Obsolete("Use the overload accepting context and readOnly.")]
     public virtual void ApplyConnectionSettings(IDbConnection connection)
     {
-        var settings = GetConnectionSessionSettings();
-        if (string.IsNullOrWhiteSpace(settings))
-        {
-            return;
-        }
+    }
 
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = settings;
-            cmd.ExecuteNonQuery();
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Failed to apply connection settings for {DatabaseType}", DatabaseType);
-        }
+    public virtual void TryEnterReadOnlyTransaction(ITransactionContext transaction)
+    {
     }
 
     public virtual bool IsReadCommittedSnapshotOn(ITrackedConnection connection)

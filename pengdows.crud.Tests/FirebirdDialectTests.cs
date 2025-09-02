@@ -32,28 +32,5 @@ public class FirebirdDialectTests
         Assert.False(dialect.SupportsJsonTypes);
     }
 
-    [Fact]
-    public void ApplyConnectionSettings_WithScript_ExecutesCommand()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.Firebird);
-        var conn = (fakeDbConnection)factory.CreateConnection();
-        conn.Open();
-        conn.EnqueueNonQueryResult(1);
-        var dialect = new FirebirdDialect(factory, NullLogger<FirebirdDialect>.Instance);
-        dialect.ApplyConnectionSettings(conn);
-        Assert.Empty(conn.NonQueryResults);
-    }
-
-    [Fact]
-    public void ApplyConnectionSettings_WithSettings_ExecutesCommand()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.Firebird);
-        var conn = (fakeDbConnection)factory.CreateConnection();
-        conn.Open();
-        conn.EnqueueNonQueryResult(1);
-        var dialect = new FirebirdDialect(factory, NullLogger<FirebirdDialect>.Instance);
-        dialect.ApplyConnectionSettings(conn);
-        Assert.Empty(conn.NonQueryResults);
-    }
 
 }

@@ -1,3 +1,4 @@
+using System;
 using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
@@ -31,9 +32,44 @@ public class SqliteDialect : SqlDialect
 
     public override string GetVersionQuery() => "SELECT sqlite_version()";
 
+    public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
+    {
+        return readOnly
+            ? "PRAGMA foreign_keys = ON;\nPRAGMA query_only = ON;"
+            : GetConnectionSessionSettings();
+    }
+
+    [Obsolete]
     public override string GetConnectionSessionSettings()
     {
         return "PRAGMA foreign_keys = ON;";
+    }
+
+    public override void ApplyConnectionSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)
+    {
+        var cs = context.ConnectionString;
+        if (readOnly && !IsMemoryConnection(cs))
+        {
+            cs = $"{cs};Mode=ReadOnly";
+        }
+
+        connection.ConnectionString = cs;
+    }
+
+    private static bool IsMemoryConnection(string connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            return false;
+        }
+
+        var lower = connectionString.ToLowerInvariant();
+        if (lower.Contains(":memory:"))
+        {
+            return true;
+        }
+
+        return lower.Contains("mode=memory");
     }
 
     public override DataTable GetDataSourceInformationSchema(ITrackedConnection connection)

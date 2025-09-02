@@ -15,7 +15,7 @@ internal class StandardConnectionStrategy : IConnectionStrategy
 
     public ITrackedConnection GetConnection(ExecutionType executionType, bool isShared)
     {
-        return _context.FactoryCreateConnection(null, isShared);
+        return _context.FactoryCreateConnection(null, isShared, _context.IsReadOnlyConnection);
     }
 
     public virtual void PostInitialize(ITrackedConnection? connection)

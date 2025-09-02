@@ -12,6 +12,7 @@ using Moq;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
+using pengdows.crud.isolation;
 using pengdows.crud.Tests.Mocks;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
@@ -197,7 +198,7 @@ public class DatabaseContextTests
     {
         var factory = new fakeDbFactory(product);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory,
-            readWriteMode: ReadWriteMode.WriteOnly);
+            readWriteMode: (ReadWriteMode)0);
         Assert.Throws<InvalidOperationException>(() => context.AssertIsReadConnection());
     }
 
@@ -289,13 +290,15 @@ public class DatabaseContextTests
     }
 
     [Fact]
-    public void BeginTransaction_ReadOnly_InvalidIsolation_Throws()
+    public void BeginTransaction_ReadOnly_DefaultsToResolverLevel()
     {
         var product = SupportedDatabase.Sqlite;
         var factory = new fakeDbFactory(product);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
-        Assert.Throws<InvalidOperationException>(
-            () => context.BeginTransaction(IsolationLevel.ReadCommitted, ExecutionType.Read));
+        using var tx = context.BeginTransaction(readOnly: true);
+        var expected = new IsolationResolver(product, context.RCSIEnabled)
+            .Resolve(IsolationProfile.SafeNonBlockingReads);
+        Assert.Equal(expected, tx.IsolationLevel);
     }
 
     [Fact]
@@ -314,25 +317,13 @@ public class DatabaseContextTests
     }
 
     [Fact]
-    public void BeginTransaction_ReadOnly_SingleWriter_DisposesEphemeralConnection()
+    public void BeginTransaction_ReadOnly_UnsupportedIsolation_Throws()
     {
         var product = SupportedDatabase.Sqlite;
-        var config = new DatabaseContextConfiguration
-        {
-            ConnectionString = $"Data Source=:memory:;EmulatedProduct={product}",
-            ProviderName = product.ToString(),
-            DbMode = DbMode.SingleWriter
-        };
         var factory = new fakeDbFactory(product);
-        var context = new DatabaseContext(config, factory);
-        Assert.Equal(1, context.NumberOfOpenConnections);
-
-        using (context.BeginTransaction(executionType: ExecutionType.Read))
-        {
-            Assert.Equal(1, context.NumberOfOpenConnections);
-        }
-
-        Assert.Equal(1, context.NumberOfOpenConnections);
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
+        Assert.Throws<InvalidOperationException>(
+            () => context.BeginTransaction(IsolationLevel.Snapshot, ExecutionType.Read));
     }
 
     [Fact]

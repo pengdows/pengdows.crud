@@ -214,23 +214,30 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     }
 
 
-    public ReadWriteMode ReadWriteMode { get; set; }
+    private ReadWriteMode _readWriteMode = ReadWriteMode.ReadWrite;
+    public ReadWriteMode ReadWriteMode
+    {
+        get => _readWriteMode;
+        set
+        {
+            _readWriteMode = value == ReadWriteMode.WriteOnly ? ReadWriteMode.ReadWrite : value;
+            _isReadConnection = (_readWriteMode & ReadWriteMode.ReadOnly) == ReadWriteMode.ReadOnly;
+            _isWriteConnection = (_readWriteMode & ReadWriteMode.WriteOnly) == ReadWriteMode.WriteOnly;
+        }
+    }
 
     public string Name { get; set; }
 
-    private string ConnectionString
-    {
-        get => _connectionString;
-        set
-        {
-            //don't let it change
-            if (!string.IsNullOrWhiteSpace(_connectionString) || string.IsNullOrWhiteSpace(value))
-            {
-                throw new ArgumentException($"Connection string reset attempted.");
-            }
+    public string ConnectionString => _connectionString;
 
-            _connectionString = value;
+    private void SetConnectionString(string value)
+    {
+        if (!string.IsNullOrWhiteSpace(_connectionString) || string.IsNullOrWhiteSpace(value))
+        {
+            throw new ArgumentException("Connection string reset attempted.");
         }
+
+        _connectionString = value;
     }
 
 
@@ -250,14 +257,17 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     public ITypeMapRegistry TypeMapRegistry { get; }
 
     public IDataSourceInformation DataSourceInfo => _dataSourceInfo;
-    public string SessionSettingsPreamble => _dialect.GetConnectionSessionSettings();
+    public string SessionSettingsPreamble => _dialect.GetConnectionSessionSettings(this, IsReadOnlyConnection);
 
     public ITransactionContext BeginTransaction(
         IsolationLevel? isolationLevel = null,
-        ExecutionType executionType = ExecutionType.Write)
+        ExecutionType executionType = ExecutionType.Write,
+        bool? readOnly = null)
     {
-        if (executionType == ExecutionType.Read)
+        var ro = readOnly ?? (executionType == ExecutionType.Read);
+        if (ro)
         {
+            executionType = ExecutionType.Read;
             if (!_isReadConnection)
             {
                 throw new InvalidOperationException("Context is not readable.");
@@ -265,12 +275,11 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
 
             if (isolationLevel is null)
             {
-                isolationLevel = IsolationLevel.RepeatableRead;
+                isolationLevel = _isolationResolver.Resolve(IsolationProfile.SafeNonBlockingReads);
             }
-
-            if (isolationLevel != IsolationLevel.RepeatableRead)
+            else
             {
-                throw new InvalidOperationException("Read-only transactions must use 'RepeatableRead'.");
+                _isolationResolver.Validate(isolationLevel.Value);
             }
         }
         else
@@ -280,9 +289,13 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
                 throw new NotSupportedException("Context is read-only.");
             }
 
+            if (executionType == ExecutionType.Read)
+            {
+                throw new InvalidOperationException("Write transaction requested with read execution type.");
+            }
+
             if (isolationLevel is null)
             {
-                // Choose a sensible default supported by the current database.
                 var supported = _isolationResolver.GetSupportedLevels();
                 if (supported.Contains(IsolationLevel.ReadCommitted))
                 {
@@ -299,15 +312,16 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             }
         }
 
-        return new TransactionContext(this, isolationLevel.Value, executionType);
+        return new TransactionContext(this, isolationLevel.Value, executionType, ro);
     }
 
     public ITransactionContext BeginTransaction(
         IsolationProfile isolationProfile,
-        ExecutionType executionType = ExecutionType.Write)
+        ExecutionType executionType = ExecutionType.Write,
+        bool? readOnly = null)
     {
         var level = _isolationResolver.Resolve(isolationProfile);
-        return BeginTransaction(level, executionType);
+        return BeginTransaction(level, executionType, readOnly);
     }
 
     public string CompositeIdentifierSeparator => _dataSourceInfo.CompositeIdentifierSeparator;
@@ -404,6 +418,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     private ITrackedConnection FactoryCreateConnection(
         string? connectionString = null,
         bool isSharedConnection = false,
+        bool readOnly = false,
         Action<DbConnection>? onFirstOpen = null)
     {
         SanitizeConnectionString(connectionString);
@@ -411,6 +426,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         var connection = _factory.CreateConnection() ??
                          throw new InvalidOperationException("Factory returned null DbConnection.");
         connection.ConnectionString = ConnectionString;
+        _dialect?.ApplyConnectionSettings(connection, this, readOnly);
 
         // Ensure session settings from the active dialect are applied on first open for all modes.
         Action<DbConnection>? firstOpenHandler = conn =>
@@ -419,7 +435,9 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             {
                 // Apply session settings for all connection modes.
                 // Prefer dialect-provided settings when available; fall back to precomputed string.
-                var settings = (_dialect != null ? _dialect.GetConnectionSessionSettings() : _connectionSessionSettings) ?? string.Empty;
+                var settings = (_dialect != null
+                    ? _dialect.GetConnectionSessionSettings(this, readOnly)
+                    : _connectionSessionSettings) ?? string.Empty;
                 if (!string.IsNullOrWhiteSpace(settings))
                 {
                     using var cmd = conn.CreateCommand();
@@ -475,18 +493,17 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
 
     private void SanitizeConnectionString(string? connectionString)
     {
-        if (connectionString != null && string.IsNullOrWhiteSpace(ConnectionString))
+        if (connectionString != null && string.IsNullOrWhiteSpace(_connectionString))
         {
             try
             {
                 var csb = GetFactoryConnectionStringBuilder(connectionString);
                 var tmp = csb.ConnectionString;
-                ConnectionString = tmp;
+                SetConnectionString(tmp);
             }
             catch
             {
-                // Some providers (or raw strings) may not conform to key=value; fall back to raw string.
-                ConnectionString = connectionString;
+                SetConnectionString(connectionString);
             }
         }
     }
@@ -505,9 +522,9 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
 
     // Duplicates removed; properties already exist earlier in the class
 
-    internal ITrackedConnection FactoryCreateConnection(string? connectionString = null, bool isSharedConnection = false)
+    internal ITrackedConnection FactoryCreateConnection(string? connectionString = null, bool isSharedConnection = false, bool readOnly = false)
     {
-        return FactoryCreateConnection(connectionString, isSharedConnection, null);
+        return FactoryCreateConnection(connectionString, isSharedConnection, readOnly, null);
     }
 
 
@@ -541,11 +558,9 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         ITrackedConnection? conn = null;
         try
         {
-            _isReadConnection = (ReadWriteMode & ReadWriteMode.ReadOnly) == ReadWriteMode.ReadOnly;
-            _isWriteConnection = (ReadWriteMode & ReadWriteMode.WriteOnly) == ReadWriteMode.WriteOnly;
             // this connection will be set as our single connection for any DbMode != DbMode.Standard
             // so we set it to shared.
-            conn = FactoryCreateConnection(connectionString, true, null);
+            conn = FactoryCreateConnection(connectionString, true, IsReadOnlyConnection, null);
             try
             {
                 conn.Open();
@@ -702,9 +717,9 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         }
     }
 
-    internal ITrackedConnection GetStandardConnection(bool isShared = false)
+    internal ITrackedConnection GetStandardConnection(bool isShared = false, bool readOnly = false)
     {
-        var conn = FactoryCreateConnection(null, isShared);
+        var conn = FactoryCreateConnection(null, isShared, readOnly);
         return conn;
     }
 
@@ -720,8 +735,8 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         {
             // For transaction-scoped reads (shared=true), reuse the persistent connection
             // to avoid opening an extra ephemeral connection under SingleWriter mode.
-            // For ad-hoc reads (shared=false), use a standard ephemeral connection.
-            return isShared ? GetSingleConnection() : GetStandardConnection(isShared);
+            // For ad-hoc reads (shared=false), use a standard ephemeral connection configured as read-only.
+            return isShared ? GetSingleConnection() : GetStandardConnection(isShared, true);
         }
 
         return GetSingleConnection();

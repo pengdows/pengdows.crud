@@ -54,10 +54,20 @@ public class DatabaseContextConfigurationTests
     public void ReadWriteMode_CanBeSetAndRetrieved()
     {
         var config = new DatabaseContextConfiguration();
-        
+
         config.ReadWriteMode = ReadWriteMode.ReadOnly;
-        
+
         Assert.Equal(ReadWriteMode.ReadOnly, config.ReadWriteMode);
+    }
+
+    [Fact]
+    public void ReadWriteMode_WriteOnlyResetsToReadWrite()
+    {
+        var config = new DatabaseContextConfiguration();
+
+        config.ReadWriteMode = ReadWriteMode.WriteOnly;
+
+        Assert.Equal(ReadWriteMode.ReadWrite, config.ReadWriteMode);
     }
 
     [Fact]
@@ -86,7 +96,7 @@ public class DatabaseContextConfigurationTests
         Assert.Equal(connectionString, config.ConnectionString);
         Assert.Equal(providerName, config.ProviderName);
         Assert.Equal(DbMode.KeepAlive, config.DbMode);
-        Assert.Equal(ReadWriteMode.WriteOnly, config.ReadWriteMode);
+        Assert.Equal(ReadWriteMode.ReadWrite, config.ReadWriteMode);
         Assert.True(config.SetDefaultSearchPath);
     }
 
