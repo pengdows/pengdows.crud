@@ -29,6 +29,7 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
     private bool _skipFirstFailOnOpen;
     private bool _skipFirstBreakConnection;
     private fakeDbFactory? _factoryRef;
+    private string? _emulatedTypeName;
     public override string DataSource => "FakeSource";
     public override string ServerVersion => GetEmulatedServerVersion();
 
@@ -71,6 +72,33 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
     public int? GetMaxParameterLimit()
     {
         return _maxParameterLimit;
+    }
+
+    /// <summary>
+    /// Sets the emulated type name for the connection (e.g., "Npgsql.NpgsqlConnection")
+    /// This affects GetType().FullName behavior to simulate different connection types
+    /// </summary>
+    public void SetEmulatedTypeName(string typeName)
+    {
+        _emulatedTypeName = typeName;
+    }
+
+    /// <summary>
+    /// Gets the emulated type name if set, otherwise returns the actual type name
+    /// </summary>
+    public string GetEmulatedTypeName()
+    {
+        return _emulatedTypeName ?? GetType().FullName ?? "fakeDbConnection";
+    }
+
+    /// <summary>
+    /// Override for testing purposes - checks if the type name starts with the specified prefix
+    /// This is used by dialects to check connection types (e.g., "Npgsql.")
+    /// </summary>
+    public bool TypeNameStartsWith(string prefix)
+    {
+        var typeName = _emulatedTypeName ?? GetType().FullName ?? "";
+        return typeName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

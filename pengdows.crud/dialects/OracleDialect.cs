@@ -1,4 +1,6 @@
+using System.Data;
 using System.Data.Common;
+using System.Reflection;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 
@@ -22,6 +24,9 @@ public class OracleDialect : SqlDialect
     public override int ParameterNameMaxLength => 30;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.Oracle;
     public override bool RequiresStoredProcParameterNameMatch => true;
+    
+    // Oracle prefers statement cache and array binding over manual prepare
+    public override bool PrepareStatements => false;
     public override SqlStandardLevel MaxSupportedStandard =>
         IsInitialized ? base.MaxSupportedStandard : DetermineStandardCompliance(null);
 
@@ -47,6 +52,34 @@ public class OracleDialect : SqlDialect
     public override string GetConnectionSessionSettings()
     {
         return "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD';";
+    }
+
+    public override void ApplyConnectionSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)
+    {
+        // Configure Oracle-specific connection settings for optimal performance
+        if (connection.GetType().FullName?.Contains("Oracle") == true)
+        {
+            try
+            {
+                // Set StatementCacheSize for better performance with repeated queries
+                var connectionType = connection.GetType();
+                var statementCacheSizeProperty = connectionType.GetProperty("StatementCacheSize");
+                if (statementCacheSizeProperty != null)
+                {
+                    var currentCacheSize = statementCacheSizeProperty.GetValue(connection);
+                    if (currentCacheSize is int size && size < 64)
+                    {
+                        statementCacheSizeProperty.SetValue(connection, 64);
+                    }
+                }
+                
+                Logger.LogDebug("Applied Oracle connection settings: StatementCacheSize configured");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogDebug(ex, "Failed to configure Oracle connection settings, using defaults");
+            }
+        }
     }
 
     protected override SqlStandardLevel DetermineStandardCompliance(Version? version)

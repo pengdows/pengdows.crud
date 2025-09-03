@@ -6,13 +6,15 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using pengdows.crud.connection;
+using pengdows.crud.infrastructure;
 using pengdows.crud.threading;
 
 #endregion
 
 namespace pengdows.crud.wrappers;
 
-public class TrackedConnection : ITrackedConnection, IAsyncDisposable
+public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
 {
     private readonly DbConnection _connection;
     private readonly bool _isSharedConnection;
@@ -23,9 +25,13 @@ public class TrackedConnection : ITrackedConnection, IAsyncDisposable
     private readonly Action<DbConnection>? _onFirstOpen;
     private readonly StateChangeEventHandler? _onStateChange;
     private readonly SemaphoreSlim? _semaphoreSlim;
-    private int _disposed;
 
     private int _wasOpened;
+    
+    /// <summary>
+    /// Per-connection state for prepare behavior tracking
+    /// </summary>
+    public ConnectionLocalState LocalState { get; } = new();
 
 
     protected internal TrackedConnection(
@@ -79,14 +85,14 @@ public class TrackedConnection : ITrackedConnection, IAsyncDisposable
         TriggerFirstOpen();
     }
 
-    public void Dispose()
+    protected override void DisposeManaged()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        _logger.LogDebug("Disposing connection {Name}", _name);
+
+        if (_connection == null)
         {
             return;
         }
-
-        _logger.LogDebug("Disposing connection {Name}", _name);
 
         try
         {
@@ -103,8 +109,6 @@ public class TrackedConnection : ITrackedConnection, IAsyncDisposable
 
         _onDispose?.Invoke(_connection);
         _connection.Dispose();
-
-        GC.SuppressFinalize(this); // Add this here
     }
 
 
@@ -143,14 +147,14 @@ public class TrackedConnection : ITrackedConnection, IAsyncDisposable
         TriggerFirstOpen();
     }
 
-    public async ValueTask DisposeAsync()
+    protected override async ValueTask DisposeManagedAsync()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        _logger.LogDebug("Async disposing connection {Name}", _name);
+
+        if (_connection == null)
         {
             return;
         }
-
-        _logger.LogDebug("Async disposing connection {Name}", _name);
 
         if (_isSharedConnection && _semaphoreSlim != null)
         {

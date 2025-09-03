@@ -21,6 +21,9 @@ public class SqliteDialect : SqlDialect
     public override bool SupportsNamedParameters => true;
     public override int MaxParameterLimit => 999;
     public override int ParameterNameMaxLength => 255;
+    
+    // SQLite benefits from prepared statements with inherent prepare support
+    public override bool PrepareStatements => true;
 
     public override bool SupportsInsertOnConflict => true;
     public override bool SupportsMerge => false;

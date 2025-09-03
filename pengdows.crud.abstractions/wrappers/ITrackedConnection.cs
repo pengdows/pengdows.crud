@@ -1,6 +1,7 @@
 #region
 
 using System.Data;
+using pengdows.crud.connection;
 using pengdows.crud.threading;
 #pragma warning disable CS0108, CS0114
 
@@ -39,4 +40,9 @@ public interface ITrackedConnection : IDbConnection
     /// Retrieves schema information for the current connection.
     /// </summary>
     DataTable GetSchema();
+
+    /// <summary>
+    /// Per-connection state for prepare behavior tracking
+    /// </summary>
+    ConnectionLocalState LocalState { get; }
 }

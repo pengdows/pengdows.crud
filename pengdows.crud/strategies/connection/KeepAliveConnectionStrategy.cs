@@ -49,6 +49,4 @@ internal class KeepAliveConnectionStrategy : StandardConnectionStrategy
         return ValueTask.CompletedTask;
     }
 
-    public new void Dispose() { }
-    public new ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }

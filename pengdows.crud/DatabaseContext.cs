@@ -42,6 +42,8 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     private readonly bool _setDefaultSearchPath;
     private string _connectionSessionSettings = string.Empty;
     private readonly DbMode _originalUserMode;
+    private readonly bool? _forceManualPrepare;
+    private readonly bool? _disablePrepare;
 
     public Guid RootId { get; } = Guid.NewGuid();
 
@@ -135,6 +137,8 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             _originalUserMode = configuration.DbMode;
             _factory = factory ?? throw new NullReferenceException(nameof(factory));
             _setDefaultSearchPath = configuration.SetDefaultSearchPath;
+            _forceManualPrepare = configuration.ForceManualPrepare;
+            _disablePrepare = configuration.DisablePrepare;
 
             // Pre-infer connection mode for in-memory providers only when the user did not
             // explicitly choose a non-standard mode. Respect explicit choices.
@@ -338,6 +342,8 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     public long NumberOfOpenConnections => Interlocked.Read(ref _connectionCount);
     public string QuotePrefix => _dialect.QuotePrefix;
     public string QuoteSuffix => _dialect.QuoteSuffix;
+    public bool? ForceManualPrepare => _forceManualPrepare;
+    public bool? DisablePrepare => _disablePrepare;
 
     public ISqlContainer CreateSqlContainer(string? query = null)
     {

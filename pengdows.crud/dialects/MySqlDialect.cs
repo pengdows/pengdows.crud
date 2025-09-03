@@ -21,6 +21,9 @@ public class MySqlDialect : SqlDialect
     public override int MaxOutputParameters => 65535;
     public override int ParameterNameMaxLength => 64;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.Call;
+    
+    // MySQL benefits from server-side prepared statements
+    public override bool PrepareStatements => true;
 
     public override bool SupportsNamespaces => true;
 

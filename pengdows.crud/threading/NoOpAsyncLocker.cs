@@ -1,6 +1,8 @@
+using pengdows.crud.infrastructure;
+
 namespace pengdows.crud.threading;
 
-internal sealed class NoOpAsyncLocker : ILockerAsync
+internal sealed class NoOpAsyncLocker : SafeAsyncDisposableBase, ILockerAsync
 {
     public static readonly NoOpAsyncLocker Instance = new();
 
@@ -18,8 +20,4 @@ internal sealed class NoOpAsyncLocker : ILockerAsync
         return Task.FromResult(true);
     }
 
-    public ValueTask DisposeAsync()
-    {
-        return ValueTask.CompletedTask;
-    }
 }

@@ -1,12 +1,12 @@
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
 
 namespace pengdows.crud.strategies.connection;
 
-internal class StandardConnectionStrategy : IConnectionStrategy
+internal class StandardConnectionStrategy : SafeAsyncDisposableBase, IConnectionStrategy
 {
     protected readonly DatabaseContext _context;
-    private int _disposed;
 
     public StandardConnectionStrategy(DatabaseContext context)
     {
@@ -39,7 +39,4 @@ internal class StandardConnectionStrategy : IConnectionStrategy
         return ValueTask.CompletedTask;
     }
 
-    public bool IsDisposed => Volatile.Read(ref _disposed) != 0;
-    public void Dispose() { Interlocked.Exchange(ref _disposed, 1); }
-    public ValueTask DisposeAsync() { Interlocked.Exchange(ref _disposed, 1); return ValueTask.CompletedTask; }
 }

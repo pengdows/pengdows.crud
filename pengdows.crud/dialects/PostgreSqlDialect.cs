@@ -23,6 +23,9 @@ public class PostgreSqlDialect : SqlDialect
     public override int ParameterNameMaxLength => 63;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.PostgreSQL;
     public override bool RequiresStoredProcParameterNameMatch => true;
+    
+    // PostgreSQL benefits from prepared statements
+    public override bool PrepareStatements => true;
     public override SqlStandardLevel MaxSupportedStandard =>
         IsInitialized ? base.MaxSupportedStandard : DetermineStandardCompliance(null);
 
@@ -59,9 +62,50 @@ SET search_path = public;";
     public override void ApplyConnectionSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)
     {
         var cs = context.ConnectionString;
+        
+        // Handle read-only connection setting
         if (readOnly)
         {
             cs = $"{cs};Options='-c default_transaction_read_only=on'";
+        }
+
+        // Apply Npgsql-specific prepare settings if this is an Npgsql connection
+        if (connection.GetType().FullName?.StartsWith("Npgsql.") == true)
+        {
+            try
+            {
+                // Use the inherited ConnectionStringBuilder property instead of reflection
+                ConnectionStringBuilder.ConnectionString = cs;
+                var builder = ConnectionStringBuilder;
+                
+                // Configure auto-prepare settings for optimal prepared statement performance
+                if (builder.ContainsKey("MaxAutoPrepare") && (int)builder["MaxAutoPrepare"] == 0)
+                {
+                    builder["MaxAutoPrepare"] = 64;
+                }
+                else if (!builder.ContainsKey("MaxAutoPrepare"))
+                {
+                    builder["MaxAutoPrepare"] = 64;
+                }
+                
+                if (builder.ContainsKey("AutoPrepareMinUsages") && (int)builder["AutoPrepareMinUsages"] == 0)
+                {
+                    builder["AutoPrepareMinUsages"] = 2;
+                }
+                else if (!builder.ContainsKey("AutoPrepareMinUsages"))
+                {
+                    builder["AutoPrepareMinUsages"] = 2;
+                }
+                
+                // Multiplexing must be disabled for prepare to work properly
+                builder["Multiplexing"] = false;
+                
+                cs = builder.ToString();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogDebug(ex, "Failed to configure Npgsql connection string settings, using original connection string");
+            }
         }
 
         connection.ConnectionString = cs;

@@ -137,20 +137,17 @@ public class ReadOnlySingleWriterConnectionTests
     }
 
     [Fact]
-    public async Task ReadOnlySingleWriter_WriteTransaction_ShouldStillBeReadOnly()
+    public async Task ReadOnlySingleWriter_WriteTransaction_ShouldThrow()
     {
         var factory = new RecordingFactory();
         await using var ctx = CreateReadOnlySingleWriterContext(factory);
 
-        // Create a write transaction - even though it's a "write" transaction,
-        // it should still be read-only because the context is ReadOnly
-        await using var tx = ctx.BeginTransaction(readOnly: false);
-        
-        Assert.Single(factory.Connections);
-        var persistentConnection = factory.Connections[0];
-        
-        // Must have read-only settings applied
-        Assert.Contains(persistentConnection.Commands, c => c.Contains("query_only"));
+        // Attempting to create a write transaction on a read-only context should throw
+        await Assert.ThrowsAsync<NotSupportedException>(() => 
+        {
+            var tx = ctx.BeginTransaction(readOnly: false);
+            return tx.DisposeAsync().AsTask();
+        });
     }
 
     [Fact]

@@ -37,6 +37,9 @@ public class SqlServerDialect : SqlDialect
     public override int MaxOutputParameters => 1024;
     public override int ParameterNameMaxLength => 128;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.Exec;
+    
+    // SQL Server relies on sp_executesql and server plan cache, not manual prepare
+    public override bool PrepareStatements => false;
     public override SqlStandardLevel MaxSupportedStandard =>
         IsInitialized ? base.MaxSupportedStandard : DetermineStandardCompliance(null);
 

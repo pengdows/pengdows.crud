@@ -6,6 +6,7 @@ using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.collections;
+using pengdows.crud.connection;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
@@ -466,12 +467,79 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
             cmd.Parameters.Add(param);
         }
 
-        if (_context.PrepareStatements)
-        {
-            cmd.Prepare();
-        }
+        // Apply shape-aware prepare logic
+        MaybePrepareCommand(cmd, conn);
 
         return cmd;
+    }
+
+    /// <summary>
+    /// Applies shape-aware prepare logic: prepares once per connection per SQL shape,
+    /// with fallback to disable prepare on provider failures.
+    /// </summary>
+    private void MaybePrepareCommand(DbCommand cmd, ITrackedConnection conn)
+    {
+        // Determine effective prepare setting based on configuration overrides
+        var shouldPrepare = ComputeEffectivePrepareSettings();
+        
+        // Check if prepare is disabled globally or for this connection
+        if (!shouldPrepare || conn.LocalState.PrepareDisabled)
+        {
+            return;
+        }
+
+        // Compute command shape hash for caching
+        var shapeHash = ConnectionLocalState.ComputeShapeHash(cmd);
+        
+        // Skip if already prepared for this shape
+        if (conn.LocalState.IsAlreadyPreparedForShape(shapeHash))
+        {
+            return;
+        }
+
+        try
+        {
+            cmd.Prepare();
+            conn.LocalState.MarkShapePrepared(shapeHash);
+        }
+        catch (Exception ex)
+        {
+            // Check if this type of exception should disable prepare for this connection
+            if (_dialect.ShouldDisablePrepareOn(ex))
+            {
+                conn.LocalState.PrepareDisabled = true;
+                // Log at debug level to avoid noise - this is expected fallback behavior
+                _logger?.LogDebug(ex, 
+                    "Disabled prepare for connection due to provider exception: {ExceptionType}", 
+                    ex.GetType().Name);
+            }
+            else
+            {
+                // Re-throw unexpected exceptions
+                throw;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Computes the effective prepare setting based on configuration overrides and dialect defaults
+    /// </summary>
+    private bool ComputeEffectivePrepareSettings()
+    {
+        // Check if prepare is hard-disabled via configuration
+        if (_context.DisablePrepare == true)
+        {
+            return false;
+        }
+        
+        // Check if prepare is explicitly forced on or off via configuration
+        if (_context.ForceManualPrepare.HasValue)
+        {
+            return _context.ForceManualPrepare.Value;
+        }
+        
+        // Fall back to dialect default
+        return _dialect.PrepareStatements;
     }
 
     // Backward-compatible helper for tests using reflection to invoke a simplified prepare

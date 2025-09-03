@@ -15,13 +15,14 @@ public abstract class SqlDialect:ISqlDialect
 {
     protected readonly DbProviderFactory Factory;
     protected readonly ILogger Logger;
-
+    protected DbConnectionStringBuilder ConnectionStringBuilder { get; init; }
     private IDatabaseProductInfo? _productInfo;
 
     protected SqlDialect(DbProviderFactory factory, ILogger logger)
     {
         Factory = factory ?? throw new ArgumentNullException(nameof(factory));
         Logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ConnectionStringBuilder = Factory.CreateConnectionStringBuilder() ?? new DbConnectionStringBuilder();
     }
 
     /// <summary>
@@ -310,7 +311,7 @@ public abstract class SqlDialect:ISqlDialect
             SupportsNamedParameters);
     }
 
-    [Obsolete("Use GetConnectionSessionSettings(IDatabaseContext,bool).")] 
+    [Obsolete("Use GetConnectionSessionSettings(IDatabaseContext,bool).")]
     public virtual string GetConnectionSessionSettings()
     {
         return string.Empty;
@@ -323,6 +324,14 @@ public abstract class SqlDialect:ISqlDialect
 
     public virtual void ApplyConnectionSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)
     {
+    }
+
+    /// <summary>
+    /// Default implementation checks for NotSupportedException and InvalidOperationException
+    /// </summary>
+    public virtual bool ShouldDisablePrepareOn(Exception ex)
+    {
+        return ex is NotSupportedException or InvalidOperationException;
     }
 
     [Obsolete("Use the overload accepting context and readOnly.")]

@@ -23,6 +23,9 @@ public class FirebirdDialect : SqlDialect
     public override int MaxParameterLimit => 65535;
     public override int MaxOutputParameters => 1499;
     public override int ParameterNameMaxLength => 63;
+    
+    // Firebird benefits from prepared statements
+    public override bool PrepareStatements => true;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.ExecuteProcedure;
 
     public override bool SupportsMerge => IsInitialized && ProductInfo.ParsedVersion?.Major >= 2;

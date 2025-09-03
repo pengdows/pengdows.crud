@@ -88,6 +88,18 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     bool PrepareStatements => DataSourceInfo.PrepareStatements;
 
     /// <summary>
+    /// Override to force manual prepare on or off for all commands.
+    /// When set, this overrides the dialect's PrepareStatements setting.
+    /// </summary>
+    bool? ForceManualPrepare { get; }
+
+    /// <summary>
+    /// When true, disables prepare for all commands regardless of dialect settings.
+    /// Takes precedence over ForceManualPrepare.
+    /// </summary>
+    bool? DisablePrepare { get; }
+
+    /// <summary>
     /// True if the provider supports named parameters (e.g., :name, @param).
     /// </summary>
     bool SupportsNamedParameters => DataSourceInfo.SupportsNamedParameters;

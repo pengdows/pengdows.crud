@@ -341,6 +341,14 @@ public interface ISqlDialect
     void ApplyConnectionSettings(IDbConnection connection, IDatabaseContext context, bool readOnly);
 
     /// <summary>
+    /// Determines whether prepare should be disabled for a connection based on an exception.
+    /// Used for per-connection runtime opt-out on first failure.
+    /// </summary>
+    /// <param name="ex">Exception thrown during prepare attempt.</param>
+    /// <returns>True if prepare should be disabled for this connection.</returns>
+    bool ShouldDisablePrepareOn(Exception ex);
+
+    /// <summary>
     /// Legacy overload for connection settings without context information.
     /// </summary>
     /// <param name="connection">Connection to configure.</param>

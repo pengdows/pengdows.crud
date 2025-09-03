@@ -2,18 +2,18 @@
 
 using System.Data;
 using System.Data.Common;
+using pengdows.crud.infrastructure;
 
 #endregion
 
 namespace pengdows.crud.wrappers;
 
-public class TrackedReader : ITrackedReader
+public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
 {
     private readonly ITrackedConnection _connection;
     private readonly IAsyncDisposable _connectionLocker;
     private readonly DbDataReader _reader;
     private readonly bool _shouldCloseConnection;
-    private int _disposed;
 
     public TrackedReader(DbDataReader reader,
         ITrackedConnection connection,
@@ -26,18 +26,15 @@ public class TrackedReader : ITrackedReader
         _shouldCloseConnection = shouldCloseConnection;
     }
 
-    public void Dispose()
+    protected override void DisposeManaged()
     {
-        if (Interlocked.CompareExchange(ref _disposed, 1, 0) == 0)
+        _reader.Dispose();
+        if (_shouldCloseConnection)
         {
-            _reader.Dispose();
-            if (_shouldCloseConnection)
-            {
-                _connection.Close();
-            }
-
-            _connectionLocker.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            _connection.Close();
         }
+
+        _connectionLocker.DisposeAsync().AsTask().GetAwaiter().GetResult();
     }
 
     public bool Read()
@@ -179,18 +176,15 @@ public class TrackedReader : ITrackedReader
     public bool IsClosed => _reader.IsClosed;
     public int RecordsAffected => _reader.RecordsAffected;
 
-    public async ValueTask DisposeAsync()
+    protected override async ValueTask DisposeManagedAsync()
     {
-        if (Interlocked.CompareExchange(ref _disposed, 1, 0) == 0)
+        await _reader.DisposeAsync();
+        if (_shouldCloseConnection)
         {
-            await _reader.DisposeAsync();
-            if (_shouldCloseConnection)
-            {
-                _connection.Close();
-            }
-
-            await _connectionLocker.DisposeAsync();
+            _connection.Close();
         }
+
+        await _connectionLocker.DisposeAsync();
     }
 
     public async Task<bool> ReadAsync()

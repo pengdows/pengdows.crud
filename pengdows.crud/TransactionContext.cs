@@ -186,6 +186,10 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
 
     public string QuoteSuffix => _dialect.QuoteSuffix;
 
+    public bool? ForceManualPrepare => _context.ForceManualPrepare;
+
+    public bool? DisablePrepare => _context.DisablePrepare;
+
     public string CompositeIdentifierSeparator => _dialect.CompositeIdentifierSeparator;
 
     public string WrapObjectName(string name)

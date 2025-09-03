@@ -21,6 +21,9 @@ public class DuckDbDialect : SqlDialect
     public override bool SupportsNamedParameters => true;
     public override int MaxParameterLimit => 65535;
     public override int ParameterNameMaxLength => 255;
+    
+    // DuckDB supports prepare for modest performance gains
+    public override bool PrepareStatements => true;
 
     // DuckDB has excellent SQL standard compliance and modern features
     public override bool SupportsMerge => false; // DuckDB doesn't support MERGE yet
