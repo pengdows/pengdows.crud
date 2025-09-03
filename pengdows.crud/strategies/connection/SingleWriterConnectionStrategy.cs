@@ -22,7 +22,7 @@ internal class SingleWriterConnectionStrategy :  IConnectionStrategy
     {
         if (connection != null)
         {
-            _context.ApplyConnectionSessionSettings(connection);
+            _context.ApplyPersistentConnectionSessionSettings(connection);
         }
 
         _context.SetPersistentConnection(connection);

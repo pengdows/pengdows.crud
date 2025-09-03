@@ -6,7 +6,6 @@ using System.Data;
 using System.Threading.Tasks;
 using System.Reflection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Data.Sqlite;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;

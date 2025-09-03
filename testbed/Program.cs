@@ -3,12 +3,10 @@
 
 #region
 
-using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using pengdows.crud;
 using testbed;
-using testbed.Cockroach;
 
 #endregion
 
@@ -19,7 +17,7 @@ foreach (var (assembly, type, factory) in DbProviderFactoryFinder.FindAllFactori
 
 var builder = Host.CreateApplicationBuilder(args);
 builder.Services.AddScoped<IAuditValueResolver, StringAuditContextProvider>();
- 
+
 var host = builder.Build();
 
 Console.WriteLine($"Starting parallel database testing at {DateTime.Now:yyyy-MM-dd HH:mm:ss}");

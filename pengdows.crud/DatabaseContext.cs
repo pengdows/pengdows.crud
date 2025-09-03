@@ -13,7 +13,6 @@ using pengdows.crud.infrastructure;
 using pengdows.crud.isolation;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
-using pengdows.crud.strategies;
 using pengdows.crud.strategies.connection;
 using pengdows.crud.strategies.proc;
 
@@ -178,6 +177,12 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             _procWrappingStyle = _dataSourceInfo.ProcWrappingStyle;
 
             RCSIEnabled = _dialect.IsReadCommittedSnapshotOn(initialConnection!);
+
+            // Apply session settings for persistent connections now that dialect is initialized
+            if (ConnectionMode != DbMode.Standard && initialConnection != null)
+            {
+                ApplyPersistentConnectionSessionSettings(initialConnection);
+            }
 
             // For Standard mode, dispose the connection after dialect initialization is complete
             if (ConnectionMode == DbMode.Standard && initialConnection != null)
@@ -599,7 +604,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
                 case DbMode.SingleWriter:
                     if (conn != null)
                     {
-                        ApplyConnectionSessionSettings(conn);
+                        ApplyPersistentConnectionSessionSettings(conn);
                     }
 
                     SetPersistentConnection(conn);
@@ -713,6 +718,40 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             {
                 _logger.LogError("Error setting session settings:" + ex.Message);
                 _applyConnectionSessionSettings = false;
+            }
+        }
+    }
+
+    public void ApplyPersistentConnectionSessionSettings(IDbConnection connection)
+    {
+        if (ConnectionMode == DbMode.Standard)
+        {
+            return;
+        }
+
+        // Skip if dialect hasn't been initialized yet (happens during constructor)
+        if (_dialect == null)
+        {
+            return;
+        }
+
+        _logger.LogInformation("Applying persistent connection session settings");
+
+        // For persistent connections in SingleConnection/SingleWriter mode,
+        // use the dialect's session settings which include read-only settings when appropriate
+        var sessionSettings = _dialect.GetConnectionSessionSettings(this, IsReadOnlyConnection);
+
+        if (!string.IsNullOrEmpty(sessionSettings))
+        {
+            try
+            {
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = sessionSettings;
+                cmd.ExecuteNonQuery();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("Error setting session settings:" + ex.Message);
             }
         }
     }

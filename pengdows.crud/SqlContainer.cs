@@ -301,6 +301,13 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
 
     public async Task<int> ExecuteNonQueryAsync(CommandType commandType, CancellationToken cancellationToken)
     {
+        // Check if context is configured as read-only (exactly ReadWriteMode.ReadOnly, not ReadWrite)
+        if (_context is DatabaseContext dbContext && 
+            dbContext.ReadWriteMode == ReadWriteMode.ReadOnly)
+        {
+            throw new NotSupportedException("Write operations are not supported in read-only mode.");
+        }
+        
         _context.AssertIsWriteConnection();
         ITrackedConnection? conn = null;
         DbCommand? cmd = null;
