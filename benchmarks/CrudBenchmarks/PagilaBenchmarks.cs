@@ -4,6 +4,8 @@ using Dapper;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using Npgsql;
+using pengdows.crud.configuration;
+using pengdows.crud.enums;
 using pengdows.crud;
 using pengdows.crud.attributes;
 
@@ -18,6 +20,8 @@ public class PagilaBenchmarks : IAsyncDisposable
     private TypeMapRegistry _map = null!;
     private EntityHelper<Film, int> _filmHelper = null!;
     private EntityHelper<FilmActor, int> _filmActorHelper = null!;
+    private ISqlContainer _insertFilmSc = null!;
+    private ISqlContainer _deleteByTitleSc = null!;
 
     [Params(1000)]
     public int FilmCount;
@@ -26,7 +30,10 @@ public class PagilaBenchmarks : IAsyncDisposable
     public int ActorCount;
 
     private int _filmId;
+    private List<int> _filmIds10 = new();
+    private bool _flip;
     private (int actorId, int filmId) _compositeKey;
+    private long _runCounter;
 
     [GlobalSetup]
     public async Task GlobalSetup()
@@ -50,10 +57,25 @@ public class PagilaBenchmarks : IAsyncDisposable
         _map = new TypeMapRegistry();
         _map.Register<Film>();
         _map.Register<FilmActor>();
-        _ctx = new DatabaseContext(_connStr, NpgsqlFactory.Instance, _map);
+        // Use SingleWriter to keep a persistent connection for identity retrieval performance
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = _connStr,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+        _ctx = new DatabaseContext(cfg, NpgsqlFactory.Instance, null, _map);
 
         _filmHelper = new EntityHelper<Film, int>(_ctx);
         _filmActorHelper = new EntityHelper<FilmActor, int>(_ctx);
+
+        // Prebuild reusable insert and delete containers
+        var seed = new Film { Title = "seed", Length = 0 };
+        _insertFilmSc = _filmHelper.BuildCreate(seed, _ctx);
+
+        _deleteByTitleSc = _ctx.CreateSqlContainer();
+        _deleteByTitleSc.AddParameterWithValue("t", DbType.String, "seed");
+        var pDel = _deleteByTitleSc.MakeParameterName("t");
+        _deleteByTitleSc.Query.Append($"delete from film where title = {pDel}");
 
         // pick keys to use in benchmarks
         await using var conn = new NpgsqlConnection(_connStr);
@@ -61,6 +83,7 @@ public class PagilaBenchmarks : IAsyncDisposable
         _filmId = await conn.ExecuteScalarAsync<int>("select film_id from film order by film_id limit 1");
         var row = await conn.QuerySingleAsync<(int actor_id, int film_id)>("select actor_id, film_id from film_actor limit 1");
         _compositeKey = (row.actor_id, row.film_id);
+        _filmIds10 = (await conn.QueryAsync<int>("select film_id from film order by film_id limit 10")).ToList();
     }
 
     [GlobalCleanup]
@@ -194,16 +217,78 @@ CREATE TABLE film_actor (
             new { a = _compositeKey.actorId, f = _compositeKey.filmId });
     }
 
+    [Benchmark]
+    public async Task<int> UpdateFilm_Mine()
+    {
+        // Toggle length to avoid no-op updates
+        var film = await _filmHelper.RetrieveOneAsync(_filmId);
+        if (film == null) return 0;
+        film.Length = _flip ? film.Length + 1 : film.Length - 1;
+        _flip = !_flip;
+        return await _filmHelper.UpdateAsync(film);
+    }
+
+    [Benchmark]
+    public async Task<int> UpdateFilm_Dapper()
+    {
+        await using var conn = new NpgsqlConnection(_connStr);
+        var len = await conn.ExecuteScalarAsync<int>(
+            "select length from film where film_id=@id", new { id = _filmId });
+        var newLen = _flip ? len + 1 : len - 1;
+        _flip = !_flip;
+        return await conn.ExecuteAsync(
+            "update film set length=@len where film_id=@id",
+            new { id = _filmId, len = newLen });
+    }
+
+    [Benchmark]
+    public async Task<int> InsertThenDeleteFilm_Mine()
+    {
+        // Reuse prebuilt containers and only update parameter values
+        var title = $"Bench_{Interlocked.Increment(ref _runCounter):D10}";
+        _insertFilmSc.SetParameterValue("p0", title);  // Title
+        _insertFilmSc.SetParameterValue("p1", 123);    // Length
+        await _insertFilmSc.ExecuteNonQueryAsync();
+
+        _deleteByTitleSc.SetParameterValue("t", title);
+        return await _deleteByTitleSc.ExecuteNonQueryAsync();
+    }
+
+    [Benchmark]
+    public async Task<int> InsertThenDeleteFilm_Dapper()
+    {
+        await using var conn = new NpgsqlConnection(_connStr);
+        var title = $"Bench_{Guid.NewGuid():N}";
+        var id = await conn.ExecuteScalarAsync<int>(
+            "insert into film(title, length) values (@t, @l) returning film_id",
+            new { t = title, l = 123 });
+        return await conn.ExecuteAsync("delete from film where film_id=@id", new { id });
+    }
+
+    [Benchmark]
+    public async Task<List<Film>> GetTenFilms_Mine()
+    {
+        return await _filmHelper.RetrieveAsync(_filmIds10);
+    }
+
+    [Benchmark]
+    public async Task<List<Film>> GetTenFilms_Dapper()
+    {
+        await using var conn = new NpgsqlConnection(_connStr);
+        var sql = "select film_id as \"Id\", title as \"Title\", length as \"Length\" from film where film_id = any(@ids)";
+        return (await conn.QueryAsync<Film>(sql, new { ids = _filmIds10.ToArray() })).ToList();
+    }
+
     public async ValueTask DisposeAsync()
     {
         await GlobalCleanup();
     }
 
     // Entities
-    [Table("film")]
+    [Table("film", schema: "public")]
     public class Film
     {
-        [Id]
+        [Id(false)]
         [Column("film_id", DbType.Int32)]
         public int Id { get; set; }
 
@@ -214,7 +299,7 @@ CREATE TABLE film_actor (
         public int Length { get; set; }
     }
 
-    [Table("film_actor")]
+    [Table("film_actor" , "public")]
     public class FilmActor
     {
         [PrimaryKey(1)]
@@ -226,4 +311,3 @@ CREATE TABLE film_actor (
         public int FilmId { get; set; }
     }
 }
-

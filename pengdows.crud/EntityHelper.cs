@@ -60,17 +60,40 @@ public class EntityHelper<TEntity, TRowID> :
 
     // private readonly IServiceProvider _serviceProvider;
     private ITableInfo _tableInfo = null!;
+    private IReadOnlyDictionary<string, IColumnInfo> _columnsByNameCI = null!;
     private bool _hasAuditColumns;
 
     private IColumnInfo? _versionColumn;
 
     private readonly ConcurrentDictionary<IColumnInfo, Func<object?, object?>> _readerConverters = new();
+    private readonly ConcurrentQueue<IColumnInfo> _readerConvertersOrder = new();
 
     private readonly ConcurrentDictionary<string, IReadOnlyList<IColumnInfo>> _columnListCache = new();
+    private readonly ConcurrentQueue<string> _columnListCacheOrder = new();
 
     private readonly ConcurrentDictionary<string, string> _queryCache = new();
+    private readonly ConcurrentQueue<string> _queryCacheOrder = new();
 
     private readonly ConcurrentDictionary<string, string[]> _whereParameterNames = new();
+    private readonly ConcurrentQueue<string> _whereParameterNamesOrder = new();
+
+    // Thread-safe cache for reader plans by recordset shape hash
+    private volatile ConcurrentDictionary<int, ColumnPlan[]> _readerPlans = new();
+    private const int MaxReaderPlans = 32;
+
+    private sealed class ColumnPlan
+    {
+        public int Ordinal { get; }
+        public Action<object, object?> Setter { get; }
+        public Func<object?, object?> Converter { get; }
+
+        public ColumnPlan(int ordinal, Action<object, object?> setter, Func<object?, object?> converter)
+        {
+            Ordinal = ordinal;
+            Setter = setter;
+            Converter = converter;
+        }
+    }
 
     // SQL templates cached per dialect to support context overrides
     private readonly ConcurrentDictionary<SupportedDatabase, Lazy<CachedSqlTemplates>> _templatesByDialect = new();
@@ -78,6 +101,7 @@ public class EntityHelper<TEntity, TRowID> :
     // Neutral tokens used in cached SQL; replaced with dialect-specific tokens on retrieval
     private const string NeutralQuotePrefix = "{Q}";
     private const string NeutralQuoteSuffix = "{q}";
+    private const string NeutralSeparator = "{S}";
 
     private static string WrapNeutral(string name)
     {
@@ -91,34 +115,59 @@ public class EntityHelper<TEntity, TRowID> :
             return sql;
         }
         return sql.Replace(NeutralQuotePrefix, dialect.QuotePrefix)
-                  .Replace(NeutralQuoteSuffix, dialect.QuoteSuffix);
+                  .Replace(NeutralQuoteSuffix, dialect.QuoteSuffix)
+                  .Replace(NeutralSeparator, dialect.CompositeIdentifierSeparator);
     }
 
     private const int MaxCacheSize = 100;
 
     private static void TryAddWithLimit<TKey, TValue>(ConcurrentDictionary<TKey, TValue> cache, TKey key,
-        TValue value)
+        TValue value, ConcurrentQueue<TKey> order)
         where TKey : notnull
     {
         // Use GetOrAdd to ensure we don't lose the value if already present
-        cache.GetOrAdd(key, value);
-        
-        // Check cache size and trigger eviction when limit is exceeded
-        if (cache.Count > MaxCacheSize)
+        if (cache.TryAdd(key, value))
         {
-            // For predictable behavior, clear the cache and keep only the current item
-            // This ensures that old items are evicted when the limit is exceeded
-            cache.Clear();
-            cache.TryAdd(key, value);
+            // Only track order for new entries
+            order.Enqueue(key);
+            
+            // Use queue-based FIFO eviction when limit is exceeded
+            while (cache.Count > MaxCacheSize && order.TryDequeue(out var oldKey))
+            {
+                cache.TryRemove(oldKey, out _);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Thread-safe method to add reader plans with bounded cache size using atomic dictionary swap
+    /// </summary>
+    private void TryAddReaderPlanWithLimit(int hash, ColumnPlan[] plan)
+    {
+        // Use GetOrAdd to ensure we don't lose the value if already present
+        _readerPlans.GetOrAdd(hash, plan);
+
+        // If cache size exceeds limit, atomically swap to a new dictionary
+        if (_readerPlans.Count > MaxReaderPlans)
+        {
+            var newCache = new ConcurrentDictionary<int, ColumnPlan[]>();
+            newCache.TryAdd(hash, plan);
+            // Atomic swap - other threads will start using the new cache
+            Interlocked.Exchange(ref _readerPlans, newCache);
         }
     }
 
     public void ClearCaches()
     {
         _readerConverters.Clear();
+        _readerConvertersOrder.Clear();
+        _readerPlans.Clear();
         _columnListCache.Clear();
+        _columnListCacheOrder.Clear();
         _queryCache.Clear();
+        _queryCacheOrder.Clear();
         _whereParameterNames.Clear();
+        _whereParameterNamesOrder.Clear();
     }
 
     public EntityHelper(IDatabaseContext databaseContext,
@@ -150,6 +199,7 @@ public class EntityHelper<TEntity, TRowID> :
                 "IDatabaseContext must implement ISqlDialectProvider and expose a non-null Dialect.");
         _tableInfo = _context.TypeMapRegistry.GetTableInfo<TEntity>() ??
                      throw new InvalidOperationException($"Type {typeof(TEntity).FullName} is not a table.");
+        _columnsByNameCI = _tableInfo.Columns.ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);
         _hasAuditColumns = _tableInfo.HasAuditColumns;
 
         if (_hasAuditColumns && _auditValueResolver is null)
@@ -190,6 +240,10 @@ public class EntityHelper<TEntity, TRowID> :
         return _dialect.MakeParameterName(p);
     }
 
+    /// <summary>
+    /// Legacy dialect token replacement method. Use neutral token system instead.
+    /// </summary>
+    [Obsolete("Use neutral token system with {Q}/{q}/{S} tokens instead")]
     public string ReplaceDialectTokens(string sql, string quotePrefix, string quoteSuffix, string parameterMarker)
     {
         if (sql == null)
@@ -243,7 +297,7 @@ public class EntityHelper<TEntity, TRowID> :
         }
 
         sql = factory();
-        TryAddWithLimit(_queryCache, key, sql);
+        TryAddWithLimit(_queryCache, key, sql, _queryCacheOrder);
         return sql;
     }
 
@@ -251,28 +305,66 @@ public class EntityHelper<TEntity, TRowID> :
     {
         var obj = new TEntity();
 
-        for (var i = 0; i < reader.FieldCount; i++)
+        var plan = GetOrBuildRecordsetPlan(reader);
+        for (var idx = 0; idx < plan.Length; idx++)
         {
-            var colName = reader.GetName(i);
-            if (_tableInfo.Columns.TryGetValue(colName, out var column))
+            var p = plan[idx];
+            var raw = reader.IsDBNull(p.Ordinal) ? null : reader.GetValue(p.Ordinal);
+            var coerced = p.Converter(raw);
+            try
             {
-                var raw = reader.IsDBNull(i) ? null : reader.GetValue(i);
-                var converter = GetOrCreateReaderConverter(column);
-                var coerced = converter(raw);
-                try
-                {
-                    var setter = GetOrCreateSetter(column.PropertyInfo);
-                    setter(obj, coerced);
-                }
-                catch (Exception ex)
-                {
-                    throw new InvalidValueException(
-                        $"Unable to set property from value that was stored in the database: {colName} :{ex.Message}");
-                }
+                p.Setter(obj, coerced);
+            }
+            catch (Exception ex)
+            {
+                var name = reader.GetName(p.Ordinal);
+                throw new InvalidValueException(
+                    $"Unable to set property from value that was stored in the database: {name} :{ex.Message}");
             }
         }
 
         return obj;
+    }
+
+    private ColumnPlan[] GetOrBuildRecordsetPlan(ITrackedReader reader)
+    {
+        // Compute a stronger hash for the recordset shape: field count + names + types
+        var fieldCount = reader.FieldCount;
+        var hash = fieldCount * 397;
+        for (var i = 0; i < fieldCount; i++)
+        {
+            var name = reader.GetName(i);
+            hash = unchecked(hash * 31 + StringComparer.OrdinalIgnoreCase.GetHashCode(name));
+            
+            // Include field type to strengthen hash and avoid shape collisions
+            var fieldType = reader.GetFieldType(i);
+            hash = unchecked(hash * 31 + fieldType.GetHashCode());
+        }
+
+        // Try to get existing plan from thread-safe cache
+        if (_readerPlans.TryGetValue(hash, out var existingPlan))
+        {
+            return existingPlan;
+        }
+
+        // Build new plan
+        var list = new List<ColumnPlan>(fieldCount);
+        for (var i = 0; i < fieldCount; i++)
+        {
+            var colName = reader.GetName(i);
+            if (_columnsByNameCI.TryGetValue(colName, out var column))
+            {
+                var setter = GetOrCreateSetter(column.PropertyInfo);
+                var converter = GetOrCreateReaderConverter(column);
+                list.Add(new ColumnPlan(i, setter, converter));
+            }
+        }
+
+        var plan = list.ToArray();
+        
+        // Add to cache with bounded size limit
+        TryAddReaderPlanWithLimit(hash, plan);
+        return plan;
     }
 
     private Func<object?, object?> GetOrCreateReaderConverter(IColumnInfo column)
@@ -301,7 +393,7 @@ public class EntityHelper<TEntity, TRowID> :
                     var s = value as string ?? value.ToString();
                     try
                     {
-                        return Enum.Parse(enumType, s!, false);
+                        return Enum.Parse(enumType, s!, true);
                     }
                     catch
                     {
@@ -352,7 +444,7 @@ public class EntityHelper<TEntity, TRowID> :
                 };
             }
 
-            TryAddWithLimit(_readerConverters, column, converter);
+            TryAddWithLimit(_readerConverters, column, converter, _readerConvertersOrder);
             return converter;
         }
 
@@ -371,7 +463,7 @@ public class EntityHelper<TEntity, TRowID> :
                 return JsonSerializer.Deserialize(s!, propType, opts);
             };
 
-            TryAddWithLimit(_readerConverters, column, converter);
+            TryAddWithLimit(_readerConverters, column, converter, _readerConvertersOrder);
             return converter;
         }
 
@@ -410,22 +502,43 @@ public class EntityHelper<TEntity, TRowID> :
             }
         };
 
-        TryAddWithLimit(_readerConverters, column, converter);
+        TryAddWithLimit(_readerConverters, column, converter, _readerConvertersOrder);
         return converter;
     }
 
     public async Task<bool> CreateAsync(TEntity entity, IDatabaseContext context)
     {
-        var sc = BuildCreate(entity, context);
-        var rowsAffected = await sc.ExecuteNonQueryAsync();
-
-        // For non-writable ID columns, retrieve the generated ID and populate it on the entity
-        if (rowsAffected == 1 && _idColumn != null && !_idColumn.IsIdIsWritable)
+        var ctx = context ?? _context;
+        var dialect = GetDialect(ctx);
+        
+        // Use RETURNING clause if supported to avoid race condition
+        if (_idColumn != null && !_idColumn.IsIdIsWritable && dialect.SupportsInsertReturning)
         {
-            await PopulateGeneratedIdAsync(entity, context);
+            var sc = BuildCreateWithReturning(entity, true, ctx);
+            var generatedId = await sc.ExecuteScalarAsync<object>();
+            
+            if (generatedId != null && generatedId != DBNull.Value)
+            {
+                var converted = Convert.ChangeType(generatedId, _idColumn.PropertyInfo.PropertyType, CultureInfo.InvariantCulture);
+                _idColumn.PropertyInfo.SetValue(entity, converted);
+                return true;
+            }
+            return false;
         }
+        else
+        {
+            // Fallback to old behavior for databases that don't support RETURNING
+            var sc = BuildCreate(entity, ctx);
+            var rowsAffected = await sc.ExecuteNonQueryAsync();
 
-        return rowsAffected == 1;
+            // For non-writable ID columns, retrieve the generated ID and populate it on the entity
+            if (rowsAffected == 1 && _idColumn != null && !_idColumn.IsIdIsWritable)
+            {
+                await PopulateGeneratedIdAsync(entity, ctx);
+            }
+
+            return rowsAffected == 1;
+        }
     }
 
     private async Task PopulateGeneratedIdAsync(TEntity entity, IDatabaseContext context)
@@ -522,6 +635,29 @@ public class EntityHelper<TEntity, TRowID> :
         return sc;
     }
 
+    /// <summary>
+    /// Builds an INSERT statement with optional RETURNING clause for identity capture.
+    /// </summary>
+    /// <param name="entity">Entity to insert</param>
+    /// <param name="withReturning">Whether to include RETURNING clause for identity</param>
+    /// <param name="context">Database context</param>
+    /// <returns>SQL container with INSERT statement</returns>
+    public ISqlContainer BuildCreateWithReturning(TEntity entity, bool withReturning, IDatabaseContext? context = null)
+    {
+        var sc = BuildCreate(entity, context);
+        var ctx = context ?? _context;
+        var dialect = GetDialect(ctx);
+        
+        // Add RETURNING clause if requested and supported
+        if (withReturning && _idColumn != null && !_idColumn.IsIdIsWritable && dialect.SupportsInsertReturning)
+        {
+            var idWrapped = dialect.WrapObjectName(_idColumn.Name);
+            var returningClause = dialect.RenderInsertReturningClause(idWrapped);
+            sc.Query.Append(returningClause);
+        }
+        
+        return sc;
+    }
 
     public ISqlContainer BuildBaseRetrieve(string alias, IDatabaseContext? context = null)
     {
@@ -536,7 +672,7 @@ public class EntityHelper<TEntity, TRowID> :
             var hasAlias = !string.IsNullOrWhiteSpace(alias);
             var selectList = _tableInfo.OrderedColumns
                 .Select(col => (hasAlias
-                    ? WrapNeutral(alias) + _dialect.CompositeIdentifierSeparator
+                    ? WrapNeutral(alias) + NeutralSeparator
                     : string.Empty) + WrapNeutral(col.Name));
             var sb = new StringBuilder();
             sb.Append("SELECT ")
@@ -544,7 +680,7 @@ public class EntityHelper<TEntity, TRowID> :
                 .Append("\nFROM ")
                 .Append(string.IsNullOrWhiteSpace(_tableInfo.Schema)
                     ? WrapNeutral(_tableInfo.Name)
-                    : WrapNeutral(_tableInfo.Schema) + _dialect.CompositeIdentifierSeparator + WrapNeutral(_tableInfo.Name));
+                    : WrapNeutral(_tableInfo.Schema) + NeutralSeparator + WrapNeutral(_tableInfo.Name));
             if (hasAlias)
             {
                 sb.Append(' ').Append(WrapNeutral(alias));
@@ -684,7 +820,8 @@ public class EntityHelper<TEntity, TRowID> :
         {
             throw new ArgumentNullException(nameof(sc));
         }
-        await using var reader = await sc.ExecuteReaderAsync().ConfigureAwait(false);
+        // Hint provider/ADO.NET to expect a single row for minimal overhead
+        await using var reader = await sc.ExecuteReaderSingleRowAsync().ConfigureAwait(false);
         if (await reader.ReadAsync().ConfigureAwait(false))
         {
             return MapReaderToObject(reader);
@@ -756,11 +893,13 @@ public class EntityHelper<TEntity, TRowID> :
         string alias, IDatabaseContext? context = null)
     {
         var ctx = context ?? _context;
+        var dialect = GetDialect(ctx);
         var sc = BuildBaseRetrieve(alias, ctx);
         BuildWhereByPrimaryKey(
             listOfObjects,
             sc,
-            alias);
+            alias,
+            dialect);
 
         return sc;
     }
@@ -777,6 +916,11 @@ public class EntityHelper<TEntity, TRowID> :
     }
 
     public void BuildWhereByPrimaryKey(IReadOnlyCollection<TEntity>? listOfObjects, ISqlContainer sc, string alias = "")
+    {
+        BuildWhereByPrimaryKey(listOfObjects, sc, alias, _dialect);
+    }
+
+    public void BuildWhereByPrimaryKey(IReadOnlyCollection<TEntity>? listOfObjects, ISqlContainer sc, string alias, ISqlDialect dialect)
     {
         ValidateWhereInputs(listOfObjects, sc);
 
@@ -795,7 +939,7 @@ public class EntityHelper<TEntity, TRowID> :
                 sb.Append(" OR ");
             }
 
-            sb.Append(BuildPrimaryKeyClause(entity, keys, wrappedAlias, parameters, _dialect));
+            sb.Append(BuildPrimaryKeyClause(entity, keys, wrappedAlias, parameters, dialect));
         }
 
         if (sb.Length == 0)
@@ -838,7 +982,7 @@ public class EntityHelper<TEntity, TRowID> :
             .Where(c => !c.IsNonInsertable && (!c.IsId || c.IsIdIsWritable))
             .ToList();
 
-        TryAddWithLimit(_columnListCache, "Insertable", insertable);
+        TryAddWithLimit(_columnListCache, "Insertable", insertable, _columnListCacheOrder);
         return insertable;
     }
 
@@ -853,7 +997,7 @@ public class EntityHelper<TEntity, TRowID> :
             .Where(c => !(c.IsId || c.IsVersion || c.IsNonUpdateable || c.IsCreatedBy || c.IsCreatedOn))
             .ToList();
 
-        TryAddWithLimit(_columnListCache, "Updatable", updatable);
+        TryAddWithLimit(_columnListCache, "Updatable", updatable, _columnListCacheOrder);
         return updatable;
     }
 
@@ -941,7 +1085,7 @@ public class EntityHelper<TEntity, TRowID> :
         var sc = ctx.CreateSqlContainer();
         var dialect = GetDialect(ctx);
 
-        var original = loadOriginal ? await LoadOriginalAsync(objectToUpdate) : null;
+        var original = loadOriginal ? await LoadOriginalAsync(objectToUpdate, ctx) : null;
         if (loadOriginal && original == null)
         {
             throw new InvalidOperationException("Original record not found for update.");
@@ -1119,36 +1263,8 @@ public class EntityHelper<TEntity, TRowID> :
         return (sql, parameters);
     }
 
-    private async Task<int> UpsertPortableAsync(TEntity entity, IDatabaseContext ctx)
-    {
-        var keyCols = ResolveUpsertKey();
-        var dialect = GetDialect(ctx);
-        var (updateSql, updateParams) = BuildUpdateByKey(entity, keyCols, dialect);
-        var scUpdate = ctx.CreateSqlContainer();
-        scUpdate.Query.Append(updateSql);
-        scUpdate.AddParameters(updateParams);
-        var rows = await scUpdate.ExecuteNonQueryAsync().ConfigureAwait(false);
-        if (rows > 0)
-        {
-            return rows;
-        }
 
-        var scInsert = BuildCreate(entity, ctx);
-
-        try
-        {
-            return await scInsert.ExecuteNonQueryAsync().ConfigureAwait(false);
-        }
-        catch (DbException ex) when (dialect.IsUniqueViolation(ex))
-        {
-            var scUpdate2 = ctx.CreateSqlContainer();
-            scUpdate2.Query.Append(updateSql);
-            scUpdate2.AddParameters(updateParams);
-            return await scUpdate2.ExecuteNonQueryAsync().ConfigureAwait(false);
-        }
-    }
-
-    private async Task<TEntity?> LoadOriginalAsync(TEntity objectToUpdate)
+    private async Task<TEntity?> LoadOriginalAsync(TEntity objectToUpdate, IDatabaseContext? context = null)
     {
         var idValue = _idColumn!.PropertyInfo.GetValue(objectToUpdate);
         if (IsDefaultId(idValue))
@@ -1159,7 +1275,7 @@ public class EntityHelper<TEntity, TRowID> :
         // Convert the object Id value to TRowID to avoid invalid boxing casts (e.g., int -> long)
         var targetType = typeof(TRowID);
         var underlying = Nullable.GetUnderlyingType(targetType) ?? targetType;
-        
+
         try
         {
             var converted = Convert.ChangeType(idValue!, underlying, CultureInfo.InvariantCulture);
@@ -1167,8 +1283,8 @@ public class EntityHelper<TEntity, TRowID> :
             {
                 return null;
             }
-            
-            return await RetrieveOneAsync((TRowID)converted);
+
+            return await RetrieveOneAsync((TRowID)converted, context);
         }
         catch (InvalidCastException ex)
         {
@@ -1545,11 +1661,7 @@ public class EntityHelper<TEntity, TRowID> :
             throw new ArgumentException("IDs cannot be null", nameof(ids));
         }
 
-        var markerSig = sqlContainer.MakeParameterName("marker");
-        var defaultMarkerSig = _dialect.MakeParameterName("marker");
-        var key = markerSig == defaultMarkerSig
-            ? $"Where:{wrappedColumnName}:{list.Count}"
-            : $"Where:{wrappedColumnName}:{list.Count}:{markerSig}";
+        var key = $"Where:{wrappedColumnName}:{list.Count}";
         var sql = GetCachedQuery(key, () =>
         {
             var names = new string[list.Count];
@@ -1558,7 +1670,7 @@ public class EntityHelper<TEntity, TRowID> :
                 names[i] = sqlContainer.MakeParameterName($"p{i}");
             }
 
-            TryAddWithLimit(_whereParameterNames, key, names);
+            TryAddWithLimit(_whereParameterNames, key, names, _whereParameterNamesOrder);
             return string.Concat(wrappedColumnName, " IN (", string.Join(", ", names), ")");
         });
 
@@ -1595,6 +1707,17 @@ public class EntityHelper<TEntity, TRowID> :
         return sqlContainer;
     }
 
+    /// <summary>
+    /// Type-safe coercion for audit field values (handles string to Guid, etc.)
+    /// </summary>
+    private static object? Coerce(object? value, Type targetType)
+    {
+        if (value is null) return null;
+        var t = Nullable.GetUnderlyingType(targetType) ?? targetType;
+        if (t.IsInstanceOfType(value)) return value;
+        if (t == typeof(Guid) && value is string s) return Guid.Parse(s);
+        return Convert.ChangeType(value, t, CultureInfo.InvariantCulture);
+    }
 
     private void SetAuditFields(TEntity obj, bool updateOnly)
     {
@@ -1615,7 +1738,7 @@ public class EntityHelper<TEntity, TRowID> :
         var hasUserAuditFields = _tableInfo.CreatedBy != null || _tableInfo.LastUpdatedBy != null;
         var hasTimeAuditFields = _tableInfo.CreatedOn != null || _tableInfo.LastUpdatedOn != null;
         var auditValues = _auditValueResolver?.Resolve();
-        
+
         // Require resolver only for user-based audit fields
         if (auditValues == null && hasUserAuditFields)
         {
@@ -1633,14 +1756,16 @@ public class EntityHelper<TEntity, TRowID> :
         if (_tableInfo.LastUpdatedBy?.PropertyInfo != null && auditValues != null)
         {
             // We know auditValues is not null because we validated above
-            _tableInfo.LastUpdatedBy.PropertyInfo.SetValue(obj, auditValues!.UserId);
+            var coercedUserId = Coerce(auditValues!.UserId, _tableInfo.LastUpdatedBy.PropertyInfo.PropertyType);
+            _tableInfo.LastUpdatedBy.PropertyInfo.SetValue(obj, coercedUserId);
         }
         else if (_tableInfo.LastUpdatedBy?.PropertyInfo != null)
         {
             var current = _tableInfo.LastUpdatedBy.PropertyInfo.GetValue(obj) as string;
             if (string.IsNullOrEmpty(current))
             {
-                _tableInfo.LastUpdatedBy.PropertyInfo.SetValue(obj, "system");
+                var coercedSystem = Coerce("system", _tableInfo.LastUpdatedBy.PropertyInfo.PropertyType);
+                _tableInfo.LastUpdatedBy.PropertyInfo.SetValue(obj, coercedSystem);
             }
         }
 
@@ -1668,7 +1793,8 @@ public class EntityHelper<TEntity, TRowID> :
                 || (currentValue is Guid guid && guid == Guid.Empty))
             {
                 // We know auditValues is not null because we validated above
-                _tableInfo.CreatedBy.PropertyInfo.SetValue(obj, auditValues!.UserId);
+                var coercedUserId = Coerce(auditValues!.UserId, _tableInfo.CreatedBy.PropertyInfo.PropertyType);
+                _tableInfo.CreatedBy.PropertyInfo.SetValue(obj, coercedUserId);
             }
         }
     }
@@ -1832,7 +1958,7 @@ public class EntityHelper<TEntity, TRowID> :
 
         var sb = new StringBuilder();
         sb.Append(WrapNeutral(_tableInfo.Schema));
-        sb.Append(_dialect.CompositeIdentifierSeparator);
+        sb.Append(NeutralSeparator);
         sb.Append(WrapNeutral(_tableInfo.Name));
         return sb.ToString();
     }

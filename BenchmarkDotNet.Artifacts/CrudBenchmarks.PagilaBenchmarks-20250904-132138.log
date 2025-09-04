@@ -1,0 +1,330 @@
+// Validating benchmarks:
+// ***** BenchmarkRunner: Start   *****
+// ***** Found 2 benchmark(s) in total *****
+// ***** Building 1 exe(s) in Parallel: Start   *****
+// start dotnet  restore /p:UseSharedCompilation=false /p:BuildInParallel=false /m:1 /p:Deterministic=true /p:Optimize=true /p:IntermediateOutputPath="/home/alaricd/prj/pengdows/pengdows.crud/benchmarks/CrudBenchmarks/bin/Release/net8.0/f7a1f454-5b30-4e9e-bece-844fedf7c33a/obj/Release/net8.0/" /p:OutDir="/home/alaricd/prj/pengdows/pengdows.crud/benchmarks/CrudBenchmarks/bin/Release/net8.0/f7a1f454-5b30-4e9e-bece-844fedf7c33a/bin/Release/net8.0/" /p:OutputPath="/home/alaricd/prj/pengdows/pengdows.crud/benchmarks/CrudBenchmarks/bin/Release/net8.0/f7a1f454-5b30-4e9e-bece-844fedf7c33a/bin/Release/net8.0/" in /home/alaricd/prj/pengdows/pengdows.crud/benchmarks/CrudBenchmarks/bin/Release/net8.0/f7a1f454-5b30-4e9e-bece-844fedf7c33a
+// command took 1.22 sec and exited with 0
+// start dotnet  build -c Release --no-restore /p:UseSharedCompilation=false /p:BuildInParallel=false /m:1 /p:Deterministic=true /p:Optimize=true /p:IntermediateOutputPath="/home/alaricd/prj/pengdows/pengdows.crud/benchmarks/CrudBenchmarks/bin/Release/net8.0/f7a1f454-5b30-4e9e-bece-844fedf7c33a/obj/Release/net8.0/" /p:OutDir="/home/alaricd/prj/pengdows/pengdows.crud/benchmarks/CrudBenchmarks/bin/Release/net8.0/f7a1f454-5b30-4e9e-bece-844fedf7c33a/bin/Release/net8.0/" /p:OutputPath="/home/alaricd/prj/pengdows/pengdows.crud/benchmarks/CrudBenchmarks/bin/Release/net8.0/f7a1f454-5b30-4e9e-bece-844fedf7c33a/bin/Release/net8.0/" --output "/home/alaricd/prj/pengdows/pengdows.crud/benchmarks/CrudBenchmarks/bin/Release/net8.0/f7a1f454-5b30-4e9e-bece-844fedf7c33a/bin/Release/net8.0/" in /home/alaricd/prj/pengdows/pengdows.crud/benchmarks/CrudBenchmarks/bin/Release/net8.0/f7a1f454-5b30-4e9e-bece-844fedf7c33a
+// command took 8.5 sec and exited with 0
+// ***** Done, took 00:00:09 (9.79 sec)   *****
+// Found 2 benchmarks:
+//   PagilaBenchmarks.InsertThenDeleteFilm_Mine: DefaultJob [FilmCount=1000, ActorCount=200]
+//   PagilaBenchmarks.InsertThenDeleteFilm_Dapper: DefaultJob [FilmCount=1000, ActorCount=200]
+
+// **************************
+// Benchmark: PagilaBenchmarks.InsertThenDeleteFilm_Mine: DefaultJob [FilmCount=1000, ActorCount=200]
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet f7a1f454-5b30-4e9e-bece-844fedf7c33a.dll --anonymousPipes 129 130 --benchmarkName "CrudBenchmarks.PagilaBenchmarks.InsertThenDeleteFilm_Mine(FilmCount: 1000, ActorCount: 200)" --job Default --benchmarkId 0 in /home/alaricd/prj/pengdows/pengdows.crud/benchmarks/CrudBenchmarks/bin/Release/net8.0/f7a1f454-5b30-4e9e-bece-844fedf7c33a/bin/Release/net8.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.14.0
+// Runtime=.NET 8.0.19 (8.0.1925.36514), X64 RyuJIT AVX2
+// GC=Concurrent Workstation
+// HardwareIntrinsics=AVX2,AES,BMI1,BMI2,FMA,LZCNT,PCLMUL,POPCNT VectorSize=256
+// Job: DefaultJob
+
+[testcontainers.org 00:00:00.11] Connected to Docker:
+  Host: unix:///var/run/docker.sock
+  Server Version: 28.4.0
+  Kernel Version: 6.8.0-79-generic
+  API Version: 1.51
+  Operating System: Ubuntu 24.04.3 LTS
+  Total Memory: 125.75 GB
+[testcontainers.org 00:00:00.22] Docker container 5f0c467d73cf created
+[testcontainers.org 00:00:00.26] Start Docker container 5f0c467d73cf
+[testcontainers.org 00:00:00.40] Wait for Docker container 5f0c467d73cf to complete readiness checks
+[testcontainers.org 00:00:00.40] Docker container 5f0c467d73cf ready
+[testcontainers.org 00:00:00.42] Docker container 57141adf9d3f created
+[testcontainers.org 00:00:00.42] Start Docker container 57141adf9d3f
+[testcontainers.org 00:00:00.56] Wait for Docker container 57141adf9d3f to complete readiness checks
+[testcontainers.org 00:00:00.57] Execute "/bin/sh -c true && (grep -i ':0*1538' /proc/net/tcp* || nc -vz -w 1 localhost 5432 || /bin/bash -c '</dev/tcp/localhost/5432')" at Docker container 57141adf9d3f
+[testcontainers.org 00:00:01.64] Execute "/bin/sh -c true && (grep -i ':0*1538' /proc/net/tcp* || nc -vz -w 1 localhost 5432 || /bin/bash -c '</dev/tcp/localhost/5432')" at Docker container 57141adf9d3f
+[testcontainers.org 00:00:02.69] Execute "/bin/sh -c true && (grep -i ':0*1538' /proc/net/tcp* || nc -vz -w 1 localhost 5432 || /bin/bash -c '</dev/tcp/localhost/5432')" at Docker container 57141adf9d3f
+[testcontainers.org 00:00:02.75] Docker container 57141adf9d3f ready
+OverheadJitting  1: 1 op, 259547.00 ns, 259.5470 us/op
+WorkloadJitting  1: 1 op, 26439381.00 ns, 26.4394 ms/op
+
+OverheadJitting  2: 16 op, 378661.00 ns, 23.6663 us/op
+WorkloadJitting  2: 16 op, 18368439.00 ns, 1.1480 ms/op
+
+WorkloadPilot    1: 16 op, 16270626.00 ns, 1.0169 ms/op
+WorkloadPilot    2: 32 op, 34300533.00 ns, 1.0719 ms/op
+WorkloadPilot    3: 64 op, 67536579.00 ns, 1.0553 ms/op
+WorkloadPilot    4: 128 op, 133330495.00 ns, 1.0416 ms/op
+WorkloadPilot    5: 256 op, 263842368.00 ns, 1.0306 ms/op
+WorkloadPilot    6: 512 op, 517446811.00 ns, 1.0106 ms/op
+
+OverheadWarmup   1: 512 op, 3770.00 ns, 7.3633 ns/op
+OverheadWarmup   2: 512 op, 1420.00 ns, 2.7734 ns/op
+OverheadWarmup   3: 512 op, 1690.00 ns, 3.3008 ns/op
+OverheadWarmup   4: 512 op, 1420.00 ns, 2.7734 ns/op
+OverheadWarmup   5: 512 op, 1360.00 ns, 2.6563 ns/op
+OverheadWarmup   6: 512 op, 1400.00 ns, 2.7344 ns/op
+OverheadWarmup   7: 512 op, 1340.00 ns, 2.6172 ns/op
+
+OverheadActual   1: 512 op, 1350.00 ns, 2.6367 ns/op
+OverheadActual   2: 512 op, 1400.00 ns, 2.7344 ns/op
+OverheadActual   3: 512 op, 1430.00 ns, 2.7930 ns/op
+OverheadActual   4: 512 op, 1400.00 ns, 2.7344 ns/op
+OverheadActual   5: 512 op, 1670.00 ns, 3.2617 ns/op
+OverheadActual   6: 512 op, 1380.00 ns, 2.6953 ns/op
+OverheadActual   7: 512 op, 1340.00 ns, 2.6172 ns/op
+OverheadActual   8: 512 op, 1360.00 ns, 2.6563 ns/op
+OverheadActual   9: 512 op, 1320.00 ns, 2.5781 ns/op
+OverheadActual  10: 512 op, 1340.00 ns, 2.6172 ns/op
+OverheadActual  11: 512 op, 1320.00 ns, 2.5781 ns/op
+OverheadActual  12: 512 op, 1310.00 ns, 2.5586 ns/op
+OverheadActual  13: 512 op, 1320.00 ns, 2.5781 ns/op
+OverheadActual  14: 512 op, 1370.00 ns, 2.6758 ns/op
+OverheadActual  15: 512 op, 1320.00 ns, 2.5781 ns/op
+
+WorkloadWarmup   1: 512 op, 493554715.00 ns, 963.9741 us/op
+WorkloadWarmup   2: 512 op, 483951859.00 ns, 945.2185 us/op
+WorkloadWarmup   3: 512 op, 526355091.00 ns, 1.0280 ms/op
+WorkloadWarmup   4: 512 op, 507275305.00 ns, 990.7721 us/op
+WorkloadWarmup   5: 512 op, 489557326.00 ns, 956.1667 us/op
+WorkloadWarmup   6: 512 op, 490296997.00 ns, 957.6113 us/op
+WorkloadWarmup   7: 512 op, 492213801.00 ns, 961.3551 us/op
+WorkloadWarmup   8: 512 op, 485737088.00 ns, 948.7053 us/op
+
+// BeforeActualRun
+WorkloadActual   1: 512 op, 489673730.00 ns, 956.3940 us/op
+WorkloadActual   2: 512 op, 487939786.00 ns, 953.0074 us/op
+WorkloadActual   3: 512 op, 495562261.00 ns, 967.8950 us/op
+WorkloadActual   4: 512 op, 495772128.00 ns, 968.3049 us/op
+WorkloadActual   5: 512 op, 490056741.00 ns, 957.1421 us/op
+WorkloadActual   6: 512 op, 496135539.00 ns, 969.0147 us/op
+WorkloadActual   7: 512 op, 502814841.00 ns, 982.0602 us/op
+WorkloadActual   8: 512 op, 496384280.00 ns, 969.5005 us/op
+WorkloadActual   9: 512 op, 500699838.00 ns, 977.9294 us/op
+WorkloadActual  10: 512 op, 494278311.00 ns, 965.3873 us/op
+WorkloadActual  11: 512 op, 504987497.00 ns, 986.3037 us/op
+WorkloadActual  12: 512 op, 493490522.00 ns, 963.8487 us/op
+WorkloadActual  13: 512 op, 488764981.00 ns, 954.6191 us/op
+WorkloadActual  14: 512 op, 488913537.00 ns, 954.9093 us/op
+WorkloadActual  15: 512 op, 488825594.00 ns, 954.7375 us/op
+
+// AfterActualRun
+WorkloadResult   1: 512 op, 489672380.00 ns, 956.3914 us/op
+WorkloadResult   2: 512 op, 487938436.00 ns, 953.0048 us/op
+WorkloadResult   3: 512 op, 495560911.00 ns, 967.8924 us/op
+WorkloadResult   4: 512 op, 495770778.00 ns, 968.3023 us/op
+WorkloadResult   5: 512 op, 490055391.00 ns, 957.1394 us/op
+WorkloadResult   6: 512 op, 496134189.00 ns, 969.0121 us/op
+WorkloadResult   7: 512 op, 502813491.00 ns, 982.0576 us/op
+WorkloadResult   8: 512 op, 496382930.00 ns, 969.4979 us/op
+WorkloadResult   9: 512 op, 500698488.00 ns, 977.9267 us/op
+WorkloadResult  10: 512 op, 494276961.00 ns, 965.3847 us/op
+WorkloadResult  11: 512 op, 504986147.00 ns, 986.3011 us/op
+WorkloadResult  12: 512 op, 493489172.00 ns, 963.8460 us/op
+WorkloadResult  13: 512 op, 488763631.00 ns, 954.6165 us/op
+WorkloadResult  14: 512 op, 488912187.00 ns, 954.9066 us/op
+WorkloadResult  15: 512 op, 488824244.00 ns, 954.7349 us/op
+// GC:  0 0 0 4538792 512
+// Threading:  3988 0 512
+
+[testcontainers.org 00:00:18.59] Stop Docker container 57141adf9d3f
+[testcontainers.org 00:00:18.75] Delete Docker container 57141adf9d3f
+// AfterAll
+// Benchmark Process 41059 has exited with code 0.
+
+Mean = 965.401 μs, StdErr = 2.727 μs (0.28%), N = 15, StdDev = 10.560 μs
+Min = 953.005 μs, Q1 = 955.649 μs, Median = 965.385 μs, Q3 = 969.255 μs, Max = 986.301 μs
+IQR = 13.606 μs, LowerFence = 935.240 μs, UpperFence = 989.664 μs
+ConfidenceInterval = [954.111 μs; 976.691 μs] (CI 99.9%), Margin = 11.290 μs (1.17% of Mean)
+Skewness = 0.51, Kurtosis = 1.96, MValue = 2
+
+// ** Remained 1 (50.0%) benchmark(s) to run. Estimated finish 2025-09-04 13:22 (0h 0m from now) **
+// **************************
+// Benchmark: PagilaBenchmarks.InsertThenDeleteFilm_Dapper: DefaultJob [FilmCount=1000, ActorCount=200]
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet f7a1f454-5b30-4e9e-bece-844fedf7c33a.dll --anonymousPipes 131 132 --benchmarkName "CrudBenchmarks.PagilaBenchmarks.InsertThenDeleteFilm_Dapper(FilmCount: 1000, ActorCount: 200)" --job Default --benchmarkId 1 in /home/alaricd/prj/pengdows/pengdows.crud/benchmarks/CrudBenchmarks/bin/Release/net8.0/f7a1f454-5b30-4e9e-bece-844fedf7c33a/bin/Release/net8.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.14.0
+// Runtime=.NET 8.0.19 (8.0.1925.36514), X64 RyuJIT AVX2
+// GC=Concurrent Workstation
+// HardwareIntrinsics=AVX2,AES,BMI1,BMI2,FMA,LZCNT,PCLMUL,POPCNT VectorSize=256
+// Job: DefaultJob
+
+[testcontainers.org 00:00:00.11] Connected to Docker:
+  Host: unix:///var/run/docker.sock
+  Server Version: 28.4.0
+  Kernel Version: 6.8.0-79-generic
+  API Version: 1.51
+  Operating System: Ubuntu 24.04.3 LTS
+  Total Memory: 125.75 GB
+[testcontainers.org 00:00:00.21] Docker container 8213740649d5 created
+[testcontainers.org 00:00:00.25] Start Docker container 8213740649d5
+[testcontainers.org 00:00:00.38] Wait for Docker container 8213740649d5 to complete readiness checks
+[testcontainers.org 00:00:00.38] Docker container 8213740649d5 ready
+[testcontainers.org 00:00:00.40] Docker container 441bae2875e7 created
+[testcontainers.org 00:00:00.41] Start Docker container 441bae2875e7
+[testcontainers.org 00:00:00.53] Wait for Docker container 441bae2875e7 to complete readiness checks
+[testcontainers.org 00:00:00.53] Execute "/bin/sh -c true && (grep -i ':0*1538' /proc/net/tcp* || nc -vz -w 1 localhost 5432 || /bin/bash -c '</dev/tcp/localhost/5432')" at Docker container 441bae2875e7
+[testcontainers.org 00:00:01.60] Execute "/bin/sh -c true && (grep -i ':0*1538' /proc/net/tcp* || nc -vz -w 1 localhost 5432 || /bin/bash -c '</dev/tcp/localhost/5432')" at Docker container 441bae2875e7
+[testcontainers.org 00:00:02.65] Execute "/bin/sh -c true && (grep -i ':0*1538' /proc/net/tcp* || nc -vz -w 1 localhost 5432 || /bin/bash -c '</dev/tcp/localhost/5432')" at Docker container 441bae2875e7
+[testcontainers.org 00:00:02.70] Docker container 441bae2875e7 ready
+OverheadJitting  1: 1 op, 284954.00 ns, 284.9540 us/op
+WorkloadJitting  1: 1 op, 4638417.00 ns, 4.6384 ms/op
+
+OverheadJitting  2: 16 op, 345567.00 ns, 21.5979 us/op
+WorkloadJitting  2: 16 op, 18878534.00 ns, 1.1799 ms/op
+
+WorkloadPilot    1: 16 op, 17938808.00 ns, 1.1212 ms/op
+WorkloadPilot    2: 32 op, 35359290.00 ns, 1.1050 ms/op
+WorkloadPilot    3: 64 op, 75571399.00 ns, 1.1808 ms/op
+WorkloadPilot    4: 128 op, 143603608.00 ns, 1.1219 ms/op
+WorkloadPilot    5: 256 op, 281174296.00 ns, 1.0983 ms/op
+WorkloadPilot    6: 512 op, 557401407.00 ns, 1.0887 ms/op
+
+OverheadWarmup   1: 512 op, 2960.00 ns, 5.7813 ns/op
+OverheadWarmup   2: 512 op, 1600.00 ns, 3.1250 ns/op
+OverheadWarmup   3: 512 op, 1610.00 ns, 3.1445 ns/op
+OverheadWarmup   4: 512 op, 1550.00 ns, 3.0273 ns/op
+OverheadWarmup   5: 512 op, 1530.00 ns, 2.9883 ns/op
+OverheadWarmup   6: 512 op, 1400.00 ns, 2.7344 ns/op
+OverheadWarmup   7: 512 op, 2350.00 ns, 4.5898 ns/op
+OverheadWarmup   8: 512 op, 1500.00 ns, 2.9297 ns/op
+
+OverheadActual   1: 512 op, 1461.00 ns, 2.8535 ns/op
+OverheadActual   2: 512 op, 1460.00 ns, 2.8516 ns/op
+OverheadActual   3: 512 op, 1560.00 ns, 3.0469 ns/op
+OverheadActual   4: 512 op, 2470.00 ns, 4.8242 ns/op
+OverheadActual   5: 512 op, 1500.00 ns, 2.9297 ns/op
+OverheadActual   6: 512 op, 1481.00 ns, 2.8926 ns/op
+OverheadActual   7: 512 op, 1400.00 ns, 2.7344 ns/op
+OverheadActual   8: 512 op, 1460.00 ns, 2.8516 ns/op
+OverheadActual   9: 512 op, 1450.00 ns, 2.8320 ns/op
+OverheadActual  10: 512 op, 1410.00 ns, 2.7539 ns/op
+OverheadActual  11: 512 op, 1440.00 ns, 2.8125 ns/op
+OverheadActual  12: 512 op, 1480.00 ns, 2.8906 ns/op
+OverheadActual  13: 512 op, 1420.00 ns, 2.7734 ns/op
+OverheadActual  14: 512 op, 1510.00 ns, 2.9492 ns/op
+OverheadActual  15: 512 op, 1440.00 ns, 2.8125 ns/op
+
+WorkloadWarmup   1: 512 op, 570893657.00 ns, 1.1150 ms/op
+WorkloadWarmup   2: 512 op, 559173382.00 ns, 1.0921 ms/op
+WorkloadWarmup   3: 512 op, 560238454.00 ns, 1.0942 ms/op
+WorkloadWarmup   4: 512 op, 563355432.00 ns, 1.1003 ms/op
+WorkloadWarmup   5: 512 op, 561880632.00 ns, 1.0974 ms/op
+WorkloadWarmup   6: 512 op, 582440390.00 ns, 1.1376 ms/op
+WorkloadWarmup   7: 512 op, 551743697.00 ns, 1.0776 ms/op
+
+// BeforeActualRun
+WorkloadActual   1: 512 op, 561628530.00 ns, 1.0969 ms/op
+WorkloadActual   2: 512 op, 584448281.00 ns, 1.1415 ms/op
+WorkloadActual   3: 512 op, 565749987.00 ns, 1.1050 ms/op
+WorkloadActual   4: 512 op, 557093841.00 ns, 1.0881 ms/op
+WorkloadActual   5: 512 op, 557429550.00 ns, 1.0887 ms/op
+WorkloadActual   6: 512 op, 558077475.00 ns, 1.0900 ms/op
+WorkloadActual   7: 512 op, 560370212.00 ns, 1.0945 ms/op
+WorkloadActual   8: 512 op, 564214710.00 ns, 1.1020 ms/op
+WorkloadActual   9: 512 op, 559068257.00 ns, 1.0919 ms/op
+WorkloadActual  10: 512 op, 562612519.00 ns, 1.0989 ms/op
+WorkloadActual  11: 512 op, 575636720.00 ns, 1.1243 ms/op
+WorkloadActual  12: 512 op, 564780073.00 ns, 1.1031 ms/op
+WorkloadActual  13: 512 op, 572973645.00 ns, 1.1191 ms/op
+WorkloadActual  14: 512 op, 558514387.00 ns, 1.0908 ms/op
+WorkloadActual  15: 512 op, 573045644.00 ns, 1.1192 ms/op
+
+// AfterActualRun
+WorkloadResult   1: 512 op, 561627070.00 ns, 1.0969 ms/op
+WorkloadResult   2: 512 op, 584446821.00 ns, 1.1415 ms/op
+WorkloadResult   3: 512 op, 565748527.00 ns, 1.1050 ms/op
+WorkloadResult   4: 512 op, 557092381.00 ns, 1.0881 ms/op
+WorkloadResult   5: 512 op, 557428090.00 ns, 1.0887 ms/op
+WorkloadResult   6: 512 op, 558076015.00 ns, 1.0900 ms/op
+WorkloadResult   7: 512 op, 560368752.00 ns, 1.0945 ms/op
+WorkloadResult   8: 512 op, 564213250.00 ns, 1.1020 ms/op
+WorkloadResult   9: 512 op, 559066797.00 ns, 1.0919 ms/op
+WorkloadResult  10: 512 op, 562611059.00 ns, 1.0988 ms/op
+WorkloadResult  11: 512 op, 575635260.00 ns, 1.1243 ms/op
+WorkloadResult  12: 512 op, 564778613.00 ns, 1.1031 ms/op
+WorkloadResult  13: 512 op, 572972185.00 ns, 1.1191 ms/op
+WorkloadResult  14: 512 op, 558512927.00 ns, 1.0908 ms/op
+WorkloadResult  15: 512 op, 573044184.00 ns, 1.1192 ms/op
+// GC:  0 0 0 2319336 512
+// Threading:  4096 0 512
+
+[testcontainers.org 00:00:19.67] Stop Docker container 441bae2875e7
+[testcontainers.org 00:00:19.84] Delete Docker container 441bae2875e7
+// AfterAll
+// Benchmark Process 41452 has exited with code 0.
+
+Mean = 1.104 ms, StdErr = 0.004 ms (0.37%), N = 15, StdDev = 0.016 ms
+Min = 1.088 ms, Q1 = 1.091 ms, Median = 1.099 ms, Q3 = 1.112 ms, Max = 1.141 ms
+IQR = 0.021 ms, LowerFence = 1.060 ms, UpperFence = 1.143 ms
+ConfidenceInterval = [1.087 ms; 1.120 ms] (CI 99.9%), Margin = 0.017 ms (1.52% of Mean)
+Skewness = 0.97, Kurtosis = 2.81, MValue = 2
+
+// ** Remained 0 (0.0%) benchmark(s) to run. Estimated finish 2025-09-04 13:22 (0h 0m from now) **
+// ***** BenchmarkRunner: Finish  *****
+
+// * Export *
+  BenchmarkDotNet.Artifacts/results/CrudBenchmarks.PagilaBenchmarks-report.csv
+  BenchmarkDotNet.Artifacts/results/CrudBenchmarks.PagilaBenchmarks-report-github.md
+  BenchmarkDotNet.Artifacts/results/CrudBenchmarks.PagilaBenchmarks-report.html
+
+// * Detailed results *
+PagilaBenchmarks.InsertThenDeleteFilm_Mine: DefaultJob [FilmCount=1000, ActorCount=200]
+Runtime = .NET 8.0.19 (8.0.1925.36514), X64 RyuJIT AVX2; GC = Concurrent Workstation
+Mean = 965.401 μs, StdErr = 2.727 μs (0.28%), N = 15, StdDev = 10.560 μs
+Min = 953.005 μs, Q1 = 955.649 μs, Median = 965.385 μs, Q3 = 969.255 μs, Max = 986.301 μs
+IQR = 13.606 μs, LowerFence = 935.240 μs, UpperFence = 989.664 μs
+ConfidenceInterval = [954.111 μs; 976.691 μs] (CI 99.9%), Margin = 11.290 μs (1.17% of Mean)
+Skewness = 0.51, Kurtosis = 1.96, MValue = 2
+-------------------- Histogram --------------------
+[950.401 μs ; 991.921 μs) | @@@@@@@@@@@@@@@
+---------------------------------------------------
+
+PagilaBenchmarks.InsertThenDeleteFilm_Dapper: DefaultJob [FilmCount=1000, ActorCount=200]
+Runtime = .NET 8.0.19 (8.0.1925.36514), X64 RyuJIT AVX2; GC = Concurrent Workstation
+Mean = 1.104 ms, StdErr = 0.004 ms (0.37%), N = 15, StdDev = 0.016 ms
+Min = 1.088 ms, Q1 = 1.091 ms, Median = 1.099 ms, Q3 = 1.112 ms, Max = 1.141 ms
+IQR = 0.021 ms, LowerFence = 1.060 ms, UpperFence = 1.143 ms
+ConfidenceInterval = [1.087 ms; 1.120 ms] (CI 99.9%), Margin = 0.017 ms (1.52% of Mean)
+Skewness = 0.97, Kurtosis = 2.81, MValue = 2
+-------------------- Histogram --------------------
+[1.085 ms ; 1.110 ms) | @@@@@@@@@@@
+[1.110 ms ; 1.150 ms) | @@@@
+---------------------------------------------------
+
+// * Summary *
+
+BenchmarkDotNet v0.14.0, Ubuntu 24.04.3 LTS (Noble Numbat)
+AMD Ryzen 9 5950X, 2 CPU, 8 logical and 8 physical cores
+.NET SDK 8.0.119
+  [Host]     : .NET 8.0.19 (8.0.1925.36514), X64 RyuJIT AVX2
+  DefaultJob : .NET 8.0.19 (8.0.1925.36514), X64 RyuJIT AVX2
+
+
+| Method                      | FilmCount | ActorCount | Mean       | Error    | StdDev   | Allocated |
+|---------------------------- |---------- |----------- |-----------:|---------:|---------:|----------:|
+| InsertThenDeleteFilm_Mine   | 1000      | 200        |   965.4 μs | 11.29 μs | 10.56 μs |   8.66 KB |
+| InsertThenDeleteFilm_Dapper | 1000      | 200        | 1,103.6 μs | 16.78 μs | 15.70 μs |   4.42 KB |
+
+// * Legends *
+  FilmCount  : Value of the 'FilmCount' parameter
+  ActorCount : Value of the 'ActorCount' parameter
+  Mean       : Arithmetic mean of all measurements
+  Error      : Half of 99.9% confidence interval
+  StdDev     : Standard deviation of all measurements
+  Allocated  : Allocated memory per single operation (managed only, inclusive, 1KB = 1024B)
+  1 μs       : 1 Microsecond (0.000001 sec)
+
+// * Diagnostic Output - MemoryDiagnoser *
+
+
+// ***** BenchmarkRunner: End *****
+Run time: 00:00:39 (39.16 sec), executed benchmarks: 2
+
+Global total time: 00:00:49 (49.05 sec), executed benchmarks: 2
+// * Artifacts cleanup *
+Artifacts cleanup is finished

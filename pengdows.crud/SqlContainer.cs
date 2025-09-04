@@ -33,7 +33,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
                    ?? throw new InvalidOperationException(
                        "IDatabaseContext must implement ISqlDialectProvider and expose a non-null Dialect.");
         _logger = logger ?? NullLogger<ISqlContainer>.Instance;
-        Query = new StringBuilder(query ?? string.Empty);
+        Query = StringBuilderPool.Get(query);
     }
 
     public StringBuilder Query { get; }
@@ -62,6 +62,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
     {
         return _dialect.MakeParameterName(parameterName);
     }
+
+    
 
     public DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
@@ -364,6 +366,55 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
         throw new InvalidOperationException("ExecuteScalarAsync expected at least one row but found none.");
     }
 
+    // Write-path scalar execution (e.g., INSERT ... RETURNING / OUTPUT)
+    public async Task<T?> ExecuteScalarWriteAsync<T>(CommandType commandType = CommandType.Text)
+    {
+        return await ExecuteScalarWriteAsync<T>(commandType, CancellationToken.None).ConfigureAwait(false);
+    }
+
+    public async Task<T?> ExecuteScalarWriteAsync<T>(CommandType commandType, CancellationToken cancellationToken)
+    {
+        // Check for explicit read-only mode
+        if (_context is DatabaseContext dbContext && dbContext.ReadWriteMode == ReadWriteMode.ReadOnly)
+        {
+            throw new NotSupportedException("Write operations are not supported in read-only mode.");
+        }
+
+        _context.AssertIsWriteConnection();
+        ITrackedConnection? conn = null;
+        DbCommand? cmd = null;
+        try
+        {
+            await using var contextLocker = _context.GetLock();
+            await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
+            var isTransaction = _context is ITransactionContext;
+            conn = _context.GetConnection(ExecutionType.Write, isTransaction);
+            if (_context.ConnectionMode == DbMode.SingleWriter &&
+                _context is DatabaseContext dbCtx &&
+                !ReferenceEquals(conn, dbCtx.PersistentConnection))
+            {
+                throw new InvalidOperationException("SingleWriter: writes must use the shared writer connection.");
+            }
+            await using var connectionLocker = conn.GetLock();
+            await connectionLocker.LockAsync(cancellationToken).ConfigureAwait(false);
+            cmd = await PrepareAndCreateCommandAsync(conn, commandType, ExecutionType.Write, cancellationToken).ConfigureAwait(false);
+
+            var result = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+            if (result is null || result is DBNull)
+            {
+                var isNullable = !typeof(T).IsValueType || Nullable.GetUnderlyingType(typeof(T)) != null;
+                return isNullable ? default : throw new InvalidOperationException("ExecuteScalarWriteAsync expected a value but found none.");
+            }
+
+            var targetType = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
+            return (T?)TypeCoercionHelper.Coerce(result, result.GetType(), targetType);
+        }
+        finally
+        {
+            Cleanup(cmd, conn, ExecutionType.Write);
+        }
+    }
+
     public async Task<ITrackedReader> ExecuteReaderAsync(CommandType commandType = CommandType.Text)
     {
         return await ExecuteReaderAsync(commandType, CancellationToken.None).ConfigureAwait(false);
@@ -407,6 +458,37 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
         {
             //no matter what we do NOT close the underlying connection
             //or dispose it.
+            Cleanup(cmd, null, ExecutionType.Read);
+        }
+    }
+
+    // Optimized single-row reader to hint providers/ADO.NET for minimal result shape
+    public async Task<ITrackedReader> ExecuteReaderSingleRowAsync(CancellationToken cancellationToken = default)
+    {
+        _context.AssertIsReadConnection();
+
+        ITrackedConnection conn;
+        DbCommand? cmd = null;
+        try
+        {
+            await using var contextLocker = _context.GetLock();
+            await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
+            var isTransaction = _context is ITransactionContext;
+            conn = _context.GetConnection(ExecutionType.Read, isTransaction);
+            var connectionLocker = conn.GetLock();
+            await connectionLocker.LockAsync(cancellationToken).ConfigureAwait(false);
+            cmd = await PrepareAndCreateCommandAsync(conn, CommandType.Text, ExecutionType.Read, cancellationToken).ConfigureAwait(false);
+
+            var isSingleConnection = _context.ConnectionMode == DbMode.SingleConnection;
+            var behavior = (isTransaction || isSingleConnection)
+                ? CommandBehavior.SingleRow
+                : (CommandBehavior.CloseConnection | CommandBehavior.SingleRow);
+
+            var dr = await cmd.ExecuteReaderAsync(behavior, cancellationToken).ConfigureAwait(false);
+            return new TrackedReader(dr, conn, connectionLocker, (behavior & CommandBehavior.CloseConnection) == CommandBehavior.CloseConnection);
+        }
+        finally
+        {
             Cleanup(cmd, null, ExecutionType.Read);
         }
     }
@@ -591,10 +673,9 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
 
     protected override void DisposeManaged()
     {
-        // Dispose managed resources here (clear parameters and query)
-
+        // Dispose managed resources here (clear parameters and return the builder to pool)
         _parameters.Clear();
-        Query.Clear();
         _outputParameterCount = 0;
+        StringBuilderPool.Return(Query);
     }
 }

@@ -416,4 +416,16 @@ public interface ISqlDialect
     /// </summary>
     /// <returns>SQL query to get the last inserted identity value, or empty string if not supported.</returns>
     string GetLastInsertedIdQuery();
+
+    /// <summary>
+    /// Indicates whether INSERT statements support RETURNING or OUTPUT clauses for identity values.
+    /// </summary>
+    bool SupportsInsertReturning { get; }
+
+    /// <summary>
+    /// Generates the RETURNING or OUTPUT clause for INSERT statements to capture identity values.
+    /// </summary>
+    /// <param name="idColumnWrapped">Quoted identity column name</param>
+    /// <returns>SQL clause like " RETURNING id" or " OUTPUT INSERTED.id"</returns>
+    string RenderInsertReturningClause(string idColumnWrapped);
 }

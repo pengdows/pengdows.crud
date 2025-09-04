@@ -588,6 +588,68 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             Name = _dataSourceInfo.DatabaseProductName;
             // No further provider-based overrides here
 
+            // Enforce: full-blown servers must use Standard mode (no persistent single connection).
+            // Applies to: PostgreSQL (and CockroachDB), MySQL (and MariaDB), Oracle, and SQL Server (except LocalDB/CE).
+            // Firebird embedded is treated like a local engine and is exempt.
+            if (ConnectionMode != DbMode.Standard)
+            {
+                var p = Product;
+                var isSqlServer = p == SupportedDatabase.SqlServer;
+                var connStrLower = (_connectionString ?? string.Empty).ToLowerInvariant();
+                var isLocalDb = connStrLower.Contains("(localdb)") || connStrLower.Contains("localdb");
+                var factoryNameLower = _factory.GetType().FullName?.ToLowerInvariant() ?? string.Empty;
+                var isSqlCe = factoryNameLower.Contains("sqlserverce") || Name.ToLowerInvariant().Contains("compact");
+
+                // If we're using the fakeDb/emulated provider (detected via connection string hint),
+                // do NOT force Standard mode. Tests and dev scenarios rely on single-connection/single-writer semantics.
+                var isEmulated = connStrLower.Contains("emulatedproduct=");
+
+                // Firebird embedded: detect via connection string hints
+                bool isFirebirdEmbedded = false;
+                if (p == SupportedDatabase.Firebird)
+                {
+                    try
+                    {
+                        var csb = GetFactoryConnectionStringBuilder(_connectionString);
+                        string GetVal(string key) => csb.ContainsKey(key) ? (csb[key]?.ToString() ?? string.Empty) : string.Empty;
+
+                        var serverType = GetVal("ServerType").ToLowerInvariant();
+                        var clientLib = GetVal("ClientLibrary").ToLowerInvariant();
+                        var dataSource = GetVal("DataSource").ToLowerInvariant();
+                        var database = GetVal("Database");
+
+                        if (serverType.Contains("embedded") || clientLib.Contains("embed"))
+                        {
+                            isFirebirdEmbedded = true;
+                        }
+                        else if (string.IsNullOrWhiteSpace(dataSource))
+                        {
+                            var dbLower = database.ToLowerInvariant();
+                            if (!string.IsNullOrWhiteSpace(dbLower) && (dbLower.Contains('/') || dbLower.Contains('\\') || dbLower.EndsWith(".fdb")))
+                            {
+                                isFirebirdEmbedded = true;
+                            }
+                        }
+                    }
+                    catch { /* heuristic only */ }
+                }
+
+                var isFullServer = p == SupportedDatabase.PostgreSql
+                                   || p == SupportedDatabase.CockroachDb
+                                   || p == SupportedDatabase.MySql
+                                   || p == SupportedDatabase.MariaDb
+                                   || p == SupportedDatabase.Oracle
+                                   || (isSqlServer && !isLocalDb && !isSqlCe);
+
+                if (!isEmulated && (isFullServer || (p == SupportedDatabase.Firebird && !isFirebirdEmbedded)))
+                {
+                    _logger.LogWarning(
+                        "DbMode.{Mode} is not supported for {Product}; forcing Standard mode.",
+                        ConnectionMode, p);
+                    ConnectionMode = DbMode.Standard;
+                }
+            }
+
             _isolationResolver ??= new IsolationResolver(Product, RCSIEnabled);
         }
         catch (Exception ex)

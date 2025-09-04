@@ -812,6 +812,37 @@ public abstract class SqlDialect:ISqlDialect
         };
     }
 
+    /// <summary>
+    /// Indicates whether INSERT statements support RETURNING or OUTPUT clauses for identity values.
+    /// </summary>
+    public virtual bool SupportsInsertReturning => DatabaseType switch
+    {
+        SupportedDatabase.PostgreSql => true,
+        SupportedDatabase.SqlServer => true,
+        SupportedDatabase.Sqlite => true,
+        SupportedDatabase.Oracle => true,
+        SupportedDatabase.Firebird => true,
+        _ => false
+    };
+
+    /// <summary>
+    /// Generates the RETURNING or OUTPUT clause for INSERT statements to capture identity values.
+    /// </summary>
+    /// <param name="idColumnWrapped">Quoted identity column name</param>
+    /// <returns>SQL clause like " RETURNING id" or " OUTPUT INSERTED.id"</returns>
+    public virtual string RenderInsertReturningClause(string idColumnWrapped)
+    {
+        return DatabaseType switch
+        {
+            SupportedDatabase.PostgreSql => $" RETURNING {idColumnWrapped}",
+            SupportedDatabase.SqlServer => $" OUTPUT INSERTED.{idColumnWrapped}",
+            SupportedDatabase.Sqlite => $" RETURNING {idColumnWrapped}",
+            SupportedDatabase.Oracle => $" RETURNING {idColumnWrapped} INTO ?",
+            SupportedDatabase.Firebird => $" RETURNING {idColumnWrapped}",
+            _ => string.Empty
+        };
+    }
+
     // ---- Legacy utility helpers (kept for test compatibility) ----
     // These helpers are intentionally private to match historical usage in tests via reflection.
     private static bool TryParseMajorVersion(string? version, out int major)
