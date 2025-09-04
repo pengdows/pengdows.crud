@@ -38,7 +38,8 @@ public class FirebirdDialect : SqlDialect
 
     public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
     {
-        return GetConnectionSessionSettings();
+        // Firebird doesn't have separate read-only session settings like other databases
+        return "SET TRANSACTION ISOLATION LEVEL READ COMMITTED;\nSET SQL DIALECT 3;";
     }
 
     [Obsolete]

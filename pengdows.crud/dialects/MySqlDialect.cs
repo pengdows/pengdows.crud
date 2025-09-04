@@ -37,7 +37,8 @@ public class MySqlDialect : SqlDialect
 
     public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
     {
-        var baseSettings = GetConnectionSessionSettings();
+        const string baseSettings = "SET SESSION sql_mode = 'STRICT_ALL_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,ANSI_QUOTES,NO_BACKSLASH_ESCAPES';";
+        
         if (readOnly)
         {
             return $"{baseSettings}\nSET SESSION TRANSACTION READ ONLY;";

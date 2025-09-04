@@ -234,12 +234,13 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
         }
 
         var strategy = ProcWrappingStrategyFactory.Create(_context.ProcWrappingStyle);
-        return strategy.Wrap(procName, executionType, args);
+        return strategy.Wrap(procName, executionType, args, WrapObjectName);
 
         string FormatExecWithReturn()
         {
             var paramList = string.IsNullOrWhiteSpace(args) ? string.Empty : $" {args}";
-            return $"DECLARE @__ret INT;\nEXEC @__ret = {procName}{paramList};\nSELECT @__ret;";
+            var wrappedProcName = WrapObjectName(procName);
+            return $"DECLARE @__ret INT;\nEXEC @__ret = {wrappedProcName}{paramList};\nSELECT @__ret;";
         }
 
         string BuildProcedureArguments()

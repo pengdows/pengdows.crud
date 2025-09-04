@@ -4,14 +4,16 @@ using pengdows.crud.enums;
 
 internal class PostgresProcWrappingStrategy : IProcWrappingStrategy
 {
-    public string Wrap(string procName, ExecutionType executionType, string args)
+    public string Wrap(string procName, ExecutionType executionType, string args, Func<string, string>? wrapObjectName = null)
     {
         if (string.IsNullOrWhiteSpace(procName))
         {
             throw new ArgumentException("Procedure name cannot be null or empty.", nameof(procName));
         }
+        
+        var wrappedProcName = wrapObjectName?.Invoke(procName) ?? procName;
         return executionType == ExecutionType.Read
-            ? $"SELECT * FROM {procName}({args})"
-            : $"CALL {procName}({args})";
+            ? $"SELECT * FROM {wrappedProcName}({args})"
+            : $"CALL {wrappedProcName}({args})";
     }
 }

@@ -28,17 +28,25 @@ public class SqliteDialect : SqlDialect
     public override bool SupportsInsertOnConflict => true;
     public override bool SupportsMerge => false;
     public override bool SupportsSavepoints => true;
-    public override bool SupportsJsonTypes => IsInitialized && ProductInfo.ParsedVersion >= new Version(3, 45);
-    public override bool SupportsWindowFunctions => IsInitialized && ProductInfo.ParsedVersion >= new Version(3, 25);
-    public override bool SupportsCommonTableExpressions => IsInitialized && ProductInfo.ParsedVersion >= new Version(3, 8, 3);
+    public override bool SupportsJsonTypes => IsVersionAtLeast(3, 45);
+    public override bool SupportsWindowFunctions => IsVersionAtLeast(3, 25);
+    public override bool SupportsCommonTableExpressions => IsVersionAtLeast(3, 8, 3);
 
     public override string GetVersionQuery() => "SELECT sqlite_version()";
 
-    public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
+    protected override string GetBaseSessionSettings()
     {
-        return readOnly
-            ? "PRAGMA foreign_keys = ON;\nPRAGMA query_only = ON;"
-            : GetConnectionSessionSettings();
+        return "PRAGMA foreign_keys = ON;";
+    }
+
+    protected override string GetReadOnlySessionSettings()
+    {
+        return "PRAGMA query_only = ON;";
+    }
+
+    protected override string? GetReadOnlyConnectionParameter()
+    {
+        return "Mode=ReadOnly";
     }
 
     [Obsolete]
@@ -49,16 +57,20 @@ public class SqliteDialect : SqlDialect
 
     public override void ApplyConnectionSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)
     {
-        var cs = context.ConnectionString;
-        if (readOnly && !IsMemoryConnection(cs))
+        // SQLite: Only apply read-only connection parameter if not a memory database
+        if (readOnly && IsMemoryDatabase(context.ConnectionString))
         {
-            cs = $"{cs};Mode=ReadOnly";
+            // For memory databases, just set the connection string without read-only parameter
+            connection.ConnectionString = context.ConnectionString;
         }
-
-        connection.ConnectionString = cs;
+        else
+        {
+            // Use base class implementation for non-memory databases
+            base.ApplyConnectionSettings(connection, context, readOnly);
+        }
     }
 
-    private static bool IsMemoryConnection(string connectionString)
+    protected override bool IsMemoryDatabase(string connectionString)
     {
         if (string.IsNullOrWhiteSpace(connectionString))
         {
@@ -66,12 +78,7 @@ public class SqliteDialect : SqlDialect
         }
 
         var lower = connectionString.ToLowerInvariant();
-        if (lower.Contains(":memory:"))
-        {
-            return true;
-        }
-
-        return lower.Contains("mode=memory");
+        return lower.Contains(":memory:") || lower.Contains("mode=memory");
     }
 
     public override DataTable GetDataSourceInformationSchema(ITrackedConnection connection)

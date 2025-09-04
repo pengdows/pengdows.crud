@@ -46,14 +46,21 @@ public class SqlServerDialect : SqlDialect
     public override bool SupportsNamespaces => true;
 
     // Version-specific overrides
-    public override bool SupportsMerge => IsInitialized && ProductInfo.ParsedVersion?.Major >= 10;
-    public override bool SupportsJsonTypes => IsInitialized && ProductInfo.ParsedVersion?.Major >= 13;
+    public override bool SupportsMerge => IsVersionAtLeast(10);
+    public override bool SupportsJsonTypes => IsVersionAtLeast(13);
 
     public override string GetVersionQuery() => "SELECT @@VERSION";
 
-    public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
+    protected override string GetBaseSessionSettings()
     {
-        return GetConnectionSessionSettings();
+        // SQL Server doesn't differentiate session settings based on read-only mode
+        // as it uses ApplicationIntent=ReadOnly in the connection string instead
+        return _sessionSettings ?? string.Empty;
+    }
+
+    protected override string? GetReadOnlyConnectionParameter()
+    {
+        return "ApplicationIntent=ReadOnly";
     }
 
     [Obsolete]
@@ -72,16 +79,7 @@ public class SqlServerDialect : SqlDialect
         return v == 1;
     }
 
-    public override void ApplyConnectionSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)
-    {
-        var cs = context.ConnectionString;
-        if (readOnly)
-        {
-            cs = $"{cs};ApplicationIntent=ReadOnly";
-        }
-
-        connection.ConnectionString = cs;
-    }
+    // SQL Server uses base class ApplyConnectionSettings implementation
 
     public override async Task<IDatabaseProductInfo> DetectDatabaseInfoAsync(ITrackedConnection connection)
     {
@@ -174,23 +172,18 @@ public class SqlServerDialect : SqlDialect
         }
     }
 
-    protected override SqlStandardLevel DetermineStandardCompliance(Version? version)
+    protected override Dictionary<int, SqlStandardLevel> GetMajorVersionToStandardMapping()
     {
-        if (version == null)
+        return new Dictionary<int, SqlStandardLevel>
         {
-            return SqlStandardLevel.Sql2008;
-        }
-
-        return version.Major switch
-        {
-            >= 16 => SqlStandardLevel.Sql2016,
-            >= 15 => SqlStandardLevel.Sql2016,
-            >= 14 => SqlStandardLevel.Sql2016,
-            >= 13 => SqlStandardLevel.Sql2016,
-            >= 12 => SqlStandardLevel.Sql2011,
-            >= 11 => SqlStandardLevel.Sql2008,
-            >= 10 => SqlStandardLevel.Sql2008,
-            _ => SqlStandardLevel.Sql2003
+            { 13, SqlStandardLevel.Sql2016 }, // SQL Server 2016+
+            { 12, SqlStandardLevel.Sql2011 }, // SQL Server 2014
+            { 10, SqlStandardLevel.Sql2008 }  // SQL Server 2008+
         };
+    }
+
+    protected override SqlStandardLevel GetDefaultStandardLevel()
+    {
+        return SqlStandardLevel.Sql2008;
     }
 }

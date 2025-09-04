@@ -31,7 +31,7 @@ public class WriteProcWithReturnTests
     {
         var sc = SetupContainer(SupportedDatabase.SqlServer);
         var s = sc.WrapForCreateWithReturn();
-        Assert.Equal("DECLARE @__ret INT;\nEXEC @__ret = dbo.Sqltest @p0, @p1;\nSELECT @__ret;", s);
+        Assert.Equal("DECLARE @__ret INT;\nEXEC @__ret = \"dbo\".\"Sqltest\" @p0, @p1;\nSELECT @__ret;", s);
     }
 
     [Fact]
@@ -46,7 +46,7 @@ public class WriteProcWithReturnTests
     {
         var sc = SetupContainer(SupportedDatabase.SqlServer);
         var s = sc.WrapForUpdateWithReturn();
-        Assert.Equal("DECLARE @__ret INT;\nEXEC @__ret = dbo.Sqltest @p0, @p1;\nSELECT @__ret;", s);
+        Assert.Equal("DECLARE @__ret INT;\nEXEC @__ret = \"dbo\".\"Sqltest\" @p0, @p1;\nSELECT @__ret;", s);
     }
 
     [Fact]
@@ -61,7 +61,7 @@ public class WriteProcWithReturnTests
     {
         var sc = SetupContainer(SupportedDatabase.SqlServer);
         var s = sc.WrapForDeleteWithReturn();
-        Assert.Equal("DECLARE @__ret INT;\nEXEC @__ret = dbo.Sqltest @p0, @p1;\nSELECT @__ret;", s);
+        Assert.Equal("DECLARE @__ret INT;\nEXEC @__ret = \"dbo\".\"Sqltest\" @p0, @p1;\nSELECT @__ret;", s);
     }
 
     [Fact]

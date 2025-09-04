@@ -73,7 +73,7 @@ public class SqlContainerParameterOrderTests : SqlLiteContextTestBase
         var wrapped = container.WrapForStoredProc(ExecutionType.Read);
 
         // Expect SELECT form with dialect-specific marker, preserving add order
-        Assert.Equal("SELECT * FROM my_proc(:b, :a, :c)", wrapped);
+        Assert.Equal("SELECT * FROM \"my_proc\"(:b, :a, :c)", wrapped);
     }
 }
 

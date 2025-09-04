@@ -32,23 +32,29 @@ public class PostgreSqlDialect : SqlDialect
     public override bool SupportsNamespaces => true;
 
     public override bool SupportsInsertOnConflict => true;
-    public override bool SupportsMerge => IsInitialized && ProductInfo.ParsedVersion?.Major >= 15;
-    public override bool SupportsJsonTypes => IsInitialized && ProductInfo.ParsedVersion?.Major >= 9;
-    public override bool SupportsSqlJsonConstructors => IsInitialized && ProductInfo.ParsedVersion?.Major >= 18;
-    public override bool SupportsJsonTable => IsInitialized && ProductInfo.ParsedVersion?.Major >= 18;
-    public override bool SupportsMergeReturning => IsInitialized && ProductInfo.ParsedVersion?.Major >= 18;
+    public override bool SupportsMerge => IsVersionAtLeast(15);
+    public override bool SupportsJsonTypes => IsVersionAtLeast(9);
+    public override bool SupportsSqlJsonConstructors => IsVersionAtLeast(18);
+    public override bool SupportsJsonTable => IsVersionAtLeast(18);
+    public override bool SupportsMergeReturning => IsVersionAtLeast(18);
 
     public override string GetVersionQuery() => "SELECT version()";
 
-    public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
+    protected override string GetBaseSessionSettings()
     {
-        var baseSettings = GetConnectionSessionSettings();
-        if (readOnly)
-        {
-            return $"{baseSettings}\nSET default_transaction_read_only = on;";
-        }
+        return @"SET standard_conforming_strings = on;
+SET client_min_messages = warning;
+SET search_path = public;";
+    }
 
-        return baseSettings;
+    protected override string GetReadOnlySessionSettings()
+    {
+        return "SET default_transaction_read_only = on;";
+    }
+
+    protected override string? GetReadOnlyConnectionParameter()
+    {
+        return "Options='-c default_transaction_read_only=on'";
     }
 
     [Obsolete]
@@ -59,23 +65,15 @@ SET client_min_messages = warning;
 SET search_path = public;";
     }
 
-    public override void ApplyConnectionSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)
+    protected override void ConfigureProviderSpecificSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)
     {
-        var cs = context.ConnectionString;
-        
-        // Handle read-only connection setting
-        if (readOnly)
-        {
-            cs = $"{cs};Options='-c default_transaction_read_only=on'";
-        }
-
         // Apply Npgsql-specific prepare settings if this is an Npgsql connection
         if (connection.GetType().FullName?.StartsWith("Npgsql.") == true)
         {
             try
             {
                 // Use the inherited ConnectionStringBuilder property instead of reflection
-                ConnectionStringBuilder.ConnectionString = cs;
+                ConnectionStringBuilder.ConnectionString = connection.ConnectionString;
                 var builder = ConnectionStringBuilder;
                 
                 // Configure auto-prepare settings for optimal prepared statement performance
@@ -100,31 +98,28 @@ SET search_path = public;";
                 // Multiplexing must be disabled for prepare to work properly
                 builder["Multiplexing"] = false;
                 
-                cs = builder.ToString();
+                connection.ConnectionString = builder.ToString();
             }
             catch (Exception ex)
             {
                 Logger.LogDebug(ex, "Failed to configure Npgsql connection string settings, using original connection string");
             }
         }
-
-        connection.ConnectionString = cs;
     }
 
-    protected override SqlStandardLevel DetermineStandardCompliance(Version? version)
+    protected override Dictionary<int, SqlStandardLevel> GetMajorVersionToStandardMapping()
     {
-        if (version == null)
+        return new Dictionary<int, SqlStandardLevel>
         {
-            return SqlStandardLevel.Sql2008;
-        }
-
-        return version.Major switch
-        {
-            >= 15 => SqlStandardLevel.Sql2016,
-            >= 13 => SqlStandardLevel.Sql2011,
-            >= 11 => SqlStandardLevel.Sql2008,
-            >= 9 => SqlStandardLevel.Sql2003,
-            _ => SqlStandardLevel.Sql92
+            { 15, SqlStandardLevel.Sql2016 },
+            { 13, SqlStandardLevel.Sql2011 },
+            { 11, SqlStandardLevel.Sql2008 },
+            { 9, SqlStandardLevel.Sql2003 }
         };
+    }
+
+    protected override SqlStandardLevel GetDefaultStandardLevel()
+    {
+        return SqlStandardLevel.Sql2008;
     }
 }

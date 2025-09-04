@@ -1,6 +1,5 @@
 using System.Data;
 using System.Data.Common;
-using System.Reflection;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 
@@ -24,7 +23,7 @@ public class OracleDialect : SqlDialect
     public override int ParameterNameMaxLength => 30;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.Oracle;
     public override bool RequiresStoredProcParameterNameMatch => true;
-    
+
     // Oracle prefers statement cache and array binding over manual prepare
     public override bool PrepareStatements => false;
     public override SqlStandardLevel MaxSupportedStandard =>
@@ -39,7 +38,8 @@ public class OracleDialect : SqlDialect
 
     public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
     {
-        var baseSettings = GetConnectionSessionSettings();
+        const string baseSettings = "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD';";
+
         if (readOnly)
         {
             return $"{baseSettings}\nALTER SESSION SET READ ONLY;";
@@ -72,7 +72,7 @@ public class OracleDialect : SqlDialect
                         statementCacheSizeProperty.SetValue(connection, 64);
                     }
                 }
-                
+
                 Logger.LogDebug("Applied Oracle connection settings: StatementCacheSize configured");
             }
             catch (Exception ex)

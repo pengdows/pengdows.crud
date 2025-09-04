@@ -319,11 +319,27 @@ public abstract class SqlDialect:ISqlDialect
 
     public virtual string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
     {
-        return GetConnectionSessionSettings();
+        return BuildSessionSettings(GetBaseSessionSettings(), GetReadOnlySessionSettings(), readOnly);
     }
 
     public virtual void ApplyConnectionSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)
     {
+        var connectionString = context.ConnectionString;
+        
+        // Apply read-only connection string modification if supported
+        if (readOnly)
+        {
+            var readOnlyParam = GetReadOnlyConnectionParameter();
+            if (!string.IsNullOrEmpty(readOnlyParam))
+            {
+                connectionString = BuildReadOnlyConnectionString(connectionString, readOnlyParam);
+            }
+        }
+        
+        connection.ConnectionString = connectionString;
+        
+        // Hook for database-specific connection configuration
+        ConfigureProviderSpecificSettings(connection, context, readOnly);
     }
 
     /// <summary>
@@ -398,13 +414,142 @@ public abstract class SqlDialect:ISqlDialect
         }
     }
 
+    #region Centralized Utility Methods for Derived Dialects
+
     /// <summary>
-    /// Determines SQL standard compliance based on database version
-    /// Override in concrete dialects for database-specific logic
+    /// Gets the base session settings for this dialect. Override to provide database-specific settings.
+    /// </summary>
+    /// <returns>Base session settings SQL string</returns>
+    protected virtual string GetBaseSessionSettings()
+    {
+        return string.Empty;
+    }
+
+    /// <summary>
+    /// Gets the read-only specific session settings. Override to provide database-specific read-only settings.
+    /// </summary>
+    /// <returns>Read-only session settings SQL string</returns>
+    protected virtual string GetReadOnlySessionSettings()
+    {
+        return string.Empty;
+    }
+
+    /// <summary>
+    /// Gets the connection string parameter for read-only mode. Override to provide database-specific parameter.
+    /// </summary>
+    /// <returns>Connection string parameter for read-only mode, or null if not supported</returns>
+    protected virtual string? GetReadOnlyConnectionParameter()
+    {
+        return null;
+    }
+
+    /// <summary>
+    /// Builds session settings by combining base and read-only settings
+    /// </summary>
+    /// <param name="baseSettings">Base session settings</param>
+    /// <param name="readOnlySettings">Read-only specific settings</param>
+    /// <param name="readOnly">Whether read-only mode is enabled</param>
+    /// <returns>Combined session settings</returns>
+    protected virtual string BuildSessionSettings(string baseSettings, string? readOnlySettings, bool readOnly)
+    {
+        if (readOnly && !string.IsNullOrEmpty(readOnlySettings))
+        {
+            return string.IsNullOrEmpty(baseSettings) 
+                ? readOnlySettings 
+                : $"{baseSettings}\n{readOnlySettings}";
+        }
+        return baseSettings;
+    }
+
+    /// <summary>
+    /// Builds a read-only connection string by appending the read-only parameter
+    /// </summary>
+    /// <param name="connectionString">Base connection string</param>
+    /// <param name="readOnlyParameter">Read-only parameter to append</param>
+    /// <returns>Modified connection string</returns>
+    protected virtual string BuildReadOnlyConnectionString(string connectionString, string readOnlyParameter)
+    {
+        return $"{connectionString};{readOnlyParameter}";
+    }
+
+    /// <summary>
+    /// Checks if the connection string represents a memory database
+    /// </summary>
+    /// <param name="connectionString">Connection string to check</param>
+    /// <returns>True if this is a memory database</returns>
+    protected virtual bool IsMemoryDatabase(string connectionString)
+    {
+        return connectionString.Contains(":memory:", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Checks if the database version is at least the specified version
+    /// </summary>
+    /// <param name="major">Required major version</param>
+    /// <param name="minor">Required minor version (default: 0)</param>
+    /// <param name="build">Required build/patch version (default: 0)</param>
+    /// <returns>True if version meets requirements</returns>
+    protected virtual bool IsVersionAtLeast(int major, int minor = 0, int build = 0)
+    {
+        if (!IsInitialized || ProductInfo.ParsedVersion == null)
+            return false;
+            
+        var v = ProductInfo.ParsedVersion;
+        return v.Major > major || 
+               (v.Major == major && v.Minor > minor) || 
+               (v.Major == major && v.Minor == minor && v.Build >= build);
+    }
+
+    /// <summary>
+    /// Gets a mapping of major versions to SQL standard levels. Override in derived classes.
+    /// </summary>
+    /// <returns>Dictionary mapping major version numbers to standard compliance levels</returns>
+    protected virtual Dictionary<int, SqlStandardLevel> GetMajorVersionToStandardMapping()
+    {
+        return new Dictionary<int, SqlStandardLevel>();
+    }
+
+    /// <summary>
+    /// Gets the default SQL standard level when version information is unavailable
+    /// </summary>
+    /// <returns>Default SQL standard level</returns>
+    protected virtual SqlStandardLevel GetDefaultStandardLevel()
+    {
+        return SqlStandardLevel.Sql92;
+    }
+
+    /// <summary>
+    /// Hook for database-specific connection configuration. Override to provide custom logic.
+    /// </summary>
+    /// <param name="connection">Database connection to configure</param>
+    /// <param name="context">Database context</param>
+    /// <param name="readOnly">Whether this is a read-only connection</param>
+    protected virtual void ConfigureProviderSpecificSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)
+    {
+        // Default implementation does nothing - override in derived classes
+    }
+
+    #endregion
+
+    /// <summary>
+    /// Determines SQL standard compliance based on database version.
+    /// Default implementation uses version mapping from GetMajorVersionToStandardMapping().
+    /// Override for complex version logic.
     /// </summary>
     protected virtual SqlStandardLevel DetermineStandardCompliance(Version? version)
     {
-        return SqlStandardLevel.Sql92;
+        if (version == null)
+            return GetDefaultStandardLevel();
+        
+        var mapping = GetMajorVersionToStandardMapping();
+        if (mapping.Count == 0)
+            return GetDefaultStandardLevel();
+        
+        // Find the highest version that the current version meets or exceeds
+        var applicableVersions = mapping.Where(kvp => version.Major >= kvp.Key)
+                                       .OrderByDescending(kvp => kvp.Key);
+                                       
+        return applicableVersions.FirstOrDefault().Value;
     }
 
     public virtual IDatabaseProductInfo DetectDatabaseInfo(ITrackedConnection connection)

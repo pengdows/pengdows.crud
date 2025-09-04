@@ -260,6 +260,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     }
 
 
+    // ReSharper disable once AutoPropertyCanBeMadeGetOnly.Local
     public DbMode ConnectionMode { get; private set; }
 
 

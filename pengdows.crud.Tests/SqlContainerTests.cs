@@ -377,9 +377,9 @@ public class SqlContainerTests : SqlLiteContextTestBase
     }
 
     [Theory]
-    [InlineData(SupportedDatabase.SqlServer, "dbo.my_proc", ExecutionType.Write, "EXEC {0} {1}")]
-    [InlineData(SupportedDatabase.PostgreSql, "my_proc", ExecutionType.Read, "SELECT * FROM {0}({1})")]
-    [InlineData(SupportedDatabase.Firebird, "dbo.my_proc", ExecutionType.Read, "SELECT * FROM {0}({1})")]
+    [InlineData(SupportedDatabase.SqlServer, "dbo.my_proc", ExecutionType.Write, "EXEC \"dbo\".\"my_proc\" {0}")]
+    [InlineData(SupportedDatabase.PostgreSql, "my_proc", ExecutionType.Read, "SELECT * FROM \"my_proc\"({0})")]
+    [InlineData(SupportedDatabase.Firebird, "dbo.my_proc", ExecutionType.Read, "SELECT * FROM \"dbo\".\"my_proc\"({0})")]
     public void WrapForStoredProc_ByProvider_FormatsCorrectly(
         SupportedDatabase product,
         string procName,
@@ -393,7 +393,7 @@ public class SqlContainerTests : SqlLiteContextTestBase
         var expectedName = ctx.MakeParameterName(param);
 
         var result = container.WrapForStoredProc(executionType);
-        var expected = string.Format(format, procName, expectedName);
+        var expected = string.Format(format, expectedName);
         Assert.Equal(expected, result);
     }
 
