@@ -492,12 +492,17 @@ public abstract class SqlDialect:ISqlDialect
     protected virtual bool IsVersionAtLeast(int major, int minor = 0, int build = 0)
     {
         if (!IsInitialized || ProductInfo.ParsedVersion == null)
+        {
             return false;
-            
+        }
+
         var v = ProductInfo.ParsedVersion;
-        return v.Major > major || 
-               (v.Major == major && v.Minor > minor) || 
-               (v.Major == major && v.Minor == minor && v.Build >= build);
+        var vMinor = v.Minor < 0 ? 0 : v.Minor;
+        var vBuild = v.Build < 0 ? 0 : v.Build;
+
+        return v.Major > major ||
+               (v.Major == major && vMinor > minor) ||
+               (v.Major == major && vMinor == minor && vBuild >= build);
     }
 
     /// <summary>
@@ -539,17 +544,28 @@ public abstract class SqlDialect:ISqlDialect
     protected virtual SqlStandardLevel DetermineStandardCompliance(Version? version)
     {
         if (version == null)
+        {
             return GetDefaultStandardLevel();
-        
+        }
+
         var mapping = GetMajorVersionToStandardMapping();
         if (mapping.Count == 0)
+        {
             return GetDefaultStandardLevel();
-        
+        }
+
         // Find the highest version that the current version meets or exceeds
-        var applicableVersions = mapping.Where(kvp => version.Major >= kvp.Key)
-                                       .OrderByDescending(kvp => kvp.Key);
-                                       
-        return applicableVersions.FirstOrDefault().Value;
+        var applicableVersions = mapping
+            .Where(kvp => version.Major >= kvp.Key)
+            .OrderByDescending(kvp => kvp.Key)
+            .ToList();
+
+        if (applicableVersions.Count == 0)
+        {
+            return GetDefaultStandardLevel();
+        }
+
+        return applicableVersions[0].Value;
     }
 
     public virtual IDatabaseProductInfo DetectDatabaseInfo(ITrackedConnection connection)
