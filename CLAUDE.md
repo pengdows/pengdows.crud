@@ -27,12 +27,11 @@ The library follows a layered architecture with these key components:
 - SQL dialect abstraction supports multiple databases (SQL Server, PostgreSQL, Oracle, MySQL, SQLite, etc.)
 - Connection strategies: Standard, KeepAlive, Shared, SingleWriter
 - Multi-tenancy support via tenant resolution
-
-### Directory Structure
+### Primary Key vs. Row ID (Pseudo Key)
 - `pengdows.crud/` - Core implementation
   - `attributes/` - Entity mapping attributes
   - `dialects/` - Database-specific SQL generation
-  - `connection/` - Connection management strategies  
+  - `connection/` - Connection management strategies
   - `exceptions/` - Custom exception types
   - `isolation/` - Transaction isolation handling
   - `tenant/` - Multi-tenancy support
@@ -108,7 +107,7 @@ connection.SetFailAfterOpenCount(3);
 
 // Factory-level failure configuration
 var factory = FakeDbFactory.CreateFailingFactory(
-    SupportedDatabase.PostgreSql, 
+    SupportedDatabase.PostgreSql,
     ConnectionFailureMode.FailOnOpen);
 
 // Helper for database context testing
@@ -117,7 +116,7 @@ using var context = ConnectionFailureHelper.CreateFailOnOpenContext();
 
 Connection failure modes include:
 - `FailOnOpen` - Connection fails when opening
-- `FailOnCommand` - Connection fails when creating commands  
+- `FailOnCommand` - Connection fails when creating commands
 - `FailOnTransaction` - Connection fails when beginning transactions
 - `FailAfterCount` - Connection works for N operations then fails
 - `Broken` - Connection is permanently broken
@@ -138,7 +137,7 @@ Connection failure modes include:
 
 ### Connection Management and DbMode
 
-**pengdows.crud** handles connections with a strong bias toward performance, predictability, and safe concurrency.  
+**pengdows.crud** handles connections with a strong bias toward performance, predictability, and safe concurrency.
 At the heart of this is **DbMode**, which defines how each DatabaseContext manages its connection lifecycle.
 
 **Overview:**
@@ -209,7 +208,7 @@ Use the lowest number (closest to Standard) possible for best results.
 
 **CRUD Operations (All async, return Task):**
 - `DeleteAsync(TRowID id, IDatabaseContext? context = null)` - Delete by ID, returns affected row count
-- `DeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null)` - Bulk delete, returns affected row count  
+- `DeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null)` - Bulk delete, returns affected row count
 - `RetrieveAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null)` - Load multiple entities by IDs
 - `UpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null)` - Update entity, returns affected row count
 - `UpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context = null)` - Update with original loading
@@ -297,7 +296,7 @@ Extends IDatabaseContext for transactional operations:
 
 **Transaction State:**
 - `WasCommitted` - Whether transaction was committed
-- `WasRolledBack` - Whether transaction was rolled back  
+- `WasRolledBack` - Whether transaction was rolled back
 - `IsCompleted` - Whether transaction is completed
 - `IsolationLevel` - Current isolation level
 
@@ -378,7 +377,7 @@ var entity = new TestEntity { Name = "Test" };
 var createContainer = helper.BuildCreate(entity);
 await createContainer.ExecuteNonQueryAsync();
 
-// Update  
+// Update
 var updateContainer = await helper.BuildUpdateAsync(entity);
 var rowsAffected = await updateContainer.ExecuteNonQueryAsync();
 
@@ -408,7 +407,7 @@ Assert.Throws<InvalidOperationException>(() => connection.Open());
 **Factory-Level Configuration:**
 ```csharp
 var factory = FakeDbFactory.CreateFailingFactory(
-    SupportedDatabase.PostgreSql, 
+    SupportedDatabase.PostgreSql,
     ConnectionFailureMode.FailOnOpen);
 ```
 

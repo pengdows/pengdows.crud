@@ -48,3 +48,4 @@
 - Strong-name signing can be enabled via `SNK_PATH`; do not commit keys.
 - Never hardcode identifier quoting. Always use `WrapObjectName(...)` from `IDatabaseContext`/`ISqlContainer` and `CompositeIdentifierSeparator` for dotted names. Example: `var full = ctx.WrapObjectName("schema") + ctx.CompositeIdentifierSeparator + ctx.WrapObjectName("table");`
 - Always parameterize via `AddParameterWithValue` or `CreateDbParameter`; avoid string interpolation for values.
+
