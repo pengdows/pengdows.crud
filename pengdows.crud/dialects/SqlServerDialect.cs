@@ -178,7 +178,8 @@ public class SqlServerDialect : SqlDialect
         {
             { 13, SqlStandardLevel.Sql2016 }, // SQL Server 2016+
             { 12, SqlStandardLevel.Sql2011 }, // SQL Server 2014
-            { 10, SqlStandardLevel.Sql2008 }  // SQL Server 2008+
+            { 10, SqlStandardLevel.Sql2008 }, // SQL Server 2008+
+            { 8,  SqlStandardLevel.Sql2003 }  // SQL Server 2000+
         };
     }
 

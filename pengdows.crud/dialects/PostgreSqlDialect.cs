@@ -114,7 +114,8 @@ SET search_path = public;";
             { 15, SqlStandardLevel.Sql2016 },
             { 13, SqlStandardLevel.Sql2011 },
             { 11, SqlStandardLevel.Sql2008 },
-            { 9, SqlStandardLevel.Sql2003 }
+            { 9, SqlStandardLevel.Sql2003 },
+            { 8, SqlStandardLevel.Sql92 }
         };
     }
 
