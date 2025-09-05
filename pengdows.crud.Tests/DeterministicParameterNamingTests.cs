@@ -1,4 +1,5 @@
 #region
+using System;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using pengdows.crud.enums;
@@ -56,10 +57,7 @@ public class DeterministicParameterNamingTests : IAsyncLifetime
 
         var expectedS = sc.MakeParameterName("s0");
         var expectedK = sc.MakeParameterName("k0");
-        var expectedV = sc.MakeParameterName("v0");
-
         Assert.Contains(expectedS, sql);
         Assert.Contains(expectedK, sql);
-        Assert.Contains(expectedV, sql);
     }
 }

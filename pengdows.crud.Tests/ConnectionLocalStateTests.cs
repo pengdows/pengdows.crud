@@ -13,14 +13,14 @@ public class ConnectionLocalStateTests
             PrepareDisabled = true
         };
 
-        var shape = "SELECT|1:4";
-        Assert.False(state.IsAlreadyPreparedForShape(shape));
-        state.MarkShapePrepared(shape);
-        Assert.True(state.IsAlreadyPreparedForShape(shape));
+        var sql = "SELECT 1";
+        Assert.False(state.IsAlreadyPreparedForShape(sql));
+        state.MarkShapePrepared(sql);
+        Assert.True(state.IsAlreadyPreparedForShape(sql));
 
         state.Reset();
 
-        Assert.False(state.IsAlreadyPreparedForShape(shape));
+        Assert.False(state.IsAlreadyPreparedForShape(sql));
         Assert.True(state.PrepareDisabled); // flag persists across Reset()
     }
 }

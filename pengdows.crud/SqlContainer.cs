@@ -1,8 +1,10 @@
 #region
 
+using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.collections;
@@ -25,6 +27,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     private readonly ILogger<ISqlContainer> _logger;
     private readonly IDictionary<string, DbParameter> _parameters = new OrderedDictionary<string, DbParameter>();
     private int _outputParameterCount;
+    internal List<string> ParamSequence { get; } = new();
 
     ISqlDialect ISqlDialectProvider.Dialect => _dialect;
 
@@ -63,6 +66,19 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     public string MakeParameterName(string parameterName)
     {
         return _dialect.MakeParameterName(parameterName);
+    }
+
+    internal string RenderParams(string sql)
+    {
+        ParamSequence.Clear();
+        return Regex.Replace(sql, "\\{P\\}([A-Za-z_][A-Za-z0-9_]*)", m =>
+        {
+            var name = m.Groups[1].Value;
+            ParamSequence.Add(name);
+            return _dialect.SupportsNamedParameters
+                ? string.Concat(_dialect.ParameterMarker, name)
+                : _dialect.ParameterMarker;
+        });
     }
 
     
@@ -207,6 +223,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         Query.Clear();
         _parameters.Clear();
         _outputParameterCount = 0;
+        ParamSequence.Clear();
     }
 
     public string WrapForStoredProc(ExecutionType executionType, bool includeParameters = true, bool captureReturn = false)
@@ -547,37 +564,45 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 $"Query exceeds the maximum parameter limit of {_context.MaxParameterLimit} for {_context.DatabaseProductName}.");
         }
 
-        foreach (var param in _parameters.Values)
+        if (_context.SupportsNamedParameters)
         {
-            cmd.Parameters.Add(param);
+            foreach (var param in _parameters.Values)
+            {
+                cmd.Parameters.Add(param);
+            }
+        }
+        else
+        {
+            foreach (var name in ParamSequence)
+            {
+                if (_parameters.TryGetValue(name, out var param))
+                {
+                    cmd.Parameters.Add(param);
+                }
+            }
         }
 
-        // Apply shape-aware prepare logic
+        // Apply per-text prepare logic
         MaybePrepareCommand(cmd, conn);
 
         return cmd;
     }
 
     /// <summary>
-    /// Applies shape-aware prepare logic: prepares once per connection per SQL shape,
+    /// Applies prepare logic: prepares once per connection per SQL text,
     /// with fallback to disable prepare on provider failures.
     /// </summary>
     private void MaybePrepareCommand(DbCommand cmd, ITrackedConnection conn)
     {
-        // Determine effective prepare setting based on configuration overrides
         var shouldPrepare = ComputeEffectivePrepareSettings();
-        
-        // Check if prepare is disabled globally or for this connection
+
         if (!shouldPrepare || conn.LocalState.PrepareDisabled)
         {
             return;
         }
 
-        // Compute command shape hash for caching
-        var shapeHash = ConnectionLocalState.ComputeShapeHash(cmd);
-        
-        // Skip if already prepared for this shape
-        if (conn.LocalState.IsAlreadyPreparedForShape(shapeHash))
+        var sqlText = cmd.CommandText;
+        if (conn.LocalState.IsAlreadyPreparedForShape(sqlText))
         {
             return;
         }
@@ -585,22 +610,19 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         try
         {
             cmd.Prepare();
-            conn.LocalState.MarkShapePrepared(shapeHash);
+            conn.LocalState.MarkShapePrepared(sqlText);
         }
         catch (Exception ex)
         {
-            // Check if this type of exception should disable prepare for this connection
             if (_dialect.ShouldDisablePrepareOn(ex))
             {
                 conn.LocalState.PrepareDisabled = true;
-                // Log at debug level to avoid noise - this is expected fallback behavior
-                _logger?.LogDebug(ex, 
-                    "Disabled prepare for connection due to provider exception: {ExceptionType}", 
+                _logger?.LogDebug(ex,
+                    "Disabled prepare for connection due to provider exception: {ExceptionType}",
                     ex.GetType().Name);
             }
             else
             {
-                // Re-throw unexpected exceptions
                 throw;
             }
         }
@@ -678,6 +700,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         // Dispose managed resources here (clear parameters and return the builder to pool)
         _parameters.Clear();
         _outputParameterCount = 0;
+        ParamSequence.Clear();
         StringBuilderPool.Return(Query);
     }
 }
