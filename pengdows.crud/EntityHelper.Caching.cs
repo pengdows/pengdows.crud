@@ -6,7 +6,6 @@ public partial class EntityHelper<TEntity, TRowID>
 
     public void ClearCaches()
     {
-        _readerConverters.Clear();
         _readerPlans.Clear();
         _columnListCache.Clear();
         _queryCache.Clear();

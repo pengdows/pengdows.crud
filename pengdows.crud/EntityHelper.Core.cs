@@ -8,7 +8,6 @@ using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Globalization;
-using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.@internal;
@@ -57,12 +56,14 @@ public partial class EntityHelper<TEntity, TRowID> :
 
     private IColumnInfo? _versionColumn;
 
-    private readonly BoundedCache<IColumnInfo, Func<object?, object?>> _readerConverters = new(MaxCacheSize);
+    private readonly BoundedCache<string, IReadOnlyList<IColumnInfo>> _columnListCache = new(MaxCacheSize);
 
+    private readonly BoundedCache<string, string> _queryCache = new(MaxCacheSize);
     private readonly BoundedCache<string, IReadOnlyList<IColumnInfo>> _columnListCache = new(MaxCacheSize);
 
     private readonly BoundedCache<string, string> _queryCache = new(MaxCacheSize);
 
+>>>>>>> codex/update-write-only-protection-settings
     private readonly BoundedCache<string, string[]> _whereParameterNames = new(MaxCacheSize);
 
     // Thread-safe cache for reader plans by recordset shape hash
@@ -71,15 +72,11 @@ public partial class EntityHelper<TEntity, TRowID> :
 
     private sealed class ColumnPlan
     {
-        public int Ordinal { get; }
-        public Action<object, object?> Setter { get; }
-        public Func<object?, object?> Converter { get; }
+        public Action<ITrackedReader, object> Apply { get; }
 
-        public ColumnPlan(int ordinal, Action<object, object?> setter, Func<object?, object?> converter)
+        public ColumnPlan(Action<ITrackedReader, object> apply)
         {
-            Ordinal = ordinal;
-            Setter = setter;
-            Converter = converter;
+            Apply = apply;
         }
     }
 
@@ -217,142 +214,7 @@ public partial class EntityHelper<TEntity, TRowID> :
         return _queryCache.GetOrAdd(key, _ => factory());
     }
 
-
-    private Func<object?, object?> GetOrCreateReaderConverter(IColumnInfo column)
-    {
-        if (_readerConverters.TryGet(column, out var existing))
-        {
-            return existing;
-        }
-
-        Func<object?, object?> converter;
-
-        if (column.IsEnum && column.EnumType != null)
-        {
-            var enumType = column.EnumType;
-            var enumAsString = column.DbType == DbType.String;
-            var underlying = Enum.GetUnderlyingType(enumType);
-            if (enumAsString)
-            {
-                converter = value =>
-                {
-                    if (value == null || value is DBNull)
-                    {
-                        return null;
-                    }
-
-                    var s = value as string ?? value.ToString();
-                    try
-                    {
-                        return Enum.Parse(enumType, s!, true);
-                    }
-                    catch
-                    {
-                        switch (EnumParseBehavior)
-                        {
-                            case EnumParseFailureMode.Throw:
-                                throw;
-                            case EnumParseFailureMode.SetNullAndLog:
-                                Logger.LogWarning("Cannot convert '{Value}' to enum {EnumType}.", s, enumType);
-                                return null;
-                            case EnumParseFailureMode.SetDefaultValue:
-                                return Activator.CreateInstance(enumType);
-                            default:
-                                return null;
-                        }
-                    }
-                };
-            }
-            else
-            {
-                converter = value =>
-                {
-                    if (value == null || value is DBNull)
-                    {
-                        return null;
-                    }
-
-                    try
-                    {
-                        var boxed = Convert.ChangeType(value, underlying, CultureInfo.InvariantCulture);
-                        return Enum.ToObject(enumType, boxed!);
-                    }
-                    catch
-                    {
-                        switch (EnumParseBehavior)
-                        {
-                            case EnumParseFailureMode.Throw:
-                                throw;
-                            case EnumParseFailureMode.SetNullAndLog:
-                                Logger.LogWarning("Cannot convert '{Value}' to enum {EnumType}.", value, enumType);
-                                return null;
-                            case EnumParseFailureMode.SetDefaultValue:
-                                return Activator.CreateInstance(enumType);
-                            default:
-                                return null;
-                        }
-                    }
-                };
-            }
-
-            return _readerConverters.GetOrAdd(column, _ => converter);
-        }
-
-        if (column.IsJsonType)
-        {
-            var propType = column.PropertyInfo.PropertyType;
-            var opts = column.JsonSerializerOptions ?? new JsonSerializerOptions();
-            converter = value =>
-            {
-                if (value == null || value is DBNull)
-                {
-                    return null;
-                }
-
-                var s = value as string ?? value.ToString();
-                return JsonSerializer.Deserialize(s!, propType, opts);
-            };
-
-            return _readerConverters.GetOrAdd(column, _ => converter);
-        }
-
-        converter = value =>
-        {
-            if (value == null || value is DBNull)
-            {
-                return null;
-            }
-
-            var targetType = column.PropertyInfo.PropertyType;
-            var sourceType = value.GetType();
-
-            if (targetType.IsAssignableFrom(sourceType))
-            {
-                return value;
-            }
-
-            var underlying = Nullable.GetUnderlyingType(targetType) ?? targetType;
-
-            try
-            {
-                return Convert.ChangeType(value, underlying, CultureInfo.InvariantCulture);
-            }
-            catch
-            {
-                switch (column.DbType)
-                {
-                    case DbType.Decimal:
-                    case DbType.Currency:
-                    case DbType.VarNumeric:
-                        return Convert.ToDecimal(value, CultureInfo.InvariantCulture);
-                    default:
-                        return value;
-                }
-            }
-        };
-
-        return _readerConverters.GetOrAdd(column, _ => converter);
-    }
+    
 
     public async Task<bool> CreateAsync(TEntity entity, IDatabaseContext context)
     {
@@ -1501,18 +1363,48 @@ public partial class EntityHelper<TEntity, TRowID> :
             return sqlContainer;
         }
 
-        CheckParameterLimit(sqlContainer, list.Count);
+        var dialect = ((ISqlDialectProvider)sqlContainer).Dialect;
+
+        CheckParameterLimit(sqlContainer, dialect.SupportsSetValuedParameters ? 1 : list.Count);
 
         if (list.Any(Utils.IsNullOrDbNull))
         {
             throw new ArgumentException("IDs cannot be null", nameof(ids));
         }
 
+<<<<<<< HEAD
         var key = $"Where:{wrappedColumnName}:{list.Count}";
         if (!_whereParameterNames.TryGet(key, out var names))
         {
             names = new string[list.Count];
             for (var i = 0; i < names.Length; i++)
+=======
+        if (dialect.SupportsSetValuedParameters)
+        {
+            var paramName = sqlContainer.MakeParameterName("w0");
+            var anySql = GetCachedQuery($"WhereAny:{wrappedColumnName}",
+                () => string.Concat(wrappedColumnName, " = ANY(", paramName, ")"));
+
+            AppendWherePrefix(sqlContainer);
+            sqlContainer.Query.Append(anySql);
+
+            var parameter = sqlContainer.CreateDbParameter(paramName, DbType.Object, list.ToArray());
+            sqlContainer.AddParameter(parameter);
+
+            return sqlContainer;
+        }
+
+        var bucket = 1;
+        for (; bucket < list.Count; bucket <<= 1)
+        {
+        }
+
+        var key = $"Where:{wrappedColumnName}:{bucket}";
+        if (!_whereParameterNames.TryGet(key, out var names))
+        {
+            names = new string[bucket];
+            for (var i = 0; i < bucket; i++)
+>>>>>>> codex/update-write-only-protection-settings
             {
                 names[i] = sqlContainer.MakeParameterName($"w{i}");
             }
@@ -1528,26 +1420,30 @@ public partial class EntityHelper<TEntity, TRowID> :
 
         var dbType = _idColumn!.DbType;
         var isPositional = sqlContainer.MakeParameterName("w0") == sqlContainer.MakeParameterName("w1");
+<<<<<<< HEAD
         for (var i = 0; i < list.Count; i++)
+=======
+        var lastIndex = list.Count - 1;
+        for (var i = 0; i < bucket; i++)
+>>>>>>> codex/update-write-only-protection-settings
         {
             var name = names[i];
+            var value = i < list.Count ? list[i] : list[lastIndex];
 
             if (isPositional)
             {
-                // Positional providers ignore names; just append in order
-                var parameter = sqlContainer.CreateDbParameter(name, dbType, list[i]);
+                var parameter = sqlContainer.CreateDbParameter(name, dbType, value);
                 sqlContainer.AddParameter(parameter);
                 continue;
             }
 
-            // Named providers: update if shape reused, else add
             try
             {
-                sqlContainer.SetParameterValue(name, list[i]);
+                sqlContainer.SetParameterValue(name, value);
             }
             catch (KeyNotFoundException)
             {
-                var parameter = sqlContainer.CreateDbParameter(name, dbType, list[i]);
+                var parameter = sqlContainer.CreateDbParameter(name, dbType, value);
                 sqlContainer.AddParameter(parameter);
             }
         }

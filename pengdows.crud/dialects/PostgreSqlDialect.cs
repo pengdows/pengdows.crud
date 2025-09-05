@@ -19,6 +19,7 @@ public class PostgreSqlDialect : SqlDialect
     // Use ':' parameter marker; Npgsql supports ':' and existing integrations rely on it
     public override string ParameterMarker => ":";
     public override bool SupportsNamedParameters => true;
+    public override bool SupportsSetValuedParameters => true;
     public override int MaxParameterLimit => 32767;
     public override int MaxOutputParameters => 100;
     public override int ParameterNameMaxLength => 63;

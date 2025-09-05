@@ -23,3 +23,5 @@ coverage-report/
 
 .claude/
 mydb.sqlite
+coverage.json
+benchmarks/CrudBenchmarks/BenchmarkDotNet.Artifacts/

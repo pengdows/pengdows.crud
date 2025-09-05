@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using pengdows.crud.attributes;
@@ -75,7 +74,7 @@ public class EntityHelperConverterTests : SqlLiteContextTestBase
     }
 
     [Fact]
-    public void MapReaderToObject_InvalidJson_Throws()
+    public void MapReaderToObject_InvalidJson_ReturnsNull()
     {
         var helper = new EntityHelper<JsonEntity, int>(Context);
         var rows = new[]
@@ -88,7 +87,8 @@ public class EntityHelperConverterTests : SqlLiteContextTestBase
         };
         using var reader = new FakeTrackedReader(rows);
         reader.Read();
-        Assert.Throws<JsonException>(() => helper.MapReaderToObject(reader));
+        var entity = helper.MapReaderToObject(reader);
+        Assert.Null(entity.Data);
     }
 
     [Table("EnumEntity")]
