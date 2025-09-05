@@ -1,0 +1,653 @@
+#region
+
+using System.Collections.Concurrent;
+using System.Data;
+using System.Data.Common;
+using System.Linq.Expressions;
+using System.Reflection;
+using System.Text;
+using System.Text.RegularExpressions;
+using System.Globalization;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using pengdows.crud.@internal;
+using pengdows.crud.dialects;
+using pengdows.crud.enums;
+using pengdows.crud.exceptions;
+using pengdows.crud.wrappers;
+
+#endregion
+
+namespace pengdows.crud;
+
+public partial class EntityHelper<TEntity, TRowID> :
+    IEntityHelper<TEntity, TRowID> where TEntity : class, new()
+{
+    // Cache for compiled property setters
+    private static readonly ConcurrentDictionary<PropertyInfo, Action<object, object?>> _propertySetters = new();
+
+    private readonly Lazy<CachedSqlTemplates> _cachedSqlTemplates;
+    // Per-dialect templates are cached in _templatesByDialect
+
+
+    private static ILogger _logger = NullLogger.Instance;
+
+    public static ILogger Logger
+    {
+        get => _logger;
+        set => _logger = value ?? NullLogger.Instance;
+    }
+
+    static EntityHelper()
+    {
+        ValidateRowIdType();
+    }
+
+    private readonly IAuditValueResolver? _auditValueResolver;
+    private IDatabaseContext _context = null!;
+    private ISqlDialect _dialect = null!;
+
+    private IColumnInfo? _idColumn;
+
+    // private readonly IServiceProvider _serviceProvider;
+    private ITableInfo _tableInfo = null!;
+    private IReadOnlyDictionary<string, IColumnInfo> _columnsByNameCI = null!;
+    private bool _hasAuditColumns;
+
+    private IColumnInfo? _versionColumn;
+
+    private readonly BoundedCache<string, IReadOnlyList<IColumnInfo>> _columnListCache = new(MaxCacheSize);
+
+    private readonly BoundedCache<string, string> _queryCache = new(MaxCacheSize);
+
+    private readonly BoundedCache<string, string[]> _whereParameterNames = new(MaxCacheSize);
+
+    // Thread-safe cache for reader plans by recordset shape hash
+    private readonly BoundedCache<int, ColumnPlan[]> _readerPlans = new(MaxReaderPlans);
+    private const int MaxReaderPlans = 32;
+
+    private sealed class ColumnPlan
+    {
+        public Action<ITrackedReader, object> Apply { get; }
+
+        public ColumnPlan(Action<ITrackedReader, object> apply)
+        {
+            Apply = apply;
+        }
+    }
+
+    // SQL templates cached per dialect to support context overrides
+    private readonly ConcurrentDictionary<SupportedDatabase, Lazy<CachedSqlTemplates>> _templatesByDialect = new();
+
+
+
+    public EntityHelper(IDatabaseContext databaseContext,
+        EnumParseFailureMode enumParseBehavior = EnumParseFailureMode.Throw
+    )
+    {
+        _auditValueResolver = null;
+        Initialize(databaseContext, enumParseBehavior);
+        // Per-instance lazy holds neutral templates used to derive dialect-specific variants
+        _cachedSqlTemplates = new Lazy<CachedSqlTemplates>(BuildCachedSqlTemplatesNeutral);
+    }
+
+    public EntityHelper(IDatabaseContext databaseContext,
+        IAuditValueResolver auditValueResolver,
+        EnumParseFailureMode enumParseBehavior = EnumParseFailureMode.Throw
+    )
+    {
+        _auditValueResolver = auditValueResolver;
+        Initialize(databaseContext, enumParseBehavior);
+        // Per-instance lazy holds neutral templates used to derive dialect-specific variants
+        _cachedSqlTemplates = new Lazy<CachedSqlTemplates>(BuildCachedSqlTemplatesNeutral);
+    }
+
+    private void Initialize(IDatabaseContext databaseContext, EnumParseFailureMode enumParseBehavior)
+    {
+        _context = databaseContext;
+        _dialect = (databaseContext as ISqlDialectProvider)?.Dialect
+            ?? throw new InvalidOperationException(
+                "IDatabaseContext must implement ISqlDialectProvider and expose a non-null Dialect.");
+        _tableInfo = _context.TypeMapRegistry.GetTableInfo<TEntity>() ??
+                     throw new InvalidOperationException($"Type {typeof(TEntity).FullName} is not a table.");
+        _columnsByNameCI = _tableInfo.Columns.ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);
+        _hasAuditColumns = _tableInfo.HasAuditColumns;
+
+        if (_hasAuditColumns && _auditValueResolver is null)
+        {
+            Logger.LogWarning(
+                "Entity {EntityType} declares audit columns but no IAuditValueResolver is provided; audit fields may not be populated.",
+                typeof(TEntity).FullName
+            );
+        }
+
+        WrappedTableName = (!string.IsNullOrEmpty(_tableInfo.Schema)
+                               ? WrapObjectName(_tableInfo.Schema) +
+                                 _dialect.CompositeIdentifierSeparator
+                               : "")
+                           + WrapObjectName(_tableInfo.Name);
+
+        _idColumn = _tableInfo.Columns.Values.FirstOrDefault(itm => itm.IsId);
+        _versionColumn = _tableInfo.Columns.Values.FirstOrDefault(itm => itm.IsVersion);
+
+        // Note: Validation for missing audit resolver with user fields is now handled
+        // in SetAuditFields method where it throws InvalidOperationException
+
+        EnumParseBehavior = enumParseBehavior;
+    }
+
+    public string WrappedTableName { get; set; } = null!;
+
+    public EnumParseFailureMode EnumParseBehavior { get; set; }
+
+    public string QuotePrefix => _dialect.QuotePrefix;
+
+    public string QuoteSuffix => _dialect.QuoteSuffix;
+
+    public string CompositeIdentifierSeparator => _dialect.CompositeIdentifierSeparator;
+
+    public string MakeParameterName(DbParameter p)
+    {
+        return _dialect.MakeParameterName(p);
+    }
+
+    /// <summary>
+    /// Legacy dialect token replacement method. Use neutral token system instead.
+    /// </summary>
+    [Obsolete("Use neutral token system with {Q}/{q}/{S} tokens instead")]
+    public string ReplaceDialectTokens(string sql, string quotePrefix, string quoteSuffix, string parameterMarker)
+    {
+        if (sql == null)
+        {
+            throw new ArgumentNullException(nameof(sql));
+        }
+
+        var dialectPrefix = _dialect.QuotePrefix;
+        var dialectSuffix = _dialect.QuoteSuffix;
+        var dialectMarker = _dialect.ParameterMarker;
+
+        var sb = new StringBuilder(sql.Length);
+        var inQuote = false;
+
+        for (var i = 0; i < sql.Length; i++)
+        {
+            if (!inQuote && sql.AsSpan(i).StartsWith(dialectPrefix))
+            {
+                sb.Append(quotePrefix);
+                i += dialectPrefix.Length - 1;
+                inQuote = true;
+                continue;
+            }
+
+            if (inQuote && sql.AsSpan(i).StartsWith(dialectSuffix))
+            {
+                sb.Append(quoteSuffix);
+                i += dialectSuffix.Length - 1;
+                inQuote = false;
+                continue;
+            }
+
+            if (sql.AsSpan(i).StartsWith(dialectMarker))
+            {
+                sb.Append(parameterMarker);
+                i += dialectMarker.Length - 1;
+                continue;
+            }
+
+            sb.Append(sql[i]);
+        }
+
+        return sb.ToString();
+    }
+
+    private string GetCachedQuery(string key, Func<string> factory)
+    {
+        if (_queryCache.TryGet(key, out var sql))
+        {
+            return sql;
+        }
+
+        return _queryCache.GetOrAdd(key, _ => factory());
+    }
+
+
+
+    public async Task<bool> CreateAsync(TEntity entity, IDatabaseContext context)
+    {
+        var ctx = context ?? _context;
+        var dialect = GetDialect(ctx);
+        
+        // Use RETURNING clause if supported to avoid race condition
+        if (_idColumn != null && !_idColumn.IsIdIsWritable && dialect.SupportsInsertReturning)
+        {
+            var sc = BuildCreateWithReturning(entity, true, ctx);
+            var generatedId = await sc.ExecuteScalarAsync<object>();
+            
+            if (generatedId != null && generatedId != DBNull.Value)
+            {
+                var converted = Convert.ChangeType(generatedId, _idColumn.PropertyInfo.PropertyType, CultureInfo.InvariantCulture);
+                _idColumn.PropertyInfo.SetValue(entity, converted);
+                return true;
+            }
+            return false;
+        }
+        else
+        {
+            // Fallback to old behavior for databases that don't support RETURNING
+            var sc = BuildCreate(entity, ctx);
+            var rowsAffected = await sc.ExecuteNonQueryAsync();
+
+            // For non-writable ID columns, retrieve the generated ID and populate it on the entity
+            if (rowsAffected == 1 && _idColumn != null && !_idColumn.IsIdIsWritable)
+            {
+                await PopulateGeneratedIdAsync(entity, ctx);
+            }
+
+            return rowsAffected == 1;
+        }
+    }
+
+    private async Task PopulateGeneratedIdAsync(TEntity entity, IDatabaseContext context)
+    {
+        if (_idColumn == null)
+        {
+            return;
+        }
+
+        // Get the database-specific query for retrieving the last inserted ID
+        var ctx = context ?? _context;
+        var provider = ctx as ISqlDialectProvider
+                       ?? throw new InvalidOperationException(
+                           "IDatabaseContext must implement ISqlDialectProvider and expose a non-null Dialect.");
+        var lastIdQuery = provider.Dialect.GetLastInsertedIdQuery();
+        if (string.IsNullOrEmpty(lastIdQuery))
+        {
+            return;
+        }
+
+        var sc = ctx.CreateSqlContainer(lastIdQuery);
+        var generatedId = await sc.ExecuteScalarAsync<object>();
+
+        if (generatedId != null && generatedId != DBNull.Value)
+        {
+            try
+            {
+                // Convert the ID to the appropriate type and set it on the entity
+                var convertedId = Convert.ChangeType(generatedId, _idColumn.PropertyInfo.PropertyType);
+                _idColumn.PropertyInfo.SetValue(entity, convertedId);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Failed to convert generated ID '{generatedId}' to type {_idColumn.PropertyInfo.PropertyType.Name}: {ex.Message}", ex);
+            }
+        }
+    }
+
+
+    public ISqlContainer BuildCreate(TEntity entity, IDatabaseContext? context = null)
+    {
+        if (entity == null)
+        {
+            throw new ArgumentNullException(nameof(entity));
+        }
+
+        var ctx = context ?? _context;
+        var sc = ctx.CreateSqlContainer();
+        var dialect = GetDialect(ctx);
+        // Always attempt to set audit fields if they exist - validation will happen inside SetAuditFields
+        if (_hasAuditColumns)
+        {
+            SetAuditFields(entity, false);
+        }
+
+        if (_versionColumn != null)
+        {
+            var current = _versionColumn.PropertyInfo.GetValue(entity);
+            if (current == null || Utils.IsZeroNumeric(current))
+            {
+                var target = Nullable.GetUnderlyingType(_versionColumn.PropertyInfo.PropertyType) ?? _versionColumn.PropertyInfo.PropertyType;
+                if (Utils.IsZeroNumeric(Convert.ChangeType(0, target)))
+                {
+                    var one = Convert.ChangeType(1, target);
+                    _versionColumn.PropertyInfo.SetValue(entity, one);
+                }
+            }
+        }
+
+        var template = GetTemplatesForDialect(dialect);
+        var columns = new List<string>();
+        var placeholders = new List<string>();
+
+        for (var i = 0; i < template.InsertColumns.Count; i++)
+        {
+            var column = template.InsertColumns[i];
+            var value = column.MakeParameterValueFromField(entity);
+
+            var paramName = template.InsertParameterNames[i];
+            var param = dialect.CreateDbParameter(paramName, column.DbType, value);
+            sc.AddParameter(param);
+            columns.Add(dialect.WrapObjectName(column.Name));
+            placeholders.Add(dialect.MakeParameterName(param));
+        }
+
+        sc.Query.Append("INSERT INTO ")
+            .Append(BuildWrappedTableName(dialect))
+            .Append(" (")
+            .Append(string.Join(", ", columns))
+            .Append(") VALUES (")
+            .Append(string.Join(", ", placeholders))
+            .Append(")");
+
+        return sc;
+    }
+
+    /// <summary>
+    /// Builds an INSERT statement with optional RETURNING clause for identity capture.
+    /// </summary>
+    /// <param name="entity">Entity to insert</param>
+    /// <param name="withReturning">Whether to include RETURNING clause for identity</param>
+    /// <param name="context">Database context</param>
+    /// <returns>SQL container with INSERT statement</returns>
+    public ISqlContainer BuildCreateWithReturning(TEntity entity, bool withReturning, IDatabaseContext? context = null)
+    {
+        var sc = BuildCreate(entity, context);
+        var ctx = context ?? _context;
+        var dialect = GetDialect(ctx);
+        
+        // Add RETURNING clause if requested and supported
+        if (withReturning && _idColumn != null && !_idColumn.IsIdIsWritable && dialect.SupportsInsertReturning)
+        {
+            var idWrapped = dialect.WrapObjectName(_idColumn.Name);
+            var returningClause = dialect.RenderInsertReturningClause(idWrapped);
+            sc.Query.Append(returningClause);
+        }
+        
+        return sc;
+    }
+
+    public ISqlContainer BuildDelete(TRowID id, IDatabaseContext? context = null)
+    {
+        var ctx = context ?? _context;
+        var sc = ctx.CreateSqlContainer();
+        var dialect = GetDialect(ctx);
+
+        if (_idColumn == null)
+        {
+            throw new InvalidOperationException($"row identity column for table {WrappedTableName} not found");
+        }
+
+        var counters = new ClauseCounters();
+        var name = counters.NextKey();
+        var param = dialect.CreateDbParameter(name, _idColumn.DbType, id);
+        sc.AddParameter(param);
+
+        var baseKey = "DeleteById";
+        var cacheKey = ctx.Product == _context.Product ? baseKey : $"{baseKey}:{ctx.Product}";
+        var sql = GetCachedQuery(cacheKey, () => string.Format(GetTemplatesForDialect(dialect).DeleteSql, dialect.MakeParameterName(param)));
+        sc.Query.Append(sql);
+        return sc;
+    }
+
+    public async Task<int> DeleteAsync(TRowID id, IDatabaseContext? context = null)
+    {
+        var ctx = context ?? _context;
+        var sc = BuildDelete(id, ctx);
+        return await sc.ExecuteNonQueryAsync();
+    }
+
+    public async Task<List<TEntity>> RetrieveAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null)
+    {
+        if (ids == null)
+        {
+            throw new ArgumentNullException(nameof(ids));
+        }
+
+        var list = ids.Distinct().ToList();
+        if (list.Count == 0)
+        {
+            throw new ArgumentException("List of IDs cannot be empty.", nameof(ids));
+        }
+
+        var ctx = context ?? _context;
+        var sc = BuildRetrieve(list, ctx);
+        return await LoadListAsync(sc);
+    }
+
+    public async Task<int> DeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null)
+    {
+        if (ids == null)
+        {
+            throw new ArgumentNullException(nameof(ids));
+        }
+
+        var list = ids.Distinct().ToList();
+        if (list.Count == 0)
+        {
+            throw new ArgumentException("List of IDs cannot be empty.", nameof(ids));
+        }
+
+        var ctx = context ?? _context;
+        if (_idColumn == null)
+        {
+            throw new InvalidOperationException(
+                "Single-ID operations require a designated Id column; use composite-key helpers.");
+        }
+
+        var sc = ctx.CreateSqlContainer();
+        var dialect = GetDialect(ctx);
+        sc.Query.Append("DELETE FROM ").Append(BuildWrappedTableName(dialect));
+        BuildWhere(sc.WrapObjectName(_idColumn.Name), list, sc);
+        return await sc.ExecuteNonQueryAsync();
+    }
+
+
+
+
+    public Task<TEntity?> RetrieveOneAsync(TEntity objectToRetrieve, IDatabaseContext? context = null)
+    {
+        if (objectToRetrieve == null)
+        {
+            throw new ArgumentNullException(nameof(objectToRetrieve));
+        }
+        var ctx = context ?? _context;
+        var list = new List<TEntity> { objectToRetrieve };
+        var sc = BuildRetrieve(list, string.Empty, ctx);
+        return LoadSingleAsync(sc);
+    }
+
+    public Task<TEntity?> RetrieveOneAsync(TRowID id, IDatabaseContext? context = null)
+    {
+        var ctx = context ?? _context;
+        if (_idColumn == null)
+        {
+            throw new InvalidOperationException(
+                "Single-ID operations require a designated Id column; use composite-key helpers.");
+        }
+        var list = new List<TRowID> { id };
+        var sc = BuildRetrieve(list, ctx);
+        return LoadSingleAsync(sc);
+    }
+
+
+
+
+    public Task<int> UpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null)
+    {
+        var ctx = context ?? _context;
+        return UpdateAsync(objectToUpdate, _versionColumn != null, ctx);
+    }
+
+    public async Task<int> UpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context = null)
+    {
+        var ctx = context ?? _context;
+        try
+        {
+            var sc = await BuildUpdateAsync(objectToUpdate, loadOriginal, ctx);
+            return await sc.ExecuteNonQueryAsync();
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("No changes detected for update."))
+        {
+            return 0;
+        }
+    }
+
+    public async Task<int> UpsertAsync(TEntity entity, IDatabaseContext? context = null)
+    {
+        if (entity == null)
+        {
+            throw new ArgumentNullException(nameof(entity));
+        }
+
+        var ctx = context ?? _context;
+        var sc = BuildUpsert(entity, ctx);
+        return await sc.ExecuteNonQueryAsync();
+    }
+    private IReadOnlyList<IColumnInfo> GetCachedInsertableColumns()
+    {
+        if (_columnListCache.TryGet("Insertable", out var cached))
+        {
+            return cached;
+        }
+
+        var insertable = _tableInfo.OrderedColumns
+            .Where(c => !c.IsNonInsertable && (!c.IsId || c.IsIdIsWritable))
+            .ToList();
+
+        return _columnListCache.GetOrAdd("Insertable", _ => insertable);
+    }
+
+    private IReadOnlyList<IColumnInfo> GetCachedUpdatableColumns()
+    {
+        if (_columnListCache.TryGet("Updatable", out var cached))
+        {
+            return cached;
+        }
+
+        var updatable = _tableInfo.OrderedColumns
+            .Where(c => !(c.IsId || c.IsVersion || c.IsNonUpdateable || c.IsCreatedBy || c.IsCreatedOn))
+            .ToList();
+
+        return _columnListCache.GetOrAdd("Updatable", _ => updatable);
+    }
+
+    private void CheckParameterLimit(ISqlContainer sc, int? toAdd)
+    {
+        var count = sc.ParameterCount + (toAdd ?? 0);
+        if (count > _context.MaxParameterLimit)
+        {
+            // For large batches consider chunking inputs; this method fails fast when exceeding limits.
+            throw new TooManyParametersException("Too many parameters", _context.MaxParameterLimit);
+        }
+    }
+
+    private string WrapObjectName(string objectName)
+    {
+        return _dialect.WrapObjectName(objectName);
+    }
+
+    private static bool IsDefaultId(object? value)
+    {
+        if (Utils.IsNullOrDbNull(value))
+        {
+            return true;
+        }
+
+        var type = typeof(TRowID);
+        var underlying = Nullable.GetUnderlyingType(type) ?? type;
+
+        if (underlying == typeof(string))
+        {
+            return value as string == string.Empty;
+        }
+
+        if (underlying == typeof(Guid))
+        {
+            return value is Guid g && g == Guid.Empty;
+        }
+
+        if (Utils.IsZeroNumeric(value!))
+        {
+            return true;
+        }
+
+        if (value is TRowID typed)
+        {
+            return EqualityComparer<TRowID>.Default.Equals(typed, default!);
+        }
+
+        // Different runtime type than TRowID and not a zero/empty equivalent
+        return false;
+    }
+
+
+    private static bool TryParseMajorVersion(string version, out int major)
+    {
+        major = 0;
+        if (string.IsNullOrWhiteSpace(version))
+        {
+            return false;
+        }
+
+        var match = Regex.Match(version, "(\\d+)");
+        if (!match.Success)
+        {
+            return false;
+        }
+        return int.TryParse(match.Groups[1].Value, out major);
+    }
+
+
+    private string BuildWrappedTableName(ISqlDialect dialect)
+    {
+        if (string.IsNullOrWhiteSpace(_tableInfo.Schema))
+        {
+            return dialect.WrapObjectName(_tableInfo.Name);
+        }
+
+        var sb = new StringBuilder();
+        sb.Append(dialect.WrapObjectName(_tableInfo.Schema));
+        sb.Append(dialect.CompositeIdentifierSeparator);
+        sb.Append(dialect.WrapObjectName(_tableInfo.Name));
+        return sb.ToString();
+    }
+
+    private static ISqlDialect GetDialect(IDatabaseContext ctx)
+    {
+        return (ctx as ISqlDialectProvider)?.Dialect
+               ?? throw new InvalidOperationException(
+                   "IDatabaseContext must implement ISqlDialectProvider and expose a non-null Dialect.");
+    }
+
+    private static void ValidateRowIdType()
+    {
+        var type = typeof(TRowID);
+        var underlying = Nullable.GetUnderlyingType(type) ?? type;
+
+        bool isValid = underlying == typeof(string) || underlying == typeof(Guid);
+        if (!isValid)
+        {
+            switch (Type.GetTypeCode(underlying))
+            {
+                case TypeCode.Byte:
+                case TypeCode.SByte:
+                case TypeCode.Int16:
+                case TypeCode.UInt16:
+                case TypeCode.Int32:
+                case TypeCode.UInt32:
+                case TypeCode.Int64:
+                case TypeCode.UInt64:
+                    isValid = true;
+                    break;
+                default:
+                    isValid = false;
+                    break;
+            }
+        }
+
+        if (!isValid)
+        {
+            throw new NotSupportedException(
+                $"TRowID type '{type.FullName}' is not supported. Use string, Guid, or integer types.");
+        }
+    }
+}

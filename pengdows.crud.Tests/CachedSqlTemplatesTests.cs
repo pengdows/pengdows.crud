@@ -42,13 +42,13 @@ public class CachedSqlTemplatesTests : SqlLiteContextTestBase
         var sc = helper.BuildCreate(entity);
 
         var sql = sc.Query.ToString();
-        Assert.Contains("@p0", sql);
-        Assert.Contains("@p1", sql);
+        Assert.Contains("@i0", sql);
+        Assert.Contains("@i1", sql);
 
         var field = typeof(SqlContainer).GetField("_parameters", BindingFlags.NonPublic | BindingFlags.Instance)!;
         var parameters = (IDictionary<string, DbParameter>)field.GetValue(sc)!;
-        Assert.Contains("p0", parameters.Keys);
-        Assert.Contains("p1", parameters.Keys);
+        Assert.Contains("i0", parameters.Keys);
+        Assert.Contains("i1", parameters.Keys);
     }
 
     [Fact]

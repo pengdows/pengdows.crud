@@ -92,7 +92,7 @@ public class PrepareBehaviorTests
     }
 
     [Fact]
-    public async Task Prepare_CallsOncePerShape_ThenCachesForConnection()
+    public async Task Prepare_CallsOncePerText_ThenCachesForConnection()
     {
         var factory = new RecordingPrepareFactory(SupportedDatabase.PostgreSql);
         await using var ctx = CreateContext(factory, forcePrepare: true);
@@ -104,14 +104,14 @@ public class PrepareBehaviorTests
             _ = await sc.ExecuteNonQueryAsync();
         }
 
-        // Same shape in same transaction (same connection) should not re-prepare
+        // Same text in same transaction (same connection) should not re-prepare
         await using (var sc = tx.CreateSqlContainer("SELECT @p0") as SqlContainer)
         {
             sc!.AddParameterWithValue("p0", DbType.Int32, 2);
             _ = await sc.ExecuteNonQueryAsync();
         }
 
-        // Different shape (SQL and parameters) should prepare again
+        // Different text should prepare again
         await using (var sc = tx.CreateSqlContainer("SELECT @p0, @p1") as SqlContainer)
         {
             sc!.AddParameterWithValue("p0", DbType.String, "x");
@@ -119,7 +119,7 @@ public class PrepareBehaviorTests
             _ = await sc.ExecuteNonQueryAsync();
         }
 
-        // Assert: one connection, three commands created; prepare attempts 2 (first + shape change)
+        // Assert: one connection, three commands created; prepare attempts 2 (first + text change)
         var totalAttempts = 0;
         var totalSuccess = 0;
         foreach (var connection in factory.Connections)

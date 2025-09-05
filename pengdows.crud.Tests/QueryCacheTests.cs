@@ -117,8 +117,8 @@ public class QueryCacheTests : SqlLiteContextTestBase
         var sc = Context.CreateSqlContainer();
         helper.BuildWhere(wrapped, new[] { 1, 2 }, sc);
         var countBefore = sc.ParameterCount;
-        var p0 = Context.MakeParameterName("p0");
-        var p1 = Context.MakeParameterName("p1");
+        var p0 = Context.MakeParameterName("w0");
+        var p1 = Context.MakeParameterName("w1");
 
         helper.BuildWhere(wrapped, new[] { 3, 4 }, sc);
 
@@ -140,8 +140,8 @@ public class QueryCacheTests : SqlLiteContextTestBase
 
         helper.BuildWhere(wrapped, new[] { 2, 3 }, sc);
 
-        var p0 = Context.MakeParameterName("p0");
-        var p1 = Context.MakeParameterName("p1");
+        var p0 = Context.MakeParameterName("w0");
+        var p1 = Context.MakeParameterName("w1");
 
         Assert.True(sc.ParameterCount > countBefore);
         Assert.Equal(2, sc.GetParameterValue<int>(p0));
@@ -232,8 +232,11 @@ public class QueryCacheTests : SqlLiteContextTestBase
     private static ConcurrentDictionary<string, string> GetQueryCache<TEntity, TId>(EntityHelper<TEntity, TId> helper)
         where TEntity : class, new()
     {
-        var field = typeof(EntityHelper<TEntity, TId>).GetField("_queryCache", BindingFlags.NonPublic | BindingFlags.Instance);
-        return (ConcurrentDictionary<string, string>)field!.GetValue(helper)!;
+        var field = typeof(EntityHelper<TEntity, TId>)
+            .GetField("_queryCache", BindingFlags.NonPublic | BindingFlags.Instance);
+        var cache = field!.GetValue(helper)!;
+        var mapField = cache.GetType().GetField("_map", BindingFlags.NonPublic | BindingFlags.Instance);
+        return (ConcurrentDictionary<string, string>)mapField!.GetValue(cache)!;
     }
 
     [Table("CacheEntity")]

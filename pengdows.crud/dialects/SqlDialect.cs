@@ -40,6 +40,8 @@ public abstract class SqlDialect:ISqlDialect
     public virtual string ParameterMarker => "?";
     public virtual string ParameterMarkerAt(int ordinal) => ParameterMarker;
     public virtual bool SupportsNamedParameters => true;
+
+    public virtual bool SupportsSetValuedParameters => false;
     public virtual int MaxParameterLimit => 255;
     public virtual int MaxOutputParameters => 0;
     public virtual int ParameterNameMaxLength => 18;
