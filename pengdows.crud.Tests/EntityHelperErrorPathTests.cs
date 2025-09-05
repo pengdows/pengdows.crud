@@ -54,7 +54,7 @@ public class EntityHelperErrorPathTests : SqlLiteContextTestBase
     [Fact]
     public async Task UpdateAsync_NullEntity_ThrowsArgumentNullException()
     {
-        var helper = new EntityHelper<TestEntity, long>(Context);
+        var helper = new EntityHelper<TestEntity, long>(Context, AuditValueResolver);
 
         await Assert.ThrowsAsync<ArgumentNullException>(() => helper.UpdateAsync(null!));
     }
@@ -68,7 +68,7 @@ public class EntityHelperErrorPathTests : SqlLiteContextTestBase
     [Fact]
     public async Task UpsertAsync_NullEntity_ThrowsArgumentNullException()
     {
-        var helper = new EntityHelper<TestEntity, long>(Context);
+        var helper = new EntityHelper<TestEntity, long>(Context, AuditValueResolver);
 
         await Assert.ThrowsAsync<ArgumentNullException>(() => helper.UpsertAsync(null!));
     }
@@ -82,7 +82,7 @@ public class EntityHelperErrorPathTests : SqlLiteContextTestBase
     [Fact]
     public async Task CreateAsync_NullEntity_ThrowsArgumentNullException()
     {
-        var helper = new EntityHelper<TestEntity, long>(Context);
+        var helper = new EntityHelper<TestEntity, long>(Context, AuditValueResolver);
 
         await Assert.ThrowsAsync<ArgumentNullException>(() => helper.CreateAsync(null!, Context));
     }
@@ -231,7 +231,7 @@ public class EntityHelperErrorPathTests : SqlLiteContextTestBase
     [Fact]
     public void BuildUpsert_ValidEntity_ReturnsContainer()
     {
-        var helper = new EntityHelper<TestEntity, long>(Context);
+        var helper = new EntityHelper<TestEntity, long>(Context, AuditValueResolver);
         var entity = new TestEntity { Name = "Test" };
 
         var container = helper.BuildUpsert(entity);

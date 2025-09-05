@@ -247,7 +247,27 @@ public partial class EntityHelper<TEntity, TRowID>
         var keyCols = ResolveUpsertKey();
         var (updateSql, updateParams) = BuildUpdateByKey(entity, keyCols, dialect);
         parameters.AddRange(updateParams);
-        updateSet.Append(updateSql.Substring(updateSql.IndexOf(" SET ", StringComparison.Ordinal) + 5));
+        var setStart = updateSql.IndexOf(" SET ", StringComparison.Ordinal) + 5;
+        var whereStart = updateSql.IndexOf(" WHERE ", StringComparison.Ordinal);
+        var setClause = whereStart > setStart
+            ? updateSql.Substring(setStart, whereStart - setStart)
+            : updateSql.Substring(setStart);
+        var setParts = setClause.Split(", ");
+        for (var i = 0; i < setParts.Length; i++)
+        {
+            if (i > 0)
+            {
+                updateSet.Append(", ");
+            }
+            var part = setParts[i];
+            var eq = part.IndexOf('=');
+            var left = part.Substring(0, eq).Trim();
+            var right = part.Substring(eq + 1).Trim();
+            var colName = left.Trim().Trim('"');
+            var wrapped = dialect.WrapObjectName(colName);
+            updateSet.Append("t.").Append(left).Append(" = ")
+                     .Append(right.Replace(wrapped, "t." + wrapped));
+        }
 
         var join = string.Join(" AND ", (keyCols.Count > 0 ? keyCols : new List<IColumnInfo> { _idColumn! })
             .Select(k => $"t.{dialect.WrapObjectName(k.Name)} = s.{dialect.WrapObjectName(k.Name)}"));

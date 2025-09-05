@@ -42,8 +42,7 @@ public partial class EntityHelper<TEntity, TRowID>
 
     private CachedSqlTemplates BuildCachedSqlTemplatesNeutral()
     {
-        var idCol = _tableInfo.Columns.Values.FirstOrDefault(c => c.IsId)
-                     ?? throw new InvalidOperationException($"No ID column defined for {typeof(TEntity).Name}");
+        var idCol = _tableInfo.Columns.Values.FirstOrDefault(c => c.IsId);
 
         var insertColumns = _tableInfo.Columns.Values
             .Where(c => !c.IsNonInsertable && (!c.IsId || c.IsIdIsWritable))
@@ -68,16 +67,22 @@ public partial class EntityHelper<TEntity, TRowID>
 
         var insertSql =
             $"INSERT INTO {BuildWrappedTableNameNeutral()} ({string.Join(", ", wrappedCols)}) VALUES ({string.Join(", ", valuePlaceholders)})";
-        var deleteSql =
-            $"DELETE FROM {BuildWrappedTableNameNeutral()} WHERE {WrapNeutral(idCol.Name)} = {{0}}";
 
+        var deleteSql = string.Empty;
         var updateColumns = _tableInfo.Columns.Values
-            .Where(c => !c.IsId && !c.IsVersion && !c.IsNonUpdateable && !c.IsCreatedBy && !c.IsCreatedOn)
+            .Where(c => (idCol == null || !c.IsId) && !c.IsVersion && !c.IsNonUpdateable && !c.IsCreatedBy && !c.IsCreatedOn)
             .Cast<IColumnInfo>()
             .ToList();
+        var updateSql = string.Empty;
 
-        var updateSql =
-            $"UPDATE {BuildWrappedTableNameNeutral()} SET {{0}} WHERE {WrapNeutral(idCol.Name)} = {{1}}";
+        if (idCol != null)
+        {
+            deleteSql =
+                $"DELETE FROM {BuildWrappedTableNameNeutral()} WHERE {WrapNeutral(idCol.Name)} = {{0}}";
+
+            updateSql =
+                $"UPDATE {BuildWrappedTableNameNeutral()} SET {{0}} WHERE {WrapNeutral(idCol.Name)} = {{1}}";
+        }
 
         return new CachedSqlTemplates
         {

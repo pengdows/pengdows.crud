@@ -3,6 +3,7 @@ using System.Data;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 using pengdows.crud.attributes;
+using pengdows.crud;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -36,7 +37,7 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
     public void BuildUpsert_OnConflict_BumpsVersion()
     {
         TypeMap.Register<TestEntity>();
-        var helper = new EntityHelper<TestEntity, int>(Context);
+        var helper = new EntityHelper<TestEntity, int>(Context, AuditValueResolver);
         var entity = new TestEntity { Id = 1, Name = "v" };
         var sc = helper.BuildUpsert(entity);
         var sql = sc.Query.ToString();
@@ -50,7 +51,7 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
         var factory = new fakeDbFactory(SupportedDatabase.MySql);
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=MySql", factory);
         TypeMap.Register<TestEntity>();
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new EntityHelper<TestEntity, int>(context, new StubAuditValueResolver("u"));
         var entity = new TestEntity { Id = 1, Name = "v" };
         var sc = helper.BuildUpsert(entity);
         var sql = sc.Query.ToString();
@@ -64,7 +65,7 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory);
         TypeMap.Register<TestEntity>();
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new EntityHelper<TestEntity, int>(context, new StubAuditValueResolver("u"));
         var entity = new TestEntity { Id = 1, Name = "v" };
         var sc = helper.BuildUpsert(entity);
         var sql = sc.Query.ToString();

@@ -63,7 +63,7 @@ public partial class EntityHelper<TEntity, TRowID>
         if (_tableInfo.CreatedOn?.PropertyInfo != null)
         {
             var currentValue = _tableInfo.CreatedOn.PropertyInfo.GetValue(obj) as DateTime?;
-            if (currentValue == null || currentValue == default)
+            if (currentValue == null || currentValue == default(DateTime))
             {
                 _tableInfo.CreatedOn.PropertyInfo.SetValue(obj, utcNow);
             }
