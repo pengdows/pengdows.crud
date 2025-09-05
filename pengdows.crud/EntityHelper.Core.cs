@@ -553,7 +553,9 @@ public partial class EntityHelper<TEntity, TRowID> :
             throw new InvalidOperationException($"row identity column for table {WrappedTableName} not found");
         }
 
-        var param = dialect.CreateDbParameter(_idColumn.DbType, id);
+        var counters = new ClauseCounters();
+        var name = counters.NextKey();
+        var param = dialect.CreateDbParameter(name, _idColumn.DbType, id);
         sc.AddParameter(param);
 
         var baseKey = "DeleteById";
@@ -761,6 +763,7 @@ public partial class EntityHelper<TEntity, TRowID> :
         var parameters = new List<DbParameter>();
         var wrappedAlias = BuildAliasPrefix(alias);
         var sb = new StringBuilder();
+        var counters = new ClauseCounters();
         var index = 0;
 
         foreach (var entity in listOfObjects!)
@@ -770,7 +773,7 @@ public partial class EntityHelper<TEntity, TRowID> :
                 sb.Append(" OR ");
             }
 
-            sb.Append(BuildPrimaryKeyClause(entity, keys, wrappedAlias, parameters, dialect));
+            sb.Append(BuildPrimaryKeyClause(entity, keys, wrappedAlias, parameters, dialect, counters));
         }
 
         if (sb.Length == 0)
@@ -844,7 +847,7 @@ public partial class EntityHelper<TEntity, TRowID> :
         string.IsNullOrWhiteSpace(alias) ? string.Empty : alias + ".";
 
     private string BuildPrimaryKeyClause(TEntity entity, IReadOnlyList<IColumnInfo> keys, string alias,
-        List<DbParameter> parameters, ISqlDialect dialect)
+        List<DbParameter> parameters, ISqlDialect dialect, ClauseCounters counters)
     {
         var clause = new StringBuilder("(");
         for (var i = 0; i < keys.Count; i++)
@@ -856,7 +859,8 @@ public partial class EntityHelper<TEntity, TRowID> :
 
             var pk = keys[i];
             var value = pk.MakeParameterValueFromField(entity);
-            var parameter = dialect.CreateDbParameter(pk.DbType, value);
+            var name = counters.NextKey();
+            var parameter = dialect.CreateDbParameter(name, pk.DbType, value);
 
             clause.Append(alias);
             clause.Append(dialect.WrapObjectName(pk.Name));
@@ -928,7 +932,8 @@ public partial class EntityHelper<TEntity, TRowID> :
             SetAuditFields(objectToUpdate, true);
         }
 
-        var (setClause, parameters) = BuildSetClause(objectToUpdate, original, dialect);
+        var counters = new ClauseCounters();
+        var (setClause, parameters) = BuildSetClause(objectToUpdate, original, dialect, counters);
         if (setClause.Length == 0)
         {
             throw new InvalidOperationException("No changes detected for update.");
@@ -939,7 +944,8 @@ public partial class EntityHelper<TEntity, TRowID> :
             IncrementVersion(setClause, dialect);
         }
 
-        var pId = dialect.CreateDbParameter(_idColumn.DbType,
+        var idName = counters.NextKey();
+        var pId = dialect.CreateDbParameter(idName, _idColumn.DbType,
             _idColumn.PropertyInfo.GetValue(objectToUpdate)!);
         parameters.Add(pId);
 
@@ -949,7 +955,7 @@ public partial class EntityHelper<TEntity, TRowID> :
         if (_versionColumn != null)
         {
             var versionValue = _versionColumn.MakeParameterValueFromField(objectToUpdate);
-            var versionParam = AppendVersionCondition(sc, versionValue, dialect);
+            var versionParam = AppendVersionCondition(sc, versionValue, dialect, counters);
             if (versionParam != null)
             {
                 parameters.Add(versionParam);
@@ -1054,7 +1060,8 @@ public partial class EntityHelper<TEntity, TRowID> :
         {
             SetAuditFields(updated, true);
         }
-        var (setClause, parameters) = BuildSetClause(updated, null, dialect);
+        var counters = new ClauseCounters();
+        var (setClause, parameters) = BuildSetClause(updated, null, dialect, counters);
         if (setClause.Length == 0)
         {
             throw new InvalidOperationException("No changes detected for update.");
@@ -1075,7 +1082,8 @@ public partial class EntityHelper<TEntity, TRowID> :
 
             var key = keyCols[i];
             var v = key.MakeParameterValueFromField(updated);
-            var p = dialect.CreateDbParameter(key.DbType, v);
+            var name = counters.NextKey();
+            var p = dialect.CreateDbParameter(name, key.DbType, v);
             parameters.Add(p);
             where.Append($"{dialect.WrapObjectName(key.Name)} = {dialect.MakeParameterName(p)}");
         }
@@ -1084,7 +1092,8 @@ public partial class EntityHelper<TEntity, TRowID> :
         if (_versionColumn != null)
         {
             var vv = _versionColumn.MakeParameterValueFromField(updated);
-            var p = dialect.CreateDbParameter(_versionColumn.DbType, vv);
+            var name = counters.NextVer();
+            var p = dialect.CreateDbParameter(name, _versionColumn.DbType, vv);
             parameters.Add(p);
             sql += $" AND {dialect.WrapObjectName(_versionColumn.Name)} = {dialect.MakeParameterName(p)}";
         }
@@ -1127,7 +1136,7 @@ public partial class EntityHelper<TEntity, TRowID> :
         }
     }
 
-    private (StringBuilder clause, List<DbParameter> parameters) BuildSetClause(TEntity updated, TEntity? original, ISqlDialect dialect)
+    private (StringBuilder clause, List<DbParameter> parameters) BuildSetClause(TEntity updated, TEntity? original, ISqlDialect dialect, ClauseCounters counters)
     {
         var clause = new StringBuilder();
         var parameters = new List<DbParameter>();
@@ -1155,7 +1164,8 @@ public partial class EntityHelper<TEntity, TRowID> :
             }
             else
             {
-                var param = dialect.CreateDbParameter(column.DbType, newValue);
+                var name = counters.NextSet();
+                var param = dialect.CreateDbParameter(name, column.DbType, newValue);
                 parameters.Add(param);
                 clause.Append($"{dialect.WrapObjectName(column.Name)} = {dialect.MakeParameterName(param)}");
             }
@@ -1202,7 +1212,7 @@ public partial class EntityHelper<TEntity, TRowID> :
         setClause.Append($", {dialect.WrapObjectName(_versionColumn!.Name)} = {dialect.WrapObjectName(_versionColumn.Name)} + 1");
     }
 
-    private DbParameter? AppendVersionCondition(ISqlContainer sc, object? versionValue, ISqlDialect dialect)
+    private DbParameter? AppendVersionCondition(ISqlContainer sc, object? versionValue, ISqlDialect dialect, ClauseCounters counters)
     {
         if (versionValue == null)
         {
@@ -1210,7 +1220,8 @@ public partial class EntityHelper<TEntity, TRowID> :
             return null;
         }
 
-        var pVersion = dialect.CreateDbParameter(_versionColumn!.DbType, versionValue);
+        var name = counters.NextVer();
+        var pVersion = dialect.CreateDbParameter(name, _versionColumn!.DbType, versionValue);
         sc.Query.Append(" AND ").Append(sc.WrapObjectName(_versionColumn.Name))
             .Append($" = {dialect.MakeParameterName(pVersion)}");
         return pVersion;
@@ -1245,6 +1256,7 @@ public partial class EntityHelper<TEntity, TRowID> :
         var columns = new List<string>();
         var values = new List<string>();
         var parameters = new List<DbParameter>();
+        var counters = new ClauseCounters();
 
         foreach (var column in GetCachedInsertableColumns())
         {
@@ -1262,7 +1274,8 @@ public partial class EntityHelper<TEntity, TRowID> :
             }
             else
             {
-                var p = dialect.CreateDbParameter(column.DbType, value);
+                var name = counters.NextIns();
+                var p = dialect.CreateDbParameter(name, column.DbType, value);
                 parameters.Add(p);
                 values.Add(dialect.MakeParameterName(p));
             }
@@ -1325,6 +1338,7 @@ public partial class EntityHelper<TEntity, TRowID> :
         var columns = new List<string>();
         var values = new List<string>();
         var parameters = new List<DbParameter>();
+        var counters = new ClauseCounters();
 
         foreach (var column in GetCachedInsertableColumns())
         {
@@ -1337,7 +1351,8 @@ public partial class EntityHelper<TEntity, TRowID> :
             }
             else
             {
-                var p = dialect.CreateDbParameter(column.DbType, value);
+                var name = counters.NextIns();
+                var p = dialect.CreateDbParameter(name, column.DbType, value);
                 parameters.Add(p);
                 values.Add(dialect.MakeParameterName(p));
             }
@@ -1395,6 +1410,7 @@ public partial class EntityHelper<TEntity, TRowID> :
         var srcColumns = new List<string>();
         var values = new List<string>();
         var parameters = new List<DbParameter>();
+        var counters = new ClauseCounters();
 
         foreach (var column in _tableInfo.OrderedColumns)
         {
@@ -1406,7 +1422,8 @@ public partial class EntityHelper<TEntity, TRowID> :
             }
             else
             {
-                var p = dialect.CreateDbParameter(column.DbType, value);
+                var name = counters.NextIns();
+                var p = dialect.CreateDbParameter(name, column.DbType, value);
                 parameters.Add(p);
                 placeholder = dialect.MakeParameterName(p);
             }
@@ -1497,7 +1514,7 @@ public partial class EntityHelper<TEntity, TRowID> :
             names = new string[list.Count];
             for (var i = 0; i < names.Length; i++)
             {
-                names[i] = sqlContainer.MakeParameterName($"p{i}");
+                names[i] = sqlContainer.MakeParameterName($"w{i}");
             }
 
             _whereParameterNames.GetOrAdd(key, _ => names);
@@ -1510,7 +1527,7 @@ public partial class EntityHelper<TEntity, TRowID> :
         sqlContainer.Query.Append(sql);
 
         var dbType = _idColumn!.DbType;
-        var isPositional = sqlContainer.MakeParameterName("p0") == sqlContainer.MakeParameterName("p1");
+        var isPositional = sqlContainer.MakeParameterName("w0") == sqlContainer.MakeParameterName("w1");
         for (var i = 0; i < list.Count; i++)
         {
             var name = names[i];

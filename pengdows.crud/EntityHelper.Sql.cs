@@ -61,7 +61,7 @@ public partial class EntityHelper<TEntity, TRowID>
         var valuePlaceholders = new List<string>();
         for (var i = 0; i < insertColumns.Count; i++)
         {
-            var name = $"p{i}";
+            var name = $"i{i}";
             paramNames.Add(name);
             valuePlaceholders.Add("{P}" + name);
         }
