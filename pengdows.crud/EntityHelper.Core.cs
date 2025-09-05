@@ -20,7 +20,7 @@ using pengdows.crud.wrappers;
 
 namespace pengdows.crud;
 
-public class EntityHelper<TEntity, TRowID> :
+public partial class EntityHelper<TEntity, TRowID> :
     IEntityHelper<TEntity, TRowID> where TEntity : class, new()
 {
     // Cache for compiled property setters
@@ -29,15 +29,6 @@ public class EntityHelper<TEntity, TRowID> :
     private readonly Lazy<CachedSqlTemplates> _cachedSqlTemplates;
     // Per-dialect templates are cached in _templatesByDialect
 
-    private class CachedSqlTemplates
-    {
-        public string InsertSql = null!;
-        public List<IColumnInfo> InsertColumns = null!;
-        public List<string> InsertParameterNames = null!;
-        public string DeleteSql = null!;
-        public string UpdateSql = null!;
-        public List<IColumnInfo> UpdateColumns = null!;
-    }
 
     private static ILogger _logger = NullLogger.Instance;
 
@@ -98,77 +89,7 @@ public class EntityHelper<TEntity, TRowID> :
     // SQL templates cached per dialect to support context overrides
     private readonly ConcurrentDictionary<SupportedDatabase, Lazy<CachedSqlTemplates>> _templatesByDialect = new();
 
-    // Neutral tokens used in cached SQL; replaced with dialect-specific tokens on retrieval
-    private const string NeutralQuotePrefix = "{Q}";
-    private const string NeutralQuoteSuffix = "{q}";
-    private const string NeutralSeparator = "{S}";
 
-    private static string WrapNeutral(string name)
-    {
-        return string.IsNullOrEmpty(name) ? string.Empty : NeutralQuotePrefix + name + NeutralQuoteSuffix;
-    }
-
-    private static string ReplaceNeutralTokens(string sql, ISqlDialect dialect)
-    {
-        if (string.IsNullOrEmpty(sql))
-        {
-            return sql;
-        }
-        return sql.Replace(NeutralQuotePrefix, dialect.QuotePrefix)
-                  .Replace(NeutralQuoteSuffix, dialect.QuoteSuffix)
-                  .Replace(NeutralSeparator, dialect.CompositeIdentifierSeparator);
-    }
-
-    private const int MaxCacheSize = 100;
-
-    private static void TryAddWithLimit<TKey, TValue>(ConcurrentDictionary<TKey, TValue> cache, TKey key,
-        TValue value, ConcurrentQueue<TKey> order)
-        where TKey : notnull
-    {
-        // Use GetOrAdd to ensure we don't lose the value if already present
-        if (cache.TryAdd(key, value))
-        {
-            // Only track order for new entries
-            order.Enqueue(key);
-            
-            // Use queue-based FIFO eviction when limit is exceeded
-            while (cache.Count > MaxCacheSize && order.TryDequeue(out var oldKey))
-            {
-                cache.TryRemove(oldKey, out _);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Thread-safe method to add reader plans with bounded cache size using atomic dictionary swap
-    /// </summary>
-    private void TryAddReaderPlanWithLimit(int hash, ColumnPlan[] plan)
-    {
-        // Use GetOrAdd to ensure we don't lose the value if already present
-        _readerPlans.GetOrAdd(hash, plan);
-
-        // If cache size exceeds limit, atomically swap to a new dictionary
-        if (_readerPlans.Count > MaxReaderPlans)
-        {
-            var newCache = new ConcurrentDictionary<int, ColumnPlan[]>();
-            newCache.TryAdd(hash, plan);
-            // Atomic swap - other threads will start using the new cache
-            Interlocked.Exchange(ref _readerPlans, newCache);
-        }
-    }
-
-    public void ClearCaches()
-    {
-        _readerConverters.Clear();
-        _readerConvertersOrder.Clear();
-        _readerPlans.Clear();
-        _columnListCache.Clear();
-        _columnListCacheOrder.Clear();
-        _queryCache.Clear();
-        _queryCacheOrder.Clear();
-        _whereParameterNames.Clear();
-        _whereParameterNamesOrder.Clear();
-    }
 
     public EntityHelper(IDatabaseContext databaseContext,
         EnumParseFailureMode enumParseBehavior = EnumParseFailureMode.Throw
@@ -301,71 +222,6 @@ public class EntityHelper<TEntity, TRowID> :
         return sql;
     }
 
-    public TEntity MapReaderToObject(ITrackedReader reader)
-    {
-        var obj = new TEntity();
-
-        var plan = GetOrBuildRecordsetPlan(reader);
-        for (var idx = 0; idx < plan.Length; idx++)
-        {
-            var p = plan[idx];
-            var raw = reader.IsDBNull(p.Ordinal) ? null : reader.GetValue(p.Ordinal);
-            var coerced = p.Converter(raw);
-            try
-            {
-                p.Setter(obj, coerced);
-            }
-            catch (Exception ex)
-            {
-                var name = reader.GetName(p.Ordinal);
-                throw new InvalidValueException(
-                    $"Unable to set property from value that was stored in the database: {name} :{ex.Message}");
-            }
-        }
-
-        return obj;
-    }
-
-    private ColumnPlan[] GetOrBuildRecordsetPlan(ITrackedReader reader)
-    {
-        // Compute a stronger hash for the recordset shape: field count + names + types
-        var fieldCount = reader.FieldCount;
-        var hash = fieldCount * 397;
-        for (var i = 0; i < fieldCount; i++)
-        {
-            var name = reader.GetName(i);
-            hash = unchecked(hash * 31 + StringComparer.OrdinalIgnoreCase.GetHashCode(name));
-            
-            // Include field type to strengthen hash and avoid shape collisions
-            var fieldType = reader.GetFieldType(i);
-            hash = unchecked(hash * 31 + fieldType.GetHashCode());
-        }
-
-        // Try to get existing plan from thread-safe cache
-        if (_readerPlans.TryGetValue(hash, out var existingPlan))
-        {
-            return existingPlan;
-        }
-
-        // Build new plan
-        var list = new List<ColumnPlan>(fieldCount);
-        for (var i = 0; i < fieldCount; i++)
-        {
-            var colName = reader.GetName(i);
-            if (_columnsByNameCI.TryGetValue(colName, out var column))
-            {
-                var setter = GetOrCreateSetter(column.PropertyInfo);
-                var converter = GetOrCreateReaderConverter(column);
-                list.Add(new ColumnPlan(i, setter, converter));
-            }
-        }
-
-        var plan = list.ToArray();
-        
-        // Add to cache with bounded size limit
-        TryAddReaderPlanWithLimit(hash, plan);
-        return plan;
-    }
 
     private Func<object?, object?> GetOrCreateReaderConverter(IColumnInfo column)
     {
@@ -768,25 +624,6 @@ public class EntityHelper<TEntity, TRowID> :
     }
 
 
-    public Action<object, object?> GetOrCreateSetter(PropertyInfo prop)
-    {
-        // The generated setter casts directly; a database NULL assigned to a non-nullable property will throw.
-        // This fail-fast behavior surfaces unexpected schema mismatches immediately.
-        return _propertySetters.GetOrAdd(prop, p =>
-        {
-            var objParam = Expression.Parameter(typeof(object));
-            var valueParam = Expression.Parameter(typeof(object));
-
-            var castObj = Expression.Convert(objParam, p.DeclaringType!);
-            var castValue = Expression.Convert(valueParam, p.PropertyType);
-
-            var propertyAccess = Expression.Property(castObj, p);
-            var assignment = Expression.Assign(propertyAccess, castValue);
-
-            var lambda = Expression.Lambda<Action<object, object?>>(assignment, objParam, valueParam);
-            return lambda.Compile();
-        });
-    }
 
 
     public Task<TEntity?> RetrieveOneAsync(TEntity objectToRetrieve, IDatabaseContext? context = null)
@@ -1855,85 +1692,6 @@ public class EntityHelper<TEntity, TRowID> :
         return int.TryParse(match.Groups[1].Value, out major);
     }
 
-    private CachedSqlTemplates BuildCachedSqlTemplatesNeutral()
-    {
-        var idCol = _tableInfo.Columns.Values.FirstOrDefault(c => c.IsId)
-                     ?? throw new InvalidOperationException($"No ID column defined for {typeof(TEntity).Name}");
-
-        var insertColumns = _tableInfo.Columns.Values
-            .Where(c => !c.IsNonInsertable && (!c.IsId || c.IsIdIsWritable))
-            .Where(c => _auditValueResolver != null || (!c.IsCreatedBy && !c.IsLastUpdatedBy))
-            .Cast<IColumnInfo>()
-            .ToList();
-
-        var wrappedCols = new List<string>();
-        for (var i = 0; i < insertColumns.Count; i++)
-        {
-            wrappedCols.Add(WrapNeutral(insertColumns[i].Name));
-        }
-
-        var paramNames = new List<string>();
-        var valuePlaceholders = new List<string>();
-        for (var i = 0; i < insertColumns.Count; i++)
-        {
-            var name = $"p{i}";
-            paramNames.Add(name);
-            valuePlaceholders.Add("{P}" + name);
-        }
-
-        var insertSql =
-            $"INSERT INTO {BuildWrappedTableNameNeutral()} ({string.Join(", ", wrappedCols)}) VALUES ({string.Join(", ", valuePlaceholders)})";
-        var deleteSql =
-            $"DELETE FROM {BuildWrappedTableNameNeutral()} WHERE {WrapNeutral(idCol.Name)} = {{0}}";
-
-        var updateColumns = _tableInfo.Columns.Values
-            .Where(c => !c.IsId && !c.IsVersion && !c.IsNonUpdateable && !c.IsCreatedBy && !c.IsCreatedOn)
-            .Cast<IColumnInfo>()
-            .ToList();
-
-        var updateSql =
-            $"UPDATE {BuildWrappedTableNameNeutral()} SET {{0}} WHERE {WrapNeutral(idCol.Name)} = {{1}}";
-
-        return new CachedSqlTemplates
-        {
-            InsertSql = insertSql,
-            InsertColumns = insertColumns,
-            InsertParameterNames = paramNames,
-            DeleteSql = deleteSql,
-            UpdateSql = updateSql,
-            UpdateColumns = updateColumns
-        };
-    }
-
-    private CachedSqlTemplates GetTemplatesForDialect(ISqlDialect dialect)
-    {
-        return _templatesByDialect
-            .GetOrAdd(dialect.DatabaseType, _ => new Lazy<CachedSqlTemplates>(() =>
-            {
-                var neutral = _cachedSqlTemplates.Value;
-                string RenderParams(string sql)
-                {
-                    // Replace neutral param tokens with dialect-appropriate placeholders.
-                    // Named: {P}name -> @name or :name
-                    // Positional: {P}name -> ?
-                    return Regex.Replace(sql, "\\{P\\}([A-Za-z_][A-Za-z0-9_]*)",
-                        m => dialect.SupportsNamedParameters
-                            ? string.Concat(dialect.ParameterMarker, m.Groups[1].Value)
-                            : dialect.ParameterMarker);
-                }
-
-                return new CachedSqlTemplates
-                {
-                    InsertSql = RenderParams(ReplaceNeutralTokens(neutral.InsertSql, dialect)),
-                    InsertColumns = neutral.InsertColumns,
-                    InsertParameterNames = neutral.InsertParameterNames,
-                    DeleteSql = ReplaceNeutralTokens(neutral.DeleteSql, dialect),
-                    UpdateSql = ReplaceNeutralTokens(neutral.UpdateSql, dialect),
-                    UpdateColumns = neutral.UpdateColumns
-                };
-            }))
-            .Value;
-    }
 
     private string BuildWrappedTableName(ISqlDialect dialect)
     {
@@ -1946,20 +1704,6 @@ public class EntityHelper<TEntity, TRowID> :
         sb.Append(dialect.WrapObjectName(_tableInfo.Schema));
         sb.Append(dialect.CompositeIdentifierSeparator);
         sb.Append(dialect.WrapObjectName(_tableInfo.Name));
-        return sb.ToString();
-    }
-
-    private string BuildWrappedTableNameNeutral()
-    {
-        if (string.IsNullOrWhiteSpace(_tableInfo.Schema))
-        {
-            return WrapNeutral(_tableInfo.Name);
-        }
-
-        var sb = new StringBuilder();
-        sb.Append(WrapNeutral(_tableInfo.Schema));
-        sb.Append(NeutralSeparator);
-        sb.Append(WrapNeutral(_tableInfo.Name));
         return sb.ToString();
     }
 
