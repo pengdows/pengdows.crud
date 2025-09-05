@@ -746,7 +746,9 @@ public partial class EntityHelper<TEntity, TRowID> :
 
     public void BuildWhereByPrimaryKey(IReadOnlyCollection<TEntity>? listOfObjects, ISqlContainer sc, string alias = "")
     {
-        BuildWhereByPrimaryKey(listOfObjects, sc, alias, _dialect);
+        var dialectProvider = sc as ISqlDialectProvider;
+        var dialect = dialectProvider?.Dialect ?? _dialect;
+        BuildWhereByPrimaryKey(listOfObjects, sc, alias, dialect);
     }
 
     public void BuildWhereByPrimaryKey(IReadOnlyCollection<TEntity>? listOfObjects, ISqlContainer sc, string alias, ISqlDialect dialect)
@@ -1093,6 +1095,7 @@ public partial class EntityHelper<TEntity, TRowID> :
 
     private async Task<TEntity?> LoadOriginalAsync(TEntity objectToUpdate, IDatabaseContext? context = null)
     {
+        var ctx = context ?? _context;
         var idValue = _idColumn!.PropertyInfo.GetValue(objectToUpdate);
         if (IsDefaultId(idValue))
         {
@@ -1111,7 +1114,7 @@ public partial class EntityHelper<TEntity, TRowID> :
                 return null;
             }
 
-            return await RetrieveOneAsync((TRowID)converted, context);
+            return await RetrieveOneAsync((TRowID)converted, ctx);
         }
         catch (InvalidCastException ex)
         {

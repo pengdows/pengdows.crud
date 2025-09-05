@@ -17,7 +17,7 @@ using pengdows.crud.strategies.proc;
 
 namespace pengdows.crud;
 
-public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
+public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectProvider
 {
     private readonly IDatabaseContext _context;
     private readonly ISqlDialect _dialect;
@@ -25,6 +25,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer
     private readonly ILogger<ISqlContainer> _logger;
     private readonly IDictionary<string, DbParameter> _parameters = new OrderedDictionary<string, DbParameter>();
     private int _outputParameterCount;
+
+    ISqlDialect ISqlDialectProvider.Dialect => _dialect;
 
     internal SqlContainer(IDatabaseContext context, string? query = "", ILogger<ISqlContainer>? logger = null)
     {
