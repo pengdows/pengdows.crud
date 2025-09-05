@@ -59,11 +59,7 @@ public partial class EntityHelper<TEntity, TRowID> :
     private readonly BoundedCache<string, IReadOnlyList<IColumnInfo>> _columnListCache = new(MaxCacheSize);
 
     private readonly BoundedCache<string, string> _queryCache = new(MaxCacheSize);
-    private readonly BoundedCache<string, IReadOnlyList<IColumnInfo>> _columnListCache = new(MaxCacheSize);
 
-    private readonly BoundedCache<string, string> _queryCache = new(MaxCacheSize);
-
->>>>>>> codex/update-write-only-protection-settings
     private readonly BoundedCache<string, string[]> _whereParameterNames = new(MaxCacheSize);
 
     // Thread-safe cache for reader plans by recordset shape hash
@@ -1372,13 +1368,6 @@ public partial class EntityHelper<TEntity, TRowID> :
             throw new ArgumentException("IDs cannot be null", nameof(ids));
         }
 
-<<<<<<< HEAD
-        var key = $"Where:{wrappedColumnName}:{list.Count}";
-        if (!_whereParameterNames.TryGet(key, out var names))
-        {
-            names = new string[list.Count];
-            for (var i = 0; i < names.Length; i++)
-=======
         if (dialect.SupportsSetValuedParameters)
         {
             var paramName = sqlContainer.MakeParameterName("w0");
@@ -1404,7 +1393,6 @@ public partial class EntityHelper<TEntity, TRowID> :
         {
             names = new string[bucket];
             for (var i = 0; i < bucket; i++)
->>>>>>> codex/update-write-only-protection-settings
             {
                 names[i] = sqlContainer.MakeParameterName($"w{i}");
             }
@@ -1420,12 +1408,8 @@ public partial class EntityHelper<TEntity, TRowID> :
 
         var dbType = _idColumn!.DbType;
         var isPositional = sqlContainer.MakeParameterName("w0") == sqlContainer.MakeParameterName("w1");
-<<<<<<< HEAD
-        for (var i = 0; i < list.Count; i++)
-=======
         var lastIndex = list.Count - 1;
         for (var i = 0; i < bucket; i++)
->>>>>>> codex/update-write-only-protection-settings
         {
             var name = names[i];
             var value = i < list.Count ? list[i] : list[lastIndex];
