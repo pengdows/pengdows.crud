@@ -1,4 +1,4 @@
-using System.Text;
+using System.Collections.Concurrent;
 
 namespace pengdows.crud.connection;
 
@@ -12,26 +12,16 @@ public sealed class ConnectionLocalState
     /// </summary>
     public bool PrepareDisabled { get; set; }
     
-    /// <summary>
-    /// Cache of the last prepared statement shape to avoid re-preparing identical shapes
-    /// </summary>
-    private string? _lastShapeHash;
-    private bool _isPreparedForShape;
+    private readonly ConcurrentDictionary<string, byte> _prepared = new();
+    private readonly ConcurrentQueue<string> _order = new();
+    private const int _maxPrepared = 32;
 
     /// <summary>
     /// Computes a hash of the command's SQL text and parameter types for shape caching
     /// </summary>
     public static string ComputeShapeHash(System.Data.Common.DbCommand cmd)
     {
-        var sb = new StringBuilder(cmd.CommandText.Length + cmd.Parameters.Count * 6);
-        sb.Append(cmd.CommandText);
-        
-        foreach (System.Data.Common.DbParameter p in cmd.Parameters)
-        {
-            sb.Append('|').Append((int)p.DbType).Append(':').Append(p.Size);
-        }
-        
-        return sb.ToString();
+        return cmd.CommandText;
     }
 
     /// <summary>
@@ -39,7 +29,7 @@ public sealed class ConnectionLocalState
     /// </summary>
     public bool IsAlreadyPreparedForShape(string shapeHash)
     {
-        return _isPreparedForShape && shapeHash == _lastShapeHash;
+        return _prepared.ContainsKey(shapeHash);
     }
 
     /// <summary>
@@ -47,8 +37,14 @@ public sealed class ConnectionLocalState
     /// </summary>
     public void MarkShapePrepared(string shapeHash)
     {
-        _lastShapeHash = shapeHash;
-        _isPreparedForShape = true;
+        if (_prepared.TryAdd(shapeHash, 0))
+        {
+            _order.Enqueue(shapeHash);
+            while (_prepared.Count > _maxPrepared && _order.TryDequeue(out var old))
+            {
+                _prepared.TryRemove(old, out _);
+            }
+        }
     }
 
     /// <summary>
@@ -56,8 +52,11 @@ public sealed class ConnectionLocalState
     /// </summary>
     public void Reset()
     {
-        _lastShapeHash = null;
-        _isPreparedForShape = false;
+        while (_order.TryDequeue(out _))
+        {
+        }
+
+        _prepared.Clear();
         // Don't reset PrepareDisabled - that should persist for the physical connection
     }
 }

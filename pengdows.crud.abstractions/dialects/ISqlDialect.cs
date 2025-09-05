@@ -44,6 +44,11 @@ public interface ISqlDialect
     bool SupportsNamedParameters { get; }
 
     /// <summary>
+    /// True when the dialect supports set-valued parameters for IN-lists.
+    /// </summary>
+    bool SupportsSetValuedParameters { get; }
+
+    /// <summary>
     /// Maximum number of parameters allowed in a single command.
     /// </summary>
     int MaxParameterLimit { get; }
