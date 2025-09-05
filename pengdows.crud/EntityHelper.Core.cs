@@ -8,9 +8,9 @@ using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Globalization;
-using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using pengdows.crud.@internal;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;
@@ -20,7 +20,7 @@ using pengdows.crud.wrappers;
 
 namespace pengdows.crud;
 
-public class EntityHelper<TEntity, TRowID> :
+public partial class EntityHelper<TEntity, TRowID> :
     IEntityHelper<TEntity, TRowID> where TEntity : class, new()
 {
     // Cache for compiled property setters
@@ -29,15 +29,6 @@ public class EntityHelper<TEntity, TRowID> :
     private readonly Lazy<CachedSqlTemplates> _cachedSqlTemplates;
     // Per-dialect templates are cached in _templatesByDialect
 
-    private class CachedSqlTemplates
-    {
-        public string InsertSql = null!;
-        public List<IColumnInfo> InsertColumns = null!;
-        public List<string> InsertParameterNames = null!;
-        public string DeleteSql = null!;
-        public string UpdateSql = null!;
-        public List<IColumnInfo> UpdateColumns = null!;
-    }
 
     private static ILogger _logger = NullLogger.Instance;
 
@@ -65,110 +56,30 @@ public class EntityHelper<TEntity, TRowID> :
 
     private IColumnInfo? _versionColumn;
 
-    private readonly ConcurrentDictionary<IColumnInfo, Func<object?, object?>> _readerConverters = new();
-    private readonly ConcurrentQueue<IColumnInfo> _readerConvertersOrder = new();
+    private readonly BoundedCache<string, IReadOnlyList<IColumnInfo>> _columnListCache = new(MaxCacheSize);
 
-    private readonly ConcurrentDictionary<string, IReadOnlyList<IColumnInfo>> _columnListCache = new();
-    private readonly ConcurrentQueue<string> _columnListCacheOrder = new();
+    private readonly BoundedCache<string, string> _queryCache = new(MaxCacheSize);
 
-    private readonly ConcurrentDictionary<string, string> _queryCache = new();
-    private readonly ConcurrentQueue<string> _queryCacheOrder = new();
-
-    private readonly ConcurrentDictionary<string, string[]> _whereParameterNames = new();
-    private readonly ConcurrentQueue<string> _whereParameterNamesOrder = new();
+    private readonly BoundedCache<string, string[]> _whereParameterNames = new(MaxCacheSize);
 
     // Thread-safe cache for reader plans by recordset shape hash
-    private volatile ConcurrentDictionary<int, ColumnPlan[]> _readerPlans = new();
+    private readonly BoundedCache<int, ColumnPlan[]> _readerPlans = new(MaxReaderPlans);
     private const int MaxReaderPlans = 32;
 
     private sealed class ColumnPlan
     {
-        public int Ordinal { get; }
-        public Action<object, object?> Setter { get; }
-        public Func<object?, object?> Converter { get; }
+        public Action<ITrackedReader, object> Apply { get; }
 
-        public ColumnPlan(int ordinal, Action<object, object?> setter, Func<object?, object?> converter)
+        public ColumnPlan(Action<ITrackedReader, object> apply)
         {
-            Ordinal = ordinal;
-            Setter = setter;
-            Converter = converter;
+            Apply = apply;
         }
     }
 
     // SQL templates cached per dialect to support context overrides
     private readonly ConcurrentDictionary<SupportedDatabase, Lazy<CachedSqlTemplates>> _templatesByDialect = new();
 
-    // Neutral tokens used in cached SQL; replaced with dialect-specific tokens on retrieval
-    private const string NeutralQuotePrefix = "{Q}";
-    private const string NeutralQuoteSuffix = "{q}";
-    private const string NeutralSeparator = "{S}";
 
-    private static string WrapNeutral(string name)
-    {
-        return string.IsNullOrEmpty(name) ? string.Empty : NeutralQuotePrefix + name + NeutralQuoteSuffix;
-    }
-
-    private static string ReplaceNeutralTokens(string sql, ISqlDialect dialect)
-    {
-        if (string.IsNullOrEmpty(sql))
-        {
-            return sql;
-        }
-        return sql.Replace(NeutralQuotePrefix, dialect.QuotePrefix)
-                  .Replace(NeutralQuoteSuffix, dialect.QuoteSuffix)
-                  .Replace(NeutralSeparator, dialect.CompositeIdentifierSeparator);
-    }
-
-    private const int MaxCacheSize = 100;
-
-    private static void TryAddWithLimit<TKey, TValue>(ConcurrentDictionary<TKey, TValue> cache, TKey key,
-        TValue value, ConcurrentQueue<TKey> order)
-        where TKey : notnull
-    {
-        // Use GetOrAdd to ensure we don't lose the value if already present
-        if (cache.TryAdd(key, value))
-        {
-            // Only track order for new entries
-            order.Enqueue(key);
-            
-            // Use queue-based FIFO eviction when limit is exceeded
-            while (cache.Count > MaxCacheSize && order.TryDequeue(out var oldKey))
-            {
-                cache.TryRemove(oldKey, out _);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Thread-safe method to add reader plans with bounded cache size using atomic dictionary swap
-    /// </summary>
-    private void TryAddReaderPlanWithLimit(int hash, ColumnPlan[] plan)
-    {
-        // Use GetOrAdd to ensure we don't lose the value if already present
-        _readerPlans.GetOrAdd(hash, plan);
-
-        // If cache size exceeds limit, atomically swap to a new dictionary
-        if (_readerPlans.Count > MaxReaderPlans)
-        {
-            var newCache = new ConcurrentDictionary<int, ColumnPlan[]>();
-            newCache.TryAdd(hash, plan);
-            // Atomic swap - other threads will start using the new cache
-            Interlocked.Exchange(ref _readerPlans, newCache);
-        }
-    }
-
-    public void ClearCaches()
-    {
-        _readerConverters.Clear();
-        _readerConvertersOrder.Clear();
-        _readerPlans.Clear();
-        _columnListCache.Clear();
-        _columnListCacheOrder.Clear();
-        _queryCache.Clear();
-        _queryCacheOrder.Clear();
-        _whereParameterNames.Clear();
-        _whereParameterNamesOrder.Clear();
-    }
 
     public EntityHelper(IDatabaseContext databaseContext,
         EnumParseFailureMode enumParseBehavior = EnumParseFailureMode.Throw
@@ -291,220 +202,15 @@ public class EntityHelper<TEntity, TRowID> :
 
     private string GetCachedQuery(string key, Func<string> factory)
     {
-        if (_queryCache.TryGetValue(key, out var sql))
+        if (_queryCache.TryGet(key, out var sql))
         {
             return sql;
         }
 
-        sql = factory();
-        TryAddWithLimit(_queryCache, key, sql, _queryCacheOrder);
-        return sql;
+        return _queryCache.GetOrAdd(key, _ => factory());
     }
 
-    public TEntity MapReaderToObject(ITrackedReader reader)
-    {
-        var obj = new TEntity();
 
-        var plan = GetOrBuildRecordsetPlan(reader);
-        for (var idx = 0; idx < plan.Length; idx++)
-        {
-            var p = plan[idx];
-            var raw = reader.IsDBNull(p.Ordinal) ? null : reader.GetValue(p.Ordinal);
-            var coerced = p.Converter(raw);
-            try
-            {
-                p.Setter(obj, coerced);
-            }
-            catch (Exception ex)
-            {
-                var name = reader.GetName(p.Ordinal);
-                throw new InvalidValueException(
-                    $"Unable to set property from value that was stored in the database: {name} :{ex.Message}");
-            }
-        }
-
-        return obj;
-    }
-
-    private ColumnPlan[] GetOrBuildRecordsetPlan(ITrackedReader reader)
-    {
-        // Compute a stronger hash for the recordset shape: field count + names + types
-        var fieldCount = reader.FieldCount;
-        var hash = fieldCount * 397;
-        for (var i = 0; i < fieldCount; i++)
-        {
-            var name = reader.GetName(i);
-            hash = unchecked(hash * 31 + StringComparer.OrdinalIgnoreCase.GetHashCode(name));
-            
-            // Include field type to strengthen hash and avoid shape collisions
-            var fieldType = reader.GetFieldType(i);
-            hash = unchecked(hash * 31 + fieldType.GetHashCode());
-        }
-
-        // Try to get existing plan from thread-safe cache
-        if (_readerPlans.TryGetValue(hash, out var existingPlan))
-        {
-            return existingPlan;
-        }
-
-        // Build new plan
-        var list = new List<ColumnPlan>(fieldCount);
-        for (var i = 0; i < fieldCount; i++)
-        {
-            var colName = reader.GetName(i);
-            if (_columnsByNameCI.TryGetValue(colName, out var column))
-            {
-                var setter = GetOrCreateSetter(column.PropertyInfo);
-                var converter = GetOrCreateReaderConverter(column);
-                list.Add(new ColumnPlan(i, setter, converter));
-            }
-        }
-
-        var plan = list.ToArray();
-        
-        // Add to cache with bounded size limit
-        TryAddReaderPlanWithLimit(hash, plan);
-        return plan;
-    }
-
-    private Func<object?, object?> GetOrCreateReaderConverter(IColumnInfo column)
-    {
-        if (_readerConverters.TryGetValue(column, out var existing))
-        {
-            return existing;
-        }
-
-        Func<object?, object?> converter;
-
-        if (column.IsEnum && column.EnumType != null)
-        {
-            var enumType = column.EnumType;
-            var enumAsString = column.DbType == DbType.String;
-            var underlying = Enum.GetUnderlyingType(enumType);
-            if (enumAsString)
-            {
-                converter = value =>
-                {
-                    if (value == null || value is DBNull)
-                    {
-                        return null;
-                    }
-
-                    var s = value as string ?? value.ToString();
-                    try
-                    {
-                        return Enum.Parse(enumType, s!, true);
-                    }
-                    catch
-                    {
-                        switch (EnumParseBehavior)
-                        {
-                            case EnumParseFailureMode.Throw:
-                                throw;
-                            case EnumParseFailureMode.SetNullAndLog:
-                                Logger.LogWarning("Cannot convert '{Value}' to enum {EnumType}.", s, enumType);
-                                return null;
-                            case EnumParseFailureMode.SetDefaultValue:
-                                return Activator.CreateInstance(enumType);
-                            default:
-                                return null;
-                        }
-                    }
-                };
-            }
-            else
-            {
-                converter = value =>
-                {
-                    if (value == null || value is DBNull)
-                    {
-                        return null;
-                    }
-
-                    try
-                    {
-                        var boxed = Convert.ChangeType(value, underlying, CultureInfo.InvariantCulture);
-                        return Enum.ToObject(enumType, boxed!);
-                    }
-                    catch
-                    {
-                        switch (EnumParseBehavior)
-                        {
-                            case EnumParseFailureMode.Throw:
-                                throw;
-                            case EnumParseFailureMode.SetNullAndLog:
-                                Logger.LogWarning("Cannot convert '{Value}' to enum {EnumType}.", value, enumType);
-                                return null;
-                            case EnumParseFailureMode.SetDefaultValue:
-                                return Activator.CreateInstance(enumType);
-                            default:
-                                return null;
-                        }
-                    }
-                };
-            }
-
-            TryAddWithLimit(_readerConverters, column, converter, _readerConvertersOrder);
-            return converter;
-        }
-
-        if (column.IsJsonType)
-        {
-            var propType = column.PropertyInfo.PropertyType;
-            var opts = column.JsonSerializerOptions ?? new JsonSerializerOptions();
-            converter = value =>
-            {
-                if (value == null || value is DBNull)
-                {
-                    return null;
-                }
-
-                var s = value as string ?? value.ToString();
-                return JsonSerializer.Deserialize(s!, propType, opts);
-            };
-
-            TryAddWithLimit(_readerConverters, column, converter, _readerConvertersOrder);
-            return converter;
-        }
-
-        converter = value =>
-        {
-            if (value == null || value is DBNull)
-            {
-                return null;
-            }
-
-            var targetType = column.PropertyInfo.PropertyType;
-            var sourceType = value.GetType();
-
-            if (targetType.IsAssignableFrom(sourceType))
-            {
-                return value;
-            }
-
-            var underlying = Nullable.GetUnderlyingType(targetType) ?? targetType;
-
-            try
-            {
-                return Convert.ChangeType(value, underlying, CultureInfo.InvariantCulture);
-            }
-            catch
-            {
-                switch (column.DbType)
-                {
-                    case DbType.Decimal:
-                    case DbType.Currency:
-                    case DbType.VarNumeric:
-                        return Convert.ToDecimal(value, CultureInfo.InvariantCulture);
-                    default:
-                        return value;
-                }
-            }
-        };
-
-        TryAddWithLimit(_readerConverters, column, converter, _readerConvertersOrder);
-        return converter;
-    }
 
     public async Task<bool> CreateAsync(TEntity entity, IDatabaseContext context)
     {
@@ -705,7 +411,9 @@ public class EntityHelper<TEntity, TRowID> :
             throw new InvalidOperationException($"row identity column for table {WrappedTableName} not found");
         }
 
-        var param = dialect.CreateDbParameter(_idColumn.DbType, id);
+        var counters = new ClauseCounters();
+        var name = counters.NextKey();
+        var param = dialect.CreateDbParameter(name, _idColumn.DbType, id);
         sc.AddParameter(param);
 
         var baseKey = "DeleteById";
@@ -768,25 +476,6 @@ public class EntityHelper<TEntity, TRowID> :
     }
 
 
-    public Action<object, object?> GetOrCreateSetter(PropertyInfo prop)
-    {
-        // The generated setter casts directly; a database NULL assigned to a non-nullable property will throw.
-        // This fail-fast behavior surfaces unexpected schema mismatches immediately.
-        return _propertySetters.GetOrAdd(prop, p =>
-        {
-            var objParam = Expression.Parameter(typeof(object));
-            var valueParam = Expression.Parameter(typeof(object));
-
-            var castObj = Expression.Convert(objParam, p.DeclaringType!);
-            var castValue = Expression.Convert(valueParam, p.PropertyType);
-
-            var propertyAccess = Expression.Property(castObj, p);
-            var assignment = Expression.Assign(propertyAccess, castValue);
-
-            var lambda = Expression.Lambda<Action<object, object?>>(assignment, objParam, valueParam);
-            return lambda.Compile();
-        });
-    }
 
 
     public Task<TEntity?> RetrieveOneAsync(TEntity objectToRetrieve, IDatabaseContext? context = null)
@@ -917,7 +606,9 @@ public class EntityHelper<TEntity, TRowID> :
 
     public void BuildWhereByPrimaryKey(IReadOnlyCollection<TEntity>? listOfObjects, ISqlContainer sc, string alias = "")
     {
-        BuildWhereByPrimaryKey(listOfObjects, sc, alias, _dialect);
+        var dialectProvider = sc as ISqlDialectProvider;
+        var dialect = dialectProvider?.Dialect ?? _dialect;
+        BuildWhereByPrimaryKey(listOfObjects, sc, alias, dialect);
     }
 
     public void BuildWhereByPrimaryKey(IReadOnlyCollection<TEntity>? listOfObjects, ISqlContainer sc, string alias, ISqlDialect dialect)
@@ -930,6 +621,7 @@ public class EntityHelper<TEntity, TRowID> :
         var parameters = new List<DbParameter>();
         var wrappedAlias = BuildAliasPrefix(alias);
         var sb = new StringBuilder();
+        var counters = new ClauseCounters();
         var index = 0;
 
         foreach (var entity in listOfObjects!)
@@ -939,7 +631,7 @@ public class EntityHelper<TEntity, TRowID> :
                 sb.Append(" OR ");
             }
 
-            sb.Append(BuildPrimaryKeyClause(entity, keys, wrappedAlias, parameters, dialect));
+            sb.Append(BuildPrimaryKeyClause(entity, keys, wrappedAlias, parameters, dialect, counters));
         }
 
         if (sb.Length == 0)
@@ -973,7 +665,7 @@ public class EntityHelper<TEntity, TRowID> :
 
     private IReadOnlyList<IColumnInfo> GetCachedInsertableColumns()
     {
-        if (_columnListCache.TryGetValue("Insertable", out var cached))
+        if (_columnListCache.TryGet("Insertable", out var cached))
         {
             return cached;
         }
@@ -982,13 +674,12 @@ public class EntityHelper<TEntity, TRowID> :
             .Where(c => !c.IsNonInsertable && (!c.IsId || c.IsIdIsWritable))
             .ToList();
 
-        TryAddWithLimit(_columnListCache, "Insertable", insertable, _columnListCacheOrder);
-        return insertable;
+        return _columnListCache.GetOrAdd("Insertable", _ => insertable);
     }
 
     private IReadOnlyList<IColumnInfo> GetCachedUpdatableColumns()
     {
-        if (_columnListCache.TryGetValue("Updatable", out var cached))
+        if (_columnListCache.TryGet("Updatable", out var cached))
         {
             return cached;
         }
@@ -997,8 +688,7 @@ public class EntityHelper<TEntity, TRowID> :
             .Where(c => !(c.IsId || c.IsVersion || c.IsNonUpdateable || c.IsCreatedBy || c.IsCreatedOn))
             .ToList();
 
-        TryAddWithLimit(_columnListCache, "Updatable", updatable, _columnListCacheOrder);
-        return updatable;
+        return _columnListCache.GetOrAdd("Updatable", _ => updatable);
     }
 
     private void CheckParameterLimit(ISqlContainer sc, int? toAdd)
@@ -1015,7 +705,7 @@ public class EntityHelper<TEntity, TRowID> :
         string.IsNullOrWhiteSpace(alias) ? string.Empty : alias + ".";
 
     private string BuildPrimaryKeyClause(TEntity entity, IReadOnlyList<IColumnInfo> keys, string alias,
-        List<DbParameter> parameters, ISqlDialect dialect)
+        List<DbParameter> parameters, ISqlDialect dialect, ClauseCounters counters)
     {
         var clause = new StringBuilder("(");
         for (var i = 0; i < keys.Count; i++)
@@ -1027,7 +717,8 @@ public class EntityHelper<TEntity, TRowID> :
 
             var pk = keys[i];
             var value = pk.MakeParameterValueFromField(entity);
-            var parameter = dialect.CreateDbParameter(pk.DbType, value);
+            var name = counters.NextKey();
+            var parameter = dialect.CreateDbParameter(name, pk.DbType, value);
 
             clause.Append(alias);
             clause.Append(dialect.WrapObjectName(pk.Name));
@@ -1099,7 +790,8 @@ public class EntityHelper<TEntity, TRowID> :
             SetAuditFields(objectToUpdate, true);
         }
 
-        var (setClause, parameters) = BuildSetClause(objectToUpdate, original, dialect);
+        var counters = new ClauseCounters();
+        var (setClause, parameters) = BuildSetClause(objectToUpdate, original, dialect, counters);
         if (setClause.Length == 0)
         {
             throw new InvalidOperationException("No changes detected for update.");
@@ -1110,7 +802,8 @@ public class EntityHelper<TEntity, TRowID> :
             IncrementVersion(setClause, dialect);
         }
 
-        var pId = dialect.CreateDbParameter(_idColumn.DbType,
+        var idName = counters.NextKey();
+        var pId = dialect.CreateDbParameter(idName, _idColumn.DbType,
             _idColumn.PropertyInfo.GetValue(objectToUpdate)!);
         parameters.Add(pId);
 
@@ -1120,7 +813,7 @@ public class EntityHelper<TEntity, TRowID> :
         if (_versionColumn != null)
         {
             var versionValue = _versionColumn.MakeParameterValueFromField(objectToUpdate);
-            var versionParam = AppendVersionCondition(sc, versionValue, dialect);
+            var versionParam = AppendVersionCondition(sc, versionValue, dialect, counters);
             if (versionParam != null)
             {
                 parameters.Add(versionParam);
@@ -1225,7 +918,8 @@ public class EntityHelper<TEntity, TRowID> :
         {
             SetAuditFields(updated, true);
         }
-        var (setClause, parameters) = BuildSetClause(updated, null, dialect);
+        var counters = new ClauseCounters();
+        var (setClause, parameters) = BuildSetClause(updated, null, dialect, counters);
         if (setClause.Length == 0)
         {
             throw new InvalidOperationException("No changes detected for update.");
@@ -1246,7 +940,8 @@ public class EntityHelper<TEntity, TRowID> :
 
             var key = keyCols[i];
             var v = key.MakeParameterValueFromField(updated);
-            var p = dialect.CreateDbParameter(key.DbType, v);
+            var name = counters.NextKey();
+            var p = dialect.CreateDbParameter(name, key.DbType, v);
             parameters.Add(p);
             where.Append($"{dialect.WrapObjectName(key.Name)} = {dialect.MakeParameterName(p)}");
         }
@@ -1255,7 +950,8 @@ public class EntityHelper<TEntity, TRowID> :
         if (_versionColumn != null)
         {
             var vv = _versionColumn.MakeParameterValueFromField(updated);
-            var p = dialect.CreateDbParameter(_versionColumn.DbType, vv);
+            var name = counters.NextVer();
+            var p = dialect.CreateDbParameter(name, _versionColumn.DbType, vv);
             parameters.Add(p);
             sql += $" AND {dialect.WrapObjectName(_versionColumn.Name)} = {dialect.MakeParameterName(p)}";
         }
@@ -1266,6 +962,7 @@ public class EntityHelper<TEntity, TRowID> :
 
     private async Task<TEntity?> LoadOriginalAsync(TEntity objectToUpdate, IDatabaseContext? context = null)
     {
+        var ctx = context ?? _context;
         var idValue = _idColumn!.PropertyInfo.GetValue(objectToUpdate);
         if (IsDefaultId(idValue))
         {
@@ -1284,7 +981,7 @@ public class EntityHelper<TEntity, TRowID> :
                 return null;
             }
 
-            return await RetrieveOneAsync((TRowID)converted, context);
+            return await RetrieveOneAsync((TRowID)converted, ctx);
         }
         catch (InvalidCastException ex)
         {
@@ -1297,7 +994,7 @@ public class EntityHelper<TEntity, TRowID> :
         }
     }
 
-    private (StringBuilder clause, List<DbParameter> parameters) BuildSetClause(TEntity updated, TEntity? original, ISqlDialect dialect)
+    private (StringBuilder clause, List<DbParameter> parameters) BuildSetClause(TEntity updated, TEntity? original, ISqlDialect dialect, ClauseCounters counters)
     {
         var clause = new StringBuilder();
         var parameters = new List<DbParameter>();
@@ -1325,7 +1022,8 @@ public class EntityHelper<TEntity, TRowID> :
             }
             else
             {
-                var param = dialect.CreateDbParameter(column.DbType, newValue);
+                var name = counters.NextSet();
+                var param = dialect.CreateDbParameter(name, column.DbType, newValue);
                 parameters.Add(param);
                 clause.Append($"{dialect.WrapObjectName(column.Name)} = {dialect.MakeParameterName(param)}");
             }
@@ -1372,7 +1070,7 @@ public class EntityHelper<TEntity, TRowID> :
         setClause.Append($", {dialect.WrapObjectName(_versionColumn!.Name)} = {dialect.WrapObjectName(_versionColumn.Name)} + 1");
     }
 
-    private DbParameter? AppendVersionCondition(ISqlContainer sc, object? versionValue, ISqlDialect dialect)
+    private DbParameter? AppendVersionCondition(ISqlContainer sc, object? versionValue, ISqlDialect dialect, ClauseCounters counters)
     {
         if (versionValue == null)
         {
@@ -1380,7 +1078,8 @@ public class EntityHelper<TEntity, TRowID> :
             return null;
         }
 
-        var pVersion = dialect.CreateDbParameter(_versionColumn!.DbType, versionValue);
+        var name = counters.NextVer();
+        var pVersion = dialect.CreateDbParameter(name, _versionColumn!.DbType, versionValue);
         sc.Query.Append(" AND ").Append(sc.WrapObjectName(_versionColumn.Name))
             .Append($" = {dialect.MakeParameterName(pVersion)}");
         return pVersion;
@@ -1415,6 +1114,7 @@ public class EntityHelper<TEntity, TRowID> :
         var columns = new List<string>();
         var values = new List<string>();
         var parameters = new List<DbParameter>();
+        var counters = new ClauseCounters();
 
         foreach (var column in GetCachedInsertableColumns())
         {
@@ -1432,7 +1132,8 @@ public class EntityHelper<TEntity, TRowID> :
             }
             else
             {
-                var p = dialect.CreateDbParameter(column.DbType, value);
+                var name = counters.NextIns();
+                var p = dialect.CreateDbParameter(name, column.DbType, value);
                 parameters.Add(p);
                 values.Add(dialect.MakeParameterName(p));
             }
@@ -1495,6 +1196,7 @@ public class EntityHelper<TEntity, TRowID> :
         var columns = new List<string>();
         var values = new List<string>();
         var parameters = new List<DbParameter>();
+        var counters = new ClauseCounters();
 
         foreach (var column in GetCachedInsertableColumns())
         {
@@ -1507,7 +1209,8 @@ public class EntityHelper<TEntity, TRowID> :
             }
             else
             {
-                var p = dialect.CreateDbParameter(column.DbType, value);
+                var name = counters.NextIns();
+                var p = dialect.CreateDbParameter(name, column.DbType, value);
                 parameters.Add(p);
                 values.Add(dialect.MakeParameterName(p));
             }
@@ -1565,6 +1268,7 @@ public class EntityHelper<TEntity, TRowID> :
         var srcColumns = new List<string>();
         var values = new List<string>();
         var parameters = new List<DbParameter>();
+        var counters = new ClauseCounters();
 
         foreach (var column in _tableInfo.OrderedColumns)
         {
@@ -1576,7 +1280,8 @@ public class EntityHelper<TEntity, TRowID> :
             }
             else
             {
-                var p = dialect.CreateDbParameter(column.DbType, value);
+                var name = counters.NextIns();
+                var p = dialect.CreateDbParameter(name, column.DbType, value);
                 parameters.Add(p);
                 placeholder = dialect.MakeParameterName(p);
             }
@@ -1654,52 +1359,75 @@ public class EntityHelper<TEntity, TRowID> :
             return sqlContainer;
         }
 
-        CheckParameterLimit(sqlContainer, list.Count);
+        var dialect = ((ISqlDialectProvider)sqlContainer).Dialect;
+
+        CheckParameterLimit(sqlContainer, dialect.SupportsSetValuedParameters ? 1 : list.Count);
 
         if (list.Any(Utils.IsNullOrDbNull))
         {
             throw new ArgumentException("IDs cannot be null", nameof(ids));
         }
 
-        var key = $"Where:{wrappedColumnName}:{list.Count}";
-        var sql = GetCachedQuery(key, () =>
+        if (dialect.SupportsSetValuedParameters)
         {
-            var names = new string[list.Count];
-            for (var i = 0; i < names.Length; i++)
+            var paramName = sqlContainer.MakeParameterName("w0");
+            var anySql = GetCachedQuery($"WhereAny:{wrappedColumnName}",
+                () => string.Concat(wrappedColumnName, " = ANY(", paramName, ")"));
+
+            AppendWherePrefix(sqlContainer);
+            sqlContainer.Query.Append(anySql);
+
+            var parameter = sqlContainer.CreateDbParameter(paramName, DbType.Object, list.ToArray());
+            sqlContainer.AddParameter(parameter);
+
+            return sqlContainer;
+        }
+
+        var bucket = 1;
+        for (; bucket < list.Count; bucket <<= 1)
+        {
+        }
+
+        var key = $"Where:{wrappedColumnName}:{bucket}";
+        if (!_whereParameterNames.TryGet(key, out var names))
+        {
+            names = new string[bucket];
+            for (var i = 0; i < bucket; i++)
             {
-                names[i] = sqlContainer.MakeParameterName($"p{i}");
+                names[i] = sqlContainer.MakeParameterName($"w{i}");
             }
 
-            TryAddWithLimit(_whereParameterNames, key, names, _whereParameterNamesOrder);
-            return string.Concat(wrappedColumnName, " IN (", string.Join(", ", names), ")");
-        });
+            _whereParameterNames.GetOrAdd(key, _ => names);
+        }
+
+        var sql = GetCachedQuery(key,
+            () => string.Concat(wrappedColumnName, " IN (", string.Join(", ", names), ")"));
 
         AppendWherePrefix(sqlContainer);
         sqlContainer.Query.Append(sql);
 
         var dbType = _idColumn!.DbType;
-        var names = _whereParameterNames[key];
-        var isPositional = sqlContainer.MakeParameterName("p0") == sqlContainer.MakeParameterName("p1");
-        for (var i = 0; i < list.Count; i++)
+        var isPositional = sqlContainer.MakeParameterName("w0") == sqlContainer.MakeParameterName("w1");
+        var lastIndex = list.Count - 1;
+        for (var i = 0; i < bucket; i++)
         {
             var name = names[i];
+            var value = i < list.Count ? list[i] : list[lastIndex];
 
             if (isPositional)
             {
-                // Positional providers ignore names; just append in order
-                var parameter = sqlContainer.CreateDbParameter(name, dbType, list[i]);
+                var parameter = sqlContainer.CreateDbParameter(name, dbType, value);
                 sqlContainer.AddParameter(parameter);
                 continue;
             }
 
-            // Named providers: update if shape reused, else add
             try
             {
-                sqlContainer.SetParameterValue(name, list[i]);
+                sqlContainer.SetParameterValue(name, value);
             }
             catch (KeyNotFoundException)
             {
-                var parameter = sqlContainer.CreateDbParameter(name, dbType, list[i]);
+                var parameter = sqlContainer.CreateDbParameter(name, dbType, value);
                 sqlContainer.AddParameter(parameter);
             }
         }
@@ -1855,85 +1583,6 @@ public class EntityHelper<TEntity, TRowID> :
         return int.TryParse(match.Groups[1].Value, out major);
     }
 
-    private CachedSqlTemplates BuildCachedSqlTemplatesNeutral()
-    {
-        var idCol = _tableInfo.Columns.Values.FirstOrDefault(c => c.IsId)
-                     ?? throw new InvalidOperationException($"No ID column defined for {typeof(TEntity).Name}");
-
-        var insertColumns = _tableInfo.Columns.Values
-            .Where(c => !c.IsNonInsertable && (!c.IsId || c.IsIdIsWritable))
-            .Where(c => _auditValueResolver != null || (!c.IsCreatedBy && !c.IsLastUpdatedBy))
-            .Cast<IColumnInfo>()
-            .ToList();
-
-        var wrappedCols = new List<string>();
-        for (var i = 0; i < insertColumns.Count; i++)
-        {
-            wrappedCols.Add(WrapNeutral(insertColumns[i].Name));
-        }
-
-        var paramNames = new List<string>();
-        var valuePlaceholders = new List<string>();
-        for (var i = 0; i < insertColumns.Count; i++)
-        {
-            var name = $"p{i}";
-            paramNames.Add(name);
-            valuePlaceholders.Add("{P}" + name);
-        }
-
-        var insertSql =
-            $"INSERT INTO {BuildWrappedTableNameNeutral()} ({string.Join(", ", wrappedCols)}) VALUES ({string.Join(", ", valuePlaceholders)})";
-        var deleteSql =
-            $"DELETE FROM {BuildWrappedTableNameNeutral()} WHERE {WrapNeutral(idCol.Name)} = {{0}}";
-
-        var updateColumns = _tableInfo.Columns.Values
-            .Where(c => !c.IsId && !c.IsVersion && !c.IsNonUpdateable && !c.IsCreatedBy && !c.IsCreatedOn)
-            .Cast<IColumnInfo>()
-            .ToList();
-
-        var updateSql =
-            $"UPDATE {BuildWrappedTableNameNeutral()} SET {{0}} WHERE {WrapNeutral(idCol.Name)} = {{1}}";
-
-        return new CachedSqlTemplates
-        {
-            InsertSql = insertSql,
-            InsertColumns = insertColumns,
-            InsertParameterNames = paramNames,
-            DeleteSql = deleteSql,
-            UpdateSql = updateSql,
-            UpdateColumns = updateColumns
-        };
-    }
-
-    private CachedSqlTemplates GetTemplatesForDialect(ISqlDialect dialect)
-    {
-        return _templatesByDialect
-            .GetOrAdd(dialect.DatabaseType, _ => new Lazy<CachedSqlTemplates>(() =>
-            {
-                var neutral = _cachedSqlTemplates.Value;
-                string RenderParams(string sql)
-                {
-                    // Replace neutral param tokens with dialect-appropriate placeholders.
-                    // Named: {P}name -> @name or :name
-                    // Positional: {P}name -> ?
-                    return Regex.Replace(sql, "\\{P\\}([A-Za-z_][A-Za-z0-9_]*)",
-                        m => dialect.SupportsNamedParameters
-                            ? string.Concat(dialect.ParameterMarker, m.Groups[1].Value)
-                            : dialect.ParameterMarker);
-                }
-
-                return new CachedSqlTemplates
-                {
-                    InsertSql = RenderParams(ReplaceNeutralTokens(neutral.InsertSql, dialect)),
-                    InsertColumns = neutral.InsertColumns,
-                    InsertParameterNames = neutral.InsertParameterNames,
-                    DeleteSql = ReplaceNeutralTokens(neutral.DeleteSql, dialect),
-                    UpdateSql = ReplaceNeutralTokens(neutral.UpdateSql, dialect),
-                    UpdateColumns = neutral.UpdateColumns
-                };
-            }))
-            .Value;
-    }
 
     private string BuildWrappedTableName(ISqlDialect dialect)
     {
@@ -1946,20 +1595,6 @@ public class EntityHelper<TEntity, TRowID> :
         sb.Append(dialect.WrapObjectName(_tableInfo.Schema));
         sb.Append(dialect.CompositeIdentifierSeparator);
         sb.Append(dialect.WrapObjectName(_tableInfo.Name));
-        return sb.ToString();
-    }
-
-    private string BuildWrappedTableNameNeutral()
-    {
-        if (string.IsNullOrWhiteSpace(_tableInfo.Schema))
-        {
-            return WrapNeutral(_tableInfo.Name);
-        }
-
-        var sb = new StringBuilder();
-        sb.Append(WrapNeutral(_tableInfo.Schema));
-        sb.Append(NeutralSeparator);
-        sb.Append(WrapNeutral(_tableInfo.Name));
         return sb.ToString();
     }
 
