@@ -50,7 +50,7 @@ public partial class EntityHelper<TEntity, TRowID>
         }
 
         // Try to get existing plan from thread-safe cache
-        if (_readerPlans.TryGetValue(hash, out var existingPlan))
+        if (_readerPlans.TryGet(hash, out var existingPlan))
         {
             return existingPlan;
         }
@@ -70,9 +70,7 @@ public partial class EntityHelper<TEntity, TRowID>
 
         var plan = list.ToArray();
 
-        // Add to cache with bounded size limit
-        TryAddReaderPlanWithLimit(hash, plan);
-        return plan;
+        return _readerPlans.GetOrAdd(hash, _ => plan);
     }
 
     public Action<object, object?> GetOrCreateSetter(PropertyInfo prop)

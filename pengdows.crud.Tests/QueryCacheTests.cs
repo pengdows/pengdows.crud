@@ -232,8 +232,11 @@ public class QueryCacheTests : SqlLiteContextTestBase
     private static ConcurrentDictionary<string, string> GetQueryCache<TEntity, TId>(EntityHelper<TEntity, TId> helper)
         where TEntity : class, new()
     {
-        var field = typeof(EntityHelper<TEntity, TId>).GetField("_queryCache", BindingFlags.NonPublic | BindingFlags.Instance);
-        return (ConcurrentDictionary<string, string>)field!.GetValue(helper)!;
+        var field = typeof(EntityHelper<TEntity, TId>)
+            .GetField("_queryCache", BindingFlags.NonPublic | BindingFlags.Instance);
+        var cache = field!.GetValue(helper)!;
+        var mapField = cache.GetType().GetField("_map", BindingFlags.NonPublic | BindingFlags.Instance);
+        return (ConcurrentDictionary<string, string>)mapField!.GetValue(cache)!;
     }
 
     [Table("CacheEntity")]

@@ -11,6 +11,7 @@ using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using pengdows.crud.@internal;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;
@@ -56,20 +57,16 @@ public partial class EntityHelper<TEntity, TRowID> :
 
     private IColumnInfo? _versionColumn;
 
-    private readonly ConcurrentDictionary<IColumnInfo, Func<object?, object?>> _readerConverters = new();
-    private readonly ConcurrentQueue<IColumnInfo> _readerConvertersOrder = new();
+    private readonly BoundedCache<IColumnInfo, Func<object?, object?>> _readerConverters = new(MaxCacheSize);
 
-    private readonly ConcurrentDictionary<string, IReadOnlyList<IColumnInfo>> _columnListCache = new();
-    private readonly ConcurrentQueue<string> _columnListCacheOrder = new();
+    private readonly BoundedCache<string, IReadOnlyList<IColumnInfo>> _columnListCache = new(MaxCacheSize);
 
-    private readonly ConcurrentDictionary<string, string> _queryCache = new();
-    private readonly ConcurrentQueue<string> _queryCacheOrder = new();
+    private readonly BoundedCache<string, string> _queryCache = new(MaxCacheSize);
 
-    private readonly ConcurrentDictionary<string, string[]> _whereParameterNames = new();
-    private readonly ConcurrentQueue<string> _whereParameterNamesOrder = new();
+    private readonly BoundedCache<string, string[]> _whereParameterNames = new(MaxCacheSize);
 
     // Thread-safe cache for reader plans by recordset shape hash
-    private volatile ConcurrentDictionary<int, ColumnPlan[]> _readerPlans = new();
+    private readonly BoundedCache<int, ColumnPlan[]> _readerPlans = new(MaxReaderPlans);
     private const int MaxReaderPlans = 32;
 
     private sealed class ColumnPlan
@@ -212,20 +209,18 @@ public partial class EntityHelper<TEntity, TRowID> :
 
     private string GetCachedQuery(string key, Func<string> factory)
     {
-        if (_queryCache.TryGetValue(key, out var sql))
+        if (_queryCache.TryGet(key, out var sql))
         {
             return sql;
         }
 
-        sql = factory();
-        TryAddWithLimit(_queryCache, key, sql, _queryCacheOrder);
-        return sql;
+        return _queryCache.GetOrAdd(key, _ => factory());
     }
 
 
     private Func<object?, object?> GetOrCreateReaderConverter(IColumnInfo column)
     {
-        if (_readerConverters.TryGetValue(column, out var existing))
+        if (_readerConverters.TryGet(column, out var existing))
         {
             return existing;
         }
@@ -300,8 +295,7 @@ public partial class EntityHelper<TEntity, TRowID> :
                 };
             }
 
-            TryAddWithLimit(_readerConverters, column, converter, _readerConvertersOrder);
-            return converter;
+            return _readerConverters.GetOrAdd(column, _ => converter);
         }
 
         if (column.IsJsonType)
@@ -319,8 +313,7 @@ public partial class EntityHelper<TEntity, TRowID> :
                 return JsonSerializer.Deserialize(s!, propType, opts);
             };
 
-            TryAddWithLimit(_readerConverters, column, converter, _readerConvertersOrder);
-            return converter;
+            return _readerConverters.GetOrAdd(column, _ => converter);
         }
 
         converter = value =>
@@ -358,8 +351,7 @@ public partial class EntityHelper<TEntity, TRowID> :
             }
         };
 
-        TryAddWithLimit(_readerConverters, column, converter, _readerConvertersOrder);
-        return converter;
+        return _readerConverters.GetOrAdd(column, _ => converter);
     }
 
     public async Task<bool> CreateAsync(TEntity entity, IDatabaseContext context)
@@ -810,7 +802,7 @@ public partial class EntityHelper<TEntity, TRowID> :
 
     private IReadOnlyList<IColumnInfo> GetCachedInsertableColumns()
     {
-        if (_columnListCache.TryGetValue("Insertable", out var cached))
+        if (_columnListCache.TryGet("Insertable", out var cached))
         {
             return cached;
         }
@@ -819,13 +811,12 @@ public partial class EntityHelper<TEntity, TRowID> :
             .Where(c => !c.IsNonInsertable && (!c.IsId || c.IsIdIsWritable))
             .ToList();
 
-        TryAddWithLimit(_columnListCache, "Insertable", insertable, _columnListCacheOrder);
-        return insertable;
+        return _columnListCache.GetOrAdd("Insertable", _ => insertable);
     }
 
     private IReadOnlyList<IColumnInfo> GetCachedUpdatableColumns()
     {
-        if (_columnListCache.TryGetValue("Updatable", out var cached))
+        if (_columnListCache.TryGet("Updatable", out var cached))
         {
             return cached;
         }
@@ -834,8 +825,7 @@ public partial class EntityHelper<TEntity, TRowID> :
             .Where(c => !(c.IsId || c.IsVersion || c.IsNonUpdateable || c.IsCreatedBy || c.IsCreatedOn))
             .ToList();
 
-        TryAddWithLimit(_columnListCache, "Updatable", updatable, _columnListCacheOrder);
-        return updatable;
+        return _columnListCache.GetOrAdd("Updatable", _ => updatable);
     }
 
     private void CheckParameterLimit(ISqlContainer sc, int? toAdd)
@@ -1499,23 +1489,24 @@ public partial class EntityHelper<TEntity, TRowID> :
         }
 
         var key = $"Where:{wrappedColumnName}:{list.Count}";
-        var sql = GetCachedQuery(key, () =>
+        if (!_whereParameterNames.TryGet(key, out var names))
         {
-            var names = new string[list.Count];
+            names = new string[list.Count];
             for (var i = 0; i < names.Length; i++)
             {
                 names[i] = sqlContainer.MakeParameterName($"p{i}");
             }
 
-            TryAddWithLimit(_whereParameterNames, key, names, _whereParameterNamesOrder);
-            return string.Concat(wrappedColumnName, " IN (", string.Join(", ", names), ")");
-        });
+            _whereParameterNames.GetOrAdd(key, _ => names);
+        }
+
+        var sql = GetCachedQuery(key,
+            () => string.Concat(wrappedColumnName, " IN (", string.Join(", ", names), ")"));
 
         AppendWherePrefix(sqlContainer);
         sqlContainer.Query.Append(sql);
 
         var dbType = _idColumn!.DbType;
-        var names = _whereParameterNames[key];
         var isPositional = sqlContainer.MakeParameterName("p0") == sqlContainer.MakeParameterName("p1");
         for (var i = 0; i < list.Count; i++)
         {
