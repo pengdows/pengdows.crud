@@ -24,15 +24,15 @@ internal static class PgStats
             ? "==== PostgreSQL Statistics Summary ===="
             : $"==== PostgreSQL Statistics Summary: {label} ====");
 
-        // Top queries by total_time
+        // Top queries by total_exec_time (renamed from total_time in PostgreSQL 13+)
         var top = (await conn.QueryAsync(
             @"SELECT query,
                      calls,
                      rows,
-                     total_time,
-                     mean_time,
-                     min_time,
-                     max_time,
+                     total_exec_time as total_time,
+                     mean_exec_time as mean_time,
+                     min_exec_time as min_time,
+                     max_exec_time as max_time,
                      shared_blks_hit,
                      shared_blks_read,
                      blk_read_time,
@@ -40,7 +40,7 @@ internal static class PgStats
                 FROM pg_stat_statements s
                 JOIN pg_database d ON d.oid = s.dbid
                WHERE d.datname = current_database()
-            ORDER BY total_time DESC
+            ORDER BY total_exec_time DESC
                LIMIT 10"))
             .ToList();
 
@@ -85,7 +85,7 @@ internal static class PgStats
         Console.WriteLine($"-- Summary for table: {table} --");
         var sql = @"SELECT SUM(calls) AS calls,
                            SUM(rows) AS rows,
-                           SUM(total_time) AS total_time_ms,
+                           SUM(total_exec_time) AS total_time_ms,
                            SUM(blk_read_time) AS read_ms,
                            SUM(blk_write_time) AS write_ms
                       FROM pg_stat_statements s

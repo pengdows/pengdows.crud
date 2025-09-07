@@ -127,21 +127,21 @@ public class PagilaBenchmarks : IAsyncDisposable
     }
 
     [IterationSetup]
-    public async Task IterationSetup()
+    public void IterationSetup()
     {
         if (_collectPerIteration)
         {
-            await PgStats.ResetAsync(_connStr);
+            PgStats.ResetAsync(_connStr).GetAwaiter().GetResult();
         }
     }
 
     [IterationCleanup]
-    public async Task IterationCleanup()
+    public void IterationCleanup()
     {
         if (_collectPerIteration)
         {
             var label = _currentBenchmarkLabel ?? "(unknown)";
-            await PgStats.DumpSummaryAsync(_connStr, label);
+            PgStats.DumpSummaryAsync(_connStr, label).GetAwaiter().GetResult();
         }
     }
 
@@ -298,8 +298,8 @@ CREATE TABLE film_actor (
         _currentBenchmarkLabel = nameof(InsertThenDeleteFilm_Mine);
         // Reuse prebuilt containers and only update parameter values
         var title = $"Bench_{Interlocked.Increment(ref _runCounter):D10}";
-        _insertFilmSc.SetParameterValue("p0", title);  // Title
-        _insertFilmSc.SetParameterValue("p1", 123);    // Length
+        _insertFilmSc.SetParameterValue("i0", title);  // Title
+        _insertFilmSc.SetParameterValue("i1", 123);    // Length
         await _insertFilmSc.ExecuteNonQueryAsync();
 
         _deleteByTitleSc.SetParameterValue("t", title);
