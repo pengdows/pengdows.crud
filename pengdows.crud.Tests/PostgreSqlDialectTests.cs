@@ -325,15 +325,25 @@ public class PostgreSqlDialectTests
     }
 
     [Fact]
-    public void GetConnectionSessionSettings_NonReadOnlyContext_ReturnsBaseSettings()
+    public void GetConnectionSessionSettings_DefaultContext_DoesNotIncludeSearchPath()
     {
         var ctx = CreateTestContext();
-        
+
         var settings = _dialect.GetConnectionSessionSettings(ctx, false);
-        
+
         Assert.NotEmpty(settings);
         Assert.Contains("SET standard_conforming_strings = on;", settings);
         Assert.Contains("SET client_min_messages = warning;", settings);
+        Assert.DoesNotContain("SET search_path = public;", settings);
+    }
+
+    [Fact]
+    public void GetConnectionSessionSettings_SearchPathEnabled_IncludesSearchPath()
+    {
+        var ctx = CreateTestContext(setSearchPath: true);
+
+        var settings = _dialect.GetConnectionSessionSettings(ctx, false);
+
         Assert.Contains("SET search_path = public;", settings);
     }
 
@@ -469,13 +479,14 @@ public class PostgreSqlDialectTests
         Assert.True(true); // If we reach here, no exception was thrown
     }
 
-    private DatabaseContext CreateTestContext()
+    private DatabaseContext CreateTestContext(bool setSearchPath = false)
     {
         var cfg = new pengdows.crud.configuration.DatabaseContextConfiguration
         {
             ConnectionString = "Host=localhost;Database=test;",
             DbMode = DbMode.Standard,
-            ReadWriteMode = ReadWriteMode.ReadWrite
+            ReadWriteMode = ReadWriteMode.ReadWrite,
+            SetDefaultSearchPath = setSearchPath
         };
         return new DatabaseContext(cfg, _factory);
     }
@@ -562,7 +573,7 @@ public class PostgreSqlDialectTests
 
         Assert.Contains("SET standard_conforming_strings = on", settings);
         Assert.Contains("SET client_min_messages = warning", settings);
-        Assert.Contains("SET search_path = public", settings);
+        Assert.DoesNotContain("SET search_path", settings);
     }
 
     [Fact]

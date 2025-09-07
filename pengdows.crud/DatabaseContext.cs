@@ -364,6 +364,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     public string QuoteSuffix => _dialect.QuoteSuffix;
     public bool? ForceManualPrepare => _forceManualPrepare;
     public bool? DisablePrepare => _disablePrepare;
+    public bool SetDefaultSearchPath => _setDefaultSearchPath;
 
     public ISqlContainer CreateSqlContainer(string? query = null)
     {
@@ -506,7 +507,11 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
                         }
                         else if (lower.Contains("postgres"))
                         {
-                            settings = "SET standard_conforming_strings = on;\nSET client_min_messages = warning;\nSET search_path = public;";
+                            settings = "SET standard_conforming_strings = on;\nSET client_min_messages = warning;";
+                            if (_setDefaultSearchPath)
+                            {
+                                settings += "\nSET search_path = public;";
+                            }
                         }
                         else if (lower.Contains("sqlite"))
                         {
@@ -1112,8 +1117,13 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
                 _connectionSessionSettings = @"
                 SET standard_conforming_strings = on;
                 SET client_min_messages = warning;
+";
+                if (_setDefaultSearchPath)
+                {
+                    _connectionSessionSettings += @"
                 SET search_path = public;
 ";
+                }
                 break;
 
             case SupportedDatabase.Oracle:
