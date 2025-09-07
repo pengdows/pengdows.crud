@@ -230,7 +230,7 @@ public partial class EntityHelper<TEntity, TRowID> :
         if (_idColumn != null && !_idColumn.IsIdIsWritable && dialect.SupportsInsertReturning)
         {
             var sc = BuildCreateWithReturning(entity, true, ctx);
-            var generatedId = await sc.ExecuteScalarAsync<object>();
+            var generatedId = await sc.ExecuteScalarAsync<object>().ConfigureAwait(false);
             
             if (generatedId != null && generatedId != DBNull.Value)
             {
@@ -265,12 +265,12 @@ public partial class EntityHelper<TEntity, TRowID> :
         {
             // Fallback to old behavior for databases that don't support RETURNING
             var sc = BuildCreate(entity, ctx);
-            var rowsAffected = await sc.ExecuteNonQueryAsync();
+            var rowsAffected = await sc.ExecuteNonQueryAsync().ConfigureAwait(false);
 
             // For non-writable ID columns, retrieve the generated ID and populate it on the entity
             if (rowsAffected == 1 && _idColumn != null && !_idColumn.IsIdIsWritable)
             {
-                await PopulateGeneratedIdAsync(entity, ctx);
+                await PopulateGeneratedIdAsync(entity, ctx).ConfigureAwait(false);
             }
 
             return rowsAffected == 1;
@@ -337,7 +337,7 @@ public partial class EntityHelper<TEntity, TRowID> :
         }
 
         var sc = ctx.CreateSqlContainer(lastIdQuery);
-        var generatedId = await sc.ExecuteScalarAsync<object>();
+        var generatedId = await sc.ExecuteScalarAsync<object>().ConfigureAwait(false);
 
             if (generatedId != null && generatedId != DBNull.Value)
             {
@@ -484,7 +484,7 @@ public partial class EntityHelper<TEntity, TRowID> :
     {
         var ctx = context ?? _context;
         var sc = BuildDelete(id, ctx);
-        return await sc.ExecuteNonQueryAsync();
+        return await sc.ExecuteNonQueryAsync().ConfigureAwait(false);
     }
 
     public async Task<List<TEntity>> RetrieveAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null)
@@ -502,7 +502,7 @@ public partial class EntityHelper<TEntity, TRowID> :
 
         var ctx = context ?? _context;
         var sc = BuildRetrieve(list, ctx);
-        return await LoadListAsync(sc);
+        return await LoadListAsync(sc).ConfigureAwait(false);
     }
 
     public async Task<int> DeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null)
@@ -529,7 +529,7 @@ public partial class EntityHelper<TEntity, TRowID> :
         var dialect = GetDialect(ctx);
         sc.Query.Append("DELETE FROM ").Append(BuildWrappedTableName(dialect));
         BuildWhere(sc.WrapObjectName(_idColumn.Name), list, sc);
-        return await sc.ExecuteNonQueryAsync();
+        return await sc.ExecuteNonQueryAsync().ConfigureAwait(false);
     }
 
 
@@ -674,8 +674,8 @@ public partial class EntityHelper<TEntity, TRowID> :
         var ctx = context ?? _context;
         try
         {
-            var sc = await BuildUpdateAsync(objectToUpdate, loadOriginal, ctx);
-            return await sc.ExecuteNonQueryAsync();
+            var sc = await BuildUpdateAsync(objectToUpdate, loadOriginal, ctx).ConfigureAwait(false);
+            return await sc.ExecuteNonQueryAsync().ConfigureAwait(false);
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("No changes detected for update."))
         {

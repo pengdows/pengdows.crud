@@ -104,7 +104,6 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
     public ITypeMapRegistry TypeMapRegistry => _context.TypeMapRegistry;
     public IDataSourceInformation DataSourceInfo => _context.DataSourceInfo;
     public string SessionSettingsPreamble => _context.SessionSettingsPreamble;
-
     public ILockerAsync GetLock()
     {
         ThrowIfDisposed();

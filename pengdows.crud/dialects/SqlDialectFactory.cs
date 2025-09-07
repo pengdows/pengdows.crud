@@ -27,7 +27,14 @@ public static class SqlDialectFactory
         }
 
         var dialect = CreateDialectForType(inferredType, factory, logger);
-        await dialect.DetectDatabaseInfoAsync(connection).ConfigureAwait(false);
+        var info = await dialect.DetectDatabaseInfoAsync(connection).ConfigureAwait(false);
+
+        if (info.DatabaseType != inferredType)
+        {
+            dialect = CreateDialectForType(info.DatabaseType, factory, logger);
+            await dialect.DetectDatabaseInfoAsync(connection).ConfigureAwait(false);
+        }
+
         return dialect;
     }
     public static SqlDialect CreateDialect(
@@ -90,6 +97,7 @@ public static class SqlDialectFactory
     {
         try
         {
+            connection.GetSchema();
             var schema = connection.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
             if (schema.Rows.Count > 0)
             {

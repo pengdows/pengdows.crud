@@ -19,7 +19,7 @@ public partial class EntityHelper<TEntity, TRowID>
 
         var ctx = context ?? _context;
         var sc = BuildUpsert(entity, ctx);
-        return await sc.ExecuteNonQueryAsync();
+        return await sc.ExecuteNonQueryAsync().ConfigureAwait(false);
     }
 
     public ISqlContainer BuildUpsert(TEntity entity, IDatabaseContext? context = null)

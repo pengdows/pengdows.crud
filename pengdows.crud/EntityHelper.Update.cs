@@ -34,7 +34,9 @@ public partial class EntityHelper<TEntity, TRowID>
         var sc = ctx.CreateSqlContainer();
         var dialect = GetDialect(ctx);
 
-        var original = loadOriginal ? await LoadOriginalAsync(objectToUpdate, ctx) : null;
+        var original = loadOriginal
+            ? await LoadOriginalAsync(objectToUpdate, ctx).ConfigureAwait(false)
+            : null;
         if (loadOriginal && original == null)
         {
             throw new InvalidOperationException("Original record not found for update.");
@@ -101,7 +103,7 @@ public partial class EntityHelper<TEntity, TRowID>
                 return null;
             }
 
-            return await RetrieveOneAsync((TRowID)converted, ctx);
+            return await RetrieveOneAsync((TRowID)converted, ctx).ConfigureAwait(false);
         }
         catch (InvalidCastException ex)
         {

@@ -1,4 +1,5 @@
 using System.Linq;
+using System;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
@@ -11,9 +12,7 @@ public class SessionSettingsTests
 {
     [Theory]
     [InlineData(SupportedDatabase.MySql, DbMode.Standard)]
-    [InlineData(SupportedDatabase.MySql, DbMode.SingleConnection)]
     [InlineData(SupportedDatabase.MariaDb, DbMode.Standard)]
-    [InlineData(SupportedDatabase.MariaDb, DbMode.SingleConnection)]
     public void AppliesDialectSessionSettings_OnFirstOpen(SupportedDatabase db, DbMode mode)
     {
         var factory = new fakeDbFactory(db);
@@ -39,7 +38,7 @@ public class SessionSettingsTests
             fakeConn.ExecutedNonQueryTexts.Select(s => s.Trim()).ToArray());
 
         Assert.Contains("SET SESSION", executed);
-        Assert.Contains("ANSI_QUOTES", executed);
+        Assert.Contains("sql_mode", executed, StringComparison.OrdinalIgnoreCase);
     }
 }
 

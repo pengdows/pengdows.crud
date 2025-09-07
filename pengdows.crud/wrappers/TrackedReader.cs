@@ -178,13 +178,13 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
 
     protected override async ValueTask DisposeManagedAsync()
     {
-        await _reader.DisposeAsync();
+        await _reader.DisposeAsync().ConfigureAwait(false);
         if (_shouldCloseConnection)
         {
             _connection.Close();
         }
 
-        await _connectionLocker.DisposeAsync();
+        await _connectionLocker.DisposeAsync().ConfigureAwait(false);
     }
 
     public async Task<bool> ReadAsync()

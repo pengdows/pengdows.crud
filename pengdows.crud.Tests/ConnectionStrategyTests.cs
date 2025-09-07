@@ -222,6 +222,27 @@ public class ConnectionStrategyTests
     }
 
     [Fact]
+    public void KeepAlive_PostInitialize_SetsPersistentConnection()
+    {
+        var factory = new RecordingFactory(SupportedDatabase.Sqlite);
+        var cfg = new pengdows.crud.configuration.DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:;EmulatedProduct=Sqlite",
+            DbMode = DbMode.KeepAlive,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+        using var ctx = new DatabaseContext(cfg, factory);
+
+        var connection = ctx.GetConnection(ExecutionType.Read);
+        var strategy = new pengdows.crud.strategies.connection.KeepAliveConnectionStrategy(ctx);
+
+        strategy.PostInitialize(connection);
+
+        Assert.Contains("PRAGMA foreign_keys = ON;", factory.Connection.ExecutedCommands);
+        Assert.Same(connection, ctx.PersistentConnection);
+    }
+
+    [Fact]
     public void KeepAlive_PostInitialize_NullConnection_SetsNullPersistent()
     {
         var cfg = new pengdows.crud.configuration.DatabaseContextConfiguration
@@ -421,7 +442,7 @@ public class ConnectionStrategyTests
     // Additional coverage tests for SingleConnectionStrategy
 
     [Fact]
-    public void SingleConnection_PostInitialize_AppliesSettingsAndSetsPersistent()
+    public void SingleConnection_PostInitialize_SetsPersistentConnection()
     {
         var factory = new RecordingFactory(SupportedDatabase.Sqlite);
         var cfg = new pengdows.crud.configuration.DatabaseContextConfiguration
@@ -435,13 +456,12 @@ public class ConnectionStrategyTests
         var connection = ctx.GetConnection(ExecutionType.Read);
         var strategy = new pengdows.crud.strategies.connection.SingleConnectionStrategy(ctx);
 
-        // PostInitialize should apply settings and set persistent connection
+        // PostInitialize should set persistent connection
         strategy.PostInitialize(connection);
 
-        // Verify session settings were applied (should have PRAGMA commands)
+        // Session settings should have been applied during initialization
         Assert.Contains("PRAGMA foreign_keys = ON;", factory.Connection.ExecutedCommands);
 
-        // Verify persistent connection was set
         Assert.Same(connection, ctx.PersistentConnection);
     }
 
@@ -487,7 +507,7 @@ public class ConnectionStrategyTests
     // Additional coverage tests for SingleWriterConnectionStrategy
 
     [Fact]
-    public void SingleWriter_PostInitialize_AppliesSettingsAndSetsPersistent()
+    public void SingleWriter_PostInitialize_SetsPersistentConnection()
     {
         var factory = new RecordingFactory(SupportedDatabase.Sqlite);
         var cfg = new pengdows.crud.configuration.DatabaseContextConfiguration
@@ -503,10 +523,9 @@ public class ConnectionStrategyTests
 
         strategy.PostInitialize(connection);
 
-        // Verify session settings were applied
+        // Session settings should have been applied during initialization
         Assert.Contains("PRAGMA foreign_keys = ON;", factory.Connection.ExecutedCommands);
 
-        // Verify persistent connection was set
         Assert.Same(connection, ctx.PersistentConnection);
     }
 

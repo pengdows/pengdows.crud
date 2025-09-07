@@ -28,7 +28,6 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     private IConnectionStrategy _connectionStrategy = null!;
     private IProcWrappingStrategy _procWrappingStrategy = null!;
     private ProcWrappingStyle _procWrappingStyle;
-    private bool _applyConnectionSessionSettings;
     private ITrackedConnection? _connection = null;
 
     private long _connectionCount;
@@ -39,14 +38,13 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     private bool _isReadConnection = true;
     private bool _isWriteConnection = true;
     private long _maxNumberOfOpenConnections;
-    private readonly bool _setDefaultSearchPath;
-    private string _connectionSessionSettings = string.Empty;
     private readonly DbMode _originalUserMode;
     private readonly bool? _forceManualPrepare;
     private readonly bool? _disablePrepare;
     private bool? _rcsiPrefetch;
     private int _initializing; // 0 = false, 1 = true
-    private bool _sessionSettingsAppliedOnOpen;
+    private bool _readWriteSessionSettingsAppliedOnOpen;
+    private bool _readOnlySessionSettingsAppliedOnOpen;
 
     public Guid RootId { get; } = Guid.NewGuid();
 
@@ -151,7 +149,6 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             ConnectionMode = configuration.DbMode;
             _originalUserMode = configuration.DbMode;
             _factory = factory ?? throw new ArgumentNullException(nameof(factory));
-            _setDefaultSearchPath = configuration.SetDefaultSearchPath;
             _forceManualPrepare = configuration.ForceManualPrepare;
             _disablePrepare = configuration.DisablePrepare;
 
@@ -364,7 +361,6 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     public string QuoteSuffix => _dialect.QuoteSuffix;
     public bool? ForceManualPrepare => _forceManualPrepare;
     public bool? DisablePrepare => _disablePrepare;
-
     public ISqlContainer CreateSqlContainer(string? query = null)
     {
         return new SqlContainer(this, query);
@@ -462,74 +458,29 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         // Ensure session settings from the active dialect are applied on first open for all modes.
         Action<DbConnection>? firstOpenHandler = conn =>
         {
+            var applied = readOnly ? _readOnlySessionSettingsAppliedOnOpen : _readWriteSessionSettingsAppliedOnOpen;
+            if (applied && ConnectionMode == DbMode.Standard)
+            {
+                onFirstOpen?.Invoke(conn);
+                return;
+            }
+
             ILockerAsync? guard = null;
             try
             {
                 guard = GetLock();
                 guard.LockAsync().GetAwaiter().GetResult();
-                // Apply session settings for all connection modes.
-                // Prefer dialect-provided settings when available; fall back to precomputed string.
-                string settings;
+                // Apply session settings for all connection modes using the active dialect.
                 if (Interlocked.CompareExchange(ref _initializing, 0, 0) == 1 && ConnectionMode == DbMode.Standard && !readOnly)
                 {
                     // During constructor probe in Standard mode, skip applying settings.
                     return;
                 }
-                if (_dialect != null)
+                if (_dialect == null)
                 {
-                    settings = _dialect.GetConnectionSessionSettings(this, readOnly) ?? string.Empty;
+                    return;
                 }
-                else
-                {
-                    // Dialect not initialized yet (constructor path). Derive lightweight settings
-                    // from the opened connection's product metadata for first application.
-                    try
-                    {
-                        var schema = conn.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
-                        var productName = schema.Rows.Count > 0 ? schema.Rows[0].Field<string>("DataSourceProductName") : null;
-                        var lower = (productName ?? string.Empty).ToLowerInvariant();
-                        if (lower.Contains("mysql") || lower.Contains("mariadb"))
-                        {
-                            settings = "SET SESSION sql_mode = 'STRICT_ALL_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,ANSI_QUOTES,NO_BACKSLASH_ESCAPES';";
-                            if (readOnly)
-                            {
-                                settings += "\nSET SESSION TRANSACTION READ ONLY;";
-                            }
-                        }
-                        else if (lower.Contains("oracle"))
-                        {
-                            settings = "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD';";
-                            if (readOnly)
-                            {
-                                settings += "\nALTER SESSION SET READ ONLY;";
-                            }
-                        }
-                        else if (lower.Contains("postgres"))
-                        {
-                            settings = "SET standard_conforming_strings = on;\nSET client_min_messages = warning;\nSET search_path = public;";
-                        }
-                        else if (lower.Contains("sqlite"))
-                        {
-                            settings = "PRAGMA foreign_keys = ON;";
-                            if (readOnly)
-                            {
-                                settings += "\nPRAGMA query_only = ON;";
-                            }
-                        }
-                        else if (lower.Contains("duckdb") || lower.Contains("duck db"))
-                        {
-                            settings = readOnly ? "PRAGMA read_only = 1;" : string.Empty;
-                        }
-                        else
-                        {
-                            settings = _connectionSessionSettings ?? string.Empty;
-                        }
-                    }
-                    catch
-                    {
-                        settings = _connectionSessionSettings ?? string.Empty;
-                    }
-                }
+                var settings = _dialect.GetConnectionSessionSettings(this, readOnly) ?? string.Empty;
                 if (!string.IsNullOrWhiteSpace(settings))
                 {
                     // Execute each statement separately to ensure provider compatibility
@@ -546,7 +497,14 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
                         cmd.CommandText = stmt + ';';
                         cmd.ExecuteNonQuery();
                     }
-                    _sessionSettingsAppliedOnOpen = true;
+                    if (readOnly)
+                    {
+                        _readOnlySessionSettingsAppliedOnOpen = true;
+                    }
+                    else
+                    {
+                        _readWriteSessionSettingsAppliedOnOpen = true;
+                    }
                 }
             }
             catch (Exception ex)
@@ -728,18 +686,11 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             _connectionStrategy = ConnectionStrategyFactory.Create(this, ConnectionMode);
             _procWrappingStrategy = ProcWrappingStrategyFactory.Create(_procWrappingStyle);
 
-            // 6) Apply provider/session settings according to final mode
+            // 6) Set persistent connection ownership for non-standard modes
             if (ConnectionMode is DbMode.KeepAlive or DbMode.SingleConnection or DbMode.SingleWriter)
             {
-                ApplyPersistentConnectionSessionSettings(initConn);
                 SetPersistentConnection(initConn);
                 initConn = null; // context owns it now
-            }
-            else
-            {
-                // Standard: apply per-connection session hints that must be present during dialect init
-                SetupConnectionSessionSettingsForProvider(initConn);
-                // Do NOT SetPersistentConnection
             }
 
             // 7) Isolation resolver after product/RCSI known
@@ -1096,80 +1047,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         return csb;
     }
 
-    private void SetupConnectionSessionSettingsForProvider(ITrackedConnection conn)
-    {
-        switch (Product)
-        {
-            case SupportedDatabase.MySql:
-            case SupportedDatabase.MariaDb:
-                _connectionSessionSettings = ConnectionMode == DbMode.Standard
-                    ? string.Empty
-                    : "SET SESSION sql_mode = 'STRICT_ALL_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ENGINE_SUBSTITUTION,ANSI_QUOTES';\n";
-                break;
-
-            case SupportedDatabase.PostgreSql:
-            case SupportedDatabase.CockroachDb:
-                _connectionSessionSettings = @"
-                SET standard_conforming_strings = on;
-                SET client_min_messages = warning;
-                SET search_path = public;
-";
-                break;
-
-            case SupportedDatabase.Oracle:
-                _connectionSessionSettings = @"
-                ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD';
-";
-//                ALTER SESSION SET CURRENT_SCHEMA = your_schema;
-                break;
-
-            case SupportedDatabase.Sqlite:
-                _connectionSessionSettings = "PRAGMA foreign_keys = ON;";
-                break;
-
-            case SupportedDatabase.Firebird:
-                // _connectionSessionSettings = "SET NAMES UTF8;";
-                // has to be done in connection string, not session;
-                break;
-
-            //DB 2 can't be supported under modern .net
-            //             case SupportedDatabase.Db2:
-            //                 _connectionSessionSettings = @"
-            //                  SET CURRENT DEGREE = 'ANY';
-            // ";
-            //                break;
-
-            default:
-                _connectionSessionSettings = string.Empty;
-                break;
-        }
-
-        _applyConnectionSessionSettings = _connectionSessionSettings?.Length > 0;
-    }
-
-
-    internal void ApplyConnectionSessionSettings(IDbConnection connection)
-    {
-        if (ConnectionMode == DbMode.Standard)
-        {
-            return;
-        }
-        _logger.LogInformation("Applying connection session settings");
-        if (_applyConnectionSessionSettings)
-        {
-            try
-            {
-                using var cmd = connection.CreateCommand();
-                cmd.CommandText = _connectionSessionSettings;
-                cmd.ExecuteNonQuery();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError("Error setting session settings:" + ex.Message);
-                _applyConnectionSessionSettings = false;
-            }
-        }
-    }
+    // Session settings are delegated entirely to the active dialect.
 
     public void ApplyPersistentConnectionSessionSettings(IDbConnection connection)
     {
@@ -1185,7 +1063,8 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         }
 
         // If session settings were already applied on first open, avoid double application
-        if (_sessionSettingsAppliedOnOpen)
+        var already = IsReadOnlyConnection ? _readOnlySessionSettingsAppliedOnOpen : _readWriteSessionSettingsAppliedOnOpen;
+        if (already && ConnectionMode == DbMode.Standard)
         {
             return;
         }
@@ -1212,6 +1091,14 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
                     using var cmd = connection.CreateCommand();
                     cmd.CommandText = stmt + ';';
                     cmd.ExecuteNonQuery();
+                }
+                if (IsReadOnlyConnection)
+                {
+                    _readOnlySessionSettingsAppliedOnOpen = true;
+                }
+                else
+                {
+                    _readWriteSessionSettingsAppliedOnOpen = true;
                 }
             }
             catch (Exception ex)

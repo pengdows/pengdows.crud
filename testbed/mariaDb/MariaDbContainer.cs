@@ -29,7 +29,7 @@ public class MariaDbContainer : TestContainer
             .WithEnvironment("MARIADB_ROOT_PASSWORD", _password)
             .WithEnvironment("MARIADB_DATABASE", _database)
             .WithEnvironment("MYSQL_SQL_MODE",
-                "STRICT_ALL_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ENGINE_SUBSTITUTION,ANSI_QUOTES")
+                "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,NO_ENGINE_SUBSTITUTION")
             .WithPortBinding(_port, true)
             .WithExposedPort(_port)
             .Build();

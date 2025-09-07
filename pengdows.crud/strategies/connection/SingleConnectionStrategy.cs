@@ -20,11 +20,6 @@ internal class SingleConnectionStrategy : SafeAsyncDisposableBase, IConnectionSt
 
     public void PostInitialize(ITrackedConnection? connection)
     {
-        if (connection != null)
-        {
-            _context.ApplyPersistentConnectionSessionSettings(connection);
-        }
-
         _context.SetPersistentConnection(connection);
     }
 

@@ -38,18 +38,15 @@ public static class DecimalHelpers
         decimal mantissa = scale == 0 ? abs : abs * Pow10[scale];
 
         // Trim trailing zeros from the fractional part (i.e., remove factors of 10)
-        while (scale > 0 && mantissa % 10m == 0m)
+        for (; scale > 0 && mantissa % 10m == 0m; scale--)
         {
             mantissa /= 10m;
-            scale--;
         }
 
         // Count integer digits (digits to the left of the decimal point)
         int integerDigits = 0;
-        decimal intPart = decimal.Truncate(abs);
-        while (intPart >= 1m)
+        for (decimal intPart = decimal.Truncate(abs); intPart >= 1m; intPart /= 10m)
         {
-            intPart /= 10m;
             integerDigits++;
         }
 

@@ -9,14 +9,14 @@ using System.Threading.Tasks;
 
 namespace pengdows.crud.Tests;
 
-public class MySqlSessionSettingsTests
+public class MariaDbSessionSettingsTests
 {
     private static ITrackedConnection BuildConnection(IEnumerable<Dictionary<string, object>> rows)
     {
         var inner = new fakeDbConnection
         {
-            ConnectionString = $"Data Source=:memory:;EmulatedProduct={SupportedDatabase.MySql}",
-            EmulatedProduct = SupportedDatabase.MySql
+            ConnectionString = $"Data Source=:memory:;EmulatedProduct={SupportedDatabase.MariaDb}",
+            EmulatedProduct = SupportedDatabase.MariaDb
         };
         inner.EnqueueReaderResult(rows);
         inner.Open();
@@ -31,7 +31,7 @@ public class MySqlSessionSettingsTests
             new Dictionary<string, object> { { "Variable_name", "sql_mode" }, { "Value", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,NO_ENGINE_SUBSTITUTION" } },
             new Dictionary<string, object> { { "Variable_name", "time_zone" }, { "Value", "+00:00" } },
             new Dictionary<string, object> { { "Variable_name", "character_set_client" }, { "Value", "utf8mb4" } },
-            new Dictionary<string, object> { { "Variable_name", "collation_connection" }, { "Value", "utf8mb4_0900_ai_ci" } },
+            new Dictionary<string, object> { { "Variable_name", "collation_connection" }, { "Value", "utf8mb4_general_ci" } },
             new Dictionary<string, object> { { "Variable_name", "transaction_isolation" }, { "Value", "READ-COMMITTED" } },
             new Dictionary<string, object> { { "Variable_name", "sql_notes" }, { "Value", "0" } },
             new Dictionary<string, object> { { "Variable_name", "innodb_strict_mode" }, { "Value", "ON" } },
@@ -41,10 +41,10 @@ public class MySqlSessionSettingsTests
         };
 
         await using var conn = BuildConnection(rows);
-        var factory = new fakeDbFactory(SupportedDatabase.MySql);
-        var dialect = new MySqlDialect(factory, NullLogger<MySqlDialect>.Instance);
+        var factory = new fakeDbFactory(SupportedDatabase.MariaDb);
+        var dialect = new MariaDbDialect(factory, NullLogger<MariaDbDialect>.Instance);
         await dialect.DetectDatabaseInfoAsync(conn);
-        using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=MySql", factory);
+        using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=MariaDb", factory);
         var settings = dialect.GetConnectionSessionSettings(ctx, false);
         Assert.Equal(string.Empty, settings);
     }
@@ -59,10 +59,10 @@ public class MySqlSessionSettingsTests
         };
 
         await using var conn = BuildConnection(rows);
-        var factory = new fakeDbFactory(SupportedDatabase.MySql);
-        var dialect = new MySqlDialect(factory, NullLogger<MySqlDialect>.Instance);
+        var factory = new fakeDbFactory(SupportedDatabase.MariaDb);
+        var dialect = new MariaDbDialect(factory, NullLogger<MariaDbDialect>.Instance);
         await dialect.DetectDatabaseInfoAsync(conn);
-        using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=MySql", factory);
+        using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=MariaDb", factory);
         var settings = dialect.GetConnectionSessionSettings(ctx, false);
         Assert.Contains("SET SESSION sql_mode", settings);
         Assert.Contains("SET time_zone", settings);

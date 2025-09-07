@@ -14,29 +14,6 @@ namespace pengdows.crud.Tests;
 public class DatabaseContextUncoveredMethodsTests
 {
     [Fact]
-    public void ApplyConnectionSessionSettings_CallsDialectSettings()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite.ToString());
-        var config = new DatabaseContextConfiguration
-        {
-            DbMode = DbMode.SingleWriter,
-            ProviderName = SupportedDatabase.Sqlite.ToString(),
-            ConnectionString = "Data Source=:memory:"
-        };
-        var context = new DatabaseContext(config, factory);
-
-        using var connection = factory.CreateConnection();
-        connection.Open();
-
-        var method = typeof(DatabaseContext).GetMethod("ApplyConnectionSessionSettings",
-            BindingFlags.NonPublic | BindingFlags.Instance);
-
-        method!.Invoke(context, new object[] { connection });
-
-        Assert.True(true);
-    }
-
-    [Fact]
     public void GetStandardConnection_ReturnsTrackedConnection()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite.ToString());
@@ -74,33 +51,6 @@ public class DatabaseContextUncoveredMethodsTests
         var connection = method!.Invoke(context, new object[] { true, false });
 
         Assert.NotNull(connection);
-    }
-
-    [Theory]
-    [InlineData(SupportedDatabase.SqlServer)]
-    [InlineData(SupportedDatabase.PostgreSql)]
-    [InlineData(SupportedDatabase.Sqlite)]
-    [InlineData(SupportedDatabase.Oracle)]
-    public void ApplyConnectionSessionSettings_DifferentDialects_ExecutesWithoutError(SupportedDatabase database)
-    {
-        var factory = new fakeDbFactory(database.ToString());
-        var config = new DatabaseContextConfiguration
-        {
-            DbMode = DbMode.Standard,
-            ProviderName = database.ToString(),
-            ConnectionString = $"Data Source=test;EmulatedProduct={database}"
-        };
-        var context = new DatabaseContext(config, factory);
-
-        using var connection = factory.CreateConnection();
-        connection.Open();
-
-        var method = typeof(DatabaseContext).GetMethod("ApplyConnectionSessionSettings",
-            BindingFlags.NonPublic | BindingFlags.Instance);
-
-        method!.Invoke(context, new object[] { connection });
-
-        Assert.True(true);
     }
 
     [Fact]

@@ -97,9 +97,9 @@ public class SqliteDialect : SqlDialect
         {
             await using var cmd = (DbCommand)connection.CreateCommand();
             cmd.CommandText = "SELECT sqlite_version()";
-            await using var reader = await cmd.ExecuteReaderAsync(CommandBehavior.SingleRow);
+            await using var reader = await cmd.ExecuteReaderAsync(CommandBehavior.SingleRow).ConfigureAwait(false);
 
-            if (await reader.ReadAsync())
+            if (await reader.ReadAsync().ConfigureAwait(false))
             {
                 return "SQLite";
             }

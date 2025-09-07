@@ -462,48 +462,6 @@ public class MariaDbDialectTests
     }
 
     [Fact]
-    public void GetConnectionSessionSettings_Should_Include_Read_Only_For_ReadOnly_Context()
-    {
-        var context = new DatabaseContext("test", _factory);
-
-        var settings = _dialect.GetConnectionSessionSettings(context, readOnly: true);
-
-        Assert.Contains("STRICT_ALL_TABLES", settings);
-        Assert.Contains("ONLY_FULL_GROUP_BY", settings);
-        Assert.Contains("ANSI_QUOTES", settings);
-        Assert.Contains("NO_BACKSLASH_ESCAPES", settings);
-        Assert.Contains("SET SESSION TRANSACTION READ ONLY", settings);
-    }
-
-    [Fact]
-    public void GetConnectionSessionSettings_Should_Not_Include_Read_Only_For_ReadWrite_Context()
-    {
-        var context = new DatabaseContext("test", _factory);
-
-        var settings = _dialect.GetConnectionSessionSettings(context, readOnly: false);
-
-        Assert.Contains("STRICT_ALL_TABLES", settings);
-        Assert.Contains("ONLY_FULL_GROUP_BY", settings);
-        Assert.Contains("ANSI_QUOTES", settings);
-        Assert.Contains("NO_BACKSLASH_ESCAPES", settings);
-        Assert.DoesNotContain("SET SESSION TRANSACTION READ ONLY", settings);
-    }
-
-    [Fact]
-    public void GetConnectionSessionSettings_Obsolete_Should_Return_Base_Settings()
-    {
-#pragma warning disable CS0618 // Type or member is obsolete
-        var settings = _dialect.GetConnectionSessionSettings();
-#pragma warning restore CS0618 // Type or member is obsolete
-
-        Assert.Contains("STRICT_ALL_TABLES", settings);
-        Assert.Contains("ONLY_FULL_GROUP_BY", settings);
-        Assert.Contains("ANSI_QUOTES", settings);
-        Assert.Contains("NO_BACKSLASH_ESCAPES", settings);
-        Assert.DoesNotContain("SET SESSION TRANSACTION READ ONLY", settings);
-    }
-
-    [Fact]
     public void GetVersionQuery_Should_Return_Select_Version()
     {
         Assert.Equal("SELECT VERSION()", _dialect.GetVersionQuery());

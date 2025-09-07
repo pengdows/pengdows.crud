@@ -141,9 +141,9 @@ public class PostgreSqlDialectTests
     {
         // Act
         var settings = _dialect.GetConnectionSessionSettings();
-        
+
         // Assert
-        Assert.NotNull(settings); // Should return some settings or empty string
+        Assert.Equal(string.Empty, settings);
     }
 
     [Fact]
@@ -325,28 +325,23 @@ public class PostgreSqlDialectTests
     }
 
     [Fact]
-    public void GetConnectionSessionSettings_NonReadOnlyContext_ReturnsBaseSettings()
+    public void GetConnectionSessionSettings_DefaultContext_ReturnsEmpty()
     {
         var ctx = CreateTestContext();
-        
+
         var settings = _dialect.GetConnectionSessionSettings(ctx, false);
-        
-        Assert.NotEmpty(settings);
-        Assert.Contains("SET standard_conforming_strings = on;", settings);
-        Assert.Contains("SET client_min_messages = warning;", settings);
-        Assert.Contains("SET search_path = public;", settings);
+
+        Assert.Equal(string.Empty, settings);
     }
 
     [Fact]
-    public void GetConnectionSessionSettings_ReadOnlyContext_ReturnsReadOnlySettings()
+    public void GetConnectionSessionSettings_ReadOnlyContext_ReturnsEmpty()
     {
         var ctx = CreateTestContext();
-        
+
         var settings = _dialect.GetConnectionSessionSettings(ctx, true);
-        
-        Assert.NotEmpty(settings);
-        Assert.Contains("SET default_transaction_read_only = on;", settings);
-        Assert.Contains("SET standard_conforming_strings = on;", settings);
+
+        Assert.Equal(string.Empty, settings);
     }
 
     [Fact]
@@ -556,21 +551,19 @@ public class PostgreSqlDialectTests
     }
 
     [Fact]
-    public void GetBaseSessionSettings_Should_Return_PostgreSQL_Settings()
+    public void GetBaseSessionSettings_Should_Return_Empty()
     {
         var settings = _dialect.GetBaseSessionSettings();
 
-        Assert.Contains("SET standard_conforming_strings = on", settings);
-        Assert.Contains("SET client_min_messages = warning", settings);
-        Assert.Contains("SET search_path = public", settings);
+        Assert.Equal(string.Empty, settings);
     }
 
     [Fact]
-    public void GetReadOnlySessionSettings_Should_Return_ReadOnly_Setting()
+    public void GetReadOnlySessionSettings_Should_Return_Empty()
     {
         var settings = _dialect.GetReadOnlySessionSettings();
 
-        Assert.Equal("SET default_transaction_read_only = on;", settings);
+        Assert.Equal(string.Empty, settings);
     }
 
     [Fact]

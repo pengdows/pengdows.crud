@@ -16,11 +16,6 @@ public class KeepAliveConnectionStrategy : StandardConnectionStrategy
 
     public override void PostInitialize(ITrackedConnection? connection)
     {
-        if (connection != null)
-        {
-            _context.ApplyConnectionSessionSettings(connection);
-        }
-
         _context.SetPersistentConnection(connection);
     }
 

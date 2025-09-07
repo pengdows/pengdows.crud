@@ -55,14 +55,7 @@ public class PostgreSqlDialect : SqlDialect
 
     public override string GetBaseSessionSettings()
     {
-        return @"SET standard_conforming_strings = on;
-SET client_min_messages = warning;
-SET search_path = public;";
-    }
-
-    public override string GetReadOnlySessionSettings()
-    {
-        return "SET default_transaction_read_only = on;";
+        return string.Empty;
     }
 
     public override string? GetReadOnlyConnectionParameter()
@@ -70,12 +63,15 @@ SET search_path = public;";
         return "Options='-c default_transaction_read_only=on'";
     }
 
+    public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
+    {
+        return string.Empty;
+    }
+
     [Obsolete]
     public override string GetConnectionSessionSettings()
     {
-        return @"SET standard_conforming_strings = on;
-SET client_min_messages = warning;
-SET search_path = public;";
+        return GetBaseSessionSettings();
     }
 
     public override void ConfigureProviderSpecificSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)

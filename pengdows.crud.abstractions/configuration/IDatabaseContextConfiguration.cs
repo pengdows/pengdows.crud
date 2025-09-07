@@ -32,11 +32,6 @@ public interface IDatabaseContextConfiguration
     ReadWriteMode ReadWriteMode { get; set; }
 
     /// <summary>
-    /// When true, applies a default search_path of 'public' for PostgreSQL connections.
-    /// </summary>
-    bool SetDefaultSearchPath { get; set; }
-
-    /// <summary>
     /// Override to force manual prepare on or off for all commands.
     /// When set, this overrides the dialect's PrepareStatements setting.
     /// </summary>

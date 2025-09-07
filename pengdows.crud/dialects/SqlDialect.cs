@@ -409,8 +409,9 @@ public abstract class SqlDialect:ISqlDialect
 
         try
         {
-            var versionString = await GetDatabaseVersionAsync(connection);
-            var productName = await GetProductNameAsync(connection) ?? ExtractProductNameFromVersion(versionString);
+            var versionString = await GetDatabaseVersionAsync(connection).ConfigureAwait(false);
+            var productName = await GetProductNameAsync(connection).ConfigureAwait(false)
+                             ?? ExtractProductNameFromVersion(versionString);
             var parsedVersion = ParseVersion(versionString);
             var databaseType = InferDatabaseTypeFromInfo(productName, versionString);
             var standardCompliance = DetermineStandardCompliance(parsedVersion);
