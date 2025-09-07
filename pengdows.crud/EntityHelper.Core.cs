@@ -88,7 +88,11 @@ public partial class EntityHelper<TEntity, TRowID> :
         ILogger? logger = null)
     {
         _auditValueResolver = auditValueResolver;
-        if (logger != null) Logger = logger;
+        if (logger != null)
+        {
+            Logger = logger;
+        }
+
         Initialize(databaseContext, enumParseBehavior);
         _cachedSqlTemplates = new Lazy<CachedSqlTemplates>(BuildCachedSqlTemplatesNeutral);
     }
@@ -209,8 +213,16 @@ public partial class EntityHelper<TEntity, TRowID> :
 
     public async Task<bool> CreateAsync(TEntity entity, IDatabaseContext context)
     {
-        if (entity == null) throw new ArgumentNullException(nameof(entity));
-        if (context == null) throw new ArgumentNullException(nameof(context));
+        if (entity == null)
+        {
+            throw new ArgumentNullException(nameof(entity));
+        }
+
+        if (context == null)
+        {
+            throw new ArgumentNullException(nameof(context));
+        }
+
         var ctx = context ?? _context;
         var dialect = GetDialect(ctx);
         
@@ -267,8 +279,16 @@ public partial class EntityHelper<TEntity, TRowID> :
 
     public async Task<bool> CreateAsync(TEntity entity, IDatabaseContext context, CancellationToken cancellationToken)
     {
-        if (entity == null) throw new ArgumentNullException(nameof(entity));
-        if (context == null) throw new ArgumentNullException(nameof(context));
+        if (entity == null)
+        {
+            throw new ArgumentNullException(nameof(entity));
+        }
+
+        if (context == null)
+        {
+            throw new ArgumentNullException(nameof(context));
+        }
+
         var ctx = context ?? _context;
         var dialect = GetDialect(ctx);
 

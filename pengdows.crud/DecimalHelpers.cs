@@ -23,7 +23,10 @@ public static class DecimalHelpers
     /// </summary>
     public static (int Precision, int Scale) Infer(decimal value)
     {
-        if (value == 0m) return (0, 0);
+        if (value == 0m)
+        {
+            return (0, 0);
+        }
 
         var abs = Math.Abs(value);
 

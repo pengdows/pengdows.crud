@@ -537,7 +537,11 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
                     foreach (var part in parts)
                     {
                         var stmt = part.Trim();
-                        if (string.IsNullOrEmpty(stmt)) continue;
+                        if (string.IsNullOrEmpty(stmt))
+                        {
+                            continue;
+                        }
+
                         using var cmd = conn.CreateCommand();
                         cmd.CommandText = stmt + ';';
                         cmd.ExecuteNonQuery();
@@ -799,28 +803,90 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             {
                 var name = schema.Rows[0].Field<string>("DataSourceProductName") ?? string.Empty;
                 var lower = name.ToLowerInvariant();
-                if (lower.Contains("sql server")) return SupportedDatabase.SqlServer;
-                if (lower.Contains("mariadb")) return SupportedDatabase.MariaDb;
-                if (lower.Contains("mysql")) return SupportedDatabase.MySql;
-                if (lower.Contains("cockroach")) return SupportedDatabase.CockroachDb;
-                if (lower.Contains("postgres")) return SupportedDatabase.PostgreSql;
-                if (lower.Contains("oracle")) return SupportedDatabase.Oracle;
-                if (lower.Contains("sqlite")) return SupportedDatabase.Sqlite;
-                if (lower.Contains("firebird")) return SupportedDatabase.Firebird;
-                if (lower.Contains("duckdb") || lower.Contains("duck db")) return SupportedDatabase.DuckDB;
+                if (lower.Contains("sql server"))
+                {
+                    return SupportedDatabase.SqlServer;
+                }
+
+                if (lower.Contains("mariadb"))
+                {
+                    return SupportedDatabase.MariaDb;
+                }
+
+                if (lower.Contains("mysql"))
+                {
+                    return SupportedDatabase.MySql;
+                }
+
+                if (lower.Contains("cockroach"))
+                {
+                    return SupportedDatabase.CockroachDb;
+                }
+
+                if (lower.Contains("postgres"))
+                {
+                    return SupportedDatabase.PostgreSql;
+                }
+
+                if (lower.Contains("oracle"))
+                {
+                    return SupportedDatabase.Oracle;
+                }
+
+                if (lower.Contains("sqlite"))
+                {
+                    return SupportedDatabase.Sqlite;
+                }
+
+                if (lower.Contains("firebird"))
+                {
+                    return SupportedDatabase.Firebird;
+                }
+
+                if (lower.Contains("duckdb") || lower.Contains("duck db"))
+                {
+                    return SupportedDatabase.DuckDB;
+                }
             }
         }
         catch { }
         try
         {
             var typeName = _factory.GetType().Name.ToLowerInvariant();
-            if (typeName.Contains("sqlserver") || typeName.Contains("system.data.sqlclient")) return SupportedDatabase.SqlServer;
-            if (typeName.Contains("npgsql")) return SupportedDatabase.PostgreSql;
-            if (typeName.Contains("mysql")) return SupportedDatabase.MySql;
-            if (typeName.Contains("sqlite")) return SupportedDatabase.Sqlite;
-            if (typeName.Contains("oracle")) return SupportedDatabase.Oracle;
-            if (typeName.Contains("firebird")) return SupportedDatabase.Firebird;
-            if (typeName.Contains("duckdb")) return SupportedDatabase.DuckDB;
+            if (typeName.Contains("sqlserver") || typeName.Contains("system.data.sqlclient"))
+            {
+                return SupportedDatabase.SqlServer;
+            }
+
+            if (typeName.Contains("npgsql"))
+            {
+                return SupportedDatabase.PostgreSql;
+            }
+
+            if (typeName.Contains("mysql"))
+            {
+                return SupportedDatabase.MySql;
+            }
+
+            if (typeName.Contains("sqlite"))
+            {
+                return SupportedDatabase.Sqlite;
+            }
+
+            if (typeName.Contains("oracle"))
+            {
+                return SupportedDatabase.Oracle;
+            }
+
+            if (typeName.Contains("firebird"))
+            {
+                return SupportedDatabase.Firebird;
+            }
+
+            if (typeName.Contains("duckdb"))
+            {
+                return SupportedDatabase.DuckDB;
+            }
         }
         catch { }
         return SupportedDatabase.Unknown;
@@ -864,7 +930,10 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             if (kind == InMemoryKind.Isolated)
             {
                 if (requested != DbMode.SingleConnection)
+                {
                     _logger.LogWarning("DbMode override: requested {requested}, coerced to {resolved} — reason: {reason}", requested, DbMode.SingleConnection, "Isolated in-memory requires SingleConnection");
+                }
+
                 return DbMode.SingleConnection;
             }
             if (kind == InMemoryKind.Shared)
@@ -894,7 +963,10 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         if (product == SupportedDatabase.Firebird && isFirebirdEmbedded)
         {
             if (requested != DbMode.SingleConnection)
+            {
                 _logger.LogWarning("DbMode override: requested {requested}, coerced to {resolved} — reason: {reason}", requested, DbMode.SingleConnection, "Firebird embedded requires SingleConnection");
+            }
+
             return DbMode.SingleConnection;
         }
 
@@ -910,7 +982,10 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         if (product == SupportedDatabase.SqlServer && isLocalDb)
         {
             if (requested != DbMode.KeepAlive)
+            {
                 _logger.LogWarning("DbMode override: requested {requested}, coerced to {resolved} — reason: {reason}", requested, DbMode.KeepAlive, "LocalDb requires KeepAlive");
+            }
+
             return DbMode.KeepAlive;
         }
 
@@ -950,15 +1025,27 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         if (product == SupportedDatabase.Sqlite)
         {
             bool modeMem = s.Contains("mode=memory") || s.Contains("filename=:memory:") || s.Contains("data source=:memory:");
-            if (!modeMem) return InMemoryKind.None;
+            if (!modeMem)
+            {
+                return InMemoryKind.None;
+            }
+
             bool cacheShared = s.Contains("cache=shared");
             bool dsIsLiteralMem = s.Contains("data source=:memory:") || s.Contains("filename=:memory:");
-            if (cacheShared && !dsIsLiteralMem) return InMemoryKind.Shared; // e.g., file:name?mode=memory&cache=shared
+            if (cacheShared && !dsIsLiteralMem)
+            {
+                return InMemoryKind.Shared; // e.g., file:name?mode=memory&cache=shared
+            }
+
             return InMemoryKind.Isolated;
         }
         if (product == SupportedDatabase.DuckDB)
         {
-            if (!s.Contains("data source=:memory:")) return InMemoryKind.None;
+            if (!s.Contains("data source=:memory:"))
+            {
+                return InMemoryKind.None;
+            }
+
             return s.Contains("cache=shared") ? InMemoryKind.Shared : InMemoryKind.Isolated;
         }
         return InMemoryKind.None;
@@ -972,7 +1059,11 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
 
     private static bool IsEmulatedUnknown(string? connectionString)
     {
-        if (string.IsNullOrWhiteSpace(connectionString)) return false;
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            return false;
+        }
+
         return connectionString.IndexOf("emulatedproduct=unknown", StringComparison.OrdinalIgnoreCase) >= 0;
     }
 
@@ -1113,7 +1204,11 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
                 foreach (var part in parts)
                 {
                     var stmt = part.Trim();
-                    if (string.IsNullOrEmpty(stmt)) continue;
+                    if (string.IsNullOrEmpty(stmt))
+                    {
+                        continue;
+                    }
+
                     using var cmd = connection.CreateCommand();
                     cmd.CommandText = stmt + ';';
                     cmd.ExecuteNonQuery();

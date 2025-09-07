@@ -10,10 +10,22 @@ public partial class EntityHelper<TEntity, TRowID>
     /// </summary>
     private static object? Coerce(object? value, Type targetType)
     {
-        if (value is null) return null;
+        if (value is null)
+        {
+            return null;
+        }
+
         var t = Nullable.GetUnderlyingType(targetType) ?? targetType;
-        if (t.IsInstanceOfType(value)) return value;
-        if (t == typeof(Guid) && value is string s) return Guid.Parse(s);
+        if (t.IsInstanceOfType(value))
+        {
+            return value;
+        }
+
+        if (t == typeof(Guid) && value is string s)
+        {
+            return Guid.Parse(s);
+        }
+
         return Convert.ChangeType(value, t, CultureInfo.InvariantCulture);
     }
 
