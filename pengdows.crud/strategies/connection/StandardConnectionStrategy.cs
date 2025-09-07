@@ -4,7 +4,7 @@ using pengdows.crud.wrappers;
 
 namespace pengdows.crud.strategies.connection;
 
-internal class StandardConnectionStrategy : SafeAsyncDisposableBase, IConnectionStrategy
+public class StandardConnectionStrategy : SafeAsyncDisposableBase, IConnectionStrategy
 {
     protected readonly DatabaseContext _context;
 
@@ -13,7 +13,7 @@ internal class StandardConnectionStrategy : SafeAsyncDisposableBase, IConnection
         _context = context;
     }
 
-    public ITrackedConnection GetConnection(ExecutionType executionType, bool isShared)
+    public virtual ITrackedConnection GetConnection(ExecutionType executionType, bool isShared)
     {
         return _context.FactoryCreateConnection(null, isShared, _context.IsReadOnlyConnection);
     }

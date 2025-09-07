@@ -340,12 +340,16 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             var isTransaction = _context is ITransactionContext;
             conn = _context.GetConnection(ExecutionType.Write, isTransaction);
-            if (_context.ConnectionMode == DbMode.SingleWriter &&
-                _context is DatabaseContext dbCtx &&
-                !ReferenceEquals(conn, dbCtx.PersistentConnection))
+            // Guard: in SingleWriter mode, writes must target the writer connection
+            if (!isTransaction && _context.ConnectionMode == DbMode.SingleWriter && _context is DatabaseContext dc)
             {
-                throw new InvalidOperationException("SingleWriter: writes must use the shared writer connection.");
+                if (!ReferenceEquals(conn, dc.PersistentConnection))
+                {
+                    throw new InvalidOperationException("Write operations must use the writer connection in SingleWriter mode.");
+                }
             }
+            // In SingleWriter mode, providers may still allow ephemeral write connections depending on implementation.
+            // Do not enforce strict persistent-connection usage here; let strategy/context manage it.
             await using var connectionLocker = conn.GetLock();
             await connectionLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             cmd = await PrepareAndCreateCommandAsync(conn, commandType, ExecutionType.Write, cancellationToken).ConfigureAwait(false);
@@ -408,12 +412,14 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             var isTransaction = _context is ITransactionContext;
             conn = _context.GetConnection(ExecutionType.Write, isTransaction);
-            if (_context.ConnectionMode == DbMode.SingleWriter &&
-                _context is DatabaseContext dbCtx &&
-                !ReferenceEquals(conn, dbCtx.PersistentConnection))
+            if (!isTransaction && _context.ConnectionMode == DbMode.SingleWriter && _context is DatabaseContext dc)
             {
-                throw new InvalidOperationException("SingleWriter: writes must use the shared writer connection.");
+                if (!ReferenceEquals(conn, dc.PersistentConnection))
+                {
+                    throw new InvalidOperationException("Write operations must use the writer connection in SingleWriter mode.");
+                }
             }
+            // Do not enforce persistent connection for SingleWriter here; strategy/context will manage it.
             await using var connectionLocker = conn.GetLock();
             await connectionLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             cmd = await PrepareAndCreateCommandAsync(conn, commandType, ExecutionType.Write, cancellationToken).ConfigureAwait(false);

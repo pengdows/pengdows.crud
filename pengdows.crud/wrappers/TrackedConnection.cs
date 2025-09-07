@@ -20,7 +20,7 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
     private readonly bool _isSharedConnection;
     private readonly Func<ILockerAsync> _lockFactory;
     private readonly ILogger<TrackedConnection> _logger;
-    private readonly string _name;
+    private string _name;
     private readonly Action<DbConnection>? _onDispose;
     private readonly Action<DbConnection>? _onFirstOpen;
     private readonly StateChangeEventHandler? _onStateChange;
@@ -64,6 +64,13 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
         {
             _connection.StateChange += _onStateChange;
         }
+    }
+
+    // Test convenience constructor: allow specifying a name and logger directly
+    public TrackedConnection(DbConnection conn, string name, ILogger logger)
+        : this(conn, null, null, null, logger as ILogger<TrackedConnection> ?? NullLogger<TrackedConnection>.Instance, false)
+    {
+        _name = name ?? _name;
     }
 
     public bool WasOpened => Interlocked.CompareExchange(ref _wasOpened, 0, 0) == 1;

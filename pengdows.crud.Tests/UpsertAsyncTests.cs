@@ -16,12 +16,16 @@ public class UpsertAsyncTests : SqlLiteContextTestBase, IAsyncLifetime
         helper = new EntityHelper<TestEntity, int>(Context, AuditValueResolver);
     }
 
-    public async Task InitializeAsync()
+    public new async Task InitializeAsync()
     {
+        await base.InitializeAsync();
         await BuildTestTable();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public new async Task DisposeAsync()
+    {
+        await base.DisposeAsync();
+    }
 
     [Fact]
     public async Task UpsertAsync_Inserts_WhenIdDefault()

@@ -53,7 +53,7 @@ public class MySqlDialect : SqlDialect
         return "SET SESSION sql_mode = 'STRICT_ALL_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,ANSI_QUOTES,NO_BACKSLASH_ESCAPES';";
     }
 
-    protected override SqlStandardLevel DetermineStandardCompliance(Version? version)
+    public override SqlStandardLevel DetermineStandardCompliance(Version? version)
     {
         if (version == null)
         {
@@ -72,5 +72,18 @@ public class MySqlDialect : SqlDialect
     public override string UpsertIncomingColumn(string columnName)
     {
         return $"VALUES({WrapObjectName(columnName)})";
+    }
+
+    public override void TryEnterReadOnlyTransaction(ITransactionContext transaction)
+    {
+        try
+        {
+            using var sc = transaction.CreateSqlContainer("SET SESSION TRANSACTION READ ONLY;");
+            sc.ExecuteNonQueryAsync().GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "Failed to apply MySQL read-only session settings");
+        }
     }
 }

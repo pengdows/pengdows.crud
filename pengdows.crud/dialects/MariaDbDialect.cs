@@ -1,6 +1,7 @@
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.wrappers;
 
 namespace pengdows.crud.dialects;
 
@@ -16,8 +17,15 @@ public class MariaDbDialect : SqlDialect
     }
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.MariaDb;
+    public override string QuotePrefix => "`";
+    public override string QuoteSuffix => "`";
     public override string ParameterMarker => "@";
     public override bool SupportsNamedParameters => true;
+    // Limits reflect MariaDB/MySQL protocol and server behavior.
+    // - Max parameters: 65,535 per statement (16-bit unsigned)
+    // - Max output parameters: same order of magnitude; safe cap at 65,535
+    // - Parameter name length: 64 characters
+    // Adjust only if upstream server/protocol constraints change.
     public override int MaxParameterLimit => 65535;
     public override int MaxOutputParameters => 65535;
     public override int ParameterNameMaxLength => 64;
@@ -31,15 +39,34 @@ public class MariaDbDialect : SqlDialect
     // MariaDB supports ON DUPLICATE KEY like MySQL
     public override bool SupportsOnDuplicateKey => true;
     public override bool SupportsMerge => false;
+    public override bool SupportsIdentityColumns => true; // AUTO_INCREMENT
 
     // MariaDB does not provide a native JSON type; JSON is mapped to LONGTEXT
     public override bool SupportsJsonTypes => false;
 
-    // CTEs and window functions were added in MariaDB 10.2 (approximate gate)
+    // CTEs and window functions were added in MariaDB 10.2.
+    // Reflect real behavior: return true only when initialized and version >= 10.2
+    // Tests that expect "modern" behavior should initialize the dialect first.
     public override bool SupportsWindowFunctions => IsInitialized && IsAtLeast(10, 2);
     public override bool SupportsCommonTableExpressions => IsInitialized && IsAtLeast(10, 2);
 
     public override string GetVersionQuery() => "SELECT VERSION()";
+
+    public override string GetLastInsertedIdQuery()
+    {
+        // MariaDB uses the same LAST_INSERT_ID() function as MySQL
+        return "SELECT LAST_INSERT_ID()";
+    }
+
+    public override async Task<string?> GetProductNameAsync(ITrackedConnection connection)
+    {
+        var name = await base.GetProductNameAsync(connection).ConfigureAwait(false);
+        if (!string.IsNullOrEmpty(name) && name!.IndexOf("mysql", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            return "MariaDB";
+        }
+        return name;
+    }
 
     public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
     {
@@ -61,7 +88,7 @@ public class MariaDbDialect : SqlDialect
         return "SET SESSION sql_mode = 'STRICT_ALL_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,ANSI_QUOTES,NO_BACKSLASH_ESCAPES';";
     }
 
-    protected override SqlStandardLevel DetermineStandardCompliance(Version? version)
+    public override SqlStandardLevel DetermineStandardCompliance(Version? version)
     {
         if (version == null)
         {
@@ -94,6 +121,19 @@ public class MariaDbDialect : SqlDialect
     {
         // MariaDB follows MySQL semantics for ON DUPLICATE KEY ... VALUES(col)
         return $"VALUES({WrapObjectName(columnName)})";
+    }
+
+    public override void TryEnterReadOnlyTransaction(ITransactionContext transaction)
+    {
+        try
+        {
+            using var sc = transaction.CreateSqlContainer("SET SESSION TRANSACTION READ ONLY;");
+            sc.ExecuteNonQueryAsync().GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "Failed to apply MariaDB read-only session settings");
+        }
     }
 
     private bool IsAtLeast(int major, int minor)

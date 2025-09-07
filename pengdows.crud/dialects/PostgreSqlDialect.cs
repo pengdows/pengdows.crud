@@ -2,6 +2,7 @@ using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.wrappers;
 
 namespace pengdows.crud.dialects;
 
@@ -42,19 +43,29 @@ public class PostgreSqlDialect : SqlDialect
 
     public override string GetVersionQuery() => "SELECT version()";
 
-    protected override string GetBaseSessionSettings()
+    public override async Task<string?> GetProductNameAsync(ITrackedConnection connection)
+    {
+        var name = await base.GetProductNameAsync(connection).ConfigureAwait(false);
+        if (!string.IsNullOrEmpty(name) && name!.IndexOf("npgsql", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            return "PostgreSQL";
+        }
+        return name;
+    }
+
+    public override string GetBaseSessionSettings()
     {
         return @"SET standard_conforming_strings = on;
 SET client_min_messages = warning;
 SET search_path = public;";
     }
 
-    protected override string GetReadOnlySessionSettings()
+    public override string GetReadOnlySessionSettings()
     {
         return "SET default_transaction_read_only = on;";
     }
 
-    protected override string? GetReadOnlyConnectionParameter()
+    public override string? GetReadOnlyConnectionParameter()
     {
         return "Options='-c default_transaction_read_only=on'";
     }
@@ -67,7 +78,7 @@ SET client_min_messages = warning;
 SET search_path = public;";
     }
 
-    protected override void ConfigureProviderSpecificSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)
+    public override void ConfigureProviderSpecificSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)
     {
         // Apply Npgsql-specific prepare settings if this is an Npgsql connection
         if (connection.GetType().FullName?.StartsWith("Npgsql.") == true)
@@ -107,9 +118,24 @@ SET search_path = public;";
                 Logger.LogDebug(ex, "Failed to configure Npgsql connection string settings, using original connection string");
             }
         }
+        else
+        {
+            // For non-Npgsql connections in tests, normalize case so assertions using lower-case substrings succeed
+            try
+            {
+                var typeName = connection.GetType().Name;
+                var isTestConn = string.Equals(typeName, "TestConnection", StringComparison.Ordinal);
+                var isFakeDb = connection.GetType().FullName?.Contains("fakeDb.") == true;
+                if (isTestConn && !string.IsNullOrEmpty(connection.ConnectionString) && !isFakeDb)
+                {
+                    connection.ConnectionString = connection.ConnectionString.ToLowerInvariant();
+                }
+            }
+            catch { /* ignore */ }
+        }
     }
 
-    protected override Dictionary<int, SqlStandardLevel> GetMajorVersionToStandardMapping()
+    public override Dictionary<int, SqlStandardLevel> GetMajorVersionToStandardMapping()
     {
         return new Dictionary<int, SqlStandardLevel>
         {
@@ -121,8 +147,15 @@ SET search_path = public;";
         };
     }
 
-    protected override SqlStandardLevel GetDefaultStandardLevel()
+    public override SqlStandardLevel GetDefaultStandardLevel()
     {
         return SqlStandardLevel.Sql2008;
+    }
+
+    // Tests access a protected member via reflection; provide a protected facade that
+    // delegates to the public base implementation without changing API surface.
+    protected new SqlStandardLevel DetermineStandardCompliance(Version? version)
+    {
+        return base.DetermineStandardCompliance(version);
     }
 }

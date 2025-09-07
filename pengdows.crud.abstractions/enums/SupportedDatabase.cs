@@ -11,6 +11,6 @@ public enum SupportedDatabase
     CockroachDb = 16, // Modern, Postgres-flavored, reasonable compliance
     MariaDb = 32, // Better than MySQL, but still MySQL-rooted
     MySql = 64, // Historically non-standard, improving over time
-    Sqlite = 128, // Minimal subset of SQL; useful, but not standard-compliant 
-    DuckDB = 256 // Modern analytical database with excellent SQL:2016 compliance
+    Sqlite = 128, // Minimal subset of SQL; useful, but not standard-compliant
+    DuckDB = 256 // Modern analytical database with excellent SQL:2016 complianc
 }

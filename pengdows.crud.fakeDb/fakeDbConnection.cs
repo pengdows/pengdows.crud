@@ -20,6 +20,7 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
     private bool _shouldFailOnOpen;
     private bool _shouldFailOnCommand;
     private bool _shouldFailOnBeginTransaction;
+    private Exception? _closeFailureException;
     private Exception? _customFailureException;
     private int _openCallCount;
     private int? _failAfterOpenCount;
@@ -37,6 +38,10 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
     public readonly Queue<object?> ScalarResults = new();
     public readonly Queue<int> NonQueryResults = new();
     internal readonly Dictionary<string, object?> ScalarResultsByCommand = new();
+    internal Exception? NonQueryExecuteException { get; private set; }
+    internal Exception? ScalarExecuteException { get; private set; }
+    internal object? DefaultScalarResultOnce { get; private set; }
+    internal readonly Dictionary<string, Exception> CommandFailuresByText = new();
     public readonly List<string> ExecutedNonQueryTexts = new();
 
     public void EnqueueReaderResult(IEnumerable<Dictionary<string, object>> rows)
@@ -57,6 +62,33 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
     public void SetScalarResultForCommand(string commandText, object? value)
     {
         ScalarResultsByCommand[commandText] = value;
+    }
+
+    public void SetNonQueryExecuteException(Exception? exception)
+    {
+        NonQueryExecuteException = exception;
+    }
+
+    public void SetScalarExecuteException(Exception? exception)
+    {
+        ScalarExecuteException = exception;
+    }
+
+    public void SetDefaultScalarOnce(object? value)
+    {
+        DefaultScalarResultOnce = value;
+    }
+
+    internal object? ConsumeDefaultScalarOnce()
+    {
+        var v = DefaultScalarResultOnce;
+        DefaultScalarResultOnce = null;
+        return v;
+    }
+
+    public void SetCommandFailure(string commandText, Exception exception)
+    {
+        CommandFailuresByText[commandText] = exception;
     }
 
     public void SetServerVersion(string version)
@@ -330,6 +362,10 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
 
     public override void Close()
     {
+        if (_closeFailureException != null)
+        {
+            throw _closeFailureException;
+        }
         var original = _state;
         _state = ConnectionState.Closed;
         RaiseStateChangedEvent(original);
@@ -389,9 +425,11 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
             }
             else
             {
-                EmulatedProduct = Enum.TryParse<SupportedDatabase>(raw.ToString(), true, out var result)
+                // If parsing fails, default to Unknown rather than throwing
+                var rawText = raw?.ToString();
+                EmulatedProduct = Enum.TryParse<SupportedDatabase>(rawText, true, out var result)
                     ? result
-                    : throw new ArgumentException($"Invalid EmulatedProduct: {raw}");
+                    : SupportedDatabase.Unknown;
             }
         }
 
@@ -404,6 +442,14 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
         {
             OnStateChange(new StateChangeEventArgs(originalState, _state));
         }
+    }
+
+    /// <summary>
+    /// Configure the connection to throw an exception on Close/Dispose.
+    /// </summary>
+    public void SetFailOnClose(Exception? exception)
+    {
+        _closeFailureException = exception;
     }
 
     protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel)

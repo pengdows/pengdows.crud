@@ -72,6 +72,31 @@ public class fakeDbCommand : DbCommand
         ThrowIfShouldFail(nameof(ExecuteNonQuery));
 
         var conn = FakeConnection;
+        // Treat session-setting commands as no-op and do not consume queued NonQueryResults,
+        // so tests that seed rows-affected for subsequent DML remain stable.
+        if (!string.IsNullOrWhiteSpace(CommandText))
+        {
+            var trimmed = CommandText.TrimStart();
+            var upper = trimmed.ToUpperInvariant();
+            if (upper.StartsWith("SET ") || upper.StartsWith("PRAGMA ") || upper.Contains("ALTER SESSION SET"))
+            {
+                if (conn != null && !string.IsNullOrWhiteSpace(CommandText))
+                {
+                    conn.ExecutedNonQueryTexts.Add(CommandText);
+                }
+                return 0;
+            }
+        }
+        if (conn != null && conn.NonQueryExecuteException != null)
+        {
+            var ex = conn.NonQueryExecuteException;
+            conn.SetNonQueryExecuteException(null);
+            throw ex;
+        }
+        if (conn != null && !string.IsNullOrEmpty(CommandText) && conn.CommandFailuresByText.TryGetValue(CommandText, out var exNonQuery))
+        {
+            throw exNonQuery;
+        }
         if (conn != null && !string.IsNullOrWhiteSpace(CommandText))
         {
             conn.ExecutedNonQueryTexts.Add(CommandText);
@@ -91,13 +116,57 @@ public class fakeDbCommand : DbCommand
         var conn = FakeConnection;
         if (conn != null)
         {
-            // Check for command-text-based result first
+            if (conn.ScalarExecuteException != null)
+            {
+                var ex = conn.ScalarExecuteException;
+                conn.SetScalarExecuteException(null);
+                throw ex;
+            }
+            if (!string.IsNullOrEmpty(CommandText) && conn.CommandFailuresByText.TryGetValue(CommandText, out var exScalar))
+            {
+                throw exScalar;
+            }
+            // Command-text-based result
             if (!string.IsNullOrEmpty(CommandText) && conn.ScalarResultsByCommand.TryGetValue(CommandText, out var commandResult))
             {
                 return commandResult;
             }
-
-            // Handle version queries automatically based on emulated product
+            // If this is any kind of version query and the test queued a scalar (even null/empty), prefer the queued value
+            if (!string.IsNullOrEmpty(CommandText))
+            {
+                var upper = CommandText.TrimStart().ToUpperInvariant();
+                var isGenericVersion = upper == "SELECT VERSION()" || upper == "PRAGMA VERSION" || upper == "SELECT CURRENT_VERSION";
+                var isFirebirdEngine = upper.Contains("RDB$GET_CONTEXT('SYSTEM', 'ENGINE_VERSION')");
+                var isFirebirdMonitor = upper.Contains("MON$SERVER_VERSION");
+                if ((isGenericVersion || isFirebirdEngine || isFirebirdMonitor) && conn.ScalarResults.Count > 0)
+                {
+                    return conn.ScalarResults.Dequeue();
+                }
+            }
+            // Apply default scalar only to identity-returning paths and explicit version overrides
+            if (conn.DefaultScalarResultOnce != null && !string.IsNullOrWhiteSpace(CommandText))
+            {
+                var trimmed = CommandText.TrimStart();
+                var upper = trimmed.ToUpperInvariant();
+                // Version override (tests may supply an explicit version string)
+                if (upper == "SELECT VERSION()" || upper == "PRAGMA VERSION" || upper == "SELECT CURRENT_VERSION"
+                    || upper.Contains("RDB$GET_CONTEXT('SYSTEM', 'ENGINE_VERSION')")
+                    || upper.Contains("MON$SERVER_VERSION"))
+                {
+                    return conn.ConsumeDefaultScalarOnce();
+                }
+                // INSERT ... RETURNING should return generated IDs
+                if (upper.StartsWith("INSERT") && (upper.Contains("RETURNING") || upper.Contains("OUTPUT INSERTED")))
+                {
+                    return conn.ConsumeDefaultScalarOnce();
+                }
+                // Identity retrieval SELECTs
+                if (upper.Contains("SCOPE_IDENTITY") || upper.Contains("LASTVAL") || upper.Contains("LAST_INSERT_ROWID") || upper.Contains("LAST_INSERT_ID"))
+                {
+                    return conn.ConsumeDefaultScalarOnce();
+                }
+            }
+            // Handle version queries automatically based on emulated product (do not consume the generic queue)
             if (!string.IsNullOrEmpty(CommandText))
             {
                 var versionResult = GetVersionQueryResult(CommandText, conn.EmulatedProduct);
@@ -106,8 +175,7 @@ public class fakeDbCommand : DbCommand
                     return versionResult;
                 }
             }
-
-            // Fall back to queued results
+            // Prefer queued results when present (test control) for non-version commands
             if (conn.ScalarResults.Count > 0)
             {
                 return conn.ScalarResults.Dequeue();
@@ -121,18 +189,22 @@ public class fakeDbCommand : DbCommand
     {
         var normalizedCommand = commandText.Trim().ToUpperInvariant();
 
+        // Normalize to treat SELECT CURRENT_VERSION similar to SELECT VERSION()
+        var isVersionQuery = normalizedCommand == "SELECT VERSION()" || normalizedCommand == "SELECT CURRENT_VERSION";
+
+        // Handle recognized product/version queries with canned responses to stabilize tests
         return emulatedProduct switch
         {
             SupportedDatabase.SqlServer when normalizedCommand == "SELECT @@VERSION"
                 => "Microsoft SQL Server 2019 (RTM) - 15.0.2000.5",
 
-            SupportedDatabase.PostgreSql when normalizedCommand == "SELECT VERSION()"
+            SupportedDatabase.PostgreSql when isVersionQuery
                 => "PostgreSQL 15.0 on x86_64-pc-linux-gnu",
 
-            SupportedDatabase.MySql when normalizedCommand == "SELECT VERSION()"
+            SupportedDatabase.MySql when isVersionQuery
                 => "8.0.33",
 
-            SupportedDatabase.MariaDb when normalizedCommand == "SELECT VERSION()"
+            SupportedDatabase.MariaDb when isVersionQuery
                 => "10.11.0-MariaDB",
 
             SupportedDatabase.Sqlite when normalizedCommand == "SELECT SQLITE_VERSION()"
@@ -143,12 +215,18 @@ public class fakeDbCommand : DbCommand
 
             SupportedDatabase.Firebird when normalizedCommand.Contains("RDB$GET_CONTEXT('SYSTEM', 'ENGINE_VERSION')")
                 => "4.0.0",
+            // Firebird monitor table fallback used by dialect tests
+            SupportedDatabase.Firebird when normalizedCommand.Contains("MON$SERVER_VERSION")
+                => "Firebird 4.0.2",
 
-            SupportedDatabase.CockroachDb when normalizedCommand == "SELECT VERSION()"
+            SupportedDatabase.CockroachDb when isVersionQuery
                 => "CockroachDB CCL v23.1.0",
 
-            SupportedDatabase.DuckDB when normalizedCommand == "SELECT VERSION()"
+            SupportedDatabase.DuckDB when isVersionQuery
                 => "DuckDB 0.9.2",
+            // DuckDB pragma fallback used by dialect tests
+            SupportedDatabase.DuckDB when normalizedCommand == "PRAGMA VERSION"
+                => "v0.9.2",
 
             _ => null
         };
@@ -158,6 +236,10 @@ public class fakeDbCommand : DbCommand
     {
         ThrowIfShouldFail(nameof(ExecuteDbDataReader));
         var conn = FakeConnection;
+        if (conn != null && !string.IsNullOrEmpty(CommandText) && conn.CommandFailuresByText.TryGetValue(CommandText, out var exReader))
+        {
+            throw exReader;
+        }
         if (conn != null && conn.ReaderResults.Count > 0)
         {
             return new fakeDbDataReader(conn.ReaderResults.Dequeue());

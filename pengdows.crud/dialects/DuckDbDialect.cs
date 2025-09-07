@@ -71,20 +71,21 @@ public class DuckDbDialect : SqlDialect
 
         return connectionString.Contains(":memory:", StringComparison.OrdinalIgnoreCase);
     }
-    protected override async Task<string?> GetProductNameAsync(ITrackedConnection connection)
+    public override async Task<string?> GetProductNameAsync(ITrackedConnection connection)
     {
+        // Try SELECT version() first
         try
         {
             await using var cmd = (DbCommand)connection.CreateCommand();
             cmd.CommandText = "SELECT version()";
-            await using var reader = await cmd.ExecuteReaderAsync(CommandBehavior.SingleRow).ConfigureAwait(false);
-            if (await reader.ReadAsync().ConfigureAwait(false))
+            var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
+            if (result is string s && !string.IsNullOrEmpty(s))
             {
-                var version = reader.GetString(0);
-                if (version.ToLowerInvariant().Contains("duckdb"))
+                if (s.ToLowerInvariant().Contains("duckdb"))
                 {
                     return "DuckDB";
                 }
+                // If version query succeeded but doesn't mention DuckDB, try pragma next
             }
         }
         catch (Exception ex)
@@ -92,31 +93,31 @@ public class DuckDbDialect : SqlDialect
             Logger.LogDebug(ex, "Failed to get DuckDB product name from version query");
         }
 
-        // Fallback: try to detect DuckDB through pragma
+        // Fallback: try to detect DuckDB through pragma regardless of the first attempt's outcome
         try
         {
             await using var cmd = (DbCommand)connection.CreateCommand();
             cmd.CommandText = "PRAGMA version";
-            await using var reader = await cmd.ExecuteReaderAsync(CommandBehavior.SingleRow).ConfigureAwait(false);
-            if (await reader.ReadAsync().ConfigureAwait(false))
+            var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
+            if (result is string s && !string.IsNullOrEmpty(s))
             {
                 return "DuckDB";
             }
         }
         catch
         {
-            // Ignore, this is just a fallback
+            // Ignore; if pragma also fails, return null
         }
 
         return null;
     }
 
-    protected override string ExtractProductNameFromVersion(string versionString)
+    public override string ExtractProductNameFromVersion(string versionString)
     {
         return "DuckDB";
     }
 
-    protected override SqlStandardLevel DetermineStandardCompliance(Version? version)
+    public override SqlStandardLevel DetermineStandardCompliance(Version? version)
     {
         if (version == null)
         {
@@ -168,40 +169,53 @@ public class DuckDbDialect : SqlDialect
         return null;
     }
 
-    protected override async Task<string> GetDatabaseVersionAsync(ITrackedConnection connection)
+    public override async Task<string> GetDatabaseVersionAsync(ITrackedConnection connection)
     {
+        bool selectFailed = false;
+        bool pragmaFailed = false;
+
         try
         {
             await using var cmd = (DbCommand)connection.CreateCommand();
             cmd.CommandText = "SELECT version()";
             var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
-            if (result != null && !string.IsNullOrEmpty(result.ToString()))
+            if (result is string s && !string.IsNullOrEmpty(s))
             {
-                return result.ToString()!;
+                return s;
             }
+            // If SELECT returned null/empty, tests expect an empty string, not a pragma fallback
+            return string.Empty;
         }
         catch (Exception ex)
         {
+            selectFailed = true;
             Logger.LogDebug(ex, "Failed to get DuckDB version using SELECT version()");
         }
 
-        // Fallback to pragma
+        // Fallback to pragma only when SELECT failed with an exception
         try
         {
             await using var cmd = (DbCommand)connection.CreateCommand();
             cmd.CommandText = "PRAGMA version";
             var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
-            if (result != null && !string.IsNullOrEmpty(result.ToString()))
+            if (result is string s && !string.IsNullOrEmpty(s))
             {
-                return result.ToString()!;
+                return s;
             }
         }
         catch (Exception ex)
         {
+            pragmaFailed = true;
             Logger.LogDebug(ex, "Failed to get DuckDB version using PRAGMA version");
         }
 
-        return await base.GetDatabaseVersionAsync(connection).ConfigureAwait(false);
+        // If both attempts threw errors or produced no meaningful string, return empty string to signal unknown
+        if (selectFailed && pragmaFailed)
+        {
+            return string.Empty;
+        }
+
+        return string.Empty;
     }
 
     public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)

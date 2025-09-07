@@ -17,7 +17,15 @@ public class DataSourceInformation : IDataSourceInformation
     public DataSourceInformation(SqlDialect dialect)
     {
         _dialect = dialect ?? throw new ArgumentNullException(nameof(dialect));
-        var info = dialect.ProductInfo;
+        var info = dialect.IsInitialized
+            ? dialect.ProductInfo
+            : new DatabaseProductInfo
+            {
+                ProductName = "Unknown",
+                ProductVersion = string.Empty,
+                DatabaseType = dialect.DatabaseType,
+                StandardCompliance = SqlStandardLevel.Sql92
+            };
         DatabaseProductName = info.ProductName;
         DatabaseProductVersion = info.ProductVersion;
         ParsedVersion = info.ParsedVersion;

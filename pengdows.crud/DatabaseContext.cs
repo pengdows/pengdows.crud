@@ -44,6 +44,9 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     private readonly DbMode _originalUserMode;
     private readonly bool? _forceManualPrepare;
     private readonly bool? _disablePrepare;
+    private bool? _rcsiPrefetch;
+    private int _initializing; // 0 = false, 1 = true
+    private bool _sessionSettingsAppliedOnOpen;
 
     public Guid RootId { get; } = Guid.NewGuid();
 
@@ -54,14 +57,14 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         string connectionString,
         string providerFactory,
         ITypeMapRegistry? typeMapRegistry = null,
-        DbMode mode = DbMode.Standard,
+        DbMode mode = DbMode.Best,
         ReadWriteMode readWriteMode = ReadWriteMode.ReadWrite,
         ILoggerFactory? loggerFactory = null)
         : this(
             new DatabaseContextConfiguration
             {
                 ProviderName = providerFactory,
-                ConnectionString = connectionString,
+                ConnectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString)),
                 ReadWriteMode = readWriteMode,
                 DbMode = mode
             },
@@ -76,7 +79,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         string connectionString,
         DbProviderFactory factory,
         ITypeMapRegistry? typeMapRegistry = null,
-        DbMode mode = DbMode.Standard,
+        DbMode mode = DbMode.Best,
         ReadWriteMode readWriteMode = ReadWriteMode.ReadWrite,
         ILoggerFactory? loggerFactory = null)
         : this(
@@ -97,7 +100,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         : this(new DatabaseContextConfiguration
             {
                 ConnectionString = connectionString,
-                DbMode = DbMode.Standard,
+                DbMode = DbMode.Best,
                 ReadWriteMode = ReadWriteMode.ReadWrite
             },
             factory,
@@ -110,7 +113,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         : this(new DatabaseContextConfiguration
             {
                 ConnectionString = connectionString,
-                DbMode = DbMode.Standard,
+                DbMode = DbMode.Best,
                 ReadWriteMode = ReadWriteMode.ReadWrite
             },
             factory,
@@ -125,8 +128,20 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         ILoggerFactory? loggerFactory = null,
         ITypeMapRegistry? typeMapRegistry = null)
     {
+        ILockerAsync? initLocker = null;
         try
         {
+            initLocker = GetLock();
+            initLocker.LockAsync().GetAwaiter().GetResult();
+            Interlocked.Exchange(ref _initializing, 1);
+            if (configuration is null)
+            {
+                throw new ArgumentNullException(nameof(configuration));
+            }
+            if (string.IsNullOrWhiteSpace(configuration.ConnectionString))
+            {
+                throw new ArgumentException("ConnectionString is required.", nameof(configuration.ConnectionString));
+            }
             _loggerFactory = loggerFactory ?? NullLoggerFactory.Instance;
             _logger = _loggerFactory.CreateLogger<IDatabaseContext>();
             TypeCoercionHelper.Logger =
@@ -135,80 +150,64 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             TypeMapRegistry = typeMapRegistry ?? global::pengdows.crud.TypeMapRegistry.Instance;
             ConnectionMode = configuration.DbMode;
             _originalUserMode = configuration.DbMode;
-            _factory = factory ?? throw new NullReferenceException(nameof(factory));
+            _factory = factory ?? throw new ArgumentNullException(nameof(factory));
             _setDefaultSearchPath = configuration.SetDefaultSearchPath;
             _forceManualPrepare = configuration.ForceManualPrepare;
             _disablePrepare = configuration.DisablePrepare;
 
-            // Pre-infer connection mode for in-memory providers only when the user did not
-            // explicitly choose a non-standard mode. Respect explicit choices.
-            try
-            {
-                if (configuration.DbMode == DbMode.Standard)
-                {
-                    var factoryName = _factory.GetType().Name.ToLowerInvariant();
-                    var connStr = configuration.ConnectionString ?? string.Empty;
-                    var connStrLower = connStr.ToLowerInvariant();
-
-                    string? dsPre = null;
-                    foreach (var key in new[] { "data source=", "datasource=" })
-                    {
-                        var idx = connStrLower.IndexOf(key, StringComparison.Ordinal);
-                        if (idx >= 0)
-                        {
-                            var start = idx + key.Length;
-                            var end = connStrLower.IndexOf(';', start);
-                            dsPre = connStrLower.Substring(start, end >= 0 ? end - start : connStrLower.Length - start).Trim();
-                            break;
-                        }
-                    }
-
-                    var isDuck = factoryName.Contains("duckdb") || connStrLower.Contains("emulatedproduct=duckdb");
-                    var isSqlite = factoryName.Contains("sqlite") || connStrLower.Contains("emulatedproduct=sqlite");
-
-                    if (isDuck || isSqlite)
-                    {
-                        ConnectionMode = dsPre == ":memory:" ? DbMode.SingleConnection : DbMode.SingleWriter;
-                    }
-                }
-            }
-            catch { /* ignore pre-infer failures */ }
-
             var initialConnection = InitializeInternals(configuration);
-            _dialect = SqlDialectFactory.CreateDialect(initialConnection!, _factory, _loggerFactory);
-            _dataSourceInfo = new DataSourceInformation(_dialect);
+            if (initialConnection != null)
+            {
+                _dialect = SqlDialectFactory.CreateDialect(initialConnection, _factory, _loggerFactory);
+                _dataSourceInfo = new DataSourceInformation(_dialect);
+            }
+            else if (PersistentConnection is not null)
+            {
+                // In persistent modes, InitializeInternals handed ownership to the context.
+                // Use the persistent connection to detect product/dialect now.
+                _dialect = SqlDialectFactory.CreateDialect(PersistentConnection, _factory, _loggerFactory);
+                _dataSourceInfo = new DataSourceInformation(_dialect);
+            }
+            else
+            {
+                // Fall back to a safe SQL-92 dialect when no connection is opened (e.g., Standard mode with failing open)
+                var logger = _loggerFactory.CreateLogger<SqlDialect>();
+                _dialect = new Sql92Dialect(_factory, logger);
+                _dialect.InitializeUnknownProductInfo();
+                _dataSourceInfo = new DataSourceInformation(_dialect);
+            }
             Name = _dataSourceInfo.DatabaseProductName;
             _procWrappingStyle = _dataSourceInfo.ProcWrappingStyle;
 
-            RCSIEnabled = _dialect.IsReadCommittedSnapshotOn(initialConnection!);
+            if (initialConnection != null)
+            {
+                RCSIEnabled = _rcsiPrefetch ?? _dialect.IsReadCommittedSnapshotOn(initialConnection);
+            }
+            else
+            {
+                RCSIEnabled = false;
+            }
 
             // Apply session settings for persistent connections now that dialect is initialized
-            if (ConnectionMode != DbMode.Standard && initialConnection != null)
+            if (ConnectionMode != DbMode.Standard)
             {
-                ApplyPersistentConnectionSessionSettings(initialConnection);
+                if (initialConnection != null)
+                {
+                    ApplyPersistentConnectionSessionSettings(initialConnection);
+                }
+                else if (PersistentConnection is not null)
+                {
+                    ApplyPersistentConnectionSessionSettings(PersistentConnection);
+                }
             }
 
             // For Standard mode, dispose the connection after dialect initialization is complete
             if (ConnectionMode == DbMode.Standard && initialConnection != null)
             {
                 initialConnection.Dispose();
-            }
-
-            switch (_dataSourceInfo.Product)
-            {
-                // Ensure DuckDB defaults are applied even when provider factory is opaque,
-                // but only if the user did not explicitly choose a non-standard mode.
-                case SupportedDatabase.DuckDB:
-                case SupportedDatabase.Sqlite:
-                    try
-                    {
-                        var csb2 = GetFactoryConnectionStringBuilder(configuration.ConnectionString ?? string.Empty);
-                        var ds2 = csb2["Data Source"] as string;
-                        ConnectionMode = ":memory:" == ds2 ? DbMode.SingleConnection : DbMode.SingleWriter;
-                    }
-                    catch { /* ignore */ }
-
-                    break;
+                // Reset counters to "fresh" state after initialization probe
+                Interlocked.Exchange(ref _connectionCount, 0);
+                Interlocked.Exchange(ref _maxNumberOfOpenConnections, 0);
             }
 
             _isolationResolver = new IsolationResolver(Product, RCSIEnabled);
@@ -220,6 +219,18 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             _logger?.LogError(e.Message);
             throw;
         }
+        finally
+        {
+            Interlocked.Exchange(ref _initializing, 0);
+            if (initLocker is IAsyncDisposable iad)
+            {
+                iad.DisposeAsync().GetAwaiter().GetResult();
+            }
+            else if (initLocker is IDisposable id)
+            {
+                id.Dispose();
+            }
+        }
     }
 
 
@@ -230,12 +241,20 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         set
         {
             _readWriteMode = value == ReadWriteMode.WriteOnly ? ReadWriteMode.ReadWrite : value;
-            _isReadConnection = (_readWriteMode & ReadWriteMode.ReadOnly) == ReadWriteMode.ReadOnly;
+            _isReadConnection = (_readWriteMode & ReadWriteMode.ReadOnly) == ReadWriteMode.ReadOnly ;
             _isWriteConnection = (_readWriteMode & ReadWriteMode.WriteOnly) == ReadWriteMode.WriteOnly;
+            if (_isWriteConnection)
+            {
+                //write connection implies read connection
+                _isWriteConnection = true;
+            }
         }
     }
 
     public string Name { get; set; }
+
+    // Expose original requested mode for internal strategy decisions
+    internal DbMode OriginalUserMode => _originalUserMode;
 
     public string ConnectionString => _connectionString;
 
@@ -443,23 +462,103 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         // Ensure session settings from the active dialect are applied on first open for all modes.
         Action<DbConnection>? firstOpenHandler = conn =>
         {
+            ILockerAsync? guard = null;
             try
             {
+                guard = GetLock();
+                guard.LockAsync().GetAwaiter().GetResult();
                 // Apply session settings for all connection modes.
                 // Prefer dialect-provided settings when available; fall back to precomputed string.
-                var settings = (_dialect != null
-                    ? _dialect.GetConnectionSessionSettings(this, readOnly)
-                    : _connectionSessionSettings) ?? string.Empty;
+                string settings;
+                if (Interlocked.CompareExchange(ref _initializing, 0, 0) == 1 && ConnectionMode == DbMode.Standard && !readOnly)
+                {
+                    // During constructor probe in Standard mode, skip applying settings.
+                    return;
+                }
+                if (_dialect != null)
+                {
+                    settings = _dialect.GetConnectionSessionSettings(this, readOnly) ?? string.Empty;
+                }
+                else
+                {
+                    // Dialect not initialized yet (constructor path). Derive lightweight settings
+                    // from the opened connection's product metadata for first application.
+                    try
+                    {
+                        var schema = conn.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
+                        var productName = schema.Rows.Count > 0 ? schema.Rows[0].Field<string>("DataSourceProductName") : null;
+                        var lower = (productName ?? string.Empty).ToLowerInvariant();
+                        if (lower.Contains("mysql") || lower.Contains("mariadb"))
+                        {
+                            settings = "SET SESSION sql_mode = 'STRICT_ALL_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,ANSI_QUOTES,NO_BACKSLASH_ESCAPES';";
+                            if (readOnly)
+                            {
+                                settings += "\nSET SESSION TRANSACTION READ ONLY;";
+                            }
+                        }
+                        else if (lower.Contains("oracle"))
+                        {
+                            settings = "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD';";
+                            if (readOnly)
+                            {
+                                settings += "\nALTER SESSION SET READ ONLY;";
+                            }
+                        }
+                        else if (lower.Contains("postgres"))
+                        {
+                            settings = "SET standard_conforming_strings = on;\nSET client_min_messages = warning;\nSET search_path = public;";
+                        }
+                        else if (lower.Contains("sqlite"))
+                        {
+                            settings = "PRAGMA foreign_keys = ON;";
+                            if (readOnly)
+                            {
+                                settings += "\nPRAGMA query_only = ON;";
+                            }
+                        }
+                        else if (lower.Contains("duckdb") || lower.Contains("duck db"))
+                        {
+                            settings = readOnly ? "PRAGMA read_only = 1;" : string.Empty;
+                        }
+                        else
+                        {
+                            settings = _connectionSessionSettings ?? string.Empty;
+                        }
+                    }
+                    catch
+                    {
+                        settings = _connectionSessionSettings ?? string.Empty;
+                    }
+                }
                 if (!string.IsNullOrWhiteSpace(settings))
                 {
-                    using var cmd = conn.CreateCommand();
-                    cmd.CommandText = settings;
-                    cmd.ExecuteNonQuery();
+                    // Execute each statement separately to ensure provider compatibility
+                    var parts = settings.Split(';');
+                    foreach (var part in parts)
+                    {
+                        var stmt = part.Trim();
+                        if (string.IsNullOrEmpty(stmt)) continue;
+                        using var cmd = conn.CreateCommand();
+                        cmd.CommandText = stmt + ';';
+                        cmd.ExecuteNonQuery();
+                    }
+                    _sessionSettingsAppliedOnOpen = true;
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to apply session settings on first open for {Name}", Name);
+            }
+            finally
+            {
+                if (guard is IAsyncDisposable gad)
+                {
+                    gad.DisposeAsync().GetAwaiter().GetResult();
+                }
+                else if (guard is IDisposable gd)
+                {
+                    gd.Dispose();
+                }
             }
 
             // Invoke any additional callback provided by caller
@@ -565,126 +664,316 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
 
     private ITrackedConnection? InitializeInternals(IDatabaseContextConfiguration config)
     {
-        var connectionString = config.ConnectionString;
+        // 1) Persist config first
+        _connectionString = config.ConnectionString ?? throw new ArgumentNullException(nameof(config.ConnectionString));
         ReadWriteMode = config.ReadWriteMode;
-        ITrackedConnection? conn = null;
+
+        ITrackedConnection? initConn = null;
         try
         {
-            // this connection will be set as our single connection for any DbMode != DbMode.Standard
-            // so we set it to shared.
-            conn = FactoryCreateConnection(connectionString, true, IsReadOnlyConnection, null);
+            // 2) Create + open
+            initConn = FactoryCreateConnection(_connectionString, true, IsReadOnlyConnection, null);
             try
             {
-                conn.Open();
+                initConn.Open();
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                throw new ConnectionFailedException(ex.Message);
-            }
-
-            _dataSourceInfo = DataSourceInformation.Create(conn, _factory, _loggerFactory);
-            _procWrappingStyle = _dataSourceInfo.ProcWrappingStyle;
-            SetupConnectionSessionSettingsForProvider(conn);
-            Name = _dataSourceInfo.DatabaseProductName;
-            // No further provider-based overrides here
-
-            // Enforce: full-blown servers must use Standard mode (no persistent single connection).
-            // Applies to: PostgreSQL (and CockroachDB), MySQL (and MariaDB), Oracle, and SQL Server (except LocalDB/CE).
-            // Firebird embedded is treated like a local engine and is exempt.
-            if (ConnectionMode != DbMode.Standard)
-            {
-                var p = Product;
-                var isSqlServer = p == SupportedDatabase.SqlServer;
-                var connStrLower = (_connectionString ?? string.Empty).ToLowerInvariant();
-                var isLocalDb = connStrLower.Contains("(localdb)") || connStrLower.Contains("localdb");
-                var factoryNameLower = _factory.GetType().FullName?.ToLowerInvariant() ?? string.Empty;
-                var isSqlCe = factoryNameLower.Contains("sqlserverce") || Name.ToLowerInvariant().Contains("compact");
-
-                // If we're using the fakeDb/emulated provider (detected via connection string hint),
-                // do NOT force Standard mode. Tests and dev scenarios rely on single-connection/single-writer semantics.
-                var isEmulated = connStrLower.Contains("emulatedproduct=");
-
-                // Firebird embedded: detect via connection string hints
-                bool isFirebirdEmbedded = false;
-                if (p == SupportedDatabase.Firebird)
+                // For Standard/Best with Unknown providers, allow constructor to proceed without an open
+                // connection so dialect falls back to SQL-92 and operations surface errors later.
+                if ((ConnectionMode == DbMode.Standard || ConnectionMode == DbMode.Best) && IsEmulatedUnknown(_connectionString))
                 {
-                    try
-                    {
-                        var csb = GetFactoryConnectionStringBuilder(_connectionString);
-                        string GetVal(string key) => csb.ContainsKey(key) ? (csb[key]?.ToString() ?? string.Empty) : string.Empty;
-
-                        var serverType = GetVal("ServerType").ToLowerInvariant();
-                        var clientLib = GetVal("ClientLibrary").ToLowerInvariant();
-                        var dataSource = GetVal("DataSource").ToLowerInvariant();
-                        var database = GetVal("Database");
-
-                        if (serverType.Contains("embedded") || clientLib.Contains("embed"))
-                        {
-                            isFirebirdEmbedded = true;
-                        }
-                        else if (string.IsNullOrWhiteSpace(dataSource))
-                        {
-                            var dbLower = database.ToLowerInvariant();
-                            if (!string.IsNullOrWhiteSpace(dbLower) && (dbLower.Contains('/') || dbLower.Contains('\\') || dbLower.EndsWith(".fdb")))
-                            {
-                                isFirebirdEmbedded = true;
-                            }
-                        }
-                    }
-                    catch { /* heuristic only */ }
+                    try { initConn.Dispose(); } catch { /* ignore */ }
+                    initConn = null;
                 }
-
-                var isFullServer = p == SupportedDatabase.PostgreSql
-                                   || p == SupportedDatabase.CockroachDb
-                                   || p == SupportedDatabase.MySql
-                                   || p == SupportedDatabase.MariaDb
-                                   || p == SupportedDatabase.Oracle
-                                   || (isSqlServer && !isLocalDb && !isSqlCe);
-
-                if (!isEmulated && (isFullServer || (p == SupportedDatabase.Firebird && !isFirebirdEmbedded)))
+                else
                 {
-                    _logger.LogWarning(
-                        "DbMode.{Mode} is not supported for {Product}; forcing Standard mode.",
-                        ConnectionMode, p);
-                    ConnectionMode = DbMode.Standard;
+                    throw new ConnectionFailedException("Failed to open database connection.");
                 }
             }
 
-            _isolationResolver ??= new IsolationResolver(Product, RCSIEnabled);
+            // 3) Detect product/capabilities once
+            var (product, isFirebirdEmbedded, isLocalDb) = DetectProductAndTopology(initConn, _connectionString);
+
+            // Optional: RCSI prefetch (SQL Server only)
+            bool rcsi = false;
+            if (product == SupportedDatabase.SqlServer)
+            {
+                try
+                {
+                    using var cmd = initConn.CreateCommand();
+                    cmd.CommandText = "SELECT CAST(is_read_committed_snapshot_on AS int) FROM sys.databases WHERE name = DB_NAME()";
+                    var v = cmd.ExecuteScalar();
+                    rcsi = v switch { bool b => b, byte by => by != 0, short s => s != 0, int i => i != 0, _ => Convert.ToInt32(v ?? 0) != 0 };
+                }
+                catch { /* ignore prefetch failures */ }
+            }
+            _rcsiPrefetch = rcsi;
+
+            if (initConn != null)
+            {
+                _dataSourceInfo = DataSourceInformation.Create(initConn, _factory, _loggerFactory);
+                _procWrappingStyle = _dataSourceInfo.ProcWrappingStyle;
+                Name = _dataSourceInfo.DatabaseProductName;
+            }
+
+            // 4) Coerce ConnectionMode based on product/topology
+            ConnectionMode = CoerceMode(ConnectionMode, product, isLocalDb, isFirebirdEmbedded);
+
+            // 5) Build strategies now that mode is final
+            _connectionStrategy = ConnectionStrategyFactory.Create(this, ConnectionMode);
+            _procWrappingStrategy = ProcWrappingStrategyFactory.Create(_procWrappingStyle);
+
+            // 6) Apply provider/session settings according to final mode
+            if (ConnectionMode is DbMode.KeepAlive or DbMode.SingleConnection or DbMode.SingleWriter)
+            {
+                ApplyPersistentConnectionSessionSettings(initConn);
+                SetPersistentConnection(initConn);
+                initConn = null; // context owns it now
+            }
+            else
+            {
+                // Standard: apply per-connection session hints that must be present during dialect init
+                SetupConnectionSessionSettingsForProvider(initConn);
+                // Do NOT SetPersistentConnection
+            }
+
+            // 7) Isolation resolver after product/RCSI known
+            _isolationResolver = new IsolationResolver(product, RCSIEnabled);
+
+            // 8) Return the open initConn only for Standard (caller disposes). For persistent modes we returned null.
+            return initConn;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to initialize DatabaseContext: {Message}", ex.Message);
+            // Ensure no leaked connection if we’re bailing
+            try { initConn?.Dispose(); } catch { /* ignore */ }
             throw;
         }
-        finally
+    }
+
+    /// <summary>Detects DB product/topology with a single parse.</summary>
+    private (SupportedDatabase product, bool isFirebirdEmbedded, bool isLocalDb) DetectProductAndTopology(ITrackedConnection conn, string connectionString)
+    {
+        var product = InferProduct(conn);
+        bool isLocalDb = false;
+        bool isFirebirdEmbedded = false;
+
+        var lower = (connectionString ?? string.Empty).ToLowerInvariant();
+        if (product == SupportedDatabase.SqlServer)
         {
-            _isolationResolver ??= new IsolationResolver(Product, RCSIEnabled);
-            _connectionStrategy = ConnectionStrategyFactory.Create(this, ConnectionMode);
-            _procWrappingStrategy = ProcWrappingStrategyFactory.Create(ProcWrappingStyle);
-
-            switch (ConnectionMode)
-            {
-                case DbMode.Standard:
-                    // Don't dispose here - let the constructor handle disposal after dialect initialization
-                    break;
-                case DbMode.KeepAlive:
-                case DbMode.SingleConnection:
-                case DbMode.SingleWriter:
-                    if (conn != null)
-                    {
-                        ApplyPersistentConnectionSessionSettings(conn);
-                    }
-
-                    SetPersistentConnection(conn);
-                    break;
-                default:
-                    // Don't dispose here - let the constructor handle disposal after dialect initialization
-                    break;
-            }
+            isLocalDb = lower.Contains("(localdb)") || lower.Contains("localdb");
         }
 
-        return conn;
+        if (product == SupportedDatabase.Firebird)
+        {
+            try
+            {
+                var csb = GetFactoryConnectionStringBuilderStatic(conn, connectionString);
+                string GetVal(string key) => csb.ContainsKey(key) ? csb[key]?.ToString() ?? string.Empty : string.Empty;
+                var serverType = GetVal("ServerType").ToLowerInvariant();
+                var clientLib = GetVal("ClientLibrary").ToLowerInvariant();
+                var dataSource = GetVal("DataSource").ToLowerInvariant();
+                var database = GetVal("Database").ToLowerInvariant();
+
+                isFirebirdEmbedded =
+                    serverType.Contains("embedded") ||
+                    clientLib.Contains("embed") ||
+                    (string.IsNullOrWhiteSpace(dataSource) &&
+                     (!string.IsNullOrWhiteSpace(database) &&
+                      (database.Contains('/') || database.Contains('\\') || database.EndsWith(".fdb"))));
+            }
+            catch { /* heuristic only */ }
+        }
+
+        return (product, isFirebirdEmbedded, isLocalDb);
+    }
+
+    private SupportedDatabase InferProduct(ITrackedConnection conn)
+    {
+        try
+        {
+            var schema = conn.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
+            if (schema.Rows.Count > 0)
+            {
+                var name = schema.Rows[0].Field<string>("DataSourceProductName") ?? string.Empty;
+                var lower = name.ToLowerInvariant();
+                if (lower.Contains("sql server")) return SupportedDatabase.SqlServer;
+                if (lower.Contains("mariadb")) return SupportedDatabase.MariaDb;
+                if (lower.Contains("mysql")) return SupportedDatabase.MySql;
+                if (lower.Contains("cockroach")) return SupportedDatabase.CockroachDb;
+                if (lower.Contains("postgres")) return SupportedDatabase.PostgreSql;
+                if (lower.Contains("oracle")) return SupportedDatabase.Oracle;
+                if (lower.Contains("sqlite")) return SupportedDatabase.Sqlite;
+                if (lower.Contains("firebird")) return SupportedDatabase.Firebird;
+                if (lower.Contains("duckdb") || lower.Contains("duck db")) return SupportedDatabase.DuckDB;
+            }
+        }
+        catch { }
+        try
+        {
+            var typeName = _factory.GetType().Name.ToLowerInvariant();
+            if (typeName.Contains("sqlserver") || typeName.Contains("system.data.sqlclient")) return SupportedDatabase.SqlServer;
+            if (typeName.Contains("npgsql")) return SupportedDatabase.PostgreSql;
+            if (typeName.Contains("mysql")) return SupportedDatabase.MySql;
+            if (typeName.Contains("sqlite")) return SupportedDatabase.Sqlite;
+            if (typeName.Contains("oracle")) return SupportedDatabase.Oracle;
+            if (typeName.Contains("firebird")) return SupportedDatabase.Firebird;
+            if (typeName.Contains("duckdb")) return SupportedDatabase.DuckDB;
+        }
+        catch { }
+        return SupportedDatabase.Unknown;
+    }
+
+    private static DbConnectionStringBuilder GetFactoryConnectionStringBuilderStatic(ITrackedConnection conn, string connectionString)
+    {
+        // Use a tolerant builder; if it fails, fall back to carrying raw string under Data Source
+        var csb = new DbConnectionStringBuilder();
+        try
+        {
+            csb.ConnectionString = connectionString;
+        }
+        catch
+        {
+            try { csb["Data Source"] = connectionString; } catch { /* ignore */ }
+        }
+        return csb;
+    }
+
+    private static string? TryGetDataSourcePath(string connectionString)
+    {
+        try
+        {
+            var csb = new DbConnectionStringBuilder { ConnectionString = connectionString };
+            if (csb.ContainsKey("Data Source"))
+            {
+                return csb["Data Source"]?.ToString();
+            }
+        }
+        catch { }
+        return connectionString;
+    }
+
+    private DbMode CoerceMode(DbMode requested, SupportedDatabase product, bool isLocalDb, bool isFirebirdEmbedded)
+    {
+        // Embedded engines: handle in-memory specially (isolated vs shared)
+        if (product is SupportedDatabase.Sqlite or SupportedDatabase.DuckDB)
+        {
+            var kind = DetectInMemoryKind(product, _connectionString);
+            if (kind == InMemoryKind.Isolated)
+            {
+                if (requested != DbMode.SingleConnection)
+                    _logger.LogWarning("DbMode override: requested {requested}, coerced to {resolved} — reason: {reason}", requested, DbMode.SingleConnection, "Isolated in-memory requires SingleConnection");
+                return DbMode.SingleConnection;
+            }
+            if (kind == InMemoryKind.Shared)
+            {
+                // Shared in-memory: upgrade Standard to SingleWriter, otherwise honor explicit choice
+                if (requested == DbMode.Standard)
+                {
+                    _logger.LogWarning("DbMode override: requested {requested}, coerced to {resolved} — reason: {reason}", requested, DbMode.SingleWriter, "Shared in-memory prefers SingleWriter");
+                    return DbMode.SingleWriter;
+                }
+                return requested;
+            }
+
+            // File-backed or none: previous behavior — prefer SingleWriter for Standard/KeepAlive;
+            if (requested is DbMode.Standard or DbMode.KeepAlive)
+            {
+                _logger.LogWarning("DbMode override: requested {requested}, coerced to {resolved} — reason: {reason}", requested, DbMode.SingleWriter, "SQLite/DuckDB file-based prefer persistent coordination");
+                return DbMode.SingleWriter;
+            }
+            if (requested is DbMode.Best)
+            {
+                return DbMode.SingleWriter;
+            }
+            return requested;
+        }
+
+        if (product == SupportedDatabase.Firebird && isFirebirdEmbedded)
+        {
+            if (requested != DbMode.SingleConnection)
+                _logger.LogWarning("DbMode override: requested {requested}, coerced to {resolved} — reason: {reason}", requested, DbMode.SingleConnection, "Firebird embedded requires SingleConnection");
+            return DbMode.SingleConnection;
+        }
+
+        // Full servers
+        bool isFull =
+            product is SupportedDatabase.PostgreSql
+            or SupportedDatabase.CockroachDb
+            or SupportedDatabase.MySql
+            or SupportedDatabase.MariaDb
+            or SupportedDatabase.Oracle
+            or SupportedDatabase.SqlServer;
+
+        if (product == SupportedDatabase.SqlServer && isLocalDb)
+        {
+            if (requested != DbMode.KeepAlive)
+                _logger.LogWarning("DbMode override: requested {requested}, coerced to {resolved} — reason: {reason}", requested, DbMode.KeepAlive, "LocalDb requires KeepAlive");
+            return DbMode.KeepAlive;
+        }
+
+        if (isFull && !(product == SupportedDatabase.SqlServer && isLocalDb))
+        {
+            // For full server engines:
+            // - Best resolves to Standard (do not auto-select SingleWriter)
+            // - Explicit SingleWriter is allowed
+            // - Standard stays Standard
+            // - Other modes are coerced to Standard
+            if (requested == DbMode.Best)
+            {
+                return DbMode.Standard;
+            }
+            if (requested == DbMode.SingleWriter)
+            {
+                return DbMode.SingleWriter;
+            }
+            if (requested == DbMode.Standard)
+            {
+                return DbMode.Standard;
+            }
+
+            _logger.LogWarning("DbMode override: requested {requested}, coerced to {resolved} — reason: {reason}", requested, DbMode.Standard, "Full servers prefer Standard unless SingleWriter explicitly requested");
+            return DbMode.Standard;
+        }
+
+        return requested;
+    }
+
+    private enum InMemoryKind { None, Isolated, Shared }
+
+    private static InMemoryKind DetectInMemoryKind(SupportedDatabase product, string? connectionString)
+    {
+        var cs = (connectionString ?? string.Empty).Trim();
+        var s = cs.ToLowerInvariant();
+        if (product == SupportedDatabase.Sqlite)
+        {
+            bool modeMem = s.Contains("mode=memory") || s.Contains("filename=:memory:") || s.Contains("data source=:memory:");
+            if (!modeMem) return InMemoryKind.None;
+            bool cacheShared = s.Contains("cache=shared");
+            bool dsIsLiteralMem = s.Contains("data source=:memory:") || s.Contains("filename=:memory:");
+            if (cacheShared && !dsIsLiteralMem) return InMemoryKind.Shared; // e.g., file:name?mode=memory&cache=shared
+            return InMemoryKind.Isolated;
+        }
+        if (product == SupportedDatabase.DuckDB)
+        {
+            if (!s.Contains("data source=:memory:")) return InMemoryKind.None;
+            return s.Contains("cache=shared") ? InMemoryKind.Shared : InMemoryKind.Isolated;
+        }
+        return InMemoryKind.None;
+    }
+
+    private bool IsMemoryDataSource()
+    {
+        var ds = TryGetDataSourcePath(_connectionString) ?? string.Empty;
+        return ds.IndexOf(":memory:", StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    private static bool IsEmulatedUnknown(string? connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString)) return false;
+        return connectionString.IndexOf("emulatedproduct=unknown", StringComparison.OrdinalIgnoreCase) >= 0;
     }
 
     private DbConnectionStringBuilder GetFactoryConnectionStringBuilder(string connectionString)
@@ -804,6 +1093,12 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             return;
         }
 
+        // If session settings were already applied on first open, avoid double application
+        if (_sessionSettingsAppliedOnOpen)
+        {
+            return;
+        }
+
         _logger.LogInformation("Applying persistent connection session settings");
 
         // For persistent connections in SingleConnection/SingleWriter mode,
@@ -814,9 +1109,15 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         {
             try
             {
-                using var cmd = connection.CreateCommand();
-                cmd.CommandText = sessionSettings;
-                cmd.ExecuteNonQuery();
+                var parts = sessionSettings.Split(';');
+                foreach (var part in parts)
+                {
+                    var stmt = part.Trim();
+                    if (string.IsNullOrEmpty(stmt)) continue;
+                    using var cmd = connection.CreateCommand();
+                    cmd.CommandText = stmt + ';';
+                    cmd.ExecuteNonQuery();
+                }
             }
             catch (Exception ex)
             {
@@ -841,9 +1142,20 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     {
         if (ExecutionType.Read == type)
         {
-            // For transaction-scoped reads (shared=true), reuse the persistent connection
-            // to avoid opening an extra ephemeral connection under SingleWriter mode.
-            // For ad-hoc reads (shared=false), use a standard ephemeral connection configured as read-only.
+            // Embedded in-memory providers: distinguish isolated vs shared memory
+            if (Product == SupportedDatabase.Sqlite || Product == SupportedDatabase.DuckDB)
+            {
+                var memKind = DetectInMemoryKind(Product, _connectionString);
+                if (memKind == InMemoryKind.Isolated)
+                {
+                    // Isolated memory: reuse pinned connection for all reads
+                    return GetSingleConnection();
+                }
+                // Shared memory: ephemeral read-only connections using the same CS
+                return isShared ? GetSingleConnection() : GetStandardConnection(isShared, true);
+            }
+
+            // Non-embedded: ephemeral read connection (unless shared within a transaction)
             return isShared ? GetSingleConnection() : GetStandardConnection(isShared, true);
         }
 

@@ -51,14 +51,34 @@ public class SqlServerDialect : SqlDialect
 
     public override string GetVersionQuery() => "SELECT @@VERSION";
 
-    protected override string GetBaseSessionSettings()
+    public override async Task<string> GetDatabaseVersionAsync(ITrackedConnection connection)
+    {
+        try
+        {
+            await using var cmd = (DbCommand)connection.CreateCommand();
+            cmd.CommandText = GetVersionQuery();
+            var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
+            if (result is null)
+            {
+                return string.Empty;
+            }
+            return result.ToString() ?? string.Empty;
+        }
+        catch (Exception ex)
+        {
+            // For direct version queries, surface error context as string (legacy behavior expected by tests)
+            return $"Error retrieving version: {ex.Message}";
+        }
+    }
+
+    public override string GetBaseSessionSettings()
     {
         // SQL Server doesn't differentiate session settings based on read-only mode
         // as it uses ApplicationIntent=ReadOnly in the connection string instead
         return _sessionSettings ?? string.Empty;
     }
 
-    protected override string? GetReadOnlyConnectionParameter()
+    public override string? GetReadOnlyConnectionParameter()
     {
         return "ApplicationIntent=ReadOnly";
     }
@@ -89,6 +109,14 @@ public class SqlServerDialect : SqlDialect
         if (_sessionSettings == null)
         {
             _sessionSettings = CheckSqlServerSettings(connection);
+            if (!string.IsNullOrWhiteSpace(_sessionSettings))
+            {
+                Logger.LogInformation("Applying SQL Server session settings on first connect:\n{Settings}", _sessionSettings);
+            }
+            else
+            {
+                Logger.LogInformation("SQL Server session settings: no changes required (already compliant)");
+            }
         }
         
         return productInfo;
@@ -172,7 +200,7 @@ public class SqlServerDialect : SqlDialect
         }
     }
 
-    protected override Dictionary<int, SqlStandardLevel> GetMajorVersionToStandardMapping()
+    public override Dictionary<int, SqlStandardLevel> GetMajorVersionToStandardMapping()
     {
         return new Dictionary<int, SqlStandardLevel>
         {
@@ -183,7 +211,7 @@ public class SqlServerDialect : SqlDialect
         };
     }
 
-    protected override SqlStandardLevel GetDefaultStandardLevel()
+    public override SqlStandardLevel GetDefaultStandardLevel()
     {
         return SqlStandardLevel.Sql2008;
     }

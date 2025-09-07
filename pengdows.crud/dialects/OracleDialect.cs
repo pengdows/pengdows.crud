@@ -18,6 +18,10 @@ public class OracleDialect : SqlDialect
     public override SupportedDatabase DatabaseType => SupportedDatabase.Oracle;
     public override string ParameterMarker => ":";
     public override bool SupportsNamedParameters => true;
+    // Oracle bind variable limit: we follow 64,000 as a practical upper bound
+    // for modern Oracle (12c+) engines and ODP.NET providers. This aligns with
+    // widely observed limits in production and avoids overly conservative caps.
+    // Do not change without verifying against official Oracle docs/provider behavior.
     public override int MaxParameterLimit => 64000;
     public override int MaxOutputParameters => 1024;
     public override int ParameterNameMaxLength => 30;
@@ -33,6 +37,7 @@ public class OracleDialect : SqlDialect
 
     public override bool SupportsMerge => true;
     public override bool SupportsJsonTypes => IsInitialized && ProductInfo.ParsedVersion?.Major >= 12;
+    public override bool SupportsIdentityColumns => true;
 
     public override string GetVersionQuery() => "SELECT * FROM v$version WHERE banner LIKE 'Oracle%'";
 
@@ -82,7 +87,7 @@ public class OracleDialect : SqlDialect
         }
     }
 
-    protected override SqlStandardLevel DetermineStandardCompliance(Version? version)
+    public override SqlStandardLevel DetermineStandardCompliance(Version? version)
     {
         if (version == null)
         {
@@ -98,5 +103,18 @@ public class OracleDialect : SqlDialect
             >= 11 => SqlStandardLevel.Sql2003,
             _ => SqlStandardLevel.Sql99
         };
+    }
+
+    public override void TryEnterReadOnlyTransaction(ITransactionContext transaction)
+    {
+        try
+        {
+            using var sc = transaction.CreateSqlContainer("ALTER SESSION SET READ ONLY;");
+            sc.ExecuteNonQueryAsync().GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "Failed to apply Oracle read-only session settings");
+        }
     }
 }

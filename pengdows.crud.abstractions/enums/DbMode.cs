@@ -4,6 +4,7 @@ namespace pengdows.crud.enums;
 /// Specifies how connections should be managed within the DatabaseContext.
 /// Only `Standard` is recommended for production. Other modes are for dev, test, or special use cases.
 /// </summary>
+[Flags]
 public enum DbMode
 {
     /// <summary>
@@ -34,5 +35,10 @@ public enum DbMode
     /// Not suitable for production systems or multithreaded apps. Sqlite and DuckDB
     /// MUST use this for in-memory mode, and thus are hardcoded to it in that case.
     /// </summary>
-    SingleConnection = 4
+    SingleConnection = 4,
+
+    /// <summary>
+    /// Automatic detection of the best mode based on the database type and connection string.
+    /// </summary>
+    Best = 15
 }

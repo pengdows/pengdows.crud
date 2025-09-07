@@ -81,24 +81,15 @@ public partial class EntityHelper<TEntity, TRowID> :
 
 
 
+    // Unified constructor accepting optional audit resolver and optional logger (by name)
     public EntityHelper(IDatabaseContext databaseContext,
-        EnumParseFailureMode enumParseBehavior = EnumParseFailureMode.Throw
-    )
-    {
-        _auditValueResolver = null;
-        Initialize(databaseContext, enumParseBehavior);
-        // Per-instance lazy holds neutral templates used to derive dialect-specific variants
-        _cachedSqlTemplates = new Lazy<CachedSqlTemplates>(BuildCachedSqlTemplatesNeutral);
-    }
-
-    public EntityHelper(IDatabaseContext databaseContext,
-        IAuditValueResolver auditValueResolver,
-        EnumParseFailureMode enumParseBehavior = EnumParseFailureMode.Throw
-    )
+        IAuditValueResolver? auditValueResolver = null,
+        EnumParseFailureMode enumParseBehavior = EnumParseFailureMode.Throw,
+        ILogger? logger = null)
     {
         _auditValueResolver = auditValueResolver;
+        if (logger != null) Logger = logger;
         Initialize(databaseContext, enumParseBehavior);
-        // Per-instance lazy holds neutral templates used to derive dialect-specific variants
         _cachedSqlTemplates = new Lazy<CachedSqlTemplates>(BuildCachedSqlTemplatesNeutral);
     }
 
@@ -211,9 +202,15 @@ public partial class EntityHelper<TEntity, TRowID> :
     }
 
     
+    public Task<bool> CreateAsync(TEntity entity)
+    {
+        return CreateAsync(entity, _context);
+    }
 
     public async Task<bool> CreateAsync(TEntity entity, IDatabaseContext context)
     {
+        if (entity == null) throw new ArgumentNullException(nameof(entity));
+        if (context == null) throw new ArgumentNullException(nameof(context));
         var ctx = context ?? _context;
         var dialect = GetDialect(ctx);
         
@@ -225,11 +222,32 @@ public partial class EntityHelper<TEntity, TRowID> :
             
             if (generatedId != null && generatedId != DBNull.Value)
             {
-                var converted = Convert.ChangeType(generatedId, _idColumn.PropertyInfo.PropertyType, CultureInfo.InvariantCulture);
-                _idColumn.PropertyInfo.SetValue(entity, converted);
-                return true;
+                var targetType = _idColumn.PropertyInfo.PropertyType;
+                if (targetType == typeof(Guid))
+                {
+                    if (generatedId is Guid g)
+                    {
+                        _idColumn.PropertyInfo.SetValue(entity, g);
+                    }
+                    else if (Guid.TryParse(generatedId.ToString(), out var parsed))
+                    {
+                        _idColumn.PropertyInfo.SetValue(entity, parsed);
+                    }
+                }
+                else
+                {
+                    var converted = Convert.ChangeType(generatedId, targetType, CultureInfo.InvariantCulture);
+                    _idColumn.PropertyInfo.SetValue(entity, converted);
+                }
             }
-            return false;
+            else
+            {
+                // Fallback: some providers/tests return null from INSERT ... RETURNING under fakeDb
+                // Attempt to populate via provider-specific last-insert-id query
+                await PopulateGeneratedIdAsync(entity, ctx).ConfigureAwait(false);
+            }
+            // Insert succeeded if we reached here; ID may be null, which is acceptable
+            return true;
         }
         else
         {
@@ -243,6 +261,39 @@ public partial class EntityHelper<TEntity, TRowID> :
                 await PopulateGeneratedIdAsync(entity, ctx);
             }
 
+            return rowsAffected == 1;
+        }
+    }
+
+    public async Task<bool> CreateAsync(TEntity entity, IDatabaseContext context, CancellationToken cancellationToken)
+    {
+        if (entity == null) throw new ArgumentNullException(nameof(entity));
+        if (context == null) throw new ArgumentNullException(nameof(context));
+        var ctx = context ?? _context;
+        var dialect = GetDialect(ctx);
+
+        if (_idColumn != null && !_idColumn.IsIdIsWritable && dialect.SupportsInsertReturning)
+        {
+            var sc = BuildCreateWithReturning(entity, true, ctx);
+            var generatedId = await sc.ExecuteScalarAsync<object>(CommandType.Text, cancellationToken).ConfigureAwait(false);
+            if (generatedId != null && generatedId != DBNull.Value)
+            {
+                var converted = Convert.ChangeType(generatedId, _idColumn.PropertyInfo.PropertyType, CultureInfo.InvariantCulture);
+                _idColumn.PropertyInfo.SetValue(entity, converted);
+                return true;
+            }
+            // Fallback path: try last-insert-id
+            await PopulateGeneratedIdAsync(entity, ctx).ConfigureAwait(false);
+            return true;
+        }
+        else
+        {
+            var sc = BuildCreate(entity, ctx);
+            var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+            if (rowsAffected == 1 && _idColumn != null && !_idColumn.IsIdIsWritable)
+            {
+                await PopulateGeneratedIdAsync(entity, ctx).ConfigureAwait(false);
+            }
             return rowsAffected == 1;
         }
     }
@@ -268,19 +319,38 @@ public partial class EntityHelper<TEntity, TRowID> :
         var sc = ctx.CreateSqlContainer(lastIdQuery);
         var generatedId = await sc.ExecuteScalarAsync<object>();
 
-        if (generatedId != null && generatedId != DBNull.Value)
-        {
-            try
+            if (generatedId != null && generatedId != DBNull.Value)
             {
-                // Convert the ID to the appropriate type and set it on the entity
-                var convertedId = Convert.ChangeType(generatedId, _idColumn.PropertyInfo.PropertyType);
-                _idColumn.PropertyInfo.SetValue(entity, convertedId);
+                try
+                {
+                    var targetType = _idColumn.PropertyInfo.PropertyType;
+                    if (targetType == typeof(Guid))
+                    {
+                        if (generatedId is Guid g)
+                        {
+                            _idColumn.PropertyInfo.SetValue(entity, g);
+                        }
+                        else if (Guid.TryParse(generatedId.ToString(), out var parsed))
+                        {
+                            _idColumn.PropertyInfo.SetValue(entity, parsed);
+                        }
+                        else
+                        {
+                            throw new InvalidCastException("Unable to convert generated ID to Guid.");
+                        }
+                    }
+                    else
+                    {
+                        // Convert the ID to the appropriate type and set it on the entity
+                        var convertedId = Convert.ChangeType(generatedId, targetType, CultureInfo.InvariantCulture);
+                        _idColumn.PropertyInfo.SetValue(entity, convertedId);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    throw new InvalidOperationException($"Failed to convert generated ID '{generatedId}' to type {_idColumn.PropertyInfo.PropertyType.Name}: {ex.Message}", ex);
+                }
             }
-            catch (Exception ex)
-            {
-                throw new InvalidOperationException($"Failed to convert generated ID '{generatedId}' to type {_idColumn.PropertyInfo.PropertyType.Name}: {ex.Message}", ex);
-            }
-        }
     }
 
 
@@ -365,40 +435,7 @@ public partial class EntityHelper<TEntity, TRowID> :
         return sc;
     }
 
-    public ISqlContainer BuildBaseRetrieve(string alias, IDatabaseContext? context = null)
-    {
-        var ctx = context ?? _context;
-        var dialect = GetDialect(ctx);
-
-        var sc = ctx.CreateSqlContainer();
-        var baseKey = $"BaseRetrieve:{alias}";
-        var cacheKey = baseKey; // store neutral; derive dialect at retrieval
-        var neutral = GetCachedQuery(cacheKey, () =>
-        {
-            var hasAlias = !string.IsNullOrWhiteSpace(alias);
-            var selectList = _tableInfo.OrderedColumns
-                .Select(col => (hasAlias
-                    ? WrapNeutral(alias) + NeutralSeparator
-                    : string.Empty) + WrapNeutral(col.Name));
-            var sb = new StringBuilder();
-            sb.Append("SELECT ")
-                .Append(string.Join(", ", selectList))
-                .Append("\nFROM ")
-                .Append(string.IsNullOrWhiteSpace(_tableInfo.Schema)
-                    ? WrapNeutral(_tableInfo.Name)
-                    : WrapNeutral(_tableInfo.Schema) + NeutralSeparator + WrapNeutral(_tableInfo.Name));
-            if (hasAlias)
-            {
-                sb.Append(' ').Append(WrapNeutral(alias));
-            }
-
-            return sb.ToString();
-        });
-
-        var sql = ReplaceNeutralTokens(neutral, dialect);
-        sc.Query.Append(sql);
-        return sc;
-    }
+    // moved to EntityHelper.Retrieve.cs
 
     public ISqlContainer BuildDelete(TRowID id, IDatabaseContext? context = null)
     {
@@ -541,127 +578,21 @@ public partial class EntityHelper<TEntity, TRowID> :
         return list;
     }
 
-    public ISqlContainer BuildRetrieve(IReadOnlyCollection<TRowID>? listOfIds,
-        string alias, IDatabaseContext? context = null)
-    {
-        var ctx = context ?? _context;
-        if (_idColumn == null)
-        {
-            throw new InvalidOperationException(
-                "Single-ID operations require a designated Id column; use composite-key helpers.");
-        }
-        var sc = BuildBaseRetrieve(alias, ctx);
-        var wrappedAlias = "";
-        if (!string.IsNullOrWhiteSpace(alias))
-        {
-            wrappedAlias = sc.WrapObjectName(alias) + sc.CompositeIdentifierSeparator;
-        }
+    // moved to EntityHelper.Retrieve.cs
 
-        var wrappedColumnName = wrappedAlias + sc.WrapObjectName(_idColumn.Name);
+    // moved to EntityHelper.Retrieve.cs
 
-        if (listOfIds == null || listOfIds.Count == 0)
-        {
-            throw new ArgumentException("IDs cannot be null or empty.", nameof(listOfIds));
-        }
+    // moved to EntityHelper.Retrieve.cs
 
-        if (listOfIds.Any(id => Utils.IsNullOrDbNull(id)))
-        {
-            throw new ArgumentException("IDs cannot be null", nameof(listOfIds));
-        }
+    // moved to EntityHelper.Retrieve.cs
 
-        BuildWhere(
-            wrappedColumnName,
-            listOfIds,
-            sc
-        );
+    // moved to EntityHelper.Retrieve.cs
 
-        return sc;
-    }
+    // moved to EntityHelper.Retrieve.cs
 
-    public ISqlContainer BuildRetrieve(IReadOnlyCollection<TEntity>? listOfObjects,
-        string alias, IDatabaseContext? context = null)
-    {
-        var ctx = context ?? _context;
-        var dialect = GetDialect(ctx);
-        var sc = BuildBaseRetrieve(alias, ctx);
-        BuildWhereByPrimaryKey(
-            listOfObjects,
-            sc,
-            alias,
-            dialect);
+    // moved to EntityHelper.Retrieve.cs
 
-        return sc;
-    }
-
-    public ISqlContainer BuildRetrieve(IReadOnlyCollection<TRowID>? listOfIds, IDatabaseContext? context = null)
-    {
-        return BuildRetrieve(listOfIds, "", context);
-    }
-
-    public ISqlContainer BuildRetrieve(IReadOnlyCollection<TEntity>? listOfObjects,
-        IDatabaseContext? context = null)
-    {
-        return BuildRetrieve(listOfObjects, string.Empty, context);
-    }
-
-    public void BuildWhereByPrimaryKey(IReadOnlyCollection<TEntity>? listOfObjects, ISqlContainer sc, string alias = "")
-    {
-        var dialectProvider = sc as ISqlDialectProvider;
-        var dialect = dialectProvider?.Dialect ?? _dialect;
-        BuildWhereByPrimaryKey(listOfObjects, sc, alias, dialect);
-    }
-
-    public void BuildWhereByPrimaryKey(IReadOnlyCollection<TEntity>? listOfObjects, ISqlContainer sc, string alias, ISqlDialect dialect)
-    {
-        ValidateWhereInputs(listOfObjects, sc);
-
-        var keys = GetPrimaryKeys();
-        CheckParameterLimit(sc, listOfObjects!.Count * keys.Count);
-
-        var parameters = new List<DbParameter>();
-        var wrappedAlias = BuildAliasPrefix(alias);
-        var sb = new StringBuilder();
-        var counters = new ClauseCounters();
-        var index = 0;
-
-        foreach (var entity in listOfObjects!)
-        {
-            if (index++ > 0)
-            {
-                sb.Append(" OR ");
-            }
-
-            sb.Append(BuildPrimaryKeyClause(entity, keys, wrappedAlias, parameters, dialect, counters));
-        }
-
-        if (sb.Length == 0)
-        {
-            return;
-        }
-
-        sc.AddParameters(parameters);
-        AppendWherePrefix(sc);
-        sc.Query.Append(sb);
-    }
-
-    private void ValidateWhereInputs(IReadOnlyCollection<TEntity>? listOfObjects, ISqlContainer _)
-    {
-        if (listOfObjects == null || listOfObjects.Count == 0)
-        {
-            throw new ArgumentException("List of objects cannot be null or empty.", nameof(listOfObjects));
-        }
-    }
-
-    private IReadOnlyList<IColumnInfo> GetPrimaryKeys()
-    {
-        var keys = _tableInfo.PrimaryKeys;
-        if (keys.Count < 1)
-        {
-            throw new Exception($"No primary keys found for type {typeof(TEntity).Name}");
-        }
-
-        return keys;
-    }
+    // moved to EntityHelper.Retrieve.cs
 
     private IReadOnlyList<IColumnInfo> GetCachedInsertableColumns()
     {
@@ -701,128 +632,16 @@ public partial class EntityHelper<TEntity, TRowID> :
         }
     }
 
-    private static string BuildAliasPrefix(string alias) =>
-        string.IsNullOrWhiteSpace(alias) ? string.Empty : alias + ".";
+    // moved to EntityHelper.Retrieve.cs
 
-    private string BuildPrimaryKeyClause(TEntity entity, IReadOnlyList<IColumnInfo> keys, string alias,
-        List<DbParameter> parameters, ISqlDialect dialect, ClauseCounters counters)
-    {
-        var clause = new StringBuilder("(");
-        for (var i = 0; i < keys.Count; i++)
-        {
-            if (i > 0)
-            {
-                clause.Append(" AND ");
-            }
+    // moved to EntityHelper.Retrieve.cs
 
-            var pk = keys[i];
-            var value = pk.MakeParameterValueFromField(entity);
-            var name = counters.NextKey();
-            var parameter = dialect.CreateDbParameter(name, pk.DbType, value);
-
-            clause.Append(alias);
-            clause.Append(dialect.WrapObjectName(pk.Name));
-
-            if (Utils.IsNullOrDbNull(value))
-            {
-                clause.Append(" IS NULL");
-            }
-            else
-            {
-                clause.Append(" = ");
-                clause.Append(dialect.MakeParameterName(parameter));
-                parameters.Add(parameter);
-            }
-        }
-
-        clause.Append(')');
-        return clause.ToString();
-    }
-
-    private void AppendWherePrefix(ISqlContainer sc)
-    {
-        if (!sc.HasWhereAppended)
-        {
-            sc.Query.Append("\n WHERE ");
-            sc.HasWhereAppended = true;
-        }
-        else
-        {
-            sc.Query.Append("\n AND ");
-        }
-    }
+    // moved to EntityHelper.Retrieve.cs
 
 
-    public Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null)
-    {
-        var ctx = context ?? _context;
-        return BuildUpdateAsync(objectToUpdate, _versionColumn != null, ctx);
-    }
+    // moved to EntityHelper.Update.cs
 
-    public async Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, bool loadOriginal,
-        IDatabaseContext? context = null)
-    {
-        if (objectToUpdate == null)
-        {
-            throw new ArgumentNullException(nameof(objectToUpdate));
-        }
-
-        var ctx = context ?? _context;
-        if (_idColumn == null)
-        {
-            throw new NotSupportedException(
-                "Single-ID operations require a designated Id column; use composite-key helpers.");
-        }
-        var sc = ctx.CreateSqlContainer();
-        var dialect = GetDialect(ctx);
-
-        var original = loadOriginal ? await LoadOriginalAsync(objectToUpdate, ctx) : null;
-        if (loadOriginal && original == null)
-        {
-            throw new InvalidOperationException("Original record not found for update.");
-        }
-
-        var template = GetTemplatesForDialect(dialect);
-
-        // Always attempt to set audit fields if they exist - validation will happen inside SetAuditFields
-        if (_hasAuditColumns)
-        {
-            SetAuditFields(objectToUpdate, true);
-        }
-
-        var counters = new ClauseCounters();
-        var (setClause, parameters) = BuildSetClause(objectToUpdate, original, dialect, counters);
-        if (setClause.Length == 0)
-        {
-            throw new InvalidOperationException("No changes detected for update.");
-        }
-
-        if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
-        {
-            IncrementVersion(setClause, dialect);
-        }
-
-        var idName = counters.NextKey();
-        var pId = dialect.CreateDbParameter(idName, _idColumn.DbType,
-            _idColumn.PropertyInfo.GetValue(objectToUpdate)!);
-        parameters.Add(pId);
-
-        var sql = string.Format(template.UpdateSql, setClause, dialect.MakeParameterName(pId));
-        sc.Query.Append(sql);
-
-        if (_versionColumn != null)
-        {
-            var versionValue = _versionColumn.MakeParameterValueFromField(objectToUpdate);
-            var versionParam = AppendVersionCondition(sc, versionValue, dialect, counters);
-            if (versionParam != null)
-            {
-                parameters.Add(versionParam);
-            }
-        }
-
-        sc.AddParameters(parameters);
-        return sc;
-    }
+    // moved to EntityHelper.Update.cs
 
     public Task<int> UpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null)
     {
@@ -844,57 +663,16 @@ public partial class EntityHelper<TEntity, TRowID> :
         }
     }
 
-    public async Task<int> UpsertAsync(TEntity entity, IDatabaseContext? context = null)
-    {
-        if (entity == null)
-        {
-            throw new ArgumentNullException(nameof(entity));
-        }
+    // moved to EntityHelper.Upsert.cs
 
-        var ctx = context ?? _context;
-        var sc = BuildUpsert(entity, ctx);
-        return await sc.ExecuteNonQueryAsync();
-    }
+    // moved to EntityHelper.Upsert.cs
 
-    public ISqlContainer BuildUpsert(TEntity entity, IDatabaseContext? context = null)
-    {
-        if (entity == null)
-        {
-            throw new ArgumentNullException(nameof(entity));
-        }
+    // moved to EntityHelper.Upsert.cs
 
-        var ctx = context ?? _context;
-        if (_idColumn == null && _tableInfo.PrimaryKeys.Count == 0)
-        {
-            throw new NotSupportedException("Upsert requires an Id or a composite primary key.");
-        }
+    // moved to EntityHelper.Upsert.cs
 
-        // Explicitly reject unknown/fallback dialects to avoid silently generating unsupported SQL
-        if (ctx.DataSourceInfo.IsUsingFallbackDialect)
-        {
-            throw new NotSupportedException($"Upsert not supported for {ctx.Product}");
-        }
-
-        // Use dialect capabilities instead of hard-coded database switching
-        if (ctx.DataSourceInfo.SupportsMerge)
-        {
-            return BuildUpsertMerge(entity, ctx);
-        }
-
-        if (ctx.DataSourceInfo.SupportsInsertOnConflict)
-        {
-            return BuildUpsertOnConflict(entity, ctx);
-        }
-
-        if (ctx.DataSourceInfo.SupportsOnDuplicateKey)
-        {
-            return BuildUpsertOnDuplicate(entity, ctx);
-        }
-
-        throw new NotSupportedException($"Upsert not supported for {ctx.Product}");
-    }
-
-    private IReadOnlyList<IColumnInfo> ResolveUpsertKey()
+// moved to EntityHelper.Upsert.cs
+private IReadOnlyList<IColumnInfo> ResolveUpsertKey_MOVED()
     {
         if (_idColumn != null && _idColumn.IsIdIsWritable)
         {
@@ -960,572 +738,35 @@ public partial class EntityHelper<TEntity, TRowID> :
     }
 
 
-    private async Task<TEntity?> LoadOriginalAsync(TEntity objectToUpdate, IDatabaseContext? context = null)
-    {
-        var ctx = context ?? _context;
-        var idValue = _idColumn!.PropertyInfo.GetValue(objectToUpdate);
-        if (IsDefaultId(idValue))
-        {
-            return null;
-        }
+ 
 
-        // Convert the object Id value to TRowID to avoid invalid boxing casts (e.g., int -> long)
-        var targetType = typeof(TRowID);
-        var underlying = Nullable.GetUnderlyingType(targetType) ?? targetType;
+    // moved to EntityHelper.Update.cs
 
-        try
-        {
-            var converted = Convert.ChangeType(idValue!, underlying, CultureInfo.InvariantCulture);
-            if (converted == null)
-            {
-                return null;
-            }
+    // moved to EntityHelper.Update.cs
 
-            return await RetrieveOneAsync((TRowID)converted, ctx);
-        }
-        catch (InvalidCastException ex)
-        {
-            throw new InvalidOperationException($"Cannot convert ID value '{idValue}' of type {idValue!.GetType().Name} to {targetType.Name}: {ex.Message}", ex);
-        }
-        catch (DbException)
-        {
-            // Treat provider-level errors during original load as "not found"
-            return null;
-        }
-    }
+    // moved to EntityHelper.Update.cs
 
-    private (StringBuilder clause, List<DbParameter> parameters) BuildSetClause(TEntity updated, TEntity? original, ISqlDialect dialect, ClauseCounters counters)
-    {
-        var clause = new StringBuilder();
-        var parameters = new List<DbParameter>();
-        var template = GetTemplatesForDialect(dialect);
+    // moved to EntityHelper.Update.cs
 
-        for (var i = 0; i < template.UpdateColumns.Count; i++)
-        {
-            var column = template.UpdateColumns[i];
-            var newValue = column.MakeParameterValueFromField(updated);
-            var originalValue = original != null ? column.MakeParameterValueFromField(original) : null;
+    // moved to EntityHelper.Upsert.cs
 
-            if (original != null && ValuesAreEqual(newValue, originalValue, column.DbType))
-            {
-                continue;
-            }
+ 
 
-            if (clause.Length > 0)
-            {
-                clause.Append(", ");
-            }
+ 
 
-            if (Utils.IsNullOrDbNull(newValue))
-            {
-                clause.Append($"{dialect.WrapObjectName(column.Name)} = NULL");
-            }
-            else
-            {
-                var name = counters.NextSet();
-                var param = dialect.CreateDbParameter(name, column.DbType, newValue);
-                parameters.Add(param);
-                clause.Append($"{dialect.WrapObjectName(column.Name)} = {dialect.MakeParameterName(param)}");
-            }
-        }
+ 
 
-        return (clause, parameters);
-    }
 
-    private static bool ValuesAreEqual(object? newValue, object? originalValue, DbType dbType)
-    {
-        if (newValue == null && originalValue == null)
-        {
-            return true;
-        }
 
-        if (newValue == null || originalValue == null)
-        {
-            return false;
-        }
 
-        if (newValue is byte[] a && originalValue is byte[] b)
-        {
-            return a.SequenceEqual(b);
-        }
-
-        switch (dbType)
-        {
-            case DbType.Decimal:
-            case DbType.Currency:
-            case DbType.VarNumeric:
-                return decimal.Compare(Convert.ToDecimal(newValue), Convert.ToDecimal(originalValue)) == 0;
-            case DbType.DateTime:
-            case DbType.DateTime2:
-            case DbType.DateTimeOffset:
-                return DateTime.Compare(Convert.ToDateTime(newValue).ToUniversalTime(),
-                    Convert.ToDateTime(originalValue).ToUniversalTime()) == 0;
-            default:
-                return Equals(newValue, originalValue);
-        }
-    }
-
-    private void IncrementVersion(StringBuilder setClause, ISqlDialect dialect)
-    {
-        setClause.Append($", {dialect.WrapObjectName(_versionColumn!.Name)} = {dialect.WrapObjectName(_versionColumn.Name)} + 1");
-    }
-
-    private DbParameter? AppendVersionCondition(ISqlContainer sc, object? versionValue, ISqlDialect dialect, ClauseCounters counters)
-    {
-        if (versionValue == null)
-        {
-            sc.Query.Append(" AND ").Append(sc.WrapObjectName(_versionColumn!.Name)).Append(" IS NULL");
-            return null;
-        }
-
-        var name = counters.NextVer();
-        var pVersion = dialect.CreateDbParameter(name, _versionColumn!.DbType, versionValue);
-        sc.Query.Append(" AND ").Append(sc.WrapObjectName(_versionColumn.Name))
-            .Append($" = {dialect.MakeParameterName(pVersion)}");
-        return pVersion;
-    }
-
-    private void PrepareForInsertOrUpsert(TEntity e)
-    {
-        if (_auditValueResolver != null)
-        {
-            SetAuditFields(e, updateOnly: false);
-        }
-        if (_versionColumn == null || _versionColumn.PropertyInfo.PropertyType == typeof(byte[]))
-        {
-            return;
-        }
-
-        var v = _versionColumn.PropertyInfo.GetValue(e);
-        if (v == null || Utils.IsZeroNumeric(v))
-        {
-            var t = Nullable.GetUnderlyingType(_versionColumn.PropertyInfo.PropertyType) ??
-                    _versionColumn.PropertyInfo.PropertyType;
-            _versionColumn.PropertyInfo.SetValue(e, Convert.ChangeType(1, t));
-        }
-    }
-
-    private ISqlContainer BuildUpsertOnConflict(TEntity entity, IDatabaseContext context)
-    {
-        var ctx = context ?? _context;
-        var dialect = GetDialect(ctx);
-        PrepareForInsertOrUpsert(entity);
-
-        var columns = new List<string>();
-        var values = new List<string>();
-        var parameters = new List<DbParameter>();
-        var counters = new ClauseCounters();
-
-        foreach (var column in GetCachedInsertableColumns())
-        {
-            var value = column.MakeParameterValueFromField(entity);
-
-            if (_auditValueResolver == null && (column.IsCreatedBy || column.IsLastUpdatedBy) && Utils.IsNullOrDbNull(value))
-            {
-                continue;
-            }
-
-            columns.Add(dialect.WrapObjectName(column.Name));
-            if (Utils.IsNullOrDbNull(value))
-            {
-                values.Add("NULL");
-            }
-            else
-            {
-                var name = counters.NextIns();
-                var p = dialect.CreateDbParameter(name, column.DbType, value);
-                parameters.Add(p);
-                values.Add(dialect.MakeParameterName(p));
-            }
-        }
-
-        var updateSet = new StringBuilder();
-        foreach (var column in GetCachedUpdatableColumns())
-        {
-            if (_auditValueResolver == null && column.IsLastUpdatedBy)
-            {
-                // Without a resolver we preserve existing LastUpdatedBy on conflict updates.
-                continue;
-            }
-
-            if (updateSet.Length > 0)
-            {
-                updateSet.Append(", ");
-            }
-
-            updateSet.Append($"{dialect.WrapObjectName(column.Name)} = {dialect.UpsertIncomingColumn(column.Name)}");
-        }
-
-        if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
-        {
-            updateSet.Append($", {dialect.WrapObjectName(_versionColumn.Name)} = {dialect.WrapObjectName(_versionColumn.Name)} + 1");
-        }
-
-        var keys = _tableInfo.PrimaryKeys;
-        if (_idColumn == null && keys.Count == 0)
-        {
-            throw new NotSupportedException("Upsert requires an Id or a composite primary key.");
-        }
-
-        var conflictCols = (keys.Count > 0 ? keys : new List<IColumnInfo> { _idColumn! })
-            .Select(k => dialect.WrapObjectName(k.Name));
-
-        var sc = ctx.CreateSqlContainer();
-        sc.Query.Append("INSERT INTO ")
-            .Append(BuildWrappedTableName(dialect))
-            .Append(" (")
-            .Append(string.Join(", ", columns))
-            .Append(") VALUES (")
-            .Append(string.Join(", ", values))
-            .Append(") ON CONFLICT (")
-            .Append(string.Join(", ", conflictCols))
-            .Append(") DO UPDATE SET ")
-            .Append(updateSet);
-
-        sc.AddParameters(parameters);
-        return sc;
-    }
-
-    private ISqlContainer BuildUpsertOnDuplicate(TEntity entity, IDatabaseContext context)
-    {
-        var ctx = context ?? _context;
-        var dialect = GetDialect(ctx);
-
-        PrepareForInsertOrUpsert(entity);
-
-        var columns = new List<string>();
-        var values = new List<string>();
-        var parameters = new List<DbParameter>();
-        var counters = new ClauseCounters();
-
-        foreach (var column in GetCachedInsertableColumns())
-        {
-            var value = column.MakeParameterValueFromField(entity);
-
-            columns.Add(dialect.WrapObjectName(column.Name));
-            if (Utils.IsNullOrDbNull(value))
-            {
-                values.Add("NULL");
-            }
-            else
-            {
-                var name = counters.NextIns();
-                var p = dialect.CreateDbParameter(name, column.DbType, value);
-                parameters.Add(p);
-                values.Add(dialect.MakeParameterName(p));
-            }
-        }
-
-        var updateSet = new StringBuilder();
-        foreach (var column in GetCachedUpdatableColumns())
-        {
-            if (_auditValueResolver == null && column.IsLastUpdatedBy)
-            {
-                // Without a resolver we preserve existing LastUpdatedBy on duplicate updates.
-                continue;
-            }
-
-            if (updateSet.Length > 0)
-            {
-                updateSet.Append(", ");
-            }
-
-            updateSet.Append($"{dialect.WrapObjectName(column.Name)} = {dialect.UpsertIncomingColumn(column.Name)}");
-        }
-
-        if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
-        {
-            updateSet.Append($", {dialect.WrapObjectName(_versionColumn.Name)} = {dialect.WrapObjectName(_versionColumn.Name)} + 1");
-        }
-
-        var keys = _tableInfo.PrimaryKeys;
-        if (_idColumn == null && keys.Count == 0)
-        {
-            throw new NotSupportedException("Upsert requires an Id or a composite primary key.");
-        }
-
-        var sc = ctx.CreateSqlContainer();
-        sc.Query.Append("INSERT INTO ")
-            .Append(BuildWrappedTableName(dialect))
-            .Append(" (")
-            .Append(string.Join(", ", columns))
-            .Append(") VALUES (")
-            .Append(string.Join(", ", values))
-            .Append(") ON DUPLICATE KEY UPDATE ")
-            .Append(updateSet);
-
-        sc.AddParameters(parameters);
-        return sc;
-    }
-
-    private ISqlContainer BuildUpsertMerge(TEntity entity, IDatabaseContext context)
-    {
-        var ctx = context ?? _context;
-        var dialect = GetDialect(ctx);
-
-        PrepareForInsertOrUpsert(entity);
-
-        var srcColumns = new List<string>();
-        var values = new List<string>();
-        var parameters = new List<DbParameter>();
-        var counters = new ClauseCounters();
-
-        foreach (var column in _tableInfo.OrderedColumns)
-        {
-            var value = column.MakeParameterValueFromField(entity);
-            string placeholder;
-            if (Utils.IsNullOrDbNull(value))
-            {
-                placeholder = "NULL";
-            }
-            else
-            {
-                var name = counters.NextIns();
-                var p = dialect.CreateDbParameter(name, column.DbType, value);
-                parameters.Add(p);
-                placeholder = dialect.MakeParameterName(p);
-            }
-
-            srcColumns.Add(dialect.WrapObjectName(column.Name));
-            values.Add(placeholder);
-        }
-
-        var insertColumns = GetCachedInsertableColumns()
-            .Select(c => dialect.WrapObjectName(c.Name))
-            .ToList();
-
-        var updateSet = new StringBuilder();
-        foreach (var column in GetCachedUpdatableColumns())
-        {
-            if (_auditValueResolver == null && column.IsLastUpdatedBy)
-            {
-                // Without a resolver we preserve existing LastUpdatedBy on merge updates.
-                continue;
-            }
-
-            if (updateSet.Length > 0)
-            {
-                updateSet.Append(", ");
-            }
-
-            updateSet.Append($"t.{dialect.WrapObjectName(column.Name)} = s.{dialect.WrapObjectName(column.Name)}");
-        }
-
-        if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
-        {
-            updateSet.Append(
-                $", t.{dialect.WrapObjectName(_versionColumn.Name)} = t.{dialect.WrapObjectName(_versionColumn.Name)} + 1");
-        }
-
-        var keys = _tableInfo.PrimaryKeys;
-        if (_idColumn == null && keys.Count == 0)
-        {
-            throw new NotSupportedException("Upsert requires an Id or a composite primary key.");
-        }
-
-        var join = string.Join(" AND ", (keys.Count > 0 ? keys : new List<IColumnInfo> { _idColumn! })
-            .Select(k => $"t.{dialect.WrapObjectName(k.Name)} = s.{dialect.WrapObjectName(k.Name)}"));
-
-        var sc = ctx.CreateSqlContainer();
-        sc.Query.Append("MERGE INTO ")
-            .Append(BuildWrappedTableName(dialect))
-            .Append(" AS t USING (VALUES (")
-            .Append(string.Join(", ", values))
-            .Append(")")
-            .Append(" AS s (")
-            .Append(string.Join(", ", srcColumns))
-            .Append(") ON ")
-            .Append(join)
-            .Append(" WHEN MATCHED THEN UPDATE SET ")
-            .Append(updateSet)
-            .Append(" WHEN NOT MATCHED THEN INSERT (")
-            .Append(string.Join(", ", insertColumns))
-            .Append(") VALUES (")
-            .Append(string.Join(", ", insertColumns.Select(c => "s." + c)))
-            .Append(");");
-
-        sc.AddParameters(parameters);
-        return sc;
-    }
-
-
-
-
-    public ISqlContainer BuildWhere(string wrappedColumnName, IEnumerable<TRowID> ids, ISqlContainer sqlContainer)
-    {
-        var list = ids?.Distinct().ToList();
-        if (list is null || list.Count == 0)
-        {
-            return sqlContainer;
-        }
-
-        var dialect = ((ISqlDialectProvider)sqlContainer).Dialect;
-
-        CheckParameterLimit(sqlContainer, dialect.SupportsSetValuedParameters ? 1 : list.Count);
-
-        if (list.Any(Utils.IsNullOrDbNull))
-        {
-            throw new ArgumentException("IDs cannot be null", nameof(ids));
-        }
-
-        if (dialect.SupportsSetValuedParameters)
-        {
-            var paramName = sqlContainer.MakeParameterName("w0");
-            var anySql = GetCachedQuery($"WhereAny:{wrappedColumnName}",
-                () => string.Concat(wrappedColumnName, " = ANY(", paramName, ")"));
-
-            AppendWherePrefix(sqlContainer);
-            sqlContainer.Query.Append(anySql);
-
-            var parameter = sqlContainer.CreateDbParameter(paramName, DbType.Object, list.ToArray());
-            sqlContainer.AddParameter(parameter);
-
-            return sqlContainer;
-        }
-
-        var bucket = 1;
-        for (; bucket < list.Count; bucket <<= 1)
-        {
-        }
-
-        var key = $"Where:{wrappedColumnName}:{bucket}";
-        if (!_whereParameterNames.TryGet(key, out var names))
-        {
-            names = new string[bucket];
-            for (var i = 0; i < bucket; i++)
-            {
-                names[i] = sqlContainer.MakeParameterName($"w{i}");
-            }
-
-            _whereParameterNames.GetOrAdd(key, _ => names);
-        }
-
-        var sql = GetCachedQuery(key,
-            () => string.Concat(wrappedColumnName, " IN (", string.Join(", ", names), ")"));
-
-        AppendWherePrefix(sqlContainer);
-        sqlContainer.Query.Append(sql);
-
-        var dbType = _idColumn!.DbType;
-        var isPositional = sqlContainer.MakeParameterName("w0") == sqlContainer.MakeParameterName("w1");
-        var lastIndex = list.Count - 1;
-        for (var i = 0; i < bucket; i++)
-        {
-            var name = names[i];
-            var value = i < list.Count ? list[i] : list[lastIndex];
-
-            if (isPositional)
-            {
-                var parameter = sqlContainer.CreateDbParameter(name, dbType, value);
-                sqlContainer.AddParameter(parameter);
-                continue;
-            }
-
-            try
-            {
-                sqlContainer.SetParameterValue(name, value);
-            }
-            catch (KeyNotFoundException)
-            {
-                var parameter = sqlContainer.CreateDbParameter(name, dbType, value);
-                sqlContainer.AddParameter(parameter);
-            }
-        }
-
-        return sqlContainer;
-    }
+    // moved to EntityHelper.Retrieve.cs
 
     /// <summary>
     /// Type-safe coercion for audit field values (handles string to Guid, etc.)
     /// </summary>
-    private static object? Coerce(object? value, Type targetType)
-    {
-        if (value is null) return null;
-        var t = Nullable.GetUnderlyingType(targetType) ?? targetType;
-        if (t.IsInstanceOfType(value)) return value;
-        if (t == typeof(Guid) && value is string s) return Guid.Parse(s);
-        return Convert.ChangeType(value, t, CultureInfo.InvariantCulture);
-    }
+    // moved to EntityHelper.Audit.cs
 
-    private void SetAuditFields(TEntity obj, bool updateOnly)
-    {
-        if (obj == null)
-        {
-            return;
-        }
-
-        // Skip resolving audit values when no audit columns are present
-        if (!_hasAuditColumns)
-        {
-            return;
-        }
-
-
-
-        // Check if we have user-based audit fields (non-time fields)
-        var hasUserAuditFields = _tableInfo.CreatedBy != null || _tableInfo.LastUpdatedBy != null;
-        var hasTimeAuditFields = _tableInfo.CreatedOn != null || _tableInfo.LastUpdatedOn != null;
-        var auditValues = _auditValueResolver?.Resolve();
-
-        // Require resolver only for user-based audit fields
-        if (auditValues == null && hasUserAuditFields)
-        {
-            throw new InvalidOperationException("No AuditValues could be found by the resolver.");
-        }
-        // Use resolved time or UTC now for time fields
-        var utcNow = auditValues?.UtcNow ?? DateTime.UtcNow;
-
-        // Handle LastUpdated fields
-        if (_tableInfo.LastUpdatedOn?.PropertyInfo != null)
-        {
-            _tableInfo.LastUpdatedOn.PropertyInfo.SetValue(obj, utcNow);
-        }
-
-        if (_tableInfo.LastUpdatedBy?.PropertyInfo != null && auditValues != null)
-        {
-            // We know auditValues is not null because we validated above
-            var coercedUserId = Coerce(auditValues!.UserId, _tableInfo.LastUpdatedBy.PropertyInfo.PropertyType);
-            _tableInfo.LastUpdatedBy.PropertyInfo.SetValue(obj, coercedUserId);
-        }
-        else if (_tableInfo.LastUpdatedBy?.PropertyInfo != null)
-        {
-            var current = _tableInfo.LastUpdatedBy.PropertyInfo.GetValue(obj) as string;
-            if (string.IsNullOrEmpty(current))
-            {
-                var coercedSystem = Coerce("system", _tableInfo.LastUpdatedBy.PropertyInfo.PropertyType);
-                _tableInfo.LastUpdatedBy.PropertyInfo.SetValue(obj, coercedSystem);
-            }
-        }
-
-        if (updateOnly)
-        {
-            return;
-        }
-
-        // Handle Created fields (only for new entities)
-        if (_tableInfo.CreatedOn?.PropertyInfo != null)
-        {
-            var currentValue = _tableInfo.CreatedOn.PropertyInfo.GetValue(obj) as DateTime?;
-            if (currentValue == null || currentValue == default(DateTime))
-            {
-                _tableInfo.CreatedOn.PropertyInfo.SetValue(obj, utcNow);
-            }
-        }
-
-        if (_tableInfo.CreatedBy?.PropertyInfo != null)
-        {
-            var currentValue = _tableInfo.CreatedBy.PropertyInfo.GetValue(obj);
-            if (currentValue == null
-                || currentValue as string == string.Empty
-                || Utils.IsZeroNumeric(currentValue)
-                || (currentValue is Guid guid && guid == Guid.Empty))
-            {
-                // We know auditValues is not null because we validated above
-                var coercedUserId = Coerce(auditValues!.UserId, _tableInfo.CreatedBy.PropertyInfo.PropertyType);
-                _tableInfo.CreatedBy.PropertyInfo.SetValue(obj, coercedUserId);
-            }
-        }
-    }
+    // moved to EntityHelper.Audit.cs
 
     private string WrapObjectName(string objectName)
     {

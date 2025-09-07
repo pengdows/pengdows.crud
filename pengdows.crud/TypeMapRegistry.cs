@@ -3,6 +3,7 @@
 using System.Collections.Concurrent;
 using System.Data;
 using System.Reflection;
+using System.Linq.Expressions;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using pengdows.crud.attributes;
@@ -128,6 +129,22 @@ public sealed class TypeMapRegistry : ITypeMapRegistry
                 ? new JsonSerializerOptions(jsonAttr.SerializerOptions)
                 : new JsonSerializerOptions()
         };
+
+        // Compile a fast getter delegate for this column: (object o) => (object)((TEntity)o).Prop
+        try
+        {
+            var objParam = Expression.Parameter(typeof(object), "o");
+            var castObj = Expression.Convert(objParam, entityType);
+            var propAccess = Expression.Property(castObj, prop);
+            var box = Expression.Convert(propAccess, typeof(object));
+            var lambda = Expression.Lambda<Func<object, object?>>(box, objParam);
+            ci.FastGetter = lambda.Compile();
+        }
+        catch
+        {
+            // Fallback to reflection when expression compilation is not possible
+            ci.FastGetter = null;
+        }
 
         ConfigureEnumColumn(entityType, prop, ci);
         AttachAuditReferences(tableInfo, ci);

@@ -34,17 +34,17 @@ public class SqliteDialect : SqlDialect
 
     public override string GetVersionQuery() => "SELECT sqlite_version()";
 
-    protected override string GetBaseSessionSettings()
+    public override string GetBaseSessionSettings()
     {
         return "PRAGMA foreign_keys = ON;";
     }
 
-    protected override string GetReadOnlySessionSettings()
+    public override string GetReadOnlySessionSettings()
     {
         return "PRAGMA query_only = ON;";
     }
 
-    protected override string? GetReadOnlyConnectionParameter()
+    public override string? GetReadOnlyConnectionParameter()
     {
         return "Mode=ReadOnly";
     }
@@ -91,7 +91,7 @@ public class SqliteDialect : SqlDialect
         return table;
     }
 
-    protected override async Task<string?> GetProductNameAsync(ITrackedConnection connection)
+    public override async Task<string?> GetProductNameAsync(ITrackedConnection connection)
     {
         try
         {
@@ -111,12 +111,12 @@ public class SqliteDialect : SqlDialect
         return null;
     }
 
-    protected override string ExtractProductNameFromVersion(string versionString)
+    public override string ExtractProductNameFromVersion(string versionString)
     {
         return "SQLite";
     }
 
-    protected override SqlStandardLevel DetermineStandardCompliance(Version? version)
+    public override SqlStandardLevel DetermineStandardCompliance(Version? version)
     {
         if (version == null)
         {

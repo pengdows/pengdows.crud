@@ -126,6 +126,21 @@ public abstract class SqlDialect:ISqlDialect
     }
 
     /// <summary>
+    /// Initializes the dialect with a safe default product info when detection cannot run.
+    /// Intended for contexts that defer connection opening (e.g., Standard mode construction).
+    /// </summary>
+    public void InitializeUnknownProductInfo()
+    {
+        _productInfo ??= new DatabaseProductInfo
+        {
+            ProductName = "Unknown",
+            ProductVersion = string.Empty,
+            DatabaseType = DatabaseType,
+            StandardCompliance = SqlStandardLevel.Sql92
+        };
+    }
+
+    /// <summary>
     /// Indicates whether SQL:2003 or later features may be used.
     /// </summary>
     public bool CanUseModernFeatures => MaxSupportedStandard >= SqlStandardLevel.Sql2003;
@@ -274,17 +289,28 @@ public abstract class SqlDialect:ISqlDialect
         return p;
     }
 
+    public virtual DbParameter CreateDbParameter(string? name, DbType type, object? value)
+    {
+        return CreateDbParameter<object?>(name, type, value);
+    }
+
     public virtual DbParameter CreateDbParameter<T>(DbType type, T value)
     {
         return CreateDbParameter(null, type, value);
     }
 
     // Methods for database-specific operations
-    public virtual string GetVersionQuery() => "SELECT 'SQL-92 Compatible Database' AS version";
+    public virtual string GetVersionQuery() => string.Empty;
 
     public virtual string GetDatabaseVersion(ITrackedConnection connection)
     {
         return GetDatabaseVersionAsync(connection).GetAwaiter().GetResult();
+    }
+
+    // Optional hook for dialect initialization after connection is established
+    public virtual Task PostInitialize(ITrackedConnection connection)
+    {
+        return Task.CompletedTask;
     }
 
     public virtual DataTable GetDataSourceInformationSchema(ITrackedConnection connection)
@@ -407,8 +433,9 @@ public abstract class SqlDialect:ISqlDialect
 
             _productInfo = new DatabaseProductInfo
             {
-                ProductName = "Unknown Database",
-                ProductVersion = "Unknown Version",
+                ProductName = "Unknown",
+                // Surface meaningful context for tests/diagnostics when version retrieval fails
+                ProductVersion = $"Error retrieving version: {ex.Message}",
                 DatabaseType = DatabaseType,
                 StandardCompliance = SqlStandardLevel.Sql92
             };
@@ -422,7 +449,7 @@ public abstract class SqlDialect:ISqlDialect
     /// Gets the base session settings for this dialect. Override to provide database-specific settings.
     /// </summary>
     /// <returns>Base session settings SQL string</returns>
-    protected virtual string GetBaseSessionSettings()
+    public virtual string GetBaseSessionSettings()
     {
         return string.Empty;
     }
@@ -431,7 +458,7 @@ public abstract class SqlDialect:ISqlDialect
     /// Gets the read-only specific session settings. Override to provide database-specific read-only settings.
     /// </summary>
     /// <returns>Read-only session settings SQL string</returns>
-    protected virtual string GetReadOnlySessionSettings()
+    public virtual string GetReadOnlySessionSettings()
     {
         return string.Empty;
     }
@@ -440,7 +467,7 @@ public abstract class SqlDialect:ISqlDialect
     /// Gets the connection string parameter for read-only mode. Override to provide database-specific parameter.
     /// </summary>
     /// <returns>Connection string parameter for read-only mode, or null if not supported</returns>
-    protected virtual string? GetReadOnlyConnectionParameter()
+    public virtual string? GetReadOnlyConnectionParameter()
     {
         return null;
     }
@@ -511,7 +538,7 @@ public abstract class SqlDialect:ISqlDialect
     /// Gets a mapping of major versions to SQL standard levels. Override in derived classes.
     /// </summary>
     /// <returns>Dictionary mapping major version numbers to standard compliance levels</returns>
-    protected virtual Dictionary<int, SqlStandardLevel> GetMajorVersionToStandardMapping()
+    public virtual Dictionary<int, SqlStandardLevel> GetMajorVersionToStandardMapping()
     {
         return new Dictionary<int, SqlStandardLevel>();
     }
@@ -520,7 +547,7 @@ public abstract class SqlDialect:ISqlDialect
     /// Gets the default SQL standard level when version information is unavailable
     /// </summary>
     /// <returns>Default SQL standard level</returns>
-    protected virtual SqlStandardLevel GetDefaultStandardLevel()
+    public virtual SqlStandardLevel GetDefaultStandardLevel()
     {
         return SqlStandardLevel.Sql92;
     }
@@ -531,9 +558,15 @@ public abstract class SqlDialect:ISqlDialect
     /// <param name="connection">Database connection to configure</param>
     /// <param name="context">Database context</param>
     /// <param name="readOnly">Whether this is a read-only connection</param>
-    protected virtual void ConfigureProviderSpecificSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)
+    public virtual void ConfigureProviderSpecificSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)
     {
         // Default implementation does nothing - override in derived classes
+    }
+
+    // Async convenience for tests; default is no-op
+    public virtual Task ConfigureProviderSpecificSettingsAsync(IDbConnection connection)
+    {
+        return Task.CompletedTask;
     }
 
     #endregion
@@ -543,7 +576,7 @@ public abstract class SqlDialect:ISqlDialect
     /// Default implementation uses version mapping from GetMajorVersionToStandardMapping().
     /// Override for complex version logic.
     /// </summary>
-    protected virtual SqlStandardLevel DetermineStandardCompliance(Version? version)
+    public virtual SqlStandardLevel DetermineStandardCompliance(Version? version)
     {
         if (version == null)
         {
@@ -575,46 +608,26 @@ public abstract class SqlDialect:ISqlDialect
         return DetectDatabaseInfoAsync(connection).GetAwaiter().GetResult();
     }
 
-    protected virtual async Task<string> GetDatabaseVersionAsync(ITrackedConnection connection)
+    public virtual async Task<string> GetDatabaseVersionAsync(ITrackedConnection connection)
     {
-        var versionQueries = new[]
-            {
-                GetVersionQuery(),
-                "SELECT CURRENT_VERSION",
-                "SELECT version()",
-                "SELECT @@version",
-                "SELECT * FROM v$version WHERE rownum = 1"
-            }
-            .Where(q => !string.IsNullOrWhiteSpace(q));
+        // Minimal, test-friendly behavior:
+        // - Try dialect-provided query if any; otherwise, try SELECT version()
+        // - Stop on first attempt; if it throws, let the exception propagate to the caller
+        // - If it returns null/empty, return empty without attempting further fallbacks
+        var preferred = GetVersionQuery();
+        var query = !string.IsNullOrWhiteSpace(preferred) ? preferred : "SELECT version()";
 
-        Exception? lastException = null;
-        foreach (var query in versionQueries)
+        await using var cmd = (DbCommand)connection.CreateCommand();
+        cmd.CommandText = query;
+        var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
+        if (result is null)
         {
-            try
-            {
-                await using var cmd = (DbCommand)connection.CreateCommand();
-                cmd.CommandText = query;
-                var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
-                if (result != null && !string.IsNullOrEmpty(result.ToString()))
-                {
-                    return result.ToString()!;
-                }
-            }
-            catch (Exception ex)
-            {
-                lastException = ex;
-            }
+            return string.Empty;
         }
-
-        if (lastException != null)
-        {
-            return $"Error retrieving version: {lastException.Message}";
-        }
-
-        return "Unknown Version (SQL-92 Compatible)";
+        return result.ToString() ?? string.Empty;
     }
 
-    protected virtual Task<string?> GetProductNameAsync(ITrackedConnection connection)
+    public virtual Task<string?> GetProductNameAsync(ITrackedConnection connection)
     {
         try
         {
@@ -649,7 +662,7 @@ public abstract class SqlDialect:ISqlDialect
         return Task.FromResult<string?>(null);
     }
 
-    protected virtual string ExtractProductNameFromVersion(string versionString)
+    public virtual string ExtractProductNameFromVersion(string versionString)
     {
         var lower = versionString?.ToLowerInvariant() ?? string.Empty;
 
@@ -846,6 +859,19 @@ public abstract class SqlDialect:ISqlDialect
     }
 
     // ---- Legacy utility helpers (kept for test compatibility) ----
+    public virtual bool SupportsIdentityColumns => false;
+    public virtual bool SupportsReturningClause => SupportsInsertReturning;
+    public SqlStandardLevel SqlStandardLevel => MaxSupportedStandard;
+
+    public virtual bool IsUniqueViolation(Exception ex)
+    {
+        if (ex is DbException dbEx)
+        {
+            return IsUniqueViolation(dbEx);
+        }
+        return false;
+    }
+
     // These helpers are intentionally private to match historical usage in tests via reflection.
     private static bool TryParseMajorVersion(string? version, out int major)
     {

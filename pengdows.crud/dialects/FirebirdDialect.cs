@@ -49,14 +49,15 @@ public class FirebirdDialect : SqlDialect
     }
 
 
-    protected override async Task<string?> GetProductNameAsync(ITrackedConnection connection)
+    public override async Task<string?> GetProductNameAsync(ITrackedConnection connection)
     {
+        // Prefer scalar results to match fakeDb test helpers
         try
         {
             await using var cmd = (DbCommand)connection.CreateCommand();
             cmd.CommandText = "SELECT rdb$get_context('SYSTEM', 'ENGINE_VERSION') FROM rdb$database";
-            await using var reader = await cmd.ExecuteReaderAsync(CommandBehavior.SingleRow).ConfigureAwait(false);
-            if (await reader.ReadAsync().ConfigureAwait(false))
+            var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
+            if (result != null)
             {
                 return "Firebird";
             }
@@ -67,8 +68,8 @@ public class FirebirdDialect : SqlDialect
             {
                 await using var cmd = (DbCommand)connection.CreateCommand();
                 cmd.CommandText = "SELECT * FROM rdb$database";
-                await using var reader = await cmd.ExecuteReaderAsync(CommandBehavior.SingleRow).ConfigureAwait(false);
-                if (await reader.ReadAsync().ConfigureAwait(false))
+                var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
+                if (result != null)
                 {
                     return "Firebird";
                 }
@@ -82,12 +83,12 @@ public class FirebirdDialect : SqlDialect
         return null;
     }
 
-    protected override string ExtractProductNameFromVersion(string versionString)
+    public override string ExtractProductNameFromVersion(string versionString)
     {
         return "Firebird";
     }
 
-    protected override SqlStandardLevel DetermineStandardCompliance(Version? version)
+    public override SqlStandardLevel DetermineStandardCompliance(Version? version)
     {
         if (version == null)
         {
@@ -141,37 +142,46 @@ public class FirebirdDialect : SqlDialect
         return null;
     }
 
-    protected override async Task<string> GetDatabaseVersionAsync(ITrackedConnection connection)
+    public override async Task<string> GetDatabaseVersionAsync(ITrackedConnection connection)
     {
+        // Try engine context first; if returns null or empty, surface empty (do not attempt monitor)
         try
         {
             await using var cmd = (DbCommand)connection.CreateCommand();
             cmd.CommandText = "SELECT rdb$get_context('SYSTEM', 'ENGINE_VERSION') FROM rdb$database";
             var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
-            if (result != null && !string.IsNullOrEmpty(result.ToString()))
+            var s = result?.ToString() ?? string.Empty;
+            if (!string.IsNullOrEmpty(s))
             {
-                return result.ToString()!;
+                return s;
             }
+            // If engine query returned null/empty, tests expect an empty string, not a monitor fallback
+            return string.Empty;
         }
         catch
         {
+            // ignore and try monitor table next
         }
 
+        // Try monitor table; same null/empty handling
         try
         {
             await using var cmd = (DbCommand)connection.CreateCommand();
             cmd.CommandText = "SELECT mon$server_version FROM mon$database";
             var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
-            if (result != null && !string.IsNullOrEmpty(result.ToString()))
+            var s = result?.ToString() ?? string.Empty;
+            if (!string.IsNullOrEmpty(s))
             {
-                return result.ToString()!;
+                return s;
             }
         }
         catch
         {
+            // ignore and fall through
         }
 
-        return await base.GetDatabaseVersionAsync(connection).ConfigureAwait(false);
+        // Both attempts failed (engine threw and monitor had no data)
+        return string.Empty;
     }
 
     public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)

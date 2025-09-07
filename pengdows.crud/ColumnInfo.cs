@@ -10,6 +10,8 @@ namespace pengdows.crud;
 
 public class ColumnInfo : IColumnInfo
 {
+    // Compiled fast getter for this column's PropertyInfo
+    public Func<object, object?>? FastGetter { get; set; }
     public Type? EnumType { get; set; }
     public string Name { get; init; } = null!;
     public PropertyInfo PropertyInfo { get; init; } = null!;
@@ -34,7 +36,9 @@ public class ColumnInfo : IColumnInfo
 
     public object? MakeParameterValueFromField<T>(T objectToCreate)
     {
-        var value = PropertyInfo.GetValue(objectToCreate);
+        var value = FastGetter != null
+            ? FastGetter(objectToCreate!)
+            : PropertyInfo.GetValue(objectToCreate);
         if (value != null)
         {
             if (EnumType != null)

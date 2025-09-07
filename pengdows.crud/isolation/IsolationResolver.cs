@@ -132,9 +132,7 @@ public sealed class IsolationResolver : IIsolationResolver
         {
             SupportedDatabase.SqlServer => new()
             {
-                [IsolationProfile.SafeNonBlockingReads] = rcsi
-                    ? IsolationLevel.ReadCommitted
-                    : IsolationLevel.Snapshot,
+                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.Snapshot,
                 [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
                 [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted
             },

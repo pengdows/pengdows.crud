@@ -17,6 +17,7 @@ public sealed class fakeDbFactory : DbProviderFactory
     private int _sharedOpenCount;
     private bool _skipFirstOpen;
     private bool _hasOpenedOnce;
+    private readonly List<fakeDbConnection> _connections = new();
 
     private fakeDbFactory()
     {
@@ -59,6 +60,17 @@ public sealed class fakeDbFactory : DbProviderFactory
 
     public override DbConnection CreateConnection()
     {
+        if (_connections.Count > 0)
+        {
+            var pre = _connections[0];
+            _connections.RemoveAt(0);
+            if (pre.EmulatedProduct == SupportedDatabase.Unknown)
+            {
+                pre.EmulatedProduct = _pretendToBe;
+            }
+            return pre;
+        }
+
         var c = new fakeDbConnection();
         c.EmulatedProduct = _pretendToBe;
 
@@ -141,6 +153,9 @@ public sealed class fakeDbFactory : DbProviderFactory
                         failureMode == ConnectionFailureMode.FailAfterCount;
         return new fakeDbFactory(pretendToBe, failureMode, customException, failAfterCount, skipFirst);
     }
+
+    // Expose created connections for tests
+    public List<fakeDbConnection> Connections => _connections;
 }
 
 public enum ConnectionFailureMode
@@ -152,4 +167,3 @@ public enum ConnectionFailureMode
     FailAfterCount,
     Broken
 }
-

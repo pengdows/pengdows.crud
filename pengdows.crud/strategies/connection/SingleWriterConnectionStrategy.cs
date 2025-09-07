@@ -15,7 +15,15 @@ internal class SingleWriterConnectionStrategy : SafeAsyncDisposableBase, IConnec
 
     public ITrackedConnection GetConnection(ExecutionType executionType, bool isShared)
     {
-        return _context.GetSingleWriterConnection(executionType, isShared);
+        // Writes always use the pinned writer connection.
+        if (executionType == ExecutionType.Write)
+        {
+            return _context.GetSingleConnection();
+        }
+
+        // Reads create a new read-only connection. The underlying dialect will
+        // apply read-only connection-string/session semantics as appropriate.
+        return _context.GetStandardConnection(isShared: false, readOnly: true);
     }
 
     public void PostInitialize(ITrackedConnection? connection)

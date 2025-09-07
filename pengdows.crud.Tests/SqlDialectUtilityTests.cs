@@ -67,8 +67,9 @@ public class SqlDialectUtilityTests
         var factory = new fakeDbFactory(SupportedDatabase.Firebird.ToString());
         var dialect = new FirebirdDialect(factory, NullLogger.Instance);
 
-        var method = dialect.GetType().GetMethod("ExtractProductNameFromVersion",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        var method = dialect.GetType().GetMethod(
+            "ExtractProductNameFromVersion",
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
 
         var result = (string)method!.Invoke(dialect, new object[] { "any version" })!;
 
@@ -81,8 +82,9 @@ public class SqlDialectUtilityTests
         var factory = new fakeDbFactory(SupportedDatabase.Firebird.ToString());
         var dialect = new FirebirdDialect(factory, NullLogger.Instance);
 
-        var method = dialect.GetType().GetMethod("DetermineStandardCompliance",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        var method = dialect.GetType().GetMethod(
+            "DetermineStandardCompliance",
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
 
         var result = (SqlStandardLevel)method!.Invoke(dialect, new object?[] { null })!;
 

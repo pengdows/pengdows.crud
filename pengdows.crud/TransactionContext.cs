@@ -60,14 +60,10 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
             isolationLevel = IsolationLevel.Serializable;
         }
 
-        if (_isReadOnly && _context.ConnectionMode == DbMode.SingleWriter)
-        {
-            _connection = ((DatabaseContext)_context).FactoryCreateConnection(null, true, true);
-        }
-        else
-        {
-            _connection = _context.GetConnection(executionType.Value, true);
-        }
+        // Defer all connection routing to the configured connection strategy.
+        // The strategy (and DatabaseContext helpers it uses) handle in-memory,
+        // SingleConnection, and SingleWriter cases.
+        _connection = _context.GetConnection(executionType.Value, true);
         EnsureConnectionIsOpen();
         _userLock = new SemaphoreSlim(1, 1);
         _completionLock = new SemaphoreSlim(1, 1);

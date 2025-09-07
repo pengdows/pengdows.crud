@@ -34,6 +34,8 @@ public class PagilaBenchmarks : IAsyncDisposable
     private bool _flip;
     private (int actorId, int filmId) _compositeKey;
     private long _runCounter;
+    [ThreadStatic] private static string? _currentBenchmarkLabel;
+    private bool _collectPerIteration = true;
 
     [GlobalSetup]
     public async Task GlobalSetup()
@@ -43,6 +45,12 @@ public class PagilaBenchmarks : IAsyncDisposable
             .WithEnvironment("POSTGRES_PASSWORD", "postgres")
             .WithEnvironment("POSTGRES_DB", "pagila")
             .WithPortBinding(0, 5432)
+            // Enable pg_stat_statements and I/O timing for richer statistics
+            .WithCommand(
+                "postgres",
+                "-c", "shared_preload_libraries=pg_stat_statements",
+                "-c", "pg_stat_statements.track=all",
+                "-c", "track_io_timing=on")
             .WithWaitStrategy(Wait.ForUnixContainer().UntilPortIsAvailable(5432))
             .Build();
 
@@ -53,6 +61,14 @@ public class PagilaBenchmarks : IAsyncDisposable
 
         await WaitForReady();
         await CreateSchemaAndSeedAsync();
+
+        // Initialize pg_stat_statements and reset stats before running benchmarks
+        await using (var admin = new NpgsqlConnection(_connStr))
+        {
+            await admin.OpenAsync();
+            await admin.ExecuteAsync("CREATE EXTENSION IF NOT EXISTS pg_stat_statements;");
+            await admin.ExecuteAsync("SELECT pg_stat_statements_reset();");
+        }
 
         _map = new TypeMapRegistry();
         _map.Register<Film>();
@@ -93,10 +109,39 @@ public class PagilaBenchmarks : IAsyncDisposable
         {
             await ad.DisposeAsync();
         }
+
+        // Dump Postgres statistics for analysis
+        try
+        {
+            await PgStats.DumpSummaryAsync(_connStr);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[PgStats] Failed to dump summary: {ex.Message}");
+        }
         if (_container is not null)
         {
             await _container.StopAsync();
             await _container.DisposeAsync();
+        }
+    }
+
+    [IterationSetup]
+    public async Task IterationSetup()
+    {
+        if (_collectPerIteration)
+        {
+            await PgStats.ResetAsync(_connStr);
+        }
+    }
+
+    [IterationCleanup]
+    public async Task IterationCleanup()
+    {
+        if (_collectPerIteration)
+        {
+            var label = _currentBenchmarkLabel ?? "(unknown)";
+            await PgStats.DumpSummaryAsync(_connStr, label);
         }
     }
 
@@ -188,6 +233,7 @@ CREATE TABLE film_actor (
     [Benchmark]
     public async Task<Film?> GetFilmById_Mine()
     {
+        _currentBenchmarkLabel = nameof(GetFilmById_Mine);
         var sc = _filmHelper.BuildRetrieve(new[] { _filmId });
         return await _filmHelper.LoadSingleAsync(sc);
     }
@@ -195,6 +241,7 @@ CREATE TABLE film_actor (
     [Benchmark]
     public async Task<Film?> GetFilmById_Dapper()
     {
+        _currentBenchmarkLabel = nameof(GetFilmById_Dapper);
         await using var conn = new NpgsqlConnection(_connStr);
         return await conn.QuerySingleOrDefaultAsync<Film>(
             "select film_id as \"Id\", title as \"Title\", length as \"Length\" from film where film_id=@id",
@@ -204,6 +251,7 @@ CREATE TABLE film_actor (
     [Benchmark]
     public async Task<FilmActor?> GetFilmActorComposite_Mine()
     {
+        _currentBenchmarkLabel = nameof(GetFilmActorComposite_Mine);
         var sc = _filmActorHelper.BuildRetrieve(new[] { new FilmActor { ActorId = _compositeKey.actorId, FilmId = _compositeKey.filmId } });
         return await _filmActorHelper.LoadSingleAsync(sc);
     }
@@ -211,6 +259,7 @@ CREATE TABLE film_actor (
     [Benchmark]
     public async Task<FilmActor?> GetFilmActorComposite_Dapper()
     {
+        _currentBenchmarkLabel = nameof(GetFilmActorComposite_Dapper);
         await using var conn = new NpgsqlConnection(_connStr);
         return await conn.QuerySingleOrDefaultAsync<FilmActor>(
             "select actor_id as \"ActorId\", film_id as \"FilmId\" from film_actor where actor_id=@a and film_id=@f",
@@ -220,6 +269,7 @@ CREATE TABLE film_actor (
     [Benchmark]
     public async Task<int> UpdateFilm_Mine()
     {
+        _currentBenchmarkLabel = nameof(UpdateFilm_Mine);
         // Toggle length to avoid no-op updates
         var film = await _filmHelper.RetrieveOneAsync(_filmId);
         if (film == null) return 0;
@@ -231,6 +281,7 @@ CREATE TABLE film_actor (
     [Benchmark]
     public async Task<int> UpdateFilm_Dapper()
     {
+        _currentBenchmarkLabel = nameof(UpdateFilm_Dapper);
         await using var conn = new NpgsqlConnection(_connStr);
         var len = await conn.ExecuteScalarAsync<int>(
             "select length from film where film_id=@id", new { id = _filmId });
@@ -244,6 +295,7 @@ CREATE TABLE film_actor (
     [Benchmark]
     public async Task<int> InsertThenDeleteFilm_Mine()
     {
+        _currentBenchmarkLabel = nameof(InsertThenDeleteFilm_Mine);
         // Reuse prebuilt containers and only update parameter values
         var title = $"Bench_{Interlocked.Increment(ref _runCounter):D10}";
         _insertFilmSc.SetParameterValue("p0", title);  // Title
@@ -257,6 +309,7 @@ CREATE TABLE film_actor (
     [Benchmark]
     public async Task<int> InsertThenDeleteFilm_Dapper()
     {
+        _currentBenchmarkLabel = nameof(InsertThenDeleteFilm_Dapper);
         await using var conn = new NpgsqlConnection(_connStr);
         var title = $"Bench_{Guid.NewGuid():N}";
         var id = await conn.ExecuteScalarAsync<int>(
