@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Threading;
 
 namespace pengdows.crud.@internal;
 
@@ -7,6 +8,7 @@ internal sealed class BoundedCache<TKey, TValue> where TKey : notnull
     private readonly int _max;
     private readonly ConcurrentDictionary<TKey, TValue> _map = new();
     private readonly ConcurrentQueue<TKey> _order = new();
+    private int _count;
 
     public BoundedCache(int max)
     {
@@ -24,9 +26,17 @@ internal sealed class BoundedCache<TKey, TValue> where TKey : notnull
         if (_map.TryAdd(key, created))
         {
             _order.Enqueue(key);
-            while (_map.Count > _max && _order.TryDequeue(out var old))
+            var count = Interlocked.Increment(ref _count);
+            while (count > _max && _order.TryDequeue(out var old))
             {
-                _map.TryRemove(old, out _);
+                if (_map.TryRemove(old, out _))
+                {
+                    count = Interlocked.Decrement(ref _count);
+                }
+                else
+                {
+                    count = Volatile.Read(ref _count);
+                }
             }
         }
 
@@ -45,6 +55,7 @@ internal sealed class BoundedCache<TKey, TValue> where TKey : notnull
         }
 
         _map.Clear();
+        Interlocked.Exchange(ref _count, 0);
     }
 }
 
