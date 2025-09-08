@@ -754,93 +754,49 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             {
                 var name = schema.Rows[0].Field<string>("DataSourceProductName") ?? string.Empty;
                 var lower = name.ToLowerInvariant();
-                if (lower.Contains("sql server"))
+                var product = lower switch
                 {
-                    return SupportedDatabase.SqlServer;
-                }
+                    var s when s.Contains("sql server") => SupportedDatabase.SqlServer,
+                    var s when s.Contains("mariadb") => SupportedDatabase.MariaDb,
+                    var s when s.Contains("mysql") => SupportedDatabase.MySql,
+                    var s when s.Contains("cockroach") => SupportedDatabase.CockroachDb,
+                    var s when s.Contains("postgres") => SupportedDatabase.PostgreSql,
+                    var s when s.Contains("oracle") => SupportedDatabase.Oracle,
+                    var s when s.Contains("sqlite") => SupportedDatabase.Sqlite,
+                    var s when s.Contains("firebird") => SupportedDatabase.Firebird,
+                    var s when s.Contains("duckdb") || s.Contains("duck db") => SupportedDatabase.DuckDB,
+                    _ => SupportedDatabase.Unknown
+                };
 
-                if (lower.Contains("mariadb"))
+                if (product != SupportedDatabase.Unknown)
                 {
-                    return SupportedDatabase.MariaDb;
-                }
-
-                if (lower.Contains("mysql"))
-                {
-                    return SupportedDatabase.MySql;
-                }
-
-                if (lower.Contains("cockroach"))
-                {
-                    return SupportedDatabase.CockroachDb;
-                }
-
-                if (lower.Contains("postgres"))
-                {
-                    return SupportedDatabase.PostgreSql;
-                }
-
-                if (lower.Contains("oracle"))
-                {
-                    return SupportedDatabase.Oracle;
-                }
-
-                if (lower.Contains("sqlite"))
-                {
-                    return SupportedDatabase.Sqlite;
-                }
-
-                if (lower.Contains("firebird"))
-                {
-                    return SupportedDatabase.Firebird;
-                }
-
-                if (lower.Contains("duckdb") || lower.Contains("duck db"))
-                {
-                    return SupportedDatabase.DuckDB;
+                    return product;
                 }
             }
         }
-        catch { }
+        catch
+        {
+        }
+
         try
         {
             var typeName = _factory.GetType().Name.ToLowerInvariant();
-            if (typeName.Contains("sqlserver") || typeName.Contains("system.data.sqlclient"))
+            return typeName switch
             {
-                return SupportedDatabase.SqlServer;
-            }
-
-            if (typeName.Contains("npgsql"))
-            {
-                return SupportedDatabase.PostgreSql;
-            }
-
-            if (typeName.Contains("mysql"))
-            {
-                return SupportedDatabase.MySql;
-            }
-
-            if (typeName.Contains("sqlite"))
-            {
-                return SupportedDatabase.Sqlite;
-            }
-
-            if (typeName.Contains("oracle"))
-            {
-                return SupportedDatabase.Oracle;
-            }
-
-            if (typeName.Contains("firebird"))
-            {
-                return SupportedDatabase.Firebird;
-            }
-
-            if (typeName.Contains("duckdb"))
-            {
-                return SupportedDatabase.DuckDB;
-            }
+                var s when s.Contains("sqlserver") || s.Contains("system.data.sqlclient") => SupportedDatabase.SqlServer,
+                var s when s.Contains("npgsql") => SupportedDatabase.PostgreSql,
+                var s when s.Contains("mysql") => SupportedDatabase.MySql,
+                var s when s.Contains("sqlite") => SupportedDatabase.Sqlite,
+                var s when s.Contains("oracle") => SupportedDatabase.Oracle,
+                var s when s.Contains("firebird") => SupportedDatabase.Firebird,
+                var s when s.Contains("duckdb") => SupportedDatabase.DuckDB,
+                _ => SupportedDatabase.Unknown
+            };
         }
-        catch { }
-        return SupportedDatabase.Unknown;
+        catch
+        {
+            return SupportedDatabase.Unknown;
+        }
     }
 
     private static DbConnectionStringBuilder GetFactoryConnectionStringBuilderStatic(ITrackedConnection conn, string connectionString)
