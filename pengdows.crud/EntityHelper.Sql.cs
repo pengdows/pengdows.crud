@@ -19,6 +19,32 @@ public partial class EntityHelper<TEntity, TRowID>
         public List<IColumnInfo> UpdateColumns = null!;
     }
 
+    /// <summary>
+    /// Neutral Token Replacement Strategy for SQL Template Caching
+    /// 
+    /// This optimization allows EntityHelper to cache SQL templates in a database-agnostic format,
+    /// then replace neutral tokens with dialect-specific tokens at runtime. This approach provides
+    /// significant performance benefits by avoiding repeated SQL string construction.
+    /// 
+    /// Token Definitions:
+    /// - {Q} = Quote prefix (e.g., "[" for SQL Server, "`" for MySQL, "\"" for PostgreSQL)
+    /// - {q} = Quote suffix (e.g., "]" for SQL Server, "`" for MySQL, "\"" for PostgreSQL)  
+    /// - {S} = Composite identifier separator (typically "." for schema.table notation)
+    /// - {P}paramname = Parameter placeholder (replaced with dialect-specific parameter markers)
+    /// 
+    /// Example transformation:
+    /// Neutral: "SELECT {Q}Name{q} FROM {Q}Users{q} WHERE {Q}Id{q} = {P}id"
+    /// SQL Server: "SELECT [Name] FROM [Users] WHERE [Id] = @id"
+    /// PostgreSQL: "SELECT \"Name\" FROM \"Users\" WHERE \"Id\" = $1"
+    /// MySQL: "SELECT `Name` FROM `Users` WHERE `Id` = ?"
+    /// 
+    /// This strategy enables:
+    /// 1. Single cached template per operation type (instead of per dialect)
+    /// 2. Fast string replacement instead of complex SQL building
+    /// 3. Thread-safe caching without dialect-specific lock contention
+    /// 4. Reduced memory usage across multi-database applications
+    /// </summary>
+    
     // Neutral tokens used in cached SQL; replaced with dialect-specific tokens on retrieval
     private const string NeutralQuotePrefix = "{Q}";
     private const string NeutralQuoteSuffix = "{q}";

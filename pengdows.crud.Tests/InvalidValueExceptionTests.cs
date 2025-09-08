@@ -5,7 +5,7 @@ using Moq;
 using pengdows.crud;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using pengdows.crud.wrappers;
 using Xunit;
 
@@ -16,7 +16,7 @@ public class InvalidValueExceptionTests
     [Fact]
     public void MapReaderToObject_SetterThrows_ThrowsInvalidValueException()
     {
-        var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", new FakeDbFactory(SupportedDatabase.Sqlite));
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", new fakeDbFactory(SupportedDatabase.Sqlite));
         var helper = new EntityHelper<ThrowingEntity, int>(context);
 
         var reader = new Mock<DbDataReader>();

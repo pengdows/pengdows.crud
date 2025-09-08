@@ -1,5 +1,6 @@
 using System.Data;
 using System.Data.Common;
+using System.Text;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.wrappers;
@@ -11,6 +12,7 @@ namespace pengdows.crud.dialects;
 /// </summary>
 public class PostgreSqlDialect : SqlDialect
 {
+    private string? _sessionSettings;
     public PostgreSqlDialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger)
     {
@@ -53,9 +55,82 @@ public class PostgreSqlDialect : SqlDialect
         return name;
     }
 
+    public override async Task<IDatabaseProductInfo> DetectDatabaseInfoAsync(ITrackedConnection connection)
+    {
+        var productInfo = await base.DetectDatabaseInfoAsync(connection);
+        
+        // Check and cache PostgreSQL session settings during initialization
+        if (_sessionSettings == null)
+        {
+            _sessionSettings = CheckPostgreSqlSettings(connection);
+            if (!string.IsNullOrWhiteSpace(_sessionSettings))
+            {
+                Logger.LogInformation("Applying PostgreSQL session settings on first connect:\n{Settings}", _sessionSettings);
+            }
+            else
+            {
+                Logger.LogInformation("PostgreSQL session settings: no changes required (already compliant)");
+            }
+        }
+        
+        return productInfo;
+    }
+
+    private string CheckPostgreSqlSettings(IDbConnection connection)
+    {
+        try
+        {
+            var expectedSettings = new Dictionary<string, string>
+            {
+                { "standard_conforming_strings", "on" },
+                { "client_min_messages", "warning" }
+            };
+
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = "SELECT name, setting FROM pg_settings WHERE name IN ('standard_conforming_strings', 'client_min_messages')";
+
+            using var reader = cmd.ExecuteReader();
+            var currentSettings = new Dictionary<string, string>();
+
+            while (reader.Read())
+            {
+                var settingName = reader.GetString(0);
+                var settingValue = reader.GetString(1);
+                currentSettings[settingName] = settingValue;
+            }
+
+            var sb = new StringBuilder();
+            foreach (var expectedSetting in expectedSettings)
+            {
+                var settingName = expectedSetting.Key;
+                var expectedValue = expectedSetting.Value;
+
+                currentSettings.TryGetValue(settingName, out var currentValue);
+
+                if (currentValue != expectedValue)
+                {
+                    if (sb.Length > 0)
+                    {
+                        sb.AppendLine();
+                    }
+
+                    sb.Append($"SET {settingName} = {expectedValue};");
+                }
+            }
+
+            return sb.ToString();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to check PostgreSQL session settings, applying default settings");
+            return @"SET standard_conforming_strings = on;
+SET client_min_messages = warning;";
+        }
+    }
+
     public override string GetBaseSessionSettings()
     {
-        return @"SET standard_conforming_strings = on;
+        return _sessionSettings ?? @"SET standard_conforming_strings = on;
 SET client_min_messages = warning;";
     }
 
@@ -72,17 +147,15 @@ SET client_min_messages = warning;";
     public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
     {
         var baseSettings = GetBaseSessionSettings();
-        if (context.SetDefaultSearchPath)
-        {
-            baseSettings += "\nSET search_path = public;";
-        }
+        // Note: search_path should not be set in session settings - manage via connection string or application logic
         return BuildSessionSettings(baseSettings, GetReadOnlySessionSettings(), readOnly);
     }
 
     [Obsolete]
     public override string GetConnectionSessionSettings()
     {
-        return GetBaseSessionSettings();
+        return @"SET standard_conforming_strings = on;
+SET client_min_messages = warning;";
     }
 
     public override void ConfigureProviderSpecificSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)

@@ -1,7 +1,7 @@
 using System.Reflection;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
-using pengdows.crud.FakeDb;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -23,8 +23,8 @@ public class UpdateMaxConnectionCountTests
             DbMode = DbMode.SingleConnection
         };
 
-        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
-        return new DatabaseContext(config, factory);
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        return new DatabaseContext(config.ConnectionString, factory);
     }
 
     [Fact]

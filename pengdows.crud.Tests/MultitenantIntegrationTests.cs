@@ -19,31 +19,31 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-[Table(Name = "Users")]
+[Table("Users")]
 public class User
 {
     [Id]
     public int Id { get; set; }
 
-    [Column(Type = DbType.String)]
+    [Column("Name", DbType.String)]
     public string Name { get; set; } = string.Empty;
 
-    [Column(Type = DbType.DateTime)]
+    [Column("CreatedOn", DbType.DateTime)]
     [CreatedOn]
     public DateTime CreatedOn { get; set; }
 
-    [Column(Type = DbType.DateTime)]
+    [Column("LastUpdatedOn", DbType.DateTime)]
     [LastUpdatedOn]
     public DateTime? LastUpdatedOn { get; set; }
 
-    [Column(Type = DbType.Int32)]
+    [Column("Version", DbType.Int32)]
     [Version]
     public int Version { get; set; }
 }
 
 public class AuditValueResolver : IAuditValueResolver
 {
-    public AuditValues Resolve() => new AuditValues { UserId = "system", UtcNow = DateTime.UtcNow };
+    public IAuditValues Resolve() => new AuditValues { UserId = "system", UtcNow = DateTime.UtcNow };
 }
 
 public class MultitenantIntegrationTests
@@ -94,10 +94,10 @@ public class MultitenantIntegrationTests
             var createSc = helper.BuildCreate(user);
             await createSc.ExecuteNonQueryAsync();
             var id = dbType == SupportedDatabase.Sqlite
-                ? (int)(await new SqlContainer(transaction).AppendQuery("SELECT last_insert_rowid()").ExecuteScalarAsync())
+                ? (int)(await new SqlContainer(transaction).AppendQuery("SELECT last_insert_rowid()").ExecuteScalarAsync<long>())
                 : user.Id;
 
-            var retrieveSc = helper.BuildRetrieve(new[] { id });
+            var retrieveSc = helper.BuildRetrieve(new List<int> { id });
             var retrievedUser = await helper.LoadSingleAsync(retrieveSc);
             Assert.Equal(user.Name, retrievedUser.Name);
             Assert.Equal(1, retrievedUser.Version);
@@ -115,7 +115,7 @@ public class MultitenantIntegrationTests
         {
             tasks[i] = Task.Run(async () =>
             {
-                using var transaction = context.BeginTransaction(IsolationProfile.Default);
+                using var transaction = context.BeginTransaction(IsolationProfile.SafeNonBlockingReads);
                 try
                 {
                     var helper = new EntityHelper<User, int>(context, new AuditValueResolver());
@@ -133,7 +133,7 @@ public class MultitenantIntegrationTests
         await Task.WhenAll(tasks);
 
         var countSc = new SqlContainer(context).AppendQuery("SELECT COUNT(*) FROM Users");
-        var count = await countSc.ExecuteScalarAsync();
+        var count = await countSc.ExecuteScalarAsync<long>();
         Assert.Equal(0L, count);
     }
 }

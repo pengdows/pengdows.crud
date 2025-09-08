@@ -39,6 +39,12 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     private bool _isReadConnection = true;
     private bool _isWriteConnection = true;
     private long _maxNumberOfOpenConnections;
+    
+    // Additional performance counters for granular connection pool monitoring
+    private long _totalConnectionsCreated;
+    private long _totalConnectionsReused;
+    private long _totalConnectionFailures;
+    private long _totalConnectionTimeoutFailures;
     private readonly bool _setDefaultSearchPath;
     private string _connectionSessionSettings = string.Empty;
     private readonly DbMode _originalUserMode;
@@ -360,6 +366,72 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     public int MaxOutputParameters => _dataSourceInfo.MaxOutputParameters;
     public long MaxNumberOfConnections => Interlocked.Read(ref _maxNumberOfOpenConnections);
     public long NumberOfOpenConnections => Interlocked.Read(ref _connectionCount);
+    
+    /// <summary>
+    /// Gets the total number of connections created during the lifetime of this context.
+    /// This includes both reused and newly created connections.
+    /// </summary>
+    public long TotalConnectionsCreated => Interlocked.Read(ref _totalConnectionsCreated);
+    
+    /// <summary>
+    /// Gets the total number of connections that were reused from the connection pool.
+    /// </summary>
+    public long TotalConnectionsReused => Interlocked.Read(ref _totalConnectionsReused);
+    
+    /// <summary>
+    /// Gets the total number of connection failures that occurred.
+    /// </summary>
+    public long TotalConnectionFailures => Interlocked.Read(ref _totalConnectionFailures);
+    
+    /// <summary>
+    /// Gets the total number of connection timeout failures specifically.
+    /// </summary>
+    public long TotalConnectionTimeoutFailures => Interlocked.Read(ref _totalConnectionTimeoutFailures);
+    
+    /// <summary>
+    /// Gets the connection pool efficiency ratio (reused / total created).
+    /// Returns 0 if no connections have been created.
+    /// </summary>
+    public double ConnectionPoolEfficiency
+    {
+        get
+        {
+            var total = TotalConnectionsCreated;
+            return total == 0 ? 0.0 : (double)TotalConnectionsReused / total;
+        }
+    }
+    
+    /// <summary>
+    /// Tracks a connection failure for monitoring purposes.
+    /// </summary>
+    /// <param name="exception">The exception that caused the failure</param>
+    internal void TrackConnectionFailure(Exception exception)
+    {
+        Interlocked.Increment(ref _totalConnectionFailures);
+        
+        // Track specific timeout failures
+        if (IsTimeoutException(exception))
+        {
+            Interlocked.Increment(ref _totalConnectionTimeoutFailures);
+        }
+        
+        _logger.LogWarning(exception, "Connection failure tracked: {ExceptionType}", exception.GetType().Name);
+    }
+    
+    /// <summary>
+    /// Tracks a connection reuse for monitoring purposes.
+    /// </summary>
+    internal void TrackConnectionReuse()
+    {
+        Interlocked.Increment(ref _totalConnectionsReused);
+    }
+    
+    private static bool IsTimeoutException(Exception exception)
+    {
+        return exception is TimeoutException ||
+               exception.GetType().Name.Contains("Timeout", StringComparison.OrdinalIgnoreCase) ||
+               exception.Message.Contains("timeout", StringComparison.OrdinalIgnoreCase);
+    }
     public string QuotePrefix => _dialect.QuotePrefix;
     public string QuoteSuffix => _dialect.QuoteSuffix;
     public bool? ForceManualPrepare => _forceManualPrepare;
@@ -586,6 +658,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
                     {
                         _logger.LogDebug("Opening connection: " + Name);
                         var now = Interlocked.Increment(ref _connectionCount);
+                        Interlocked.Increment(ref _totalConnectionsCreated);
                         UpdateMaxConnectionCount(now);
                         break;
                     }

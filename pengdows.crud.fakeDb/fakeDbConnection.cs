@@ -28,7 +28,6 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
     private int? _sharedFailAfterOpenCount;
     private bool _isBroken;
     private bool _skipFirstFailOnOpen;
-    private bool _skipFirstBreakConnection;
     private fakeDbFactory? _factoryRef;
     private string? _emulatedTypeName;
     public override string DataSource => "FakeSource";
@@ -226,7 +225,6 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
         _openCallCount = 0;
         _isBroken = false;
         _skipFirstFailOnOpen = false;
-        _skipFirstBreakConnection = false;
         _factoryRef = null;
     }
 

@@ -1,6 +1,9 @@
+using System.Data;
 using System.Data.Common;
+using System.Text;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.wrappers;
 
 namespace pengdows.crud.dialects;
 
@@ -9,12 +12,15 @@ namespace pengdows.crud.dialects;
 /// </summary>
 public class MySqlDialect : SqlDialect
 {
+    private string? _sessionSettings;
     public MySqlDialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger)
     {
     }
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.MySql;
+    public override string QuotePrefix => "`";
+    public override string QuoteSuffix => "`";
     public override string ParameterMarker => "@";
     public override bool SupportsNamedParameters => true;
     public override int MaxParameterLimit => 65535;
@@ -35,9 +41,67 @@ public class MySqlDialect : SqlDialect
 
     public override string GetVersionQuery() => "SELECT VERSION()";
 
+    public override async Task<IDatabaseProductInfo> DetectDatabaseInfoAsync(ITrackedConnection connection)
+    {
+        var productInfo = await base.DetectDatabaseInfoAsync(connection);
+        
+        // Check and cache MySQL session settings during initialization
+        if (_sessionSettings == null)
+        {
+            _sessionSettings = CheckMySqlSettings(connection);
+            if (!string.IsNullOrWhiteSpace(_sessionSettings))
+            {
+                Logger.LogInformation("Applying MySQL session settings on first connect:\n{Settings}", _sessionSettings);
+            }
+            else
+            {
+                Logger.LogInformation("MySQL session settings: no changes required (already compliant)");
+            }
+        }
+        
+        return productInfo;
+    }
+
+    private string CheckMySqlSettings(IDbConnection connection)
+    {
+        try
+        {
+            var expectedSqlMode = "STRICT_ALL_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,ANSI_QUOTES,NO_BACKSLASH_ESCAPES";
+
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = "SELECT @@sql_mode";
+
+            var currentSqlMode = cmd.ExecuteScalar()?.ToString() ?? "";
+            
+            var sb = new StringBuilder();
+            
+            // Check if current sql_mode contains all expected modes
+            if (!SqlModeContainsAll(currentSqlMode, expectedSqlMode))
+            {
+                sb.Append($"SET SESSION sql_mode = '{expectedSqlMode}';");
+            }
+
+            return sb.ToString();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to check MySQL session settings, applying default settings");
+            return "SET SESSION sql_mode = 'STRICT_ALL_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,ANSI_QUOTES,NO_BACKSLASH_ESCAPES';";
+        }
+    }
+
+    private static bool SqlModeContainsAll(string currentMode, string expectedMode)
+    {
+        var currentModes = currentMode.Split(',').Select(m => m.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var expectedModes = expectedMode.Split(',').Select(m => m.Trim());
+        
+        return expectedModes.All(expectedModes => currentModes.Contains(expectedModes));
+    }
+
     public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
     {
-        const string baseSettings = "SET SESSION sql_mode = 'STRICT_ALL_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,ANSI_QUOTES,NO_BACKSLASH_ESCAPES';";
+        const string defaultSqlMode = "SET SESSION sql_mode = 'STRICT_ALL_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,ANSI_QUOTES,NO_BACKSLASH_ESCAPES';";
+        var baseSettings = _sessionSettings ?? defaultSqlMode;
         
         if (readOnly)
         {
@@ -50,7 +114,8 @@ public class MySqlDialect : SqlDialect
     [Obsolete]
     public override string GetConnectionSessionSettings()
     {
-        return "SET SESSION sql_mode = 'STRICT_ALL_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,ANSI_QUOTES,NO_BACKSLASH_ESCAPES';";
+        const string defaultSqlMode = "SET SESSION sql_mode = 'STRICT_ALL_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,ANSI_QUOTES,NO_BACKSLASH_ESCAPES';";
+        return _sessionSettings ?? defaultSqlMode;
     }
 
     public override SqlStandardLevel DetermineStandardCompliance(Version? version)

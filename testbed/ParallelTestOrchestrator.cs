@@ -235,9 +235,12 @@ public class ParallelTestOrchestrator
         if (failed > 0)
         {
             Console.WriteLine("FAILURES:");
-            foreach (var failure in results.Where(r => !r.Success))
+            foreach (var result in results)
             {
-                Console.WriteLine($"  {failure.ContainerName}: {failure.Error}");
+                if (!result.Success)
+                {
+                    Console.WriteLine($"  {result.ContainerName}: {result.Error}");
+                }
             }
         }
 
