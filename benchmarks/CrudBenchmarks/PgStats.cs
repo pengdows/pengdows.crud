@@ -55,7 +55,7 @@ internal static class PgStats
         await DumpTableSummaryAsync(conn, "film");
         await DumpTableSummaryAsync(conn, "film_actor");
 
-        // Connection activity
+        // Connection activity and pool usage
         Console.WriteLine("-- Connection activity (pg_stat_activity) --");
         var act = (await conn.QueryAsync(
             @"SELECT state,
@@ -74,6 +74,50 @@ internal static class PgStats
             Console.WriteLine(
                 $"state={r.state,-12} count={r.cnt,3} avg_backend={r.avg_backend_ms,8:0.0}ms max_backend={r.max_backend_ms,8:0.0}ms avg_xact={r.avg_xact_ms,8:0.0}ms max_xact={r.max_xact_ms,8:0.0}ms");
         }
+
+        // Connection pool details
+        Console.WriteLine("-- Connection pool details --");
+        var poolDetails = (await conn.QueryAsync(
+            @"SELECT application_name,
+                     client_addr,
+                     client_port,
+                     state,
+                     backend_start,
+                     state_change,
+                     query_start,
+                     xact_start,
+                     EXTRACT(EPOCH FROM now() - backend_start)*1000 as backend_age_ms,
+                     EXTRACT(EPOCH FROM now() - state_change)*1000 as state_age_ms
+                FROM pg_stat_activity
+               WHERE datname = current_database()
+                 AND pid != pg_backend_pid()
+            ORDER BY backend_start"))
+            .ToList();
+        
+        foreach (var p in poolDetails)
+        {
+            Console.WriteLine(
+                $"app={p.application_name ?? "null",-15} addr={p.client_addr ?? "local",-12} port={p.client_port,5} state={p.state,-8} backend_age={p.backend_age_ms,8:0.0}ms state_age={p.state_age_ms,8:0.0}ms");
+        }
+
+        // Database-level statistics
+        Console.WriteLine("-- Database connection summary --");
+        var dbStats = (await conn.QuerySingleAsync(
+            @"SELECT d.datname,
+                     d.numbackends as active_connections,
+                     d.xact_commit,
+                     d.xact_rollback,
+                     d.blks_read,
+                     d.blks_hit,
+                     CASE WHEN (d.blks_read + d.blks_hit) > 0 
+                          THEN round((d.blks_hit::numeric / (d.blks_read + d.blks_hit)) * 100, 2)
+                          ELSE 0 
+                     END as cache_hit_ratio
+                FROM pg_stat_database d
+               WHERE d.datname = current_database()"));
+        
+        Console.WriteLine(
+            $"db={dbStats.datname} active_conn={dbStats.active_connections} commits={dbStats.xact_commit} rollbacks={dbStats.xact_rollback} cache_hit_ratio={dbStats.cache_hit_ratio}%");
 
         Console.WriteLine(label == null
             ? "==== End PostgreSQL Statistics Summary ===="

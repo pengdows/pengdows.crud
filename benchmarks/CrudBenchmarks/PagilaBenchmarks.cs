@@ -73,13 +73,18 @@ public class PagilaBenchmarks : IAsyncDisposable
         _map = new TypeMapRegistry();
         _map.Register<Film>();
         _map.Register<FilmActor>();
-        // Use SingleWriter to keep a persistent connection for identity retrieval performance
+        // Use Standard mode for fair comparison with Dapper's ephemeral connections
         var cfg = new DatabaseContextConfiguration
         {
             ConnectionString = _connStr,
-            ReadWriteMode = ReadWriteMode.ReadWrite
+            ReadWriteMode = ReadWriteMode.ReadWrite,
+            DbMode = DbMode.Standard
         };
         _ctx = new DatabaseContext(cfg, NpgsqlFactory.Instance, null, _map);
+        
+        // Verify the actual mode being used
+        Console.WriteLine($"[BENCHMARK] Configured DbMode: {cfg.DbMode}");
+        Console.WriteLine($"[BENCHMARK] Actual ConnectionMode: {_ctx.ConnectionMode}");
 
         _filmHelper = new EntityHelper<Film, int>(_ctx);
         _filmActorHelper = new EntityHelper<FilmActor, int>(_ctx);
