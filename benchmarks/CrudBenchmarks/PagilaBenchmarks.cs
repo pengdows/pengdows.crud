@@ -11,7 +11,16 @@ using pengdows.crud.attributes;
 
 namespace CrudBenchmarks;
 
+/// <summary>
+/// pengdows.crud Parameter Naming Reference:
+/// - RETRIEVE operations: w0, w1, w2... (WHERE parameters)  
+/// - UPDATE operations: s0, s1, s2... (SET parameters), w0, w1... (WHERE parameters)
+/// - CREATE operations: i0, i1, i2... (INSERT parameters)
+/// - DELETE operations: w0, w1, w2... (WHERE parameters)
+/// See: /docs/parameter-naming-convention.md
+/// </summary>
 [MemoryDiagnoser]
+[SimpleJob(warmupCount: 5, iterationCount: 10, invocationCount: 100)]
 public class PagilaBenchmarks : IAsyncDisposable
 {
     private IContainer? _container;
@@ -35,7 +44,7 @@ public class PagilaBenchmarks : IAsyncDisposable
     private (int actorId, int filmId) _compositeKey;
     private long _runCounter;
     [ThreadStatic] private static string? _currentBenchmarkLabel;
-    private bool _collectPerIteration = true;
+    private bool _collectPerIteration = false; // Disable for representative benchmarks
 
     [GlobalSetup]
     public async Task GlobalSetup()
@@ -81,7 +90,7 @@ public class PagilaBenchmarks : IAsyncDisposable
             DbMode = DbMode.Standard
         };
         _ctx = new DatabaseContext(cfg, NpgsqlFactory.Instance, null, _map);
-        
+
         // Verify the actual mode being used
         Console.WriteLine($"[BENCHMARK] Configured DbMode: {cfg.DbMode}");
         Console.WriteLine($"[BENCHMARK] Actual ConnectionMode: {_ctx.ConnectionMode}");
@@ -105,6 +114,18 @@ public class PagilaBenchmarks : IAsyncDisposable
         var row = await conn.QuerySingleAsync<(int actor_id, int film_id)>("select actor_id, film_id from film_actor limit 1");
         _compositeKey = (row.actor_id, row.film_id);
         _filmIds10 = (await conn.QueryAsync<int>("select film_id from film order by film_id limit 10")).ToList();
+
+        // Warmup both systems to ensure fair comparison
+        Console.WriteLine("[WARMUP] Warming up pengdows.crud...");
+        var warmupFilm = await _filmHelper.RetrieveOneAsync(_filmId);
+        Console.WriteLine($"[WARMUP] pengdows.crud warmed up - retrieved film: {warmupFilm?.Title}");
+        
+        Console.WriteLine("[WARMUP] Warming up Dapper...");
+        await using var warmupConn = new NpgsqlConnection(_connStr);
+        var dapperWarmup = await warmupConn.QuerySingleOrDefaultAsync<Film>(
+            "select film_id as \"Id\", title as \"Title\", length as \"Length\" from film where film_id=@id",
+            new { id = _filmId });
+        Console.WriteLine($"[WARMUP] Dapper warmed up - retrieved film: {dapperWarmup?.Title}");
     }
 
     [GlobalCleanup]
@@ -239,8 +260,8 @@ CREATE TABLE film_actor (
     public async Task<Film?> GetFilmById_Mine()
     {
         _currentBenchmarkLabel = nameof(GetFilmById_Mine);
-        var sc = _filmHelper.BuildRetrieve(new[] { _filmId });
-        return await _filmHelper.LoadSingleAsync(sc);
+        // Use simple approach for single ID retrieval - no container reuse needed
+        return await _filmHelper.RetrieveOneAsync(_filmId);
     }
 
     [Benchmark]
@@ -257,8 +278,9 @@ CREATE TABLE film_actor (
     public async Task<FilmActor?> GetFilmActorComposite_Mine()
     {
         _currentBenchmarkLabel = nameof(GetFilmActorComposite_Mine);
-        var sc = _filmActorHelper.BuildRetrieve(new[] { new FilmActor { ActorId = _compositeKey.actorId, FilmId = _compositeKey.filmId } });
-        return await _filmActorHelper.LoadSingleAsync(sc);
+        // Use simple approach for composite key retrieval
+        var key = new FilmActor { ActorId = _compositeKey.actorId, FilmId = _compositeKey.filmId };
+        return await _filmActorHelper.RetrieveOneAsync(key);
     }
 
     [Benchmark]
@@ -275,11 +297,16 @@ CREATE TABLE film_actor (
     public async Task<int> UpdateFilm_Mine()
     {
         _currentBenchmarkLabel = nameof(UpdateFilm_Mine);
-        // Toggle length to avoid no-op updates
+
+        // Retrieve film
         var film = await _filmHelper.RetrieveOneAsync(_filmId);
         if (film == null) return 0;
+
+        // Toggle length to avoid no-op updates
         film.Length = _flip ? film.Length + 1 : film.Length - 1;
         _flip = !_flip;
+
+        // Update film
         return await _filmHelper.UpdateAsync(film);
     }
 
@@ -323,10 +350,19 @@ CREATE TABLE film_actor (
         return await conn.ExecuteAsync("delete from film where film_id=@id", new { id });
     }
 
+
+    private ISqlContainer? scGetTenFilms_Mine;
     [Benchmark]
     public async Task<List<Film>> GetTenFilms_Mine()
     {
-        return await _filmHelper.RetrieveAsync(_filmIds10);
+        if (scGetTenFilms_Mine == null)
+        {
+            scGetTenFilms_Mine = _filmHelper.BuildRetrieve(_filmIds10);
+        }
+        scGetTenFilms_Mine.SetParameterValue("w0", _filmIds10.ToArray());
+        return await _filmHelper.LoadListAsync(scGetTenFilms_Mine);
+
+        //return await _filmHelper.RetrieveAsync(_filmIds10);
     }
 
     [Benchmark]

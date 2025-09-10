@@ -26,7 +26,6 @@ public partial class EntityHelper<TEntity, TRowID> :
     // Cache for compiled property setters
     private static readonly ConcurrentDictionary<PropertyInfo, Action<object, object?>> _propertySetters = new();
 
-    private readonly Lazy<CachedSqlTemplates> _cachedSqlTemplates;
     // Per-dialect templates are cached in _templatesByDialect
 
 
@@ -66,18 +65,53 @@ public partial class EntityHelper<TEntity, TRowID> :
     private readonly BoundedCache<int, ColumnPlan[]> _readerPlans = new(MaxReaderPlans);
     private const int MaxReaderPlans = 32;
 
+    // Optimized execution plan with pre-compiled delegates for blazing fast per-row execution
     private sealed class ColumnPlan
     {
-        public Action<ITrackedReader, object> Apply { get; }
+        public int Ordinal { get; }
+        public Func<ITrackedReader, int, object?> ValueExtractor { get; }  // Fast typed value extraction
+        public Func<object?, object?>? Coercer { get; }                     // Pre-compiled type coercion (null if not needed)
+        public Action<object, object?> Setter { get; }                     // Pre-compiled property setter
 
-        public ColumnPlan(Action<ITrackedReader, object> apply)
+        public ColumnPlan(int ordinal, Func<ITrackedReader, int, object?> valueExtractor, 
+                         Func<object?, object?>? coercer, Action<object, object?> setter)
         {
-            Apply = apply;
+            Ordinal = ordinal;
+            ValueExtractor = valueExtractor;
+            Coercer = coercer;
+            Setter = setter;
+        }
+
+        // Optimized execution: get → coerce (if needed) → set (2-3 fast operations)
+        public void Apply(ITrackedReader reader, object target)
+        {
+            if (!reader.IsDBNull(Ordinal))
+            {
+                try
+                {
+                    var raw = ValueExtractor(reader, Ordinal);
+                    var value = Coercer != null ? Coercer(raw) : raw;  // Skip coercion if types match
+                    Setter(target, value);
+                }
+                catch (Exception ex)
+                {
+                    // Let certain exceptions bubble up unchanged (e.g., ArgumentException for enum parsing in Throw mode)
+                    if (ex is ArgumentException)
+                        throw;
+                        
+                    var columnName = reader.GetName(Ordinal);
+                    throw new InvalidValueException(
+                        $"Unable to set property from value that was stored in the database: {columnName} :{ex.Message}");
+                }
+            }
         }
     }
 
     // SQL templates cached per dialect to support context overrides
     private readonly ConcurrentDictionary<SupportedDatabase, Lazy<CachedSqlTemplates>> _templatesByDialect = new();
+    
+    // Pre-built SqlContainer cache for common operations (GetById, GetByIds, etc.)
+    private readonly ConcurrentDictionary<SupportedDatabase, Lazy<CachedContainerTemplates>> _containersByDialect = new();
 
 
 
@@ -94,7 +128,7 @@ public partial class EntityHelper<TEntity, TRowID> :
         }
 
         Initialize(databaseContext, enumParseBehavior);
-        _cachedSqlTemplates = new Lazy<CachedSqlTemplates>(BuildCachedSqlTemplatesNeutral);
+        // Templates are now built directly per dialect
     }
 
     private void Initialize(IDatabaseContext databaseContext, EnumParseFailureMode enumParseBehavior)

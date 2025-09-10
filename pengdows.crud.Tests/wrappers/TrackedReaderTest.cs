@@ -6,9 +6,12 @@ using System.Data;
 using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
+using pengdows.crud.connection;
 using pengdows.crud.fakeDb;
+using pengdows.crud.threading;
 using pengdows.crud.wrappers;
 using Xunit;
+using Moq;
 
 #endregion
 
@@ -21,10 +24,13 @@ public class TrackedReaderTests
         public int CloseCallCount { get; private set; }
         public bool WasClosed => CloseCallCount > 0;
         
-        public string ConnectionString => "test";
+        public string ConnectionString { get; set; } = "test";
         public int ConnectionTimeout => 30;
         public string Database => "testdb";
+        public string DataSource => "localhost";
+        public string ServerVersion => "1.0.0";
         public ConnectionState State => ConnectionState.Open;
+        public ConnectionLocalState LocalState { get; } = new();
 
         public void Close() => CloseCallCount++;
         public void Dispose() => Close();
@@ -36,16 +42,38 @@ public class TrackedReaderTests
         public IDbTransaction BeginTransaction(IsolationLevel il) => throw new NotImplementedException();
         public void ChangeDatabase(string databaseName) => throw new NotImplementedException();
         public IDbCommand CreateCommand() => throw new NotImplementedException();
-        public DataTable? GetSchema() => null;
-        public DataTable? GetSchema(string collectionName) => null;
-        public DataTable? GetSchema(string collectionName, string?[]? restrictionValues) => null;
-        public IAsyncDisposable GetLock() => new TestAsyncDisposable();
+        public DataTable GetSchema() => new DataTable();
+        public DataTable GetSchema(string dataSourceInformation) => new DataTable();
+        public DataTable GetSchema(string collectionName, string?[]? restrictionValues) => new DataTable();
+        public ILockerAsync GetLock() => new TestLockerAsync();
     }
     
     private class TestAsyncDisposable : IAsyncDisposable
     {
         public int DisposeCallCount { get; private set; }
         public bool WasDisposed => DisposeCallCount > 0;
+        
+        public ValueTask DisposeAsync()
+        {
+            DisposeCallCount++;
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private class TestLockerAsync : ILockerAsync
+    {
+        public int DisposeCallCount { get; private set; }
+        public bool WasDisposed => DisposeCallCount > 0;
+        
+        public Task LockAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+        
+        public Task<bool> TryLockAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(true);
+        }
         
         public ValueTask DisposeAsync()
         {
@@ -61,7 +89,7 @@ public class TrackedReaderTests
         using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object>>());
         
         var connection = new TestTrackedConnection();
-        var locker = new TestAsyncDisposable();
+        var locker = new TestLockerAsync();
 
         var tracked = new TrackedReader(reader, connection, locker, true);
 
@@ -79,7 +107,7 @@ public class TrackedReaderTests
         using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object>>());
         
         var connection = new TestTrackedConnection();
-        var locker = new TestAsyncDisposable();
+        var locker = new TestLockerAsync();
 
         var tracked = new TrackedReader(reader, connection, locker, true);
 
@@ -96,7 +124,7 @@ public class TrackedReaderTests
         using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object>>());
         
         var connection = new TestTrackedConnection();
-        var locker = new TestAsyncDisposable();
+        var locker = new TestLockerAsync();
 
         var tracked = new TrackedReader(reader, connection, locker, true);
 
@@ -114,7 +142,7 @@ public class TrackedReaderTests
         using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object>>());
         
         var connection = new TestTrackedConnection();
-        var locker = new TestAsyncDisposable();
+        var locker = new TestLockerAsync();
 
         var tracked = new TrackedReader(reader, connection, locker, true);
 
@@ -139,7 +167,7 @@ public class TrackedReaderTests
         reader.Read(); // Position at first row
         
         var connection = new TestTrackedConnection();
-        var locker = new TestAsyncDisposable();
+        var locker = new TestLockerAsync();
 
         var tracked = new TrackedReader(reader, connection, locker, false);
 

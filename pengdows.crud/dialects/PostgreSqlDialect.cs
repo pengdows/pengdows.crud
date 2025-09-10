@@ -28,7 +28,7 @@ public class PostgreSqlDialect : SqlDialect
     public override int ParameterNameMaxLength => 63;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.PostgreSQL;
     public override bool RequiresStoredProcParameterNameMatch => true;
-    
+
     // PostgreSQL benefits from prepared statements
     public override bool PrepareStatements => true;
     public override SqlStandardLevel MaxSupportedStandard =>
@@ -58,25 +58,29 @@ public class PostgreSqlDialect : SqlDialect
     public override async Task<IDatabaseProductInfo> DetectDatabaseInfoAsync(ITrackedConnection connection)
     {
         var productInfo = await base.DetectDatabaseInfoAsync(connection);
-        
+
         // Check and cache PostgreSQL session settings during initialization
         if (_sessionSettings == null)
         {
-            _sessionSettings = CheckPostgreSqlSettings(connection);
+            var (settingsToApply, currentSettings) = CheckPostgreSqlSettingsWithDetails(connection);
+            _sessionSettings = settingsToApply;
+
             if (!string.IsNullOrWhiteSpace(_sessionSettings))
             {
-                Logger.LogInformation("Applying PostgreSQL session settings on first connect:\n{Settings}", _sessionSettings);
+                Logger.LogInformation("PostgreSQL session settings detected: {CurrentSettings}. Applying changes:\n{Settings}",
+                    string.Join(", ", currentSettings.Select(kv => $"{kv.Key}={kv.Value}")), _sessionSettings);
             }
             else
             {
-                Logger.LogInformation("PostgreSQL session settings: no changes required (already compliant)");
+                Logger.LogInformation("PostgreSQL session settings detected: {CurrentSettings}. No changes required (already compliant)",
+                    string.Join(", ", currentSettings.Select(kv => $"{kv.Key}={kv.Value}")));
             }
         }
-        
+
         return productInfo;
     }
 
-    private string CheckPostgreSqlSettings(IDbConnection connection)
+    private (string settingsToApply, Dictionary<string, string> currentSettings) CheckPostgreSqlSettingsWithDetails(IDbConnection connection)
     {
         try
         {
@@ -118,18 +122,32 @@ public class PostgreSqlDialect : SqlDialect
                 }
             }
 
-            return sb.ToString();
+            return (sb.ToString(), currentSettings);
         }
         catch (Exception ex)
         {
             Logger.LogWarning(ex, "Failed to check PostgreSQL session settings, applying default settings");
-            return @"SET standard_conforming_strings = on;
+            var fallbackSettings = new Dictionary<string, string>
+            {
+                { "standard_conforming_strings", "unknown" },
+                { "client_min_messages", "unknown" }
+            };
+            var fallbackSessionSettings = @"SET standard_conforming_strings = on;
 SET client_min_messages = warning;";
+            return (fallbackSessionSettings, fallbackSettings);
         }
+    }
+
+    private string CheckPostgreSqlSettings(IDbConnection connection)
+    {
+        var (settingsToApply, _) = CheckPostgreSqlSettingsWithDetails(connection);
+        return settingsToApply;
     }
 
     public override string GetBaseSessionSettings()
     {
+        // If session settings haven't been detected yet (e.g., in testing),
+        // provide fallback settings that are compatible with older PostgreSQL versions
         return _sessionSettings ?? @"SET standard_conforming_strings = on;
 SET client_min_messages = warning;";
     }
@@ -147,14 +165,14 @@ SET client_min_messages = warning;";
     public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
     {
         var baseSettings = GetBaseSessionSettings();
-        // Note: search_path should not be set in session settings - manage via connection string or application logic
+
         return BuildSessionSettings(baseSettings, GetReadOnlySessionSettings(), readOnly);
     }
 
     [Obsolete]
     public override string GetConnectionSessionSettings()
     {
-        return @"SET standard_conforming_strings = on;
+        return _sessionSettings ?? @"SET standard_conforming_strings = on;
 SET client_min_messages = warning;";
     }
 
@@ -168,7 +186,7 @@ SET client_min_messages = warning;";
                 // Use the inherited ConnectionStringBuilder property instead of reflection
                 ConnectionStringBuilder.ConnectionString = connection.ConnectionString;
                 var builder = ConnectionStringBuilder;
-                
+
                 // Configure auto-prepare settings for optimal prepared statement performance
                 if (builder.ContainsKey("MaxAutoPrepare") && (int)builder["MaxAutoPrepare"] == 0)
                 {
@@ -178,7 +196,7 @@ SET client_min_messages = warning;";
                 {
                     builder["MaxAutoPrepare"] = 64;
                 }
-                
+
                 if (builder.ContainsKey("AutoPrepareMinUsages") && (int)builder["AutoPrepareMinUsages"] == 0)
                 {
                     builder["AutoPrepareMinUsages"] = 2;
@@ -187,10 +205,10 @@ SET client_min_messages = warning;";
                 {
                     builder["AutoPrepareMinUsages"] = 2;
                 }
-                
+
                 // Multiplexing must be disabled for prepare to work properly
                 builder["Multiplexing"] = false;
-                
+
                 connection.ConnectionString = builder.ToString();
             }
             catch (Exception ex)

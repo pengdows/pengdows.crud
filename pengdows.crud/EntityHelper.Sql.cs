@@ -19,54 +19,32 @@ public partial class EntityHelper<TEntity, TRowID>
         public List<IColumnInfo> UpdateColumns = null!;
     }
 
+    private class CachedContainerTemplates
+    {
+        public ISqlContainer GetByIdTemplate = null!;
+        public ISqlContainer GetByIdsTemplate = null!;
+        public ISqlContainer InsertTemplate = null!;
+        public ISqlContainer UpdateTemplate = null!;
+        public ISqlContainer DeleteByIdTemplate = null!;
+        public ISqlContainer BaseRetrieveTemplate = null!;
+        public ISqlContainer UpsertTemplate = null!;
+    }
+
     /// <summary>
-    /// Neutral Token Replacement Strategy for SQL Template Caching
+    /// Dialect-Specific SQL Template Caching
     /// 
-    /// This optimization allows EntityHelper to cache SQL templates in a database-agnostic format,
-    /// then replace neutral tokens with dialect-specific tokens at runtime. This approach provides
-    /// significant performance benefits by avoiding repeated SQL string construction.
+    /// This optimization caches SQL templates directly for each database dialect,
+    /// eliminating runtime token replacement and string transformation overhead.
+    /// Templates are built once per dialect and reused for all subsequent operations.
     /// 
-    /// Token Definitions:
-    /// - {Q} = Quote prefix (e.g., "[" for SQL Server, "`" for MySQL, "\"" for PostgreSQL)
-    /// - {q} = Quote suffix (e.g., "]" for SQL Server, "`" for MySQL, "\"" for PostgreSQL)  
-    /// - {S} = Composite identifier separator (typically "." for schema.table notation)
-    /// - {P}paramname = Parameter placeholder (replaced with dialect-specific parameter markers)
-    /// 
-    /// Example transformation:
-    /// Neutral: "SELECT {Q}Name{q} FROM {Q}Users{q} WHERE {Q}Id{q} = {P}id"
-    /// SQL Server: "SELECT [Name] FROM [Users] WHERE [Id] = @id"
-    /// PostgreSQL: "SELECT \"Name\" FROM \"Users\" WHERE \"Id\" = $1"
-    /// MySQL: "SELECT `Name` FROM `Users` WHERE `Id` = ?"
-    /// 
-    /// This strategy enables:
-    /// 1. Single cached template per operation type (instead of per dialect)
-    /// 2. Fast string replacement instead of complex SQL building
-    /// 3. Thread-safe caching without dialect-specific lock contention
-    /// 4. Reduced memory usage across multi-database applications
+    /// Benefits:
+    /// 1. Zero transformation cost - templates are ready to use
+    /// 2. Reduced memory allocations from string operations
+    /// 3. Better cache locality per database type
+    /// 4. Simpler code path without regex and string replacements
     /// </summary>
-    
-    // Neutral tokens used in cached SQL; replaced with dialect-specific tokens on retrieval
-    private const string NeutralQuotePrefix = "{Q}";
-    private const string NeutralQuoteSuffix = "{q}";
-    private const string NeutralSeparator = "{S}";
 
-    private static string WrapNeutral(string name)
-    {
-        return string.IsNullOrEmpty(name) ? string.Empty : NeutralQuotePrefix + name + NeutralQuoteSuffix;
-    }
-
-    private static string ReplaceNeutralTokens(string sql, ISqlDialect dialect)
-    {
-        if (string.IsNullOrEmpty(sql))
-        {
-            return sql;
-        }
-        return sql.Replace(NeutralQuotePrefix, dialect.QuotePrefix)
-                  .Replace(NeutralQuoteSuffix, dialect.QuoteSuffix)
-                  .Replace(NeutralSeparator, dialect.CompositeIdentifierSeparator);
-    }
-
-    private CachedSqlTemplates BuildCachedSqlTemplatesNeutral()
+    private CachedSqlTemplates BuildCachedSqlTemplatesForDialect(ISqlDialect dialect)
     {
         var idCol = _tableInfo.Columns.Values.FirstOrDefault(c => c.IsId)
                      ?? throw new InvalidOperationException($"No ID column defined for {typeof(TEntity).Name}");
@@ -80,7 +58,7 @@ public partial class EntityHelper<TEntity, TRowID>
         var wrappedCols = new List<string>();
         for (var i = 0; i < insertColumns.Count; i++)
         {
-            wrappedCols.Add(WrapNeutral(insertColumns[i].Name));
+            wrappedCols.Add(dialect.WrapObjectName(insertColumns[i].Name));
         }
 
         var paramNames = new List<string>();
@@ -89,13 +67,16 @@ public partial class EntityHelper<TEntity, TRowID>
         {
             var name = $"i{i}";
             paramNames.Add(name);
-            valuePlaceholders.Add("{P}" + name);
+            var placeholder = dialect.SupportsNamedParameters 
+                ? dialect.ParameterMarker + name
+                : dialect.ParameterMarker;
+            valuePlaceholders.Add(placeholder);
         }
 
         var insertSql =
-            $"INSERT INTO {BuildWrappedTableNameNeutral()} ({string.Join(", ", wrappedCols)}) VALUES ({string.Join(", ", valuePlaceholders)})";
+            $"INSERT INTO {BuildWrappedTableName(dialect)} ({string.Join(", ", wrappedCols)}) VALUES ({string.Join(", ", valuePlaceholders)})";
         var deleteSql =
-            $"DELETE FROM {BuildWrappedTableNameNeutral()} WHERE {WrapNeutral(idCol.Name)} = {{0}}";
+            $"DELETE FROM {BuildWrappedTableName(dialect)} WHERE {dialect.WrapObjectName(idCol.Name)} = {{0}}";
 
         var updateColumns = _tableInfo.Columns.Values
             .Where(c => !c.IsId && !c.IsVersion && !c.IsNonUpdateable && !c.IsCreatedBy && !c.IsCreatedOn)
@@ -103,7 +84,7 @@ public partial class EntityHelper<TEntity, TRowID>
             .ToList();
 
         var updateSql =
-            $"UPDATE {BuildWrappedTableNameNeutral()} SET {{0}} WHERE {WrapNeutral(idCol.Name)} = {{1}}";
+            $"UPDATE {BuildWrappedTableName(dialect)} SET {{0}} WHERE {dialect.WrapObjectName(idCol.Name)} = {{1}}";
 
         return new CachedSqlTemplates
         {
@@ -120,43 +101,46 @@ public partial class EntityHelper<TEntity, TRowID>
     {
         return _templatesByDialect
             .GetOrAdd(dialect.DatabaseType, _ => new Lazy<CachedSqlTemplates>(() =>
-            {
-                var neutral = _cachedSqlTemplates.Value;
-                string RenderParams(string sql)
-                {
-                    // Replace neutral param tokens with dialect-appropriate placeholders.
-                    // Named: {P}name -> @name or :name
-                    // Positional: {P}name -> ?
-                    return Regex.Replace(sql, "\\{P\\}([A-Za-z_][A-Za-z0-9_]*)",
-                        m => dialect.SupportsNamedParameters
-                            ? string.Concat(dialect.ParameterMarker, m.Groups[1].Value)
-                            : dialect.ParameterMarker);
-                }
-
-                return new CachedSqlTemplates
-                {
-                    InsertSql = RenderParams(ReplaceNeutralTokens(neutral.InsertSql, dialect)),
-                    InsertColumns = neutral.InsertColumns,
-                    InsertParameterNames = neutral.InsertParameterNames,
-                    DeleteSql = ReplaceNeutralTokens(neutral.DeleteSql, dialect),
-                    UpdateSql = ReplaceNeutralTokens(neutral.UpdateSql, dialect),
-                    UpdateColumns = neutral.UpdateColumns
-                };
-            }))
+                BuildCachedSqlTemplatesForDialect(dialect)))
             .Value;
     }
 
-    private string BuildWrappedTableNameNeutral()
+    private CachedContainerTemplates BuildCachedContainerTemplatesForDialect(ISqlDialect dialect, IDatabaseContext context)
     {
-        if (string.IsNullOrWhiteSpace(_tableInfo.Schema))
-        {
-            return WrapNeutral(_tableInfo.Name);
-        }
-
-        var sb = new StringBuilder();
-        sb.Append(WrapNeutral(_tableInfo.Schema));
-        sb.Append(NeutralSeparator);
-        sb.Append(WrapNeutral(_tableInfo.Name));
-        return sb.ToString();
+        // Build pre-configured containers with parameters for common operations
+        var templates = new CachedContainerTemplates();
+        
+        // GetById - single ID parameter
+        templates.GetByIdTemplate = BuildRetrieve(new[] { default(TRowID)! }, context);
+        
+        // GetByIds - array parameter (will be updated with actual IDs)
+        templates.GetByIdsTemplate = BuildRetrieve(new[] { default(TRowID)!, default(TRowID)! }, context);
+        
+        // BaseRetrieve - no WHERE clause
+        templates.BaseRetrieveTemplate = BuildBaseRetrieve("a", context);
+        
+        // Insert - entity fields as parameters
+        var sampleEntity = new TEntity();
+        templates.InsertTemplate = BuildCreate(sampleEntity, context);
+        
+        // Update - entity fields as parameters
+        templates.UpdateTemplate = BuildUpdateAsync(sampleEntity, context).Result;
+        
+        // Delete by ID
+        templates.DeleteByIdTemplate = BuildDelete(default(TRowID)!, context);
+        
+        // Upsert
+        templates.UpsertTemplate = BuildUpsert(sampleEntity, context);
+        
+        return templates;
     }
+
+    private CachedContainerTemplates GetContainerTemplatesForDialect(ISqlDialect dialect, IDatabaseContext context)
+    {
+        return _containersByDialect
+            .GetOrAdd(dialect.DatabaseType, _ => new Lazy<CachedContainerTemplates>(() =>
+                BuildCachedContainerTemplatesForDialect(dialect, context)))
+            .Value;
+    }
+
 }

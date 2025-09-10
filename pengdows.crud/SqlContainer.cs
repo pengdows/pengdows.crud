@@ -704,6 +704,43 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }
     }
 
+    public ISqlContainer Clone()
+    {
+        // Create a new container with the same context - let it get a StringBuilder from the pool
+        var clone = new SqlContainer(_context, null, _logger);
+        
+        // Copy the SQL query content to the pooled StringBuilder
+        clone.Query.Clear();
+        clone.Query.Append(Query.ToString());
+        
+        // Copy the WHERE flag
+        clone.HasWhereAppended = HasWhereAppended;
+        
+        // Clone all parameters with the same names and types but allow value updates
+        foreach (var kvp in _parameters)
+        {
+            var originalParam = kvp.Value;
+            var clonedParam = _dialect.CreateDbParameter(
+                originalParam.ParameterName, 
+                originalParam.DbType, 
+                originalParam.Value);
+                
+            // Preserve parameter properties
+            clonedParam.Direction = originalParam.Direction;
+            clonedParam.Size = originalParam.Size;
+            clonedParam.Scale = originalParam.Scale;
+            clonedParam.Precision = originalParam.Precision;
+            
+            clone.AddParameter(clonedParam);
+        }
+        
+        // Copy parameter sequence for rendering
+        clone.ParamSequence.AddRange(ParamSequence);
+        clone._outputParameterCount = _outputParameterCount;
+        
+        return clone;
+    }
+
     protected override void DisposeManaged()
     {
         // Dispose managed resources here (clear parameters and return the builder to pool)

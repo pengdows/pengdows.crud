@@ -198,4 +198,11 @@ public interface ISqlContainer :ISafeAsyncDisposableBase
     /// <param name="captureReturn">Whether to capture the procedure return value when supported.</param>
     string WrapForStoredProc(ExecutionType executionType, bool includeParameters = true, bool captureReturn = false);
 
+    /// <summary>
+    /// Creates a lightweight clone of this container with the same SQL query and parameter structure,
+    /// allowing parameter values to be updated without affecting the original.
+    /// </summary>
+    /// <returns>A cloned container ready for parameter value updates.</returns>
+    ISqlContainer Clone();
+
 }

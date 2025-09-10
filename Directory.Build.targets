@@ -1,0 +1,8 @@
+<Project>
+  <!-- Vendor reference verification target - only runs for core assemblies -->
+  <Target Name="VerifyNoVendor" AfterTargets="Build" Condition="'$(SkipVerifyNoVendor)' != 'true' And '$(MSBuildProjectName)' != 'testbed' And '$(MSBuildProjectName)' != 'CrudBenchmarks' And '$(MSBuildProjectName)' != 'pengdows.crud.Tests' And '$(MSBuildProjectName)' != 'verify-novendor' And !$(MSBuildProjectDirectory.Contains('testbed')) And !$(MSBuildProjectDirectory.Contains('benchmarks')) And !$(MSBuildProjectDirectory.Contains('Tests'))">
+    <Exec Command="dotnet &quot;$(MSBuildThisFileDirectory)tools/verify-novendor/bin/Debug/net8.0/verify-novendor.dll&quot; &quot;$(TargetDir)&quot;" 
+          ContinueOnError="false"
+          IgnoreExitCode="false" />
+  </Target>
+</Project>

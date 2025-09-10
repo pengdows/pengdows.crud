@@ -31,7 +31,7 @@ public class ColumnInfo : IColumnInfo
     public bool IsLastUpdatedBy { get; set; }
     public bool IsLastUpdatedOn { get; set; }
     public int Ordinal { get; set; }
-    public Type EnumUnderlyingType { get; set; } = null!;
+    public Type? EnumUnderlyingType { get; set; }
     public bool EnumAsString { get; set; }
 
     public object? MakeParameterValueFromField<T>(T objectToCreate)
@@ -45,7 +45,7 @@ public class ColumnInfo : IColumnInfo
             {
                 value = DbType == DbType.String
                     ? value.ToString() // Save enum as string name
-                    : Convert.ChangeType(value, Enum.GetUnderlyingType(EnumType)); // Save enum as int
+                    : Convert.ChangeType(value, EnumUnderlyingType!); // Use cached underlying type
             }
 
             if (IsJsonType)

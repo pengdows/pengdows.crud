@@ -55,6 +55,12 @@ public interface IColumnInfo
     Type? EnumType { get; set; }
 
     /// <summary>
+    /// Underlying type of the enum when <see cref="IsEnum"/> is true.
+    /// Cached to avoid reflection during mapping.
+    /// </summary>
+    Type? EnumUnderlyingType { get; set; }
+
+    /// <summary>
     /// True when the column stores JSON data.
     /// </summary>
     bool IsJsonType { get; set; }

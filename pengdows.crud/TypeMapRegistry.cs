@@ -124,6 +124,7 @@ public sealed class TypeMapRegistry : ITypeMapRegistry
             // Only treat as enum when [EnumColumn] is present; plain enum properties are allowed but not special-cased.
             IsEnum             = enumAttr != null,
             EnumType           = enumAttr?.EnumType,
+            EnumUnderlyingType = enumAttr?.EnumType != null ? Enum.GetUnderlyingType(enumAttr.EnumType) : null,
             IsJsonType         = jsonAttr != null,
             JsonSerializerOptions = jsonAttr?.SerializerOptions != null
                 ? new JsonSerializerOptions(jsonAttr.SerializerOptions)

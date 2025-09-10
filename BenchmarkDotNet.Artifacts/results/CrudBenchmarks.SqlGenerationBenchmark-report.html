@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='utf-8' />
+<title>CrudBenchmarks.SqlGenerationBenchmark-20250909-155148</title>
+
+<style type="text/css">
+	table { border-collapse: collapse; display: block; width: 100%; overflow: auto; }
+	td, th { padding: 6px 13px; border: 1px solid #ddd; text-align: right; }
+	tr { background-color: #fff; border-top: 1px solid #ccc; }
+	tr:nth-child(even) { background: #f8f8f8; }
+</style>
+</head>
+<body>
+<pre><code>
+BenchmarkDotNet v0.14.0, Ubuntu 24.04.3 LTS (Noble Numbat)
+AMD Ryzen 9 5950X, 2 CPU, 8 logical and 8 physical cores
+.NET SDK 8.0.119
+  [Host]     : .NET 8.0.19 (8.0.1925.36514), X64 RyuJIT AVX2
+  Job-YNOEID : .NET 8.0.19 (8.0.1925.36514), X64 RyuJIT AVX2
+  Dry        : .NET 8.0.19 (8.0.1925.36514), X64 RyuJIT AVX2
+</code></pre>
+<pre><code></code></pre>
+
+<table>
+<thead><tr><th>Method                 </th><th>Job </th><th>IterationCount</th><th>LaunchCount</th><th>RunStrategy</th><th>UnrollFactor</th><th>WarmupCount</th><th>Mean    </th><th>Error</th><th>StdDev</th><th>Gen0</th><th>Allocated</th>
+</tr>
+</thead><tbody><tr><td>ParameterCreation_Mine</td><td>Job-YNOEID</td><td>10</td><td>Default</td><td>Default</td><td>16</td><td>3</td><td>34.196 ns</td><td>0.4357 ns</td><td>0.2882 ns</td><td>0.0072</td><td>120 B</td>
+</tr><tr><td>ParameterCreation_Dapper</td><td>Job-YNOEID</td><td>10</td><td>Default</td><td>Default</td><td>16</td><td>3</td><td>6.204 ns</td><td>0.3524 ns</td><td>0.2331 ns</td><td>0.0014</td><td>24 B</td>
+</tr><tr><td>ParameterCreation_Mine_String</td><td>Job-YNOEID</td><td>10</td><td>Default</td><td>Default</td><td>16</td><td>3</td><td>38.088 ns</td><td>0.2759 ns</td><td>0.1642 ns</td><td>0.0052</td><td>88 B</td>
+</tr><tr><td>ParameterCreation_Mine_Int</td><td>Job-YNOEID</td><td>10</td><td>Default</td><td>Default</td><td>16</td><td>3</td><td>29.490 ns</td><td>0.4143 ns</td><td>0.2167 ns</td><td>0.0067</td><td>112 B</td>
+</tr><tr><td>ParameterCreation_Mine</td><td>Dry</td><td>1</td><td>1</td><td>ColdStart</td><td>1</td><td>1</td><td>609,163.000 ns</td><td>NA</td><td>0.0000 ns</td><td>-</td><td>920 B</td>
+</tr><tr><td>ParameterCreation_Dapper</td><td>Dry</td><td>1</td><td>1</td><td>ColdStart</td><td>1</td><td>1</td><td>420,736.000 ns</td><td>NA</td><td>0.0000 ns</td><td>-</td><td>760 B</td>
+</tr><tr><td>ParameterCreation_Mine_String</td><td>Dry</td><td>1</td><td>1</td><td>ColdStart</td><td>1</td><td>1</td><td>610,954.000 ns</td><td>NA</td><td>0.0000 ns</td><td>-</td><td>888 B</td>
+</tr><tr><td>ParameterCreation_Mine_Int</td><td>Dry</td><td>1</td><td>1</td><td>ColdStart</td><td>1</td><td>1</td><td>698,437.000 ns</td><td>NA</td><td>0.0000 ns</td><td>-</td><td>912 B</td>
+</tr></tbody></table>
+</body>
+</html>

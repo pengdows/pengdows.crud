@@ -17,44 +17,32 @@ public partial class EntityHelper<TEntity, TRowID>
 
         var sc = ctx.CreateSqlContainer();
 
-        // Neutral SQL cached once per alias
-        var baseKey = $"BaseRetrieve:{alias}";
-        var neutral = GetCachedQuery(baseKey, () =>
+        // Build SQL directly for this dialect, cached per alias + product
+        var cacheKey = ctx.Product == _context.Product
+            ? $"BaseRetrieve:{alias}"
+            : $"BaseRetrieve:{alias}:{ctx.Product}";
+
+        var sql = GetCachedQuery(cacheKey, () =>
         {
             var hasAlias = !string.IsNullOrWhiteSpace(alias);
             var selectList = _tableInfo.OrderedColumns
                 .Select(col => (hasAlias
-                    ? WrapNeutral(alias) + NeutralSeparator
-                    : string.Empty) + WrapNeutral(col.Name));
+                    ? dialect.WrapObjectName(alias) + dialect.CompositeIdentifierSeparator
+                    : string.Empty) + dialect.WrapObjectName(col.Name));
             var sb = new StringBuilder();
             sb.Append("SELECT ")
                 .Append(string.Join(", ", selectList))
                 .Append("\nFROM ")
-                .Append(string.IsNullOrWhiteSpace(_tableInfo.Schema)
-                    ? WrapNeutral(_tableInfo.Name)
-                    : WrapNeutral(_tableInfo.Schema) + NeutralSeparator + WrapNeutral(_tableInfo.Name));
+                .Append(BuildWrappedTableName(dialect));
             if (hasAlias)
             {
-                sb.Append(' ').Append(WrapNeutral(alias));
+                sb.Append(' ').Append(dialect.WrapObjectName(alias));
             }
 
             return sb.ToString();
         });
 
-        // Dialect-expanded SQL cached per alias + product to avoid per-call token replacement
-        var expandedKey = ctx.Product == _context.Product
-            ? $"{baseKey}:exp"
-            : $"{baseKey}:{ctx.Product}:exp";
-
-        if (_queryCache.TryGet(expandedKey, out var expanded))
-        {
-            sc.Query.Append(expanded);
-            return sc;
-        }
-
-        var sql = ReplaceNeutralTokens(neutral, dialect);
-        expanded = _queryCache.GetOrAdd(expandedKey, _ => sql);
-        sc.Query.Append(expanded);
+        sc.Query.Append(sql);
         return sc;
     }
 
@@ -313,5 +301,48 @@ public partial class EntityHelper<TEntity, TRowID>
         }
 
         return sqlContainer;
+    }
+
+    /// <summary>
+    /// Fast-path method for retrieving a single entity by ID using cached containers.
+    /// Avoids BuildRetrieve overhead by cloning pre-built containers and updating parameter values.
+    /// </summary>
+    public async Task<TEntity?> RetrieveOneByIdFast(TRowID id, IDatabaseContext? context = null)
+    {
+        var ctx = context ?? _context;
+        var dialect = GetDialect(ctx);
+        
+        // Get cached container template and clone it
+        var templates = GetContainerTemplatesForDialect(dialect, ctx);
+        using var container = templates.GetByIdTemplate.Clone();
+        
+        // Update the ID parameter value
+        container.SetParameterValue("p0", new[] { id });
+        
+        // Execute directly
+        return await LoadSingleAsync(container);
+    }
+
+    /// <summary>
+    /// Fast-path method for retrieving multiple entities by IDs using cached containers.
+    /// Avoids BuildRetrieve overhead by cloning pre-built containers and updating parameter values.
+    /// </summary>
+    public async Task<List<TEntity>> RetrieveByIdsFast(IEnumerable<TRowID> ids, IDatabaseContext? context = null)
+    {
+        var idArray = ids.ToArray();
+        if (idArray.Length == 0) return new List<TEntity>();
+        
+        var ctx = context ?? _context;
+        var dialect = GetDialect(ctx);
+        
+        // Get cached container template and clone it
+        var templates = GetContainerTemplatesForDialect(dialect, ctx);
+        using var container = templates.GetByIdsTemplate.Clone();
+        
+        // Update the ID parameter value with the actual array
+        container.SetParameterValue("p0", idArray);
+        
+        // Execute directly
+        return await LoadListAsync(container);
     }
 }
