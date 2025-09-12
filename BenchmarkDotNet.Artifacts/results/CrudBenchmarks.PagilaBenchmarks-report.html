@@ -2,7 +2,7 @@
 <html lang='en'>
 <head>
 <meta charset='utf-8' />
-<title>CrudBenchmarks.PagilaBenchmarks-20250909-165807</title>
+<title>CrudBenchmarks.PagilaBenchmarks-20250911-191415</title>
 
 <style type="text/css">
 	table { border-collapse: collapse; display: block; width: 100%; overflow: auto; }
@@ -17,17 +17,41 @@ BenchmarkDotNet v0.14.0, Ubuntu 24.04.3 LTS (Noble Numbat)
 AMD Ryzen 9 5950X, 2 CPU, 8 logical and 8 physical cores
 .NET SDK 8.0.119
   [Host]     : .NET 8.0.19 (8.0.1925.36514), X64 RyuJIT AVX2
-  Job-WHKJOA : .NET 8.0.19 (8.0.1925.36514), X64 RyuJIT AVX2
+  Job-ARXIKU : .NET 8.0.19 (8.0.1925.36514), X64 RyuJIT AVX2
+  ShortRun   : .NET 8.0.19 (8.0.1925.36514), X64 RyuJIT AVX2
 </code></pre>
-<pre><code>InvocationCount=100  IterationCount=10  UnrollFactor=1  
-WarmupCount=5  
+<pre><code>UnrollFactor=1  
 </code></pre>
 
 <table>
-<thead><tr><th>Method      </th><th>FilmCount</th><th>ActorCount</th><th>Mean</th><th>Error</th><th>StdDev</th><th>Allocated</th>
+<thead><tr><th>Method                         </th><th>Job </th><th>InvocationCount</th><th>IterationCount</th><th>LaunchCount</th><th>WarmupCount</th><th>FilmCount</th><th>ActorCount</th><th>Mean</th><th>Error</th><th>StdDev</th><th>Median</th><th>Allocated</th>
 </tr>
-</thead><tbody><tr><td>GetFilmById_Mine</td><td>1000</td><td>200</td><td>492.0 &mu;s</td><td>31.97 &mu;s</td><td>21.14 &mu;s</td><td>15.36 KB</td>
-</tr><tr><td>GetFilmById_Dapper</td><td>1000</td><td>200</td><td>291.4 &mu;s</td><td>16.82 &mu;s</td><td>10.01 &mu;s</td><td>3.5 KB</td>
+</thead><tbody><tr><td>GetFilmById_Mine_Traditional</td><td>Job-ARXIKU</td><td>100</td><td>10</td><td>Default</td><td>5</td><td>1000</td><td>200</td><td>504.5 &mu;s</td><td>38.84 &mu;s</td><td>25.69 &mu;s</td><td>501.3 &mu;s</td><td>15.35 KB</td>
+</tr><tr><td>GetFilmById_Mine_FastPath</td><td>Job-ARXIKU</td><td>100</td><td>10</td><td>Default</td><td>5</td><td>1000</td><td>200</td><td>NA</td><td>NA</td><td>NA</td><td>NA</td><td>NA</td>
+</tr><tr><td>GetFilmById_Dapper</td><td>Job-ARXIKU</td><td>100</td><td>10</td><td>Default</td><td>5</td><td>1000</td><td>200</td><td>301.1 &mu;s</td><td>16.45 &mu;s</td><td>10.88 &mu;s</td><td>300.8 &mu;s</td><td>3.47 KB</td>
+</tr><tr><td>GetFilmActorComposite_Mine</td><td>Job-ARXIKU</td><td>100</td><td>10</td><td>Default</td><td>5</td><td>1000</td><td>200</td><td>462.8 &mu;s</td><td>24.44 &mu;s</td><td>16.17 &mu;s</td><td>469.5 &mu;s</td><td>16.31 KB</td>
+</tr><tr><td>GetFilmActorComposite_Dapper</td><td>Job-ARXIKU</td><td>100</td><td>10</td><td>Default</td><td>5</td><td>1000</td><td>200</td><td>296.5 &mu;s</td><td>10.91 &mu;s</td><td>6.49 &mu;s</td><td>294.9 &mu;s</td><td>3.66 KB</td>
+</tr><tr><td>UpdateFilm_Mine</td><td>Job-ARXIKU</td><td>100</td><td>10</td><td>Default</td><td>5</td><td>1000</td><td>200</td><td>1,018.3 &mu;s</td><td>113.10 &mu;s</td><td>74.81 &mu;s</td><td>1,024.8 &mu;s</td><td>29.44 KB</td>
+</tr><tr><td>UpdateFilm_Dapper</td><td>Job-ARXIKU</td><td>100</td><td>10</td><td>Default</td><td>5</td><td>1000</td><td>200</td><td>643.5 &mu;s</td><td>29.50 &mu;s</td><td>19.51 &mu;s</td><td>637.2 &mu;s</td><td>4.34 KB</td>
+</tr><tr><td>InsertThenDeleteFilm_Mine_Traditional</td><td>Job-ARXIKU</td><td>100</td><td>10</td><td>Default</td><td>5</td><td>1000</td><td>200</td><td>1,399.7 &mu;s</td><td>43.74 &mu;s</td><td>26.03 &mu;s</td><td>1,395.4 &mu;s</td><td>27.26 KB</td>
+</tr><tr><td>InsertThenDeleteFilm_Mine_FastPath</td><td>Job-ARXIKU</td><td>100</td><td>10</td><td>Default</td><td>5</td><td>1000</td><td>200</td><td>1,488.8 &mu;s</td><td>126.01 &mu;s</td><td>83.35 &mu;s</td><td>1,508.6 &mu;s</td><td>28.45 KB</td>
+</tr><tr><td>InsertThenDeleteFilm_Dapper</td><td>Job-ARXIKU</td><td>100</td><td>10</td><td>Default</td><td>5</td><td>1000</td><td>200</td><td>1,151.5 &mu;s</td><td>21.13 &mu;s</td><td>13.98 &mu;s</td><td>1,147.8 &mu;s</td><td>4.39 KB</td>
+</tr><tr><td>GetTenFilms_Mine_Traditional</td><td>Job-ARXIKU</td><td>100</td><td>10</td><td>Default</td><td>5</td><td>1000</td><td>200</td><td>568.6 &mu;s</td><td>54.21 &mu;s</td><td>35.85 &mu;s</td><td>561.8 &mu;s</td><td>17.09 KB</td>
+</tr><tr><td>GetTenFilms_Mine_FastPath</td><td>Job-ARXIKU</td><td>100</td><td>10</td><td>Default</td><td>5</td><td>1000</td><td>200</td><td>NA</td><td>NA</td><td>NA</td><td>NA</td><td>NA</td>
+</tr><tr><td>GetTenFilms_Dapper</td><td>Job-ARXIKU</td><td>100</td><td>10</td><td>Default</td><td>5</td><td>1000</td><td>200</td><td>331.6 &mu;s</td><td>15.63 &mu;s</td><td>10.34 &mu;s</td><td>330.0 &mu;s</td><td>5.55 KB</td>
+</tr><tr><td>GetFilmById_Mine_Traditional</td><td>ShortRun</td><td>1</td><td>3</td><td>1</td><td>3</td><td>1000</td><td>200</td><td>801.6 &mu;s</td><td>4,767.31 &mu;s</td><td>261.31 &mu;s</td><td>677.6 &mu;s</td><td>16.9 KB</td>
+</tr><tr><td>GetFilmById_Mine_FastPath</td><td>ShortRun</td><td>1</td><td>3</td><td>1</td><td>3</td><td>1000</td><td>200</td><td>NA</td><td>NA</td><td>NA</td><td>NA</td><td>NA</td>
+</tr><tr><td>GetFilmById_Dapper</td><td>ShortRun</td><td>1</td><td>3</td><td>1</td><td>3</td><td>1000</td><td>200</td><td>364.0 &mu;s</td><td>277.96 &mu;s</td><td>15.24 &mu;s</td><td>363.9 &mu;s</td><td>4.81 KB</td>
+</tr><tr><td>GetFilmActorComposite_Mine</td><td>ShortRun</td><td>1</td><td>3</td><td>1</td><td>3</td><td>1000</td><td>200</td><td>820.4 &mu;s</td><td>5,404.78 &mu;s</td><td>296.25 &mu;s</td><td>653.9 &mu;s</td><td>17.9 KB</td>
+</tr><tr><td>GetFilmActorComposite_Dapper</td><td>ShortRun</td><td>1</td><td>3</td><td>1</td><td>3</td><td>1000</td><td>200</td><td>416.8 &mu;s</td><td>605.38 &mu;s</td><td>33.18 &mu;s</td><td>402.9 &mu;s</td><td>4.98 KB</td>
+</tr><tr><td>UpdateFilm_Mine</td><td>ShortRun</td><td>1</td><td>3</td><td>1</td><td>3</td><td>1000</td><td>200</td><td>1,270.2 &mu;s</td><td>1,225.29 &mu;s</td><td>67.16 &mu;s</td><td>1,266.5 &mu;s</td><td>32.63 KB</td>
+</tr><tr><td>UpdateFilm_Dapper</td><td>ShortRun</td><td>1</td><td>3</td><td>1</td><td>3</td><td>1000</td><td>200</td><td>820.8 &mu;s</td><td>936.87 &mu;s</td><td>51.35 &mu;s</td><td>813.5 &mu;s</td><td>6.37 KB</td>
+</tr><tr><td>InsertThenDeleteFilm_Mine_Traditional</td><td>ShortRun</td><td>1</td><td>3</td><td>1</td><td>3</td><td>1000</td><td>200</td><td>1,731.7 &mu;s</td><td>647.65 &mu;s</td><td>35.50 &mu;s</td><td>1,730.8 &mu;s</td><td>29.64 KB</td>
+</tr><tr><td>InsertThenDeleteFilm_Mine_FastPath</td><td>ShortRun</td><td>1</td><td>3</td><td>1</td><td>3</td><td>1000</td><td>200</td><td>1,784.5 &mu;s</td><td>1,486.35 &mu;s</td><td>81.47 &mu;s</td><td>1,756.8 &mu;s</td><td>31.58 KB</td>
+</tr><tr><td>InsertThenDeleteFilm_Dapper</td><td>ShortRun</td><td>1</td><td>3</td><td>1</td><td>3</td><td>1000</td><td>200</td><td>1,322.3 &mu;s</td><td>760.51 &mu;s</td><td>41.69 &mu;s</td><td>1,331.2 &mu;s</td><td>6.46 KB</td>
+</tr><tr><td>GetTenFilms_Mine_Traditional</td><td>ShortRun</td><td>1</td><td>3</td><td>1</td><td>3</td><td>1000</td><td>200</td><td>824.5 &mu;s</td><td>5,459.33 &mu;s</td><td>299.24 &mu;s</td><td>667.9 &mu;s</td><td>18.63 KB</td>
+</tr><tr><td>GetTenFilms_Mine_FastPath</td><td>ShortRun</td><td>1</td><td>3</td><td>1</td><td>3</td><td>1000</td><td>200</td><td>NA</td><td>NA</td><td>NA</td><td>NA</td><td>NA</td>
+</tr><tr><td>GetTenFilms_Dapper</td><td>ShortRun</td><td>1</td><td>3</td><td>1</td><td>3</td><td>1000</td><td>200</td><td>451.0 &mu;s</td><td>276.60 &mu;s</td><td>15.16 &mu;s</td><td>449.2 &mu;s</td><td>7.12 KB</td>
 </tr></tbody></table>
 </body>
 </html>

@@ -33,8 +33,11 @@ public class SqlServerDialect : SqlDialect
     public override SupportedDatabase DatabaseType => SupportedDatabase.SqlServer;
     public override string ParameterMarker => "@";
     public override bool SupportsNamedParameters => true;
+    // IMMUTABLE: SQL Server sp_executesql documented limit - do not change without extensive testing
     public override int MaxParameterLimit => 2100;
+    // IMMUTABLE: SQL Server output parameter limit - do not change without extensive testing  
     public override int MaxOutputParameters => 1024;
+    // IMMUTABLE: SQL Server identifier length limit - do not change without extensive testing
     public override int ParameterNameMaxLength => 128;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.Exec;
     

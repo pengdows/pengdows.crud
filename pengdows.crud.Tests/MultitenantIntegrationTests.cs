@@ -110,10 +110,12 @@ public class MultitenantIntegrationTests
             await deleteSc.ExecuteNonQueryAsync();
         }
 
-        var tasks = new Task[10];
-        for (var i = 0; i < tasks.Length; i++)
+        // SQLite in SingleConnection mode doesn't support concurrent transactions
+        // Run operations sequentially for SQLite, concurrently for others
+        if (dbType == SupportedDatabase.Sqlite)
         {
-            tasks[i] = Task.Run(async () =>
+            // Run tasks sequentially for SQLite
+            for (var i = 0; i < 10; i++)
             {
                 using var transaction = context.BeginTransaction(IsolationProfile.SafeNonBlockingReads);
                 try
@@ -127,10 +129,33 @@ public class MultitenantIntegrationTests
                     transaction.Rollback();
                     throw new Exception($"Tenant {tenant} failed: {ex.Message}", ex);
                 }
-            });
+            }
         }
+        else
+        {
+            // Run tasks concurrently for other databases
+            var tasks = new Task[10];
+            for (var i = 0; i < tasks.Length; i++)
+            {
+                tasks[i] = Task.Run(async () =>
+                {
+                    using var transaction = context.BeginTransaction(IsolationProfile.SafeNonBlockingReads);
+                    try
+                    {
+                        var helper = new EntityHelper<User, int>(context, new AuditValueResolver());
+                        await PerformCrud(helper, transaction);
+                        transaction.Commit();
+                    }
+                    catch (Exception ex)
+                    {
+                        transaction.Rollback();
+                        throw new Exception($"Tenant {tenant} failed: {ex.Message}", ex);
+                    }
+                });
+            }
 
-        await Task.WhenAll(tasks);
+            await Task.WhenAll(tasks);
+        }
 
         var countSc = new SqlContainer(context).AppendQuery("SELECT COUNT(*) FROM Users");
         var count = await countSc.ExecuteScalarAsync<long>();

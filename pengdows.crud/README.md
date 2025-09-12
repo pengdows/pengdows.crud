@@ -57,6 +57,8 @@ Due to missing or outdated .NET providers:
 - Sybase ASE
 - SQL Anywhere
 
+Note: DB2 and Sybase ASE are not planned and will not be implemented.
+
 Want support? Ask the vendor to ship a **real** ADO.NET provider.
 
 ---

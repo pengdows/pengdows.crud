@@ -205,4 +205,13 @@ public interface ISqlContainer :ISafeAsyncDisposableBase
     /// <returns>A cloned container ready for parameter value updates.</returns>
     ISqlContainer Clone();
 
+    /// <summary>
+    /// Creates a lightweight clone of this container with the same SQL query and parameter structure,
+    /// but with a different database context. This is essential for cached containers that need to
+    /// work with different contexts (e.g., transactions, multi-tenancy).
+    /// </summary>
+    /// <param name="context">The database context to use for the cloned container. If null, uses the original context.</param>
+    /// <returns>A cloned container with the specified context, ready for parameter value updates.</returns>
+    ISqlContainer Clone(IDatabaseContext? context);
+
 }

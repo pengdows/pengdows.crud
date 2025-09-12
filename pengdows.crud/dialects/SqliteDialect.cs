@@ -19,7 +19,9 @@ public class SqliteDialect : SqlDialect
     public override SupportedDatabase DatabaseType => SupportedDatabase.Sqlite;
     public override string ParameterMarker => "@";
     public override bool SupportsNamedParameters => true;
+    // IMMUTABLE: SQLite SQLITE_MAX_VARIABLE_NUMBER default - do not change without extensive testing
     public override int MaxParameterLimit => 999;
+    // IMMUTABLE: SQLite identifier length limit - do not change without extensive testing
     public override int ParameterNameMaxLength => 255;
     
     // SQLite benefits from prepared statements with inherent prepare support

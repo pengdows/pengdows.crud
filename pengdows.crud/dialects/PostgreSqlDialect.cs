@@ -23,8 +23,11 @@ public class PostgreSqlDialect : SqlDialect
     public override string ParameterMarker => ":";
     public override bool SupportsNamedParameters => true;
     public override bool SupportsSetValuedParameters => true;
+    // IMMUTABLE: PostgreSQL practical parameter limit - do not change without extensive testing
     public override int MaxParameterLimit => 32767;
+    // IMMUTABLE: PostgreSQL conservative output parameter limit for stored functions - do not change without extensive testing
     public override int MaxOutputParameters => 100;
+    // IMMUTABLE: PostgreSQL NAMEDATALEN-1 identifier limit - do not change without extensive testing
     public override int ParameterNameMaxLength => 63;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.PostgreSQL;
     public override bool RequiresStoredProcParameterNameMatch => true;

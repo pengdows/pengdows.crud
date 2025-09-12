@@ -64,7 +64,8 @@ public class ColumnInfoTests
             Name = "EnumValue",
             PropertyInfo = typeof(Sample).GetProperty(nameof(Sample.EnumValue)),
             DbType = DbType.Int32,
-            EnumType = typeof(TestEnum)
+            EnumType = typeof(TestEnum),
+            EnumUnderlyingType = Enum.GetUnderlyingType(typeof(TestEnum))
         };
 
         var result = column.MakeParameterValueFromField(obj);

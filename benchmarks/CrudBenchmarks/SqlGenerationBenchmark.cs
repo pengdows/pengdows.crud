@@ -18,7 +18,6 @@ public class SqlGenerationBenchmark
     private EntityHelper<Film, int> _filmHelper = null!;
     
     private int _filmId = 1;
-    private ISqlContainer _cachedContainer = null!;
     private string _staticSql = null!;
 
     [GlobalSetup]
@@ -32,8 +31,7 @@ public class SqlGenerationBenchmark
         _ctx = new DatabaseContext("fake", factory, _map, DbMode.Standard, ReadWriteMode.ReadWrite);
         _filmHelper = new EntityHelper<Film, int>(_ctx);
         
-        // Pre-build container to isolate object loading from SQL generation
-        _cachedContainer = _filmHelper.BuildRetrieve(new[] { _filmId });
+        // EntityHelper will handle internal caching automatically
         
         // Static SQL for comparison (what Dapper essentially uses)
         _staticSql = "SELECT \"film_id\", \"title\", \"length\" FROM \"public\".\"film\" WHERE \"film_id\" = ANY($1)";
@@ -51,7 +49,7 @@ public class SqlGenerationBenchmark
     [Benchmark]
     public string SqlGeneration_Mine_GetSql()
     {
-        // Test just getting the SQL string from pre-built container
+        // Test just getting the SQL string from newly built container
         var container = _filmHelper.BuildRetrieve(new[] { _filmId });
         return container.Query.ToString();
     }
@@ -71,17 +69,35 @@ public class SqlGenerationBenchmark
     }
 
     [Benchmark] 
-    public ISqlContainer SqlGeneration_Mine_BuildUpdate()
+    public ISqlContainer SqlGeneration_Mine_BuildUpdate_Traditional()
     {
-        // Test UPDATE SQL generation
+        // Traditional approach: Clear cache each time to simulate no caching
+        _filmHelper.ClearCaches();
         var film = new Film { Id = _filmId, Title = "Test", Length = 120 };
-        return _filmHelper.BuildUpdateAsync(film).Result;
+        return _filmHelper.BuildUpdateAsync(film, false, _ctx).Result;
+    }
+    
+    [Benchmark] 
+    public ISqlContainer SqlGeneration_Mine_BuildUpdate_FastPath()
+    {
+        // Fast-path approach: Uses cached templates (cache is warmed up)
+        var film = new Film { Id = _filmId, Title = "Test", Length = 120 };
+        return _filmHelper.BuildUpdateAsync(film, false, _ctx).Result;
     }
 
     [Benchmark]
-    public ISqlContainer SqlGeneration_Mine_BuildCreate()
+    public ISqlContainer SqlGeneration_Mine_BuildCreate_Traditional()
     {
-        // Test INSERT SQL generation
+        // Traditional approach: Clear cache each time to simulate no caching
+        _filmHelper.ClearCaches();
+        var film = new Film { Id = _filmId, Title = "Test", Length = 120 };
+        return _filmHelper.BuildCreate(film, _ctx);
+    }
+    
+    [Benchmark]
+    public ISqlContainer SqlGeneration_Mine_BuildCreate_FastPath()
+    {
+        // Fast-path approach: Uses cached templates (cache is warmed up)
         var film = new Film { Id = _filmId, Title = "Test", Length = 120 };
         return _filmHelper.BuildCreate(film, _ctx);
     }

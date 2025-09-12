@@ -179,7 +179,6 @@ public class ParallelTestOrchestrator
                 Container = new FirebirdSqlTestContainer(),
                 TestProviderFactory = (db, sp) => new FirebirdTestProvider(db, sp)
             },
-            // Add Sybase as needed
         };
 
         // Oracle - check if external Oracle is available
@@ -195,8 +194,6 @@ public class ParallelTestOrchestrator
         }
 
         // Additional databases can be added here:
-        // - DB2 (ibmcom/db2) - requires IBM.Data.DB2 package
-        // - Sybase ASE - requires AdoNetCore.AseClient (already available)
         // - Others as needed
 
         return configurations;

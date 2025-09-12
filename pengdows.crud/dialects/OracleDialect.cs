@@ -18,12 +18,14 @@ public class OracleDialect : SqlDialect
     public override SupportedDatabase DatabaseType => SupportedDatabase.Oracle;
     public override string ParameterMarker => ":";
     public override bool SupportsNamedParameters => true;
-    // Oracle bind variable limit: we follow 64,000 as a practical upper bound
+    // IMMUTABLE: Oracle bind variable limit: we follow 64,000 as a practical upper bound
     // for modern Oracle (12c+) engines and ODP.NET providers. This aligns with
     // widely observed limits in production and avoids overly conservative caps.
     // Do not change without verifying against official Oracle docs/provider behavior.
     public override int MaxParameterLimit => 64000;
+    // IMMUTABLE: Oracle output parameter limit - do not change without extensive testing
     public override int MaxOutputParameters => 1024;
+    // IMMUTABLE: Oracle pre-12.2 identifier length limit - do not change without extensive testing
     public override int ParameterNameMaxLength => 30;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.Oracle;
     public override bool RequiresStoredProcParameterNameMatch => true;

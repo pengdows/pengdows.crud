@@ -19,12 +19,15 @@ public class MySqlDialect : SqlDialect
     }
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.MySql;
-    public override string QuotePrefix => "`";
-    public override string QuoteSuffix => "`";
+    public override string QuotePrefix => "\"";
+    public override string QuoteSuffix => "\"";
     public override string ParameterMarker => "@";
     public override bool SupportsNamedParameters => true;
+    // IMMUTABLE: MySQL theoretical maximum parameter limit - do not change without extensive testing
     public override int MaxParameterLimit => 65535;
+    // IMMUTABLE: MySQL output parameter limit - do not change without extensive testing
     public override int MaxOutputParameters => 65535;
+    // IMMUTABLE: MySQL identifier length limit - do not change without extensive testing
     public override int ParameterNameMaxLength => 64;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.Call;
     

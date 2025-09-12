@@ -40,6 +40,8 @@ The library follows a layered architecture with these key components:
 
 ## Development Commands
 
+**IMPORTANT**: Whenever changes are made to this codebase, ALL unit tests should pass and ALL integration tests (in the "testbed" app) should pass. This ensures code quality and prevents regressions across all supported database providers.
+
 ### Build and Test
 ```bash
 # Build entire solution

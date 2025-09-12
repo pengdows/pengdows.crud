@@ -172,8 +172,10 @@ public class TrackedReaderTests
         var tracked = new TrackedReader(reader, connection, locker, false);
 
         Assert.Equal(2, tracked.FieldCount);
-        Assert.Equal("value", tracked[0]);
+        Assert.Equal("value2", tracked[0]);  // First column "col" has "value2"
+        Assert.Equal("value", tracked[1]);   // Second column "field0" has "value"  
         Assert.Equal("value2", tracked["col"]);
+        Assert.Equal("value", tracked["field0"]);
     }
 
     [Fact]

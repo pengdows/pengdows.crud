@@ -21,7 +21,6 @@ public class IsolationBenchmarks
     private EntityHelper<Film, int> _filmHelper = null!;
     
     private int _filmId = 1;
-    private ISqlContainer _cachedContainer = null!;
     private string _staticSql = null!;
 
     [GlobalSetup]
@@ -39,8 +38,7 @@ public class IsolationBenchmarks
         _ctx = new DatabaseContext(cfg, NpgsqlFactory.Instance, null, _map);
         _filmHelper = new EntityHelper<Film, int>(_ctx);
         
-        // Pre-build container to isolate object loading from SQL generation
-        _cachedContainer = _filmHelper.BuildRetrieve(new[] { _filmId });
+        // EntityHelper will handle internal caching automatically
         
         // Static SQL for comparison
         _staticSql = "SELECT \"film_id\", \"title\", \"length\" FROM \"public\".\"film\" WHERE \"film_id\" = ANY($1)";
@@ -73,19 +71,18 @@ public class IsolationBenchmarks
     // ============= OBJECT LOADING BENCHMARKS =============
     
     [Benchmark]
-    public async Task<Film?> ObjectLoading_Mine_WithSqlGen()
+    public async Task<Film?> ObjectLoading_Mine_Traditional()
     {
-        // Full pipeline: SQL generation + execution + object loading
+        // Traditional approach: SQL generation + execution + object loading
         var sc = _filmHelper.BuildRetrieve(new[] { _filmId });
         return await _filmHelper.LoadSingleAsync(sc);
     }
     
     [Benchmark]
-    public async Task<Film?> ObjectLoading_Mine_CachedSql()
+    public async Task<Film?> ObjectLoading_Mine_FastPath()
     {
-        // Execution + object loading only (SQL pre-generated)
-        _cachedContainer.SetParameterValue("p0", new[] { _filmId });
-        return await _filmHelper.LoadSingleAsync(_cachedContainer);
+        // Fast-path: EntityHelper's built-in caching with cloning
+        return await _filmHelper.RetrieveOneAsync(_filmId, _ctx);
     }
     
     [Benchmark]

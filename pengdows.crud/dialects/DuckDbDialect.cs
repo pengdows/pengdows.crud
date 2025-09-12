@@ -19,7 +19,9 @@ public class DuckDbDialect : SqlDialect
     public override SupportedDatabase DatabaseType => SupportedDatabase.DuckDB;
     public override string ParameterMarker => "$";
     public override bool SupportsNamedParameters => true;
+    // IMMUTABLE: DuckDB practical parameter limit - do not change without extensive testing
     public override int MaxParameterLimit => 65535;
+    // IMMUTABLE: DuckDB identifier length limit - do not change without extensive testing
     public override int ParameterNameMaxLength => 255;
     
     // DuckDB supports prepare for modest performance gains

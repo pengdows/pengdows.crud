@@ -29,8 +29,7 @@ public class PagilaBenchmarks : IAsyncDisposable
     private TypeMapRegistry _map = null!;
     private EntityHelper<Film, int> _filmHelper = null!;
     private EntityHelper<FilmActor, int> _filmActorHelper = null!;
-    private ISqlContainer _insertFilmSc = null!;
-    private ISqlContainer _deleteByTitleSc = null!;
+    // Remove manual template caching - use EntityHelper's built-in caching
 
     [Params(1000)]
     public int FilmCount;
@@ -98,14 +97,7 @@ public class PagilaBenchmarks : IAsyncDisposable
         _filmHelper = new EntityHelper<Film, int>(_ctx);
         _filmActorHelper = new EntityHelper<FilmActor, int>(_ctx);
 
-        // Prebuild reusable insert and delete containers
-        var seed = new Film { Title = "seed", Length = 0 };
-        _insertFilmSc = _filmHelper.BuildCreate(seed, _ctx);
-
-        _deleteByTitleSc = _ctx.CreateSqlContainer();
-        _deleteByTitleSc.AddParameterWithValue("t", DbType.String, "seed");
-        var pDel = _deleteByTitleSc.MakeParameterName("t");
-        _deleteByTitleSc.Query.Append($"delete from film where title = {pDel}");
+        // EntityHelper will handle internal caching and cloning automatically
 
         // pick keys to use in benchmarks
         await using var conn = new NpgsqlConnection(_connStr);
@@ -257,11 +249,19 @@ CREATE TABLE film_actor (
     }
 
     [Benchmark]
-    public async Task<Film?> GetFilmById_Mine()
+    public async Task<Film?> GetFilmById_Mine_Traditional()
     {
-        _currentBenchmarkLabel = nameof(GetFilmById_Mine);
-        // Use simple approach for single ID retrieval - no container reuse needed
+        _currentBenchmarkLabel = nameof(GetFilmById_Mine_Traditional);
+        // Traditional approach
         return await _filmHelper.RetrieveOneAsync(_filmId);
+    }
+
+    [Benchmark]
+    public async Task<Film?> GetFilmById_Mine_FastPath()
+    {
+        _currentBenchmarkLabel = nameof(GetFilmById_Mine_FastPath);
+        // Fast-path approach - uses EntityHelper's built-in caching with cloning
+        return await _filmHelper.RetrieveOneAsync(_filmId, _ctx);
     }
 
     [Benchmark]
@@ -325,17 +325,40 @@ CREATE TABLE film_actor (
     }
 
     [Benchmark]
-    public async Task<int> InsertThenDeleteFilm_Mine()
+    public async Task<int> InsertThenDeleteFilm_Mine_Traditional()
     {
-        _currentBenchmarkLabel = nameof(InsertThenDeleteFilm_Mine);
-        // Reuse prebuilt containers and only update parameter values
+        _currentBenchmarkLabel = nameof(InsertThenDeleteFilm_Mine_Traditional);
+        // Traditional approach - build containers each time
         var title = $"Bench_{Interlocked.Increment(ref _runCounter):D10}";
-        _insertFilmSc.SetParameterValue("i0", title);  // Title
-        _insertFilmSc.SetParameterValue("i1", 123);    // Length
-        await _insertFilmSc.ExecuteNonQueryAsync();
+        
+        var film = new Film { Title = title, Length = 123 };
+        var insertContainer = _filmHelper.BuildCreate(film, _ctx);
+        await insertContainer.ExecuteNonQueryAsync();
 
-        _deleteByTitleSc.SetParameterValue("t", title);
-        return await _deleteByTitleSc.ExecuteNonQueryAsync();
+        var deleteContainer = _ctx.CreateSqlContainer();
+        deleteContainer.AddParameterWithValue("t", DbType.String, title);
+        var pDel = deleteContainer.MakeParameterName("t");
+        deleteContainer.Query.Append($"delete from film where title = {pDel}");
+        return await deleteContainer.ExecuteNonQueryAsync();
+    }
+    
+    [Benchmark]
+    public async Task<int> InsertThenDeleteFilm_Mine_FastPath()
+    {
+        _currentBenchmarkLabel = nameof(InsertThenDeleteFilm_Mine_FastPath);
+        // FastPath approach - uses EntityHelper's internal caching
+        var title = $"Bench_{Interlocked.Increment(ref _runCounter):D10}";
+        
+        var film = new Film { Title = title, Length = 123 };
+        // EntityHelper will use internal caching for CreateAsync if implemented
+        await _filmHelper.CreateAsync(film, _ctx);
+
+        // For delete, we still need custom SQL since it's by title, not ID
+        var deleteContainer = _ctx.CreateSqlContainer();
+        deleteContainer.AddParameterWithValue("t", DbType.String, title);
+        var pDel = deleteContainer.MakeParameterName("t");
+        deleteContainer.Query.Append($"delete from film where title = {pDel}");
+        return await deleteContainer.ExecuteNonQueryAsync();
     }
 
     [Benchmark]
@@ -351,18 +374,19 @@ CREATE TABLE film_actor (
     }
 
 
-    private ISqlContainer? scGetTenFilms_Mine;
     [Benchmark]
-    public async Task<List<Film>> GetTenFilms_Mine()
+    public async Task<List<Film>> GetTenFilms_Mine_Traditional()
     {
-        if (scGetTenFilms_Mine == null)
-        {
-            scGetTenFilms_Mine = _filmHelper.BuildRetrieve(_filmIds10);
-        }
-        scGetTenFilms_Mine.SetParameterValue("w0", _filmIds10.ToArray());
-        return await _filmHelper.LoadListAsync(scGetTenFilms_Mine);
+        // Traditional approach - build container each time
+        using var container = _filmHelper.BuildRetrieve(_filmIds10, _ctx);
+        return await _filmHelper.LoadListAsync(container);
+    }
 
-        //return await _filmHelper.RetrieveAsync(_filmIds10);
+    [Benchmark]
+    public async Task<List<Film>> GetTenFilms_Mine_FastPath()
+    {
+        // Fast-path approach - uses EntityHelper's built-in caching with cloning
+        return await _filmHelper.RetrieveAsync(_filmIds10, _ctx);
     }
 
     [Benchmark]

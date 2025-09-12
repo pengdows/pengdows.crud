@@ -535,8 +535,65 @@ public partial class EntityHelper<TEntity, TRowID> :
         }
 
         var ctx = context ?? _context;
-        var sc = BuildRetrieve(list, ctx);
-        return await LoadListAsync(sc);
+        var dialect = GetDialect(ctx);
+        
+        // Try to use cached templates for better performance, but fall back to traditional method
+        // to avoid circular dependency during template building
+        try
+        {
+            // For small lists, use cached template for better performance
+            // For larger lists, fall back to BuildRetrieve to handle dynamic parameter lists correctly
+            if (list.Count == 1)
+            {
+                // Single ID - reuse GetByIdTemplate
+                var templates = GetContainerTemplatesForDialect(dialect, ctx);
+                using var container = templates.GetByIdTemplate.Clone(ctx);
+                
+                if (dialect.SupportsSetValuedParameters)
+                {
+                    container.SetParameterValue("w0", list.ToArray());
+                }
+                else
+                {
+                    container.SetParameterValue("w0", list[0]);
+                }
+                
+                return await LoadListAsync(container);
+            }
+            else if (list.Count == 2 && !dialect.SupportsSetValuedParameters)
+            {
+                // Two IDs - can reuse GetByIdsTemplate for non-array dialects
+                var templates = GetContainerTemplatesForDialect(dialect, ctx);
+                using var container = templates.GetByIdsTemplate.Clone(ctx);
+                
+                container.SetParameterValue("w0", list[0]);
+                container.SetParameterValue("w1", list[1]);
+                
+                return await LoadListAsync(container);
+            }
+            else if (dialect.SupportsSetValuedParameters)
+            {
+                // Array-based dialects can handle any size with the 2-ID template
+                var templates = GetContainerTemplatesForDialect(dialect, ctx);
+                using var container = templates.GetByIdsTemplate.Clone(ctx);
+                
+                container.SetParameterValue("w0", list.ToArray());
+                
+                return await LoadListAsync(container);
+            }
+            else
+            {
+                // Fall back to dynamic BuildRetrieve for larger lists on non-array dialects
+                var sc = BuildRetrieve(list, ctx);
+                return await LoadListAsync(sc);
+            }
+        }
+        catch (Exception ex) when (ex.Message.Contains("Original record not found") || ex is AggregateException)
+        {
+            // Fall back to traditional method during template building or other issues
+            var sc = BuildRetrieve(list, ctx);
+            return await LoadListAsync(sc);
+        }
     }
 
     public async Task<int> DeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null)
@@ -581,7 +638,7 @@ public partial class EntityHelper<TEntity, TRowID> :
         return LoadSingleAsync(sc);
     }
 
-    public Task<TEntity?> RetrieveOneAsync(TRowID id, IDatabaseContext? context = null)
+    public async Task<TEntity?> RetrieveOneAsync(TRowID id, IDatabaseContext? context = null)
     {
         var ctx = context ?? _context;
         if (_idColumn == null)
@@ -589,9 +646,35 @@ public partial class EntityHelper<TEntity, TRowID> :
             throw new InvalidOperationException(
                 "Single-ID operations require a designated Id column; use composite-key helpers.");
         }
-        var list = new List<TRowID> { id };
-        var sc = BuildRetrieve(list, ctx);
-        return LoadSingleAsync(sc);
+        
+        var dialect = GetDialect(ctx);
+        
+        // Try to use cached template for better performance, but fall back to traditional method
+        // to avoid circular dependency during template building
+        try
+        {
+            var templates = GetContainerTemplatesForDialect(dialect, ctx);
+            using var container = templates.GetByIdTemplate.Clone(ctx);
+            
+            // Update the ID parameter - templates use w0 for WHERE parameters
+            if (dialect.SupportsSetValuedParameters)
+            {
+                container.SetParameterValue("w0", new[] { id });
+            }
+            else
+            {
+                container.SetParameterValue("w0", id);
+            }
+            
+            return await LoadSingleAsync(container);
+        }
+        catch (Exception ex) when (ex.Message.Contains("Original record not found") || ex is AggregateException)
+        {
+            // Fall back to traditional method during template building or other issues
+            var list = new List<TRowID> { id };
+            var sc = BuildRetrieve(list, ctx);
+            return await LoadSingleAsync(sc);
+        }
     }
 
     public async Task<TEntity?> LoadSingleAsync(ISqlContainer sc)

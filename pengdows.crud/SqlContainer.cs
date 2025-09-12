@@ -706,8 +706,16 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
     public ISqlContainer Clone()
     {
-        // Create a new container with the same context - let it get a StringBuilder from the pool
-        var clone = new SqlContainer(_context, null, _logger);
+        return Clone(null);
+    }
+
+    public ISqlContainer Clone(IDatabaseContext? context)
+    {
+        // Use the provided context or fallback to the original context
+        var targetContext = context ?? _context;
+        
+        // Create a new container with the target context - let it get a StringBuilder from the pool
+        var clone = new SqlContainer(targetContext, null, _logger);
         
         // Copy the SQL query content to the pooled StringBuilder
         clone.Query.Clear();
@@ -717,10 +725,11 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         clone.HasWhereAppended = HasWhereAppended;
         
         // Clone all parameters with the same names and types but allow value updates
+        // Use the target context's dialect for parameter creation
         foreach (var kvp in _parameters)
         {
             var originalParam = kvp.Value;
-            var clonedParam = _dialect.CreateDbParameter(
+            var clonedParam = clone._dialect.CreateDbParameter(
                 originalParam.ParameterName, 
                 originalParam.DbType, 
                 originalParam.Value);

@@ -338,13 +338,17 @@ public class PostgreSqlDialectTests
     }
 
     [Fact]
-    public void GetConnectionSessionSettings_SearchPathEnabled_IncludesSearchPath()
+    public void GetConnectionSessionSettings_SearchPathEnabled_DoesNotIncludeSearchPath()
     {
+        // PostgreSQL should NEVER automatically set search_path due to security concerns
+        // Setting search_path automatically can lead to schema hijacking attacks
         var ctx = CreateTestContext(setSearchPath: true);
 
         var settings = _dialect.GetConnectionSessionSettings(ctx, false);
 
-        Assert.Contains("SET search_path = public;", settings);
+        Assert.DoesNotContain("SET search_path = public;", settings);
+        Assert.Contains("SET standard_conforming_strings = on;", settings);
+        Assert.Contains("SET client_min_messages = warning;", settings);
     }
 
     [Fact]

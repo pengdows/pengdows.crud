@@ -303,46 +303,4 @@ public partial class EntityHelper<TEntity, TRowID>
         return sqlContainer;
     }
 
-    /// <summary>
-    /// Fast-path method for retrieving a single entity by ID using cached containers.
-    /// Avoids BuildRetrieve overhead by cloning pre-built containers and updating parameter values.
-    /// </summary>
-    public async Task<TEntity?> RetrieveOneByIdFast(TRowID id, IDatabaseContext? context = null)
-    {
-        var ctx = context ?? _context;
-        var dialect = GetDialect(ctx);
-        
-        // Get cached container template and clone it
-        var templates = GetContainerTemplatesForDialect(dialect, ctx);
-        using var container = templates.GetByIdTemplate.Clone();
-        
-        // Update the ID parameter value
-        container.SetParameterValue("p0", new[] { id });
-        
-        // Execute directly
-        return await LoadSingleAsync(container);
-    }
-
-    /// <summary>
-    /// Fast-path method for retrieving multiple entities by IDs using cached containers.
-    /// Avoids BuildRetrieve overhead by cloning pre-built containers and updating parameter values.
-    /// </summary>
-    public async Task<List<TEntity>> RetrieveByIdsFast(IEnumerable<TRowID> ids, IDatabaseContext? context = null)
-    {
-        var idArray = ids.ToArray();
-        if (idArray.Length == 0) return new List<TEntity>();
-        
-        var ctx = context ?? _context;
-        var dialect = GetDialect(ctx);
-        
-        // Get cached container template and clone it
-        var templates = GetContainerTemplatesForDialect(dialect, ctx);
-        using var container = templates.GetByIdsTemplate.Clone();
-        
-        // Update the ID parameter value with the actual array
-        container.SetParameterValue("p0", idArray);
-        
-        // Execute directly
-        return await LoadListAsync(container);
-    }
 }

@@ -20,8 +20,11 @@ public class FirebirdDialect : SqlDialect
     public override string ParameterMarker => "@";
     public override bool SupportsNamedParameters => true;
     public override bool SupportsSavepoints => true;
+    // IMMUTABLE: Firebird theoretical parameter limit - do not change without extensive testing
     public override int MaxParameterLimit => 65535;
+    // IMMUTABLE: Firebird PSQL practical output parameter limit - do not change without extensive testing
     public override int MaxOutputParameters => 1499;
+    // IMMUTABLE: Firebird identifier length limit - do not change without extensive testing
     public override int ParameterNameMaxLength => 63;
     
     // Firebird benefits from prepared statements

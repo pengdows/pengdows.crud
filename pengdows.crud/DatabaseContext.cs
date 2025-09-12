@@ -531,6 +531,9 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
                          throw new InvalidOperationException("Factory returned null DbConnection.");
         connection.ConnectionString = ConnectionString;
         _dialect?.ApplyConnectionSettings(connection, this, readOnly);
+        
+        // Increment total connections created counter when a new connection is actually created
+        Interlocked.Increment(ref _totalConnectionsCreated);
 
         // Ensure session settings from the active dialect are applied on first open for all modes.
         Action<DbConnection>? firstOpenHandler = conn =>
@@ -658,7 +661,6 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
                     {
                         _logger.LogDebug("Opening connection: " + Name);
                         var now = Interlocked.Increment(ref _connectionCount);
-                        Interlocked.Increment(ref _totalConnectionsCreated);
                         UpdateMaxConnectionCount(now);
                         break;
                     }
@@ -1083,6 +1085,12 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             }
 
             _logger.LogWarning("DbMode override: requested {requested}, coerced to {resolved} — reason: {reason}", requested, DbMode.Standard, "Full servers prefer Standard unless SingleWriter explicitly requested");
+            return DbMode.Standard;
+        }
+
+        // Unknown databases: Best resolves to Standard for safety
+        if (requested == DbMode.Best)
+        {
             return DbMode.Standard;
         }
 
