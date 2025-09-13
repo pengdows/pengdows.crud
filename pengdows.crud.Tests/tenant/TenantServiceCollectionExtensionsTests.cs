@@ -16,8 +16,10 @@ public class TenantServiceCollectionExtensionsTests
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["MultiTenant:Tenants:0:Name"] = "a",
+                ["MultiTenant:Tenants:0:DatabaseContextConfiguration:ProviderName"] = "fake-a",
                 ["MultiTenant:Tenants:0:DatabaseContextConfiguration:ConnectionString"] = "Server=A;",
                 ["MultiTenant:Tenants:1:Name"] = "b",
+                ["MultiTenant:Tenants:1:DatabaseContextConfiguration:ProviderName"] = "fake-b",
                 ["MultiTenant:Tenants:1:DatabaseContextConfiguration:ConnectionString"] = "Server=B;"
             })
             .Build();

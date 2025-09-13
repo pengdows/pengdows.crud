@@ -19,6 +19,7 @@ public class TenantConnectionResolverTests
             DatabaseContextConfiguration = new DatabaseContextConfiguration
             {
                 ConnectionString = "Server=A;",
+                ProviderName = "fake-a",
                 DbMode = DbMode.Standard,
                 ReadWriteMode = ReadWriteMode.ReadWrite
             }
@@ -30,6 +31,7 @@ public class TenantConnectionResolverTests
             DatabaseContextConfiguration = new DatabaseContextConfiguration
             {
                 ConnectionString = "Server=B;",
+                ProviderName = "fake-b",
                 DbMode = DbMode.Standard,
                 ReadWriteMode = ReadWriteMode.ReadWrite
             }
@@ -70,6 +72,7 @@ public class TenantConnectionResolverTests
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = "Server=A;",
+            ProviderName = "fake-a",
             DbMode = DbMode.Standard,
             ReadWriteMode = ReadWriteMode.ReadWrite
         };
@@ -140,6 +143,7 @@ public class TenantConnectionResolverTests
                     DatabaseContextConfiguration = new DatabaseContextConfiguration
                     {
                         ConnectionString = "Server=OptA;",
+                        ProviderName = "fake-a",
                         DbMode = DbMode.Standard,
                         ReadWriteMode = ReadWriteMode.ReadWrite
                     }
@@ -150,6 +154,7 @@ public class TenantConnectionResolverTests
                     DatabaseContextConfiguration = new DatabaseContextConfiguration
                     {
                         ConnectionString = "Server=OptB;",
+                        ProviderName = "fake-b",
                         DbMode = DbMode.Standard,
                         ReadWriteMode = ReadWriteMode.ReadWrite
                     }

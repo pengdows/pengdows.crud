@@ -35,6 +35,11 @@ public class TenantConnectionResolver : ITenantConnectionResolver
             throw new ArgumentNullException(nameof(configuration));
         }
 
+        if (string.IsNullOrWhiteSpace(configuration.ProviderName))
+        {
+            throw new ArgumentException("Tenant configuration must include a non-empty ProviderName.", nameof(configuration));
+        }
+
         _configurations[tenant] = configuration;
     }
 
@@ -50,6 +55,11 @@ public class TenantConnectionResolver : ITenantConnectionResolver
             if (tenant == null)
             {
                 continue;
+            }
+
+            if (tenant.DatabaseContextConfiguration == null || string.IsNullOrWhiteSpace(tenant.DatabaseContextConfiguration.ProviderName))
+            {
+                throw new ArgumentException($"Tenant '{tenant?.Name}' configuration must include a non-empty ProviderName.");
             }
 
             Register(tenant.Name, tenant.DatabaseContextConfiguration);
