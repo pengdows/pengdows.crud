@@ -12,7 +12,7 @@ public class ReadOnlySessionSettingsTests
 {
     public static TheoryData<SupportedDatabase, string> DialectData => new()
     {
-        { SupportedDatabase.PostgreSql, "SET default_transaction_read_only = on;" },
+        { SupportedDatabase.PostgreSql, "SET default_transaction_read_only = on" },
         { SupportedDatabase.MySql, "SET SESSION TRANSACTION READ ONLY;" },
         { SupportedDatabase.MariaDb, "SET SESSION TRANSACTION READ ONLY;" },
         { SupportedDatabase.Oracle, "ALTER SESSION SET READ ONLY;" },

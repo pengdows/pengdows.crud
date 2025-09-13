@@ -503,7 +503,7 @@ public class DatabaseContextTests
         _ = new DatabaseContext(config, factory);
 
         // Should execute DBCC USEROPTIONS to check settings, but no SET commands since settings are already correct
-        Assert.Contains("DBCC USEROPTIONS;", factory.Connection.ExecutedCommands);
+        Assert.Contains("DBCC USEROPTIONS", factory.Connection.ExecutedCommands);
         Assert.DoesNotContain(factory.Connection.ExecutedCommands, cmd => cmd.Contains("SET"));
     }
 
@@ -520,7 +520,7 @@ public class DatabaseContextTests
 
         _ = new DatabaseContext(config, factory);
 
-        Assert.Contains("PRAGMA foreign_keys = ON;", factory.Connection.ExecutedCommands);
+        Assert.Contains("PRAGMA foreign_keys = ON", factory.Connection.ExecutedCommands);
     }
 
     [Fact]
@@ -537,7 +537,7 @@ public class DatabaseContextTests
         _ = new DatabaseContext(config, factory);
 
         // Should execute DBCC USEROPTIONS to check settings, but no SET commands since settings are already correct
-        Assert.Contains("DBCC USEROPTIONS;", factory.Connection.ExecutedCommands);
+        Assert.Contains("DBCC USEROPTIONS", factory.Connection.ExecutedCommands);
         Assert.DoesNotContain(factory.Connection.ExecutedCommands, cmd => cmd.Contains("SET"));
     }
 
@@ -596,7 +596,7 @@ public class DatabaseContextTests
             _record.Add(CommandText);
             
             // Mock DBCC USEROPTIONS to return correct settings so SqlServerDialect doesn't generate session settings
-            if (CommandText.Trim().Equals("DBCC USEROPTIONS;", StringComparison.OrdinalIgnoreCase))
+            if (CommandText.Trim().Equals("DBCC USEROPTIONS", StringComparison.OrdinalIgnoreCase))
             {
                 return new SqlServerSettingsDataReader();
             }

@@ -332,24 +332,11 @@ public class PostgreSqlDialectTests
         var settings = _dialect.GetConnectionSessionSettings(ctx, false);
 
         Assert.NotEmpty(settings);
-        Assert.Contains("SET standard_conforming_strings = on;", settings);
-        Assert.Contains("SET client_min_messages = warning;", settings);
-        Assert.DoesNotContain("SET search_path = public;", settings);
+        Assert.Contains("SET standard_conforming_strings = on", settings);
+        Assert.Contains("SET client_min_messages = warning", settings);
+        Assert.DoesNotContain("SET search_path", settings);
     }
 
-    [Fact]
-    public void GetConnectionSessionSettings_SearchPathEnabled_DoesNotIncludeSearchPath()
-    {
-        // PostgreSQL should NEVER automatically set search_path due to security concerns
-        // Setting search_path automatically can lead to schema hijacking attacks
-        var ctx = CreateTestContext(setSearchPath: true);
-
-        var settings = _dialect.GetConnectionSessionSettings(ctx, false);
-
-        Assert.DoesNotContain("SET search_path = public;", settings);
-        Assert.Contains("SET standard_conforming_strings = on;", settings);
-        Assert.Contains("SET client_min_messages = warning;", settings);
-    }
 
     [Fact]
     public void GetConnectionSessionSettings_ReadOnlyContext_ReturnsReadOnlySettings()
@@ -359,8 +346,8 @@ public class PostgreSqlDialectTests
         var settings = _dialect.GetConnectionSessionSettings(ctx, true);
         
         Assert.NotEmpty(settings);
-        Assert.Contains("SET default_transaction_read_only = on;", settings);
-        Assert.Contains("SET standard_conforming_strings = on;", settings);
+        Assert.Contains("SET default_transaction_read_only = on", settings);
+        Assert.Contains("SET standard_conforming_strings = on", settings);
     }
 
     [Fact]
@@ -483,14 +470,13 @@ public class PostgreSqlDialectTests
         Assert.True(true); // If we reach here, no exception was thrown
     }
 
-    private DatabaseContext CreateTestContext(bool setSearchPath = false)
+    private DatabaseContext CreateTestContext()
     {
         var cfg = new pengdows.crud.configuration.DatabaseContextConfiguration
         {
             ConnectionString = "Host=localhost;Database=test;",
             DbMode = DbMode.Standard,
-            ReadWriteMode = ReadWriteMode.ReadWrite,
-            SetDefaultSearchPath = setSearchPath
+            ReadWriteMode = ReadWriteMode.ReadWrite
         };
         return new DatabaseContext(cfg, _factory);
     }
@@ -585,7 +571,7 @@ public class PostgreSqlDialectTests
     {
         var settings = _dialect.GetReadOnlySessionSettings();
 
-        Assert.Equal("SET default_transaction_read_only = on;", settings);
+        Assert.Equal("SET default_transaction_read_only = on", settings);
     }
 
     [Fact]

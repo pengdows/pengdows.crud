@@ -32,7 +32,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
 
     public Guid RootId { get; }
 
-    internal TransactionContext(
+    private TransactionContext(
         IDatabaseContext context,
         IsolationLevel isolationLevel = IsolationLevel.Unspecified,
         ExecutionType? executionType = null,
@@ -104,7 +104,6 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
     public ITypeMapRegistry TypeMapRegistry => _context.TypeMapRegistry;
     public IDataSourceInformation DataSourceInfo => _context.DataSourceInfo;
     public string SessionSettingsPreamble => _context.SessionSettingsPreamble;
-    public bool SetDefaultSearchPath => _context.SetDefaultSearchPath;
 
     public ILockerAsync GetLock()
     {
@@ -124,7 +123,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
             throw new InvalidOperationException("Cannot create a SQL container because the transaction is completed.");
         }
 
-        return new SqlContainer(this, query);
+        return SqlContainer.Create(this, query);
     }
 
     public DbParameter CreateDbParameter<T>(string? name, DbType type, T value,
@@ -499,4 +498,15 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
     }
 
     public ISqlDialect Dialect =>  _dialect;
+
+    // Internal factory used by DatabaseContext
+    internal static TransactionContext Create(
+        IDatabaseContext context,
+        IsolationLevel isolationLevel = IsolationLevel.Unspecified,
+        ExecutionType? executionType = null,
+        bool isReadOnly = false,
+        ILogger<TransactionContext>? logger = null)
+    {
+        return new TransactionContext(context, isolationLevel, executionType, isReadOnly, logger);
+    }
 }

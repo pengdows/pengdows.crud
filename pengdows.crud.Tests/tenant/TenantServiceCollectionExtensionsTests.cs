@@ -26,7 +26,7 @@ public class TenantServiceCollectionExtensionsTests
         services.AddLogging();
         services.AddMultiTenancy(config);
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var resolver = provider.GetRequiredService<ITenantConnectionResolver>();
         var contextRegistry = provider.GetRequiredService<ITenantContextRegistry>();

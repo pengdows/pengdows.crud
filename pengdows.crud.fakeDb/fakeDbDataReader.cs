@@ -11,23 +11,27 @@ namespace pengdows.crud.fakeDb;
 public class fakeDbDataReader : DbDataReader
 {
     private readonly List<Dictionary<string, object>> _rows;
-    private readonly string[] _columnNames;
     private int _index = -1;
 
     public fakeDbDataReader(
         IEnumerable<Dictionary<string, object>>? rows = null)
     {
         _rows = rows?.ToList() ?? new List<Dictionary<string, object>>();
-        // Establish consistent column ordering from the first row
-        _columnNames = _rows.Count > 0 ? _rows[0].Keys.ToArray() : Array.Empty<string>();
     }
 
     public fakeDbDataReader() : this(new List<Dictionary<string, object>>())
     {
     }
 
+    private Dictionary<string, object>? CurrentRow =>
+        _index >= 0 && _index < _rows.Count ? _rows[_index] : null;
+
+    private static string[] GetKeys(Dictionary<string, object> row)
+        => row.Keys.ToArray();
+
     public override int FieldCount
-        => _columnNames.Length;
+        => CurrentRow?.Count
+           ?? (_rows.Count > 0 ? _rows[0].Count : 0);
 
     public override bool HasRows
         => _rows.Count > 0;
@@ -39,7 +43,18 @@ public class fakeDbDataReader : DbDataReader
     public override int RecordsAffected => 0;
 
     public override object this[int i] => GetValue(i);
-    public override object this[string name] => GetValue(GetOrdinal(name));
+    public override object this[string name]
+    {
+        get
+        {
+            var row = CurrentRow ?? (_rows.Count > 0 ? _rows[0] : null);
+            if (row is null)
+            {
+                throw new IndexOutOfRangeException("No current row.");
+            }
+            return row[name];
+        }
+    }
 
     public override bool IsClosed => _isClosed;
 
@@ -61,8 +76,10 @@ public class fakeDbDataReader : DbDataReader
 
     public override object GetValue(int i)
     {
-        var columnName = _columnNames[i];
-        return _rows[_index][columnName];
+        var row = CurrentRow ?? (_rows.Count > 0 ? _rows[0] : null)
+                  ?? throw new IndexOutOfRangeException("No data rows.");
+        var keys = GetKeys(row);
+        return row[keys[i]];
     }
 
     public override int GetValues(object[] values)
@@ -77,17 +94,24 @@ public class fakeDbDataReader : DbDataReader
 
     public override string GetName(int i)
     {
-        return _columnNames[i];
+        var row = CurrentRow ?? (_rows.Count > 0 ? _rows[0] : null)
+                  ?? throw new IndexOutOfRangeException("No data rows.");
+        var keys = GetKeys(row);
+        return keys[i];
     }
 
     public override int GetOrdinal(string name)
     {
-        return Array.IndexOf(_columnNames, name);
+        var row = CurrentRow ?? (_rows.Count > 0 ? _rows[0] : null)
+                  ?? throw new IndexOutOfRangeException("No data rows.");
+        var keys = GetKeys(row);
+        return Array.IndexOf(keys, name);
     }
 
     public override bool IsDBNull(int i)
     {
-        return GetValue(i) is null || GetValue(i) == DBNull.Value;
+        var value = GetValue(i);
+        return value is null || value == DBNull.Value;
     }
 
     public override bool NextResult()
@@ -107,7 +131,25 @@ public class fakeDbDataReader : DbDataReader
 
     public override long GetBytes(int ordinal, long dataOffset, byte[]? buffer, int bufferOffset, int length)
     {
-        throw new NotSupportedException();
+        var data = GetValue(ordinal);
+        if (data is not byte[] bytes)
+        {
+            // If it's not a byte array, return 0 to indicate no bytes copied
+            return 0;
+        }
+
+        var available = bytes.LongLength - dataOffset;
+        if (available <= 0)
+        {
+            return 0;
+        }
+
+        var toCopy = (int)Math.Min(length, available);
+        if (buffer != null && toCopy > 0)
+        {
+            Array.Copy(bytes, (int)dataOffset, buffer, bufferOffset, toCopy);
+        }
+        return toCopy;
     }
 
     public override char GetChar(int i)

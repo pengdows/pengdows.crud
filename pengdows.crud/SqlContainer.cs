@@ -32,14 +32,42 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
     ISqlDialect ISqlDialectProvider.Dialect => _dialect;
 
-    internal SqlContainer(IDatabaseContext context, string? query = "", ILogger<ISqlContainer>? logger = null)
+    // Primary private constructor (enforces creation via factory methods)
+    private SqlContainer(IDatabaseContext context, ISqlDialect dialect, string? query, ILogger<ISqlContainer>? logger)
     {
         _context = context;
-        _dialect = (context as ISqlDialectProvider)?.Dialect
-                   ?? throw new InvalidOperationException(
-                       "IDatabaseContext must implement ISqlDialectProvider and expose a non-null Dialect.");
+        _dialect = dialect ?? throw new ArgumentNullException(nameof(dialect));
         _logger = logger ?? NullLogger<ISqlContainer>.Instance;
         Query = StringBuilderPool.Get(query);
+    }
+
+    // Legacy constructor kept for binary compatibility but made unreachable to callers.
+    // Any attempt to call this directly will fail at compile time.
+    [Obsolete("Do not construct SqlContainer directly. Use IDatabaseContext.CreateSqlContainer(...) instead.", true)]
+    internal SqlContainer(IDatabaseContext context, string? query = "", ILogger<ISqlContainer>? logger = null)
+        : this(
+            context,
+            (context as ISqlDialectProvider)?.Dialect
+                ?? throw new InvalidOperationException(
+                    "IDatabaseContext must implement ISqlDialectProvider and expose a non-null Dialect."),
+            query,
+            logger)
+    {
+    }
+
+    // Internal factory used by DatabaseContext/TransactionContext
+    internal static SqlContainer Create(IDatabaseContext context, string? query = "", ILogger<ISqlContainer>? logger = null)
+    {
+        var dialect = (context as ISqlDialectProvider)?.Dialect
+                      ?? throw new InvalidOperationException(
+                          "IDatabaseContext must implement ISqlDialectProvider and expose a non-null Dialect.");
+        return new SqlContainer(context, dialect, query, logger);
+    }
+
+    // Test support: allow explicit dialect for specialized scenarios
+    internal static SqlContainer CreateForDialect(IDatabaseContext context, ISqlDialect dialect, string? query = "", ILogger<ISqlContainer>? logger = null)
+    {
+        return new SqlContainer(context, dialect, query, logger);
     }
 
     public StringBuilder Query { get; }
@@ -376,6 +404,10 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         if (await reader.ReadAsync().ConfigureAwait(false))
         {
             var value = reader.GetValue(0); // always returns object
+            if (typeof(T) == typeof(object))
+            {
+                return (T?)value;
+            }
             var targetType = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
             return (T?)TypeCoercionHelper.Coerce(value, reader.GetFieldType(0), targetType);
         }
@@ -430,6 +462,11 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             {
                 var isNullable = !typeof(T).IsValueType || Nullable.GetUnderlyingType(typeof(T)) != null;
                 return isNullable ? default : throw new InvalidOperationException("ExecuteScalarWriteAsync expected a value but found none.");
+            }
+
+            if (typeof(T) == typeof(object))
+            {
+                return (T?)result;
             }
 
             var targetType = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
@@ -715,7 +752,9 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         var targetContext = context ?? _context;
         
         // Create a new container with the target context - let it get a StringBuilder from the pool
-        var clone = new SqlContainer(targetContext, null, _logger);
+        var targetDialect = (targetContext as ISqlDialectProvider)?.Dialect
+                            ?? _dialect;
+        var clone = new SqlContainer(targetContext, targetDialect, null, _logger);
         
         // Copy the SQL query content to the pooled StringBuilder
         clone.Query.Clear();

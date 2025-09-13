@@ -45,7 +45,6 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     private long _totalConnectionsReused;
     private long _totalConnectionFailures;
     private long _totalConnectionTimeoutFailures;
-    private readonly bool _setDefaultSearchPath;
     private string _connectionSessionSettings = string.Empty;
     private readonly DbMode _originalUserMode;
     private readonly bool? _forceManualPrepare;
@@ -157,7 +156,6 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             ConnectionMode = configuration.DbMode;
             _originalUserMode = configuration.DbMode;
             _factory = factory ?? throw new ArgumentNullException(nameof(factory));
-            _setDefaultSearchPath = configuration.SetDefaultSearchPath;
             _forceManualPrepare = configuration.ForceManualPrepare;
             _disablePrepare = configuration.DisablePrepare;
 
@@ -347,7 +345,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             }
         }
 
-        return new TransactionContext(this, isolationLevel.Value, executionType, ro);
+        return TransactionContext.Create(this, isolationLevel.Value, executionType, ro);
     }
 
     public ITransactionContext BeginTransaction(
@@ -436,11 +434,10 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     public string QuoteSuffix => _dialect.QuoteSuffix;
     public bool? ForceManualPrepare => _forceManualPrepare;
     public bool? DisablePrepare => _disablePrepare;
-    public bool SetDefaultSearchPath => _setDefaultSearchPath;
 
     public ISqlContainer CreateSqlContainer(string? query = null)
     {
-        return new SqlContainer(this, query);
+        return SqlContainer.Create(this, query);
     }
 
     public DbParameter CreateDbParameter<T>(string? name, DbType type, T value,
@@ -583,10 +580,6 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
                         else if (lower.Contains("postgres"))
                         {
                             settings = "SET standard_conforming_strings = on;\nSET client_min_messages = warning;";
-                            if (_setDefaultSearchPath)
-                            {
-                                settings += "\nSET search_path = public;";
-                            }
                         }
                         else if (lower.Contains("sqlite"))
                         {
@@ -612,7 +605,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
                 }
                 if (!string.IsNullOrWhiteSpace(settings))
                 {
-                    // Execute each statement separately to ensure provider compatibility
+                    // Execute one statement at a time. Do not auto-append semicolons.
                     var parts = settings.Split(';');
                     foreach (var part in parts)
                     {
@@ -623,7 +616,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
                         }
 
                         using var cmd = conn.CreateCommand();
-                        cmd.CommandText = stmt + ';';
+                        cmd.CommandText = stmt; // no trailing ';'
                         cmd.ExecuteNonQuery();
                     }
                     _sessionSettingsAppliedOnOpen = true;
@@ -1194,12 +1187,6 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
                 SET standard_conforming_strings = on;
                 SET client_min_messages = warning;
 ";
-                if (_setDefaultSearchPath)
-                {
-                    _connectionSessionSettings += @"
-                SET search_path = public;
-";
-                }
                 break;
 
             case SupportedDatabase.Oracle:
@@ -1245,9 +1232,20 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         {
             try
             {
-                using var cmd = connection.CreateCommand();
-                cmd.CommandText = _connectionSessionSettings;
-                cmd.ExecuteNonQuery();
+                // Split on ';' and execute each non-empty statement individually.
+                var parts = (_connectionSessionSettings ?? string.Empty).Split(';');
+                foreach (var part in parts)
+                {
+                    var stmt = part.Trim();
+                    if (string.IsNullOrEmpty(stmt))
+                    {
+                        continue;
+                    }
+
+                    using var cmd = connection.CreateCommand();
+                    cmd.CommandText = stmt; // do not append ';'
+                    cmd.ExecuteNonQuery();
+                }
             }
             catch (Exception ex)
             {
@@ -1296,7 +1294,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
                     }
 
                     using var cmd = connection.CreateCommand();
-                    cmd.CommandText = stmt + ';';
+                    cmd.CommandText = stmt; // no trailing ';'
                     cmd.ExecuteNonQuery();
                 }
             }

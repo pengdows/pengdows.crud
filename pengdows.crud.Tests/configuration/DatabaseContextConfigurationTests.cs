@@ -15,7 +15,6 @@ public class DatabaseContextConfigurationTests
         Assert.Equal(string.Empty, config.ProviderName);
         Assert.Equal(DbMode.Standard, config.DbMode);
         Assert.Equal(ReadWriteMode.ReadWrite, config.ReadWriteMode);
-        Assert.False(config.SetDefaultSearchPath);
     }
 
     [Fact]
@@ -71,16 +70,6 @@ public class DatabaseContextConfigurationTests
     }
 
     [Fact]
-    public void SetDefaultSearchPath_CanBeSetAndRetrieved()
-    {
-        var config = new DatabaseContextConfiguration();
-        
-        config.SetDefaultSearchPath = true;
-        
-        Assert.True(config.SetDefaultSearchPath);
-    }
-
-    [Fact]
     public void AllProperties_CanBeSetTogether()
     {
         var config = new DatabaseContextConfiguration();
@@ -91,13 +80,11 @@ public class DatabaseContextConfigurationTests
         config.ProviderName = providerName;
         config.DbMode = DbMode.KeepAlive;
         config.ReadWriteMode = ReadWriteMode.WriteOnly;
-        config.SetDefaultSearchPath = true;
         
         Assert.Equal(connectionString, config.ConnectionString);
         Assert.Equal(providerName, config.ProviderName);
         Assert.Equal(DbMode.KeepAlive, config.DbMode);
         Assert.Equal(ReadWriteMode.ReadWrite, config.ReadWriteMode);
-        Assert.True(config.SetDefaultSearchPath);
     }
 
     [Fact]

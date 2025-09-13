@@ -108,7 +108,7 @@ public class ConnectionStrategyTests
             ReadWriteMode = ReadWriteMode.ReadWrite
         };
         using var ctx = new DatabaseContext(cfg, factory);
-        Assert.Contains("PRAGMA foreign_keys = ON;", factory.Connection.ExecutedCommands);
+        Assert.Contains("PRAGMA foreign_keys = ON", factory.Connection.ExecutedCommands);
     }
 
     [Fact]
@@ -439,7 +439,7 @@ public class ConnectionStrategyTests
         strategy.PostInitialize(connection);
 
         // Verify session settings were applied (should have PRAGMA commands)
-        Assert.Contains("PRAGMA foreign_keys = ON;", factory.Connection.ExecutedCommands);
+        Assert.Contains("PRAGMA foreign_keys = ON", factory.Connection.ExecutedCommands);
 
         // Verify persistent connection was set
         Assert.Same(connection, ctx.PersistentConnection);
@@ -504,7 +504,7 @@ public class ConnectionStrategyTests
         strategy.PostInitialize(connection);
 
         // Verify session settings were applied
-        Assert.Contains("PRAGMA foreign_keys = ON;", factory.Connection.ExecutedCommands);
+        Assert.Contains("PRAGMA foreign_keys = ON", factory.Connection.ExecutedCommands);
 
         // Verify persistent connection was set
         Assert.Same(connection, ctx.PersistentConnection);

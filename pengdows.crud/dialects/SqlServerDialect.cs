@@ -13,15 +13,14 @@ namespace pengdows.crud.dialects;
 public class SqlServerDialect : SqlDialect
 {
     private const string DefaultSessionSettings =
-        "SET NOCOUNT ON;\n" +
+        // Minimal, individual SET statements; no NOCOUNT wrappers; semicolons used only as delimiters.
         "SET ANSI_NULLS ON;\n" +
         "SET ANSI_PADDING ON;\n" +
         "SET ANSI_WARNINGS ON;\n" +
         "SET ARITHABORT ON;\n" +
         "SET CONCAT_NULL_YIELDS_NULL ON;\n" +
         "SET QUOTED_IDENTIFIER ON;\n" +
-        "SET NUMERIC_ROUNDABORT OFF;\n" +
-        "SET NOCOUNT OFF;";
+        "SET NUMERIC_ROUNDABORT OFF;";
 
     private string? _sessionSettings;
 
@@ -142,7 +141,7 @@ public class SqlServerDialect : SqlDialect
             };
 
             using var cmd = connection.CreateCommand();
-            cmd.CommandText = "DBCC USEROPTIONS;";
+            cmd.CommandText = "DBCC USEROPTIONS"; // no trailing ';'
 
             using var reader = cmd.ExecuteReader();
             var currentSettings = expectedSettings.ToDictionary(kvp => kvp.Key, _ => "OFF");
@@ -183,15 +182,9 @@ public class SqlServerDialect : SqlDialect
                     {
                         sb.AppendLine();
                     }
-
-                    sb.Append($"SET {settingName} {expectedValue}");
+                    // Return individual SET statements; execution loop will split/execute one-by-one
+                    sb.Append($"SET {settingName} {expectedValue};");
                 }
-            }
-
-            if (sb.Length > 0)
-            {
-                sb.Insert(0, "SET NOCOUNT ON;\n");
-                sb.AppendLine(";\nSET NOCOUNT OFF;");
             }
 
             return sb.ToString();
@@ -199,6 +192,7 @@ public class SqlServerDialect : SqlDialect
         catch (Exception ex)
         {
             Logger.LogWarning(ex, "Failed to check SQL Server session settings, applying default settings");
+            // Provide minimal, individual statements (no NOCOUNT wrapper, no multi-batch)
             return DefaultSessionSettings;
         }
     }

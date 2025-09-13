@@ -70,18 +70,6 @@ public class KeepAliveConnectionStrategyTests
         Assert.NotNull(connection);
     }
 
-    [Fact(Skip = "Removed: initial open normalized to ConnectionFailedException")]
-    public void GetConnection_Should_Handle_Connection_Factory_Failure()
-    {
-        // Arrange
-        var factory = fakeDbFactory.CreateFailingFactory(
-            SupportedDatabase.SqlServer, 
-            ConnectionFailureMode.FailOnOpen, 
-            new InvalidOperationException("Connection pool exhausted"));
-        
-        // Act & Assert (per contract: ctor open must surface failure immediately)
-        Assert.Throws<InvalidOperationException>(() => new DatabaseContext("test", factory));
-    }
 
     [Fact]
     public async Task CloseConnectionAsync_Should_Handle_Connection_Cleanup()
@@ -154,18 +142,6 @@ public class KeepAliveConnectionStrategyTests
         Assert.NotNull(connection2);
     }
 
-    [Fact(Skip = "Removed: initial open normalized to ConnectionFailedException")]
-    public void GetConnection_Should_Handle_Database_Connection_Timeout()
-    {
-        // Arrange
-        var factory = fakeDbFactory.CreateFailingFactory(
-            SupportedDatabase.PostgreSql, 
-            ConnectionFailureMode.FailOnOpen, 
-            new TimeoutException("Connection timeout"));
-        
-        // Act & Assert (per contract: ctor open must surface failure immediately)
-        Assert.Throws<TimeoutException>(() => new DatabaseContext("test", factory));
-    }
 
     [Fact]
     public async Task CloseConnectionAsync_Should_Handle_Connection_Close_Failure()

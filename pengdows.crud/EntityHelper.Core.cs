@@ -264,7 +264,7 @@ public partial class EntityHelper<TEntity, TRowID> :
         if (_idColumn != null && !_idColumn.IsIdIsWritable && dialect.SupportsInsertReturning)
         {
             var sc = BuildCreateWithReturning(entity, true, ctx);
-            var generatedId = await sc.ExecuteScalarAsync<object>();
+            var generatedId = await sc.ExecuteScalarWriteAsync<object>();
             
             if (generatedId != null && generatedId != DBNull.Value)
             {
@@ -329,7 +329,7 @@ public partial class EntityHelper<TEntity, TRowID> :
         if (_idColumn != null && !_idColumn.IsIdIsWritable && dialect.SupportsInsertReturning)
         {
             var sc = BuildCreateWithReturning(entity, true, ctx);
-            var generatedId = await sc.ExecuteScalarAsync<object>(CommandType.Text, cancellationToken).ConfigureAwait(false);
+            var generatedId = await sc.ExecuteScalarWriteAsync<object>(CommandType.Text, cancellationToken).ConfigureAwait(false);
             if (generatedId != null && generatedId != DBNull.Value)
             {
                 var converted = Convert.ChangeType(generatedId, _idColumn.PropertyInfo.PropertyType, CultureInfo.InvariantCulture);

@@ -86,10 +86,20 @@ public class fakeDbTests
     }
 
     [Fact]
-    public void fakeDbDataReader_GetBytes_Throws()
+    public void fakeDbDataReader_GetBytes_CopiesBytesSafely()
     {
-        var reader = new fakeDbDataReader();
-        Assert.Throws<NotSupportedException>(() => reader.GetBytes(0, 0, null, 0, 0));
+        var row = new System.Collections.Generic.Dictionary<string, object>
+        {
+            ["ByteField"] = new byte[] { 0, 1, 2, 3, 4, 5 }
+        };
+        using var reader = new fakeDbDataReader(new[] { row });
+        Assert.True(reader.Read());
+
+        var buffer = new byte[3];
+        var copied = reader.GetBytes(0, 2, buffer, 0, buffer.Length);
+
+        Assert.Equal(3, copied);
+        Assert.Equal(new byte[] { 2, 3, 4 }, buffer);
     }
 
     [Fact]

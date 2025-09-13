@@ -167,16 +167,6 @@ public class EntityHelperErrorPathTests : SqlLiteContextTestBase
         Assert.Throws<InvalidOperationException>(() => helper.BuildRetrieve(new[] { "test" }, "alias"));
     }
 
-    [Fact(Skip = "Removed: constructor may normalize open failures to ConnectionFailedException")]
-    public async Task UpsertAsync_UnsupportedDatabase_ThrowsNotSupportedException()
-    {
-        var factory = new fakeDbFactory(nameof(SupportedDatabase.Unknown));
-        var context = new DatabaseContext("test", factory);
-        var helper = new EntityHelper<TestEntity, long>(context);
-        var entity = new TestEntity { Name = "test" };
-
-        await Assert.ThrowsAsync<NotSupportedException>(() => helper.UpsertAsync(entity));
-    }
 
     [Fact]
     public void ValidateRowIdType_UnsupportedType_ThrowsNotSupportedException()

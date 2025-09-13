@@ -27,14 +27,14 @@ public class EntityHelperCreateAsyncErrorTests
         _typeMap.Register<TestEntityWithDefaultId>();
     }
 
-    [Fact(Skip = "Disabled due to SQL Server RETURNING changes")]
+    [Fact]
     public async Task CreateAsync_Should_Return_False_When_No_Rows_Affected()
     {
         // Arrange
-        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         factory.SetNonQueryResult(0); // No rows affected
         
-        var context = new DatabaseContext("test", factory, _typeMap);
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=Unknown", factory, _typeMap);
         var helper = new EntityHelper<TestEntitySimple, int>(context);
         
         var entity = new TestEntitySimple { Name = "Test" };
@@ -46,11 +46,11 @@ public class EntityHelperCreateAsyncErrorTests
         Assert.False(result);
     }
 
-    [Fact(Skip = "Disabled due to SQL Server RETURNING changes")]
+    [Fact]
     public async Task CreateAsync_Should_Return_False_When_Multiple_Rows_Affected()
     {
         // Arrange
-        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var factory = new fakeDbFactory(SupportedDatabase.MariaDb);
         factory.SetNonQueryResult(2); // Multiple rows affected (unexpected)
         
         var context = new DatabaseContext("test", factory, _typeMap);
@@ -112,7 +112,7 @@ public class EntityHelperCreateAsyncErrorTests
         await Assert.ThrowsAsync<ArgumentNullException>(() => helper.CreateAsync(null!));
     }
 
-    [Fact(Skip = "Disabled due to SQL Server RETURNING changes")]
+    [Fact]
     public async Task CreateAsync_Should_Handle_Entity_With_All_Default_Values()
     {
         // Arrange
@@ -132,13 +132,15 @@ public class EntityHelperCreateAsyncErrorTests
         Assert.Equal(100, entity.Id); // Should populate generated ID
     }
 
-    [Fact(Skip = "Disabled due to SQL Server RETURNING changes")]
+    [Fact]
     public async Task CreateAsync_Should_Handle_Guid_Id_Population()
     {
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var expectedGuid = Guid.NewGuid();
-        factory.SetIdPopulationResult(expectedGuid, rowsAffected: 1);
+        // Provide string form to avoid provider-level coercion issues in ExecuteScalarWrite
+        factory.SetNonQueryResult(1);
+        factory.SetScalarResult(expectedGuid.ToString());
         
         var context = new DatabaseContext("test", factory, _typeMap);
         var helper = new EntityHelper<TestEntityWithGuid, Guid>(context);
@@ -232,7 +234,7 @@ public class EntityHelperCreateAsyncErrorTests
         Assert.True(result); // FakeDb allows null values by default
     }
 
-    [Fact(Skip = "Disabled due to SQL Server RETURNING changes")]
+    [Fact]
     public async Task CreateAsync_Should_Handle_Transaction_Context()
     {
         // Arrange

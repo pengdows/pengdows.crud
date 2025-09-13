@@ -29,7 +29,6 @@ public class DatabaseContextConfiguration : IDatabaseContextConfiguration
         }
     }
 
-    public bool SetDefaultSearchPath { get; set; }
     public bool? ForceManualPrepare { get; set; }
     public bool? DisablePrepare { get; set; }
 }

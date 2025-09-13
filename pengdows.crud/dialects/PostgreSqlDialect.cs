@@ -157,7 +157,7 @@ SET client_min_messages = warning;";
 
     public override string GetReadOnlySessionSettings()
     {
-        return "SET default_transaction_read_only = on;";
+        return "SET default_transaction_read_only = on";
     }
 
     public override string? GetReadOnlyConnectionParameter()

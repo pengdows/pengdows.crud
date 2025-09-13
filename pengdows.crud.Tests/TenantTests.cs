@@ -33,7 +33,7 @@ public class TenantTests
             ConnectionString = "Data Source=test;EmulatedProduct=Sqlite",
         };
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var registry = new TenantContextRegistry(provider, new StubResolver(cfg), provider.GetRequiredService<Microsoft.Extensions.Logging.ILoggerFactory>());
 
         using var ctx = registry.GetContext("tenant1");
@@ -47,7 +47,7 @@ public class TenantTests
     {
         var dict = new Dictionary<string, string?>
         {
-            ["MultiTenant:Tenants:0:Name"] = "tenant-a",
+            ["MultiTenant:Tenants:0:Name"] = "tenant-di-a",
             ["MultiTenant:Tenants:0:DatabaseContextConfiguration:ProviderName"] = "fake-sqlite",
             ["MultiTenant:Tenants:0:DatabaseContextConfiguration:ConnectionString"] = "Data Source=test;EmulatedProduct=Sqlite",
         };
@@ -61,10 +61,10 @@ public class TenantTests
         services.AddKeyedSingleton<DbProviderFactory>("fake-sqlite", (sp, key) => new fakeDbFactory(SupportedDatabase.Sqlite));
 
         services.AddMultiTenancy(configuration);
-        var sp = services.BuildServiceProvider();
+        using var sp = services.BuildServiceProvider();
 
         var registry = sp.GetRequiredService<ITenantContextRegistry>();
-        using var ctx = registry.GetContext("tenant-a");
+        using var ctx = registry.GetContext("tenant-di-a");
         using var sc = ctx.CreateSqlContainer("SELECT 1");
         var affected = sc.ExecuteNonQueryAsync().GetAwaiter().GetResult();
         Assert.Equal(1, affected);

@@ -124,6 +124,6 @@ public class SqlServerDialectSettingsTests
         using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory);
         var settings = dialect.GetConnectionSessionSettings(ctx, false);
         Assert.Contains("SET QUOTED_IDENTIFIER ON", settings);
-        Assert.StartsWith("SET NOCOUNT ON", settings);
+        Assert.DoesNotContain("NOCOUNT", settings);
     }
 }

@@ -44,11 +44,6 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     string SessionSettingsPreamble { get; }
 
     /// <summary>
-    /// When true, applies a default PostgreSQL search_path of 'public'.
-    /// </summary>
-    bool SetDefaultSearchPath { get; }
-
-    /// <summary>
     /// Stored Procedure wrapping style (CALL vs EXEC vs plain SELECT).
     /// </summary>
     ProcWrappingStyle ProcWrappingStyle { get; }

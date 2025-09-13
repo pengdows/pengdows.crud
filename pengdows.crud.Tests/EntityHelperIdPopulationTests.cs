@@ -24,7 +24,7 @@ public class EntityHelperIdPopulationTests
         _typeMap.Register<TestEntityWithWritableId>();
     }
 
-    [Fact(Skip = "Disabled due to SQL Server RETURNING changes")]
+    [Fact]
     public async Task CreateAsync_Should_Populate_Generated_Id_For_Auto_Increment_Column()
     {
         // Arrange
@@ -78,16 +78,16 @@ public class EntityHelperIdPopulationTests
     }
 
     [Fact]
-    public async Task CreateAsync_Should_Handle_Dialect_Without_LastIdQuery()
+    public async Task CreateAsync_Should_Handle_Dialect_With_Returning_Populates_Id()
     {
-        // Arrange - Use a dialect that might not support LAST_INSERT_ID
+        // Arrange - Use a dialect with RETURNING to populate ID (Sqlite)
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var context = new DatabaseContext("test", factory, _typeMap);
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory, _typeMap);
         var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
         
         factory.SetNonQueryResult(1);
+        factory.SetScalarResult(42);
         
-        // Don't set scalar result - simulates dialect returning null for GetLastInsertedIdQuery
         var entity = new TestEntityWithAutoId { Name = "Test Entity" };
 
         // Act
@@ -95,8 +95,8 @@ public class EntityHelperIdPopulationTests
 
         // Assert
         Assert.True(result);
-        // ID population should be skipped gracefully when dialect doesn't support it
-        Assert.Equal(0, entity.Id); // Should remain default value
+        // ID should be populated via RETURNING
+        Assert.Equal(42, entity.Id);
     }
 
     [Fact]
@@ -138,12 +138,12 @@ public class EntityHelperIdPopulationTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => helper.CreateAsync(entity));
     }
 
-    [Fact(Skip = "Disabled due to SQL Server RETURNING changes")]
+    [Fact]
     public async Task CreateAsync_Should_Not_Attempt_Id_Population_When_Insert_Fails()
     {
         // Arrange
-        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
-        var context = new DatabaseContext("test", factory, _typeMap);
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=Unknown", factory, _typeMap);
         var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
         
         factory.SetNonQueryResult(0); // Insert fails - no rows affected
@@ -158,12 +158,12 @@ public class EntityHelperIdPopulationTests
         Assert.Equal(0, entity.Id); // ID should not be populated when insert fails
     }
 
-    [Fact(Skip = "Disabled due to SQL Server RETURNING changes")]
+    [Fact]
     public async Task CreateAsync_Should_Handle_Multiple_Rows_Affected_Gracefully()
     {
         // Arrange
-        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
-        var context = new DatabaseContext("test", factory, _typeMap);
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=Unknown", factory, _typeMap);
         var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
         
         factory.SetNonQueryResult(2); // Multiple rows affected (unusual but possible)

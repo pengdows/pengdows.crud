@@ -106,7 +106,7 @@ public class SqlContainerParameterOrderTests : SqlLiteContextTestBase
         ctx.SetupGet(c => c.ForceManualPrepare).Returns((bool?)null);
         ctx.As<ISqlDialectProvider>().SetupGet(p => p.Dialect).Returns(dialect);
 
-        using var container = new SqlContainer(ctx.Object, "SELECT {P}b, {P}a");
+        using var container = SqlContainer.CreateForDialect(ctx.Object, dialect, "SELECT {P}b, {P}a");
         var rendered = container.RenderParams(container.Query.ToString());
         container.Query.Clear().Append(rendered);
         var pA = dialect.CreateDbParameter("a", DbType.Int32, 1);
@@ -175,4 +175,3 @@ public class SqlContainerParameterOrderTests : SqlLiteContextTestBase
         }
     }
 }
-

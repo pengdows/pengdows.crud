@@ -225,16 +225,14 @@ public class TrackedReaderTests
     }
 
     [Fact]
-    public void NextResult_ReturnsFalseWithoutCallingReader()
+    public void NextResult_ThrowsNotSupported_AndDoesNotCallUnderlying()
     {
         var reader = new Mock<DbDataReader>();
         reader.Setup(r => r.NextResult()).Throws<InvalidOperationException>();
 
         var tracked = new TrackedReader(reader.Object, Mock.Of<ITrackedConnection>(), Mock.Of<IAsyncDisposable>(), false);
 
-        var result = tracked.NextResult();
-
-        Assert.False(result);
+        Assert.Throws<NotSupportedException>(() => tracked.NextResult());
         reader.Verify(r => r.NextResult(), Times.Never);
     }
 

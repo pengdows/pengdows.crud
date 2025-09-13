@@ -22,7 +22,7 @@ public class EntityHelperIdPopulationDebugTest
         _typeMap.Register<TestEntityWithAutoId>();
     }
 
-    [Fact(Skip = "Disabled due to SQL Server RETURNING changes")]
+    [Fact]
     public async Task EntityHelper_Should_Recognize_AutoId_Entity_Configuration()
     {
         // Test that EntityHelper recognizes the entity as having an auto-generated ID
@@ -63,7 +63,7 @@ public class EntityHelperIdPopulationDebugTest
         Assert.Equal(42, entity.Id);
     }
 
-    [Fact(Skip = "Disabled due to SQL Server RETURNING changes")]
+    [Fact]
     public async Task EntityHelper_Should_Work_With_Dialect_SupportsInsertReturning_True()
     {
         // Test the SQLite path (SupportsInsertReturning = true)
@@ -80,7 +80,7 @@ public class EntityHelperIdPopulationDebugTest
         Assert.Equal(99, entity.Id); // Should work via INSERT RETURNING path
     }
 
-    [Fact(Skip = "Disabled due to SQL Server RETURNING changes")]
+    [Fact]
     public async Task EntityHelper_Should_Work_With_Dialect_SupportsInsertReturning_False()
     {
         // Test the SQL Server path (SupportsInsertReturning = true, uses OUTPUT INSERTED)  

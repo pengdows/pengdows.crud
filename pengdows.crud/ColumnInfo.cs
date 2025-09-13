@@ -43,9 +43,16 @@ public class ColumnInfo : IColumnInfo
         {
             if (EnumType != null)
             {
-                value = DbType == DbType.String
-                    ? value.ToString() // Save enum as string name
-                    : Convert.ChangeType(value, EnumUnderlyingType!); // Use cached underlying type
+                if (DbType == DbType.String)
+                {
+                    value = value.ToString(); // Save enum as string name
+                }
+                else
+                {
+                    // Use cached underlying type, or determine it if not cached
+                    var underlyingType = EnumUnderlyingType ?? Enum.GetUnderlyingType(EnumType);
+                    value = Convert.ChangeType(value, underlyingType);
+                }
             }
 
             if (IsJsonType)

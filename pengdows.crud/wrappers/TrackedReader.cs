@@ -168,8 +168,8 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
 
     public bool NextResult()
     {
-        return false;
-        // No MARS support
+        // Multiple result sets are not supported by policy.
+        throw new NotSupportedException("Multiple result sets are not supported.");
     }
 
     public int Depth => _reader.Depth;
