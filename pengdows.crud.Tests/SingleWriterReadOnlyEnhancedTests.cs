@@ -298,7 +298,7 @@ public class SingleWriterReadOnlyEnhancedTests
 
         var conn = ctx.GetConnection(executionType);
         await conn.OpenAsync();
-        
+
         if (shouldBeReadOnly)
         {
             Assert.Equal(2, factory.Connections.Count);
@@ -313,3 +313,4 @@ public class SingleWriterReadOnlyEnhancedTests
         }
     }
 }
+

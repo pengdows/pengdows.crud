@@ -160,42 +160,26 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             _disablePrepare = configuration.DisablePrepare;
 
             var initialConnection = InitializeInternals(configuration);
-            if (initialConnection == null && PersistentConnection is null)
+
+            // Build strategies now that mode is final (moved from InitializeInternals)
+            _connectionStrategy = ConnectionStrategyFactory.Create(this, ConnectionMode);
+            _procWrappingStrategy = ProcWrappingStrategyFactory.Create(_procWrappingStyle);
+
+            // Delegate dialect detection to the strategy
+            var (dialect, dataSourceInfo) = _connectionStrategy.HandleDialectDetection(initialConnection, _factory, _loggerFactory);
+
+            if (dialect != null && dataSourceInfo != null)
             {
-                // Fall back to a safe SQL-92 dialect when no connection is opened (e.g., Standard mode with failing open)
+                _dialect = (SqlDialect)dialect;
+                _dataSourceInfo = (DataSourceInformation)dataSourceInfo;
+            }
+            else
+            {
+                // Fall back to a safe SQL-92 dialect when detection fails
                 var logger = _loggerFactory.CreateLogger<SqlDialect>();
                 _dialect = new Sql92Dialect(_factory, logger);
                 _dialect.InitializeUnknownProductInfo();
                 _dataSourceInfo = new DataSourceInformation(_dialect);
-            }
-            else if (configuration.DbMode == DbMode.Standard && initialConnection != null)
-            {
-                // Standard mode: safe to detect using the opened connection
-                _dialect = SqlDialectFactory.CreateDialect(initialConnection, _factory, _loggerFactory);
-                _dataSourceInfo = new DataSourceInformation(_dialect);
-            }
-            else
-            {
-                // Persistent modes: detect using a temporary connection so we don't consume state on the persistent writer
-                ITrackedConnection? detectConn = null;
-                try
-                {
-                    detectConn = FactoryCreateConnection(_connectionString, true, IsReadOnlyConnection, null);
-                    detectConn.Open();
-                    _dialect = SqlDialectFactory.CreateDialect(detectConn, _factory, _loggerFactory);
-                    _dataSourceInfo = new DataSourceInformation(_dialect);
-                }
-                catch
-                {
-                    var logger = _loggerFactory.CreateLogger<SqlDialect>();
-                    _dialect = new Sql92Dialect(_factory, logger);
-                    _dialect.InitializeUnknownProductInfo();
-                    _dataSourceInfo = new DataSourceInformation(_dialect);
-                }
-                finally
-                {
-                    try { detectConn?.Dispose(); } catch { /* ignore */ }
-                }
             }
             Name = _dataSourceInfo.DatabaseProductName;
             _procWrappingStyle = _dataSourceInfo.ProcWrappingStyle;
@@ -809,7 +793,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
 
             if (initConn != null && config.DbMode == DbMode.Standard)
             {
-                // Only do inline detection for Standard mode; persistent modes will detect via a throwaway connection
+                // Only do inline detection for Standard mode; SingleWriter mode will detect via main constructor
                 _dataSourceInfo = DataSourceInformation.Create(initConn, _factory, _loggerFactory);
                 _procWrappingStyle = _dataSourceInfo.ProcWrappingStyle;
                 Name = _dataSourceInfo.DatabaseProductName;
@@ -823,11 +807,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
                 _logger.LogWarning("DbMode override: requested {requested}, coerced to {resolved} — reason: {reason}", requestedMode, ConnectionMode, "Final mode differs from requested based on product/topology");
             }
 
-            // 5) Build strategies now that mode is final
-            _connectionStrategy = ConnectionStrategyFactory.Create(this, ConnectionMode);
-            _procWrappingStrategy = ProcWrappingStrategyFactory.Create(_procWrappingStyle);
-
-            // 6) Apply provider/session settings according to final mode
+            // 5) Apply provider/session settings according to final mode
             if (ConnectionMode is DbMode.KeepAlive or DbMode.SingleConnection or DbMode.SingleWriter)
             {
                 ApplyPersistentConnectionSessionSettings(initConn);

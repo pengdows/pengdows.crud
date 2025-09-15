@@ -1,9 +1,41 @@
+using System.Data.Common;
+using Microsoft.Extensions.Logging;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
 
 namespace pengdows.crud.strategies.connection;
 
+/// <summary>
+/// SINGLE WRITER CONNECTION STRATEGY - DESIGN INTENT:
+///
+/// PURPOSE: Optimized for databases that allow unlimited concurrent readers but only ONE writer.
+/// Maintains one persistent writer connection and creates ephemeral read-only connections as needed.
+///
+/// BEHAVIOR:
+/// - Writes: Always use the single persistent writer connection (never dispose)
+/// - Reads: Create ephemeral read-only connections with read-only hints applied
+/// - The persistent writer connection is held for the entire DatabaseContext lifetime
+/// - Read connections are disposed immediately after use
+///
+/// DATABASE EXAMPLES:
+/// - SQL Server Compact Edition (SQLCE) - single writer limitation
+/// - SQLite with WAL mode - benefits from persistent writer
+/// - File-based databases where write locks are expensive to acquire
+/// - Any database with single-writer/multi-reader architecture
+///
+/// THREAD SAFETY:
+/// - Writer connection: Protected by database-level write locking
+/// - Reader connections: Each request gets its own ephemeral connection
+///
+/// PERFORMANCE BENEFITS:
+/// - Eliminates write lock acquisition overhead on every operation
+/// - Read operations don't interfere with the persistent writer
+/// - Optimal for applications with mixed read/write workloads
+///
+/// DO NOT MODIFY: This strategy is specifically designed for single-writer database constraints
+/// </summary>
 internal class SingleWriterConnectionStrategy : SafeAsyncDisposableBase, IConnectionStrategy
 {
     private readonly DatabaseContext _context;
@@ -60,6 +92,25 @@ internal class SingleWriterConnectionStrategy : SafeAsyncDisposableBase, IConnec
 
         connection.Dispose();
         return ValueTask.CompletedTask;
+    }
+
+    public (ISqlDialect? dialect, IDataSourceInformation? dataSourceInfo) HandleDialectDetection(
+        ITrackedConnection? initConnection,
+        DbProviderFactory factory,
+        ILoggerFactory loggerFactory)
+    {
+        // SingleWriter strategy: use the persistent connection for detection
+        // The initConnection becomes the persistent connection, so reuse it for dialect detection
+        var connectionForDetection = _context.PersistentConnection ?? initConnection;
+
+        if (connectionForDetection != null)
+        {
+            var dialect = SqlDialectFactory.CreateDialect(connectionForDetection, factory, loggerFactory);
+            var dataSourceInfo = new DataSourceInformation(dialect);
+            return (dialect, dataSourceInfo);
+        }
+
+        return (null, null);
     }
 
 }

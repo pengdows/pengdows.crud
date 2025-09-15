@@ -1,7 +1,10 @@
 using System;
+using System.Data.Common;
 using System.Reflection;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using pengdows.crud.configuration;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 using pengdows.crud.strategies.connection;
@@ -59,6 +62,14 @@ public class SingleWriterWriteGuardTests
             {
                 connection?.Dispose();
             }
+        }
+
+        public (ISqlDialect? dialect, IDataSourceInformation? dataSourceInfo) HandleDialectDetection(
+            ITrackedConnection? initConnection,
+            DbProviderFactory factory,
+            ILoggerFactory loggerFactory)
+        {
+            return (null, null);
         }
 
         public bool IsDisposed => false;

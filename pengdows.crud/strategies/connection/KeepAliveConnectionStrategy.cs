@@ -1,9 +1,37 @@
 using System.Data;
+using System.Data.Common;
+using Microsoft.Extensions.Logging;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.wrappers;
 
 namespace pengdows.crud.strategies.connection;
 
+/// <summary>
+/// KEEP-ALIVE CONNECTION STRATEGY - DESIGN INTENT:
+///
+/// PURPOSE: Identical to Standard strategy except maintains one unused "sentinel" connection to prevent
+/// database engine from unloading in embedded/local database scenarios.
+///
+/// BEHAVIOR:
+/// - Creates ephemeral connections for all actual work (identical to Standard)
+/// - Maintains one persistent "sentinel" connection that is never used for operations
+/// - The sentinel connection prevents the database from shutting down between operations
+/// - All working connections are disposed immediately when released (like Standard)
+///
+/// SPECIFIC USE CASES:
+/// - SQLite databases where you want to prevent WAL mode cleanup between operations
+/// - LocalDB instances that might shut down when no connections are active
+/// - Embedded databases that have expensive startup costs
+/// - File-based databases where keeping the engine loaded improves performance
+///
+/// THREAD SAFETY: Fully thread-safe - sentinel connection is read-only after initialization
+///
+/// IMPORTANT: The sentinel connection is NEVER used for actual operations - it exists purely
+/// to keep the database engine loaded and prevent costly reload cycles.
+///
+/// DO NOT MODIFY: This strategy is specifically tuned for embedded database engine behavior
+/// </summary>
 public class KeepAliveConnectionStrategy : StandardConnectionStrategy
 {
     public KeepAliveConnectionStrategy(DatabaseContext context) : base(context)
@@ -75,6 +103,31 @@ public class KeepAliveConnectionStrategy : StandardConnectionStrategy
 
         connection.Dispose();
         return ValueTask.CompletedTask;
+    }
+
+    public override (ISqlDialect? dialect, IDataSourceInformation? dataSourceInfo) HandleDialectDetection(
+        ITrackedConnection? initConnection,
+        DbProviderFactory factory,
+        ILoggerFactory loggerFactory)
+    {
+        // KeepAlive strategy: use throwaway connection to avoid consuming state on the sentinel connection
+        ITrackedConnection? detectConn = null;
+        try
+        {
+            detectConn = _context.FactoryCreateConnection(_context.ConnectionString, true, _context.IsReadOnlyConnection);
+            detectConn.Open();
+            var dialect = SqlDialectFactory.CreateDialect(detectConn, factory, loggerFactory);
+            var dataSourceInfo = new DataSourceInformation(dialect);
+            return (dialect, dataSourceInfo);
+        }
+        catch
+        {
+            return (null, null);
+        }
+        finally
+        {
+            try { detectConn?.Dispose(); } catch { /* ignore */ }
+        }
     }
 
 }
