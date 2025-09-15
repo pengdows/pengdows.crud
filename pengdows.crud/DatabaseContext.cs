@@ -46,7 +46,6 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     private long _totalConnectionFailures;
     private long _totalConnectionTimeoutFailures;
     private string _connectionSessionSettings = string.Empty;
-    private readonly DbMode _originalUserMode;
     private readonly bool? _forceManualPrepare;
     private readonly bool? _disablePrepare;
     private bool? _rcsiPrefetch;
@@ -154,7 +153,6 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             ReadWriteMode = configuration.ReadWriteMode;
             TypeMapRegistry = typeMapRegistry ?? global::pengdows.crud.TypeMapRegistry.Instance;
             ConnectionMode = configuration.DbMode;
-            _originalUserMode = configuration.DbMode;
             _factory = factory ?? throw new ArgumentNullException(nameof(factory));
             _forceManualPrepare = configuration.ForceManualPrepare;
             _disablePrepare = configuration.DisablePrepare;
@@ -259,8 +257,6 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     public string Name { get; set; }
 
     // Expose original requested mode for internal strategy decisions
-    internal DbMode OriginalUserMode => _originalUserMode;
-
     public string ConnectionString => _connectionString;
 
     private void SetConnectionString(string value)
@@ -802,10 +798,6 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             // 4) Coerce ConnectionMode based on product/topology
             var requestedMode = ConnectionMode;
             ConnectionMode = CoerceMode(requestedMode, product, isLocalDb, isFirebirdEmbedded);
-            if (ConnectionMode != requestedMode)
-            {
-                _logger.LogWarning("DbMode override: requested {requested}, coerced to {resolved} — reason: {reason}", requestedMode, ConnectionMode, "Final mode differs from requested based on product/topology");
-            }
 
             // 5) Apply provider/session settings according to final mode
             if (ConnectionMode is DbMode.KeepAlive or DbMode.SingleConnection or DbMode.SingleWriter)
@@ -1000,106 +992,134 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         return connectionString;
     }
 
+
     private DbMode CoerceMode(DbMode requested, SupportedDatabase product, bool isLocalDb, bool isFirebirdEmbedded)
     {
-        // Embedded engines: handle in-memory specially (isolated vs shared)
-        if (product is SupportedDatabase.Sqlite or SupportedDatabase.DuckDB)
+        switch (product)
         {
-            var kind = DetectInMemoryKind(product, _connectionString);
-            if (kind == InMemoryKind.Isolated)
+            case SupportedDatabase.Sqlite or SupportedDatabase.DuckDB:
             {
-                if (requested != DbMode.SingleConnection)
+                var kind = DetectInMemoryKind(product, _connectionString);
+                switch (kind)
                 {
-                    _logger.LogWarning("DbMode override: requested {requested}, coerced to {resolved} — reason: {reason}", requested, DbMode.SingleConnection, "Isolated in-memory requires SingleConnection");
+                    case InMemoryKind.Isolated:
+                    {
+                        LogModeOverride(requested, DbMode.SingleConnection, "Isolated in-memory requires SingleConnection");
+                        return DbMode.SingleConnection;
+                    }
+                    case InMemoryKind.Shared:
+                    {
+                        switch (requested)
+                        {
+                            case DbMode.Standard:
+                            {
+                                LogModeOverride(requested, DbMode.SingleWriter, "Shared in-memory prefers SingleWriter");
+                                return DbMode.SingleWriter;
+                            }
+                            case DbMode.Best:
+                            {
+                                LogModeOverride(requested, DbMode.SingleWriter, "Shared in-memory prefers SingleWriter");
+                                return DbMode.SingleWriter;
+                            }
+                            default:
+                            {
+                                return requested;
+                            }
+                        }
+                    }
                 }
 
+                switch (requested)
+                {
+                    case DbMode.Standard:
+                    {
+                        LogModeOverride(requested, DbMode.SingleWriter, "SQLite/DuckDB file-based prefer persistent coordination");
+                        return DbMode.SingleWriter;
+                    }
+                    case DbMode.KeepAlive:
+                    {
+                        LogModeOverride(requested, DbMode.SingleWriter, "SQLite/DuckDB file-based prefer persistent coordination");
+                        return DbMode.SingleWriter;
+                    }
+                    case DbMode.Best:
+                    {
+                        LogModeOverride(requested, DbMode.SingleWriter, "SQLite/DuckDB file-based prefer persistent coordination");
+                        return DbMode.SingleWriter;
+                    }
+                    default:
+                    {
+                        return requested;
+                    }
+                }
+            }
+            case SupportedDatabase.Firebird when isFirebirdEmbedded:
+            {
+                LogModeOverride(requested, DbMode.SingleConnection, "Firebird embedded requires SingleConnection");
                 return DbMode.SingleConnection;
             }
-            if (kind == InMemoryKind.Shared)
+            case SupportedDatabase.SqlServer when isLocalDb:
             {
-                // Shared in-memory: upgrade Standard/Best to SingleWriter, otherwise honor explicit choice
-                if (requested == DbMode.Standard || requested == DbMode.Best)
+                LogModeOverride(requested, DbMode.KeepAlive, "LocalDb requires KeepAlive");
+                return DbMode.KeepAlive;
+            }
+            case SupportedDatabase.PostgreSql
+                or SupportedDatabase.CockroachDb
+                or SupportedDatabase.MySql
+                or SupportedDatabase.MariaDb
+                or SupportedDatabase.Oracle
+                or SupportedDatabase.SqlServer:
+            {
+                switch (requested)
                 {
-                    _logger.LogWarning("DbMode override: requested {requested}, coerced to {resolved} — reason: {reason}", requested, DbMode.SingleWriter, "Shared in-memory prefers SingleWriter");
-                    return DbMode.SingleWriter;
+                    case DbMode.SingleWriter:
+                    {
+                        return DbMode.SingleWriter;
+                    }
+                    case DbMode.Standard:
+                    {
+                        return DbMode.Standard;
+                    }
+                    case DbMode.Best:
+                    {
+                        LogModeOverride(requested, DbMode.Standard, "Full servers prefer Standard for automatic selection");
+                        return DbMode.Standard;
+                    }
+                    default:
+                    {
+                        LogModeOverride(requested, DbMode.Standard, "Full servers prefer Standard unless SingleWriter explicitly requested");
+                        return DbMode.Standard;
+                    }
                 }
-                return requested;
             }
-
-            // File-backed or none: previous behavior — prefer SingleWriter for Standard/KeepAlive;
-            if (requested is DbMode.Standard or DbMode.KeepAlive)
+            default:
             {
-                _logger.LogWarning("DbMode override: requested {requested}, coerced to {resolved} — reason: {reason}", requested, DbMode.SingleWriter, "SQLite/DuckDB file-based prefer persistent coordination");
-                return DbMode.SingleWriter;
+                break;
             }
-            if (requested is DbMode.Best)
-            {
-                _logger.LogWarning("DbMode override: requested {requested}, coerced to {resolved} — reason: {reason}", requested, DbMode.SingleWriter, "SQLite/DuckDB file-based prefer persistent coordination");
-                return DbMode.SingleWriter;
-            }
-            return requested;
         }
 
-        if (product == SupportedDatabase.Firebird && isFirebirdEmbedded)
-        {
-            if (requested != DbMode.SingleConnection)
-            {
-                _logger.LogWarning("DbMode override: requested {requested}, coerced to {resolved} — reason: {reason}", requested, DbMode.SingleConnection, "Firebird embedded requires SingleConnection");
-            }
-
-            return DbMode.SingleConnection;
-        }
-
-        // Full servers
-        bool isFull =
-            product is SupportedDatabase.PostgreSql
-            or SupportedDatabase.CockroachDb
-            or SupportedDatabase.MySql
-            or SupportedDatabase.MariaDb
-            or SupportedDatabase.Oracle
-            or SupportedDatabase.SqlServer;
-
-        if (product == SupportedDatabase.SqlServer && isLocalDb)
-        {
-            if (requested != DbMode.KeepAlive)
-            {
-                _logger.LogWarning("DbMode override: requested {requested}, coerced to {resolved} — reason: {reason}", requested, DbMode.KeepAlive, "LocalDb requires KeepAlive");
-            }
-
-            return DbMode.KeepAlive;
-        }
-
-        if (isFull && !(product == SupportedDatabase.SqlServer && isLocalDb))
-        {
-            // For full server engines:
-            // - Best resolves to Standard (do not auto-select SingleWriter)
-            // - Explicit SingleWriter is allowed
-            // - Standard stays Standard
-            // - Other modes are coerced to Standard
-            if (requested == DbMode.Best)
-            {
-                return DbMode.Standard;
-            }
-            if (requested == DbMode.SingleWriter)
-            {
-                return DbMode.SingleWriter;
-            }
-            if (requested == DbMode.Standard)
-            {
-                return DbMode.Standard;
-            }
-
-            _logger.LogWarning("DbMode override: requested {requested}, coerced to {resolved} — reason: {reason}", requested, DbMode.Standard, "Full servers prefer Standard unless SingleWriter explicitly requested");
-            return DbMode.Standard;
-        }
-
-        // Unknown databases: Best resolves to Standard for safety
         if (requested == DbMode.Best)
         {
+            LogModeOverride(requested, DbMode.Standard, "Unknown providers default to Standard for safety");
             return DbMode.Standard;
         }
 
         return requested;
+    }
+
+    private void LogModeOverride(DbMode requested, DbMode resolved, string reason)
+    {
+        if (requested == resolved)
+        {
+            return;
+        }
+
+        if (requested == DbMode.Best)
+        {
+            _logger.LogInformation("DbMode auto-selection: requested {requested}, resolved to {resolved} — reason: {reason}", requested, resolved, reason);
+            return;
+        }
+
+        _logger.LogWarning("DbMode override: requested {requested}, coerced to {resolved} — reason: {reason}", requested, resolved, reason);
     }
 
     private enum InMemoryKind { None, Isolated, Shared }

@@ -114,6 +114,54 @@ public class ConnectionStrategyTests
     }
 
     [Fact]
+    public void KeepAliveRequested_IsolatedInMemory_UsesSingleConnectionStrategy()
+    {
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:;EmulatedProduct=Sqlite",
+            DbMode = DbMode.KeepAlive,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Sqlite));
+
+        Assert.Equal(DbMode.SingleConnection, ctx.ConnectionMode);
+        Assert.NotNull(ctx.PersistentConnection);
+
+        var readConnection = ctx.GetConnection(ExecutionType.Read);
+        var writeConnection = ctx.GetConnection(ExecutionType.Write);
+
+        Assert.Same(ctx.PersistentConnection, readConnection);
+        Assert.Same(readConnection, writeConnection);
+
+        ctx.CloseAndDisposeConnection(readConnection);
+        Assert.True(ctx.NumberOfOpenConnections >= 1);
+    }
+
+    [Fact]
+    public void KeepAliveRequested_LocalDb_RetainsKeepAliveSentinelConnection()
+    {
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=(localdb)\\mssqllocaldb;Database=TestDb;EmulatedProduct=SqlServer",
+            DbMode = DbMode.KeepAlive,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.SqlServer));
+
+        Assert.Equal(DbMode.KeepAlive, ctx.ConnectionMode);
+        Assert.NotNull(ctx.PersistentConnection);
+
+        var operationConnection = ctx.GetConnection(ExecutionType.Read);
+
+        Assert.NotSame(ctx.PersistentConnection, operationConnection);
+
+        ctx.CloseAndDisposeConnection(operationConnection);
+        Assert.True(ctx.NumberOfOpenConnections >= 1);
+    }
+
+    [Fact]
     public void SingleConnection_AlwaysReturnsPersistent()
     {
         using var ctx = CreateContext(DbMode.SingleConnection, SupportedDatabase.Sqlite, ":memory:");
