@@ -1,9 +1,10 @@
 #region
 
+using System.Reflection;
+using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
-using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 #endregion
@@ -16,7 +17,7 @@ public class SqlDialectUtilityTests
     public void TryParseMajorVersion_ValidVersionString_ReturnsTrue()
     {
         var method = typeof(SqlDialect).GetMethod("TryParseMajorVersion",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            BindingFlags.NonPublic | BindingFlags.Static);
 
         var parameters = new object[] { "14.2.1", 0 };
         var result = (bool)method!.Invoke(null, parameters)!;
@@ -30,7 +31,7 @@ public class SqlDialectUtilityTests
     public void TryParseMajorVersion_InvalidVersionString_ReturnsFalse()
     {
         var method = typeof(SqlDialect).GetMethod("TryParseMajorVersion",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            BindingFlags.NonPublic | BindingFlags.Static);
 
         var parameters1 = new object[] { "invalid", 0 };
         var result1 = (bool)method!.Invoke(null, parameters1)!;
@@ -46,7 +47,7 @@ public class SqlDialectUtilityTests
     public void GetPrime_ReturnsValidPrimes()
     {
         var method = typeof(SqlDialect).GetMethod("GetPrime",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            BindingFlags.NonPublic | BindingFlags.Static);
 
         var prime1 = (int)method!.Invoke(null, new object[] { 1 })!;
         var prime2 = (int)method.Invoke(null, new object[] { 10 })!;
@@ -69,7 +70,7 @@ public class SqlDialectUtilityTests
 
         var method = dialect.GetType().GetMethod(
             "ExtractProductNameFromVersion",
-            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
 
         var result = (string)method!.Invoke(dialect, new object[] { "any version" })!;
 
@@ -84,7 +85,7 @@ public class SqlDialectUtilityTests
 
         var method = dialect.GetType().GetMethod(
             "DetermineStandardCompliance",
-            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
 
         var result = (SqlStandardLevel)method!.Invoke(dialect, new object?[] { null })!;
 

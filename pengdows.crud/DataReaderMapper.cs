@@ -16,10 +16,6 @@ public sealed class DataReaderMapper : IDataReaderMapper
 {
     public static readonly IDataReaderMapper Instance = new DataReaderMapper();
 
-    public DataReaderMapper()
-    {
-    }
-
     private static readonly ConcurrentDictionary<PropertyInfo, Action<object, object?>> _setterCache = new();
     private static readonly ConcurrentDictionary<(Type Type, string Schema, MapperOptions Options), MapperPlan> _planCache = new();
 

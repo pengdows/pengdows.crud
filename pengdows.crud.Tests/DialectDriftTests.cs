@@ -1,5 +1,4 @@
-using System.Collections.Generic;
-using System.Data;
+using System;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 using Xunit;
@@ -31,8 +30,8 @@ public class DialectDriftTests
         var sqlSqlite = scSqlite.Query.ToString();
 
         // Assert
-        Assert.Contains(":w0", sqlPg);       // PostgreSQL uses ':' marker
-        Assert.Contains("@w0", sqlSqlite);    // SQLite uses '@' marker
+        Assert.Contains(":p0", sqlPg);       // PostgreSQL uses ':' marker
+        Assert.Contains("@p0", sqlSqlite);    // SQLite uses '@' marker
     }
 
     [Fact]
@@ -45,18 +44,18 @@ public class DialectDriftTests
         // Prime cache with SQLite
         var sc1 = helper.BuildRetrieve(new[] { 42 }, context: sqliteCtx);
         var sql1 = sc1.Query.ToString();
-        Assert.Contains("@w0", sql1);
+        Assert.Contains("@p0", sql1);
 
         // Now render with PostgreSQL and ensure ':' is used (not '@')
         var sc2 = helper.BuildRetrieve(new[] { 43 }, context: pgCtx);
         var sql2 = sc2.Query.ToString();
-        Assert.Contains(":w0", sql2);
-        Assert.DoesNotContain("@w0", sql2);
+        Assert.Contains(":p0", sql2);
+        Assert.DoesNotContain("@p0", sql2);
 
         // And back to SQLite to ensure no regression
         var sc3 = helper.BuildRetrieve(new[] { 44 }, context: sqliteCtx);
         var sql3 = sc3.Query.ToString();
-        Assert.Contains("@w0", sql3);
-        Assert.DoesNotContain(":w0", sql3);
+        Assert.Contains("@p0", sql3);
+        Assert.DoesNotContain(":p0", sql3);
     }
 }

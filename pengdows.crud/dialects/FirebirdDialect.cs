@@ -1,5 +1,6 @@
 using System.Data;
 using System.Data.Common;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.wrappers;
@@ -121,7 +122,7 @@ public class FirebirdDialect : SqlDialect
             return standardVersion;
         }
 
-        var legacyMatch = System.Text.RegularExpressions.Regex.Match(versionString, @"LI-V(\d+)\.(\d+)\.(\d+)");
+        var legacyMatch = Regex.Match(versionString, @"LI-V(\d+)\.(\d+)\.(\d+)");
         if (legacyMatch.Success)
         {
             if (int.TryParse(legacyMatch.Groups[1].Value, out var major) &&
@@ -132,7 +133,7 @@ public class FirebirdDialect : SqlDialect
             }
         }
 
-        var firebirdMatch = System.Text.RegularExpressions.Regex.Match(versionString, @"Firebird\s+(\d+)\.(\d+)");
+        var firebirdMatch = Regex.Match(versionString, @"Firebird\s+(\d+)\.(\d+)");
         if (firebirdMatch.Success)
         {
             if (int.TryParse(firebirdMatch.Groups[1].Value, out var major) &&

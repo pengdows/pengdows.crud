@@ -160,25 +160,42 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             _disablePrepare = configuration.DisablePrepare;
 
             var initialConnection = InitializeInternals(configuration);
-            if (initialConnection != null)
-            {
-                _dialect = SqlDialectFactory.CreateDialect(initialConnection, _factory, _loggerFactory);
-                _dataSourceInfo = new DataSourceInformation(_dialect);
-            }
-            else if (PersistentConnection is not null)
-            {
-                // In persistent modes, InitializeInternals handed ownership to the context.
-                // Use the persistent connection to detect product/dialect now.
-                _dialect = SqlDialectFactory.CreateDialect(PersistentConnection, _factory, _loggerFactory);
-                _dataSourceInfo = new DataSourceInformation(_dialect);
-            }
-            else
+            if (initialConnection == null && PersistentConnection is null)
             {
                 // Fall back to a safe SQL-92 dialect when no connection is opened (e.g., Standard mode with failing open)
                 var logger = _loggerFactory.CreateLogger<SqlDialect>();
                 _dialect = new Sql92Dialect(_factory, logger);
                 _dialect.InitializeUnknownProductInfo();
                 _dataSourceInfo = new DataSourceInformation(_dialect);
+            }
+            else if (configuration.DbMode == DbMode.Standard && initialConnection != null)
+            {
+                // Standard mode: safe to detect using the opened connection
+                _dialect = SqlDialectFactory.CreateDialect(initialConnection, _factory, _loggerFactory);
+                _dataSourceInfo = new DataSourceInformation(_dialect);
+            }
+            else
+            {
+                // Persistent modes: detect using a temporary connection so we don't consume state on the persistent writer
+                ITrackedConnection? detectConn = null;
+                try
+                {
+                    detectConn = FactoryCreateConnection(_connectionString, true, IsReadOnlyConnection, null);
+                    detectConn.Open();
+                    _dialect = SqlDialectFactory.CreateDialect(detectConn, _factory, _loggerFactory);
+                    _dataSourceInfo = new DataSourceInformation(_dialect);
+                }
+                catch
+                {
+                    var logger = _loggerFactory.CreateLogger<SqlDialect>();
+                    _dialect = new Sql92Dialect(_factory, logger);
+                    _dialect.InitializeUnknownProductInfo();
+                    _dataSourceInfo = new DataSourceInformation(_dialect);
+                }
+                finally
+                {
+                    try { detectConn?.Dispose(); } catch { /* ignore */ }
+                }
             }
             Name = _dataSourceInfo.DatabaseProductName;
             _procWrappingStyle = _dataSourceInfo.ProcWrappingStyle;
@@ -437,7 +454,15 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
 
     public ISqlContainer CreateSqlContainer(string? query = null)
     {
-        return SqlContainer.Create(this, query);
+        // Provide a logger so container can emit diagnostics (e.g., prepare-disable notices)
+        var logger = _loggerFactory.CreateLogger<ISqlContainer>();
+        return SqlContainer.Create(this, query, logger);
+    }
+
+    // Internal helper so TransactionContext can reuse the same logger factory for containers
+    internal ILogger<ISqlContainer> CreateSqlContainerLogger()
+    {
+        return _loggerFactory.CreateLogger<ISqlContainer>();
     }
 
     public DbParameter CreateDbParameter<T>(string? name, DbType type, T value,
@@ -782,15 +807,21 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             }
             _rcsiPrefetch = rcsi;
 
-            if (initConn != null)
+            if (initConn != null && config.DbMode == DbMode.Standard)
             {
+                // Only do inline detection for Standard mode; persistent modes will detect via a throwaway connection
                 _dataSourceInfo = DataSourceInformation.Create(initConn, _factory, _loggerFactory);
                 _procWrappingStyle = _dataSourceInfo.ProcWrappingStyle;
                 Name = _dataSourceInfo.DatabaseProductName;
             }
 
             // 4) Coerce ConnectionMode based on product/topology
-            ConnectionMode = CoerceMode(ConnectionMode, product, isLocalDb, isFirebirdEmbedded);
+            var requestedMode = ConnectionMode;
+            ConnectionMode = CoerceMode(requestedMode, product, isLocalDb, isFirebirdEmbedded);
+            if (ConnectionMode != requestedMode)
+            {
+                _logger.LogWarning("DbMode override: requested {requested}, coerced to {resolved} — reason: {reason}", requestedMode, ConnectionMode, "Final mode differs from requested based on product/topology");
+            }
 
             // 5) Build strategies now that mode is final
             _connectionStrategy = ConnectionStrategyFactory.Create(this, ConnectionMode);
@@ -1006,8 +1037,8 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             }
             if (kind == InMemoryKind.Shared)
             {
-                // Shared in-memory: upgrade Standard to SingleWriter, otherwise honor explicit choice
-                if (requested == DbMode.Standard)
+                // Shared in-memory: upgrade Standard/Best to SingleWriter, otherwise honor explicit choice
+                if (requested == DbMode.Standard || requested == DbMode.Best)
                 {
                     _logger.LogWarning("DbMode override: requested {requested}, coerced to {resolved} — reason: {reason}", requested, DbMode.SingleWriter, "Shared in-memory prefers SingleWriter");
                     return DbMode.SingleWriter;
@@ -1023,6 +1054,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             }
             if (requested is DbMode.Best)
             {
+                _logger.LogWarning("DbMode override: requested {requested}, coerced to {resolved} — reason: {reason}", requested, DbMode.SingleWriter, "SQLite/DuckDB file-based prefer persistent coordination");
                 return DbMode.SingleWriter;
             }
             return requested;
@@ -1268,8 +1300,9 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             return;
         }
 
-        // If session settings were already applied on first open, avoid double application
-        if (_sessionSettingsAppliedOnOpen)
+        // If session settings were already applied on the persistent connection, avoid double
+        // application only for that same connection; still allow explicit application to other connections
+        if (_sessionSettingsAppliedOnOpen && ReferenceEquals(connection, _connection))
         {
             return;
         }

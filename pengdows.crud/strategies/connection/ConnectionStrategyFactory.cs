@@ -1,7 +1,6 @@
-namespace pengdows.crud.strategies.connection;
-
-
 using pengdows.crud.enums;
+
+namespace pengdows.crud.strategies.connection;
 
 internal static class ConnectionStrategyFactory
 {

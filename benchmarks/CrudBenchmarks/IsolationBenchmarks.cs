@@ -1,13 +1,13 @@
 using System.Data;
 using System.Data.Common;
 using BenchmarkDotNet.Attributes;
-using Dapper;
-using Npgsql;
-using pengdows.crud.configuration;
-using pengdows.crud.enums;
 using pengdows.crud;
 using pengdows.crud.attributes;
+using pengdows.crud.configuration;
+using pengdows.crud.enums;
+using pengdows.crud.fakeDb;
 using pengdows.crud.wrappers;
+// Dapper/Npgsql removed to avoid external DB dependency in this fixture
 
 namespace CrudBenchmarks;
 
@@ -15,7 +15,8 @@ namespace CrudBenchmarks;
 [SimpleJob(warmupCount: 3, iterationCount: 10)]
 public class IsolationBenchmarks
 {
-    private string _connStr = "Host=localhost;Port=5432;Database=pagila;Username=postgres;Password=postgres;Maximum Pool Size=100";
+    // Use FakeDb to isolate from external dependencies
+    private string _connStr = "fake";
     private IDatabaseContext _ctx = null!;
     private TypeMapRegistry _map = null!;
     private EntityHelper<Film, int> _filmHelper = null!;
@@ -35,7 +36,8 @@ public class IsolationBenchmarks
             ReadWriteMode = ReadWriteMode.ReadWrite,
             DbMode = DbMode.Standard
         };
-        _ctx = new DatabaseContext(cfg, NpgsqlFactory.Instance, null, _map);
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        _ctx = new DatabaseContext(cfg, factory, null, _map);
         _filmHelper = new EntityHelper<Film, int>(_ctx);
         
         // EntityHelper will handle internal caching automatically
@@ -71,17 +73,9 @@ public class IsolationBenchmarks
     // ============= OBJECT LOADING BENCHMARKS =============
     
     [Benchmark]
-    public async Task<Film?> ObjectLoading_Mine_Traditional()
+    public async Task<Film?> ObjectLoading_Mine()
     {
-        // Traditional approach: SQL generation + execution + object loading
-        var sc = _filmHelper.BuildRetrieve(new[] { _filmId });
-        return await _filmHelper.LoadSingleAsync(sc);
-    }
-    
-    [Benchmark]
-    public async Task<Film?> ObjectLoading_Mine_FastPath()
-    {
-        // Fast-path: EntityHelper's built-in caching with cloning
+        // Integrated path: EntityHelper handles caching/optimization internally
         return await _filmHelper.RetrieveOneAsync(_filmId, _ctx);
     }
     
@@ -108,11 +102,20 @@ public class IsolationBenchmarks
     [Benchmark]
     public async Task<Film?> ObjectLoading_Dapper()
     {
-        // Dapper baseline for comparison
-        await using var conn = new NpgsqlConnection(_connStr);
-        return await conn.QuerySingleOrDefaultAsync<Film>(
-            "select film_id as \"Id\", title as \"Title\", length as \"Length\" from film where film_id=@id",
-            new { id = _filmId });
+        // Replace Dapper baseline with direct SQL via context to keep benchmark self-contained
+        using var conn = _ctx.GetConnection(ExecutionType.Read);
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = _staticSql;
+        var p = cmd.CreateParameter();
+        p.Value = new[] { _filmId };
+        cmd.Parameters.Add(p);
+        await conn.OpenAsync();
+        using var reader = cmd.ExecuteReader();
+        if (reader.Read())
+        {
+            return _filmHelper.MapReaderToObject((ITrackedReader)reader);
+        }
+        return null;
     }
 
     // ============= PARAMETER CREATION BENCHMARKS =============
@@ -142,12 +145,13 @@ public class IsolationBenchmarks
     }
     
     [Benchmark]
-    public async Task<NpgsqlConnection> ConnectionOverhead_Direct()
+    public async Task<ITrackedConnection> ConnectionOverhead_Direct()
     {
-        var conn = new NpgsqlConnection(_connStr);
+        // Use context connection to avoid external dependency
+        var conn = _ctx.GetConnection(ExecutionType.Read);
         await conn.OpenAsync();
-        await conn.CloseAsync();
-        await conn.DisposeAsync();
+        conn.Close();
+        _ctx.CloseAndDisposeConnection(conn);
         return conn;
     }
 

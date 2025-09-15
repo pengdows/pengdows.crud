@@ -1,6 +1,6 @@
-namespace pengdows.crud.strategies.proc;
-
 using pengdows.crud.enums;
+
+namespace pengdows.crud.strategies.proc;
 
 internal class OracleProcWrappingStrategy : IProcWrappingStrategy
 {

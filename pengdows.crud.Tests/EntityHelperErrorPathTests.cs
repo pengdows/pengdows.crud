@@ -5,9 +5,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Threading.Tasks;
 using pengdows.crud.attributes;
-using pengdows.crud.enums;
 using pengdows.crud.exceptions;
-using pengdows.crud.fakeDb;
 using Xunit;
 
 #endregion
@@ -92,7 +90,7 @@ public class EntityHelperErrorPathTests : SqlLiteContextTestBase
     {
         var helper = new EntityHelper<TestEntity, long>(Context);
 
-        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.DeleteAsync((IEnumerable<long>)null!));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.DeleteAsync(null!));
     }
 
     [Fact]
@@ -108,7 +106,7 @@ public class EntityHelperErrorPathTests : SqlLiteContextTestBase
     {
         var helper = new EntityHelper<TestEntity, long>(Context);
 
-        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.RetrieveAsync((IEnumerable<long>)null!));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.RetrieveAsync(null!));
     }
 
     [Fact]
@@ -247,6 +245,6 @@ public class EntityHelperErrorPathTests : SqlLiteContextTestBase
     {
         var helper = new EntityHelper<TestEntity, long>(Context);
 
-        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.RetrieveOneAsync((TestEntity)null!));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.RetrieveOneAsync(null!));
     }
 }

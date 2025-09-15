@@ -4,7 +4,6 @@ namespace pengdows.crud.enums;
 /// Specifies how connections should be managed within the DatabaseContext.
 /// Only `Standard` is recommended for production. Other modes are for dev, test, or special use cases.
 /// </summary>
-[Flags]
 public enum DbMode
 {
     /// <summary>

@@ -1,10 +1,6 @@
-using System;
-using System.Collections.Generic;
 using System.Data.Common;
-using System.Linq;
 using System.Text;
 using pengdows.crud.@internal;
-using pengdows.crud.dialects;
 
 namespace pengdows.crud;
 

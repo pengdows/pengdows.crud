@@ -12,6 +12,7 @@ namespace testbed.Cockroach;
 public class CockroachDbTestContainer : TestContainer
 {
     private IContainer? _container;
+    private int _mappedSqlPort;
 
     public override async Task StartAsync()
     {
@@ -19,7 +20,8 @@ public class CockroachDbTestContainer : TestContainer
             .WithImage("cockroachdb/cockroach:v25.1.0")
             .WithName("test-cockroach")
             .WithHostname("cockroach")
-            .WithPortBinding(26257, 26257)
+            // bind SQL port to a random host port to avoid conflicts
+            .WithPortBinding(26257, true)
             .WithPortBinding(8080, true)
             .WithCommand("start-single-node", "--insecure")
             .WithWaitStrategy(Wait.ForUnixContainer().UntilPortIsAvailable(26257))
@@ -27,18 +29,45 @@ public class CockroachDbTestContainer : TestContainer
 
         await _container.StartAsync();
 
-        // Create the test database
-        var connectionString = "Host=localhost;Port=26257;Username=root;SSL Mode=disable;";
-        await using var conn = new NpgsqlConnection(connectionString);
-        await conn.OpenAsync();
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "CREATE DATABASE IF NOT EXISTS testdb;";
-        await cmd.ExecuteNonQueryAsync();
+        // Create the test database using the mapped host port
+        _mappedSqlPort = _container.GetMappedPublicPort(26257);
+        var connectionString = $"Host=localhost;Port={_mappedSqlPort};Username=root;SSL Mode=Disable;Trust Server Certificate=true;Timeout=5";
+
+        // Cockroach may report port availability before SQL service is fully ready; retry a few times.
+        const int maxAttempts = 10;
+        var attempt = 0;
+        Exception? last = null;
+        while (attempt++ < maxAttempts)
+        {
+            try
+            {
+                await using var conn = new NpgsqlConnection(connectionString);
+                await conn.OpenAsync();
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = "CREATE DATABASE IF NOT EXISTS testdb;";
+                await cmd.ExecuteNonQueryAsync();
+                last = null;
+                break;
+            }
+            catch (Exception ex)
+            {
+                last = ex;
+                await Task.Delay(1000);
+            }
+        }
+        if (last != null)
+        {
+            throw new InvalidOperationException($"Failed to initialize CockroachDB: {last.Message}", last);
+        }
     }
 
     public override Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)
     {
-        var cs = "Host=localhost;Port=26257;Username=root;Database=testdb;SSL Mode=disable;";
+        if (_mappedSqlPort == 0 && _container != null)
+        {
+            _mappedSqlPort = _container.GetMappedPublicPort(26257);
+        }
+        var cs = $"Host=localhost;Port={_mappedSqlPort};Username=root;Database=testdb;SSL Mode=Disable;Trust Server Certificate=true;Pooling=true;Minimum Pool Size=1;Maximum Pool Size=20;Timeout=15;CommandTimeout=30;";
         var ctx = new DatabaseContext(cs, NpgsqlFactory.Instance, null!);
         return Task.FromResult<IDatabaseContext>(ctx);
     }

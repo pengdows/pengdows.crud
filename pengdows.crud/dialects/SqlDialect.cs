@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Data;
 using System.Data.Common;
 using System.Text;
@@ -17,6 +18,49 @@ public abstract class SqlDialect:ISqlDialect
     protected readonly ILogger Logger;
     protected DbConnectionStringBuilder ConnectionStringBuilder { get; init; }
     private IDatabaseProductInfo? _productInfo;
+
+    // Performance optimization: Cache frequently used parameter names to avoid repeated string operations
+    private readonly ConcurrentDictionary<string, string> _trimmedNameCache = new();
+
+    // Pre-compiled parameter marker trimming for faster string operations
+    private static readonly char[] _parameterMarkers = { '@', ':', '?', '$' };
+
+    // Type conversion delegates for hot paths - compiled once, reused everywhere
+    private static readonly ConcurrentDictionary<DbType, Action<DbParameter, object?>> _typeConversionCache = new();
+
+    // Precompiled common type conversions to avoid repeated pattern matching
+    private static readonly Dictionary<DbType, Action<DbParameter, object?>> _commonConversions = new()
+    {
+        [DbType.Guid] = static (p, v) =>
+        {
+            p.DbType = DbType.String;
+            if (v is Guid guid)
+            {
+                p.Value = guid.ToString();
+                p.Size = 36;
+            }
+        },
+        [DbType.Boolean] = static (p, v) =>
+        {
+            p.DbType = DbType.Int16;
+            if (v is bool b)
+            {
+                p.Value = b ? (short)1 : (short)0;
+            }
+        },
+        [DbType.DateTimeOffset] = static (p, v) =>
+        {
+            p.DbType = DbType.DateTime;
+            if (v is DateTimeOffset dto)
+            {
+                p.Value = dto.DateTime;
+            }
+        }
+    };
+
+    // Simple parameter pool - avoid repeated factory calls for hot paths
+    private readonly ConcurrentQueue<DbParameter> _parameterPool = new();
+    private const int MaxPoolSize = 100; // Prevent unbounded growth
 
     protected SqlDialect(DbProviderFactory factory, ILogger logger)
     {
@@ -207,24 +251,58 @@ public abstract class SqlDialect:ISqlDialect
         return $"EXCLUDED.{WrapObjectName(columnName)}";
     }
 
+    /// <summary>
+    /// Get a parameter from the pool or create a new one. For internal use by hot paths.
+    /// </summary>
+    private DbParameter GetPooledParameter()
+    {
+        if (_parameterPool.TryDequeue(out var pooled))
+        {
+            // Reset pooled parameter to clean state
+            pooled.ParameterName = string.Empty;
+            pooled.Value = null;
+            pooled.DbType = DbType.Object;
+            pooled.Direction = ParameterDirection.Input;
+            pooled.Size = 0;
+            pooled.Precision = 0;
+            pooled.Scale = 0;
+            return pooled;
+        }
+
+        return Factory.CreateParameter() ?? throw new InvalidOperationException("Failed to create parameter.");
+    }
+
+    /// <summary>
+    /// Return a parameter to the pool for reuse. Call this when parameter is no longer needed.
+    /// </summary>
+    internal void ReturnParameterToPool(DbParameter parameter)
+    {
+        if (_parameterPool.Count < MaxPoolSize)
+        {
+            _parameterPool.Enqueue(parameter);
+        }
+        // If pool is full, let it get garbage collected
+    }
+
     public virtual DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
-        var p = Factory.CreateParameter() ?? throw new InvalidOperationException("Failed to create parameter.");
+        var p = GetPooledParameter();
 
+        // Optimized parameter name processing with caching
         if (string.IsNullOrWhiteSpace(name))
         {
             name = GenerateRandomName(5, ParameterNameMaxLength);
         }
         else if (SupportsNamedParameters)
         {
-            // Trim any leading marker characters from provided names so
-            // DbParameter.ParameterName is the raw identifier the provider expects.
-            // Some providers (e.g., DuckDB) use '$' in SQL text but expect the
-            // underlying parameter name without the marker.
-            name = name.TrimStart('@', ':', '?', '$');
+            // Use cached trimmed names to avoid repeated string operations
+            name = _trimmedNameCache.GetOrAdd(name, static n => n.TrimStart(_parameterMarkers));
         }
 
-        var valueIsNull = Utils.IsNullOrDbNull(value);
+        // Inline null check - faster than Utils.IsNullOrDbNull()
+        var valueIsNull = value is null || ReferenceEquals(value, DBNull.Value);
+
+        // Batch property assignment for better performance
         p.ParameterName = name;
         p.DbType = type;
         p.Value = valueIsNull ? DBNull.Value : value!;
@@ -233,56 +311,28 @@ public abstract class SqlDialect:ISqlDialect
         {
             p.ParameterName = string.Empty;
 
-            if (!valueIsNull)
+            // Use cached delegates for faster type conversions
+            if (!valueIsNull && _commonConversions.TryGetValue(p.DbType, out var converter))
             {
-                switch (p.DbType)
-                {
-                    case DbType.Guid:
-                        p.DbType = DbType.String;
-                        if (value is Guid guidValue)
-                        {
-                            p.Value = guidValue.ToString();
-                            p.Size = 36;
-                        }
-                        break;
-                    case DbType.Boolean:
-                        p.DbType = DbType.Int16;
-                        if (value is bool boolValue)
-                        {
-                            p.Value = boolValue ? (short)1 : (short)0;
-                        }
-                        break;
-                    case DbType.DateTimeOffset:
-                        p.DbType = DbType.DateTime;
-                        if (value is DateTimeOffset dtoValue)
-                        {
-                            p.Value = dtoValue.DateTime;
-                        }
-                        break;
-                }
+                converter(p, value);
             }
         }
 
+        // Optimized final type processing - handle string length and decimal precision
         if (!valueIsNull)
         {
-            switch (p.DbType)
+            // Handle string types efficiently
+            if (value is string s && (p.DbType == DbType.String || p.DbType == DbType.AnsiString ||
+                                    p.DbType == DbType.StringFixedLength || p.DbType == DbType.AnsiStringFixedLength))
             {
-                case DbType.String:
-                case DbType.AnsiString:
-                case DbType.StringFixedLength:
-                case DbType.AnsiStringFixedLength:
-                    if (value is string s)
-                    {
-                        p.Size = Math.Max(s.Length, 1);
-                    }
-                    break;
-                case DbType.Decimal when value is decimal dec:
-                {
-                    var (prec, scale) = DecimalHelpers.Infer(dec);
-                    p.Precision = (byte)prec;
-                    p.Scale = (byte)scale;
-                    break;
-                }
+                p.Size = Math.Max(s.Length, 1);
+            }
+            // Handle decimal precision efficiently
+            else if (p.DbType == DbType.Decimal && value is decimal dec)
+            {
+                var (prec, scale) = DecimalHelpers.Infer(dec);
+                p.Precision = (byte)prec;
+                p.Scale = (byte)scale;
             }
         }
 
@@ -304,7 +354,15 @@ public abstract class SqlDialect:ISqlDialect
 
     public virtual string GetDatabaseVersion(ITrackedConnection connection)
     {
-        return GetDatabaseVersionAsync(connection).GetAwaiter().GetResult();
+        try
+        {
+            return GetDatabaseVersionAsync(connection).GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to retrieve database version");
+            return $"Error retrieving version: {ex.Message}";
+        }
     }
 
     // Optional hook for dialect initialization after connection is established
@@ -353,7 +411,7 @@ public abstract class SqlDialect:ISqlDialect
     public virtual void ApplyConnectionSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)
     {
         var connectionString = context.ConnectionString;
-        
+
         // Apply read-only connection string modification if supported
         if (readOnly)
         {
@@ -363,9 +421,9 @@ public abstract class SqlDialect:ISqlDialect
                 connectionString = BuildReadOnlyConnectionString(connectionString, readOnlyParam);
             }
         }
-        
+
         connection.ConnectionString = connectionString;
-        
+
         // Hook for database-specific connection configuration
         ConfigureProviderSpecificSettings(connection, context, readOnly);
     }
@@ -483,8 +541,8 @@ public abstract class SqlDialect:ISqlDialect
     {
         if (readOnly && !string.IsNullOrEmpty(readOnlySettings))
         {
-            return string.IsNullOrEmpty(baseSettings) 
-                ? readOnlySettings 
+            return string.IsNullOrEmpty(baseSettings)
+                ? readOnlySettings
                 : $"{baseSettings}\n{readOnlySettings}";
         }
         return baseSettings;
@@ -612,8 +670,8 @@ public abstract class SqlDialect:ISqlDialect
     {
         // Minimal, test-friendly behavior:
         // - Try dialect-provided query if any; otherwise, try SELECT version()
-        // - Stop on first attempt; if it throws, let the exception propagate to the caller
-        // - If it returns null/empty, return empty without attempting further fallbacks
+        // - If it throws, let the exception propagate so higher levels can decide how to handle
+        // - If it returns null/empty, return empty
         var preferred = GetVersionQuery();
         var query = !string.IsNullOrWhiteSpace(preferred) ? preferred : "SELECT version()";
 

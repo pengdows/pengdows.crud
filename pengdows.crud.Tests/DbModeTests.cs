@@ -2,6 +2,7 @@
 
 using System;
 using System.Data;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
@@ -74,7 +75,7 @@ public class DbModeTests
         var typeMap = new TypeMapRegistry();
         typeMap.Register<User>();
 
-        var dbFile = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"crud_{Guid.NewGuid():N}.db");
+        var dbFile = Path.Combine(Path.GetTempPath(), $"crud_{Guid.NewGuid():N}.db");
         var cfg = new DatabaseContextConfiguration
         {
             ConnectionString = $"Data Source={dbFile}",
@@ -103,7 +104,7 @@ public class DbModeTests
         Assert.Equal(20, count);
 
         // Cleanup the temp file
-        try { System.IO.File.Delete(dbFile); } catch { }
+        try { File.Delete(dbFile); } catch { }
     }
 
     // Minimal entity definition to exercise helper

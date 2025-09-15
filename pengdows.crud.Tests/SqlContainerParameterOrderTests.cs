@@ -4,12 +4,11 @@ using System.Data.Common;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
-using pengdows.crud;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
-using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -102,7 +101,7 @@ public class SqlContainerParameterOrderTests : SqlLiteContextTestBase
         ctx.SetupGet(c => c.SupportsNamedParameters).Returns(false);
         ctx.SetupGet(c => c.MaxParameterLimit).Returns(100);
         ctx.SetupGet(c => c.DatabaseProductName).Returns(dsi.DatabaseProductName);
-        ctx.SetupGet(c => c.DisablePrepare).Returns((bool?)true);
+        ctx.SetupGet(c => c.DisablePrepare).Returns(true);
         ctx.SetupGet(c => c.ForceManualPrepare).Returns((bool?)null);
         ctx.As<ISqlDialectProvider>().SetupGet(p => p.Dialect).Returns(dialect);
 

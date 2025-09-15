@@ -65,7 +65,7 @@ internal static class FakeDbFactoryTestExtensions
         // Connection failure expected during initialization
         var init = new fakeDbConnection();
         init.SetCustomFailureException(exception);
-        init.SetFailOnOpen(true);
+        init.SetFailOnOpen();
         factory.Connections.Add(init);
     }
 
@@ -76,7 +76,7 @@ internal static class FakeDbFactoryTestExtensions
         {
             var op = new fakeDbConnection();
             op.SetCustomFailureException(exception);
-            op.SetFailOnCommand(true);
+            op.SetFailOnCommand();
             factory.Connections.Add(op);
         }
     }

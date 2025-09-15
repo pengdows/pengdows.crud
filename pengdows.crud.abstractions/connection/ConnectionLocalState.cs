@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Data.Common;
 
 namespace pengdows.crud.connection;
 
@@ -19,7 +20,7 @@ public sealed class ConnectionLocalState
     /// <summary>
     /// Computes a hash of the command's SQL text and parameter types for shape caching
     /// </summary>
-    public static string ComputeShapeHash(System.Data.Common.DbCommand cmd)
+    public static string ComputeShapeHash(DbCommand cmd)
     {
         return cmd.CommandText;
     }

@@ -3,17 +3,16 @@
 using System.Collections.Concurrent;
 using System.Data;
 using System.Data.Common;
-using System.Linq.Expressions;
+using System.Globalization;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Globalization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using pengdows.crud.@internal;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;
+using pengdows.crud.@internal;
 using pengdows.crud.wrappers;
 
 #endregion
@@ -551,35 +550,33 @@ public partial class EntityHelper<TEntity, TRowID> :
                 
                 if (dialect.SupportsSetValuedParameters)
                 {
-                    container.SetParameterValue("w0", list.ToArray());
+                    container.SetParameterValue("p0", list.ToArray());
                 }
                 else
                 {
-                    container.SetParameterValue("w0", list[0]);
+                    container.SetParameterValue("p0", list[0]);
                 }
                 
                 return await LoadListAsync(container);
             }
-            else if (list.Count == 2 && !dialect.SupportsSetValuedParameters)
+
+            if (list.Count == 2 && !dialect.SupportsSetValuedParameters)
             {
                 // Two IDs - can reuse GetByIdsTemplate for non-array dialects
                 var templates = GetContainerTemplatesForDialect(dialect, ctx);
                 using var container = templates.GetByIdsTemplate.Clone(ctx);
                 
-                container.SetParameterValue("w0", list[0]);
-                container.SetParameterValue("w1", list[1]);
+                container.SetParameterValue("p0", list[0]);
+                container.SetParameterValue("p1", list[1]);
                 
                 return await LoadListAsync(container);
             }
-            else if (dialect.SupportsSetValuedParameters)
+
+            if (dialect.SupportsSetValuedParameters)
             {
-                // Array-based dialects can handle any size with the 2-ID template
-                var templates = GetContainerTemplatesForDialect(dialect, ctx);
-                using var container = templates.GetByIdsTemplate.Clone(ctx);
-                
-                container.SetParameterValue("w0", list.ToArray());
-                
-                return await LoadListAsync(container);
+                // Prefer dynamic build for array-capable dialects to avoid provider type mismatches
+                var sc = BuildRetrieve(list, ctx);
+                return await LoadListAsync(sc);
             }
             else
             {
@@ -646,35 +643,23 @@ public partial class EntityHelper<TEntity, TRowID> :
             throw new InvalidOperationException(
                 "Single-ID operations require a designated Id column; use composite-key helpers.");
         }
-        
-        var dialect = GetDialect(ctx);
-        
-        // Try to use cached template for better performance, but fall back to traditional method
-        // to avoid circular dependency during template building
-        try
-        {
-            var templates = GetContainerTemplatesForDialect(dialect, ctx);
-            using var container = templates.GetByIdTemplate.Clone(ctx);
-            
-            // Update the ID parameter - templates use w0 for WHERE parameters
-            if (dialect.SupportsSetValuedParameters)
-            {
-                container.SetParameterValue("w0", new[] { id });
-            }
-            else
-            {
-                container.SetParameterValue("w0", id);
-            }
-            
-            return await LoadSingleAsync(container);
-        }
-        catch (Exception ex) when (ex.Message.Contains("Original record not found") || ex is AggregateException)
-        {
-            // Fall back to traditional method during template building or other issues
-            var list = new List<TRowID> { id };
-            var sc = BuildRetrieve(list, ctx);
-            return await LoadSingleAsync(sc);
-        }
+
+        // Fast path: generate simple equality SQL directly instead of using expensive templates
+        using var container = BuildBaseRetrieve("", ctx);
+
+        // Add simple WHERE clause: column = @p0
+        var wrappedColumnName = container.WrapObjectName(_idColumn.Name);
+        var paramName = container.MakeParameterName("p0");
+        container.Query.Append(" WHERE ");
+        container.Query.Append(wrappedColumnName);
+        container.Query.Append(" = ");
+        container.Query.Append(paramName);
+
+        // Add the parameter
+        var parameter = container.CreateDbParameter(paramName, _idColumn.DbType, id);
+        container.AddParameter(parameter);
+
+        return await LoadSingleAsync(container);
     }
 
     public async Task<TEntity?> LoadSingleAsync(ISqlContainer sc)

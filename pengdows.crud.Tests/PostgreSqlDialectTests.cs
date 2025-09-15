@@ -3,11 +3,14 @@
 using System;
 using System.Data;
 using System.Data.Common;
+using System.Reflection;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
+using pengdows.crud.configuration;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
+using pengdows.crud.wrappers;
 using Xunit;
 
 #endregion
@@ -116,7 +119,7 @@ public class PostgreSqlDialectTests
     {
         // Arrange
         var connection = _factory.CreateConnection();
-        var trackedConnection = new pengdows.crud.wrappers.TrackedConnection(connection, "test", NullLogger.Instance);
+        var trackedConnection = new TrackedConnection(connection, "test", NullLogger.Instance);
         
         // Act & Assert - Should not throw
         await _dialect.PostInitialize(trackedConnection);
@@ -243,7 +246,7 @@ public class PostgreSqlDialectTests
     {
         // Arrange
         var connection = _factory.CreateConnection();
-        var trackedConnection = new pengdows.crud.wrappers.TrackedConnection(connection, "test", NullLogger.Instance);
+        var trackedConnection = new TrackedConnection(connection, "test", NullLogger.Instance);
         
         // Act
         var version = await _dialect.GetDatabaseVersionAsync(trackedConnection);
@@ -258,7 +261,7 @@ public class PostgreSqlDialectTests
     {
         // Arrange
         var connection = _factory.CreateConnection();
-        var trackedConnection = new pengdows.crud.wrappers.TrackedConnection(connection, "test", NullLogger.Instance);
+        var trackedConnection = new TrackedConnection(connection, "test", NullLogger.Instance);
         
         // Act
         var productName = await _dialect.GetProductNameAsync(trackedConnection);
@@ -315,7 +318,7 @@ public class PostgreSqlDialectTests
     [InlineData("param999", ":param999")]
     public void MakeParameterName_ReturnsCorrectFormat(string paramName, string expected)
     {
-        var param = new pengdows.crud.fakeDb.fakeDbParameter 
+        var param = new fakeDbParameter 
         { 
             ParameterName = paramName, 
             DbType = DbType.Int32, 
@@ -407,7 +410,7 @@ public class PostgreSqlDialectTests
         
         // Use reflection to call the protected method
         var method = typeof(PostgreSqlDialect).GetMethod("DetermineStandardCompliance", 
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            BindingFlags.NonPublic | BindingFlags.Instance);
         var result = (SqlStandardLevel)method!.Invoke(_dialect, new object[] { version })!;
         
         Assert.Equal(expected, result);
@@ -417,7 +420,7 @@ public class PostgreSqlDialectTests
     public void DetermineStandardCompliance_NullVersion_ReturnsDefault()
     {
         var method = typeof(PostgreSqlDialect).GetMethod("DetermineStandardCompliance", 
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            BindingFlags.NonPublic | BindingFlags.Instance);
         var result = (SqlStandardLevel)method!.Invoke(_dialect, new object[] { null })!;
         
         Assert.Equal(SqlStandardLevel.Sql2008, result);
@@ -428,7 +431,7 @@ public class PostgreSqlDialectTests
     {
         // Test that the ConnectionStringBuilder property is properly initialized
         var property = typeof(SqlDialect).GetProperty("ConnectionStringBuilder", 
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            BindingFlags.NonPublic | BindingFlags.Instance);
         var builder = (DbConnectionStringBuilder)property!.GetValue(_dialect)!;
         
         Assert.NotNull(builder);
@@ -444,7 +447,7 @@ public class PostgreSqlDialectTests
         
         // Get the ConnectionStringBuilder before the call
         var property = typeof(SqlDialect).GetProperty("ConnectionStringBuilder", 
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            BindingFlags.NonPublic | BindingFlags.Instance);
         var builder = (DbConnectionStringBuilder)property!.GetValue(_dialect)!;
         
         _dialect.ApplyConnectionSettings(connection, ctx, false);
@@ -472,7 +475,7 @@ public class PostgreSqlDialectTests
 
     private DatabaseContext CreateTestContext()
     {
-        var cfg = new pengdows.crud.configuration.DatabaseContextConfiguration
+        var cfg = new DatabaseContextConfiguration
         {
             ConnectionString = "Host=localhost;Database=test;",
             DbMode = DbMode.Standard,

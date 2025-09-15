@@ -1,5 +1,6 @@
 using System.Data;
 using System.Data.Common;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.wrappers;
@@ -153,10 +154,10 @@ public class DuckDbDialect : SqlDialect
         }
 
         // DuckDB specific parsing for format like "v1.0.0" or "DuckDB v0.9.2"
-        var duckDbMatch = System.Text.RegularExpressions.Regex.Match(
+        var duckDbMatch = Regex.Match(
             versionString, 
             @"(?:DuckDB\s+)?v?(\d+)\.(\d+)\.(\d+)(?:-\w+)?", 
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            RegexOptions.IgnoreCase);
             
         if (duckDbMatch.Success)
         {

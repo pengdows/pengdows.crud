@@ -57,7 +57,7 @@ public sealed class IsolationResolver : IIsolationResolver
     {
         var map = new Dictionary<SupportedDatabase, HashSet<IsolationLevel>>
         {
-            [SupportedDatabase.SqlServer] = new HashSet<IsolationLevel>()
+            [SupportedDatabase.SqlServer] = new HashSet<IsolationLevel>
             {
                 IsolationLevel.ReadUncommitted,
                 rcsi ? IsolationLevel.ReadCommitted : default,

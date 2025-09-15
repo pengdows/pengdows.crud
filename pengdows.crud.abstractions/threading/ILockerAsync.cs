@@ -1,7 +1,3 @@
-#region
-
-#endregion
-
 namespace pengdows.crud.threading;
 
 /// <summary>

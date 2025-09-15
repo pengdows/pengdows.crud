@@ -67,7 +67,7 @@ public class TypeCoercionHelperTests
         var column = new ColumnInfo
             { EnumType = typeof(TestEnum), PropertyInfo = typeof(TestEntityWithEnum).GetProperty(nameof(TestEntityWithEnum.Status)) };
         Assert.Throws<ArgumentException>(() =>
-            TypeCoercionHelper.Coerce("Invalid", typeof(string), column, EnumParseFailureMode.Throw));
+            TypeCoercionHelper.Coerce("Invalid", typeof(string), column));
     }
 
     [Fact]

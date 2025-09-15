@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Data.Common;
 using System.Threading.Tasks;
@@ -80,7 +81,7 @@ public class DataSourceInformationCapabilityTests
         public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.None;
         public override Task<string> GetDatabaseVersionAsync(ITrackedConnection connection) => Task.FromResult("1.0");
         public override Task<string?> GetProductNameAsync(ITrackedConnection connection) => Task.FromResult<string?>("OldDB");
-        public override SqlStandardLevel DetermineStandardCompliance(System.Version? version) => SqlStandardLevel.Sql89;
+        public override SqlStandardLevel DetermineStandardCompliance(Version? version) => SqlStandardLevel.Sql89;
     }
 
     [Fact]

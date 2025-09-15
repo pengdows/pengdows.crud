@@ -143,8 +143,24 @@ SET client_min_messages = warning;";
 
     private string CheckPostgreSqlSettings(IDbConnection connection)
     {
-        var (settingsToApply, _) = CheckPostgreSqlSettingsWithDetails(connection);
-        return settingsToApply;
+        // Use cached settings if available, otherwise detect and cache them
+        if (_sessionSettings == null)
+        {
+            var (settingsToApply, currentSettings) = CheckPostgreSqlSettingsWithDetails(connection);
+            _sessionSettings = settingsToApply;
+
+            if (!string.IsNullOrWhiteSpace(_sessionSettings))
+            {
+                Logger.LogInformation("PostgreSQL session settings detected: {CurrentSettings}. Applying changes:\n{Settings}",
+                    string.Join(", ", currentSettings.Select(kv => $"{kv.Key}={kv.Value}")), _sessionSettings);
+            }
+            else
+            {
+                Logger.LogInformation("PostgreSQL session settings detected: {CurrentSettings}. No changes required (already compliant)",
+                    string.Join(", ", currentSettings.Select(kv => $"{kv.Key}={kv.Value}")));
+            }
+        }
+        return _sessionSettings;
     }
 
     public override string GetBaseSessionSettings()

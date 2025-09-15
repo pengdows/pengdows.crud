@@ -1,15 +1,15 @@
 #region
 
-using Microsoft.Data.Sqlite;
 using System;
 using System.Threading.Tasks;
+using Microsoft.Data.Sqlite;
 using Xunit;
 
 #endregion
 
 namespace pengdows.crud.Tests;
 
-[Xunit.Collection("SqliteSerial")]
+[Collection("SqliteSerial")]
 public class SqlLiteContextTestBase : IAsyncLifetime
 
 {

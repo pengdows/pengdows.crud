@@ -127,7 +127,7 @@ public class EntityHelperConverterTests : SqlLiteContextTestBase
         public string Name { get; set; } = string.Empty;
     }
 
-    private sealed class FakeTrackedReader : fakeDbDataReader, ITrackedReader
+    internal sealed class FakeTrackedReader : fakeDbDataReader, ITrackedReader
     {
         public FakeTrackedReader(IEnumerable<Dictionary<string, object>> rows) : base(rows)
         {

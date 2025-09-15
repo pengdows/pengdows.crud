@@ -1,8 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Text.RegularExpressions;
 using pengdows.crud.dialects;
 
 namespace pengdows.crud;
@@ -52,7 +47,6 @@ public partial class EntityHelper<TEntity, TRowID>
         var insertColumns = _tableInfo.Columns.Values
             .Where(c => !c.IsNonInsertable && (!c.IsId || c.IsIdIsWritable))
             .Where(c => _auditValueResolver != null || (!c.IsCreatedBy && !c.IsLastUpdatedBy))
-            .Cast<IColumnInfo>()
             .ToList();
 
         var wrappedCols = new List<string>();
@@ -80,7 +74,6 @@ public partial class EntityHelper<TEntity, TRowID>
 
         var updateColumns = _tableInfo.Columns.Values
             .Where(c => !c.IsId && !c.IsVersion && !c.IsNonUpdateable && !c.IsCreatedBy && !c.IsCreatedOn)
-            .Cast<IColumnInfo>()
             .ToList();
 
         var updateSql =

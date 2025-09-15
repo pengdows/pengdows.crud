@@ -36,7 +36,7 @@ public class fakeDbDataReader : DbDataReader
     public override bool HasRows
         => _rows.Count > 0;
 
-    private bool _isClosed = false;
+    private bool _isClosed;
     
     // Stubs for unused members
     public override int Depth => 0;

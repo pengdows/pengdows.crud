@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Globalization;
@@ -59,7 +57,7 @@ public partial class EntityHelper<TEntity, TRowID>
                 var ordinal = i;
                 var fieldType = reader.GetFieldType(ordinal);
                 var targetType = Nullable.GetUnderlyingType(column.PropertyInfo.PropertyType) ?? column.PropertyInfo.PropertyType;
-                
+
                 // Build optimized delegates
                 var valueExtractor = BuildValueExtractor(fieldType);
                 var coercer = BuildCoercer(column, fieldType, targetType);
@@ -107,7 +105,7 @@ public partial class EntityHelper<TEntity, TRowID>
         if (column.IsJsonType)
         {
             var jsonOpts = column.JsonSerializerOptions ?? new JsonSerializerOptions();
-            return value => value is string json 
+            return value => value is string json
                 ? TryDeserializeJson(json, targetType, jsonOpts, column.Name)
                 : null;
         }
@@ -117,27 +115,26 @@ public partial class EntityHelper<TEntity, TRowID>
         {
             var enumType = column.EnumType;
             var enumAsString = column.DbType == DbType.String;
-            
+
+            var isTargetNullable = Nullable.GetUnderlyingType(column.PropertyInfo.PropertyType) != null;
             if (enumAsString)
             {
-                return value => value?.ToString() is string s 
-                    ? TryParseEnum(s, enumType, column.Name)
-                    : null;
+                return value => value?.ToString() is string s
+                    ? TryParseEnum(s, enumType, column.Name, isTargetNullable)
+                    : (isTargetNullable ? null : Activator.CreateInstance(enumType));
             }
-            else
-            {
-                var enumUnderlying = column.EnumUnderlyingType!;
-                return value => value != null 
-                    ? TryConvertToEnum(value, enumType, enumUnderlying, column.Name)
-                    : null;
-            }
+
+            var enumUnderlying = column.EnumUnderlyingType!;
+            return value => value != null
+                ? TryConvertToEnum(value, enumType, enumUnderlying, column.Name, isTargetNullable)
+                : (isTargetNullable ? null : Activator.CreateInstance(enumType));
         }
 
         // Type conversion
         if (!targetType.IsAssignableFrom(fieldType))
         {
             var dbType = column.DbType;
-            return value => value != null 
+            return value => value != null
                 ? TryConvertType(value, targetType, dbType, column.Name)
                 : null;
         }
@@ -159,7 +156,7 @@ public partial class EntityHelper<TEntity, TRowID>
         }
     }
 
-    private object? TryParseEnum(string value, Type enumType, string columnName)
+    private object? TryParseEnum(string value, Type enumType, string columnName, bool targetNullable)
     {
         try
         {
@@ -167,20 +164,28 @@ public partial class EntityHelper<TEntity, TRowID>
         }
         catch
         {
-            return HandleEnumParseFailure(value, enumType, columnName);
+            return HandleEnumParseFailure(value, enumType, columnName, targetNullable);
         }
     }
 
-    private object? TryConvertToEnum(object value, Type enumType, Type underlyingType, string columnName)
+    private object? TryConvertToEnum(object value, Type enumType, Type underlyingType, string columnName, bool targetNullable)
     {
         try
         {
             var converted = Convert.ChangeType(value, underlyingType, CultureInfo.InvariantCulture);
-            return Enum.ToObject(enumType, converted!);
+            var enumValue = Enum.ToObject(enumType, converted!);
+
+            // Validate that the converted value is actually defined in the enum
+            if (!Enum.IsDefined(enumType, enumValue))
+            {
+                return HandleEnumParseFailure(value, enumType, columnName, targetNullable);
+            }
+
+            return enumValue;
         }
         catch
         {
-            return HandleEnumParseFailure(value, enumType, columnName);
+            return HandleEnumParseFailure(value, enumType, columnName, targetNullable);
         }
     }
 
@@ -204,19 +209,21 @@ public partial class EntityHelper<TEntity, TRowID>
                     // Fall through to exception
                 }
             }
-            
+
             throw new InvalidValueException(
                 $"Unable to convert value for column {columnName} from {value.GetType().Name} to {targetType.Name}");
         }
     }
 
-    private object? HandleEnumParseFailure(object value, Type enumType, string columnName)
+    private object? HandleEnumParseFailure(object value, Type enumType, string columnName, bool targetNullable)
     {
         return EnumParseBehavior switch
         {
             // When Throw mode, let the ArgumentException bubble up unchanged
             EnumParseFailureMode.Throw => throw new ArgumentException($"Cannot convert '{value}' to enum {enumType}"),
-            EnumParseFailureMode.SetNullAndLog => LogAndReturnNull(value, enumType, columnName),
+            EnumParseFailureMode.SetNullAndLog => targetNullable
+                ? LogAndReturnNull(value, enumType, columnName)
+                : Activator.CreateInstance(enumType),
             EnumParseFailureMode.SetDefaultValue => Activator.CreateInstance(enumType),
             _ => null
         };

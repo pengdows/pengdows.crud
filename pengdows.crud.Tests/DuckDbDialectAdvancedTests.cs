@@ -1,7 +1,7 @@
 #region
+
 using System;
 using System.Data;
-using System.Data.Common;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.dialects;
@@ -9,6 +9,7 @@ using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 using pengdows.crud.wrappers;
 using Xunit;
+
 #endregion
 
 namespace pengdows.crud.Tests;

@@ -1,9 +1,8 @@
-using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
-using System.Linq;
 using System.Text;
 using pengdows.crud.dialects;
+using pengdows.crud.enums;
 using pengdows.crud.@internal;
 
 namespace pengdows.crud;
@@ -221,43 +220,105 @@ public partial class EntityHelper<TEntity, TRowID>
 
     public ISqlContainer BuildWhere(string wrappedColumnName, IEnumerable<TRowID> ids, ISqlContainer sqlContainer)
     {
-        var list = ids?.Distinct().ToList();
-        if (list is null || list.Count == 0)
+        if (ids is null)
+        {
+            return sqlContainer;
+        }
+
+        // Build unique non-null list and allow at most one NULL (rendered as IS NULL)
+        var nonNullIds = new List<TRowID>();
+        var seen = new HashSet<TRowID?>();
+        var hasNull = false;
+        foreach (var id in ids)
+        {
+            if (Utils.IsNullOrDbNull(id))
+            {
+                hasNull = true;
+                continue;
+            }
+            if (seen.Add(id))
+            {
+                nonNullIds.Add(id);
+            }
+        }
+
+        if (nonNullIds.Count == 0 && !hasNull)
         {
             return sqlContainer;
         }
 
         var dialect = ((ISqlDialectProvider)sqlContainer).Dialect;
+        CheckParameterLimit(sqlContainer, dialect.SupportsSetValuedParameters ? 1 : nonNullIds.Count);
 
-        CheckParameterLimit(sqlContainer, dialect.SupportsSetValuedParameters ? 1 : list.Count);
-
-        if (list.Any(Utils.IsNullOrDbNull))
+        // Only NULL provided
+        if (nonNullIds.Count == 0 && hasNull)
         {
-            throw new ArgumentException("IDs cannot be null", nameof(ids));
-        }
-
-        if (dialect.SupportsSetValuedParameters)
-        {
-            var paramName = sqlContainer.MakeParameterName("w0");
-            var anySql = GetCachedQuery($"WhereAny:{wrappedColumnName}",
-                () => string.Concat(wrappedColumnName, " = ANY(", paramName, ")"));
-
             AppendWherePrefix(sqlContainer);
-            sqlContainer.Query.Append(anySql);
-
-            var parameter = sqlContainer.CreateDbParameter(paramName, DbType.Object, list.ToArray());
-            sqlContainer.AddParameter(parameter);
-
+            sqlContainer.Query.Append(wrappedColumnName).Append(" IS NULL");
             return sqlContainer;
         }
 
-        var bucket = 1;
-        for (; bucket < list.Count; bucket <<= 1)
+        // Single non-null value = equality (optionally OR IS NULL when hasNull)
+        if (nonNullIds.Count == 1)
         {
+            var paramName = sqlContainer.MakeParameterName("p0");
+            var product = (((ISqlDialectProvider)sqlContainer).Dialect as SqlDialect)?.DatabaseType
+                          ?? SupportedDatabase.Unknown;
+            var key = $"WhereEquals:{wrappedColumnName}:{product}{(hasNull ? ":Null" : string.Empty)}";
+            var equalityCore = GetCachedQuery(key, () => string.Concat(wrappedColumnName, " = ", paramName));
+            _queryCache.GetOrAdd($"Where:{wrappedColumnName}:1", _ => equalityCore);
+
+            AppendWherePrefix(sqlContainer);
+            if (hasNull)
+            {
+                sqlContainer.Query.Append('(')
+                    .Append(equalityCore)
+                    .Append(" OR ")
+                    .Append(wrappedColumnName)
+                    .Append(" IS NULL)");
+            }
+            else
+            {
+                sqlContainer.Query.Append(equalityCore);
+            }
+
+            var parameter = sqlContainer.CreateDbParameter(paramName, _idColumn!.DbType, nonNullIds[0]);
+            sqlContainer.AddParameter(parameter);
+            return sqlContainer;
         }
 
-        var key = $"Where:{wrappedColumnName}:{bucket}";
-        if (!_whereParameterNames.TryGet(key, out var names))
+        // Set-valued parameters (ANY)
+        if (dialect.SupportsSetValuedParameters)
+        {
+            var paramName = sqlContainer.MakeParameterName("w0");
+            var anyCore = GetCachedQuery($"WhereAny:{wrappedColumnName}",
+                () => string.Concat(wrappedColumnName, " = ANY(", paramName, ")"));
+
+            AppendWherePrefix(sqlContainer);
+            if (hasNull)
+            {
+                sqlContainer.Query.Append('(')
+                    .Append(anyCore)
+                    .Append(" OR ")
+                    .Append(wrappedColumnName)
+                    .Append(" IS NULL)");
+            }
+            else
+            {
+                sqlContainer.Query.Append(anyCore);
+            }
+
+            var parameter = sqlContainer.CreateDbParameter(paramName, DbType.Object, nonNullIds.ToArray());
+            sqlContainer.AddParameter(parameter);
+            return sqlContainer;
+        }
+
+        // IN-list with bucketing
+        var bucket = 1;
+        for (; bucket < nonNullIds.Count; bucket <<= 1) { }
+
+        var keyIn = $"Where:{wrappedColumnName}:{bucket}";
+        if (!_whereParameterNames.TryGet(keyIn, out var names))
         {
             names = new string[bucket];
             for (var i = 0; i < bucket; i++)
@@ -265,22 +326,33 @@ public partial class EntityHelper<TEntity, TRowID>
                 names[i] = sqlContainer.MakeParameterName($"w{i}");
             }
 
-            _whereParameterNames.GetOrAdd(key, _ => names);
+            _whereParameterNames.GetOrAdd(keyIn, _ => names);
         }
 
-        var sql = GetCachedQuery(key,
+        var inCore = GetCachedQuery(keyIn,
             () => string.Concat(wrappedColumnName, " IN (", string.Join(", ", names), ")"));
 
         AppendWherePrefix(sqlContainer);
-        sqlContainer.Query.Append(sql);
+        if (hasNull)
+        {
+            sqlContainer.Query.Append('(')
+                .Append(inCore)
+                .Append(" OR ")
+                .Append(wrappedColumnName)
+                .Append(" IS NULL)");
+        }
+        else
+        {
+            sqlContainer.Query.Append(inCore);
+        }
 
         var dbType = _idColumn!.DbType;
         var isPositional = sqlContainer.MakeParameterName("w0") == sqlContainer.MakeParameterName("w1");
-        var lastIndex = list.Count - 1;
+        var lastIndex = nonNullIds.Count - 1;
         for (var i = 0; i < bucket; i++)
         {
             var name = names[i];
-            var value = i < list.Count ? list[i] : list[lastIndex];
+            var value = i < nonNullIds.Count ? nonNullIds[i] : nonNullIds[lastIndex];
 
             if (isPositional)
             {

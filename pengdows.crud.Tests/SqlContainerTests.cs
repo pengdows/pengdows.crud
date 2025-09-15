@@ -3,10 +3,10 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Threading.Tasks;
 using System.Reflection;
-using Microsoft.Extensions.Logging;
+using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 using Xunit;
@@ -25,7 +25,7 @@ public class SqlContainerTests : SqlLiteContextTestBase
         // _connection = new SqliteConnection("Data Source=:memory:");
         // _connection.Open();
         TypeMap.Register<TestEntity>();
-        entityHelper = new EntityHelper<TestEntity, int>(Context, null);
+        entityHelper = new EntityHelper<TestEntity, int>(Context);
         Assert.Equal(DbMode.SingleConnection, Context.ConnectionMode);
         BuildTestTable();
     }

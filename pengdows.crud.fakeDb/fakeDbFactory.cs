@@ -83,7 +83,7 @@ public sealed class fakeDbFactory : DbProviderFactory
         switch (_failureMode)
         {
             case ConnectionFailureMode.FailOnOpen:
-                c.SetFailOnOpen(true);
+                c.SetFailOnOpen();
                 c.SetFactoryReference(this);
                 break;
             case ConnectionFailureMode.FailOnCommand:
@@ -97,7 +97,7 @@ public sealed class fakeDbFactory : DbProviderFactory
                 break;
             case ConnectionFailureMode.Broken:
                 c.SetFactoryReference(this);
-                c.BreakConnection(false); // Don't skip, factory will decide
+                c.BreakConnection(); // Don't skip, factory will decide
                 break;
         }
 
@@ -119,7 +119,7 @@ public sealed class fakeDbFactory : DbProviderFactory
             _skipFirstOpen = false;
             return 0; // Don't count the first open (context initialization)
         }
-        return System.Threading.Interlocked.Increment(ref _sharedOpenCount);
+        return Interlocked.Increment(ref _sharedOpenCount);
     }
 
     /// <summary>

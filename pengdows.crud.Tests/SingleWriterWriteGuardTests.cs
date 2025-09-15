@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using System.Threading.Tasks;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
@@ -30,7 +31,7 @@ public class SingleWriterWriteGuardTests
 
     private static void ReplaceStrategy(DatabaseContext context, IConnectionStrategy strategy)
     {
-        var field = typeof(DatabaseContext).GetField("_connectionStrategy", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        var field = typeof(DatabaseContext).GetField("_connectionStrategy", BindingFlags.Instance | BindingFlags.NonPublic);
         field!.SetValue(context, strategy);
     }
 

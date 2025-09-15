@@ -1,10 +1,9 @@
 using System.Data;
 using System.Data.Common;
 using BenchmarkDotNet.Attributes;
-using pengdows.crud.configuration;
-using pengdows.crud.enums;
 using pengdows.crud;
 using pengdows.crud.attributes;
+using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 
 namespace CrudBenchmarks;
@@ -28,7 +27,7 @@ public class SqlGenerationBenchmark
         
         // Use FakeDb to avoid database connection issues in benchmarks
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
-        _ctx = new DatabaseContext("fake", factory, _map, DbMode.Standard, ReadWriteMode.ReadWrite);
+        _ctx = new DatabaseContext("fake", factory, _map, DbMode.Standard);
         _filmHelper = new EntityHelper<Film, int>(_ctx);
         
         // EntityHelper will handle internal caching automatically
@@ -68,36 +67,18 @@ public class SqlGenerationBenchmark
         return _ctx.CreateSqlContainer("SELECT * FROM film WHERE id = ");
     }
 
-    [Benchmark] 
-    public ISqlContainer SqlGeneration_Mine_BuildUpdate_Traditional()
+    [Benchmark]
+    public ISqlContainer SqlGeneration_Mine_BuildUpdate()
     {
-        // Traditional approach: Clear cache each time to simulate no caching
-        _filmHelper.ClearCaches();
-        var film = new Film { Id = _filmId, Title = "Test", Length = 120 };
-        return _filmHelper.BuildUpdateAsync(film, false, _ctx).Result;
-    }
-    
-    [Benchmark] 
-    public ISqlContainer SqlGeneration_Mine_BuildUpdate_FastPath()
-    {
-        // Fast-path approach: Uses cached templates (cache is warmed up)
+        // Uses EntityHelper's internal caching and optimized template generation
         var film = new Film { Id = _filmId, Title = "Test", Length = 120 };
         return _filmHelper.BuildUpdateAsync(film, false, _ctx).Result;
     }
 
     [Benchmark]
-    public ISqlContainer SqlGeneration_Mine_BuildCreate_Traditional()
+    public ISqlContainer SqlGeneration_Mine_BuildCreate()
     {
-        // Traditional approach: Clear cache each time to simulate no caching
-        _filmHelper.ClearCaches();
-        var film = new Film { Id = _filmId, Title = "Test", Length = 120 };
-        return _filmHelper.BuildCreate(film, _ctx);
-    }
-    
-    [Benchmark]
-    public ISqlContainer SqlGeneration_Mine_BuildCreate_FastPath()
-    {
-        // Fast-path approach: Uses cached templates (cache is warmed up)
+        // Uses EntityHelper's internal caching and optimized template generation
         var film = new Film { Id = _filmId, Title = "Test", Length = 120 };
         return _filmHelper.BuildCreate(film, _ctx);
     }

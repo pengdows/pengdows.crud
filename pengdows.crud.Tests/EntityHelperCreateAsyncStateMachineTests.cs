@@ -1,12 +1,14 @@
 #region
+
 using System;
-using System.Data;
+using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 using Xunit;
+
 #endregion
 
 namespace pengdows.crud.Tests;
@@ -160,13 +162,13 @@ public class EntityHelperCreateAsyncStateMachineTests
         );
     }
 
-    [Fact(Skip="temporarily disabled while finalizing DbMode/ID population behavior")]
+    [Fact]
     public async Task CreateAsync_Should_Handle_Connection_Failure()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var connection = (fakeDbConnection)factory.CreateConnection();
-        connection.SetFailOnOpen(); // Connection fails to open
-        
+        // Set exception before creating context
+        factory.SetException(new InvalidOperationException("Connection failed"));
+
         var context = new DatabaseContext("test", factory, _typeMap);
         var helper = new EntityHelper<TestEntitySimple, int>(context, logger: new LoggerFactory().CreateLogger<EntityHelper<TestEntitySimple, int>>());
         _typeMap.Register<TestEntitySimple>();
@@ -196,11 +198,23 @@ public class EntityHelperCreateAsyncStateMachineTests
         );
     }
 
-    [Fact(Skip = "Pending: stabilize fakeDb scalar exception path under RETURNING for non-persistent servers")]
+    [Fact]
     public async Task CreateAsync_Should_Handle_Transaction_Rollback_On_Exception()
     {
-        // Pending rewrite
-        await Task.CompletedTask;
+        // Arrange
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        var context = new DatabaseContext("test", factory, _typeMap);
+        var helper = new EntityHelper<TestEntitySimple, int>(context, logger: new LoggerFactory().CreateLogger<EntityHelper<TestEntitySimple, int>>());
+        _typeMap.Register<TestEntitySimple>();
+        var entity = new TestEntitySimple { Name = "Test" };
+
+        // Set up factory to throw exception during scalar operations (ID retrieval)
+        factory.SetScalarException(new InvalidOperationException("RETURNING failed"));
+
+        // Act & Assert - should propagate the exception
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => helper.CreateAsync(entity, context)
+        );
     }
 
     [Fact]
@@ -254,30 +268,34 @@ public class EntityHelperCreateAsyncStateMachineTests
         );
     }
 
-    [Fact(Skip="temporarily disabled while finalizing DbMode/ID population behavior")]
+    [Fact]
     public async Task CreateAsync_Should_Handle_ThreadAbortException()
     {
-        var context = new DatabaseContext("test", _factory, _typeMap);
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        // Set exception before creating context
+        factory.SetScalarException(CreateThreadAbort());
+
+        var context = new DatabaseContext("test", factory, _typeMap);
         var helper = new EntityHelper<TestEntitySimple, int>(context, logger: new LoggerFactory().CreateLogger<EntityHelper<TestEntitySimple, int>>());
         _typeMap.Register<TestEntitySimple>();
         var entity = new TestEntitySimple { Name = "Test" };
-        
-        _factory.SetNonQueryException(CreateThreadAbort());
 
         await Assert.ThrowsAsync<ThreadAbortException>(
             () => helper.CreateAsync(entity, context)
         );
     }
 
-    [Fact(Skip="temporarily disabled while finalizing DbMode/ID population behavior")]
+    [Fact]
     public async Task CreateAsync_Should_Handle_StackOverflowException()
     {
-        var context = new DatabaseContext("test", _factory, _typeMap);
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        // Set exception before creating context
+        factory.SetScalarException(new StackOverflowException());
+
+        var context = new DatabaseContext("test", factory, _typeMap);
         var helper = new EntityHelper<TestEntitySimple, int>(context, logger: new LoggerFactory().CreateLogger<EntityHelper<TestEntitySimple, int>>());
         _typeMap.Register<TestEntitySimple>();
         var entity = new TestEntitySimple { Name = "Test" };
-        
-        _factory.SetNonQueryException(new StackOverflowException());
 
         await Assert.ThrowsAsync<StackOverflowException>(
             () => helper.CreateAsync(entity, context)
@@ -325,6 +343,6 @@ public class EntityHelperCreateAsyncStateMachineTests
     }
     private static ThreadAbortException CreateThreadAbort()
     {
-        return (ThreadAbortException)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(ThreadAbortException));
+        return (ThreadAbortException)FormatterServices.GetUninitializedObject(typeof(ThreadAbortException));
     }
 }

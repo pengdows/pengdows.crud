@@ -1,9 +1,9 @@
-using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Threading;
 using System.Threading.Tasks;
-using pengdows.crud.fakeDb;
 using pengdows.crud.enums;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests.fakeDb;
@@ -88,7 +88,7 @@ public class fakeDbTests
     [Fact]
     public void fakeDbDataReader_GetBytes_CopiesBytesSafely()
     {
-        var row = new System.Collections.Generic.Dictionary<string, object>
+        var row = new Dictionary<string, object>
         {
             ["ByteField"] = new byte[] { 0, 1, 2, 3, 4, 5 }
         };

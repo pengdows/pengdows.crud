@@ -1,9 +1,7 @@
-namespace pengdows.crud;
-
-using System;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
-using System.Threading;
+
+namespace pengdows.crud;
 
 /// <summary>
 /// Production-ready UUIDv7 generator implementing RFC 9562 with optimizations for high throughput.
@@ -205,11 +203,9 @@ public static class Uuid7Optimized
             // Large backward jump: use logical clock
             return Math.Max(lastMs, globalEpoch);
         }
-        else
-        {
-            // Small drift: pin to last known time
-            return lastMs;
-        }
+
+        // Small drift: pin to last known time
+        return lastMs;
     }
 
     private static long BoundedWaitNextMs(long currentMs)

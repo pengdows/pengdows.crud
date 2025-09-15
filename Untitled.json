@@ -1,23 +1,23 @@
 ﻿{
   "DotCoverVersion": "2025.2.1",
   "Kind": "SolutionRoot",
-  "CoveredStatements": 4058,
-  "TotalStatements": 4659,
-  "CoveragePercent": 87,
+  "CoveredStatements": 4089,
+  "TotalStatements": 4663,
+  "CoveragePercent": 88,
   "Children": [
     {
       "Kind": "Project",
       "Name": "pengdows.crud",
-      "CoveredStatements": 4058,
-      "TotalStatements": 4659,
-      "CoveragePercent": 87,
+      "CoveredStatements": 4089,
+      "TotalStatements": 4663,
+      "CoveragePercent": 88,
       "Children": [
         {
           "Kind": "Namespace",
           "Name": "pengdows.crud",
-          "CoveredStatements": 4058,
-          "TotalStatements": 4659,
-          "CoveragePercent": 87,
+          "CoveredStatements": 4089,
+          "TotalStatements": 4663,
+          "CoveragePercent": 88,
           "Children": [
             {
               "Kind": "Namespace",
@@ -183,16 +183,16 @@
             {
               "Kind": "Namespace",
               "Name": "collections",
-              "CoveredStatements": 360,
+              "CoveredStatements": 367,
               "TotalStatements": 394,
-              "CoveragePercent": 91,
+              "CoveragePercent": 93,
               "Children": [
                 {
                   "Kind": "Type",
                   "Name": "OrderedDictionary<TKey,TValue>",
-                  "CoveredStatements": 331,
+                  "CoveredStatements": 337,
                   "TotalStatements": 363,
-                  "CoveragePercent": 91,
+                  "CoveragePercent": 93,
                   "Children": [
                     {
                       "Kind": "Type",
@@ -204,9 +204,9 @@
                     {
                       "Kind": "Type",
                       "Name": "Enumerator",
-                      "CoveredStatements": 20,
+                      "CoveredStatements": 24,
                       "TotalStatements": 25,
-                      "CoveragePercent": 80,
+                      "CoveragePercent": 96,
                       "Children": [
                         {
                           "Kind": "Constructor",
@@ -262,9 +262,9 @@
                         {
                           "Kind": "Method",
                           "Name": "System.Collections.IEnumerator.Reset():void",
-                          "CoveredStatements": 0,
+                          "CoveredStatements": 4,
                           "TotalStatements": 5,
-                          "CoveragePercent": 0
+                          "CoveragePercent": 80
                         },
                         {
                           "Kind": "Method",
@@ -394,9 +394,9 @@
                     {
                       "Kind": "Type",
                       "Name": "KeyEnumerator",
-                      "CoveredStatements": 18,
+                      "CoveredStatements": 19,
                       "TotalStatements": 24,
-                      "CoveragePercent": 75,
+                      "CoveragePercent": 79,
                       "Children": [
                         {
                           "Kind": "Constructor",
@@ -423,15 +423,15 @@
                         {
                           "Kind": "Property",
                           "Name": "System.Collections.IEnumerator.Current:object",
-                          "CoveredStatements": 0,
+                          "CoveredStatements": 1,
                           "TotalStatements": 1,
-                          "CoveragePercent": 0,
+                          "CoveragePercent": 100,
                           "Children": [
                             {
                               "Kind": "PropertyGetter",
-                              "CoveredStatements": 0,
+                              "CoveredStatements": 1,
                               "TotalStatements": 1,
-                              "CoveragePercent": 0
+                              "CoveragePercent": 100
                             }
                           ]
                         },
@@ -577,9 +577,9 @@
                     {
                       "Kind": "Type",
                       "Name": "ValueEnumerator",
-                      "CoveredStatements": 18,
+                      "CoveredStatements": 19,
                       "TotalStatements": 24,
-                      "CoveragePercent": 75,
+                      "CoveragePercent": 79,
                       "Children": [
                         {
                           "Kind": "Constructor",
@@ -606,15 +606,15 @@
                         {
                           "Kind": "Property",
                           "Name": "System.Collections.IEnumerator.Current:object",
-                          "CoveredStatements": 0,
+                          "CoveredStatements": 1,
                           "TotalStatements": 1,
-                          "CoveragePercent": 0,
+                          "CoveragePercent": 100,
                           "Children": [
                             {
                               "Kind": "PropertyGetter",
-                              "CoveredStatements": 0,
+                              "CoveredStatements": 1,
                               "TotalStatements": 1,
-                              "CoveragePercent": 0
+                              "CoveragePercent": 100
                             }
                           ]
                         },
@@ -967,9 +967,9 @@
                 {
                   "Kind": "Type",
                   "Name": "OrderedDictionaryExtensions",
-                  "CoveredStatements": 29,
+                  "CoveredStatements": 30,
                   "TotalStatements": 31,
-                  "CoveragePercent": 94,
+                  "CoveragePercent": 97,
                   "Children": [
                     {
                       "Kind": "Constructor",
@@ -981,15 +981,15 @@
                     {
                       "Kind": "Property",
                       "Name": "Logger:ILogger",
-                      "CoveredStatements": 0,
+                      "CoveredStatements": 1,
                       "TotalStatements": 2,
-                      "CoveragePercent": 0,
+                      "CoveragePercent": 50,
                       "Children": [
                         {
                           "Kind": "PropertyGetter",
-                          "CoveredStatements": 0,
+                          "CoveredStatements": 1,
                           "TotalStatements": 1,
-                          "CoveragePercent": 0
+                          "CoveragePercent": 100
                         },
                         {
                           "Kind": "PropertySetter",
@@ -5824,9 +5824,9 @@
             {
               "Kind": "Namespace",
               "Name": "tenant",
-              "CoveredStatements": 48,
-              "TotalStatements": 49,
-              "CoveragePercent": 98,
+              "CoveredStatements": 50,
+              "TotalStatements": 53,
+              "CoveragePercent": 94,
               "Children": [
                 {
                   "Kind": "Type",
@@ -5863,9 +5863,9 @@
                 {
                   "Kind": "Type",
                   "Name": "TenantConnectionResolver",
-                  "CoveredStatements": 24,
-                  "TotalStatements": 25,
-                  "CoveragePercent": 96,
+                  "CoveredStatements": 26,
+                  "TotalStatements": 29,
+                  "CoveragePercent": 90,
                   "Children": [
                     {
                       "Kind": "Constructor",
@@ -5884,16 +5884,16 @@
                     {
                       "Kind": "Method",
                       "Name": "Register(string,DatabaseContextConfiguration):void",
-                      "CoveredStatements": 6,
-                      "TotalStatements": 6,
-                      "CoveragePercent": 100
+                      "CoveredStatements": 7,
+                      "TotalStatements": 8,
+                      "CoveragePercent": 88
                     },
                     {
                       "Kind": "Method",
                       "Name": "Register(IEnumerable<TenantConfiguration>):void",
-                      "CoveredStatements": 7,
-                      "TotalStatements": 8,
-                      "CoveragePercent": 88
+                      "CoveredStatements": 8,
+                      "TotalStatements": 10,
+                      "CoveragePercent": 80
                     },
                     {
                       "Kind": "Method",
@@ -6070,16 +6070,16 @@
             {
               "Kind": "Namespace",
               "Name": "wrappers",
-              "CoveredStatements": 144,
+              "CoveredStatements": 145,
               "TotalStatements": 156,
-              "CoveragePercent": 92,
+              "CoveragePercent": 93,
               "Children": [
                 {
                   "Kind": "Type",
                   "Name": "TrackedConnection",
-                  "CoveredStatements": 87,
+                  "CoveredStatements": 88,
                   "TotalStatements": 96,
-                  "CoveragePercent": 91,
+                  "CoveragePercent": 92,
                   "Children": [
                     {
                       "Kind": "Constructor",
@@ -6238,9 +6238,9 @@
                     {
                       "Kind": "Method",
                       "Name": "ChangeDatabase(string):void",
-                      "CoveredStatements": 0,
+                      "CoveredStatements": 1,
                       "TotalStatements": 1,
-                      "CoveragePercent": 0
+                      "CoveragePercent": 100
                     },
                     {
                       "Kind": "Method",
@@ -6717,9 +6717,9 @@
             {
               "Kind": "Type",
               "Name": "DatabaseContext",
-              "CoveredStatements": 417,
+              "CoveredStatements": 432,
               "TotalStatements": 544,
-              "CoveragePercent": 77,
+              "CoveragePercent": 79,
               "Children": [
                 {
                   "Kind": "Type",
@@ -6788,15 +6788,15 @@
                 {
                   "Kind": "Property",
                   "Name": "ConnectionPoolEfficiency:double",
-                  "CoveredStatements": 0,
+                  "CoveredStatements": 2,
                   "TotalStatements": 2,
-                  "CoveragePercent": 0,
+                  "CoveragePercent": 100,
                   "Children": [
                     {
                       "Kind": "PropertyGetter",
-                      "CoveredStatements": 0,
+                      "CoveredStatements": 2,
                       "TotalStatements": 2,
-                      "CoveragePercent": 0
+                      "CoveragePercent": 100
                     }
                   ]
                 },
@@ -6983,15 +6983,15 @@
                 {
                   "Kind": "Property",
                   "Name": "ProcWrappingStrategy:IProcWrappingStrategy",
-                  "CoveredStatements": 0,
+                  "CoveredStatements": 1,
                   "TotalStatements": 1,
-                  "CoveragePercent": 0,
+                  "CoveragePercent": 100,
                   "Children": [
                     {
                       "Kind": "PropertyGetter",
-                      "CoveredStatements": 0,
+                      "CoveredStatements": 1,
                       "TotalStatements": 1,
-                      "CoveragePercent": 0
+                      "CoveragePercent": 100
                     }
                   ]
                 },
@@ -7100,60 +7100,60 @@
                 {
                   "Kind": "Property",
                   "Name": "TotalConnectionFailures:long",
-                  "CoveredStatements": 0,
+                  "CoveredStatements": 1,
                   "TotalStatements": 1,
-                  "CoveragePercent": 0,
+                  "CoveragePercent": 100,
                   "Children": [
                     {
                       "Kind": "PropertyGetter",
-                      "CoveredStatements": 0,
+                      "CoveredStatements": 1,
                       "TotalStatements": 1,
-                      "CoveragePercent": 0
+                      "CoveragePercent": 100
                     }
                   ]
                 },
                 {
                   "Kind": "Property",
                   "Name": "TotalConnectionsCreated:long",
-                  "CoveredStatements": 0,
+                  "CoveredStatements": 1,
                   "TotalStatements": 1,
-                  "CoveragePercent": 0,
+                  "CoveragePercent": 100,
                   "Children": [
                     {
                       "Kind": "PropertyGetter",
-                      "CoveredStatements": 0,
+                      "CoveredStatements": 1,
                       "TotalStatements": 1,
-                      "CoveragePercent": 0
+                      "CoveragePercent": 100
                     }
                   ]
                 },
                 {
                   "Kind": "Property",
                   "Name": "TotalConnectionsReused:long",
-                  "CoveredStatements": 0,
+                  "CoveredStatements": 1,
                   "TotalStatements": 1,
-                  "CoveragePercent": 0,
+                  "CoveragePercent": 100,
                   "Children": [
                     {
                       "Kind": "PropertyGetter",
-                      "CoveredStatements": 0,
+                      "CoveredStatements": 1,
                       "TotalStatements": 1,
-                      "CoveragePercent": 0
+                      "CoveragePercent": 100
                     }
                   ]
                 },
                 {
                   "Kind": "Property",
                   "Name": "TotalConnectionTimeoutFailures:long",
-                  "CoveredStatements": 0,
+                  "CoveredStatements": 1,
                   "TotalStatements": 1,
-                  "CoveragePercent": 0,
+                  "CoveragePercent": 100,
                   "Children": [
                     {
                       "Kind": "PropertyGetter",
-                      "CoveredStatements": 0,
+                      "CoveredStatements": 1,
                       "TotalStatements": 1,
-                      "CoveragePercent": 0
+                      "CoveragePercent": 100
                     }
                   ]
                 },
@@ -7246,16 +7246,16 @@
                 {
                   "Kind": "Method",
                   "Name": "CreateDbParameter<T>(DbType,T,ParameterDirection):DbParameter",
-                  "CoveredStatements": 0,
+                  "CoveredStatements": 1,
                   "TotalStatements": 1,
-                  "CoveragePercent": 0
+                  "CoveragePercent": 100
                 },
                 {
                   "Kind": "Method",
                   "Name": "CreateDbParameter<T>(DbType,T):DbParameter",
-                  "CoveredStatements": 0,
+                  "CoveredStatements": 1,
                   "TotalStatements": 1,
-                  "CoveragePercent": 0
+                  "CoveragePercent": 100
                 },
                 {
                   "Kind": "Method",
@@ -7431,9 +7431,9 @@
                 {
                   "Kind": "Method",
                   "Name": "IsTimeoutException(Exception):bool",
-                  "CoveredStatements": 0,
+                  "CoveredStatements": 1,
                   "TotalStatements": 1,
-                  "CoveragePercent": 0
+                  "CoveragePercent": 100
                 },
                 {
                   "Kind": "Method",
@@ -7480,9 +7480,9 @@
                 {
                   "Kind": "Method",
                   "Name": "TrackConnectionFailure(Exception):void",
-                  "CoveredStatements": 0,
+                  "CoveredStatements": 5,
                   "TotalStatements": 5,
-                  "CoveragePercent": 0
+                  "CoveragePercent": 100
                 },
                 {
                   "Kind": "Method",
@@ -8068,7 +8068,7 @@
             {
               "Kind": "Type",
               "Name": "EntityHelper<TEntity,TRowID>",
-              "CoveredStatements": 799,
+              "CoveredStatements": 800,
               "TotalStatements": 975,
               "CoveragePercent": 82,
               "Children": [
@@ -9214,9 +9214,9 @@
                 {
                   "Kind": "Method",
                   "Name": "SetAuditFields(TEntity,bool):void",
-                  "CoveredStatements": 25,
+                  "CoveredStatements": 26,
                   "TotalStatements": 27,
-                  "CoveragePercent": 93
+                  "CoveragePercent": 96
                 },
                 {
                   "Kind": "Method",
@@ -9420,9 +9420,9 @@
             {
               "Kind": "Type",
               "Name": "SqlContainer",
-              "CoveredStatements": 279,
+              "CoveredStatements": 280,
               "TotalStatements": 305,
-              "CoveragePercent": 91,
+              "CoveragePercent": 92,
               "Children": [
                 {
                   "Kind": "Constructor",
@@ -9572,9 +9572,9 @@
                 {
                   "Kind": "Method",
                   "Name": "Clone():ISqlContainer",
-                  "CoveredStatements": 0,
+                  "CoveredStatements": 1,
                   "TotalStatements": 1,
-                  "CoveragePercent": 0
+                  "CoveragePercent": 100
                 },
                 {
                   "Kind": "Method",
@@ -10125,9 +10125,9 @@
             {
               "Kind": "Type",
               "Name": "TransactionContext",
-              "CoveredStatements": 152,
+              "CoveredStatements": 153,
               "TotalStatements": 183,
-              "CoveragePercent": 83,
+              "CoveragePercent": 84,
               "Children": [
                 {
                   "Kind": "Constructor",
@@ -10169,15 +10169,15 @@
                 {
                   "Kind": "Property",
                   "Name": "ConnectionString:string",
-                  "CoveredStatements": 0,
+                  "CoveredStatements": 1,
                   "TotalStatements": 1,
-                  "CoveragePercent": 0,
+                  "CoveragePercent": 100,
                   "Children": [
                     {
                       "Kind": "PropertyGetter",
-                      "CoveredStatements": 0,
+                      "CoveredStatements": 1,
                       "TotalStatements": 1,
-                      "CoveragePercent": 0
+                      "CoveragePercent": 100
                     }
                   ]
                 },
@@ -11080,9 +11080,9 @@
             {
               "Kind": "Type",
               "Name": "Uuid7Optimized",
-              "CoveredStatements": 125,
+              "CoveredStatements": 128,
               "TotalStatements": 136,
-              "CoveragePercent": 92,
+              "CoveragePercent": 94,
               "Children": [
                 {
                   "Kind": "Type",
@@ -11125,9 +11125,9 @@
                 {
                   "Kind": "Method",
                   "Name": "BoundedWaitNextMs(long):long",
-                  "CoveredStatements": 10,
+                  "CoveredStatements": 13,
                   "TotalStatements": 13,
-                  "CoveragePercent": 77
+                  "CoveragePercent": 100
                 },
                 {
                   "Kind": "Method",

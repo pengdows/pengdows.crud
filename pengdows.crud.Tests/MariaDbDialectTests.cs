@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
+using pengdows.crud.wrappers;
 using Xunit;
 
 #endregion
@@ -118,7 +119,7 @@ public class MariaDbDialectTests
     {
         // Arrange
         var connection = _factory.CreateConnection();
-        var trackedConnection = new pengdows.crud.wrappers.TrackedConnection(connection, "mariadb_test", NullLogger.Instance);
+        var trackedConnection = new TrackedConnection(connection, "mariadb_test", NullLogger.Instance);
 
         // Act & Assert - Should not throw
         await _dialect.PostInitialize(trackedConnection);
@@ -167,7 +168,7 @@ public class MariaDbDialectTests
     {
         // MariaDB 10.2+ supports window functions; initialize dialect first
         var connection = _factory.CreateConnection();
-        var trackedConnection = new pengdows.crud.wrappers.TrackedConnection(connection, "mariadb_test", NullLogger.Instance);
+        var trackedConnection = new TrackedConnection(connection, "mariadb_test", NullLogger.Instance);
         _ = _dialect.DetectDatabaseInfoAsync(trackedConnection).GetAwaiter().GetResult();
         Assert.True(_dialect.SupportsWindowFunctions);
     }
@@ -177,7 +178,7 @@ public class MariaDbDialectTests
     {
         // MariaDB 10.2+ supports CTEs; initialize dialect first
         var connection = _factory.CreateConnection();
-        var trackedConnection = new pengdows.crud.wrappers.TrackedConnection(connection, "mariadb_test", NullLogger.Instance);
+        var trackedConnection = new TrackedConnection(connection, "mariadb_test", NullLogger.Instance);
         _ = _dialect.DetectDatabaseInfoAsync(trackedConnection).GetAwaiter().GetResult();
         Assert.True(_dialect.SupportsCommonTableExpressions);
     }
@@ -260,7 +261,7 @@ public class MariaDbDialectTests
     {
         // Arrange
         var connection = _factory.CreateConnection();
-        var trackedConnection = new pengdows.crud.wrappers.TrackedConnection(connection, "test", NullLogger.Instance);
+        var trackedConnection = new TrackedConnection(connection, "test", NullLogger.Instance);
 
         // Act
         var version = await _dialect.GetDatabaseVersionAsync(trackedConnection);
@@ -275,7 +276,7 @@ public class MariaDbDialectTests
     {
         // Arrange
         var connection = _factory.CreateConnection();
-        var trackedConnection = new pengdows.crud.wrappers.TrackedConnection(connection, "test", NullLogger.Instance);
+        var trackedConnection = new TrackedConnection(connection, "test", NullLogger.Instance);
 
         // Act
         var productName = await _dialect.GetProductNameAsync(trackedConnection);
@@ -528,7 +529,7 @@ public class MariaDbDialectTests
     public void Version_Dependent_Features_Should_Work_When_Not_Initialized()
     {
         // Create a new dialect instance that hasn't been initialized
-        var newDialect = new MariaDbDialect(_factory, Microsoft.Extensions.Logging.Abstractions.NullLogger<MariaDbDialect>.Instance);
+        var newDialect = new MariaDbDialect(_factory, NullLogger<MariaDbDialect>.Instance);
 
         // These will return false because IsInitialized is false
         Assert.False(newDialect.SupportsWindowFunctions);
@@ -540,7 +541,7 @@ public class MariaDbDialectTests
     {
         // This tests the private IsAtLeast method indirectly through version-dependent features
         // When ProductInfo.ParsedVersion is null, version-dependent features should return false
-        var newDialect = new MariaDbDialect(_factory, Microsoft.Extensions.Logging.Abstractions.NullLogger<MariaDbDialect>.Instance);
+        var newDialect = new MariaDbDialect(_factory, NullLogger<MariaDbDialect>.Instance);
 
         // Force IsInitialized to true by calling a method that would initialize it
         // But since ProductInfo.ParsedVersion will be null in fakeDb, features should be false

@@ -1,9 +1,7 @@
 #region
 
 using System;
-using System.Data;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 using pengdows.crud.strategies.connection;

@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Linq;
+using pengdows.crud.fakeDb;
 using pengdows.crud.wrappers;
 
 #endregion
@@ -26,7 +27,7 @@ public class FakeTrackedConnection : TrackedConnection, ITrackedConnection
     {
         _schema = schema;
 
-        if (connection is pengdows.crud.fakeDb.fakeDbConnection fake && scalars.Count > 0)
+        if (connection is fakeDbConnection fake && scalars.Count > 0)
         {
             var value = scalars.Values.First();
             var isSqlite = scalars.Keys.Any(k => k.Equals("SELECT sqlite_version()", StringComparison.OrdinalIgnoreCase));

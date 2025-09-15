@@ -5,8 +5,10 @@ using System.Data;
 using System.Data.Common;
 using System.Linq;
 using System.Threading.Tasks;
+using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
+using pengdows.crud.strategies.connection;
 using pengdows.crud.wrappers;
 using Xunit;
 
@@ -49,7 +51,7 @@ public class ConnectionStrategyTests
 
     private static DatabaseContext CreateContext(DbMode mode, SupportedDatabase product = SupportedDatabase.SqlServer, string dataSource = "test")
     {
-        var cfg = new pengdows.crud.configuration.DatabaseContextConfiguration
+        var cfg = new DatabaseContextConfiguration
         {
             ConnectionString = $"Data Source={dataSource};EmulatedProduct={product}",
             DbMode = mode,
@@ -61,7 +63,7 @@ public class ConnectionStrategyTests
     [Fact]
     public async Task Standard_NewConnectionPerCall_ReleaseDisposes()
     {
-        await using var ctx = CreateContext(DbMode.Standard, SupportedDatabase.SqlServer);
+        await using var ctx = CreateContext(DbMode.Standard);
         Assert.Equal(0, ctx.NumberOfOpenConnections);
 
         var c1 = ctx.GetConnection(ExecutionType.Read);
@@ -101,7 +103,7 @@ public class ConnectionStrategyTests
     public void KeepAlive_AppliesSessionSettings_OnInit()
     {
         var factory = new RecordingFactory(SupportedDatabase.Sqlite);
-        var cfg = new pengdows.crud.configuration.DatabaseContextConfiguration
+        var cfg = new DatabaseContextConfiguration
         {
             ConnectionString = "Data Source=:memory:;EmulatedProduct=Sqlite",
             DbMode = DbMode.KeepAlive,
@@ -150,7 +152,7 @@ public class ConnectionStrategyTests
     [Fact]
     public async Task Standard_MaxConnections_TracksPeak()
     {
-        await using var ctx = CreateContext(DbMode.Standard, SupportedDatabase.SqlServer);
+        await using var ctx = CreateContext(DbMode.Standard);
         var a = ctx.GetConnection(ExecutionType.Read);
         var b = ctx.GetConnection(ExecutionType.Write);
         await a.OpenAsync();
@@ -224,7 +226,7 @@ public class ConnectionStrategyTests
     [Fact]
     public void KeepAlive_PostInitialize_NullConnection_SetsNullPersistent()
     {
-        var cfg = new pengdows.crud.configuration.DatabaseContextConfiguration
+        var cfg = new DatabaseContextConfiguration
         {
             ConnectionString = "Data Source=:memory:;EmulatedProduct=Sqlite",
             DbMode = DbMode.KeepAlive,
@@ -336,7 +338,7 @@ public class ConnectionStrategyTests
     public void Standard_PostInitialize_DisposesConnection()
     {
         var factory = new RecordingFactory(SupportedDatabase.SqlServer);
-        var cfg = new pengdows.crud.configuration.DatabaseContextConfiguration
+        var cfg = new DatabaseContextConfiguration
         {
             ConnectionString = "Data Source=test;EmulatedProduct=SqlServer",
             DbMode = DbMode.Standard,
@@ -345,7 +347,7 @@ public class ConnectionStrategyTests
         using var ctx = new DatabaseContext(cfg, factory);
 
         var connection = ctx.GetConnection(ExecutionType.Read);
-        var strategy = new pengdows.crud.strategies.connection.StandardConnectionStrategy(ctx);
+        var strategy = new StandardConnectionStrategy(ctx);
 
         // PostInitialize should dispose the provided connection
         // We verify this by checking the connection state changes to Closed after PostInitialize
@@ -361,8 +363,8 @@ public class ConnectionStrategyTests
     [Fact]
     public void Standard_PostInitialize_NullConnection_DoesNotThrow()
     {
-        var ctx = CreateContext(DbMode.Standard, SupportedDatabase.SqlServer);
-        var strategy = new pengdows.crud.strategies.connection.StandardConnectionStrategy(ctx);
+        var ctx = CreateContext(DbMode.Standard);
+        var strategy = new StandardConnectionStrategy(ctx);
 
         // Should not throw with null connection
         strategy.PostInitialize(null);
@@ -372,7 +374,7 @@ public class ConnectionStrategyTests
     public async Task Standard_ReleaseConnectionAsync_DisposesConnection()
     {
         var factory = new RecordingFactory(SupportedDatabase.SqlServer);
-        var cfg = new pengdows.crud.configuration.DatabaseContextConfiguration
+        var cfg = new DatabaseContextConfiguration
         {
             ConnectionString = "Data Source=test;EmulatedProduct=SqlServer",
             DbMode = DbMode.Standard,
@@ -381,7 +383,7 @@ public class ConnectionStrategyTests
         using var ctx = new DatabaseContext(cfg, factory);
 
         var connection = ctx.GetConnection(ExecutionType.Read);
-        var strategy = new pengdows.crud.strategies.connection.StandardConnectionStrategy(ctx);
+        var strategy = new StandardConnectionStrategy(ctx);
 
         // Open connection to test disposal
         connection.Open();
@@ -397,7 +399,7 @@ public class ConnectionStrategyTests
     public void Standard_ReleaseConnection_DisposesConnection()
     {
         var factory = new RecordingFactory(SupportedDatabase.SqlServer);
-        var cfg = new pengdows.crud.configuration.DatabaseContextConfiguration
+        var cfg = new DatabaseContextConfiguration
         {
             ConnectionString = "Data Source=test;EmulatedProduct=SqlServer",
             DbMode = DbMode.Standard,
@@ -406,7 +408,7 @@ public class ConnectionStrategyTests
         using var ctx = new DatabaseContext(cfg, factory);
 
         var connection = ctx.GetConnection(ExecutionType.Read);
-        var strategy = new pengdows.crud.strategies.connection.StandardConnectionStrategy(ctx);
+        var strategy = new StandardConnectionStrategy(ctx);
 
         // Open connection to test disposal
         connection.Open();
@@ -424,7 +426,7 @@ public class ConnectionStrategyTests
     public void SingleConnection_PostInitialize_AppliesSettingsAndSetsPersistent()
     {
         var factory = new RecordingFactory(SupportedDatabase.Sqlite);
-        var cfg = new pengdows.crud.configuration.DatabaseContextConfiguration
+        var cfg = new DatabaseContextConfiguration
         {
             ConnectionString = "Data Source=:memory:;EmulatedProduct=Sqlite",
             DbMode = DbMode.SingleConnection,
@@ -433,7 +435,7 @@ public class ConnectionStrategyTests
         using var ctx = new DatabaseContext(cfg, factory);
 
         var connection = ctx.GetConnection(ExecutionType.Read);
-        var strategy = new pengdows.crud.strategies.connection.SingleConnectionStrategy(ctx);
+        var strategy = new SingleConnectionStrategy(ctx);
 
         // PostInitialize should apply settings and set persistent connection
         strategy.PostInitialize(connection);
@@ -449,7 +451,7 @@ public class ConnectionStrategyTests
     public void SingleConnection_PostInitialize_NullConnection_SetsPersistentToNull()
     {
         var ctx = CreateContext(DbMode.SingleConnection, SupportedDatabase.Sqlite, ":memory:");
-        var strategy = new pengdows.crud.strategies.connection.SingleConnectionStrategy(ctx);
+        var strategy = new SingleConnectionStrategy(ctx);
 
         strategy.PostInitialize(null);
 
@@ -461,11 +463,11 @@ public class ConnectionStrategyTests
     public async Task SingleConnection_ReleaseConnectionAsync_NonPersistentConnection_Disposes()
     {
         await using var ctx = CreateContext(DbMode.SingleConnection, SupportedDatabase.Sqlite, ":memory:");
-        var strategy = new pengdows.crud.strategies.connection.SingleConnectionStrategy(ctx);
+        var strategy = new SingleConnectionStrategy(ctx);
 
         // Create a separate connection that's different from the persistent one
         var factory = new RecordingFactory(SupportedDatabase.Sqlite);
-        var cfg = new pengdows.crud.configuration.DatabaseContextConfiguration
+        var cfg = new DatabaseContextConfiguration
         {
             ConnectionString = "Data Source=:memory:;EmulatedProduct=Sqlite",
             DbMode = DbMode.Standard, // Use Standard mode for this separate connection
@@ -490,7 +492,7 @@ public class ConnectionStrategyTests
     public void SingleWriter_PostInitialize_AppliesSettingsAndSetsPersistent()
     {
         var factory = new RecordingFactory(SupportedDatabase.Sqlite);
-        var cfg = new pengdows.crud.configuration.DatabaseContextConfiguration
+        var cfg = new DatabaseContextConfiguration
         {
             ConnectionString = "Data Source=file.db;EmulatedProduct=Sqlite",
             DbMode = DbMode.SingleWriter,
@@ -499,7 +501,7 @@ public class ConnectionStrategyTests
         using var ctx = new DatabaseContext(cfg, factory);
 
         var connection = ctx.GetConnection(ExecutionType.Write);
-        var strategy = new pengdows.crud.strategies.connection.SingleWriterConnectionStrategy(ctx);
+        var strategy = new SingleWriterConnectionStrategy(ctx);
 
         strategy.PostInitialize(connection);
 
@@ -514,7 +516,7 @@ public class ConnectionStrategyTests
     public async Task SingleWriter_ReleaseConnectionAsync_ReadConnection_Disposes()
     {
         await using var ctx = CreateContext(DbMode.SingleWriter, SupportedDatabase.Sqlite, "file.db");
-        var strategy = new pengdows.crud.strategies.connection.SingleWriterConnectionStrategy(ctx);
+        var strategy = new SingleWriterConnectionStrategy(ctx);
 
         // Get a read connection (should be disposable)
         var readConnection = ctx.GetConnection(ExecutionType.Read);
@@ -532,7 +534,7 @@ public class ConnectionStrategyTests
     public async Task SingleWriter_ReleaseConnectionAsync_WriteConnection_DoesNotDispose()
     {
         await using var ctx = CreateContext(DbMode.SingleWriter, SupportedDatabase.Sqlite, "file.db");
-        var strategy = new pengdows.crud.strategies.connection.SingleWriterConnectionStrategy(ctx);
+        var strategy = new SingleWriterConnectionStrategy(ctx);
 
         // Get the write connection (should be persistent)
         var writeConnection = ctx.GetConnection(ExecutionType.Write);
@@ -548,7 +550,7 @@ public class ConnectionStrategyTests
     public void SingleWriter_ReleaseConnection_ReadConnection_Disposes()
     {
         using var ctx = CreateContext(DbMode.SingleWriter, SupportedDatabase.Sqlite, "file.db");
-        var strategy = new pengdows.crud.strategies.connection.SingleWriterConnectionStrategy(ctx);
+        var strategy = new SingleWriterConnectionStrategy(ctx);
 
         // Get a read connection (should be disposable)
         var readConnection = ctx.GetConnection(ExecutionType.Read);
@@ -566,7 +568,7 @@ public class ConnectionStrategyTests
     public void SingleWriter_ReleaseConnection_WriteConnection_DoesNotDispose()
     {
         using var ctx = CreateContext(DbMode.SingleWriter, SupportedDatabase.Sqlite, "file.db");
-        var strategy = new pengdows.crud.strategies.connection.SingleWriterConnectionStrategy(ctx);
+        var strategy = new SingleWriterConnectionStrategy(ctx);
 
         // Get the write connection (should be persistent)
         var writeConnection = ctx.GetConnection(ExecutionType.Write);

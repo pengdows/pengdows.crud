@@ -1,10 +1,9 @@
 using System;
-using System.Collections.Concurrent;
+using System.Collections;
 using System.Collections.Generic;
 using System.Data.Common;
 using System.Reflection;
 using System.Threading.Tasks;
-using pengdows.crud.enums;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -22,11 +21,11 @@ public class CachedSqlTemplatesTests : SqlLiteContextTestBase
         // Build create twice with same helper to verify template reuse within instance
         var sc1 = helper1.BuildCreate(entity1);
         var field = typeof(EntityHelper<TestEntity, int>).GetField("_templatesByDialect", BindingFlags.Instance | BindingFlags.NonPublic)!;
-        var dialectCache1 = field.GetValue(helper1) as System.Collections.IDictionary;
+        var dialectCache1 = field.GetValue(helper1) as IDictionary;
         var initialCacheCount = dialectCache1!.Count;
 
         var sc2 = helper1.BuildCreate(entity2);
-        var dialectCache2 = field.GetValue(helper1) as System.Collections.IDictionary;
+        var dialectCache2 = field.GetValue(helper1) as IDictionary;
         var finalCacheCount = dialectCache2!.Count;
 
         // Verify cache was reused (same count means no new templates were created)
@@ -66,11 +65,11 @@ public class CachedSqlTemplatesTests : SqlLiteContextTestBase
         await helper1.BuildUpdateAsync(entity1, loadOriginal: false);
 
         var field = typeof(EntityHelper<TestEntity, int>).GetField("_templatesByDialect", BindingFlags.Instance | BindingFlags.NonPublic)!;
-        var dialectCache1 = field.GetValue(helper1) as System.Collections.IDictionary;
+        var dialectCache1 = field.GetValue(helper1) as IDictionary;
         var initialCacheCount = dialectCache1!.Count;
 
         await helper1.BuildUpdateAsync(entity2, loadOriginal: false);
-        var dialectCache2 = field.GetValue(helper1) as System.Collections.IDictionary;
+        var dialectCache2 = field.GetValue(helper1) as IDictionary;
         var finalCacheCount = dialectCache2!.Count;
 
         // Verify cache was reused (same count means no new templates were created)

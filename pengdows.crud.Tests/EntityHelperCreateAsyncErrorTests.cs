@@ -3,10 +3,8 @@
 using System;
 using System.Data;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
-using pengdows.crud.exceptions;
 using pengdows.crud.fakeDb;
 using Xunit;
 
@@ -200,15 +198,15 @@ public class EntityHelperCreateAsyncErrorTests
         await Assert.ThrowsAsync<ArgumentException>(() => helper.CreateAsync(entity));
     }
 
-    [Fact(Skip="temporarily disabled while finalizing DbMode/ID population behavior")]
+    [Fact]
     public async Task CreateAsync_Should_Handle_Connection_Acquisition_Failure()
     {
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         factory.SetConnectionException(new TimeoutException("Connection pool exhausted"));
-        
+
         // Act & Assert (per contract: ctor open must surface failure immediately)
-        Assert.Throws<TimeoutException>(() => new DatabaseContext("test", factory, _typeMap));
+        Assert.Throws<pengdows.crud.exceptions.ConnectionFailedException>(() => new DatabaseContext("test", factory, _typeMap));
     }
 
     [Fact]

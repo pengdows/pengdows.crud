@@ -3,6 +3,7 @@
 using System;
 using System.Reflection;
 using System.Threading.Tasks;
+using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 using pengdows.crud.strategies.connection;
@@ -46,7 +47,7 @@ public class StrategyReflectionTests
 
     private static DatabaseContext Create(DbMode mode, SupportedDatabase product = SupportedDatabase.SqlServer, string dataSource = "test")
     {
-        var cfg = new pengdows.crud.configuration.DatabaseContextConfiguration
+        var cfg = new DatabaseContextConfiguration
         {
             ConnectionString = $"Data Source={dataSource};EmulatedProduct={product}",
             DbMode = mode,
@@ -58,7 +59,7 @@ public class StrategyReflectionTests
     [Fact]
     public void StandardStrategy_Release_Disposes()
     {
-        using var ctx = Create(DbMode.Standard, SupportedDatabase.SqlServer);
+        using var ctx = Create(DbMode.Standard);
         var strat = GetStrategy(ctx);
         var c = ctx.GetConnection(ExecutionType.Write);
         c.Open();

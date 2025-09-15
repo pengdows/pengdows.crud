@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
+using pengdows.crud.wrappers;
 using Xunit;
 
 #endregion
@@ -120,7 +121,7 @@ public class OracleDialectAdvancedTests
         // Arrange
         var connection = _factory.CreateConnection();
         var trackedConnection =
-            new pengdows.crud.wrappers.TrackedConnection(connection, "oracle_test", NullLogger.Instance);
+            new TrackedConnection(connection, "oracle_test", NullLogger.Instance);
 
         // Act & Assert - Should not throw
         await _dialect.PostInitialize(trackedConnection);
@@ -256,7 +257,7 @@ public class OracleDialectAdvancedTests
     {
         // Arrange
         var connection = _factory.CreateConnection();
-        var trackedConnection = new pengdows.crud.wrappers.TrackedConnection(connection, "test", NullLogger.Instance);
+        var trackedConnection = new TrackedConnection(connection, "test", NullLogger.Instance);
 
         // Act
         var version = await _dialect.GetDatabaseVersionAsync(trackedConnection);
@@ -271,7 +272,7 @@ public class OracleDialectAdvancedTests
     {
         // Arrange
         var connection = _factory.CreateConnection();
-        var trackedConnection = new pengdows.crud.wrappers.TrackedConnection(connection, "test", NullLogger.Instance);
+        var trackedConnection = new TrackedConnection(connection, "test", NullLogger.Instance);
 
         // Act
         var productName = await _dialect.GetProductNameAsync(trackedConnection);

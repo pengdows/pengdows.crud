@@ -99,7 +99,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
     public bool RCSIEnabled => _context.RCSIEnabled;
     public string ConnectionString => _context.ConnectionString;
     public int MaxParameterLimit => _context.MaxParameterLimit;
-    public int MaxOutputParameters => (_dialect as pengdows.crud.dialects.SqlDialect)?.MaxOutputParameters ?? 0;
+    public int MaxOutputParameters => (_dialect as SqlDialect)?.MaxOutputParameters ?? 0;
     public DbMode ConnectionMode => DbMode.SingleConnection;
     public ITypeMapRegistry TypeMapRegistry => _context.TypeMapRegistry;
     public IDataSourceInformation DataSourceInfo => _context.DataSourceInfo;
@@ -123,7 +123,13 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
             throw new InvalidOperationException("Cannot create a SQL container because the transaction is completed.");
         }
 
-        return SqlContainer.Create(this, query);
+        // Try to reuse the parent context's logger factory if available so tests can capture logs
+        ILogger<ISqlContainer>? logger = null;
+        if (_context is DatabaseContext dbCtx)
+        {
+            logger = dbCtx.CreateSqlContainerLogger();
+        }
+        return SqlContainer.Create(this, query, logger);
     }
 
     public DbParameter CreateDbParameter<T>(string? name, DbType type, T value,

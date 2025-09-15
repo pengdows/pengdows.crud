@@ -7,8 +7,8 @@ using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Linq;
-using System.Threading.Tasks;
 using System.Runtime.Serialization;
+using System.Threading.Tasks;
 using Moq;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
@@ -199,7 +199,7 @@ public class DatabaseContextTests
     {
         var factory = new fakeDbFactory(product);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory,
-            readWriteMode: (ReadWriteMode)0);
+            readWriteMode: 0);
         Assert.Throws<InvalidOperationException>(() => context.AssertIsReadConnection());
     }
 

@@ -2,8 +2,8 @@
 
 using System.Collections.Concurrent;
 using System.Data;
-using System.Reflection;
 using System.Linq.Expressions;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using pengdows.crud.attributes;
@@ -18,10 +18,6 @@ public sealed class TypeMapRegistry : ITypeMapRegistry
     private readonly ConcurrentDictionary<Type, TableInfo> _typeMap = new();
 
     public static TypeMapRegistry Instance { get; } = new();
-
-    public TypeMapRegistry()
-    {
-    }
 
     public void Clear()
     {

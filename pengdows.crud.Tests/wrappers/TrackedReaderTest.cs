@@ -6,12 +6,12 @@ using System.Data;
 using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
+using Moq;
 using pengdows.crud.connection;
 using pengdows.crud.fakeDb;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
 using Xunit;
-using Moq;
 
 #endregion
 

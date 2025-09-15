@@ -1,7 +1,5 @@
 using System;
 using System.Data;
-using System.Threading.Tasks;
-using pengdows.crud;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 using Xunit;

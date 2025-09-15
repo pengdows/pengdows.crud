@@ -5,8 +5,8 @@ using System.Data;
 using System.Data.Common;
 using System.Linq;
 using pengdows.crud.collections;
-using pengdows.crud.fakeDb;
 using pengdows.crud.enums;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 #endregion

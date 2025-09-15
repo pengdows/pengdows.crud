@@ -1,6 +1,8 @@
 #region
+
 using System;
 using Xunit;
+
 #endregion
 
 namespace pengdows.crud.Tests;
@@ -16,19 +18,23 @@ public class BuildWhereNullIdTests : SqlLiteContextTestBase
     }
 
     [Fact]
-    public void BuildWhere_WithNullId_Throws()
+    public void BuildWhere_WithNullId_RendersIsNull()
     {
         var sc = Context.CreateSqlContainer();
         var wrapped = Context.WrapObjectName("Id");
-        Assert.Throws<ArgumentException>(() => helper.BuildWhere(wrapped, new int?[] { null }, sc));
+        helper.BuildWhere(wrapped, new int?[] { null }, sc);
+        var sql = sc.Query.ToString();
+        Assert.Contains("IS NULL", sql);
     }
 
     [Fact]
-    public void BuildWhere_WithMixedIds_Throws()
+    public void BuildWhere_WithMixedIds_IncludesIsNull()
     {
         var sc = Context.CreateSqlContainer();
         var wrapped = Context.WrapObjectName("Id");
-        Assert.Throws<ArgumentException>(() => helper.BuildWhere(wrapped, new int?[] { 1, null, 2 }, sc));
+        helper.BuildWhere(wrapped, new int?[] { 1, null, 2 }, sc);
+        var sql = sc.Query.ToString();
+        Assert.Contains(" IS NULL", sql);
     }
 
     [Fact]

@@ -1,10 +1,12 @@
 #region
+
 using System.Collections.Concurrent;
 using System.Data;
 using System.Reflection;
 using System.Threading.Tasks;
 using pengdows.crud.attributes;
 using Xunit;
+
 #endregion
 
 namespace pengdows.crud.Tests;
@@ -117,8 +119,8 @@ public class QueryCacheTests : SqlLiteContextTestBase
         var sc = Context.CreateSqlContainer();
         helper.BuildWhere(wrapped, new[] { 1, 2 }, sc);
         var countBefore = sc.ParameterCount;
-        var p0 = Context.MakeParameterName("w0");
-        var p1 = Context.MakeParameterName("w1");
+        var p0 = Context.MakeParameterName("p0");
+        var p1 = Context.MakeParameterName("p1");
 
         helper.BuildWhere(wrapped, new[] { 3, 4 }, sc);
 
@@ -140,8 +142,8 @@ public class QueryCacheTests : SqlLiteContextTestBase
 
         helper.BuildWhere(wrapped, new[] { 2, 3 }, sc);
 
-        var p0 = Context.MakeParameterName("w0");
-        var p1 = Context.MakeParameterName("w1");
+        var p0 = Context.MakeParameterName("p0");
+        var p1 = Context.MakeParameterName("p1");
 
         Assert.True(sc.ParameterCount > countBefore);
         Assert.Equal(2, sc.GetParameterValue<int>(p0));

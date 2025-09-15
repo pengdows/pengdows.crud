@@ -1,8 +1,8 @@
-using System;
 using System.Collections.Generic;
+using System.Data.Common;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using System.Data.Common;
+using Microsoft.Extensions.Logging;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
@@ -34,7 +34,7 @@ public class TenantTests
         };
 
         using var provider = services.BuildServiceProvider();
-        var registry = new TenantContextRegistry(provider, new StubResolver(cfg), provider.GetRequiredService<Microsoft.Extensions.Logging.ILoggerFactory>());
+        var registry = new TenantContextRegistry(provider, new StubResolver(cfg), provider.GetRequiredService<ILoggerFactory>());
 
         using var ctx = registry.GetContext("tenant1");
         using var sc = ctx.CreateSqlContainer("SELECT 1");

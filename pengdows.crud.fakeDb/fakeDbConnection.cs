@@ -344,10 +344,8 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
                 RaiseStateChangedEvent(original);
                 return; // Exit early, don't do normal open logic
             }
-            else
-            {
-                throw new InvalidOperationException("Connection is broken");
-            }
+
+            throw new InvalidOperationException("Connection is broken");
         }
 
         OpenCount++;

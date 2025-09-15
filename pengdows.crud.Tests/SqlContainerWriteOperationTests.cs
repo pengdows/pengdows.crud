@@ -4,11 +4,9 @@ using System;
 using System.Data;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
-using pengdows.crud.wrappers;
 using Xunit;
 
 #endregion
@@ -65,7 +63,7 @@ public class SqlContainerWriteOperationTests
             ConnectionString = "test",
             ReadWriteMode = ReadWriteMode.ReadOnly
         };
-        var context = new DatabaseContext(config, factory, null, null);
+        var context = new DatabaseContext(config, factory);
         var container = context.CreateSqlContainer("INSERT INTO test VALUES (@p1)");
         container.AddParameterWithValue("p1", DbType.String, "value");
 
@@ -190,7 +188,7 @@ public class SqlContainerWriteOperationTests
             ConnectionString = "test",
             DbMode = DbMode.SingleWriter
         };
-        var context = new DatabaseContext(config, factory, null, null);
+        var context = new DatabaseContext(config, factory);
         var container = context.CreateSqlContainer("INSERT INTO test VALUES (@p1)");
         container.AddParameterWithValue("p1", DbType.String, "value");
 

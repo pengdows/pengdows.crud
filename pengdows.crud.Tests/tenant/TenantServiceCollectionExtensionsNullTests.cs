@@ -19,6 +19,6 @@ public class TenantServiceCollectionExtensionsNullTests
     public void AddMultiTenancy_NullConfiguration_Throws()
     {
         var services = new ServiceCollection();
-        Assert.Throws<ArgumentNullException>(() => TenantServiceCollectionExtensions.AddMultiTenancy(services, null!));
+        Assert.Throws<ArgumentNullException>(() => services.AddMultiTenancy(null!));
     }
 }

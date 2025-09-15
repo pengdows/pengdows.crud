@@ -1,8 +1,10 @@
 #region
+
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Xunit;
+
 #endregion
 
 namespace pengdows.crud.Tests;
@@ -117,6 +119,19 @@ public class UpdateDeleteAsyncTests : SqlLiteContextTestBase
         var loaded = await helper.RetrieveOneAsync(e);
         Assert.NotNull(loaded);
         var sc = await helper.BuildUpdateAsync(loaded!, true);
+        var sql = sc.Query.ToString();
+        Assert.Contains(Context.WrapObjectName("LastUpdatedOn"), sql);
+    }
+
+    [Fact]
+    public async Task BuildUpdateAsync_AuditOnly_NoOriginal_IncludesAuditColumns()
+    {
+        await BuildTestTable();
+        var e = new TestEntity { Name = Guid.NewGuid().ToString() };
+        await helper.CreateAsync(e, Context);
+        var loaded = await helper.RetrieveOneAsync(e);
+        Assert.NotNull(loaded);
+        var sc = await helper.BuildUpdateAsync(loaded!, loadOriginal: false);
         var sql = sc.Query.ToString();
         Assert.Contains(Context.WrapObjectName("LastUpdatedOn"), sql);
     }

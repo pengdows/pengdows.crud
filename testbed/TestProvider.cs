@@ -26,7 +26,7 @@ public class TestProvider : IAsyncTestProvider
 
     public async Task RunTest()
     {
-        Console.WriteLine("Completed testing of provider:" + _context.Product.ToString());
+        Console.WriteLine("Completed testing of provider:" + _context.Product);
         try
         {
             Console.WriteLine("Running Create table");
@@ -66,7 +66,7 @@ public class TestProvider : IAsyncTestProvider
         }
         finally
         {
-            Console.WriteLine("Completed testing of provider:" + _context.Product.ToString());
+            Console.WriteLine("Completed testing of provider:" + _context.Product);
         }
     }
 
@@ -172,7 +172,7 @@ CREATE TABLE {qp}test_table{qs} (
 
     private async Task<TestTable> RetrieveRows(long id, IDatabaseContext? db = null)
     {
-        var arr = new List<long>() { id };
+        var arr = new List<long> { id };
         var ctx = db ?? _context;
         var sc = _helper.BuildRetrieve(arr, ctx);
 

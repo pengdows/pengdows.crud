@@ -1,3 +1,4 @@
+using System.Data;
 using pengdows.crud.enums;
 using pengdows.crud.wrappers;
 
@@ -31,7 +32,7 @@ public class KeepAliveConnectionStrategy : StandardConnectionStrategy
         try
         {
             // Try to open immediately so open-time failures surface here
-            if (conn.State != System.Data.ConnectionState.Open)
+            if (conn.State != ConnectionState.Open)
             {
                 conn.Open();
             }

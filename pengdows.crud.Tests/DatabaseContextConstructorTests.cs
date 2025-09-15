@@ -166,7 +166,7 @@ public class DatabaseContextConstructorTests
         
         // Act & Assert
         Assert.Throws<ArgumentNullException>(() => 
-            new DatabaseContext(config, nullFactory, NullLoggerFactory.Instance, null));
+            new DatabaseContext(config, nullFactory, NullLoggerFactory.Instance));
     }
 
     [Fact]
@@ -178,7 +178,7 @@ public class DatabaseContextConstructorTests
         
         // Act & Assert
         Assert.Throws<ArgumentNullException>(() => 
-            new DatabaseContext(nullConfig, factory, NullLoggerFactory.Instance, null));
+            new DatabaseContext(nullConfig, factory, NullLoggerFactory.Instance));
     }
 
     [Fact]
@@ -195,7 +195,7 @@ public class DatabaseContextConstructorTests
         
         // Act & Assert
         Assert.ThrowsAny<ArgumentException>(() => 
-            new DatabaseContext(config, factory, NullLoggerFactory.Instance, null));
+            new DatabaseContext(config, factory, NullLoggerFactory.Instance));
     }
 
     [Fact]
@@ -221,7 +221,7 @@ public class DatabaseContextConstructorTests
             };
 
             // Act
-            var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance, null);
+            var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
 
             // Assert: :memory: must always coerce to SingleConnection
             Assert.NotNull(context);
@@ -250,7 +250,7 @@ public class DatabaseContextConstructorTests
             };
             
             // Act
-            var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance, null);
+            var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
             
             // Assert
             Assert.NotNull(context);
@@ -269,7 +269,7 @@ public class DatabaseContextConstructorTests
         };
         
         // Act
-        var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance, null);
+        var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
         
         // Assert
         Assert.NotNull(context);
@@ -310,7 +310,7 @@ public class DatabaseContextConstructorTests
         };
         
         // Act
-        var context = new DatabaseContext(config, factory, null, null);
+        var context = new DatabaseContext(config, factory);
         
         // Assert
         Assert.NotNull(context);
@@ -330,7 +330,7 @@ public class DatabaseContextConstructorTests
         };
         
         // Act
-        var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance, null);
+        var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
         
         // Assert
         Assert.NotNull(context);
@@ -351,7 +351,7 @@ public class DatabaseContextConstructorTests
         };
         
         // Act
-        var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance, null);
+        var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
         
         // Assert
         Assert.NotNull(context);
@@ -370,7 +370,7 @@ public class DatabaseContextConstructorTests
         };
         
         // Act
-        var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance, null);
+        var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
         
         // Assert
         // For SQL Server in Standard mode, counters should be 0 after initialization connection is disposed
