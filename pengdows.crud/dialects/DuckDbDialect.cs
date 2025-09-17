@@ -29,17 +29,25 @@ public class DuckDbDialect : SqlDialect
     public override bool PrepareStatements => true;
 
     // DuckDB has excellent SQL standard compliance and modern features
-    public override bool SupportsMerge => false; // DuckDB doesn't support MERGE yet
+    public override bool SupportsMerge => IsVersionAtLeast(1, 4); // MERGE support added in v1.4.0
+    public override bool SupportsMergeReturning => IsVersionAtLeast(1, 4); // MERGE RETURNING support added in v1.4.0
     public override bool SupportsInsertOnConflict => true; // ON CONFLICT support
     public override bool SupportsJsonTypes => true; // Excellent JSON support
     public override bool SupportsArrayTypes => true; // Strong array support
     public override bool SupportsWindowFunctions => true; // Comprehensive window functions
+    public override bool SupportsEnhancedWindowFunctions => true; // Advanced window functions including FILL
     public override bool SupportsCommonTableExpressions => true; // Full CTE support
     public override bool SupportsNamespaces => true; // Schema support
     public override bool SupportsXmlTypes => false; // No XML support
     public override bool SupportsTemporalData => false; // No temporal tables yet
     public override bool SupportsRowPatternMatching => false; // Not yet supported
     public override bool SupportsMultidimensionalArrays => true; // Nested structures
+
+    // Database encryption support (DuckDB 1.4.0+)
+    public virtual bool SupportsEncryption => IsVersionAtLeast(1, 4); // AES-256-GCM encryption with ATTACH
+
+    // FILL window function support (DuckDB 1.4.0+)
+    public virtual bool SupportsFillWindowFunction => IsVersionAtLeast(1, 4); // FILL() window function for interpolation
 
     public override string GetVersionQuery() => "SELECT version()";
 
@@ -50,6 +58,10 @@ public class DuckDbDialect : SqlDialect
         {
             cs = $"{cs};access_mode=READ_ONLY";
         }
+
+        // DuckDB 1.4.0+ supports database encryption via ATTACH with ENCRYPTION_KEY
+        // This is handled at the SQL level via ATTACH commands, not connection string parameters
+        // The connection string itself does not need modification for encryption
 
         connection.ConnectionString = cs;
     }

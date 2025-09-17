@@ -39,6 +39,7 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
     internal readonly Dictionary<string, object?> ScalarResultsByCommand = new();
     internal Exception? NonQueryExecuteException { get; private set; }
     internal Exception? ScalarExecuteException { get; private set; }
+    internal Exception? PersistentScalarException { get; private set; }
     internal object? DefaultScalarResultOnce { get; private set; }
     internal readonly Dictionary<string, Exception> CommandFailuresByText = new();
     public readonly List<string> ExecutedNonQueryTexts = new();
@@ -71,6 +72,11 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
     public void SetScalarExecuteException(Exception? exception)
     {
         ScalarExecuteException = exception;
+    }
+
+    public void SetPersistentScalarException(Exception? exception)
+    {
+        PersistentScalarException = exception;
     }
 
     public void SetDefaultScalarOnce(object? value)
@@ -289,6 +295,11 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
 
     public override void Open()
     {
+        if (_state == ConnectionState.Open)
+        {
+            return; // Already open, don't change state again
+        }
+
         if (_isBroken)
         {
             throw new InvalidOperationException("Connection is broken");

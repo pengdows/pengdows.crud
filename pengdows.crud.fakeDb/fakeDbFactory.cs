@@ -18,6 +18,7 @@ public sealed class fakeDbFactory : DbProviderFactory
     private bool _skipFirstOpen;
     private bool _hasOpenedOnce;
     private readonly List<fakeDbConnection> _connections = new();
+    private Exception? _globalPersistentScalarException;
 
     private fakeDbFactory()
     {
@@ -101,7 +102,18 @@ public sealed class fakeDbFactory : DbProviderFactory
                 break;
         }
 
+        // Apply any factory-level exception configuration to new connections
+        if (_globalPersistentScalarException != null)
+        {
+            c.SetPersistentScalarException(_globalPersistentScalarException);
+        }
+
         return c;
+    }
+
+    public void SetGlobalPersistentScalarException(Exception? exception)
+    {
+        _globalPersistentScalarException = exception;
     }
 
     public override DbParameter CreateParameter()

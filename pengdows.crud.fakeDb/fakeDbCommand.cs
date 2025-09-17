@@ -116,6 +116,12 @@ public class fakeDbCommand : DbCommand
         var conn = FakeConnection;
         if (conn != null)
         {
+            // Check persistent scalar exception first
+            if (conn.PersistentScalarException != null)
+            {
+                throw conn.PersistentScalarException;
+            }
+
             if (conn.ScalarExecuteException != null)
             {
                 var ex = conn.ScalarExecuteException;

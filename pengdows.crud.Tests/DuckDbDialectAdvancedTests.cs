@@ -335,7 +335,7 @@ public class DuckDbDialectAdvancedTests
     public void Feature_Support_Properties_Should_Return_Expected_Values()
     {
         Assert.True(_dialect.SupportsNamedParameters);
-        Assert.False(_dialect.SupportsMerge);
+        Assert.False(_dialect.SupportsMerge); // False when not initialized - version-dependent
         Assert.True(_dialect.SupportsInsertOnConflict);
         Assert.True(_dialect.SupportsJsonTypes);
         Assert.True(_dialect.SupportsArrayTypes);
@@ -363,5 +363,34 @@ public class DuckDbDialectAdvancedTests
 #pragma warning restore CS0618 // Type or member is obsolete
 
         Assert.Equal(string.Empty, settings);
+    }
+
+    [Theory]
+    [InlineData("v1.4.0", true)]
+    [InlineData("v1.3.0", false)]
+    [InlineData("v1.5.0", true)]
+    [InlineData("v0.9.0", false)]
+    public void Version_Parsing_Should_Work_Correctly(string versionString, bool isVersionOnePointFourOrLater)
+    {
+        var dialect = new DuckDbDialect(_factory, _logger);
+        var parsedVersion = dialect.ParseVersion(versionString);
+
+        Assert.NotNull(parsedVersion);
+
+        if (isVersionOnePointFourOrLater)
+        {
+            Assert.True(parsedVersion.Major > 1 || (parsedVersion.Major == 1 && parsedVersion.Minor >= 4));
+        }
+        else
+        {
+            Assert.True(parsedVersion.Major < 1 || (parsedVersion.Major == 1 && parsedVersion.Minor < 4));
+        }
+    }
+
+    [Fact]
+    public void SupportsEnhancedWindowFunctions_Should_Return_True()
+    {
+        // Enhanced window functions should always be true for DuckDB
+        Assert.True(_dialect.SupportsEnhancedWindowFunctions);
     }
 }

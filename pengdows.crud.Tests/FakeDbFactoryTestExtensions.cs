@@ -52,12 +52,8 @@ internal static class FakeDbFactoryTestExtensions
 
     public static void SetScalarException(this fakeDbFactory factory, Exception exception)
     {
-        for (int i = 0; i < 6; i++)
-        {
-            var c = new fakeDbConnection();
-            c.SetScalarExecuteException(exception);
-            factory.Connections.Add(c);
-        }
+        // Use the new global persistent scalar exception which applies to all future connections
+        factory.SetGlobalPersistentScalarException(exception);
     }
 
     public static void SetConnectionException(this fakeDbFactory factory, Exception exception)

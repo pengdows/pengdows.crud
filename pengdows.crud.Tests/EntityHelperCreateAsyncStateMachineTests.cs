@@ -165,7 +165,7 @@ public class EntityHelperCreateAsyncStateMachineTests
     [Fact]
     public async Task CreateAsync_Should_Handle_Connection_Failure()
     {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
         // Set exception before creating context
         factory.SetException(new InvalidOperationException("Connection failed"));
 
@@ -271,16 +271,18 @@ public class EntityHelperCreateAsyncStateMachineTests
     [Fact]
     public async Task CreateAsync_Should_Handle_ThreadAbortException()
     {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        // Set exception before creating context
-        factory.SetScalarException(CreateThreadAbort());
-
+        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
         var context = new DatabaseContext("test", factory, _typeMap);
-        var helper = new EntityHelper<TestEntitySimple, int>(context, logger: new LoggerFactory().CreateLogger<EntityHelper<TestEntitySimple, int>>());
         _typeMap.Register<TestEntitySimple>();
+
+        var helper = new EntityHelper<TestEntitySimple, int>(context, logger: new LoggerFactory().CreateLogger<EntityHelper<TestEntitySimple, int>>());
+
+        // Set exception AFTER helper creation to avoid consuming during initialization
+        // Note: ThreadAbortException is obsolete in .NET Core/.NET 5+, using OperationCanceledException as a substitute
+        factory.SetScalarException(new OperationCanceledException("Simulated thread abort"));
         var entity = new TestEntitySimple { Name = "Test" };
 
-        await Assert.ThrowsAsync<ThreadAbortException>(
+        await Assert.ThrowsAsync<OperationCanceledException>(
             () => helper.CreateAsync(entity, context)
         );
     }
@@ -288,16 +290,19 @@ public class EntityHelperCreateAsyncStateMachineTests
     [Fact]
     public async Task CreateAsync_Should_Handle_StackOverflowException()
     {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        // Set exception before creating context
-        factory.SetScalarException(new StackOverflowException());
-
+        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
         var context = new DatabaseContext("test", factory, _typeMap);
-        var helper = new EntityHelper<TestEntitySimple, int>(context, logger: new LoggerFactory().CreateLogger<EntityHelper<TestEntitySimple, int>>());
         _typeMap.Register<TestEntitySimple>();
+
+        var helper = new EntityHelper<TestEntitySimple, int>(context, logger: new LoggerFactory().CreateLogger<EntityHelper<TestEntitySimple, int>>());
+
+        // Set exception AFTER helper creation to avoid consuming during initialization
+        // Note: StackOverflowException cannot be caught in .NET Core/.NET 5+, using OutOfMemoryException as a substitute
+        factory.SetScalarException(new OutOfMemoryException("Simulated stack overflow"));
+
         var entity = new TestEntitySimple { Name = "Test" };
 
-        await Assert.ThrowsAsync<StackOverflowException>(
+        await Assert.ThrowsAsync<OutOfMemoryException>(
             () => helper.CreateAsync(entity, context)
         );
     }
@@ -305,7 +310,7 @@ public class EntityHelperCreateAsyncStateMachineTests
     [Fact]
     public async Task CreateAsync_Should_Handle_Successful_Execution_With_ID_Population()
     {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite); // SQLite supports INSERT RETURNING
+        var factory = new FakeDbFactory(SupportedDatabase.Sqlite); // SQLite supports INSERT RETURNING
         
         // Set up ID population BEFORE creating DatabaseContext for proper initialization
         factory.SetIdPopulationResult(42, rowsAffected: 1);
@@ -340,9 +345,5 @@ public class EntityHelperCreateAsyncStateMachineTests
         var result = await helper.CreateAsync(entity, context);
         
         Assert.True(result);
-    }
-    private static ThreadAbortException CreateThreadAbort()
-    {
-        return (ThreadAbortException)FormatterServices.GetUninitializedObject(typeof(ThreadAbortException));
     }
 }
