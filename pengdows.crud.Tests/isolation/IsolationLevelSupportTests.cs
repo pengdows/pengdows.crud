@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Linq;
 using pengdows.crud.enums;
 using pengdows.crud.isolation;
 using Xunit;
@@ -13,63 +14,79 @@ namespace pengdows.crud.Tests.isolation;
 
 public class IsolationLevelSupportTests
 {
-    [Fact]
-    public void Validate_AllSupportedLevels_DoesNotThrow()
+    [Theory]
+    [MemberData(nameof(GetSupportedLevelExpectations))]
+    public void GetSupportedLevels_MatchesExpectations(SupportedDatabase database, bool rcsiEnabled, IsolationLevel[] expected)
     {
-        var validator = new IsolationLevelSupport();
-        var supported = new Dictionary<SupportedDatabase, IsolationLevel[]>
+        var resolver = new IsolationResolver(database, rcsiEnabled);
+        var actual = resolver.GetSupportedLevels().OrderBy(level => level).ToArray();
+
+        Assert.Equal(expected.OrderBy(level => level).ToArray(), actual);
+    }
+
+    [Fact]
+    public void Validate_UnsupportedLevel_Throws()
+    {
+        var sqlResolver = new IsolationResolver(
+            SupportedDatabase.SqlServer,
+            readCommittedSnapshotEnabled: true);
+        Assert.Throws<InvalidOperationException>(() => sqlResolver.Validate(IsolationLevel.Chaos));
+
+        var pgResolver = new IsolationResolver(
+            SupportedDatabase.PostgreSql,
+            readCommittedSnapshotEnabled: false);
+        Assert.Throws<InvalidOperationException>(() => pgResolver.Validate(IsolationLevel.ReadUncommitted));
+    }
+
+    public static IEnumerable<object[]> GetSupportedLevelExpectations()
+    {
+        yield return new object[]
         {
-            [SupportedDatabase.SqlServer] = new[]
+            SupportedDatabase.SqlServer,
+            true,
+            new[]
             {
                 IsolationLevel.ReadUncommitted,
                 IsolationLevel.ReadCommitted,
                 IsolationLevel.RepeatableRead,
                 IsolationLevel.Serializable,
                 IsolationLevel.Snapshot
-            },
-            [SupportedDatabase.PostgreSql] = new[]
+            }
+        };
+
+        yield return new object[]
+        {
+            SupportedDatabase.PostgreSql,
+            false,
+            new[]
             {
                 IsolationLevel.ReadCommitted,
                 IsolationLevel.RepeatableRead,
                 IsolationLevel.Serializable
-            },
-            [SupportedDatabase.MySql] = new[]
+            }
+        };
+
+        yield return new object[]
+        {
+            SupportedDatabase.MySql,
+            false,
+            new[]
             {
                 IsolationLevel.ReadUncommitted,
                 IsolationLevel.ReadCommitted,
                 IsolationLevel.RepeatableRead,
                 IsolationLevel.Serializable
-            },
-            [SupportedDatabase.DuckDB] = new[]
+            }
+        };
+
+        yield return new object[]
+        {
+            SupportedDatabase.DuckDB,
+            false,
+            new[]
             {
                 IsolationLevel.Serializable
             }
         };
-
-        foreach (var kv in supported)
-        {
-            foreach (var lvl in kv.Value)
-            {
-                validator.Validate(kv.Key, lvl);
-            }
-        }
-    }
-
-    [Fact]
-    public void Validate_UnsupportedLevel_Throws()
-    {
-        var validator = new IsolationLevelSupport();
-        Assert.Throws<InvalidOperationException>(() =>
-            validator.Validate(SupportedDatabase.SqlServer, IsolationLevel.Chaos));
-        Assert.Throws<InvalidOperationException>(() =>
-            validator.Validate(SupportedDatabase.DuckDB, IsolationLevel.ReadCommitted));
-    }
-
-    [Fact]
-    public void Validate_UnknownDatabase_Throws()
-    {
-        var validator = new IsolationLevelSupport();
-        Assert.Throws<NotSupportedException>(() =>
-            validator.Validate(SupportedDatabase.Unknown, IsolationLevel.ReadCommitted));
     }
 }

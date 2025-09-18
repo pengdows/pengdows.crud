@@ -11,9 +11,13 @@ namespace pengdows.crud.dialects;
 /// </summary>
 public class SqliteDialect : SqlDialect
 {
+    private readonly bool _systemDataSqlite;
+
     public SqliteDialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger)
     {
+        var ns = factory.GetType().Namespace ?? string.Empty;
+        _systemDataSqlite = ns.Contains("System.Data.SQLite", StringComparison.OrdinalIgnoreCase);
     }
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.Sqlite;
@@ -144,4 +148,10 @@ public class SqliteDialect : SqlDialect
     {
         return ex is DbException dbEx && dbEx.ErrorCode == 19;
     }
+
+    // Connection pooling properties for SQLite (provider-aware)
+    public override bool SupportsExternalPooling => _systemDataSqlite; // Microsoft.Data.Sqlite: true pooling, but no min/max keywords
+    public override string? PoolingSettingName => "Pooling"; // set only if absent; harmless for M.D.Sqlite
+    public override string? MinPoolSizeSettingName => null; // no min keyword for either
+    public override string? MaxPoolSizeSettingName => _systemDataSqlite ? "Max Pool Size" : null;
 }

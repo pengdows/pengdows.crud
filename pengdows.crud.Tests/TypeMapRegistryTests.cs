@@ -194,18 +194,31 @@ public class TypeMapRegistryTests
     }
 
     [Fact]
-    public void GetTableInfo_ThrowsOnInvalidPrimaryKeyOrder_AndRenumbersZeros()
+    public void GetTableInfo_ValidatesPrimaryKeyOrderingRules()
     {
         var registry = new TypeMapRegistry();
         Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<BadPkOrder>());
 
-        // Zero order should be accepted and auto-renumbered starting at 1
         var info = registry.GetTableInfo<ZeroPkOrder>();
         Assert.Single(info.PrimaryKeys);
         Assert.Equal(1, info.PrimaryKeys[0].PkOrder);
 
-        // Duplicate explicit orders (> 0) should throw
         Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<DuplicateExplicitPkOrder>());
+        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<MixedPkOrder>());
+    }
+
+    [Fact]
+    public void GetTableInfo_ThrowsForInvalidVersionType()
+    {
+        var registry = new TypeMapRegistry();
+        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<InvalidVersionEntity>());
+    }
+
+    [Fact]
+    public void GetTableInfo_ThrowsForInvalidLastUpdatedOnType()
+    {
+        var registry = new TypeMapRegistry();
+        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<InvalidLastUpdatedEntity>());
     }
 
     [Fact]
@@ -404,6 +417,42 @@ public class TypeMapRegistryTests
         [PrimaryKey(1)]
         [Column("B", DbType.Int32)]
         public int B { get; set; }
+    }
+
+    [Table("MixedPkOrder")]
+    private class MixedPkOrder
+    {
+        [PrimaryKey(1)]
+        [Column("A", DbType.Int32)]
+        public int A { get; set; }
+
+        [PrimaryKey(0)]
+        [Column("B", DbType.Int32)]
+        public int B { get; set; }
+    }
+
+    [Table("InvalidVersion")]
+    private class InvalidVersionEntity
+    {
+        [Id]
+        [Column("Id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [Column("RowVersion", DbType.String)]
+        [Version]
+        public string RowVersion { get; set; } = string.Empty;
+    }
+
+    [Table("InvalidLastUpdated")]
+    private class InvalidLastUpdatedEntity
+    {
+        [Id]
+        [Column("Id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [Column("Timestamp", DbType.String)]
+        [LastUpdatedOn]
+        public string Timestamp { get; set; } = string.Empty;
     }
 
     [Table("DuplicateOrdinal")]

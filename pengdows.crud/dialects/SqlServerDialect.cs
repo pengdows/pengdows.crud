@@ -212,4 +212,10 @@ public class SqlServerDialect : SqlDialect
     {
         return SqlStandardLevel.Sql2008;
     }
+
+    // Connection pooling properties for SQL Server
+    public override bool SupportsExternalPooling => true;
+    public override string? PoolingSettingName => "Pooling";
+    public override string? MinPoolSizeSettingName => "Min Pool Size";
+    public override string? MaxPoolSizeSettingName => "Max Pool Size";
 }

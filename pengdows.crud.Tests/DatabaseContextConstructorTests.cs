@@ -377,4 +377,120 @@ public class DatabaseContextConstructorTests
         Assert.Equal(0, context.NumberOfOpenConnections); // Should start at 0 after initialization reset
         Assert.Equal(0, context.MaxNumberOfConnections); // Should start at 0 after initialization reset
     }
+
+    [Fact]
+    public void Constructor_Adds_Default_MinPoolSize_For_Standard_Mode_When_Missing()
+    {
+        // Arrange
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=test;Database=testdb;",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+
+        // Act
+        var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
+
+        // Assert
+        var builder = new DbConnectionStringBuilder { ConnectionString = context.ConnectionString };
+        Assert.True(builder.ContainsKey("Min Pool Size"));
+        Assert.Equal("10", builder["Min Pool Size"].ToString());
+    }
+
+    [Fact]
+    public void Constructor_Does_Not_Override_Existing_MinPoolSize()
+    {
+        // Arrange
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=test;Database=testdb;Min Pool Size=3;",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+
+        // Act
+        var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
+
+        // Assert
+        var builder = new DbConnectionStringBuilder { ConnectionString = context.ConnectionString };
+        Assert.True(builder.ContainsKey("Min Pool Size"));
+        Assert.Equal("3", builder["Min Pool Size"].ToString());
+    }
+
+    [Fact]
+    public void Constructor_Skips_MinPoolSize_When_Pooling_Disabled()
+    {
+        // Arrange
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=test;Database=testdb;Pooling=false;",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+
+        // Act
+        var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
+
+        // Assert
+        var builder = new DbConnectionStringBuilder { ConnectionString = context.ConnectionString };
+        Assert.False(builder.ContainsKey("Min Pool Size"));
+    }
+
+    private sealed class RejectingBuilderFactory : DbProviderFactory
+    {
+        private sealed class RejectingBuilder : DbConnectionStringBuilder
+        {
+            public override object this[string keyword]
+            {
+                get => base[keyword];
+                set
+                {
+                    if (keyword.Equals("EmulatedProduct", StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new ArgumentException("Unrecognized keyword.");
+                    }
+
+                    base[keyword] = value;
+                }
+            }
+        }
+
+        public override DbConnection CreateConnection()
+        {
+            return new fakeDbConnection { EmulatedProduct = SupportedDatabase.SqlServer };
+        }
+
+        public override DbConnectionStringBuilder CreateConnectionStringBuilder()
+        {
+            return new RejectingBuilder();
+        }
+    }
+
+    [Fact]
+    public void Constructor_Preserves_ConnectionString_When_Builder_Rejects_Custom_Keys()
+    {
+        // Arrange - include custom keyword that real providers may reject
+        const string rawConnectionString = "Server=test;Database=testdb;EmulatedProduct=SqlServer";
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = rawConnectionString,
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        var factory = new RejectingBuilderFactory();
+
+        // Act
+        using var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
+
+        // Assert - the original connection string should be retained verbatim
+        Assert.Equal(rawConnectionString, context.ConnectionString);
+    }
 }

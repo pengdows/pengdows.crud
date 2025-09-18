@@ -4,6 +4,7 @@
 - Source: `pengdows.crud/` (core), `pengdows.crud.abstractions/` (interfaces), `pengdows.crud.fakeDb/` (in-memory provider), `testbed/` (integration suite via Testcontainers).
 - Tests: `pengdows.crud.Tests/` (xUnit). Coverage and TRX under `TestResults/`.
 - Solution: `pengdows.crud.sln`. CI: `.github/workflows/deploy.yml`.
+- Benchmarks: `benchmarks/CrudBenchmarks/` (BenchmarkDotNet suite; run before shipping perf-sensitive changes).
 
 ## Build, Test, and Development Commands
 - Restore: `dotnet restore`
@@ -13,6 +14,10 @@
   `dotnet test -c Release --results-directory TestResults -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Exclude="[pengdows.crud.Tests]*;[pengdows.crud.abstractions]*;[pengdows.crud.fakeDb]*;[testbed]*"`
 - Pack (NuGet): `dotnet pack <project>.csproj -c Release`
 - Integration suite (requires Docker): `dotnet run -c Release --project testbed`
+- `testbed` is the integration testing app; treat it as part of the primary verification flow.
+- Whenever work is completed, ensure all unit tests and integration tests pass with no skipped tests.
+- If the intended functionality is unclear, consult the wiki (`pengdows.crud.wiki/`) or ask for clarification before proceeding.
+- Tooling: utilities are in `tools/`; run `dotnet run --project tools/verify-novendor` to ensure no vendor directories are committed.
 
 ## Coding Style & Naming Conventions
 - C# 12 on `net8.0`; `Nullable` and `ImplicitUsings` enabled.
@@ -36,6 +41,8 @@
 - Framework: xUnit; mocks: Moq. Name files `*Tests.cs` and mirror source namespaces.
 - Prefer `pengdows.crud.fakeDb` for unit tests; avoid real DBs. Use `testbed/` for integration via Testcontainers.
 - Coverage artifacts live in `TestResults/`; CI publishes Cobertura from `TestResults/**/coverage.cobertura.xml`.
+- Tests for expected behavior should be written first to lock in desired outcomes before implementation changes.
+- The entire unit-test suite currently finishes in under 30 seconds; if a run approaches three minutes, terminate it and investigate for locking/hanging issues immediately.
 
 ## Commit & Pull Request Guidelines
 - Commits: short, imperative; optional prefixes `feat:`, `fix:`, `refactor:`, `chore:`.
@@ -46,4 +53,3 @@
 - Never commit secrets or real connection strings; use environment variables and user-secrets. Strong-name via `SNK_PATH` (do not commit keys).
 - Do not hardcode identifier quoting. Use `WrapObjectName(...)` and `CompositeIdentifierSeparator` (e.g., ``var full = ctx.WrapObjectName("schema") + ctx.CompositeIdentifierSeparator + ctx.WrapObjectName("table");``).
 - Always parameterize values (`AddParameterWithValue`, `CreateDbParameter`); avoid string interpolation for SQL.
-

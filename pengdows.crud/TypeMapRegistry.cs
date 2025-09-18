@@ -122,10 +122,18 @@ public sealed class TypeMapRegistry : ITypeMapRegistry
             EnumType           = enumAttr?.EnumType,
             EnumUnderlyingType = enumAttr?.EnumType != null ? Enum.GetUnderlyingType(enumAttr.EnumType) : null,
             IsJsonType         = jsonAttr != null,
-            JsonSerializerOptions = jsonAttr?.SerializerOptions != null
-                ? new JsonSerializerOptions(jsonAttr.SerializerOptions)
-                : new JsonSerializerOptions()
+            JsonSerializerOptions = BuildJsonOptions(jsonAttr)
         };
+
+        if (ci.IsVersion)
+        {
+            ValidateVersionColumn(prop);
+        }
+
+        if (ci.IsLastUpdatedOn)
+        {
+            ValidateLastUpdatedOnColumn(prop);
+        }
 
         // Compile a fast getter delegate for this column: (object o) => (object)((TEntity)o).Prop
         try
@@ -147,6 +155,16 @@ public sealed class TypeMapRegistry : ITypeMapRegistry
         AttachAuditReferences(tableInfo, ci);
         AddColumnToMap(entityType, prop, tableInfo, ci);
         CaptureSpecialColumns(entityType, tableInfo, ci);
+    }
+
+    private static JsonSerializerOptions BuildJsonOptions(JsonAttribute? jsonAttr)
+    {
+        var options = jsonAttr?.SerializerOptions != null
+            ? new JsonSerializerOptions(jsonAttr.SerializerOptions)
+            : new JsonSerializerOptions();
+
+        options.PropertyNameCaseInsensitive = true;
+        return options;
     }
 
     private static void ConfigureEnumColumn(Type entityType, PropertyInfo prop, ColumnInfo ci)
@@ -245,30 +263,80 @@ public sealed class TypeMapRegistry : ITypeMapRegistry
             return;
         }
 
-        // Reject duplicate explicitly assigned orders (> 0)
-        var dupSpecified = pks.Where(k => k.PkOrder > 0)
-            .GroupBy(k => k.PkOrder)
-            .Any(g => g.Count() > 1);
-        if (dupSpecified)
+        var specified = pks.Where(k => k.PkOrder > 0).ToList();
+        if (specified.Count > 0 && specified.Count != pks.Count)
         {
             throw new InvalidOperationException(
-                $"Type {entityType.FullName} has invalid PrimaryKey order values (must be unique and > 0).");
+                $"Type {entityType.FullName} mixes PrimaryKey definitions with and without explicit Order values. Specify Order on all or none.");
         }
 
-        // Sort by explicit order first; unspecified (0) retain their discovery order via stable sort
-        var sorted = pks
-            .OrderBy(k => k.PkOrder == 0 ? int.MaxValue : k.PkOrder)
-            .ToList();
-
-        // Renumber sequentially from 1 to N to normalize ordering
-        for (var i = 0; i < sorted.Count; i++)
+        if (specified.Count > 0)
         {
-            sorted[i].PkOrder = i + 1;
+            var seen = new HashSet<int>();
+            foreach (var key in specified)
+            {
+                if (!seen.Add(key.PkOrder))
+                {
+                    throw new InvalidOperationException(
+                        $"Type {entityType.FullName} has duplicate PrimaryKey order value {key.PkOrder}.");
+                }
+            }
+
+            var expectedCount = pks.Count;
+            if (seen.Min() != 1 || seen.Max() != expectedCount || seen.Count != expectedCount)
+            {
+                throw new InvalidOperationException(
+                    $"PrimaryKey orders for {entityType.FullName} must form a contiguous sequence starting at 1.");
+            }
+
+            return;
+        }
+
+        // No explicit orders supplied: assign sequentially in discovery order
+        for (var i = 0; i < pks.Count; i++)
+        {
+            pks[i].PkOrder = i + 1;
         }
     }
 
     private static bool HasAuditColumns(TableInfo t) =>
         t.CreatedBy != null || t.CreatedOn != null || t.LastUpdatedBy != null || t.LastUpdatedOn != null;
+
+    private static void ValidateVersionColumn(PropertyInfo property)
+    {
+        var type = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
+
+        if (type == typeof(byte[]))
+        {
+            return;
+        }
+
+        switch (Type.GetTypeCode(type))
+        {
+            case TypeCode.Byte:
+            case TypeCode.SByte:
+            case TypeCode.Int16:
+            case TypeCode.Int32:
+            case TypeCode.Int64:
+            case TypeCode.UInt16:
+            case TypeCode.UInt32:
+            case TypeCode.UInt64:
+                return;
+            default:
+                throw new InvalidOperationException(
+                    $"Property {property.DeclaringType?.FullName}.{property.Name} marked with [Version] must be a byte array or integral type.");
+        }
+    }
+
+    private static void ValidateLastUpdatedOnColumn(PropertyInfo property)
+    {
+        var type = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
+        if (type != typeof(DateTime) && type != typeof(DateTimeOffset))
+        {
+            throw new InvalidOperationException(
+                $"Property {property.DeclaringType?.FullName}.{property.Name} marked with [LastUpdatedOn] must be DateTime or DateTimeOffset.");
+        }
+    }
 
     private static void AssignOrdinals(Type entityType, TableInfo tableInfo)
     {

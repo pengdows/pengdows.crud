@@ -11,6 +11,9 @@ pengdows.crud is a SQL-first, strongly-typed, testable data access layer for .NE
 - `pengdows.crud.fakeDb` - a complete .net DbProvider for mocking low level calls.
 - `pengdows.crud.Tests` - Comprehensive test suite
 - `testbed` - Integration testing with real databases
+- `docs/` - Connection management walkthroughs and parameter naming guidance
+- `benchmarks/CrudBenchmarks/` - BenchmarkDotNet suite for performance validation
+- `tools/verify-novendor/` - Utility to ensure vendor directories aren't committed
 
 ## Core Architecture
 
@@ -40,7 +43,7 @@ The library follows a layered architecture with these key components:
 
 ## Development Commands
 
-**IMPORTANT**: Whenever changes are made to this codebase, ALL unit tests should pass and ALL integration tests (in the "testbed" app) should pass. This ensures code quality and prevents regressions across all supported database providers.
+**IMPORTANT**: Whenever changes are made to this codebase, ALL unit tests should pass and ALL integration tests (in the "testbed" app) should pass. No tests may be skipped. This ensures code quality and prevents regressions across all supported database providers. When functionality is unclear, consult the wiki (`pengdows.crud.wiki/`) first or ask for clarification before making changes.
 
 ### Build and Test
 ```bash
@@ -80,7 +83,9 @@ dotnet pack pengdows.crud.fakeDb/pengdows.crud.fakeDb.csproj -c Release
 - TDD should be followed for all new features and bug fixes
 - Test coverage should be raised to and maintained at **90%** minimum
 - Write tests first, then implement functionality
+- Tests for expected behavior should be authored before touching the implementation so regressions are caught immediately.
 - Ensure tests are comprehensive, including edge cases and error conditions
+- Unit tests normally complete in well under 30 seconds; if a run exceeds three minutes, stop it and diagnose the likely locking problem right away.
 
 **Test Coverage Requirements:**
 - Maintain minimum **90% test coverage** across all projects

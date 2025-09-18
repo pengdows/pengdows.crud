@@ -4,12 +4,38 @@ using System.Collections.Generic;
 using System.Data.Common;
 using System.Reflection;
 using System.Threading.Tasks;
+using pengdows.crud.enums;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class CachedSqlTemplatesTests : SqlLiteContextTestBase
+public class CachedSqlTemplatesTests : IAsyncLifetime
 {
+    public TypeMapRegistry TypeMap { get; private set; } = null!;
+    public IDatabaseContext Context { get; private set; } = null!;
+    public IAuditValueResolver AuditValueResolver { get; private set; } = null!;
+
+    public Task InitializeAsync()
+    {
+        TypeMap = new TypeMapRegistry();
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        Context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory, TypeMap);
+        AuditValueResolver = new StubAuditValueResolver("test-user");
+        return Task.CompletedTask;
+    }
+
+    public async Task DisposeAsync()
+    {
+        if (Context is IAsyncDisposable asyncDisp)
+        {
+            await asyncDisp.DisposeAsync().ConfigureAwait(false);
+        }
+        else if (Context is IDisposable disp)
+        {
+            disp.Dispose();
+        }
+    }
     [Fact]
     public void BuildCreate_ReusesCachedTemplates()
     {

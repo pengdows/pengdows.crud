@@ -2,8 +2,10 @@
 
 using System.Data;
 using System.Data.Common;
+using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.collections;
@@ -25,6 +27,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     private readonly ILogger<ISqlContainer> _logger;
     private readonly IDictionary<string, DbParameter> _parameters = new OrderedDictionary<string, DbParameter>();
     private int _outputParameterCount;
+    private int _nextParameterId = -1;
     internal List<string> ParamSequence { get; } = new();
 
     ISqlDialect ISqlDialectProvider.Dialect => _dialect;
@@ -107,7 +110,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         });
     }
 
-    
+
 
     public DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
@@ -129,7 +132,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
         if (string.IsNullOrEmpty(parameter.ParameterName))
         {
-            parameter.ParameterName = GenerateRandomName();
+            parameter.ParameterName = GenerateParameterName();
         }
 
         var isOutput = parameter.Direction switch
@@ -170,7 +173,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     public DbParameter AddParameterWithValue<T>(string? name, DbType type, T value,
         ParameterDirection direction = ParameterDirection.Input)
     {
-        name ??= GenerateRandomName();
+        name ??= GenerateParameterName();
         var parameter = _context.CreateDbParameter(name, type, value);
         parameter.Direction = direction;
 
@@ -369,20 +372,32 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     {
         return WrapForStoredProc(ExecutionType.Write, includeParameters, captureReturn: true);
     }
-    private string GenerateRandomName()
+
+    private string GenerateParameterName()
     {
-        const int maxAttempts = 1000;
-        for (var attempt = 0; attempt < maxAttempts; attempt++)
+        var maxLength = Math.Max(1, _context.DataSourceInfo.ParameterNameMaxLength);
+        const string basePrefix = "p";
+        var prefix = basePrefix;
+
+        if (maxLength <= prefix.Length)
         {
-            var name = _context.GenerateRandomName();
-            if (!_parameters.ContainsKey(name))
-            {
-                return name;
-            }
+            return prefix[..maxLength];
         }
-        
-        // Fallback: use timestamp-based name to guarantee uniqueness
-        return $"p_{DateTimeOffset.UtcNow.Ticks}_{Guid.NewGuid():N}".Substring(0, 30);
+
+        var available = maxLength - prefix.Length;
+        var next = Interlocked.Increment(ref _nextParameterId);
+        var suffix = next.ToString("x", CultureInfo.InvariantCulture);
+
+        if (suffix.Length > available)
+        {
+            suffix = suffix[^available..];
+        }
+        else if (suffix.Length < available)
+        {
+            suffix = suffix.PadLeft(available, '0');
+        }
+
+        return prefix + suffix;
     }
 
     public async Task<int> ExecuteNonQueryAsync(CommandType commandType = CommandType.Text)
@@ -393,12 +408,12 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     public async Task<int> ExecuteNonQueryAsync(CommandType commandType, CancellationToken cancellationToken)
     {
         // Check if context is configured as read-only (exactly ReadWriteMode.ReadOnly, not ReadWrite)
-        if (_context is DatabaseContext dbContext && 
+        if (_context is DatabaseContext dbContext &&
             dbContext.ReadWriteMode == ReadWriteMode.ReadOnly)
         {
             throw new NotSupportedException("Write operations are not supported in read-only mode.");
         }
-        
+
         _context.AssertIsWriteConnection();
         ITrackedConnection? conn = null;
         DbCommand? cmd = null;
@@ -626,12 +641,12 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         await OpenConnectionAsync(conn, cancellationToken).ConfigureAwait(false);
         var cmd = CreateCommand(conn);
         cmd.CommandType = CommandType.Text;
-        
+
         // Compute command text once to avoid double ToString() and guard logging
         var cmdText = (commandType == CommandType.StoredProcedure)
             ? WrapForStoredProc(executionType, includeParameters: true)
             : Query.ToString();
-            
+
         if (_logger.IsEnabled(LogLevel.Information))
         {
             _logger.LogInformation("Executing SQL: {Sql}", cmdText);
@@ -729,13 +744,13 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         {
             return false;
         }
-        
+
         // Check if prepare is explicitly forced on or off via configuration
         if (_context.ForceManualPrepare.HasValue)
         {
             return _context.ForceManualPrepare.Value;
         }
-        
+
         // Fall back to dialect default
         return _dialect.PrepareStatements;
     }
@@ -764,7 +779,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             try
             {
                 cmd.Parameters?.Clear();
-                cmd.Connection = null;
+               try{ cmd.Connection = null;}
+               catch { /* ignore */ }
                 cmd.Dispose();
             }
             catch (Exception ex)
@@ -795,42 +811,42 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     {
         // Use the provided context or fallback to the original context
         var targetContext = context ?? _context;
-        
+
         // Create a new container with the target context - let it get a StringBuilder from the pool
         var targetDialect = (targetContext as ISqlDialectProvider)?.Dialect
                             ?? _dialect;
         var clone = new SqlContainer(targetContext, targetDialect, null, _logger);
-        
+
         // Copy the SQL query content to the pooled StringBuilder
         clone.Query.Clear();
         clone.Query.Append(Query.ToString());
-        
+
         // Copy the WHERE flag
         clone.HasWhereAppended = HasWhereAppended;
-        
+
         // Clone all parameters with the same names and types but allow value updates
         // Use the target context's dialect for parameter creation
         foreach (var kvp in _parameters)
         {
             var originalParam = kvp.Value;
             var clonedParam = clone._dialect.CreateDbParameter(
-                originalParam.ParameterName, 
-                originalParam.DbType, 
+                originalParam.ParameterName,
+                originalParam.DbType,
                 originalParam.Value);
-                
+
             // Preserve parameter properties
             clonedParam.Direction = originalParam.Direction;
             clonedParam.Size = originalParam.Size;
             clonedParam.Scale = originalParam.Scale;
             clonedParam.Precision = originalParam.Precision;
-            
+
             clone.AddParameter(clonedParam);
         }
-        
+
         // Copy parameter sequence for rendering
         clone.ParamSequence.AddRange(ParamSequence);
         clone._outputParameterCount = _outputParameterCount;
-        
+
         return clone;
     }
 

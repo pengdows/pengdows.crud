@@ -57,7 +57,7 @@ public class ConnectionStrategyTests
             DbMode = mode,
             ReadWriteMode = ReadWriteMode.ReadWrite
         };
-        return new DatabaseContext(cfg, new FakeDbFactory(product));
+        return new DatabaseContext(cfg, new fakeDbFactory(product));
     }
 
     [Fact]
@@ -86,8 +86,14 @@ public class ConnectionStrategyTests
     [Fact]
     public async Task KeepAlive_PersistentStaysOpen_OthersDispose()
     {
-        // Use SQL Server to avoid automatic mode coercion that happens with SQLite
-        await using var ctx = CreateContext(DbMode.KeepAlive, SupportedDatabase.SqlServer);
+        // Use LocalDb to preserve KeepAlive mode (regular SQL Server coerces KeepAlive to Standard)
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=(localdb)\\mssqllocaldb;Database=TestDb;EmulatedProduct=SqlServer",
+            DbMode = DbMode.KeepAlive,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+        await using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.SqlServer));
         // keep-alive opens a persistent connection during initialization
         Assert.True(ctx.NumberOfOpenConnections >= 1);
 
@@ -124,7 +130,7 @@ public class ConnectionStrategyTests
             ReadWriteMode = ReadWriteMode.ReadWrite
         };
 
-        using var ctx = new DatabaseContext(cfg, new FakeDbFactory(SupportedDatabase.Sqlite));
+        using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Sqlite));
 
         Assert.Equal(DbMode.SingleConnection, ctx.ConnectionMode);
         Assert.NotNull(ctx.PersistentConnection);
@@ -149,7 +155,7 @@ public class ConnectionStrategyTests
             ReadWriteMode = ReadWriteMode.ReadWrite
         };
 
-        using var ctx = new DatabaseContext(cfg, new FakeDbFactory(SupportedDatabase.SqlServer));
+        using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.SqlServer));
 
         Assert.Equal(DbMode.KeepAlive, ctx.ConnectionMode);
         Assert.NotNull(ctx.PersistentConnection);
@@ -282,7 +288,7 @@ public class ConnectionStrategyTests
             DbMode = DbMode.KeepAlive,
             ReadWriteMode = ReadWriteMode.ReadWrite
         };
-        using var ctx = new DatabaseContext(cfg, new FakeDbFactory(SupportedDatabase.Sqlite));
+        using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Sqlite));
 
         // PostInitialize is called during construction, we're just verifying it doesn't crash with null
         Assert.NotNull(ctx); // Context created successfully

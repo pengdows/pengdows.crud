@@ -93,7 +93,7 @@ public static class OrderedDictionaryExtensions
 
         var key = string.IsNullOrEmpty(parameter.ParameterName)
             ? throw new ArgumentException("Parameter must have a name")
-            : parameter.ParameterName.TrimStart('@', ':', '?'); // Remove database-specific prefixes
+            : parameter.ParameterName.TrimStart('@', ':', '?', '$'); // Remove database-specific prefixes
 
         dict[key] = parameter;
     }

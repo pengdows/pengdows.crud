@@ -168,6 +168,13 @@ public sealed class fakeDbFactory : DbProviderFactory
 
     // Expose created connections for tests
     public List<fakeDbConnection> Connections => _connections;
+
+    public override DbConnectionStringBuilder? CreateConnectionStringBuilder()
+    {
+        // Return a connection string builder that supports provider-specific keys
+        // based on which database we're emulating
+        return new fakeDbConnectionStringBuilder(_pretendToBe);
+    }
 }
 
 public enum ConnectionFailureMode

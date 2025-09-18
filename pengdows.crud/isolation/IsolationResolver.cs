@@ -29,13 +29,6 @@ public sealed class IsolationResolver : IIsolationResolver
             throw new NotSupportedException($"Profile {profile} not supported for {_product}");
         }
 
-        if (!_rcsi && _product == SupportedDatabase.PostgreSql &&
-            profile == IsolationProfile.SafeNonBlockingReads && level == IsolationLevel.ReadCommitted)
-        {
-            throw new InvalidOperationException(
-                $"Tenant {_product} does not have RCSI enabled. Profile {profile} maps to blocking isolation level.");
-        }
-
         Validate(level);
         return level;
     }
@@ -57,22 +50,35 @@ public sealed class IsolationResolver : IIsolationResolver
     {
         var map = new Dictionary<SupportedDatabase, HashSet<IsolationLevel>>
         {
-            [SupportedDatabase.SqlServer] = new HashSet<IsolationLevel>
+            [SupportedDatabase.SqlServer] = rcsi ? new HashSet<IsolationLevel>
             {
-                IsolationLevel.ReadUncommitted,
-                rcsi ? IsolationLevel.ReadCommitted : default,
-                IsolationLevel.RepeatableRead,
-                IsolationLevel.Serializable,
-                IsolationLevel.Snapshot
-            }.Where(l => l != default).ToHashSet(),
-
-            [SupportedDatabase.PostgreSql] =
-            [
                 IsolationLevel.ReadUncommitted,
                 IsolationLevel.ReadCommitted,
                 IsolationLevel.RepeatableRead,
+                IsolationLevel.Serializable,
+                IsolationLevel.Snapshot
+            } : new HashSet<IsolationLevel>
+            {
+                IsolationLevel.ReadUncommitted,
+                IsolationLevel.RepeatableRead,
+                IsolationLevel.Serializable,
+                IsolationLevel.Snapshot
+            },
+
+            [SupportedDatabase.PostgreSql] = new HashSet<IsolationLevel>
+            {
+                IsolationLevel.ReadCommitted,
+                        IsolationLevel.RepeatableRead,
+                        IsolationLevel.Serializable,
+                        IsolationLevel.Snapshot
+                    },
+
+            [SupportedDatabase.PostgreSql] = new HashSet<IsolationLevel>
+            {
+                IsolationLevel.ReadCommitted,
+                IsolationLevel.RepeatableRead,
                 IsolationLevel.Serializable
-            ],
+            },
 
             [SupportedDatabase.CockroachDb] = [IsolationLevel.Serializable],
 
@@ -137,11 +143,15 @@ public sealed class IsolationResolver : IIsolationResolver
                 [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted
             },
 
-            SupportedDatabase.PostgreSql => new()
+            SupportedDatabase.PostgreSql => rcsi ? new()
             {
                 [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
                 [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
-                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted
+                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
+            } : new()
+            {
+                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
+                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
             },
 
             SupportedDatabase.CockroachDb => new()

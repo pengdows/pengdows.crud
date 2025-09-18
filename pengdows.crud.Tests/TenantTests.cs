@@ -34,7 +34,7 @@ public class TenantTests
         };
 
         using var provider = services.BuildServiceProvider();
-        var registry = new TenantContextRegistry(provider, new StubResolver(cfg), provider.GetRequiredService<ILoggerFactory>());
+        using var registry = new TenantContextRegistry(provider, new StubResolver(cfg), provider.GetRequiredService<ILoggerFactory>());
 
         using var ctx = registry.GetContext("tenant1");
         using var sc = ctx.CreateSqlContainer("SELECT 1");

@@ -100,4 +100,10 @@ public class MariaDbDialect : MySqlDialect
 
         return v.Major > major || (v.Major == major && v.Minor >= minor);
     }
+
+    // Connection pooling properties for MariaDB
+    public override bool SupportsExternalPooling => true;
+    public override string? PoolingSettingName => "Pooling";
+    public override string? MinPoolSizeSettingName => "Min Pool Size";
+    public override string? MaxPoolSizeSettingName => "Max Pool Size";
 }

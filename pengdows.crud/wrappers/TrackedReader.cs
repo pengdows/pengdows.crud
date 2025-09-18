@@ -2,6 +2,7 @@
 
 using System.Data;
 using System.Data.Common;
+using System.Threading.Tasks;
 using pengdows.crud.infrastructure;
 
 #endregion
@@ -34,7 +35,7 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
             _connection.Close();
         }
 
-        _connectionLocker.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        DisposeLockerSynchronously();
     }
 
     public bool Read()
@@ -211,5 +212,24 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
     public Guid GetGuid(int i)
     {
         return _reader.GetGuid(i);
+    }
+
+    private void DisposeLockerSynchronously()
+    {
+        if (_connectionLocker == null)
+        {
+            return;
+        }
+
+        if (_connectionLocker is IDisposable disposable)
+        {
+            disposable.Dispose();
+            return;
+        }
+
+        Task.Run(async () =>
+        {
+            await _connectionLocker.DisposeAsync().ConfigureAwait(false);
+        }).GetAwaiter().GetResult();
     }
 }

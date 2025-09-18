@@ -2,6 +2,8 @@
 
 using System.Data;
 using System.Data.Common;
+using System.Globalization;
+using System.Reflection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
@@ -55,6 +57,20 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     public Guid RootId { get; } = Guid.NewGuid();
 
     private static readonly char[] _parameterPrefixes = { '@', '?', ':' };
+    private const int DefaultMinPoolSize = 1;
+    private static readonly string[] _minPoolKeyCandidates =
+    {
+        "Min Pool Size",
+        "MinPoolSize",
+        "Minimum Pool Size",
+        "MinimumPoolSize"
+    };
+
+    private static readonly string[] _minPoolPropertyCandidates =
+    {
+        "MinPoolSize",
+        "MinimumPoolSize"
+    };
 
     [Obsolete("Use the constructor that takes DatabaseContextConfiguration instead.")]
     public DatabaseContext(
@@ -181,6 +197,9 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             }
             Name = _dataSourceInfo.DatabaseProductName;
             _procWrappingStyle = _dataSourceInfo.ProcWrappingStyle;
+
+            // Apply pooling defaults now that we have the final mode and dialect
+            ApplyDefaultPoolingDefaults();
 
             if (initialConnection != null)
             {
@@ -686,8 +705,10 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             try
             {
                 var csb = GetFactoryConnectionStringBuilder(connectionString);
-                var tmp = csb.ConnectionString;
-                SetConnectionString(tmp);
+                var normalized = RepresentsRawConnectionString(csb, connectionString)
+                    ? connectionString
+                    : csb.ConnectionString;
+                SetConnectionString(normalized);
             }
             catch
             {
@@ -742,7 +763,8 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     private ITrackedConnection? InitializeInternals(IDatabaseContextConfiguration config)
     {
         // 1) Persist config first
-        _connectionString = config.ConnectionString ?? throw new ArgumentNullException(nameof(config.ConnectionString));
+        var rawConnectionString = config.ConnectionString ?? throw new ArgumentNullException(nameof(config.ConnectionString));
+        _connectionString = NormalizeConnectionString(rawConnectionString);
         ReadWriteMode = config.ReadWriteMode;
 
         ITrackedConnection? initConn = null;
@@ -798,6 +820,8 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             // 4) Coerce ConnectionMode based on product/topology
             var requestedMode = ConnectionMode;
             ConnectionMode = CoerceMode(requestedMode, product, isLocalDb, isFirebirdEmbedded);
+
+            // Pooling defaults will be applied after dialect detection
 
             // 5) Apply provider/session settings according to final mode
             if (ConnectionMode is DbMode.KeepAlive or DbMode.SingleConnection or DbMode.SingleWriter)
@@ -963,6 +987,96 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         return SupportedDatabase.Unknown;
     }
 
+    private string NormalizeConnectionString(string connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            return connectionString;
+        }
+
+        try
+        {
+            var builder = GetFactoryConnectionStringBuilder(connectionString);
+            if (RepresentsRawConnectionString(builder, connectionString))
+            {
+                return connectionString;
+            }
+
+            return builder.ConnectionString;
+        }
+        catch
+        {
+            return connectionString;
+        }
+    }
+
+    private void ApplyDefaultPoolingDefaults()
+    {
+        if (ConnectionMode is not (DbMode.Standard or DbMode.KeepAlive))
+        {
+            return;
+        }
+
+        // Need dialect to know which provider we're dealing with
+        if (_dialect == null)
+        {
+            return;
+        }
+
+        if (!_dialect.SupportsExternalPooling)
+        {
+            return;
+        }
+
+        try
+        {
+            var builder = GetFactoryConnectionStringBuilder(_connectionString);
+            if (RepresentsRawConnectionString(builder, _connectionString))
+            {
+                return;
+            }
+            var modified = false;
+
+            // Pooling=true if absent
+            if (!string.IsNullOrEmpty(_dialect.PoolingSettingName) &&
+                !builder.ContainsKey(_dialect.PoolingSettingName))
+            {
+                builder[_dialect.PoolingSettingName] = true;
+                modified = true;
+            }
+
+            // Min pool size if absent and pooling is enabled (Standard mode gets higher default for production scalability)
+            if (!string.IsNullOrEmpty(_dialect.MinPoolSizeSettingName) &&
+                !builder.ContainsKey(_dialect.MinPoolSizeSettingName))
+            {
+                // Only add MinPoolSize if pooling is enabled
+                var poolingEnabled = !builder.ContainsKey(_dialect.PoolingSettingName) ||
+                                   (builder.ContainsKey(_dialect.PoolingSettingName) &&
+                                    bool.TryParse(builder[_dialect.PoolingSettingName]?.ToString(), out var pooling) && pooling);
+
+                if (poolingEnabled)
+                {
+                    var minPoolSize = ConnectionMode == DbMode.Standard ? 10 : DefaultMinPoolSize;
+                    builder[_dialect.MinPoolSizeSettingName] = minPoolSize;
+                    modified = true;
+                }
+            }
+
+            // Do NOT inject Max; leave provider default (usually 100)
+
+            if (modified)
+            {
+                _connectionString = builder.ConnectionString;
+                var appliedMinPoolSize = ConnectionMode == DbMode.Standard ? 10 : DefaultMinPoolSize;
+                _logger.LogDebug("Applied pooling defaults: Pooling=true, MinPoolSize={MinPoolSize}", appliedMinPoolSize);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Skipping default pooling adjustments due to builder failure.");
+        }
+    }
+
     private static DbConnectionStringBuilder GetFactoryConnectionStringBuilderStatic(ITrackedConnection conn, string connectionString)
     {
         // Use a tolerant builder; if it fails, fall back to carrying raw string under Data Source
@@ -976,6 +1090,21 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             try { csb["Data Source"] = connectionString; } catch { /* ignore */ }
         }
         return csb;
+    }
+
+    private static bool RepresentsRawConnectionString(DbConnectionStringBuilder builder, string original)
+    {
+        if (builder == null)
+        {
+            return true;
+        }
+
+        if (!builder.TryGetValue("Data Source", out var raw) || builder.Count != 1)
+        {
+            return false;
+        }
+
+        return string.Equals(Convert.ToString(raw), original, StringComparison.Ordinal);
     }
 
     private static string? TryGetDataSourcePath(string connectionString)
@@ -1200,6 +1329,120 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         }
 
         return csb;
+    }
+
+    private bool TryEnsureDefaultMinPoolSize(DbConnectionStringBuilder builder, int minPoolSize)
+    {
+        if (builder is null)
+        {
+            return false;
+        }
+
+        if (IsPoolingDisabled(builder) || ConnectionStringHasMinPool(builder))
+        {
+            return false;
+        }
+
+        if (TrySetMinPoolViaProperty(builder, minPoolSize))
+        {
+            _logger.LogDebug("Applied default MinPoolSize={MinPoolSize} via strongly-typed builder.", minPoolSize);
+            return true;
+        }
+
+        if (TrySetMinPoolViaIndexer(builder, minPoolSize))
+        {
+            _logger.LogDebug("Applied default MinPoolSize={MinPoolSize} via generic builder.", minPoolSize);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool ConnectionStringHasMinPool(DbConnectionStringBuilder builder)
+    {
+        foreach (var key in _minPoolKeyCandidates)
+        {
+            if (builder.ContainsKey(key))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsPoolingDisabled(DbConnectionStringBuilder builder)
+    {
+        if (!builder.TryGetValue("Pooling", out var rawValue))
+        {
+            return false;
+        }
+
+        switch (rawValue)
+        {
+            case bool boolValue:
+                return !boolValue;
+            case string stringValue:
+            {
+                if (bool.TryParse(stringValue, out var parsedBool))
+                {
+                    return !parsedBool;
+                }
+
+                if (int.TryParse(stringValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedInt))
+                {
+                    return parsedInt == 0;
+                }
+
+                break;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TrySetMinPoolViaProperty(DbConnectionStringBuilder builder, int minPoolSize)
+    {
+        foreach (var candidate in _minPoolPropertyCandidates)
+        {
+            var property = builder.GetType().GetProperty(candidate, BindingFlags.Instance | BindingFlags.Public | BindingFlags.IgnoreCase);
+            if (property == null || !property.CanWrite)
+            {
+                continue;
+            }
+
+            var targetType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
+            try
+            {
+                var converted = Convert.ChangeType(minPoolSize, targetType, CultureInfo.InvariantCulture);
+                property.SetValue(builder, converted);
+                return true;
+            }
+            catch
+            {
+                // Try next candidate/property style.
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TrySetMinPoolViaIndexer(DbConnectionStringBuilder builder, int minPoolSize)
+    {
+        foreach (var key in _minPoolKeyCandidates)
+        {
+            try
+            {
+                builder[key] = minPoolSize;
+                return true;
+            }
+            catch
+            {
+                // Try next alias until one is accepted.
+            }
+        }
+
+        return false;
     }
 
     private void SetupConnectionSessionSettingsForProvider(ITrackedConnection conn)

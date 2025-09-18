@@ -4,6 +4,7 @@ using System.Data;
 using System.Data.Common;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.connection;
@@ -25,6 +26,7 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
     private readonly Action<DbConnection>? _onFirstOpen;
     private readonly StateChangeEventHandler? _onStateChange;
     private readonly SemaphoreSlim? _semaphoreSlim;
+    private static readonly TimeSpan SharedDisposeTimeout = TimeSpan.FromSeconds(5);
 
     private int _wasOpened;
     
@@ -86,7 +88,7 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
         finally
         {
             stopwatch.Stop();
-            _logger.LogInformation("Connection opened in {ElapsedMilliseconds} ms", stopwatch.ElapsedMilliseconds);
+            _logger.LogDebug("Connection opened in {ElapsedMilliseconds} ms", stopwatch.ElapsedMilliseconds);
         }
 
         TriggerFirstOpen();
@@ -101,21 +103,13 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
             return;
         }
 
-        try
+        if (_isSharedConnection && _semaphoreSlim != null)
         {
-            if (_connection.State != ConnectionState.Closed)
-            {
-                _logger.LogWarning("Connection {Name} was still open during Dispose. Closing.", _name);
-                _connection.Close();
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error while closing connection during Dispose.");
+            DisposeSharedConnectionSynchronously();
+            return;
         }
 
-        _onDispose?.Invoke(_connection);
-        _connection.Dispose();
+        DisposeConnectionSync();
     }
 
 
@@ -148,7 +142,7 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
         finally
         {
             stopwatch.Stop();
-            _logger.LogInformation("Connection opened in {ElapsedMilliseconds} ms", stopwatch.ElapsedMilliseconds);
+            _logger.LogDebug("Connection opened in {ElapsedMilliseconds} ms", stopwatch.ElapsedMilliseconds);
         }
 
         TriggerFirstOpen();
@@ -165,55 +159,94 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
 
         if (_isSharedConnection && _semaphoreSlim != null)
         {
-            // Avoid long waits during disposal to prevent hangs in tests/teardown
-            var acquired = _semaphoreSlim.Wait(0);
-            if (acquired)
+            await DisposeSharedConnectionAsync().ConfigureAwait(false);
+            return;
+        }
+
+        await DisposeConnectionAsyncCore().ConfigureAwait(false);
+    }
+
+    private void DisposeSharedConnectionSynchronously()
+    {
+        Task.Run(async () =>
+        {
+            await DisposeSharedConnectionAsync().ConfigureAwait(false);
+        }).GetAwaiter().GetResult();
+    }
+
+    private async Task DisposeSharedConnectionAsync()
+    {
+        if (_semaphoreSlim == null)
+        {
+            await DisposeConnectionAsyncCore().ConfigureAwait(false);
+            return;
+        }
+
+        if (await _semaphoreSlim.WaitAsync(SharedDisposeTimeout).ConfigureAwait(false))
+        {
+            try
             {
+                await DisposeConnectionAsyncCore().ConfigureAwait(false);
+            }
+            finally
+            {
+                _semaphoreSlim.Release();
+            }
+        }
+        else
+        {
+            _logger.LogWarning("Timed out waiting to dispose shared connection {Name}; retrying once lock is released.", _name);
+            await Task.Run(async () =>
+            {
+                await _semaphoreSlim.WaitAsync().ConfigureAwait(false);
                 try
                 {
-                    if (_connection.State != ConnectionState.Closed)
-                    {
-                        _logger.LogWarning("Connection {Name} was still open during DisposeAsync. Closing.", _name);
-                        _connection.Close(); // Safe sync close
-                    }
-
-                    _onDispose?.Invoke(_connection);
-                    await _connection.DisposeAsync().ConfigureAwait(false);
+                    await DisposeConnectionAsyncCore().ConfigureAwait(false);
                 }
                 finally
                 {
                     _semaphoreSlim.Release();
                 }
-            }
-            else
+            }).ConfigureAwait(false);
+        }
+    }
+
+    private void DisposeConnectionSync()
+    {
+        try
+        {
+            if (_connection.State != ConnectionState.Closed)
             {
-                _logger.LogError("TrackedConnection.DisposeAsync could not acquire lock; disposing without semaphore.");
-                try
-                {
-                    if (_connection.State != ConnectionState.Closed)
-                    {
-                        _connection.Close();
-                    }
-                    _onDispose?.Invoke(_connection);
-                    await _connection.DisposeAsync().ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error disposing connection without lock.");
-                }
+                _logger.LogWarning("Connection {Name} was still open during Dispose. Closing.", _name);
+                _connection.Close();
             }
         }
-        else
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error while closing connection during Dispose.");
+        }
+
+        _onDispose?.Invoke(_connection);
+        _connection.Dispose();
+    }
+
+    private async ValueTask DisposeConnectionAsyncCore()
+    {
+        try
         {
             if (_connection.State != ConnectionState.Closed)
             {
                 _logger.LogWarning("Connection {Name} was still open during DisposeAsync. Closing.", _name);
-                _connection.Close(); // Safe sync close
+                _connection.Close();
             }
-
-            _onDispose?.Invoke(_connection);
-            await _connection.DisposeAsync().ConfigureAwait(false);
         }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error while closing connection during DisposeAsync.");
+        }
+
+        _onDispose?.Invoke(_connection);
+        await _connection.DisposeAsync().ConfigureAwait(false);
     }
 
     #region IDbConnection passthroughs

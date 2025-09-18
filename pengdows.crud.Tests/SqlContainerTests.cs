@@ -93,6 +93,21 @@ public class SqlContainerTests : SqlLiteContextTestBase
     }
 
     [Fact]
+    public void GeneratedParameterNames_AreDeterministic_AndWithinLimit()
+    {
+        var container = Context.CreateSqlContainer();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        for (var i = 0; i < 32; i++)
+        {
+            var param = container.AddParameterWithValue(DbType.Int32, i);
+            Assert.StartsWith("p", param.ParameterName, StringComparison.OrdinalIgnoreCase);
+            Assert.True(param.ParameterName.Length <= Context.DataSourceInfo.ParameterNameMaxLength);
+            Assert.True(seen.Add(param.ParameterName));
+        }
+    }
+
+    [Fact]
     public void SetParameterValue_UpdatesExistingParameter()
     {
         var container = Context.CreateSqlContainer();

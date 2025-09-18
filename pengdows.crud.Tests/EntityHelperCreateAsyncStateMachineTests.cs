@@ -165,7 +165,7 @@ public class EntityHelperCreateAsyncStateMachineTests
     [Fact]
     public async Task CreateAsync_Should_Handle_Connection_Failure()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         // Set exception before creating context
         factory.SetException(new InvalidOperationException("Connection failed"));
 
@@ -271,7 +271,7 @@ public class EntityHelperCreateAsyncStateMachineTests
     [Fact]
     public async Task CreateAsync_Should_Handle_ThreadAbortException()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         var context = new DatabaseContext("test", factory, _typeMap);
         _typeMap.Register<TestEntitySimple>();
 
@@ -290,7 +290,7 @@ public class EntityHelperCreateAsyncStateMachineTests
     [Fact]
     public async Task CreateAsync_Should_Handle_StackOverflowException()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         var context = new DatabaseContext("test", factory, _typeMap);
         _typeMap.Register<TestEntitySimple>();
 
@@ -310,7 +310,7 @@ public class EntityHelperCreateAsyncStateMachineTests
     [Fact]
     public async Task CreateAsync_Should_Handle_Successful_Execution_With_ID_Population()
     {
-        var factory = new FakeDbFactory(SupportedDatabase.Sqlite); // SQLite supports INSERT RETURNING
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite); // SQLite supports INSERT RETURNING
         
         // Set up ID population BEFORE creating DatabaseContext for proper initialization
         factory.SetIdPopulationResult(42, rowsAffected: 1);

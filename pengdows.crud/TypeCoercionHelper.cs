@@ -1,7 +1,11 @@
 #region
 
+using System;
 using System.Globalization;
+using System.IO;
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.enums;
@@ -69,12 +73,7 @@ public static class TypeCoercionHelper
         // JSON deserialization
         if (columnInfo.IsJsonType)
         {
-            if (value is string json && !string.IsNullOrWhiteSpace(json))
-            {
-                return JsonSerializer.Deserialize(json, targetType, columnInfo.JsonSerializerOptions);
-            }
-
-            throw new ArgumentException($"Cannot deserialize JSON value '{value}' to type {targetType}.");
+            return CoerceJsonValue(value, targetType, columnInfo);
         }
 
         return CoerceCore(value!, dbFieldType, targetType);
@@ -131,11 +130,100 @@ public static class TypeCoercionHelper
         try
         {
             var underlyingTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
-            return Convert.ChangeType(value, underlyingTarget);
+            return Convert.ChangeType(value, underlyingTarget, CultureInfo.InvariantCulture);
         }
         catch (Exception ex)
         {
             throw new InvalidCastException($"Cannot convert value '{value}' ({sourceType}) to {targetType}.", ex);
         }
+    }
+
+    private static object? CoerceJsonValue(
+        object? value,
+        Type targetType,
+        IColumnInfo columnInfo)
+    {
+        if (Utils.IsNullOrDbNull(value))
+        {
+            return null;
+        }
+
+        // Respect cases where the provider already gives us the desired type.
+        if (value != null && targetType.IsInstanceOfType(value))
+        {
+            return value;
+        }
+
+        var options = columnInfo.JsonSerializerOptions ?? JsonSerializerOptions.Default;
+
+        if (targetType == typeof(string))
+        {
+            return ExtractJsonString(value!, options);
+        }
+
+        return value switch
+        {
+            string jsonText => string.IsNullOrWhiteSpace(jsonText)
+                ? null
+                : JsonSerializer.Deserialize(jsonText, targetType, options),
+            JsonElement element => element.Deserialize(targetType, options),
+            JsonDocument document => document.Deserialize(targetType, options),
+            JsonNode node => node.Deserialize(targetType, options),
+            byte[] bytes => bytes.Length == 0
+                ? null
+                : JsonSerializer.Deserialize(bytes, targetType, options),
+            ArraySegment<byte> segment when segment.Count > 0 =>
+                JsonSerializer.Deserialize(new ReadOnlySpan<byte>(segment.Array!, segment.Offset, segment.Count), targetType, options),
+            ReadOnlyMemory<byte> memory when !memory.IsEmpty =>
+                JsonSerializer.Deserialize(memory.Span, targetType, options),
+            Stream stream => DeserializeFromStream(stream, targetType, options),
+            _ => RoundTripDeserialize(value!, targetType, options)
+        };
+    }
+
+    private static object? RoundTripDeserialize(object value, Type targetType, JsonSerializerOptions options)
+    {
+        var serialized = JsonSerializer.Serialize(value, options);
+        return string.IsNullOrWhiteSpace(serialized)
+            ? null
+            : JsonSerializer.Deserialize(serialized, targetType, options);
+    }
+
+    private static object? DeserializeFromStream(Stream stream, Type targetType, JsonSerializerOptions options)
+    {
+        if (stream.CanSeek)
+        {
+            stream.Seek(0, SeekOrigin.Begin);
+        }
+
+        // JsonSerializer leaves stream positioned at the end; caller owns stream lifetime.
+        return JsonSerializer.Deserialize(stream, targetType, options);
+    }
+
+    private static string ExtractJsonString(object value, JsonSerializerOptions options)
+    {
+        return value switch
+        {
+            string jsonText => jsonText,
+            JsonElement element => element.GetRawText(),
+            JsonDocument document => document.RootElement.GetRawText(),
+            JsonNode node => node.ToJsonString(options),
+            byte[] bytes => bytes.Length == 0 ? string.Empty : Encoding.UTF8.GetString(bytes),
+            ArraySegment<byte> segment when segment.Count > 0 => Encoding.UTF8.GetString(segment.Array!, segment.Offset, segment.Count),
+            ReadOnlyMemory<byte> memory when !memory.IsEmpty => Encoding.UTF8.GetString(memory.Span),
+            Stream stream => StreamToString(stream),
+            _ => JsonSerializer.Serialize(value, options)
+        };
+    }
+
+    private static string StreamToString(Stream stream)
+    {
+        if (stream.CanSeek)
+        {
+            stream.Seek(0, SeekOrigin.Begin);
+        }
+
+        using var reader = new StreamReader(stream, Encoding.UTF8, leaveOpen: true);
+        return reader.ReadToEnd();
     }
 }

@@ -841,6 +841,11 @@ public abstract class SqlDialect:ISqlDialect
             return simple;
         }
 
+        if (!string.IsNullOrWhiteSpace(versionString))
+        {
+            Logger.LogWarning("Unable to parse database version '{Version}' for {DatabaseType}; falling back to default SQL compliance.", versionString, DatabaseType);
+        }
+
         return null;
     }
 
@@ -915,6 +920,31 @@ public abstract class SqlDialect:ISqlDialect
             _ => string.Empty
         };
     }
+
+    // Connection pooling properties - safe defaults for SQL-92 compatibility
+    /// <summary>
+    /// True when the database provider supports external connection pooling.
+    /// Default: true for most server databases, override to false for in-process databases.
+    /// </summary>
+    public virtual bool SupportsExternalPooling => true;
+
+    /// <summary>
+    /// The connection string parameter name for enabling/disabling pooling.
+    /// Default: "Pooling" for most providers.
+    /// </summary>
+    public virtual string? PoolingSettingName => "Pooling";
+
+    /// <summary>
+    /// The connection string parameter name for minimum pool size.
+    /// Default: null (no standard), must be overridden in provider-specific dialects.
+    /// </summary>
+    public virtual string? MinPoolSizeSettingName => null;
+
+    /// <summary>
+    /// The connection string parameter name for maximum pool size.
+    /// Default: null (no standard), may be overridden in provider-specific dialects.
+    /// </summary>
+    public virtual string? MaxPoolSizeSettingName => null;
 
     // ---- Legacy utility helpers (kept for test compatibility) ----
     public virtual bool SupportsIdentityColumns => false;

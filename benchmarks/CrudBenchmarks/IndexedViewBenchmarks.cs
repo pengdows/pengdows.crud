@@ -1,0 +1,383 @@
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+using System.Data;
+using BenchmarkDotNet.Attributes;
+using Dapper;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.SqlClient;
+using pengdows.crud;
+using pengdows.crud.attributes;
+using pengdows.crud.configuration;
+using pengdows.crud.enums;
+
+namespace CrudBenchmarks;
+
+/// <summary>
+/// Demonstrates pengdows.crud's indexed view advantages over Entity Framework.
+/// EF's session settings (ARITHABORT OFF) prevent indexed view usage,
+/// while pengdows.crud preserves database optimizations.
+/// </summary>
+[MemoryDiagnoser]
+[SimpleJob(warmupCount: 3, iterationCount: 5, invocationCount: 50)]
+public class IndexedViewBenchmarks : IAsyncDisposable
+{
+    private string _connStr = string.Empty;
+    private IDatabaseContext _pengdowsContext = null!;
+    private TypeMapRegistry _map = null!;
+    private EntityHelper<CustomerOrderSummary, int> _summaryHelper = null!;
+    private EfTestDbContext _efContext = null!;
+    private SqlConnection _directSqlConnection = null!;
+
+    private readonly List<int> _customerIds = new();
+    private int _testCustomerId;
+
+    [Params(1000, 5000)] // Different dataset sizes to show scaling impact
+    public int CustomerCount;
+
+    [Params(10)] // Orders per customer average
+    public int OrdersPerCustomer;
+
+    [GlobalSetup]
+    public async Task GlobalSetup()
+    {
+        // Use SQL Server LocalDB for indexed view testing
+        _connStr = "Server=(localdb)\\MSSQLLocalDB;Database=IndexedViewBenchmark;Integrated Security=true;TrustServerCertificate=true;";
+
+        await CreateDatabaseAndSchemaAsync();
+        await SeedDataAsync();
+
+        // Setup pengdows.crud context
+        _map = new TypeMapRegistry();
+        _map.Register<CustomerOrderSummary>();
+
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = _connStr,
+            ReadWriteMode = ReadWriteMode.ReadWrite,
+            DbMode = DbMode.Standard
+        };
+        _pengdowsContext = new DatabaseContext(cfg, SqlClientFactory.Instance, null, _map);
+        _summaryHelper = new EntityHelper<CustomerOrderSummary, int>(_pengdowsContext);
+
+        // Setup Entity Framework context
+        var options = new DbContextOptionsBuilder<EfTestDbContext>()
+            .UseSqlServer(_connStr)
+            .Options;
+        _efContext = new EfTestDbContext(options);
+
+        // Setup direct SQL connection for comparison
+        _directSqlConnection = new SqlConnection(_connStr);
+        await _directSqlConnection.OpenAsync();
+
+        // Pick test customer IDs
+        _testCustomerId = _customerIds[0];
+
+        Console.WriteLine($"[BENCHMARK] Testing with {CustomerCount} customers, {OrdersPerCustomer} orders/customer avg");
+        Console.WriteLine($"[BENCHMARK] pengdows.crud ConnectionMode: {_pengdowsContext.ConnectionMode}");
+
+        // Verify indexed view is created and working
+        await VerifyIndexedViewAsync();
+    }
+
+    private async Task CreateDatabaseAndSchemaAsync()
+    {
+        // Create database if it doesn't exist
+        var masterConnStr = "Server=(localdb)\\MSSQLLocalDB;Database=master;Integrated Security=true;TrustServerCertificate=true;";
+        await using var masterConn = new SqlConnection(masterConnStr);
+        await masterConn.OpenAsync();
+
+        await masterConn.ExecuteAsync(@"
+            IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = 'IndexedViewBenchmark')
+            BEGIN
+                CREATE DATABASE IndexedViewBenchmark;
+            END");
+
+        // Create schema and indexed view
+        await using var conn = new SqlConnection(_connStr);
+        await conn.OpenAsync();
+
+        await conn.ExecuteAsync(@"
+            -- Drop existing objects
+            IF OBJECT_ID('dbo.vw_CustomerOrderSummary', 'V') IS NOT NULL
+                DROP VIEW dbo.vw_CustomerOrderSummary;
+
+            IF OBJECT_ID('dbo.Orders', 'U') IS NOT NULL
+                DROP TABLE dbo.Orders;
+
+            IF OBJECT_ID('dbo.Customers', 'U') IS NOT NULL
+                DROP TABLE dbo.Customers;
+
+            -- Create tables
+            CREATE TABLE dbo.Customers (
+                customer_id INT IDENTITY(1,1) PRIMARY KEY,
+                company_name NVARCHAR(100) NOT NULL,
+                created_date DATETIME2 DEFAULT GETUTCDATE()
+            );
+
+            CREATE TABLE dbo.Orders (
+                order_id INT IDENTITY(1,1) PRIMARY KEY,
+                customer_id INT NOT NULL REFERENCES dbo.Customers(customer_id),
+                order_date DATETIME2 DEFAULT GETUTCDATE(),
+                total_amount DECIMAL(18,2) NOT NULL,
+                status NVARCHAR(20) DEFAULT 'Active'
+            );
+
+            -- Create indexed view (the key advantage)
+            CREATE VIEW dbo.vw_CustomerOrderSummary WITH SCHEMABINDING AS
+            SELECT
+                customer_id,
+                COUNT_BIG(*) as order_count,
+                SUM(total_amount) as total_amount,
+                AVG(total_amount) as avg_order_amount,
+                MAX(order_date) as last_order_date
+            FROM dbo.Orders
+            WHERE status = 'Active'
+            GROUP BY customer_id;
+
+            -- Create the clustered index (makes it an indexed/materialized view)
+            CREATE UNIQUE CLUSTERED INDEX IX_CustomerOrderSummary_CustomerID
+            ON dbo.vw_CustomerOrderSummary(customer_id);
+
+            -- Create additional indexes for performance
+            CREATE INDEX IX_Orders_CustomerID_Status ON dbo.Orders(customer_id, status);
+            ");
+    }
+
+    private async Task SeedDataAsync()
+    {
+        await using var conn = new SqlConnection(_connStr);
+        await conn.OpenAsync();
+        await using var tx = await conn.BeginTransactionAsync();
+
+        // Insert customers
+        for (int i = 1; i <= CustomerCount; i++)
+        {
+            var customerId = await conn.ExecuteScalarAsync<int>(
+                "INSERT INTO dbo.Customers (company_name) OUTPUT INSERTED.customer_id VALUES (@name)",
+                new { name = $"Company {i:D6}" }, tx);
+            _customerIds.Add(customerId);
+        }
+
+        // Insert orders (varying amounts per customer)
+        var random = new Random(42); // Deterministic for benchmarking
+        foreach (var customerId in _customerIds)
+        {
+            var orderCount = Math.Max(1, random.Next(OrdersPerCustomer / 2, OrdersPerCustomer * 2));
+            for (int i = 0; i < orderCount; i++)
+            {
+                var amount = 100 + random.Next(1, 1000);
+                await conn.ExecuteAsync(@"
+                    INSERT INTO dbo.Orders (customer_id, total_amount, order_date)
+                    VALUES (@customerId, @amount, DATEADD(day, -@daysAgo, GETUTCDATE()))",
+                    new {
+                        customerId,
+                        amount,
+                        daysAgo = random.Next(1, 365)
+                    }, tx);
+            }
+        }
+
+        await tx.CommitAsync();
+
+        // Update statistics to ensure optimal query plans
+        await conn.ExecuteAsync(@"
+            UPDATE STATISTICS dbo.Customers;
+            UPDATE STATISTICS dbo.Orders;
+            UPDATE STATISTICS dbo.vw_CustomerOrderSummary;
+        ");
+    }
+
+    private async Task VerifyIndexedViewAsync()
+    {
+        await using var conn = new SqlConnection(_connStr);
+        await conn.OpenAsync();
+
+        // Verify the indexed view exists and has data
+        var viewCount = await conn.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM dbo.vw_CustomerOrderSummary");
+        Console.WriteLine($"[VERIFICATION] Indexed view contains {viewCount} customer summaries");
+
+        // Check if indexed view will be used (requires ARITHABORT ON)
+        await conn.ExecuteAsync("SET ARITHABORT ON");
+        var plan = await conn.QuerySingleOrDefaultAsync<string>(@"
+            SET SHOWPLAN_TEXT ON;
+            SELECT customer_id, order_count FROM dbo.vw_CustomerOrderSummary WHERE customer_id = 1;
+            SET SHOWPLAN_TEXT OFF;
+        ");
+
+        if (plan?.Contains("vw_CustomerOrderSummary") == true)
+        {
+            Console.WriteLine("[VERIFICATION] ✅ Indexed view will be used with proper session settings");
+        }
+        else
+        {
+            Console.WriteLine("[VERIFICATION] ⚠️ Indexed view may not be optimal");
+        }
+    }
+
+    [GlobalCleanup]
+    public async Task GlobalCleanup()
+    {
+        if (_pengdowsContext is IAsyncDisposable pad)
+            await pad.DisposeAsync();
+
+        if (_efContext != null)
+            await _efContext.DisposeAsync();
+
+        if (_directSqlConnection != null)
+            await _directSqlConnection.DisposeAsync();
+    }
+
+    /// <summary>
+    /// pengdows.crud using indexed view - preserves database optimizations
+    /// </summary>
+    [Benchmark]
+    public async Task<CustomerOrderSummary?> GetCustomerSummary_pengdows_IndexedView()
+    {
+        return await _summaryHelper.RetrieveOneAsync(_testCustomerId);
+    }
+
+    /// <summary>
+    /// Entity Framework query that should use indexed view but can't due to ARITHABORT OFF
+    /// </summary>
+    [Benchmark]
+    public async Task<EfCustomerOrderSummary?> GetCustomerSummary_EntityFramework_Aggregation()
+    {
+        return await _efContext.Orders
+            .Where(o => o.CustomerId == _testCustomerId && o.Status == "Active")
+            .GroupBy(o => o.CustomerId)
+            .Select(g => new EfCustomerOrderSummary
+            {
+                CustomerId = g.Key,
+                OrderCount = g.Count(),
+                TotalAmount = g.Sum(o => o.TotalAmount),
+                AvgOrderAmount = g.Average(o => o.TotalAmount),
+                LastOrderDate = g.Max(o => o.OrderDate)
+            })
+            .FirstOrDefaultAsync();
+    }
+
+    /// <summary>
+    /// Entity Framework with manual ARITHABORT ON (workaround, but brittle)
+    /// </summary>
+    [Benchmark]
+    public async Task<EfCustomerOrderSummary?> GetCustomerSummary_EntityFramework_WithWorkaround()
+    {
+        // Manual workaround - set ARITHABORT ON to enable indexed view
+        await _efContext.Database.ExecuteSqlRawAsync("SET ARITHABORT ON");
+
+        return await _efContext.Orders
+            .Where(o => o.CustomerId == _testCustomerId && o.Status == "Active")
+            .GroupBy(o => o.CustomerId)
+            .Select(g => new EfCustomerOrderSummary
+            {
+                CustomerId = g.Key,
+                OrderCount = g.Count(),
+                TotalAmount = g.Sum(o => o.TotalAmount),
+                AvgOrderAmount = g.Average(o => o.TotalAmount),
+                LastOrderDate = g.Max(o => o.OrderDate)
+            })
+            .FirstOrDefaultAsync();
+    }
+
+    /// <summary>
+    /// Direct SQL with proper session settings (baseline performance)
+    /// </summary>
+    [Benchmark]
+    public async Task<CustomerOrderSummary?> GetCustomerSummary_DirectSQL_IndexedView()
+    {
+        return await _directSqlConnection.QuerySingleOrDefaultAsync<CustomerOrderSummary>(@"
+            SET ARITHABORT ON;
+            SELECT customer_id as CustomerId, order_count as OrderCount,
+                   total_amount as TotalAmount, avg_order_amount as AvgOrderAmount,
+                   last_order_date as LastOrderDate
+            FROM dbo.vw_CustomerOrderSummary
+            WHERE customer_id = @customerId",
+            new { customerId = _testCustomerId });
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await GlobalCleanup();
+    }
+
+    // pengdows.crud entity for indexed view
+    [pengdows.crud.attributes.Table("vw_CustomerOrderSummary", schema: "dbo")]
+    public class CustomerOrderSummary
+    {
+        [Id(false)] // Not generated, comes from view
+        [pengdows.crud.attributes.Column("customer_id", DbType.Int32)]
+        public int CustomerId { get; set; }
+
+        [pengdows.crud.attributes.Column("order_count", DbType.Int64)]
+        public long OrderCount { get; set; }
+
+        [pengdows.crud.attributes.Column("total_amount", DbType.Decimal)]
+        public decimal TotalAmount { get; set; }
+
+        [pengdows.crud.attributes.Column("avg_order_amount", DbType.Decimal)]
+        public decimal AvgOrderAmount { get; set; }
+
+        [pengdows.crud.attributes.Column("last_order_date", DbType.DateTime2)]
+        public DateTime LastOrderDate { get; set; }
+    }
+
+    // Entity Framework entities
+    public class EfTestDbContext : DbContext
+    {
+        public EfTestDbContext(DbContextOptions<EfTestDbContext> options) : base(options) { }
+
+        public DbSet<EfCustomer> Customers { get; set; }
+        public DbSet<EfOrder> Orders { get; set; }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<EfCustomer>(entity =>
+            {
+                entity.ToTable("Customers");
+                entity.HasKey(e => e.CustomerId);
+                entity.Property(e => e.CustomerId).HasColumnName("customer_id");
+                entity.Property(e => e.CompanyName).HasColumnName("company_name").IsRequired();
+                entity.Property(e => e.CreatedDate).HasColumnName("created_date");
+            });
+
+            modelBuilder.Entity<EfOrder>(entity =>
+            {
+                entity.ToTable("Orders");
+                entity.HasKey(e => e.OrderId);
+                entity.Property(e => e.OrderId).HasColumnName("order_id");
+                entity.Property(e => e.CustomerId).HasColumnName("customer_id");
+                entity.Property(e => e.OrderDate).HasColumnName("order_date");
+                entity.Property(e => e.TotalAmount).HasColumnName("total_amount");
+                entity.Property(e => e.Status).HasColumnName("status");
+            });
+        }
+    }
+
+    public class EfCustomer
+    {
+        public int CustomerId { get; set; }
+        public string CompanyName { get; set; } = string.Empty;
+        public DateTime CreatedDate { get; set; }
+        public virtual ICollection<EfOrder> Orders { get; set; } = new List<EfOrder>();
+    }
+
+    public class EfOrder
+    {
+        public int OrderId { get; set; }
+        public int CustomerId { get; set; }
+        public DateTime OrderDate { get; set; }
+        public decimal TotalAmount { get; set; }
+        public string Status { get; set; } = "Active";
+        public virtual EfCustomer Customer { get; set; } = null!;
+    }
+
+    public class EfCustomerOrderSummary
+    {
+        public int CustomerId { get; set; }
+        public int OrderCount { get; set; }
+        public decimal TotalAmount { get; set; }
+        public decimal AvgOrderAmount { get; set; }
+        public DateTime LastOrderDate { get; set; }
+    }
+}

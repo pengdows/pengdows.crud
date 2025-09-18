@@ -44,7 +44,7 @@ internal static class ConnectionStrategyFactory
             DbMode.KeepAlive => new KeepAliveConnectionStrategy(context),
             DbMode.SingleConnection => new SingleConnectionStrategy(context),
             DbMode.SingleWriter => new SingleWriterConnectionStrategy(context),
-            _ => new StandardConnectionStrategy(context)
+            _ => throw new NotSupportedException($"Unsupported database mode: {mode}")
         };
     }
 }

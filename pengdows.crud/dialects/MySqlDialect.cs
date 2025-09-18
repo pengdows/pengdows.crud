@@ -13,9 +13,13 @@ namespace pengdows.crud.dialects;
 public class MySqlDialect : SqlDialect
 {
     private string? _sessionSettings;
+    private readonly bool _isMySqlConnector;
+
     public MySqlDialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger)
     {
+        var ns = factory.GetType().Namespace ?? string.Empty;
+        _isMySqlConnector = ns.Contains("MySqlConnector", StringComparison.OrdinalIgnoreCase);
     }
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.MySql;
@@ -154,4 +158,10 @@ public class MySqlDialect : SqlDialect
             Logger.LogDebug(ex, "Failed to apply MySQL read-only session settings");
         }
     }
+
+    // Connection pooling properties for MySQL (provider-aware)
+    public override bool SupportsExternalPooling => true;
+    public override string? PoolingSettingName => "Pooling";
+    public override string? MinPoolSizeSettingName => _isMySqlConnector ? "MinimumPoolSize" : "Min Pool Size";
+    public override string? MaxPoolSizeSettingName => _isMySqlConnector ? "MaximumPoolSize" : "Max Pool Size";
 }

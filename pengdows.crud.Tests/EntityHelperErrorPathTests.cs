@@ -6,14 +6,40 @@ using System.Data;
 using System.Threading.Tasks;
 using pengdows.crud.attributes;
 using pengdows.crud.exceptions;
+using pengdows.crud.fakeDb;
+using pengdows.crud.enums;
 using Xunit;
 
 #endregion
 
 namespace pengdows.crud.Tests;
 
-public class EntityHelperErrorPathTests : SqlLiteContextTestBase
+public class EntityHelperErrorPathTests : IAsyncLifetime
 {
+    public TypeMapRegistry TypeMap { get; private set; } = null!;
+    public IDatabaseContext Context { get; private set; } = null!;
+    public IAuditValueResolver AuditValueResolver { get; private set; } = null!;
+
+    public Task InitializeAsync()
+    {
+        TypeMap = new TypeMapRegistry();
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        Context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory, TypeMap);
+        AuditValueResolver = new StubAuditValueResolver("test-user");
+        return Task.CompletedTask;
+    }
+
+    public async Task DisposeAsync()
+    {
+        if (Context is IAsyncDisposable asyncDisp)
+        {
+            await asyncDisp.DisposeAsync().ConfigureAwait(false);
+        }
+        else if (Context is IDisposable disp)
+        {
+            disp.Dispose();
+        }
+    }
     [Table("test_entity")]
     private class EntityWithNoPrimaryKey
     {

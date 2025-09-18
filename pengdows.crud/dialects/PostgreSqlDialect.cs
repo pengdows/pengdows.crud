@@ -275,4 +275,10 @@ SET client_min_messages = warning;";
     {
         return base.DetermineStandardCompliance(version);
     }
+
+    // Connection pooling properties for PostgreSQL (Npgsql)
+    public override bool SupportsExternalPooling => true;
+    public override string? PoolingSettingName => "Pooling";
+    public override string? MinPoolSizeSettingName => "Minimum Pool Size";
+    public override string? MaxPoolSizeSettingName => "Maximum Pool Size";
 }

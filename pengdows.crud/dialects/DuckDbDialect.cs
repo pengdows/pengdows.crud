@@ -258,4 +258,10 @@ public class DuckDbDialect : SqlDialect
     public override bool SupportsSubqueries => true;
     public override bool SupportsOuterJoins => true;
     public override bool SupportsUnion => true;
+
+    // Connection pooling properties for DuckDB (in-process, no pooling)
+    public override bool SupportsExternalPooling => false; // in-process
+    public override string? PoolingSettingName => null;
+    public override string? MinPoolSizeSettingName => null;
+    public override string? MaxPoolSizeSettingName => null;
 }

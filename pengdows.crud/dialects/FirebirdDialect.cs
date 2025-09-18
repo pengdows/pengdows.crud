@@ -210,4 +210,10 @@ public class FirebirdDialect : SqlDialect
 
         return parameter;
     }
+
+    // Connection pooling properties for Firebird
+    public override bool SupportsExternalPooling => true;
+    public override string? PoolingSettingName => "Pooling";
+    public override string? MinPoolSizeSettingName => "MinPoolSize";
+    public override string? MaxPoolSizeSettingName => "MaxPoolSize";
 }

@@ -40,9 +40,10 @@ public class TenantConnectionResolverTests
         var list = new[] { tenantA, tenantB };
 
         // Act
-        TenantConnectionResolver.Register(list);
-        var resultA = TenantConnectionResolver.Instance.GetDatabaseContextConfiguration("a");
-        var resultB = TenantConnectionResolver.Instance.GetDatabaseContextConfiguration("b");
+        var resolver = new TenantConnectionResolver();
+        resolver.Register(list);
+        var resultA = resolver.GetDatabaseContextConfiguration("a");
+        var resultB = resolver.GetDatabaseContextConfiguration("b");
 
         // Assert
         Assert.Same(tenantA.DatabaseContextConfiguration, resultA);
@@ -78,8 +79,9 @@ public class TenantConnectionResolverTests
         };
 
         // Act
-        TenantConnectionResolver.Register(tenantId, config);
-        var result = TenantConnectionResolver.Instance.GetDatabaseContextConfiguration(tenantId);
+        var resolver = new TenantConnectionResolver();
+        resolver.Register(tenantId, config);
+        var result = resolver.GetDatabaseContextConfiguration(tenantId);
 
         // Assert
         Assert.Same(config, result);
@@ -92,8 +94,9 @@ public class TenantConnectionResolverTests
         var unknownTenant = "nonexistent";
 
         // Act & Assert
+        var resolver = new TenantConnectionResolver();
         var ex = Assert.Throws<InvalidOperationException>(() =>
-            TenantConnectionResolver.Instance.GetDatabaseContextConfiguration(unknownTenant));
+            resolver.GetDatabaseContextConfiguration(unknownTenant));
 
         Assert.Contains(unknownTenant, ex.Message);
     }
@@ -106,8 +109,9 @@ public class TenantConnectionResolverTests
     {
         var config = new DatabaseContextConfiguration();
 
+        var resolver = new TenantConnectionResolver();
         var ex = Assert.Throws<ArgumentNullException>(() =>
-            TenantConnectionResolver.Register(invalidTenant, config));
+            resolver.Register(invalidTenant, config));
 
         Assert.Equal("tenant", ex.ParamName);
     }
@@ -115,8 +119,9 @@ public class TenantConnectionResolverTests
     [Fact]
     public void Register_NullConfiguration_ShouldThrow()
     {
+        var resolver = new TenantConnectionResolver();
         var ex = Assert.Throws<ArgumentNullException>(() =>
-            TenantConnectionResolver.Register("tenant-x", null!));
+            resolver.Register("tenant-x", null!));
 
         Assert.Equal("configuration", ex.ParamName);
     }
@@ -124,8 +129,9 @@ public class TenantConnectionResolverTests
     [Fact]
     public void GetConfiguration_NullTenant_ShouldThrow()
     {
+        var resolver = new TenantConnectionResolver();
         var ex = Assert.Throws<ArgumentNullException>(() =>
-            TenantConnectionResolver.Instance.GetDatabaseContextConfiguration(null!));
+            resolver.GetDatabaseContextConfiguration(null!));
 
         Assert.Equal("tenant", ex.ParamName);
     }
@@ -162,17 +168,34 @@ public class TenantConnectionResolverTests
             }
         };
 
-        TenantConnectionResolver.Register(options);
+        var resolver = new TenantConnectionResolver();
+        resolver.Register(options);
 
-        Assert.Equal("Server=OptA;", TenantConnectionResolver.Instance.GetDatabaseContextConfiguration("opts-a").ConnectionString);
-        Assert.Equal("Server=OptB;", TenantConnectionResolver.Instance.GetDatabaseContextConfiguration("opts-b").ConnectionString);
+        Assert.Equal("Server=OptA;", resolver.GetDatabaseContextConfiguration("opts-a").ConnectionString);
+        Assert.Equal("Server=OptB;", resolver.GetDatabaseContextConfiguration("opts-b").ConnectionString);
     }
 
     [Fact]
     public void Register_NullOptions_ShouldThrow()
     {
-        var ex = Assert.Throws<ArgumentNullException>(() => TenantConnectionResolver.Register((MultiTenantOptions)null!));
+        var resolver = new TenantConnectionResolver();
+        var ex = Assert.Throws<ArgumentNullException>(() => resolver.Register((MultiTenantOptions)null!));
         Assert.Equal("options", ex.ParamName);
+    }
+
+    [Fact]
+    public void Clear_RemovesAllRegistrations()
+    {
+        var resolver = new TenantConnectionResolver();
+        resolver.Register("tenant-clear", new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=Clear;",
+            ProviderName = "fake-clear"
+        });
+
+        resolver.Clear();
+
+        Assert.Throws<InvalidOperationException>(() => resolver.GetDatabaseContextConfiguration("tenant-clear"));
     }
 
     private class TestTenantConnectionResolver : ITenantConnectionResolver

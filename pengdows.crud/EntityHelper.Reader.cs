@@ -104,9 +104,8 @@ public partial class EntityHelper<TEntity, TRowID>
         // JSON handling
         if (column.IsJsonType)
         {
-            var jsonOpts = column.JsonSerializerOptions ?? new JsonSerializerOptions();
-            return value => value is string json
-                ? TryDeserializeJson(json, targetType, jsonOpts, column.Name)
+            return value => value != null
+                ? TryDeserializeJson(value, column, column.Name)
                 : null;
         }
 
@@ -143,11 +142,11 @@ public partial class EntityHelper<TEntity, TRowID>
     }
 
     // Optimized helper methods with minimal error handling overhead
-    private object? TryDeserializeJson(string json, Type targetType, JsonSerializerOptions options, string columnName)
+    private object? TryDeserializeJson(object value, IColumnInfo column, string columnName)
     {
         try
         {
-            return JsonSerializer.Deserialize(json, targetType, options);
+            return TypeCoercionHelper.Coerce(value, value.GetType(), column);
         }
         catch (Exception ex)
         {

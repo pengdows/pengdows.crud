@@ -433,4 +433,29 @@ public interface ISqlDialect
     /// <param name="idColumnWrapped">Quoted identity column name</param>
     /// <returns>SQL clause like " RETURNING id" or " OUTPUT INSERTED.id"</returns>
     string RenderInsertReturningClause(string idColumnWrapped);
+
+    // Connection pooling properties
+    /// <summary>
+    /// True when the database provider supports external connection pooling.
+    /// False for in-process databases like DuckDB.
+    /// </summary>
+    bool SupportsExternalPooling { get; }
+
+    /// <summary>
+    /// The connection string parameter name for enabling/disabling pooling.
+    /// Usually "Pooling" for most providers, null if not supported.
+    /// </summary>
+    string? PoolingSettingName { get; }
+
+    /// <summary>
+    /// The connection string parameter name for minimum pool size.
+    /// Provider-specific (e.g., "Min Pool Size" vs "MinimumPoolSize"), null if not supported.
+    /// </summary>
+    string? MinPoolSizeSettingName { get; }
+
+    /// <summary>
+    /// The connection string parameter name for maximum pool size.
+    /// Provider-specific (e.g., "Max Pool Size" vs "MaximumPoolSize"), null if not supported.
+    /// </summary>
+    string? MaxPoolSizeSettingName { get; }
 }

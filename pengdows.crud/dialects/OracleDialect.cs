@@ -119,4 +119,10 @@ public class OracleDialect : SqlDialect
             Logger.LogDebug(ex, "Failed to apply Oracle read-only session settings");
         }
     }
+
+    // Connection pooling properties for Oracle
+    public override bool SupportsExternalPooling => true;
+    public override string? PoolingSettingName => "Pooling";
+    public override string? MinPoolSizeSettingName => "Min Pool Size";
+    public override string? MaxPoolSizeSettingName => "Max Pool Size";
 }

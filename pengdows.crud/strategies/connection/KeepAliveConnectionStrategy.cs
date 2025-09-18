@@ -110,13 +110,23 @@ public class KeepAliveConnectionStrategy : StandardConnectionStrategy
         DbProviderFactory factory,
         ILoggerFactory loggerFactory)
     {
-        // KeepAlive strategy: use throwaway connection to avoid consuming state on the sentinel connection
-        ITrackedConnection? detectConn = null;
+        var detectionTarget = initConnection ?? _context.PersistentConnection;
+        var ownsConnection = false;
+
+        if (detectionTarget == null)
+        {
+            detectionTarget = _context.FactoryCreateConnection(_context.ConnectionString, true, _context.IsReadOnlyConnection);
+            ownsConnection = true;
+        }
+
         try
         {
-            detectConn = _context.FactoryCreateConnection(_context.ConnectionString, true, _context.IsReadOnlyConnection);
-            detectConn.Open();
-            var dialect = SqlDialectFactory.CreateDialect(detectConn, factory, loggerFactory);
+            if (detectionTarget.State != ConnectionState.Open)
+            {
+                detectionTarget.Open();
+            }
+
+            var dialect = SqlDialectFactory.CreateDialect(detectionTarget, factory, loggerFactory);
             var dataSourceInfo = new DataSourceInformation(dialect);
             return (dialect, dataSourceInfo);
         }
@@ -126,7 +136,10 @@ public class KeepAliveConnectionStrategy : StandardConnectionStrategy
         }
         finally
         {
-            try { detectConn?.Dispose(); } catch { /* ignore */ }
+            if (ownsConnection && detectionTarget != null)
+            {
+                try { detectionTarget.Dispose(); } catch { /* ignore */ }
+            }
         }
     }
 
