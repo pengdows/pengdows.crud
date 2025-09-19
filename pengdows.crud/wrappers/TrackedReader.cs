@@ -2,7 +2,6 @@
 
 using System.Data;
 using System.Data.Common;
-using System.Threading.Tasks;
 using pengdows.crud.infrastructure;
 
 #endregion
@@ -40,6 +39,11 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
 
     public bool Read()
     {
+        if (IsDisposed || _reader.IsClosed)
+        {
+            return false; // Reader is already disposed or closed, no more data
+        }
+
         if (_reader.Read())
         {
             return true;
@@ -190,6 +194,11 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
 
     public async Task<bool> ReadAsync()
     {
+        if (IsDisposed || _reader.IsClosed)
+        {
+            return false; // Reader is already disposed or closed, no more data
+        }
+
         if (await _reader.ReadAsync().ConfigureAwait(false))
         {
             return true;

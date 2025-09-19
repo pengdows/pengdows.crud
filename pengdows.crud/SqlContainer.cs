@@ -5,7 +5,6 @@ using System.Data.Common;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.collections;
@@ -173,6 +172,17 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     public DbParameter AddParameterWithValue<T>(string? name, DbType type, T value,
         ParameterDirection direction = ParameterDirection.Input)
     {
+        if (direction is ParameterDirection.Output or ParameterDirection.InputOutput or ParameterDirection.ReturnValue)
+        {
+            var maxOut = _context.DataSourceInfo.MaxOutputParameters;
+            if (maxOut <= 0)
+            {
+                throw new ArgumentException(
+                    $"Provider {_context.DatabaseProductName} does not support output parameters.",
+                    nameof(direction));
+            }
+        }
+
         name ??= GenerateParameterName();
         var parameter = _context.CreateDbParameter(name, type, value);
         parameter.Direction = direction;

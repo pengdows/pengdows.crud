@@ -12,7 +12,7 @@ public class FakeParameterCollection : DbParameterCollection
     private readonly List<DbParameter> _params = new();
 
     public override int Count => _params.Count;
-    public override object SyncRoot => new();
+    public override object SyncRoot => _params;
 
     public new DbParameter this[int index]
     {
@@ -24,7 +24,15 @@ public class FakeParameterCollection : DbParameterCollection
 
     protected override void SetParameter(string parameterName, DbParameter value)
     {
-        throw new NotImplementedException();
+        var index = _params.FindIndex(p => string.Equals(p.ParameterName, parameterName, StringComparison.OrdinalIgnoreCase));
+        if (index >= 0)
+        {
+            _params[index] = value;
+        }
+        else
+        {
+            _params.Add(value);
+        }
     }
 
     public override int Add(object value)

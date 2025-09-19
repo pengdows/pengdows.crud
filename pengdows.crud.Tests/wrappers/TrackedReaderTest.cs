@@ -120,7 +120,7 @@ public class TrackedReaderTests
     {
         public bool NextResultCalled { get; private set; }
 
-        public TrackingFakeReader() : base(Array.Empty<Dictionary<string, object>>())
+        public TrackingFakeReader() : base(Array.Empty<Dictionary<string, object?>>())
         {
         }
 
@@ -135,7 +135,7 @@ public class TrackedReaderTests
     public async Task ReadAsync_ReturnsFalseAndDisposes_WhenDone()
     {
         // Create empty fakeDb reader (no rows, so ReadAsync returns false)
-        using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object>>());
+        using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object?>>());
         
         var connection = new TestTrackedConnection();
         var locker = new TestLockerAsync();
@@ -153,7 +153,7 @@ public class TrackedReaderTests
     public void Read_ReturnsFalseAndDisposes_WhenDone()
     {
         // Create empty fakeDb reader (no rows, so Read returns false)
-        using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object>>());
+        using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object?>>());
         
         var connection = new TestTrackedConnection();
         var locker = new TestLockerAsync();
@@ -170,7 +170,7 @@ public class TrackedReaderTests
     [Fact]
     public async Task DisposeAsync_OnlyOnce()
     {
-        using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object>>());
+        using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object?>>());
         
         var connection = new TestTrackedConnection();
         var locker = new TestLockerAsync();
@@ -188,7 +188,7 @@ public class TrackedReaderTests
     [Fact]
     public void Dispose_OnlyOnce()
     {
-        using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object>>());
+        using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object?>>());
         
         var connection = new TestTrackedConnection();
         var locker = new TestLockerAsync();
@@ -230,7 +230,7 @@ public class TrackedReaderTests
     [Fact]
     public void Read_DoesNotClose_WhenShouldCloseConnectionFalse()
     {
-        using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object>>());
+        using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object?>>());
         var connection = new TestTrackedConnection();
         var locker = new TestLockerAsync();
 
@@ -281,7 +281,7 @@ public class TrackedReaderTests
     [Fact]
     public async Task DisposeAsync_ClosesConnection_WhenShouldCloseTrue()
     {
-        using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object>>());
+        using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object?>>());
         var connection = new TestTrackedConnection();
         var locker = new TestLockerAsync();
 
@@ -296,7 +296,7 @@ public class TrackedReaderTests
     [Fact]
     public async Task DisposeAsync_DoesNotCloseConnection_WhenShouldCloseFalse()
     {
-        using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object>>());
+        using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object?>>());
         var connection = new TestTrackedConnection();
         var locker = new TestLockerAsync();
 
@@ -311,7 +311,7 @@ public class TrackedReaderTests
     [Fact]
     public void Dispose_DoesNotCloseConnection_WhenShouldCloseFalse()
     {
-        using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object>>());
+        using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object?>>());
         var connection = new TestTrackedConnection();
         var locker = new TestLockerAsync();
 
@@ -373,7 +373,7 @@ public class TrackedReaderTests
     [Fact]
     public void Dispose_DoesNotInvokeLockerOnCurrentSynchronizationContext()
     {
-        using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object>>());
+        using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object?>>());
         var connection = new TestTrackedConnection();
         var blockingContext = new BlockingSynchronizationContext();
         var locker = new ContextSensitiveLocker(blockingContext);

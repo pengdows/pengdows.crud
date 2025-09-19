@@ -10,7 +10,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class EntityHelperNegativeTests : SqlLiteContextTestBase
+public class EntityHelperNegativeTests : SqlLiteContextTestBase, IAsyncLifetime
 {
     private readonly EntityHelper<TestEntity, int> helper;
 
@@ -18,6 +18,17 @@ public class EntityHelperNegativeTests : SqlLiteContextTestBase
     {
         TypeMap.Register<TestEntity>();
         helper = new EntityHelper<TestEntity, int>(Context);
+    }
+
+    public new async Task InitializeAsync()
+    {
+        await base.InitializeAsync();
+        await BuildTestTable();
+    }
+
+    public new async Task DisposeAsync()
+    {
+        await base.DisposeAsync();
     }
 
     [Fact]
@@ -30,7 +41,6 @@ public class EntityHelperNegativeTests : SqlLiteContextTestBase
     [Fact]
     public async Task BuildUpdateAsync_LoadOriginal_NotFound_Throws()
     {
-        await BuildTestTable();
         var entity = new TestEntity { Id = 123, Name = "missing" };
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await helper.BuildUpdateAsync(entity, true));

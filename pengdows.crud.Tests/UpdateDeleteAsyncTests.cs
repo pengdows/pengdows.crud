@@ -9,7 +9,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class UpdateDeleteAsyncTests : SqlLiteContextTestBase
+public class UpdateDeleteAsyncTests : RealSqliteContextTestBase, IAsyncLifetime
 {
     private readonly EntityHelper<TestEntity, int> helper;
 
@@ -17,7 +17,17 @@ public class UpdateDeleteAsyncTests : SqlLiteContextTestBase
     {
         TypeMap.Register<TestEntity>();
         helper = new EntityHelper<TestEntity, int>(Context, AuditValueResolver);
-        BuildTestTable();
+    }
+
+    public new async Task InitializeAsync()
+    {
+        await base.InitializeAsync();
+        await BuildTestTable();
+    }
+
+    public new async Task DisposeAsync()
+    {
+        await base.DisposeAsync();
     }
 
     [Fact]
@@ -59,7 +69,6 @@ public class UpdateDeleteAsyncTests : SqlLiteContextTestBase
     [Fact]
     public async Task RetrieveAsync_ReturnsRows()
     {
-        await BuildTestTable();
         var e1 = new TestEntity { Name = Guid.NewGuid().ToString() };
         var e2 = new TestEntity { Name = Guid.NewGuid().ToString() };
         await helper.CreateAsync(e1, Context);
@@ -73,7 +82,6 @@ public class UpdateDeleteAsyncTests : SqlLiteContextTestBase
     [Fact]
     public async Task DeleteAsync_List_RemovesRows()
     {
-        await BuildTestTable();
         var e1 = new TestEntity { Name = Guid.NewGuid().ToString() };
         var e2 = new TestEntity { Name = Guid.NewGuid().ToString() };
         await helper.CreateAsync(e1, Context);
@@ -87,7 +95,6 @@ public class UpdateDeleteAsyncTests : SqlLiteContextTestBase
     [Fact]
     public async Task RetrieveOneAsync_ById_ReturnsRow()
     {
-        await BuildTestTable();
         var entity = new TestEntity { Name = Guid.NewGuid().ToString() };
         await helper.CreateAsync(entity, Context);
 
@@ -100,7 +107,6 @@ public class UpdateDeleteAsyncTests : SqlLiteContextTestBase
     [Fact]
     public async Task RetrieveOneAsync_ByEntity_ReturnsRow()
     {
-        await BuildTestTable();
         var entity = new TestEntity { Name = Guid.NewGuid().ToString() };
         await helper.CreateAsync(entity, Context);
 
@@ -113,7 +119,6 @@ public class UpdateDeleteAsyncTests : SqlLiteContextTestBase
     [Fact]
     public async Task BuildUpdateAsync_AuditOnly_IncludesAuditColumns()
     {
-        await BuildTestTable();
         var e = new TestEntity { Name = Guid.NewGuid().ToString() };
         await helper.CreateAsync(e, Context);
         var loaded = await helper.RetrieveOneAsync(e);
@@ -126,7 +131,6 @@ public class UpdateDeleteAsyncTests : SqlLiteContextTestBase
     [Fact]
     public async Task BuildUpdateAsync_AuditOnly_NoOriginal_IncludesAuditColumns()
     {
-        await BuildTestTable();
         var e = new TestEntity { Name = Guid.NewGuid().ToString() };
         await helper.CreateAsync(e, Context);
         var loaded = await helper.RetrieveOneAsync(e);
