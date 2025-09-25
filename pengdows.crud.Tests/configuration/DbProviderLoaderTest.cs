@@ -4,13 +4,12 @@ using System;
 using System.Collections.Generic;
 using System.Data.Common;
 using System.IO;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Moq;
 using pengdows.crud.configuration;
-using pengdows.crud.enums;
-using pengdows.crud.fakeDb;
 using Xunit;
 
 #endregion
@@ -127,7 +126,7 @@ public class DbProviderLoaderTests
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["DatabaseProviders:sqlite:ProviderName"] = "FakeDb.Sqlite"
+                ["DatabaseProviders:sqlite:ProviderName"] = "Microsoft.Data.Sqlite"
             })
             .Build();
 
@@ -135,16 +134,15 @@ public class DbProviderLoaderTests
         var loader = new DbProviderLoader(config, logger.Object);
         var services = new ServiceCollection();
 
-        var fakeFactory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        DbProviderFactories.RegisterFactory("FakeDb.Sqlite", fakeFactory);
+       DbProviderFactories.RegisterFactory("Microsoft.Data.Sqlite", SqliteFactory.Instance);
 
         loader.LoadAndRegisterProviders(services);
 
         var provider = services.BuildServiceProvider();
         var factory = provider.GetRequiredKeyedService<DbProviderFactory>("sqlite");
 
-        Assert.Same(fakeFactory, factory);
-        Assert.Same(fakeFactory, DbProviderFactories.GetFactory("FakeDb.Sqlite"));
+        Assert.Same(SqliteFactory.Instance, factory);
+        Assert.Same(SqliteFactory.Instance, DbProviderFactories.GetFactory("Microsoft.Data.Sqlite"));
     }
 
     [Fact]
@@ -177,7 +175,7 @@ public class DbProviderLoaderTests
         var loader = new DbProviderLoader(config, logger.Object);
 
         // ensure assembly load doesn't hide missing provider
-        _ = new fakeDbFactory(SupportedDatabase.Sqlite);
+        _ = SqliteFactory.Instance;
 
         Assert.Throws<InvalidOperationException>(() => loader.LoadAndRegisterProviders(new ServiceCollection()));
     }

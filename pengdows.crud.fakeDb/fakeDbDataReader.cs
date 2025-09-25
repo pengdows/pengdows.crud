@@ -10,23 +10,23 @@ namespace pengdows.crud.fakeDb;
 
 public class fakeDbDataReader : DbDataReader
 {
-    private readonly List<Dictionary<string, object?>> _rows;
+    private readonly List<Dictionary<string, object>> _rows;
     private int _index = -1;
 
     public fakeDbDataReader(
-        IEnumerable<Dictionary<string, object?>>? rows = null)
+        IEnumerable<Dictionary<string, object>>? rows = null)
     {
-        _rows = rows?.ToList() ?? new List<Dictionary<string, object?>>();
+        _rows = rows?.ToList() ?? new List<Dictionary<string, object>>();
     }
 
-    public fakeDbDataReader() : this(new List<Dictionary<string, object?>>())
+    public fakeDbDataReader() : this(new List<Dictionary<string, object>>())
     {
     }
 
-    private Dictionary<string, object?>? CurrentRow =>
+    private Dictionary<string, object>? CurrentRow =>
         _index >= 0 && _index < _rows.Count ? _rows[_index] : null;
 
-    private static string[] GetKeys(Dictionary<string, object?> row)
+    private static string[] GetKeys(Dictionary<string, object> row)
         => row.Keys.ToArray();
 
     public override int FieldCount
@@ -52,8 +52,7 @@ public class fakeDbDataReader : DbDataReader
             {
                 throw new IndexOutOfRangeException("No current row.");
             }
-            var value = row[name];
-            return value ?? DBNull.Value;
+            return row[name];
         }
     }
 
@@ -80,8 +79,7 @@ public class fakeDbDataReader : DbDataReader
         var row = CurrentRow ?? (_rows.Count > 0 ? _rows[0] : null)
                   ?? throw new IndexOutOfRangeException("No data rows.");
         var keys = GetKeys(row);
-        var value = row[keys[i]];
-        return value ?? DBNull.Value;
+        return row[keys[i]];
     }
 
     public override int GetValues(object[] values)
@@ -192,8 +190,7 @@ public class fakeDbDataReader : DbDataReader
 
     public override Type GetFieldType(int ordinal)
     {
-        var value = GetValue(ordinal);
-        return value?.GetType() ?? typeof(object);
+        return GetValue(ordinal).GetType();
     }
 
     public override float GetFloat(int i)
@@ -258,6 +255,6 @@ public class fakeDbDataReader : DbDataReader
         }
         
         // For non-nested data or invalid position, return an empty reader
-        return new fakeDbDataReader(new List<Dictionary<string, object?>>());
+        return new fakeDbDataReader(new List<Dictionary<string, object>>());
     }
 }

@@ -92,7 +92,6 @@ public class AdditionalCoverageTests : SqlLiteContextTestBase
     {
         // This test exercises the compiled value extractor and coercer methods
         // Arrange
-        TypeMap.Register<SimpleCoverageEntity>();
         var helper = new EntityHelper<SimpleCoverageEntity, long>(Context, AuditValueResolver);
 
         // Act - Create SQL that returns data requiring type coercion

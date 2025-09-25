@@ -1,6 +1,8 @@
 using System.Data;
 using System.Diagnostics;
 using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Configs;
+using BenchmarkDotNet.Loggers;
 using Dapper;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;

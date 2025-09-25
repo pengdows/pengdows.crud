@@ -210,6 +210,55 @@ public class DataReaderMapperTests
         Assert.Equal(0, result[0].Age);
     }
 
+    [Fact]
+    public async Task LoadObjectsFromDataReaderAsync_MapsEnumFromString()
+    {
+        var reader = new fakeDbDataReader(new[]
+        {
+            new Dictionary<string, object>
+            {
+                ["State"] = "Two"
+            }
+        });
+
+        var result = await DataReaderMapper.LoadObjectsFromDataReaderAsync<EnumEntity>(reader);
+
+        Assert.Single(result);
+        Assert.Equal(SampleState.Two, result[0].State);
+    }
+
+    [Fact]
+    public async Task LoadObjectsFromDataReaderAsync_MapsEnumFromNumeric()
+    {
+        var reader = new fakeDbDataReader(new[]
+        {
+            new Dictionary<string, object>
+            {
+                ["State"] = 1
+            }
+        });
+
+        var result = await DataReaderMapper.LoadObjectsFromDataReaderAsync<EnumEntity>(reader);
+
+        Assert.Single(result);
+        Assert.Equal(SampleState.Two, result[0].State);
+    }
+
+    [Fact]
+    public async Task LoadObjectsFromDataReaderAsync_StrictInvalidEnumThrows()
+    {
+        var reader = new fakeDbDataReader(new[]
+        {
+            new Dictionary<string, object>
+            {
+                ["State"] = "invalid"
+            }
+        });
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => DataReaderMapper.LoadAsync<EnumEntity>(reader, new MapperOptions(Strict: true)));
+    }
+
     private class SampleEntity
     {
         public string Name { get; set; }
@@ -227,5 +276,16 @@ public class DataReaderMapperTests
         public string? Name { get; set; }
 
         public int Age { get; set; }
+    }
+
+    private enum SampleState
+    {
+        One = 0,
+        Two = 1
+    }
+
+    private class EnumEntity
+    {
+        public SampleState State { get; set; }
     }
 }

@@ -20,25 +20,6 @@ public sealed class fakeDbFactory : DbProviderFactory
     private readonly List<fakeDbConnection> _connections = new();
     private Exception? _globalPersistentScalarException;
 
-    private bool _enableDataPersistence;
-
-    /// <summary>
-    /// When true, new fake connections will persist DML effects in-memory via <see cref="FakeDataStore"/>.
-    /// Existing pre-seeded connections are updated to match to keep factory behaviour consistent.
-    /// </summary>
-    public bool EnableDataPersistence
-    {
-        get => _enableDataPersistence;
-        set
-        {
-            _enableDataPersistence = value;
-            foreach (var connection in _connections)
-            {
-                connection.EnableDataPersistence = value;
-            }
-        }
-    }
-
     private fakeDbFactory()
     {
         _pretendToBe = SupportedDatabase.Unknown;
@@ -88,13 +69,11 @@ public sealed class fakeDbFactory : DbProviderFactory
             {
                 pre.EmulatedProduct = _pretendToBe;
             }
-            pre.EnableDataPersistence = EnableDataPersistence;
             return pre;
         }
 
         var c = new fakeDbConnection();
         c.EmulatedProduct = _pretendToBe;
-        c.EnableDataPersistence = EnableDataPersistence;
 
         // Configure failure modes based on factory settings
         if (_customException != null)

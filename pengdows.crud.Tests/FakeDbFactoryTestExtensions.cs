@@ -15,7 +15,6 @@ internal static class FakeDbFactoryTestExtensions
         for (int i = 0; i < 8; i++)
         {
             var c = new fakeDbConnection();
-            c.EnableDataPersistence = factory.EnableDataPersistence;
             c.EnqueueNonQueryResult(value);
             c.EnqueueNonQueryResult(value);
             c.EnqueueNonQueryResult(value);
@@ -35,7 +34,6 @@ internal static class FakeDbFactoryTestExtensions
         for (int i = 0; i < 4; i++)
         {
             var extra = new fakeDbConnection();
-            extra.EnableDataPersistence = factory.EnableDataPersistence;
             extra.EnqueueScalarResult(value);
             extra.SetDefaultScalarOnce(value);
             factory.Connections.Add(extra);
@@ -47,7 +45,6 @@ internal static class FakeDbFactoryTestExtensions
         for (int i = 0; i < 6; i++)
         {
             var c = new fakeDbConnection();
-            c.EnableDataPersistence = factory.EnableDataPersistence;
             c.SetNonQueryExecuteException(exception);
             factory.Connections.Add(c);
         }
@@ -63,7 +60,6 @@ internal static class FakeDbFactoryTestExtensions
     {
         // Connection failure expected during initialization
         var init = new fakeDbConnection();
-        init.EnableDataPersistence = factory.EnableDataPersistence;
         init.SetCustomFailureException(exception);
         init.SetFailOnOpen();
         factory.Connections.Add(init);
@@ -75,7 +71,6 @@ internal static class FakeDbFactoryTestExtensions
         for (int i = 0; i < 6; i++)
         {
             var op = new fakeDbConnection();
-            op.EnableDataPersistence = factory.EnableDataPersistence;
             op.SetCustomFailureException(exception);
             op.SetFailOnCommand();
             factory.Connections.Add(op);
@@ -99,8 +94,7 @@ internal static class FakeDbFactoryTestExtensions
         // - Database detection/version queries during DatabaseContext initialization
         // - INSERT operations and ID population during EntityHelper.CreateAsync
         var primaryConnection = new fakeDbConnection();
-        primaryConnection.EnableDataPersistence = factory.EnableDataPersistence;
-
+        
         // Set up database detection queries for initialization phase
         primaryConnection.ScalarResultsByCommand["SELECT VERSION()"] = "Test Database 1.0";
         primaryConnection.ScalarResultsByCommand["SELECT @@VERSION"] = "Test Database 1.0"; 
@@ -127,7 +121,6 @@ internal static class FakeDbFactoryTestExtensions
         for (int i = 0; i < 6; i++)
         {
             var fx = new fakeDbConnection();
-            fx.EnableDataPersistence = factory.EnableDataPersistence;
             fx.EnqueueNonQueryResult(rowsAffected);
             fx.SetDefaultScalarOnce(generatedId);
             fx.EnqueueScalarResult(generatedId);

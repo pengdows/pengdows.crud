@@ -35,9 +35,8 @@ public class fakeDbCommand : DbCommand
     [AllowNull]
     public new DbTransaction Transaction { get; set; }
 
-    private readonly FakeParameterCollection _parameterCollection = new();
-
-    protected override DbParameterCollection DbParameterCollection => _parameterCollection;
+    protected override DbParameterCollection DbParameterCollection
+        => new FakeParameterCollection();
 
     protected override DbTransaction? DbTransaction { get; set; }
 
@@ -102,18 +101,9 @@ public class fakeDbCommand : DbCommand
         {
             conn.ExecutedNonQueryTexts.Add(CommandText);
         }
-
-        // Prefer queued results when present (test control)
         if (conn != null && conn.NonQueryResults.Count > 0)
         {
             return conn.NonQueryResults.Dequeue();
-        }
-
-        // Use data persistence if enabled
-        if (conn != null && conn.EnableDataPersistence && !string.IsNullOrWhiteSpace(CommandText))
-        {
-            var result = conn.DataStore.ExecuteNonQuery(CommandText, Parameters);
-            return result;
         }
 
         return 1;
@@ -147,7 +137,6 @@ public class fakeDbCommand : DbCommand
             {
                 return commandResult;
             }
-
             // If this is any kind of version query and the test queued a scalar (even null/empty), prefer the queued value
             if (!string.IsNullOrEmpty(CommandText))
             {
@@ -196,16 +185,6 @@ public class fakeDbCommand : DbCommand
             if (conn.ScalarResults.Count > 0)
             {
                 return conn.ScalarResults.Dequeue();
-            }
-
-            // Use data persistence if enabled
-            if (conn.EnableDataPersistence && !string.IsNullOrWhiteSpace(CommandText))
-            {
-                var result = conn.DataStore.ExecuteScalar(CommandText, Parameters);
-                if (result != null)
-                {
-                    return result;
-                }
             }
         }
 
@@ -267,18 +246,9 @@ public class fakeDbCommand : DbCommand
         {
             throw exReader;
         }
-
-        // Prefer queued results when present (test control)
         if (conn != null && conn.ReaderResults.Count > 0)
         {
             return new fakeDbDataReader(conn.ReaderResults.Dequeue());
-        }
-
-        // Use data persistence if enabled
-        if (conn != null && conn.EnableDataPersistence && !string.IsNullOrWhiteSpace(CommandText))
-        {
-            var results = conn.DataStore.ExecuteReader(CommandText, Parameters);
-            return new fakeDbDataReader(results);
         }
 
         return new fakeDbDataReader();
