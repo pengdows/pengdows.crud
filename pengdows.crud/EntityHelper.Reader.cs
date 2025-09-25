@@ -3,6 +3,7 @@ using System.Data.Common;
 using System.Globalization;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;
@@ -62,7 +63,7 @@ public partial class EntityHelper<TEntity, TRowID>
                 var coercer = BuildCoercer(column, fieldType, targetType);
                 var setter = GetOrCreateSetter(column.PropertyInfo);
 
-                list.Add(new ColumnPlan(ordinal, valueExtractor, coercer, setter));
+                list.Add(new ColumnPlan(ordinal, valueExtractor, coercer, setter, column.PropertyInfo.PropertyType));
             }
         }
 
@@ -95,142 +96,30 @@ public partial class EntityHelper<TEntity, TRowID>
     private Func<object?, object?>? BuildCoercer(IColumnInfo column, Type fieldType, Type targetType)
     {
         // No coercion needed if types match and no special handling required
-        if (targetType.IsAssignableFrom(fieldType) && !column.IsJsonType && !column.IsEnum)
+        if (targetType.IsAssignableFrom(fieldType) && !column.IsJsonType && column.EnumType == null)
         {
             return null;
         }
 
-        // JSON handling
-        if (column.IsJsonType)
+        return value =>
         {
-            return value => value != null
-                ? TryDeserializeJson(value, column, column.Name)
-                : null;
-        }
-
-        // Enum handling
-        if (column.IsEnum && column.EnumType != null)
-        {
-            var enumType = column.EnumType;
-            var enumAsString = column.DbType == DbType.String;
-
-            var isTargetNullable = Nullable.GetUnderlyingType(column.PropertyInfo.PropertyType) != null;
-            if (enumAsString)
+            if (value == null)
             {
-                return value => value?.ToString() is string s
-                    ? TryParseEnum(s, enumType, column.Name, isTargetNullable)
-                    : (isTargetNullable ? null : Activator.CreateInstance(enumType));
+                return null;
             }
 
-            var enumUnderlying = column.EnumUnderlyingType!;
-            return value => value != null
-                ? TryConvertToEnum(value, enumType, enumUnderlying, column.Name, isTargetNullable)
-                : (isTargetNullable ? null : Activator.CreateInstance(enumType));
-        }
+            var runtimeType = value.GetType();
 
-        // Type conversion
-        if (!targetType.IsAssignableFrom(fieldType))
-        {
-            var dbType = column.DbType;
-            return value => value != null
-                ? TryConvertType(value, targetType, dbType, column.Name)
-                : null;
-        }
-
-        return null;
-    }
-
-    // Optimized helper methods with minimal error handling overhead
-    private object? TryDeserializeJson(object value, IColumnInfo column, string columnName)
-    {
-        try
-        {
-            return TypeCoercionHelper.Coerce(value, value.GetType(), column);
-        }
-        catch (Exception ex)
-        {
-            Logger.LogDebug(ex, "Failed to deserialize JSON for column {Column}", columnName);
-            return null;
-        }
-    }
-
-    private object? TryParseEnum(string value, Type enumType, string columnName, bool targetNullable)
-    {
-        try
-        {
-            return Enum.Parse(enumType, value, true);
-        }
-        catch
-        {
-            return HandleEnumParseFailure(value, enumType, columnName, targetNullable);
-        }
-    }
-
-    private object? TryConvertToEnum(object value, Type enumType, Type underlyingType, string columnName, bool targetNullable)
-    {
-        try
-        {
-            var converted = Convert.ChangeType(value, underlyingType, CultureInfo.InvariantCulture);
-            var enumValue = Enum.ToObject(enumType, converted!);
-
-            // Validate that the converted value is actually defined in the enum
-            if (!Enum.IsDefined(enumType, enumValue))
+            try
             {
-                return HandleEnumParseFailure(value, enumType, columnName, targetNullable);
+                return TypeCoercionHelper.Coerce(value, runtimeType, column, EnumParseBehavior, _coercionOptions);
             }
-
-            return enumValue;
-        }
-        catch
-        {
-            return HandleEnumParseFailure(value, enumType, columnName, targetNullable);
-        }
-    }
-
-    private object? TryConvertType(object value, Type targetType, DbType dbType, string columnName)
-    {
-        try
-        {
-            return Convert.ChangeType(value, targetType, CultureInfo.InvariantCulture);
-        }
-        catch
-        {
-            // Special handling for decimal types
-            if (dbType == DbType.Decimal || dbType == DbType.Currency || dbType == DbType.VarNumeric)
+            catch (JsonException ex)
             {
-                try
-                {
-                    return Convert.ToDecimal(value, CultureInfo.InvariantCulture);
-                }
-                catch
-                {
-                    // Fall through to exception
-                }
+                Logger.LogDebug(ex, "Failed to deserialize JSON for column {Column}", column.Name);
+                return null;
             }
-
-            throw new InvalidValueException(
-                $"Unable to convert value for column {columnName} from {value.GetType().Name} to {targetType.Name}");
-        }
-    }
-
-    private object? HandleEnumParseFailure(object value, Type enumType, string columnName, bool targetNullable)
-    {
-        return EnumParseBehavior switch
-        {
-            // When Throw mode, let the ArgumentException bubble up unchanged
-            EnumParseFailureMode.Throw => throw new ArgumentException($"Cannot convert '{value}' to enum {enumType}"),
-            EnumParseFailureMode.SetNullAndLog => targetNullable
-                ? LogAndReturnNull(value, enumType, columnName)
-                : Activator.CreateInstance(enumType),
-            EnumParseFailureMode.SetDefaultValue => Activator.CreateInstance(enumType),
-            _ => null
         };
-    }
-
-    private object? LogAndReturnNull(object value, Type enumType, string columnName)
-    {
-        Logger.LogWarning("Cannot convert '{Value}' to enum {EnumType} for column {Column}", value, enumType, columnName);
-        return null;
     }
 
     public Action<object, object?> GetOrCreateSetter(PropertyInfo prop)

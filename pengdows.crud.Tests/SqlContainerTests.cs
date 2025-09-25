@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Reflection;
 using System.Threading.Tasks;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
@@ -14,7 +15,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class SqlContainerTests : SqlLiteContextTestBase, IAsyncLifetime
+public class SqlContainerTests : SqlLiteContextTestBase
 {
     private readonly EntityHelper<TestEntity, int> entityHelper;
 
@@ -26,17 +27,7 @@ public class SqlContainerTests : SqlLiteContextTestBase, IAsyncLifetime
         TypeMap.Register<TestEntity>();
         entityHelper = new EntityHelper<TestEntity, int>(Context);
         Assert.Equal(DbMode.SingleConnection, Context.ConnectionMode);
-    }
-
-    public new async Task InitializeAsync()
-    {
-        await base.InitializeAsync();
-        await BuildTestTable();
-    }
-
-    public new async Task DisposeAsync()
-    {
-        await base.DisposeAsync();
+        BuildTestTable();
     }
 
     public void Dispose()
@@ -237,6 +228,7 @@ public class SqlContainerTests : SqlLiteContextTestBase, IAsyncLifetime
     {
         var qp = Context.QuotePrefix;
         var qs = Context.QuoteSuffix;
+        await BuildTestTable();
         var container = Context.CreateSqlContainer();
         AssertProperNumberOfConnectionsForMode();
         var p = container.AddParameterWithValue(DbType.String, "TestName");
@@ -253,6 +245,7 @@ public class SqlContainerTests : SqlLiteContextTestBase, IAsyncLifetime
     {
         var qp = Context.QuotePrefix;
         var qs = Context.QuoteSuffix;
+        await BuildTestTable();
         var container = Context.CreateSqlContainer();
         AssertProperNumberOfConnectionsForMode();
         var p = container.AddParameterWithValue(DbType.String, "TestName");
@@ -272,6 +265,7 @@ public class SqlContainerTests : SqlLiteContextTestBase, IAsyncLifetime
     {
         var qp = Context.QuotePrefix;
         var qs = Context.QuoteSuffix;
+        await BuildTestTable();
         var container = Context.CreateSqlContainer();
 
         container.Query.AppendFormat("SELECT {0}Name{1} FROM {0}Test{1} WHERE {0}Id{1} = 1", qp, qs);
@@ -286,6 +280,7 @@ public class SqlContainerTests : SqlLiteContextTestBase, IAsyncLifetime
     {
         var qp = Context.QuotePrefix;
         var qs = Context.QuoteSuffix;
+        await BuildTestTable();
         var container = Context.CreateSqlContainer();
 
         container.Query.AppendFormat("SELECT {0}Id{1} FROM {0}Test{1} WHERE {0}Id{1} = -1", qp, qs);
@@ -325,6 +320,7 @@ public class SqlContainerTests : SqlLiteContextTestBase, IAsyncLifetime
     [Fact]
     public async Task ExecuteReaderAsync_ReturnsData()
     {
+        await BuildTestTable();
         var container = Context.CreateSqlContainer();
         AssertProperNumberOfConnectionsForMode();
         var qp = Context.QuotePrefix;
@@ -489,9 +485,8 @@ public class SqlContainerTests : SqlLiteContextTestBase, IAsyncLifetime
         var mockLogger = new TestLogger();
         mockLogger.SetLogLevel(LogLevel.Critical); // Disable info logging
         var loggerFactory = new TestLoggerFactory(mockLogger);
-
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        await using var context = new DatabaseContext("Data Source=:memory:;EmulatedProduct=Sqlite", factory, TypeMap, DbMode.Standard, ReadWriteMode.ReadWrite, loggerFactory);
+        
+        await using var context = new DatabaseContext("Data Source=:memory:", SqliteFactory.Instance, TypeMap, DbMode.Standard, ReadWriteMode.ReadWrite, loggerFactory);
         await using var container = context.CreateSqlContainer("SELECT 1");
         await using var reader = await container.ExecuteReaderAsync();
         
@@ -504,9 +499,8 @@ public class SqlContainerTests : SqlLiteContextTestBase, IAsyncLifetime
         var mockLogger = new TestLogger();
         mockLogger.SetLogLevel(LogLevel.Information); // Enable info logging
         var loggerFactory = new TestLoggerFactory(mockLogger);
-
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        await using var context = new DatabaseContext("Data Source=:memory:;EmulatedProduct=Sqlite", factory, TypeMap, DbMode.Standard, ReadWriteMode.ReadWrite, loggerFactory);
+        
+        await using var context = new DatabaseContext("Data Source=:memory:", SqliteFactory.Instance, TypeMap, DbMode.Standard, ReadWriteMode.ReadWrite, loggerFactory);
         await using var container = context.CreateSqlContainer("SELECT 42");
         await using var reader = await container.ExecuteReaderAsync();
         // Multiple info logs can occur during initialization; just ensure something was logged at Info level
@@ -520,8 +514,7 @@ public class SqlContainerTests : SqlLiteContextTestBase, IAsyncLifetime
         mockLogger.SetLogLevel(LogLevel.Information);
         var loggerFactory = new TestLoggerFactory(mockLogger);
 
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        await using var context = new DatabaseContext("Data Source=:memory:;EmulatedProduct=Sqlite", factory, TypeMap, DbMode.Standard, ReadWriteMode.ReadWrite, loggerFactory);
+        await using var context = new DatabaseContext("Data Source=:memory:", SqliteFactory.Instance, TypeMap, DbMode.Standard, ReadWriteMode.ReadWrite, loggerFactory);
         await using var container = context.CreateSqlContainer("MyStoredProc");
         container.AddParameterWithValue("param1", DbType.String, "value1");
 

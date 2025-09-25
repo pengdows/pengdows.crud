@@ -1,5 +1,6 @@
 #region
 
+using System;
 using System.Collections.Concurrent;
 using System.Data;
 using System.Data.Common;
@@ -54,6 +55,8 @@ public partial class EntityHelper<TEntity, TRowID> :
 
     private IColumnInfo? _versionColumn;
 
+    private readonly TypeCoercionOptions _coercionOptions = TypeCoercionOptions.Default;
+
     private readonly BoundedCache<string, IReadOnlyList<IColumnInfo>> _columnListCache = new(MaxCacheSize);
 
     private readonly BoundedCache<string, string> _queryCache = new(MaxCacheSize);
@@ -71,14 +74,17 @@ public partial class EntityHelper<TEntity, TRowID> :
         public Func<ITrackedReader, int, object?> ValueExtractor { get; }  // Fast typed value extraction
         public Func<object?, object?>? Coercer { get; }                     // Pre-compiled type coercion (null if not needed)
         public Action<object, object?> Setter { get; }                     // Pre-compiled property setter
+        private Type PropertyType { get; }
 
-        public ColumnPlan(int ordinal, Func<ITrackedReader, int, object?> valueExtractor, 
-                         Func<object?, object?>? coercer, Action<object, object?> setter)
+        public ColumnPlan(int ordinal, Func<ITrackedReader, int, object?> valueExtractor,
+                         Func<object?, object?>? coercer, Action<object, object?> setter,
+                         Type propertyType)
         {
             Ordinal = ordinal;
             ValueExtractor = valueExtractor;
             Coercer = coercer;
             Setter = setter;
+            PropertyType = propertyType;
         }
 
         // Optimized execution: get → coerce (if needed) → set (2-3 fast operations)
@@ -90,6 +96,11 @@ public partial class EntityHelper<TEntity, TRowID> :
                 {
                     var raw = ValueExtractor(reader, Ordinal);
                     var value = Coercer != null ? Coercer(raw) : raw;  // Skip coercion if types match
+                    if (value == null && PropertyType.IsValueType && Nullable.GetUnderlyingType(PropertyType) == null)
+                    {
+                        return;
+                    }
+
                     Setter(target, value);
                 }
                 catch (Exception ex)
@@ -97,7 +108,7 @@ public partial class EntityHelper<TEntity, TRowID> :
                     // Let certain exceptions bubble up unchanged (e.g., ArgumentException for enum parsing in Throw mode)
                     if (ex is ArgumentException)
                         throw;
-                        
+
                     var columnName = reader.GetName(Ordinal);
                     throw new InvalidValueException(
                         $"Unable to set property from value that was stored in the database: {columnName} :{ex.Message}");
@@ -448,9 +459,19 @@ public partial class EntityHelper<TEntity, TRowID> :
 
             var paramName = template.InsertParameterNames[i];
             var param = dialect.CreateDbParameter(paramName, column.DbType, value);
+            if (column.IsJsonType)
+            {
+                dialect.TryMarkJsonParameter(param, column);
+            }
             sc.AddParameter(param);
             columns.Add(dialect.WrapObjectName(column.Name));
-            placeholders.Add(dialect.MakeParameterName(param));
+            var marker = dialect.MakeParameterName(param);
+            if (column.IsJsonType)
+            {
+                marker = dialect.RenderJsonArgument(marker, column);
+            }
+
+            placeholders.Add(marker);
         }
 
         sc.Query.Append("INSERT INTO ")

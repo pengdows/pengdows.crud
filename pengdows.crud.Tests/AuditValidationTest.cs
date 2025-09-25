@@ -4,7 +4,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class AuditValidationTest : RealSqliteContextTestBase
+public class AuditValidationTest : SqlLiteContextTestBase
 {
     [Fact]
     public async Task VerifyAuditFieldsArePopulated()

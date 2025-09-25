@@ -10,7 +10,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class EntityHelper_IntegrationTests : RealSqliteContextTestBase, IAsyncLifetime
+public class EntityHelper_IntegrationTests : SqlLiteContextTestBase
 {
     private readonly EntityHelper<TestEntity, int> entityHelper;
 
@@ -23,17 +23,7 @@ public class EntityHelper_IntegrationTests : RealSqliteContextTestBase, IAsyncLi
         entityHelper = new EntityHelper<TestEntity, int>(Context, AuditValueResolver);
 
         Assert.Equal(DbMode.SingleConnection, Context.ConnectionMode);
-    }
-
-    public new async Task InitializeAsync()
-    {
-        await base.InitializeAsync();
-        await BuildTestTable();
-    }
-
-    public new async Task DisposeAsync()
-    {
-        await base.DisposeAsync();
+        BuildTestTable();
     }
 
     public void Dispose()

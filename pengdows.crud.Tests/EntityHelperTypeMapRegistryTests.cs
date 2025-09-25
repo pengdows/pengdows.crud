@@ -1,6 +1,5 @@
 using System;
-using pengdows.crud.enums;
-using pengdows.crud.fakeDb;
+using Microsoft.Data.Sqlite;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -28,8 +27,7 @@ public class EntityHelperTypeMapRegistryTests
     [Fact]
     public void BuildDelete_UsesContextTypeMapRegistry()
     {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        using var ctx = new DatabaseContext("Data Source=:memory:;EmulatedProduct=Sqlite", factory, new CustomTypeMapRegistry());
+        using var ctx = new DatabaseContext("Data Source=:memory:", SqliteFactory.Instance, new CustomTypeMapRegistry());
         var helper = new EntityHelper<TestTable, long>(ctx);
         var sc = helper.BuildDelete(1, ctx);
         Assert.Contains("custom_test_table", sc.Query.ToString(), StringComparison.OrdinalIgnoreCase);
@@ -38,8 +36,7 @@ public class EntityHelperTypeMapRegistryTests
     [Fact]
     public void Constructor_MissingTableInfo_Throws()
     {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        using var ctx = new DatabaseContext("Data Source=:memory:;EmulatedProduct=Sqlite", factory, new NullTypeMapRegistry());
+        using var ctx = new DatabaseContext("Data Source=:memory:", SqliteFactory.Instance, new NullTypeMapRegistry());
         Assert.Throws<InvalidOperationException>(() => new EntityHelper<TestTable, long>(ctx));
     }
 }

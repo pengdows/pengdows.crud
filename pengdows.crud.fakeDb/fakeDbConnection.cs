@@ -33,7 +33,7 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
     public override string DataSource => "FakeSource";
     public override string ServerVersion => GetEmulatedServerVersion();
 
-    internal readonly Queue<IEnumerable<Dictionary<string, object?>>> ReaderResults = new();
+    internal readonly Queue<IEnumerable<Dictionary<string, object>>> ReaderResults = new();
     public readonly Queue<object?> ScalarResults = new();
     public readonly Queue<int> NonQueryResults = new();
     internal readonly Dictionary<string, object?> ScalarResultsByCommand = new();
@@ -44,15 +44,7 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
     internal readonly Dictionary<string, Exception> CommandFailuresByText = new();
     public readonly List<string> ExecutedNonQueryTexts = new();
 
-    // Enhanced data persistence
-    internal readonly FakeDataStore DataStore = new();
-    /// <summary>
-    /// Controls whether the connection should persist DML results in-memory for subsequent queries.
-    /// Tests opt-in explicitly to avoid surprising behavior changes in existing suites.
-    /// </summary>
-    public bool EnableDataPersistence { get; set; } = false;
-
-    public void EnqueueReaderResult(IEnumerable<Dictionary<string, object?>> rows)
+    public void EnqueueReaderResult(IEnumerable<Dictionary<string, object>> rows)
     {
         ReaderResults.Enqueue(rows);
     }

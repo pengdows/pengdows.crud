@@ -5,6 +5,7 @@ using System.Data.Common;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.collections;
@@ -172,17 +173,6 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     public DbParameter AddParameterWithValue<T>(string? name, DbType type, T value,
         ParameterDirection direction = ParameterDirection.Input)
     {
-        if (direction is ParameterDirection.Output or ParameterDirection.InputOutput or ParameterDirection.ReturnValue)
-        {
-            var maxOut = _context.DataSourceInfo.MaxOutputParameters;
-            if (maxOut <= 0)
-            {
-                throw new ArgumentException(
-                    $"Provider {_context.DatabaseProductName} does not support output parameters.",
-                    nameof(direction));
-            }
-        }
-
         name ??= GenerateParameterName();
         var parameter = _context.CreateDbParameter(name, type, value);
         parameter.Direction = direction;
@@ -579,7 +569,14 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             // otherwise, we will have the connection set to autoclose so that we
             //close the underlying connection when the DbDataReader is closed;
             var dr = await cmd.ExecuteReaderAsync(behavior, cancellationToken).ConfigureAwait(false);
-            return new TrackedReader(dr, conn, connectionLocker, behavior == CommandBehavior.CloseConnection);
+            var trackedReader = new TrackedReader(
+                dr,
+                conn,
+                connectionLocker,
+                behavior == CommandBehavior.CloseConnection,
+                cmd);
+            cmd = null;
+            return trackedReader;
         }
         finally
         {
@@ -612,7 +609,14 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 : (CommandBehavior.CloseConnection | CommandBehavior.SingleRow);
 
             var dr = await cmd.ExecuteReaderAsync(behavior, cancellationToken).ConfigureAwait(false);
-            return new TrackedReader(dr, conn, connectionLocker, (behavior & CommandBehavior.CloseConnection) == CommandBehavior.CloseConnection);
+            var trackedReader = new TrackedReader(
+                dr,
+                conn,
+                connectionLocker,
+                (behavior & CommandBehavior.CloseConnection) == CommandBehavior.CloseConnection,
+                cmd);
+            cmd = null;
+            return trackedReader;
         }
         finally
         {

@@ -2,8 +2,7 @@
 
 using System;
 using System.Threading.Tasks;
-using pengdows.crud.enums;
-using pengdows.crud.fakeDb;
+using Microsoft.Data.Sqlite;
 using Xunit;
 
 #endregion
@@ -17,9 +16,7 @@ public class SqlLiteContextTestBase : IAsyncLifetime
     protected SqlLiteContextTestBase()
     {
         TypeMap = new TypeMapRegistry();
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        factory.EnableDataPersistence = true;
-        Context = new DatabaseContext("Data Source=:memory:;EmulatedProduct=Sqlite", factory, TypeMap);
+        Context = new DatabaseContext("Data Source=:memory:", SqliteFactory.Instance, TypeMap);
         AuditValueResolver = new StubAuditValueResolver("test-user");
     }
 
