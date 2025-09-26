@@ -569,13 +569,13 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             // otherwise, we will have the connection set to autoclose so that we
             //close the underlying connection when the DbDataReader is closed;
             var dr = await cmd.ExecuteReaderAsync(behavior, cancellationToken).ConfigureAwait(false);
-            return new TrackedReader(dr, conn, connectionLocker, behavior == CommandBehavior.CloseConnection);
+            return new TrackedReader(dr, conn, connectionLocker, behavior == CommandBehavior.CloseConnection, cmd);
         }
         finally
         {
             //no matter what we do NOT close the underlying connection
-            //or dispose it.
-            Cleanup(cmd, null, ExecutionType.Read);
+            //or dispose it here—the reader manages command disposal.
+            Cleanup(null, null, ExecutionType.Read);
         }
     }
 
@@ -602,11 +602,12 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 : (CommandBehavior.CloseConnection | CommandBehavior.SingleRow);
 
             var dr = await cmd.ExecuteReaderAsync(behavior, cancellationToken).ConfigureAwait(false);
-            return new TrackedReader(dr, conn, connectionLocker, (behavior & CommandBehavior.CloseConnection) == CommandBehavior.CloseConnection);
+            return new TrackedReader(dr, conn, connectionLocker, (behavior & CommandBehavior.CloseConnection) == CommandBehavior.CloseConnection, cmd);
         }
         finally
         {
-            Cleanup(cmd, null, ExecutionType.Read);
+            // Command lifetime is managed by the returned reader for read operations.
+            Cleanup(null, null, ExecutionType.Read);
         }
     }
 

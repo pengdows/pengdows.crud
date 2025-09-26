@@ -246,7 +246,15 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
         }
 
         _onDispose?.Invoke(_connection);
-        await _connection.DisposeAsync().ConfigureAwait(false);
+        try
+        {
+            await _connection.DisposeAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error while disposing connection asynchronously. Falling back to synchronous dispose.");
+            _connection.Dispose();
+        }
     }
 
     #region IDbConnection passthroughs

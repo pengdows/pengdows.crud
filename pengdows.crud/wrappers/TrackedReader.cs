@@ -15,20 +15,24 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
     private readonly IAsyncDisposable _connectionLocker;
     private readonly DbDataReader _reader;
     private readonly bool _shouldCloseConnection;
+    private readonly DbCommand? _command;
 
     public TrackedReader(DbDataReader reader,
         ITrackedConnection connection,
         IAsyncDisposable connectionLocker,
-        bool shouldCloseConnection)
+        bool shouldCloseConnection,
+        DbCommand? command = null)
     {
         _reader = reader;
         _connection = connection;
         _connectionLocker = connectionLocker;
         _shouldCloseConnection = shouldCloseConnection;
+        _command = command;
     }
 
     protected override void DisposeManaged()
     {
+        _command?.Dispose();
         _reader.Dispose();
         if (_shouldCloseConnection)
         {
@@ -179,13 +183,22 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
 
     protected override async ValueTask DisposeManagedAsync()
     {
-        await _reader.DisposeAsync();
+        if (_command is IAsyncDisposable asyncCmd)
+        {
+            await asyncCmd.DisposeAsync().ConfigureAwait(false);
+        }
+        else
+        {
+            _command?.Dispose();
+        }
+
+        await _reader.DisposeAsync().ConfigureAwait(false);
         if (_shouldCloseConnection)
         {
             _connection.Close();
         }
 
-        await _connectionLocker.DisposeAsync();
+        await _connectionLocker.DisposeAsync().ConfigureAwait(false);
     }
 
     public async Task<bool> ReadAsync()
