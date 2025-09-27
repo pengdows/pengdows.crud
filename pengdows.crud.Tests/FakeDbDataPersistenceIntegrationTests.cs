@@ -1,6 +1,8 @@
 #region
 
 using System.Data;
+using System.Threading.Tasks;
+using pengdows.crud.attributes;
 using pengdows.crud.fakeDb;
 using Xunit;
 
@@ -220,12 +222,12 @@ public class FakeDbDataPersistenceIntegrationTests
 public class TestUser
 {
     [Id]
-    [Column("Id")]
+    [Column("Id", DbType.Int32)]
     public int Id { get; set; }
 
-    [Column("Name")]
+    [Column("Name", DbType.String)]
     public string Name { get; set; } = string.Empty;
 
-    [Column("Email")]
+    [Column("Email", DbType.String)]
     public string? Email { get; set; }
 }
