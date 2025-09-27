@@ -38,6 +38,18 @@ public class SqliteDialect : SqlDialect
     public override bool SupportsWindowFunctions => IsVersionAtLeast(3, 25);
     public override bool SupportsCommonTableExpressions => IsVersionAtLeast(3, 8, 3);
 
+    public override bool SupportsInsertReturning => IsVersionAtLeast(3, 35);
+
+    public override string GetInsertReturningClause(string idColumnName)
+    {
+        return $"RETURNING {WrapObjectName(idColumnName)}";
+    }
+
+    public override string GetLastInsertedIdQuery()
+    {
+        return "SELECT last_insert_rowid()";
+    }
+
     public override string GetVersionQuery() => "SELECT sqlite_version()";
 
     public override string GetBaseSessionSettings()

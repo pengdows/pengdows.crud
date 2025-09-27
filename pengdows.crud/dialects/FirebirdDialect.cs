@@ -37,6 +37,17 @@ public class FirebirdDialect : SqlDialect
     public override bool SupportsCommonTableExpressions => IsInitialized && ProductInfo.ParsedVersion?.Major >= 2;
     public override bool SupportsJsonTypes => false;
     public override bool SupportsArrayTypes => true;
+    public override bool SupportsInsertReturning => true;
+
+    public override string GetInsertReturningClause(string idColumnName)
+    {
+        return $"RETURNING {WrapObjectName(idColumnName)}";
+    }
+
+    public override string GetLastInsertedIdQuery()
+    {
+        throw new NotSupportedException("Firebird requires generator-specific syntax. Use RETURNING clause or GEN_ID(generator_name, 0) instead.");
+    }
 
     public override string GetVersionQuery() => "SELECT rdb$get_context('SYSTEM', 'ENGINE_VERSION') FROM rdb$database";
 

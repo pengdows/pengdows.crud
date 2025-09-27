@@ -46,6 +46,19 @@ public class PostgreSqlDialect : SqlDialect
     public override bool SupportsJsonTable => IsVersionAtLeast(18);
     public override bool SupportsMergeReturning => IsVersionAtLeast(18);
 
+    public override bool SupportsInsertReturning => true;
+
+    public override string GetInsertReturningClause(string idColumnName)
+    {
+        return $"RETURNING {WrapObjectName(idColumnName)}";
+    }
+
+    public override string GetLastInsertedIdQuery()
+    {
+        // Fallback method - prefer RETURNING clause
+        return "SELECT lastval()";
+    }
+
     public override string GetVersionQuery() => "SELECT version()";
 
     public override async Task<string?> GetProductNameAsync(ITrackedConnection connection)

@@ -23,6 +23,10 @@ var host = builder.Build();
 Console.WriteLine($"Starting parallel database testing at {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
 Console.WriteLine();
 
+// First demonstrate our hierarchical ID retrieval system
+HierarchicalIdRetrievalDemo.Run();
+Console.WriteLine();
+
 // Use the new parallel orchestrator (Oracle can be enabled via INCLUDE_ORACLE=true)
 var includeOracle = Environment.GetEnvironmentVariable("INCLUDE_ORACLE")?.ToLower() == "true";
 var orchestrator = new ParallelTestOrchestrator(host.Services, includeOracle);

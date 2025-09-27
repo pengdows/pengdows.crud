@@ -51,6 +51,19 @@ public class SqlServerDialect : SqlDialect
     public override bool SupportsMerge => IsVersionAtLeast(10);
     public override bool SupportsJsonTypes => IsVersionAtLeast(13);
 
+    public override bool SupportsInsertReturning => true;
+
+    public override string GetInsertReturningClause(string idColumnName)
+    {
+        return $"OUTPUT INSERTED.{WrapObjectName(idColumnName)}";
+    }
+
+    public override string GetLastInsertedIdQuery()
+    {
+        // Fallback method - prefer OUTPUT clause
+        return "SELECT SCOPE_IDENTITY()";
+    }
+
     public override string GetVersionQuery() => "SELECT @@VERSION";
 
     public override async Task<string> GetDatabaseVersionAsync(ITrackedConnection connection)

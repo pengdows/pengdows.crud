@@ -46,6 +46,11 @@ public class MySqlDialect : SqlDialect
     public override bool SupportsWindowFunctions => IsInitialized && ProductInfo.ParsedVersion?.Major >= 8;
     public override bool SupportsCommonTableExpressions => IsInitialized && ProductInfo.ParsedVersion?.Major >= 8;
 
+    public override string GetLastInsertedIdQuery()
+    {
+        return "SELECT LAST_INSERT_ID()";
+    }
+
     public override string GetVersionQuery() => "SELECT VERSION()";
 
     public override async Task<IDatabaseProductInfo> DetectDatabaseInfoAsync(ITrackedConnection connection)

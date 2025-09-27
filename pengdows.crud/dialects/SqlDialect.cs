@@ -874,34 +874,165 @@ public abstract class SqlDialect:ISqlDialect
 
     /// <summary>
     /// Gets the database-specific query for retrieving the last inserted identity value.
-    /// Base implementation returns empty string. Override in dialect-specific classes.
+    /// This is a fallback method - prefer using RETURNING/OUTPUT clauses when supported.
     /// </summary>
-    /// <returns>SQL query to get the last inserted identity value, or empty string if not supported.</returns>
+    /// <returns>SQL query to get the last inserted identity value</returns>
     public virtual string GetLastInsertedIdQuery()
+    {
+        throw new NotSupportedException($"GetLastInsertedIdQuery not implemented for {DatabaseType}. " +
+            $"Prefer using RETURNING/OUTPUT clauses, or implement parameter-based row lookup.");
+    }
+
+    /// <summary>
+    /// Indicates whether INSERT statements support RETURNING or OUTPUT clauses for retrieving generated values.
+    /// This is the preferred method for getting inserted IDs as it's atomic and race-condition free.
+    /// </summary>
+    public virtual bool SupportsInsertReturning => false;
+
+    /// <summary>
+    /// Gets the SQL syntax for RETURNING/OUTPUT clause to retrieve the inserted ID.
+    /// Only valid when SupportsInsertReturning is true.
+    /// </summary>
+    /// <param name="idColumnName">The name of the identity/auto-increment column</param>
+    /// <returns>The RETURNING/OUTPUT clause SQL</returns>
+    public virtual string GetInsertReturningClause(string idColumnName)
+    {
+        if (!SupportsInsertReturning)
+        {
+            throw new NotSupportedException($"{DatabaseType} does not support INSERT RETURNING/OUTPUT clauses.");
+        }
+
+        return $"RETURNING {WrapObjectName(idColumnName)}";
+    }
+
+    /// <summary>
+    /// Gets the preferred strategy for retrieving generated primary key values after INSERT.
+    /// This determines the hierarchy: inline RETURNING > session functions > correlation tokens > natural key lookup.
+    /// </summary>
+    public virtual GeneratedKeyPlan GetGeneratedKeyPlan()
+    {
+        // Oracle special case: sequence prefetch is preferred even though it supports RETURNING
+        if (DatabaseType == SupportedDatabase.Oracle)
+        {
+            return GeneratedKeyPlan.PrefetchSequence;
+        }
+
+        // First preference: inline RETURNING/OUTPUT clauses (atomic, single round-trip)
+        if (SupportsInsertReturning)
+        {
+            return DatabaseType switch
+            {
+                SupportedDatabase.SqlServer => GeneratedKeyPlan.OutputInserted,
+                _ => GeneratedKeyPlan.Returning
+            };
+        }
+
+        // Second preference: session-scoped functions (safe on same connection)
+        if (HasSessionScopedLastIdFunction())
+        {
+            return GeneratedKeyPlan.SessionScopedFunction;
+        }
+
+        // Universal fallback: correlation token (works everywhere, requires two round-trips)
+        return GeneratedKeyPlan.CorrelationToken;
+    }
+
+    /// <summary>
+    /// Determines if this database has a safe session-scoped last insert ID function.
+    /// </summary>
+    public virtual bool HasSessionScopedLastIdFunction()
     {
         return DatabaseType switch
         {
-            SupportedDatabase.Sqlite => "SELECT last_insert_rowid()",
-            SupportedDatabase.SqlServer => "SELECT SCOPE_IDENTITY()",
-            SupportedDatabase.MySql => "SELECT LAST_INSERT_ID()",
-            SupportedDatabase.PostgreSql => "SELECT lastval()",
-            SupportedDatabase.Oracle => "SELECT @@IDENTITY",
-            _ => string.Empty
+            SupportedDatabase.MySql => true,       // LAST_INSERT_ID() is per-connection safe
+            SupportedDatabase.MariaDb => true,     // LAST_INSERT_ID() is per-connection safe
+            SupportedDatabase.Sqlite => true,      // last_insert_rowid() is per-connection safe
+            SupportedDatabase.SqlServer => true,   // SCOPE_IDENTITY() is per-batch/scope safe
+            SupportedDatabase.PostgreSql => false, // lastval() can point at wrong sequence
+            SupportedDatabase.DuckDB => false,     // prefer RETURNING over lastval()
+            _ => false
         };
     }
 
     /// <summary>
-    /// Indicates whether INSERT statements support RETURNING or OUTPUT clauses for identity values.
+    /// Generates a correlation token query to retrieve the ID of an inserted row.
+    /// This is the safest universal fallback that works on any database.
     /// </summary>
-    public virtual bool SupportsInsertReturning => DatabaseType switch
+    /// <param name="tableName">The name of the table</param>
+    /// <param name="idColumnName">The name of the identity/ID column</param>
+    /// <param name="correlationTokenColumn">The name of the correlation token column</param>
+    /// <param name="tokenParameterName">The parameter name for the token value</param>
+    /// <returns>SQL query to find the inserted row by correlation token</returns>
+    public virtual string GetCorrelationTokenLookupQuery(string tableName, string idColumnName,
+        string correlationTokenColumn, string tokenParameterName)
     {
-        SupportedDatabase.PostgreSql => true,
-        SupportedDatabase.SqlServer => true,
-        SupportedDatabase.Sqlite => true,
-        SupportedDatabase.Oracle => true,
-        SupportedDatabase.Firebird => true,
-        _ => false
-    };
+        return $"SELECT {WrapObjectName(idColumnName)} FROM {WrapObjectName(tableName)} " +
+               $"WHERE {WrapObjectName(correlationTokenColumn)} = {tokenParameterName}";
+    }
+
+    /// <summary>
+    /// Generates a natural key lookup query (last resort, requires unique constraints).
+    /// Only safe when the lookup columns have a unique constraint and no data transformation occurs.
+    /// </summary>
+    /// <param name="tableName">The name of the table</param>
+    /// <param name="idColumnName">The name of the identity/ID column</param>
+    /// <param name="columnNames">List of non-identity column names (must have unique constraint)</param>
+    /// <param name="parameterNames">List of parameter names corresponding to the columns</param>
+    /// <returns>SQL query to find the inserted row by natural key</returns>
+    /// <exception cref="InvalidOperationException">Thrown when natural key lookup is unsafe</exception>
+    public virtual string GetNaturalKeyLookupQuery(string tableName, string idColumnName,
+        IReadOnlyList<string> columnNames, IReadOnlyList<string> parameterNames)
+    {
+        if (columnNames.Count != parameterNames.Count)
+        {
+            throw new ArgumentException("Column names and parameter names must have the same count");
+        }
+
+        if (columnNames.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "Natural key lookup requires at least one column. Consider using correlation token fallback instead.");
+        }
+
+        // This is a dangerous operation - require explicit acknowledgment
+        Logger.LogWarning(
+            "Using natural key lookup for table {TableName} with columns [{Columns}]. " +
+            "This is only safe if these columns have a unique constraint and no data transformation occurs during INSERT. " +
+            "Consider using correlation token fallback for better safety.",
+            tableName, string.Join(", ", columnNames));
+
+        var whereConditions = columnNames
+            .Zip(parameterNames, (col, param) => $"{WrapObjectName(col)} = {param}")
+            .ToList();
+
+        var selectClause = DatabaseType switch
+        {
+            SupportedDatabase.SqlServer => $"SELECT TOP 1 {WrapObjectName(idColumnName)}",
+            _ => $"SELECT {WrapObjectName(idColumnName)}"
+        };
+
+        var query = $"{selectClause} FROM {WrapObjectName(tableName)} WHERE " +
+                   string.Join(" AND ", whereConditions);
+
+        // For databases that support ORDER BY with identity columns, get the most recent
+        if (SupportsIdentityColumns && DatabaseType != SupportedDatabase.Oracle)
+        {
+            query += $" ORDER BY {WrapObjectName(idColumnName)} DESC";
+        }
+
+        // Add LIMIT clause for non-SQL Server databases
+        if (DatabaseType == SupportedDatabase.Oracle)
+        {
+            query += " AND ROWNUM = 1";
+        }
+        else if (DatabaseType != SupportedDatabase.SqlServer)
+        {
+            query += " LIMIT 1";
+        }
+
+        return query;
+    }
+
 
     /// <summary>
     /// Generates the RETURNING or OUTPUT clause for INSERT statements to capture identity values.

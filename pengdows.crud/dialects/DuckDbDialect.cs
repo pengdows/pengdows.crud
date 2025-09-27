@@ -42,12 +42,23 @@ public class DuckDbDialect : SqlDialect
     public override bool SupportsTemporalData => false; // No temporal tables yet
     public override bool SupportsRowPatternMatching => false; // Not yet supported
     public override bool SupportsMultidimensionalArrays => true; // Nested structures
+    public override bool SupportsInsertReturning => true; // DuckDB supports RETURNING clause
 
     // Database encryption support (DuckDB 1.4.0+)
     public virtual bool SupportsEncryption => IsVersionAtLeast(1, 4); // AES-256-GCM encryption with ATTACH
 
     // FILL window function support (DuckDB 1.4.0+)
     public virtual bool SupportsFillWindowFunction => IsVersionAtLeast(1, 4); // FILL() window function for interpolation
+
+    public override string GetInsertReturningClause(string idColumnName)
+    {
+        return $"RETURNING {WrapObjectName(idColumnName)}";
+    }
+
+    public override string GetLastInsertedIdQuery()
+    {
+        return "SELECT lastval()"; // DuckDB supports lastval() like PostgreSQL
+    }
 
     public override string GetVersionQuery() => "SELECT version()";
 
