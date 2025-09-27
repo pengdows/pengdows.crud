@@ -8,7 +8,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class UpsertAsyncTests : SqlLiteContextTestBase, IAsyncLifetime
+public class UpsertAsyncTests : RealSqliteContextTestBase, IAsyncLifetime
 {
     private readonly EntityHelper<TestEntity, int> helper;
 
