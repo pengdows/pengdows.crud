@@ -10,6 +10,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.attributes;
+using pengdows.crud.enums;
 
 #endregion
 
@@ -20,9 +21,11 @@ public sealed class DataReaderMapper : IDataReaderMapper
     public static readonly IDataReaderMapper Instance = new DataReaderMapper();
 
     private static readonly ConcurrentDictionary<SetterCacheKey, Action<object, DbDataReader>> _setterCache = new();
-    private static readonly ConcurrentDictionary<(Type Type, string Schema, MapperOptions Options), MapperPlan> _planCache = new();
+    private static readonly ConcurrentDictionary<PlanCacheKey, MapperPlan> _planCache = new();
     private static readonly ConcurrentDictionary<PropertyLookupCacheKey, IReadOnlyDictionary<string, PropertyInfo>> _propertyLookupCache = new();
     private static readonly MethodInfo _getFieldValueGenericMethod = ResolveGetFieldValueMethod();
+
+    private readonly record struct PlanCacheKey(Type Type, string SchemaHash, bool ColumnsOnly, EnumParseFailureMode EnumMode);
 
     public static Task<List<T>> LoadObjectsFromDataReaderAsync<T>(
         IDataReader reader,
@@ -111,8 +114,8 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
         options ??= MapperOptions.Default;
 
-        var schemaHash = BuildSchemaHash(rdr);
-        var planKey = (typeof(T), schemaHash, options);
+        var schemaHash = BuildSchemaHash(rdr, options);
+        var planKey = new PlanCacheKey(typeof(T), schemaHash, options.ColumnsOnly, options.EnumMode);
 
         var plan = _planCache.GetOrAdd(planKey, _ => BuildPlan<T>(rdr, options));
 
@@ -180,9 +183,17 @@ public sealed class DataReaderMapper : IDataReaderMapper
             setters.ToArray());
     }
 
-    private static string BuildSchemaHash(DbDataReader reader)
+    private static string BuildSchemaHash(DbDataReader reader, MapperOptions options)
     {
         var builder = new StringBuilder();
+
+        // Include options in the hash to ensure proper cache invalidation
+        builder.Append(options.ColumnsOnly ? '1' : '0');
+        builder.Append('\u001F');
+        builder.Append((int)options.EnumMode);
+        builder.Append('\u001F');
+
+        // Include field names and types for more robust caching
         for (var i = 0; i < reader.FieldCount; i++)
         {
             if (i > 0)
@@ -190,7 +201,15 @@ public sealed class DataReaderMapper : IDataReaderMapper
                 builder.Append('|');
             }
 
-            builder.Append(reader.GetName(i));
+            var name = reader.GetName(i);
+
+            // Apply name policy if specified and not in ColumnsOnly mode
+            if (!options.ColumnsOnly && options.NamePolicy != null)
+            {
+                name = options.NamePolicy(name);
+            }
+
+            builder.Append(name);
             builder.Append(':');
             var fieldType = ResolveFieldType(reader, i);
             builder.Append(fieldType.AssemblyQualifiedName ?? fieldType.FullName ?? fieldType.Name);
