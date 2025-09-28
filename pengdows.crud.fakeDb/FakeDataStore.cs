@@ -126,8 +126,9 @@ public class FakeDataStore
                     _tables[tableName] = new List<Dictionary<string, object?>>();
                 }
             }
+            return 1; // CREATE TABLE executed successfully
         }
-        return 0; // CREATE TABLE typically returns 0
+        return 0; // Failed to parse CREATE TABLE
     }
 
     private int HandleInsert(string commandText, DbParameterCollection? parameters)
@@ -307,7 +308,7 @@ public class FakeDataStore
 
             // Handle SELECT * FROM table
             var selectMatch = Regex.Match(commandText,
-                @"SELECT\s+(.+?)\s+FROM\s+([`\[\]""'\w]+)(?:\s+WHERE\s+(.+))?$",
+                @"SELECT\s+(.+?)\s+FROM\s+([`\[\]""'\w]+)(?:\s+WHERE\s+(.+?))?(?:\s+ORDER\s+BY\s+.+)?$",
                 RegexOptions.IgnoreCase);
 
             if (!selectMatch.Success)
@@ -382,11 +383,11 @@ public class FakeDataStore
 
                 if (string.IsNullOrWhiteSpace(wherePart))
                 {
-                    return rows.Count;
+                    return (long)rows.Count;
                 }
                 else
                 {
-                    return rows.Count(row => EvaluateWhereClause(row, wherePart, parameters));
+                    return (long)rows.Count(row => EvaluateWhereClause(row, wherePart, parameters));
                 }
             }
         }
