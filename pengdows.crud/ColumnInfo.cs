@@ -39,25 +39,28 @@ public class ColumnInfo : IColumnInfo
         var value = FastGetter != null
             ? FastGetter(objectToCreate!)
             : PropertyInfo.GetValue(objectToCreate);
-        if (value != null)
+        var current = value;
+
+        if (current != null)
         {
             if (EnumType != null)
             {
                 if (DbType == DbType.String)
                 {
-                    value = value.ToString(); // Save enum as string name
+                    value = current.ToString(); // Save enum as string name
                 }
                 else
                 {
                     // Use cached underlying type, or determine it if not cached
                     var underlyingType = EnumUnderlyingType ?? Enum.GetUnderlyingType(EnumType);
-                    value = Convert.ChangeType(value, underlyingType);
+                    value = Convert.ChangeType(current, underlyingType);
                 }
             }
 
             if (IsJsonType)
             {
-                value = JsonSerializer.Serialize(value);
+                var options = JsonSerializerOptions ?? JsonSerializerOptions.Default;
+                value = TypeCoercionHelper.GetJsonText(current, options);
             }
         }
 

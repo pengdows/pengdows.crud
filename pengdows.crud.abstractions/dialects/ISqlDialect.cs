@@ -1,6 +1,7 @@
 using System.Data;
 using System.Data.Common;
 using System.Text.RegularExpressions;
+using pengdows.crud;
 using pengdows.crud.enums;
 using pengdows.crud.wrappers;
 
@@ -42,6 +43,21 @@ public interface ISqlDialect
     /// True when the dialect supports named parameters.
     /// </summary>
     bool SupportsNamedParameters { get; }
+
+    /// <summary>
+    /// Allows the dialect to render provider-specific JSON casts for parameter placeholders.
+    /// </summary>
+    /// <param name="parameterMarker">Base parameter marker (e.g., @p0).</param>
+    /// <param name="column">Column metadata describing the JSON column.</param>
+    /// <returns>Dialect-specific SQL fragment.</returns>
+    string RenderJsonArgument(string parameterMarker, IColumnInfo column);
+
+    /// <summary>
+    /// Gives the dialect a chance to stamp provider-specific metadata on JSON parameters.
+    /// </summary>
+    /// <param name="parameter">Parameter instance to update.</param>
+    /// <param name="column">Column metadata describing the JSON column.</param>
+    void TryMarkJsonParameter(DbParameter parameter, IColumnInfo column);
 
     /// <summary>
     /// True when the dialect supports set-valued parameters for IN-lists.

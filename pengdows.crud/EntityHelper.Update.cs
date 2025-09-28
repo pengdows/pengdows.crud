@@ -141,8 +141,18 @@ public partial class EntityHelper<TEntity, TRowID>
             {
                 var name = counters.NextSet();
                 var param = dialect.CreateDbParameter(name, column.DbType, newValue);
+                if (column.IsJsonType)
+                {
+                    dialect.TryMarkJsonParameter(param, column);
+                }
                 parameters.Add(param);
-                clause.Append($"{dialect.WrapObjectName(column.Name)} = {dialect.MakeParameterName(param)}");
+                var marker = dialect.MakeParameterName(param);
+                if (column.IsJsonType)
+                {
+                    marker = dialect.RenderJsonArgument(marker, column);
+                }
+
+                clause.Append($"{dialect.WrapObjectName(column.Name)} = {marker}");
             }
         }
 
@@ -171,14 +181,47 @@ public partial class EntityHelper<TEntity, TRowID>
             case DbType.Decimal:
             case DbType.Currency:
             case DbType.VarNumeric:
-                return decimal.Compare(Convert.ToDecimal(newValue), Convert.ToDecimal(originalValue)) == 0;
+                return decimal.Compare(Convert.ToDecimal(newValue, CultureInfo.InvariantCulture),
+                    Convert.ToDecimal(originalValue, CultureInfo.InvariantCulture)) == 0;
             case DbType.DateTime:
             case DbType.DateTime2:
+                return NormalizeDateTime(Convert.ToDateTime(newValue, CultureInfo.InvariantCulture)) ==
+                    NormalizeDateTime(Convert.ToDateTime(originalValue, CultureInfo.InvariantCulture));
             case DbType.DateTimeOffset:
-                return DateTime.Compare(Convert.ToDateTime(newValue).ToUniversalTime(),
-                    Convert.ToDateTime(originalValue).ToUniversalTime()) == 0;
+                return NormalizeDateTimeOffset(newValue).UtcDateTime == NormalizeDateTimeOffset(originalValue).UtcDateTime;
             default:
                 return Equals(newValue, originalValue);
+        }
+    }
+
+    private static DateTime NormalizeDateTime(DateTime value)
+    {
+        return value.Kind switch
+        {
+            DateTimeKind.Utc => value,
+            DateTimeKind.Local => value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+        };
+    }
+
+    private static DateTimeOffset NormalizeDateTimeOffset(object value)
+    {
+        switch (value)
+        {
+            case DateTimeOffset dto:
+                return dto;
+            case DateTime dt:
+                return dt.Kind switch
+                {
+                    DateTimeKind.Utc => new DateTimeOffset(dt, TimeSpan.Zero),
+                    DateTimeKind.Local => new DateTimeOffset(dt),
+                    _ => new DateTimeOffset(DateTime.SpecifyKind(dt, DateTimeKind.Utc), TimeSpan.Zero)
+                };
+            case string s when DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed):
+                return parsed;
+            default:
+                var converted = Convert.ToDateTime(value, CultureInfo.InvariantCulture);
+                return new DateTimeOffset(NormalizeDateTime(converted), TimeSpan.Zero);
         }
     }
 

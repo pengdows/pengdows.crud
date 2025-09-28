@@ -4,6 +4,7 @@ using System.Data.Common;
 using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
+using pengdows.crud;
 using pengdows.crud.enums;
 using pengdows.crud.wrappers;
 
@@ -84,6 +85,19 @@ public abstract class SqlDialect:ISqlDialect
     public virtual string ParameterMarker => "?";
     public virtual string ParameterMarkerAt(int ordinal) => ParameterMarker;
     public virtual bool SupportsNamedParameters => true;
+
+    public virtual string RenderJsonArgument(string parameterMarker, IColumnInfo column)
+    {
+        return parameterMarker;
+    }
+
+    public virtual void TryMarkJsonParameter(DbParameter parameter, IColumnInfo column)
+    {
+        if (parameter == null)
+        {
+            throw new ArgumentNullException(nameof(parameter));
+        }
+    }
 
     public virtual bool SupportsSetValuedParameters => false;
     public virtual int MaxParameterLimit => 255;

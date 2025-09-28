@@ -569,7 +569,14 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             // otherwise, we will have the connection set to autoclose so that we
             //close the underlying connection when the DbDataReader is closed;
             var dr = await cmd.ExecuteReaderAsync(behavior, cancellationToken).ConfigureAwait(false);
-            return new TrackedReader(dr, conn, connectionLocker, behavior == CommandBehavior.CloseConnection, cmd);
+            var trackedReader = new TrackedReader(
+                dr,
+                conn,
+                connectionLocker,
+                behavior == CommandBehavior.CloseConnection,
+                cmd);
+            cmd = null;
+            return trackedReader;
         }
         finally
         {
@@ -602,7 +609,14 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 : (CommandBehavior.CloseConnection | CommandBehavior.SingleRow);
 
             var dr = await cmd.ExecuteReaderAsync(behavior, cancellationToken).ConfigureAwait(false);
-            return new TrackedReader(dr, conn, connectionLocker, (behavior & CommandBehavior.CloseConnection) == CommandBehavior.CloseConnection, cmd);
+            var trackedReader = new TrackedReader(
+                dr,
+                conn,
+                connectionLocker,
+                (behavior & CommandBehavior.CloseConnection) == CommandBehavior.CloseConnection,
+                cmd);
+            cmd = null;
+            return trackedReader;
         }
         finally
         {

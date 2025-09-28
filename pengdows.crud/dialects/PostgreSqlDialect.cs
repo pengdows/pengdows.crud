@@ -1,7 +1,9 @@
+using System;
 using System.Data;
 using System.Data.Common;
 using System.Text;
 using Microsoft.Extensions.Logging;
+using pengdows.crud;
 using pengdows.crud.enums;
 using pengdows.crud.wrappers;
 
@@ -57,6 +59,37 @@ public class PostgreSqlDialect : SqlDialect
     {
         // Fallback method - prefer RETURNING clause
         return "SELECT lastval()";
+    }
+
+    public override string RenderJsonArgument(string parameterMarker, IColumnInfo column)
+    {
+        return string.Concat(parameterMarker, "::jsonb");
+    }
+
+    public override void TryMarkJsonParameter(DbParameter parameter, IColumnInfo column)
+    {
+        base.TryMarkJsonParameter(parameter, column);
+        parameter.DbType = DbType.String;
+        parameter.Size = 0;
+
+        try
+        {
+            var type = parameter.GetType();
+            type.GetProperty("DataTypeName")?.SetValue(parameter, "jsonb");
+
+            var npgsqlDbTypeProperty = type.GetProperty("NpgsqlDbType");
+            if (npgsqlDbTypeProperty != null && npgsqlDbTypeProperty.PropertyType.IsEnum)
+            {
+                if (Enum.TryParse(npgsqlDbTypeProperty.PropertyType, "Jsonb", ignoreCase: true, out var enumValue))
+                {
+                    npgsqlDbTypeProperty.SetValue(parameter, enumValue);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "Failed to stamp NpgsqlDbType metadata for JSON parameter {Parameter}.", parameter.ParameterName);
+        }
     }
 
     public override string GetVersionQuery() => "SELECT version()";

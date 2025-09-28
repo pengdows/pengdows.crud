@@ -2,6 +2,7 @@
 
 using System.Data;
 using System.Data.Common;
+using System.Threading;
 using System.Threading.Tasks;
 using pengdows.crud.infrastructure;
 
@@ -13,11 +14,13 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
 {
     private readonly ITrackedConnection _connection;
     private readonly IAsyncDisposable _connectionLocker;
+    private DbCommand? _command;
     private readonly DbDataReader _reader;
     private readonly bool _shouldCloseConnection;
     private readonly DbCommand? _command;
 
-    public TrackedReader(DbDataReader reader,
+    public TrackedReader(
+        DbDataReader reader,
         ITrackedConnection connection,
         IAsyncDisposable connectionLocker,
         bool shouldCloseConnection,
@@ -34,6 +37,7 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
     {
         _command?.Dispose();
         _reader.Dispose();
+        DisposeCommand();
         if (_shouldCloseConnection)
         {
             _connection.Close();
@@ -183,16 +187,8 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
 
     protected override async ValueTask DisposeManagedAsync()
     {
-        if (_command is IAsyncDisposable asyncCmd)
-        {
-            await asyncCmd.DisposeAsync().ConfigureAwait(false);
-        }
-        else
-        {
-            _command?.Dispose();
-        }
-
-        await _reader.DisposeAsync().ConfigureAwait(false);
+        await _reader.DisposeAsync();
+        DisposeCommand();
         if (_shouldCloseConnection)
         {
             _connection.Close();
@@ -244,5 +240,41 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
         {
             await _connectionLocker.DisposeAsync().ConfigureAwait(false);
         }).GetAwaiter().GetResult();
+    }
+
+    private void DisposeCommand()
+    {
+        var command = Interlocked.Exchange(ref _command, null);
+        if (command == null)
+        {
+            return;
+        }
+
+        try
+        {
+            command.Parameters?.Clear();
+        }
+        catch
+        {
+            // Ignore failures while clearing parameters during disposal.
+        }
+
+        try
+        {
+            command.Connection = null;
+        }
+        catch
+        {
+            // Ignore providers that do not allow clearing the connection.
+        }
+
+        try
+        {
+            command.Dispose();
+        }
+        catch
+        {
+            // Ignore disposal failures so reader shutdown always succeeds.
+        }
     }
 }

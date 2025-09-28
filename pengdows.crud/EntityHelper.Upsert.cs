@@ -119,8 +119,18 @@ public partial class EntityHelper<TEntity, TRowID>
             {
                 var name = counters.NextIns();
                 var p = dialect.CreateDbParameter(name, column.DbType, value);
+                if (column.IsJsonType)
+                {
+                    dialect.TryMarkJsonParameter(p, column);
+                }
                 parameters.Add(p);
-                values.Add(dialect.MakeParameterName(p));
+                var marker = dialect.MakeParameterName(p);
+                if (column.IsJsonType)
+                {
+                    marker = dialect.RenderJsonArgument(marker, column);
+                }
+
+                values.Add(marker);
             }
         }
 
@@ -196,8 +206,18 @@ public partial class EntityHelper<TEntity, TRowID>
             {
                 var name = counters.NextIns();
                 var p = dialect.CreateDbParameter(name, column.DbType, value);
+                if (column.IsJsonType)
+                {
+                    dialect.TryMarkJsonParameter(p, column);
+                }
                 parameters.Add(p);
-                placeholder = dialect.MakeParameterName(p);
+                var marker = dialect.MakeParameterName(p);
+                if (column.IsJsonType)
+                {
+                    marker = dialect.RenderJsonArgument(marker, column);
+                }
+
+                placeholder = marker;
             }
 
             columns.Add(dialect.WrapObjectName(column.Name));
@@ -269,8 +289,18 @@ public partial class EntityHelper<TEntity, TRowID>
             {
                 var name = counters.NextIns();
                 var p = dialect.CreateDbParameter(name, column.DbType, value);
+                if (column.IsJsonType)
+                {
+                    dialect.TryMarkJsonParameter(p, column);
+                }
                 parameters.Add(p);
-                placeholder = dialect.MakeParameterName(p);
+                var marker = dialect.MakeParameterName(p);
+                if (column.IsJsonType)
+                {
+                    marker = dialect.RenderJsonArgument(marker, column);
+                }
+
+                placeholder = marker;
             }
 
             srcColumns.Add(dialect.WrapObjectName(column.Name));

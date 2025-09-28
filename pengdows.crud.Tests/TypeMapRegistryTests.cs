@@ -127,6 +127,17 @@ public class TypeMapRegistryTests
     }
 
     [Fact]
+    public void GetTableInfo_FillsMissingOrdinalsSequentially()
+    {
+        var registry = new TypeMapRegistry();
+        var info = registry.GetTableInfo<MixedOrdinalEntity>();
+
+        Assert.Equal(1, info.Columns["First"].Ordinal);
+        Assert.Equal(3, info.Columns["Second"].Ordinal);
+        Assert.Equal(2, info.Columns["Third"].Ordinal);
+    }
+
+    [Fact]
     public void GetTableInfo_SucceedsWithPrimaryKeysOnly()
     {
         var registry = new TypeMapRegistry();
@@ -160,13 +171,13 @@ public class TypeMapRegistryTests
     }
 
     [Fact]
-    public void GetTableInfo_AllowsEnumPropertyMissingEnumColumn()
+    public void GetTableInfo_InfersEnumPropertyMissingAttribute()
     {
         var registry = new TypeMapRegistry();
         var info = registry.GetTableInfo<EnumMissingAttr>();
         var propType = typeof(EnumMissingAttr).GetProperty("State")?.PropertyType;
         Assert.True(propType?.IsEnum);
-        Assert.False(info.Columns["State"].IsEnum);
+        Assert.True(info.Columns["State"].IsEnum);
     }
 
     [Fact]
@@ -184,6 +195,33 @@ public class TypeMapRegistryTests
         var info = registry.GetTableInfo<JsonInvalidEntity>();
         Assert.Equal(DbType.Int32, info.Columns["Data"].DbType);
         Assert.True(info.Columns["Data"].IsJsonType);
+    }
+
+    [Fact]
+    public void GetTableInfo_InfersJsonWhenAttributeMissing()
+    {
+        var registry = new TypeMapRegistry();
+        var info = registry.GetTableInfo<StringPayloadEntity>();
+
+        Assert.True(info.Columns["Payload"].IsJsonType);
+    }
+
+    [Fact]
+    public void GetTableInfo_TrimsColumnNames()
+    {
+        var registry = new TypeMapRegistry();
+        var info = registry.GetTableInfo<WhitespaceColumnEntity>();
+
+        Assert.True(info.Columns.ContainsKey("Clean"));
+    }
+
+    [Fact]
+    public void GetTableInfo_InfersBinaryJson()
+    {
+        var registry = new TypeMapRegistry();
+        var info = registry.GetTableInfo<BinaryJsonEntity>();
+
+        Assert.True(info.Columns["Payload"].IsJsonType);
     }
 
     [Fact]
@@ -352,6 +390,20 @@ public class TypeMapRegistryTests
         public SampleEnum State { get; set; }
     }
 
+    [Table("MixedOrdinals")]
+    private class MixedOrdinalEntity
+    {
+        [Id]
+        [Column("First", DbType.String)]
+        public string First { get; set; } = string.Empty;
+
+        [Column("Second", DbType.String, 3)]
+        public string Second { get; set; } = string.Empty;
+
+        [Column("Third", DbType.String)]
+        public string Third { get; set; } = string.Empty;
+    }
+
     [Table("JsonValid")]
     private class JsonValidEntity
     {
@@ -374,6 +426,39 @@ public class TypeMapRegistryTests
         [Column("Data", DbType.Int32)]
         [Json]
         public int Data { get; set; }
+    }
+
+    [Table("JsonStringWithoutAttribute")]
+    private class StringPayloadEntity
+    {
+        [Id]
+        [Column("Id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [Column("Payload", DbType.String)]
+        public string Payload { get; set; } = string.Empty;
+    }
+
+    [Table("WhitespaceColumns")]
+    private class WhitespaceColumnEntity
+    {
+        [Id]
+        [Column("  Id  ", DbType.Int32)]
+        public int Id { get; set; }
+
+        [Column("  Clean  ", DbType.String)]
+        public string Clean { get; set; } = string.Empty;
+    }
+
+    [Table("BinaryJson")]
+    private class BinaryJsonEntity
+    {
+        [Id]
+        [Column("Id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [Column("Payload", DbType.Binary)]
+        public byte[] Payload { get; set; } = Array.Empty<byte>();
     }
 
     [Table("DuplicateColumns")]
