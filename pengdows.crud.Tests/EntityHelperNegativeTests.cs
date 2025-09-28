@@ -42,7 +42,7 @@ public class EntityHelperNegativeTests : SqlLiteContextTestBase
         // Use real SQLite for this integration test to ensure proper data persistence
         using var realContext = new DatabaseContext("Data Source=:memory:", Microsoft.Data.Sqlite.SqliteFactory.Instance, new TypeMapRegistry());
         var typeMap = realContext.TypeMapRegistry;
-        typeMap.Register<NoAuditEntity>();
+        _ = typeMap.GetTableInfo<NoAuditEntity>();
 
         var noAuditHelper = new EntityHelper<NoAuditEntity, int>(realContext);
         await BuildNoAuditTableReal(realContext);

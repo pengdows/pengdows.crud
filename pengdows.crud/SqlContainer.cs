@@ -840,7 +840,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
         // Copy the SQL query content to the pooled StringBuilder
         clone.Query.Clear();
-        clone.Query.Append(Query.ToString());
+        clone.Query.Append(Query);
 
         // Copy the WHERE flag
         clone.HasWhereAppended = HasWhereAppended;

@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using pengdows.crud.dialects;
 
 namespace pengdows.crud;
@@ -23,6 +24,59 @@ public partial class EntityHelper<TEntity, TRowID>
         public ISqlContainer DeleteByIdTemplate = null!;
         public ISqlContainer BaseRetrieveTemplate = null!;
         public ISqlContainer UpsertTemplate = null!;
+    }
+
+    private static TRowID CreateTemplateRowId()
+    {
+        if (typeof(TRowID).IsValueType)
+        {
+            return default!;
+        }
+
+        if (typeof(TRowID) == typeof(string))
+        {
+            return (TRowID)(object)string.Empty;
+        }
+
+        if (typeof(TRowID).IsArray)
+        {
+            var elementType = typeof(TRowID).GetElementType() ?? typeof(object);
+            var instance = Array.CreateInstance(elementType, 1);
+            return (TRowID)(object)instance;
+        }
+
+        try
+        {
+            return (TRowID)Activator.CreateInstance(typeof(TRowID), nonPublic: true)!;
+        }
+        catch
+        {
+            try
+            {
+                return (TRowID)RuntimeHelpers.GetUninitializedObject(typeof(TRowID));
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    $"Unable to create a template identifier instance for {typeof(TRowID)}.", ex);
+            }
+        }
+    }
+
+    private static IReadOnlyCollection<TRowID> CreateTemplateRowIds(int count)
+    {
+        if (count <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(count));
+        }
+
+        var values = new TRowID[count];
+        for (var i = 0; i < count; i++)
+        {
+            values[i] = CreateTemplateRowId();
+        }
+
+        return values;
     }
 
     /// <summary>
@@ -104,10 +158,11 @@ public partial class EntityHelper<TEntity, TRowID>
         var templates = new CachedContainerTemplates();
         
         // GetById - single ID parameter
-        templates.GetByIdTemplate = BuildRetrieve(new[] { default(TRowID)! }, context);
-        
+        var singleIdTemplateCount = dialect.SupportsSetValuedParameters ? 2 : 1;
+        templates.GetByIdTemplate = BuildRetrieveInternal(CreateTemplateRowIds(singleIdTemplateCount), "", context, deduplicate: false);
+
         // GetByIds - array parameter (will be updated with actual IDs)
-        templates.GetByIdsTemplate = BuildRetrieve(new[] { default(TRowID)!, default(TRowID)! }, context);
+        templates.GetByIdsTemplate = BuildRetrieveInternal(CreateTemplateRowIds(2), "", context, deduplicate: false);
         
         // BaseRetrieve - no WHERE clause
         templates.BaseRetrieveTemplate = BuildBaseRetrieve("a", context);
@@ -120,7 +175,7 @@ public partial class EntityHelper<TEntity, TRowID>
         templates.UpdateTemplate = BuildUpdateAsync(sampleEntity, context).Result;
         
         // Delete by ID
-        templates.DeleteByIdTemplate = BuildDelete(default(TRowID)!, context);
+        templates.DeleteByIdTemplate = BuildDelete(CreateTemplateRowId(), context);
         
         // Upsert
         templates.UpsertTemplate = BuildUpsert(sampleEntity, context);

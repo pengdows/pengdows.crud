@@ -48,6 +48,12 @@ public partial class EntityHelper<TEntity, TRowID>
     public ISqlContainer BuildRetrieve(IReadOnlyCollection<TRowID>? listOfIds,
         string alias, IDatabaseContext? context = null)
     {
+        return BuildRetrieveInternal(listOfIds, alias, context, deduplicate: true);
+    }
+
+    internal ISqlContainer BuildRetrieveInternal(IReadOnlyCollection<TRowID>? listOfIds,
+        string alias, IDatabaseContext? context, bool deduplicate)
+    {
         var ctx = context ?? _context;
         if (_idColumn == null)
         {
@@ -73,10 +79,11 @@ public partial class EntityHelper<TEntity, TRowID>
             throw new ArgumentException("IDs cannot be null", nameof(listOfIds));
         }
 
-        BuildWhere(
+        BuildWhereInternal(
             wrappedColumnName,
             listOfIds,
-            sc
+            sc,
+            deduplicate
         );
 
         return sc;
@@ -220,14 +227,20 @@ public partial class EntityHelper<TEntity, TRowID>
 
     public ISqlContainer BuildWhere(string wrappedColumnName, IEnumerable<TRowID> ids, ISqlContainer sqlContainer)
     {
+        return BuildWhereInternal(wrappedColumnName, ids, sqlContainer, deduplicate: true);
+    }
+
+    internal ISqlContainer BuildWhereInternal(string wrappedColumnName, IEnumerable<TRowID> ids,
+        ISqlContainer sqlContainer, bool deduplicate)
+    {
         if (ids is null)
         {
             return sqlContainer;
         }
 
-        // Build unique non-null list and allow at most one NULL (rendered as IS NULL)
+        // Build a non-null list and allow at most one NULL (rendered as IS NULL)
         var nonNullIds = new List<TRowID>();
-        var seen = new HashSet<TRowID?>();
+        HashSet<TRowID?>? seen = deduplicate ? new HashSet<TRowID?>() : null;
         var hasNull = false;
         foreach (var id in ids)
         {
@@ -236,7 +249,13 @@ public partial class EntityHelper<TEntity, TRowID>
                 hasNull = true;
                 continue;
             }
-            if (seen.Add(id))
+            if (!deduplicate)
+            {
+                nonNullIds.Add(id);
+                continue;
+            }
+
+            if (seen!.Add(id))
             {
                 nonNullIds.Add(id);
             }
