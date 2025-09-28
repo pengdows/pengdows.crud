@@ -6,7 +6,9 @@ using System.Data.Common;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Text;
 using pengdows.crud.attributes;
+using pengdows.crud.enums;
 
 #endregion
 
@@ -17,7 +19,9 @@ public sealed class DataReaderMapper : IDataReaderMapper
     public static readonly IDataReaderMapper Instance = new DataReaderMapper();
 
     private static readonly ConcurrentDictionary<PropertyInfo, Action<object, object?>> _setterCache = new();
-    private static readonly ConcurrentDictionary<(Type Type, string Schema, MapperOptions Options), MapperPlan> _planCache = new();
+    private static readonly ConcurrentDictionary<PlanCacheKey, MapperPlan> _planCache = new();
+
+    private readonly record struct PlanCacheKey(Type Type, string SchemaHash, bool ColumnsOnly, EnumParseFailureMode EnumMode);
 
     public static Task<List<T>> LoadObjectsFromDataReaderAsync<T>(
         IDataReader reader,
@@ -106,8 +110,8 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
         options ??= MapperOptions.Default;
 
-        var schemaHash = BuildSchemaHash(rdr);
-        var planKey = (typeof(T), schemaHash, options);
+        var schemaHash = BuildSchemaHash(rdr, options);
+        var planKey = new PlanCacheKey(typeof(T), schemaHash, options.ColumnsOnly, options.EnumMode);
 
         var plan = _planCache.GetOrAdd(planKey, _ => BuildPlan<T>(rdr, options));
 
@@ -194,15 +198,29 @@ public sealed class DataReaderMapper : IDataReaderMapper
             coercers.ToArray());
     }
 
-    private static string BuildSchemaHash(IDataRecord reader)
+    private static string BuildSchemaHash(DbDataReader reader, MapperOptions options)
     {
-        var names = new string[reader.FieldCount];
+        var normalizedNames = new string[reader.FieldCount];
         for (var i = 0; i < reader.FieldCount; i++)
         {
-            names[i] = reader.GetName(i);
+            var name = reader.GetName(i);
+
+            if (!options.ColumnsOnly && options.NamePolicy != null)
+            {
+                name = options.NamePolicy(name);
+            }
+
+            normalizedNames[i] = name;
         }
 
-        return string.Join("|", names);
+        var builder = new StringBuilder();
+        builder.Append(options.ColumnsOnly ? '1' : '0');
+        builder.Append('\u001F');
+        builder.Append((int)options.EnumMode);
+        builder.Append('\u001F');
+        builder.AppendJoin('\u001F', normalizedNames);
+
+        return builder.ToString();
     }
 
     private static Action<object, object?> GetOrCreateSetter(PropertyInfo prop)
