@@ -30,6 +30,21 @@ public class SqlContainerTests : SqlLiteContextTestBase
         BuildTestTable();
     }
 
+    [Fact]
+    public async Task Dispose_ReturnsParametersToDialectPool()
+    {
+        var param = Context.CreateDbParameter("p0", DbType.Int32, 1);
+        var container = Context.CreateSqlContainer();
+        container.AddParameter(param);
+
+        await container.DisposeAsync();
+
+        var reused = Context.CreateDbParameter("p1", DbType.Int32, 2);
+
+        Assert.Same(param, reused);
+        Assert.Equal(2, reused.Value);
+    }
+
     public void Dispose()
     {
         Context.Dispose();

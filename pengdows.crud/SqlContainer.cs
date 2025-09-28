@@ -298,7 +298,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     public void Clear()
     {
         Query.Clear();
-        _parameters.Clear();
+        ReturnParametersToPool();
         _outputParameterCount = 0;
         ParamSequence.Clear();
     }
@@ -874,9 +874,28 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     protected override void DisposeManaged()
     {
         // Dispose managed resources here (clear parameters and return the builder to pool)
-        _parameters.Clear();
+        ReturnParametersToPool();
         _outputParameterCount = 0;
         ParamSequence.Clear();
         StringBuilderPool.Return(Query);
+    }
+
+    private void ReturnParametersToPool()
+    {
+        if (_parameters.Count == 0)
+        {
+            _parameters.Clear();
+            return;
+        }
+
+        if (_dialect is SqlDialect sqlDialect)
+        {
+            foreach (var parameter in _parameters.Values)
+            {
+                sqlDialect.ReturnParameterToPool(parameter);
+            }
+        }
+
+        _parameters.Clear();
     }
 }
