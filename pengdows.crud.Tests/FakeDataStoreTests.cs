@@ -1,7 +1,10 @@
 #region
 
+using System.Collections.Generic;
 using System.Data;
+using System.Linq;
 using Microsoft.Data.Sqlite;
+using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 using Xunit;
 
@@ -45,7 +48,7 @@ public class FakeDataStoreTests
         var store = new FakeDataStore();
         store.ExecuteNonQuery("CREATE TABLE Users (Id INTEGER PRIMARY KEY, Name TEXT)");
 
-        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var command = factory.CreateCommand();
         command.CommandText = "INSERT INTO Users (Name) VALUES (@name)";
         var param = command.CreateParameter();

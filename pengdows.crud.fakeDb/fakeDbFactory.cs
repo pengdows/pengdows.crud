@@ -19,6 +19,7 @@ public sealed class fakeDbFactory : DbProviderFactory
     private bool _hasOpenedOnce;
     private readonly List<fakeDbConnection> _connections = new();
     private Exception? _globalPersistentScalarException;
+    public bool EnableDataPersistence { get; set; } = false;
 
     private fakeDbFactory()
     {
@@ -69,6 +70,8 @@ public sealed class fakeDbFactory : DbProviderFactory
             {
                 pre.EmulatedProduct = _pretendToBe;
             }
+            // Apply data persistence setting from factory
+            pre.EnableDataPersistence = EnableDataPersistence;
             return pre;
         }
 
@@ -107,6 +110,9 @@ public sealed class fakeDbFactory : DbProviderFactory
         {
             c.SetPersistentScalarException(_globalPersistentScalarException);
         }
+
+        // Apply data persistence setting from factory
+        c.EnableDataPersistence = EnableDataPersistence;
 
         return c;
     }

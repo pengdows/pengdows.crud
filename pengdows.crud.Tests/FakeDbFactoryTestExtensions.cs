@@ -7,7 +7,7 @@ using pengdows.crud.fakeDb;
 
 namespace pengdows.crud.Tests;
 
-internal static class FakeDbFactoryTestExtensions
+internal static class fakeDbFactoryTestExtensions
 {
     public static void SetNonQueryResult(this fakeDbFactory factory, int value)
     {

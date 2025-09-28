@@ -3,6 +3,7 @@
 using System.Data;
 using System.Threading.Tasks;
 using pengdows.crud.attributes;
+using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 using Xunit;
 
@@ -19,7 +20,7 @@ public class FakeDbDataPersistenceIntegrationTests
     public async Task FakeDbConnection_WithDataPersistence_ShouldPersistInsertedData()
     {
         // Arrange
-        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         factory.EnableDataPersistence = true;
 
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory);
@@ -52,7 +53,7 @@ public class FakeDbDataPersistenceIntegrationTests
     public async Task FakeDbConnection_WithoutDataPersistence_ShouldNotPersistData()
     {
         // Arrange
-        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         factory.EnableDataPersistence = false; // Explicitly disabled
 
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory);
@@ -83,7 +84,7 @@ public class FakeDbDataPersistenceIntegrationTests
     public async Task EntityHelper_WithDataPersistence_ShouldPersistEntityOperations()
     {
         // Arrange
-        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         factory.EnableDataPersistence = true;
 
         var typeMap = new TypeMapRegistry();
@@ -117,7 +118,7 @@ public class FakeDbDataPersistenceIntegrationTests
     public async Task FakeDbConnection_UpdateOperations_ShouldModifyPersistedData()
     {
         // Arrange
-        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         factory.EnableDataPersistence = true;
 
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory);
@@ -153,7 +154,7 @@ public class FakeDbDataPersistenceIntegrationTests
     public async Task FakeDbConnection_DeleteOperations_ShouldRemovePersistedData()
     {
         // Arrange
-        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         factory.EnableDataPersistence = true;
 
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory);
@@ -191,7 +192,7 @@ public class FakeDbDataPersistenceIntegrationTests
     public async Task FakeDbConnection_QueuedResultsTakePrecedence_OverDataPersistence()
     {
         // Arrange
-        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         factory.EnableDataPersistence = true;
 
         var connection = (fakeDbConnection)factory.CreateConnection();
