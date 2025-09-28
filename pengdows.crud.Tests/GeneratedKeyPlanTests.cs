@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -20,10 +21,15 @@ public class GeneratedKeyPlanTests
 {
     private readonly ILogger _logger = NullLogger.Instance;
 
+    private fakeDbFactory CreateFactory(SupportedDatabase dbType)
+    {
+        return new fakeDbFactory(dbType);
+    }
+
     [Fact]
     public void PostgreSql_GetGeneratedKeyPlan_ReturnsReturning()
     {
-        var dialect = new PostgreSqlDialect(null!, _logger);
+        var dialect = new PostgreSqlDialect(CreateFactory(SupportedDatabase.PostgreSql), _logger);
         var plan = dialect.GetGeneratedKeyPlan();
         Assert.Equal(GeneratedKeyPlan.Returning, plan);
     }
@@ -31,7 +37,7 @@ public class GeneratedKeyPlanTests
     [Fact]
     public void SqlServer_GetGeneratedKeyPlan_ReturnsOutputInserted()
     {
-        var dialect = new SqlServerDialect(null!, _logger);
+        var dialect = new SqlServerDialect(CreateFactory(SupportedDatabase.SqlServer), _logger);
         var plan = dialect.GetGeneratedKeyPlan();
         Assert.Equal(GeneratedKeyPlan.OutputInserted, plan);
     }
@@ -39,7 +45,7 @@ public class GeneratedKeyPlanTests
     [Fact]
     public void MySql_GetGeneratedKeyPlan_ReturnsSessionScopedFunction()
     {
-        var dialect = new MySqlDialect(null!, _logger);
+        var dialect = new MySqlDialect(CreateFactory(SupportedDatabase.MySql), _logger);
         var plan = dialect.GetGeneratedKeyPlan();
         Assert.Equal(GeneratedKeyPlan.SessionScopedFunction, plan);
     }
@@ -47,7 +53,7 @@ public class GeneratedKeyPlanTests
     [Fact]
     public void MariaDb_GetGeneratedKeyPlan_ReturnsSessionScopedFunction()
     {
-        var dialect = new MariaDbDialect(null!, _logger);
+        var dialect = new MariaDbDialect(CreateFactory(SupportedDatabase.MariaDb), _logger);
         var plan = dialect.GetGeneratedKeyPlan();
         Assert.Equal(GeneratedKeyPlan.SessionScopedFunction, plan);
     }
@@ -55,7 +61,7 @@ public class GeneratedKeyPlanTests
     [Fact]
     public void Oracle_GetGeneratedKeyPlan_ReturnsPrefetchSequence()
     {
-        var dialect = new OracleDialect(null!, _logger);
+        var dialect = new OracleDialect(CreateFactory(SupportedDatabase.Oracle), _logger);
         var plan = dialect.GetGeneratedKeyPlan();
         // Oracle supports RETURNING but sequence prefetch is preferred
         Assert.Equal(GeneratedKeyPlan.PrefetchSequence, plan);
@@ -64,7 +70,7 @@ public class GeneratedKeyPlanTests
     [Fact]
     public void Firebird_GetGeneratedKeyPlan_ReturnsReturning()
     {
-        var dialect = new FirebirdDialect(null!, _logger);
+        var dialect = new FirebirdDialect(CreateFactory(SupportedDatabase.Firebird), _logger);
         var plan = dialect.GetGeneratedKeyPlan();
         Assert.Equal(GeneratedKeyPlan.Returning, plan);
     }
@@ -72,7 +78,7 @@ public class GeneratedKeyPlanTests
     [Fact]
     public void DuckDb_GetGeneratedKeyPlan_ReturnsReturning()
     {
-        var dialect = new DuckDbDialect(null!, _logger);
+        var dialect = new DuckDbDialect(CreateFactory(SupportedDatabase.DuckDB), _logger);
         var plan = dialect.GetGeneratedKeyPlan();
         Assert.Equal(GeneratedKeyPlan.Returning, plan);
     }
@@ -80,7 +86,7 @@ public class GeneratedKeyPlanTests
     [Fact]
     public void Sqlite_GetGeneratedKeyPlan_ReturnsSessionScopedFunction()
     {
-        var dialect = new SqliteDialect(null!, _logger);
+        var dialect = new SqliteDialect(CreateFactory(SupportedDatabase.Sqlite), _logger);
         var plan = dialect.GetGeneratedKeyPlan();
         // SQLite may support RETURNING depending on version, but session function is safer default
         Assert.Equal(GeneratedKeyPlan.SessionScopedFunction, plan);
@@ -92,7 +98,7 @@ public class GeneratedKeyPlanTests
     public void GetCorrelationTokenLookupQuery_GeneratesCorrectSql(
         string tableName, string idColumn, string tokenColumn, string tokenParam)
     {
-        var dialect = new PostgreSqlDialect(null!, _logger);
+        var dialect = new PostgreSqlDialect(CreateFactory(SupportedDatabase.PostgreSql), _logger);
         var query = dialect.GetCorrelationTokenLookupQuery(tableName, idColumn, tokenColumn, tokenParam);
 
         var expected = $"SELECT \"{idColumn}\" FROM \"{tableName}\" WHERE \"{tokenColumn}\" = {tokenParam}";
@@ -102,7 +108,7 @@ public class GeneratedKeyPlanTests
     [Fact]
     public void GetNaturalKeyLookupQuery_WithValidColumns_GeneratesCorrectSql()
     {
-        var dialect = new SqlServerDialect(null!, _logger);
+        var dialect = new SqlServerDialect(CreateFactory(SupportedDatabase.SqlServer), _logger);
         var columns = new[] { "email", "username" };
         var parameters = new[] { "@p1", "@p2" };
 
@@ -117,7 +123,7 @@ public class GeneratedKeyPlanTests
     [Fact]
     public void GetNaturalKeyLookupQuery_WithMismatchedArrays_ThrowsArgumentException()
     {
-        var dialect = new PostgreSqlDialect(null!, _logger);
+        var dialect = new PostgreSqlDialect(CreateFactory(SupportedDatabase.PostgreSql), _logger);
         var columns = new[] { "email", "username" };
         var parameters = new[] { ":p1" }; // Mismatched count
 
@@ -129,7 +135,7 @@ public class GeneratedKeyPlanTests
     [Fact]
     public void GetNaturalKeyLookupQuery_WithEmptyColumns_ThrowsInvalidOperationException()
     {
-        var dialect = new PostgreSqlDialect(null!, _logger);
+        var dialect = new PostgreSqlDialect(CreateFactory(SupportedDatabase.PostgreSql), _logger);
         var columns = Array.Empty<string>();
         var parameters = Array.Empty<string>();
 
@@ -159,14 +165,14 @@ public class GeneratedKeyPlanTests
     {
         return dbType switch
         {
-            SupportedDatabase.SqlServer => new SqlServerDialect(null!, _logger),
-            SupportedDatabase.PostgreSql => new PostgreSqlDialect(null!, _logger),
-            SupportedDatabase.Sqlite => new SqliteDialect(null!, _logger),
-            SupportedDatabase.MySql => new MySqlDialect(null!, _logger),
-            SupportedDatabase.MariaDb => new MariaDbDialect(null!, _logger),
-            SupportedDatabase.Oracle => new OracleDialect(null!, _logger),
-            SupportedDatabase.Firebird => new FirebirdDialect(null!, _logger),
-            SupportedDatabase.DuckDB => new DuckDbDialect(null!, _logger),
+            SupportedDatabase.SqlServer => new SqlServerDialect(CreateFactory(dbType), _logger),
+            SupportedDatabase.PostgreSql => new PostgreSqlDialect(CreateFactory(dbType), _logger),
+            SupportedDatabase.Sqlite => new SqliteDialect(CreateFactory(dbType), _logger),
+            SupportedDatabase.MySql => new MySqlDialect(CreateFactory(dbType), _logger),
+            SupportedDatabase.MariaDb => new MariaDbDialect(CreateFactory(dbType), _logger),
+            SupportedDatabase.Oracle => new OracleDialect(CreateFactory(dbType), _logger),
+            SupportedDatabase.Firebird => new FirebirdDialect(CreateFactory(dbType), _logger),
+            SupportedDatabase.DuckDB => new DuckDbDialect(CreateFactory(dbType), _logger),
             _ => throw new ArgumentOutOfRangeException(nameof(dbType), dbType, "Unsupported database type")
         };
     }
@@ -239,19 +245,19 @@ public class GeneratedKeyPlanTests
     public void GeneratedKeyPlan_RespectsHierarchy()
     {
         // When a database supports RETURNING, it should prefer that over session functions
-        var postgresDialect = new PostgreSqlDialect(null!, _logger);
+        var postgresDialect = new PostgreSqlDialect(CreateFactory(SupportedDatabase.PostgreSql), _logger);
         Assert.True(postgresDialect.SupportsInsertReturning);
         Assert.False(postgresDialect.HasSessionScopedLastIdFunction());
         Assert.Equal(GeneratedKeyPlan.Returning, postgresDialect.GetGeneratedKeyPlan());
 
         // When a database doesn't support RETURNING but has session functions, use those
-        var mysqlDialect = new MySqlDialect(null!, _logger);
+        var mysqlDialect = new MySqlDialect(CreateFactory(SupportedDatabase.MySql), _logger);
         Assert.False(mysqlDialect.SupportsInsertReturning);
         Assert.True(mysqlDialect.HasSessionScopedLastIdFunction());
         Assert.Equal(GeneratedKeyPlan.SessionScopedFunction, mysqlDialect.GetGeneratedKeyPlan());
 
         // Oracle is special case - even though it supports RETURNING, sequence prefetch is preferred
-        var oracleDialect = new OracleDialect(null!, _logger);
+        var oracleDialect = new OracleDialect(CreateFactory(SupportedDatabase.Oracle), _logger);
         Assert.True(oracleDialect.SupportsInsertReturning);
         Assert.Equal(GeneratedKeyPlan.PrefetchSequence, oracleDialect.GetGeneratedKeyPlan());
     }
