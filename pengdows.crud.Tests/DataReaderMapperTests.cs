@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Threading.Tasks;
 using pengdows.crud.attributes;
+using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 using Xunit;
 
@@ -211,6 +212,42 @@ public class DataReaderMapperTests
     }
 
     [Fact]
+    public async Task LoadAsync_WhenSwitchingColumnsOnlyOption_RespectsCachedLookup()
+    {
+        var defaultReader = new fakeDbDataReader(new[]
+        {
+            new Dictionary<string, object>
+            {
+                ["Name"] = "Alice",
+                ["Age"] = 45
+            }
+        });
+
+        var defaultResult = await DataReaderMapper.LoadAsync<ColumnsOnlyEntity>(defaultReader, MapperOptions.Default);
+
+        Assert.Single(defaultResult);
+        Assert.Equal("Alice", defaultResult[0].Name);
+        Assert.Equal(45, defaultResult[0].Age);
+
+        var columnsOnlyReader = new fakeDbDataReader(new[]
+        {
+            new Dictionary<string, object>
+            {
+                ["Name"] = "Bob",
+                ["Age"] = 51
+            }
+        });
+
+        var columnsOnlyResult = await DataReaderMapper.LoadAsync<ColumnsOnlyEntity>(
+            columnsOnlyReader,
+            new MapperOptions(ColumnsOnly: true));
+
+        Assert.Single(columnsOnlyResult);
+        Assert.Equal("Bob", columnsOnlyResult[0].Name);
+        Assert.Equal(0, columnsOnlyResult[0].Age);
+    }
+
+    [Fact]
     public async Task LoadObjectsFromDataReaderAsync_MapsEnumFromString()
     {
         var reader = new fakeDbDataReader(new[]
@@ -259,6 +296,201 @@ public class DataReaderMapperTests
             () => DataReaderMapper.LoadAsync<EnumEntity>(reader, new MapperOptions(Strict: true)));
     }
 
+    [Fact]
+    public async Task LoadAsync_WithTypeConversion_UsesCoercion()
+    {
+        var reader = new fakeDbDataReader(new[]
+        {
+            new Dictionary<string, object>
+            {
+                ["Age"] = "42"
+            }
+        });
+
+        var result = await DataReaderMapper.LoadAsync<TypeConversionEntity>(reader, MapperOptions.Default);
+
+        Assert.Single(result);
+        Assert.Equal(42, result[0].Age);
+    }
+
+    [Fact]
+    public async Task LoadObjectsFromDataReaderAsync_DirectAssignment_UsesGetFieldValue()
+    {
+        var reader = new TrackingFieldAccessReader(new[]
+        {
+            new Dictionary<string, object>
+            {
+                ["Age"] = 37
+            }
+        });
+
+        var result = await DataReaderMapper.LoadObjectsFromDataReaderAsync<DirectEntity>(reader);
+
+        Assert.Single(result);
+        Assert.Equal(37, result[0].Age);
+        Assert.Equal(1, reader.GetValueCallCount);
+        Assert.Equal(1, reader.GetFieldValueCallCount);
+    }
+
+    [Fact]
+    public async Task LoadObjectsFromDataReaderAsync_CoercionPath_UsesGetValue()
+    {
+        var reader = new TrackingFieldAccessReader(new[]
+        {
+            new Dictionary<string, object>
+            {
+                ["Age"] = "58"
+            }
+        });
+
+        var result = await DataReaderMapper.LoadObjectsFromDataReaderAsync<TypeConversionEntity>(reader);
+
+        Assert.Single(result);
+        Assert.Equal(58, result[0].Age);
+        Assert.Equal(2, reader.GetValueCallCount);
+        Assert.Equal(0, reader.GetFieldValueCallCount);
+    }
+
+    [Fact]
+    public async Task LoadObjectsFromDataReaderAsync_WhenColumnTypeRemainsStable_ReusesTypedGetter()
+    {
+        var firstReader = new StrictTrackingFieldAccessReader(new[]
+        {
+            new Dictionary<string, object>
+            {
+                ["Age"] = 64
+            }
+        });
+
+        var secondReader = new StrictTrackingFieldAccessReader(new[]
+        {
+            new Dictionary<string, object>
+            {
+                ["Age"] = 65
+            }
+        });
+
+        var firstResult = await DataReaderMapper.LoadObjectsFromDataReaderAsync<DirectEntity>(firstReader);
+        var secondResult = await DataReaderMapper.LoadObjectsFromDataReaderAsync<DirectEntity>(secondReader);
+
+        Assert.Single(firstResult);
+        Assert.Equal(64, firstResult[0].Age);
+        Assert.Single(secondResult);
+        Assert.Equal(65, secondResult[0].Age);
+        Assert.Equal(0, firstReader.GetFieldValueFailures);
+        Assert.True(firstReader.GetFieldValueCallCount >= 1);
+        Assert.Equal(0, secondReader.GetFieldValueFailures);
+        Assert.True(secondReader.GetFieldValueCallCount >= 1);
+    }
+
+    [Fact]
+    public async Task LoadObjectsFromDataReaderAsync_WhenColumnTypeChanges_RebuildsPlanAndUsesCoercion()
+    {
+        var firstReader = new StrictTrackingFieldAccessReader(new[]
+        {
+            new Dictionary<string, object>
+            {
+                ["Age"] = 70
+            }
+        });
+
+        var secondReader = new StrictTrackingFieldAccessReader(new[]
+        {
+            new Dictionary<string, object>
+            {
+                ["Age"] = "71"
+            }
+        });
+
+        var firstResult = await DataReaderMapper.LoadObjectsFromDataReaderAsync<DirectEntity>(firstReader);
+        Assert.Single(firstResult);
+        Assert.Equal(70, firstResult[0].Age);
+        Assert.Equal(0, firstReader.GetFieldValueFailures);
+        Assert.True(firstReader.GetFieldValueCallCount >= 1);
+
+        var secondResult = await DataReaderMapper.LoadObjectsFromDataReaderAsync<DirectEntity>(secondReader);
+
+        Assert.Single(secondResult);
+        Assert.Equal(71, secondResult[0].Age);
+        Assert.Equal(0, secondReader.GetFieldValueCallCount);
+        Assert.True(secondReader.GetValueCallCount >= 2);
+        Assert.Equal(0, secondReader.GetFieldValueFailures);
+    }
+
+    [Fact]
+    public async Task LoadAsync_WithEnumSetNullAndLog_UsesConfiguredBehavior()
+    {
+        var reader = new fakeDbDataReader(new[]
+        {
+            new Dictionary<string, object>
+            {
+                ["NullableState"] = "invalid",
+                ["RequiredState"] = "invalid"
+            }
+        });
+
+        var options = new MapperOptions(EnumMode: EnumParseFailureMode.SetNullAndLog);
+        var result = await DataReaderMapper.LoadAsync<EnumModeEntity>(reader, options);
+
+        Assert.Single(result);
+        Assert.Null(result[0].NullableState);
+        Assert.Equal(default(SampleState), result[0].RequiredState);
+    }
+
+    [Fact]
+    public async Task LoadAsync_WithEnumSetDefaultValue_UsesConfiguredBehavior()
+    {
+        var reader = new fakeDbDataReader(new[]
+        {
+            new Dictionary<string, object>
+            {
+                ["NullableState"] = 999,
+                ["RequiredState"] = 999
+            }
+        });
+
+        var options = new MapperOptions(EnumMode: EnumParseFailureMode.SetDefaultValue);
+        var result = await DataReaderMapper.LoadAsync<EnumModeEntity>(reader, options);
+
+        Assert.Single(result);
+        Assert.Equal(default(SampleState?), result[0].NullableState);
+        Assert.Equal(default(SampleState), result[0].RequiredState);
+    }
+
+    [Fact]
+    public async Task LoadAsync_WhenGetFieldTypeThrows_FallsBackToObject()
+    {
+        var reader = new ThrowingFieldTypeReader(new[]
+        {
+            new Dictionary<string, object>
+            {
+                ["Age"] = 21
+            }
+        });
+
+        var result = await DataReaderMapper.LoadAsync<TypeConversionEntity>(reader, MapperOptions.Default);
+
+        Assert.Single(result);
+        Assert.Equal(21, result[0].Age);
+    }
+
+    [Fact]
+    public async Task LoadAsync_ColumnsOnly_WithDuplicateColumnNames_ThrowsArgumentException()
+    {
+        var reader = new fakeDbDataReader(new[]
+        {
+            new Dictionary<string, object>
+            {
+                ["Alias"] = "First"
+            }
+        });
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => DataReaderMapper.LoadAsync<DuplicateColumnNamesEntity>(
+                reader,
+                new MapperOptions(ColumnsOnly: true)));
+    }
+
     private class SampleEntity
     {
         public string Name { get; set; }
@@ -287,5 +519,126 @@ public class DataReaderMapperTests
     private class EnumEntity
     {
         public SampleState State { get; set; }
+    }
+
+    private class TypeConversionEntity
+    {
+        public int Age { get; set; }
+    }
+
+    private class EnumModeEntity
+    {
+        public SampleState? NullableState { get; set; }
+        public SampleState RequiredState { get; set; }
+    }
+
+    private class DuplicateColumnNamesEntity
+    {
+        [Column("Alias", DbType.String)]
+        public string? First { get; set; }
+
+        [Column("Alias", DbType.String)]
+        public string? Second { get; set; }
+    }
+
+    private class DirectEntity
+    {
+        public int Age { get; set; }
+    }
+
+    private sealed class ThrowingFieldTypeReader : fakeDbDataReader
+    {
+        public ThrowingFieldTypeReader(IEnumerable<Dictionary<string, object>> rows)
+            : base(rows)
+        {
+        }
+
+        public override Type GetFieldType(int ordinal)
+        {
+            throw new InvalidOperationException("Simulated failure.");
+        }
+    }
+
+    private sealed class TrackingFieldAccessReader : fakeDbDataReader
+    {
+        public TrackingFieldAccessReader(IEnumerable<Dictionary<string, object>> rows)
+            : base(rows)
+        {
+        }
+
+        public int GetValueCallCount { get; private set; }
+
+        public int GetFieldValueCallCount { get; private set; }
+
+        public override object GetValue(int i)
+        {
+            GetValueCallCount++;
+            return base.GetValue(i);
+        }
+
+        public override T GetFieldValue<T>(int ordinal)
+        {
+            GetFieldValueCallCount++;
+            var value = base.GetValue(ordinal);
+            if (value is T typed)
+            {
+                return typed;
+            }
+
+            return (T)Convert.ChangeType(value, typeof(T));
+        }
+    }
+
+    private sealed class StrictTrackingFieldAccessReader : fakeDbDataReader
+    {
+        private bool _suppressValueCount;
+
+        public StrictTrackingFieldAccessReader(IEnumerable<Dictionary<string, object>> rows)
+            : base(rows)
+        {
+        }
+
+        public int GetValueCallCount { get; private set; }
+
+        public int GetFieldValueCallCount { get; private set; }
+
+        public int GetFieldValueFailures { get; private set; }
+
+        public override object GetValue(int i)
+        {
+            if (!_suppressValueCount)
+            {
+                GetValueCallCount++;
+            }
+
+            return base.GetValue(i);
+        }
+
+        public override Type GetFieldType(int ordinal)
+        {
+            try
+            {
+                _suppressValueCount = true;
+                return base.GetFieldType(ordinal);
+            }
+            finally
+            {
+                _suppressValueCount = false;
+            }
+        }
+
+        public override T GetFieldValue<T>(int ordinal)
+        {
+            GetFieldValueCallCount++;
+            var value = base.GetValue(ordinal);
+            if (value is T typed)
+            {
+                return typed;
+            }
+
+            GetFieldValueFailures++;
+            throw new InvalidCastException(
+                $"Cannot convert value of type {value?.GetType().FullName ?? "null"} to {typeof(T).FullName}.");
+        }
     }
 }

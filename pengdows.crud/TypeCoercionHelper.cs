@@ -33,8 +33,6 @@ public sealed record TypeCoercionOptions(TimeMappingPolicy TimePolicy, JsonPassT
 
 public static class TypeCoercionHelper
 {
-    private static readonly char[] TrueChars = { 't', 'y', '1' };
-    private static readonly char[] FalseChars = { 'f', 'n', '0' };
     private static readonly Type GuidType = typeof(Guid);
     private static readonly Type GuidArrayType = typeof(byte[]);
     private static readonly Type ReadOnlyMemoryOfByteType = typeof(ReadOnlyMemory<byte>);
@@ -286,17 +284,19 @@ public static class TypeCoercionHelper
 
     private static bool EvaluateCharBoolean(char lower)
     {
-        if (Array.IndexOf(TrueChars, lower) >= 0)
+        switch (lower)
         {
-            return true;
+            case 't':
+            case 'y':
+            case '1':
+                return true;
+            case 'f':
+            case 'n':
+            case '0':
+                return false;
+            default:
+                throw new InvalidCastException($"Cannot convert character '{lower}' to Boolean.");
         }
-
-        if (Array.IndexOf(FalseChars, lower) >= 0)
-        {
-            return false;
-        }
-
-        throw new InvalidCastException($"Cannot convert character '{lower}' to Boolean.");
     }
 
     private static object CoerceDateTimeOffset(object value, TypeCoercionOptions options)
