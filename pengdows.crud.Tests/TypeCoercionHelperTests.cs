@@ -103,6 +103,21 @@ public class TypeCoercionHelperTests
     }
 
     [Fact]
+    public void Coerce_SingleCharacterBoolean_TrueBranch()
+    {
+        var result = TypeCoercionHelper.Coerce("Y", typeof(string), typeof(bool));
+
+        Assert.Equal(true, result);
+    }
+
+    [Fact]
+    public void Coerce_SingleCharacterBoolean_InvalidCharacter_Throws()
+    {
+        Assert.Throws<InvalidCastException>(() =>
+            TypeCoercionHelper.Coerce('x', typeof(char), typeof(bool)));
+    }
+
+    [Fact]
     public void Coerce_JsonToObject_ParsesCorrectly()
     {
         var json = "{\"Name\":\"Test\"}";
