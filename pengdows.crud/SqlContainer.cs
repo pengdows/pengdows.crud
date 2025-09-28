@@ -173,6 +173,12 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     public DbParameter AddParameterWithValue<T>(string? name, DbType type, T value,
         ParameterDirection direction = ParameterDirection.Input)
     {
+        // Validate parameter direction before creating parameter
+        if (direction == ParameterDirection.Output && _context.DataSourceInfo.MaxOutputParameters == 0)
+        {
+            throw new ArgumentException($"Output parameters are not supported by {_dialect.DatabaseType}.");
+        }
+
         name ??= GenerateParameterName();
         var parameter = _context.CreateDbParameter(name, type, value);
         parameter.Direction = direction;

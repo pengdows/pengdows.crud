@@ -39,11 +39,15 @@ public class EntityHelperNegativeTests : SqlLiteContextTestBase
     [Fact]
     public async Task BuildUpdateAsync_NoAudit_NoChanges_Throws()
     {
-        TypeMap.Register<NoAuditEntity>();
-        var noAuditHelper = new EntityHelper<NoAuditEntity, int>(Context);
-        await BuildNoAuditTable();
+        // Use real SQLite for this integration test to ensure proper data persistence
+        using var realContext = new DatabaseContext("Data Source=:memory:", Microsoft.Data.Sqlite.SqliteFactory.Instance, new TypeMapRegistry());
+        var typeMap = realContext.TypeMapRegistry;
+        typeMap.Register<NoAuditEntity>();
+
+        var noAuditHelper = new EntityHelper<NoAuditEntity, int>(realContext);
+        await BuildNoAuditTableReal(realContext);
         var e = new NoAuditEntity { Name = Guid.NewGuid().ToString() };
-        await noAuditHelper.CreateAsync(e, Context);
+        await noAuditHelper.CreateAsync(e, realContext);
         var loaded = await noAuditHelper.RetrieveOneAsync(e);
         Assert.NotNull(loaded);
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
@@ -151,6 +155,16 @@ public class EntityHelperNegativeTests : SqlLiteContextTestBase
         var sql = string.Format(
             @"CREATE TABLE IF NOT EXISTS {0}NoAudit{1} ({0}Id{1} INTEGER PRIMARY KEY AUTOINCREMENT,{0}Name{1} TEXT NOT NULL)", qp, qs);
         var container = Context.CreateSqlContainer(sql);
+        await container.ExecuteNonQueryAsync();
+    }
+
+    private async Task BuildNoAuditTableReal(IDatabaseContext context)
+    {
+        var qp = context.QuotePrefix;
+        var qs = context.QuoteSuffix;
+        var sql = string.Format(
+            @"CREATE TABLE IF NOT EXISTS {0}NoAudit{1} ({0}Id{1} INTEGER PRIMARY KEY AUTOINCREMENT,{0}Name{1} TEXT NOT NULL)", qp, qs);
+        var container = context.CreateSqlContainer(sql);
         await container.ExecuteNonQueryAsync();
     }
 

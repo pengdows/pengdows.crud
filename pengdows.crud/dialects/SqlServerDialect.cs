@@ -52,6 +52,7 @@ public class SqlServerDialect : SqlDialect
     public override bool SupportsJsonTypes => IsVersionAtLeast(13);
 
     public override bool SupportsInsertReturning => true;
+    public override bool SupportsIdentityColumns => true;
 
     public override string GetInsertReturningClause(string idColumnName)
     {

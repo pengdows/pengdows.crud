@@ -114,10 +114,10 @@ public class GeneratedKeyPlanTests
 
         var query = dialect.GetNaturalKeyLookupQuery("users", "id", columns, parameters);
 
-        Assert.Contains("SELECT TOP 1 [id]", query);
-        Assert.Contains("FROM [users]", query);
-        Assert.Contains("WHERE [email] = @p1 AND [username] = @p2", query);
-        Assert.Contains("ORDER BY [id] DESC", query);
+        Assert.Contains("SELECT TOP 1 \"id\"", query);
+        Assert.Contains("FROM \"users\"", query);
+        Assert.Contains("WHERE \"email\" = @p1 AND \"username\" = @p2", query);
+        Assert.Contains("ORDER BY \"id\" DESC", query);
     }
 
     [Fact]
@@ -187,7 +187,7 @@ public class GeneratedKeyPlanTests
         {
             // Inline RETURNING/OUTPUT (highest priority)
             (SupportedDatabase.PostgreSql, GeneratedKeyPlan.Returning, "RETURNING \"id\""),
-            (SupportedDatabase.SqlServer, GeneratedKeyPlan.OutputInserted, "OUTPUT INSERTED.[id]"),
+            (SupportedDatabase.SqlServer, GeneratedKeyPlan.OutputInserted, "OUTPUT INSERTED.\"id\""),
             (SupportedDatabase.Firebird, GeneratedKeyPlan.Returning, "RETURNING \"id\""),
             (SupportedDatabase.DuckDB, GeneratedKeyPlan.Returning, "RETURNING \"id\""),
 

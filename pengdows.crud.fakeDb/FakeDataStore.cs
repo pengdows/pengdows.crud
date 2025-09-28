@@ -18,6 +18,7 @@ public class FakeDataStore
     private readonly ConcurrentDictionary<string, List<Dictionary<string, object?>>> _tables = new();
     private readonly object _lockObject = new();
     private int _nextId = 1;
+    private int _lastInsertId = 0;
 
     public void Clear()
     {
@@ -25,6 +26,7 @@ public class FakeDataStore
         {
             _tables.Clear();
             _nextId = 1;
+            _lastInsertId = 0;
         }
     }
 
@@ -74,6 +76,12 @@ public class FakeDataStore
         if (sql == "SELECT 1" || sql == "SELECT 1;" || sql.StartsWith("SELECT 1 "))
         {
             return 1;
+        }
+
+        // Handle SQLite last_insert_rowid() function
+        if (sql == "SELECT LAST_INSERT_ROWID()" || sql == "SELECT LAST_INSERT_ROWID();")
+        {
+            return _lastInsertId;
         }
 
         // Handle COUNT queries
@@ -152,9 +160,11 @@ public class FakeDataStore
                     EnsureTable(tableName);
 
                     // For simple format, create a generic row with auto-assigned ID
+                    var nextId = _nextId++;
+                    _lastInsertId = nextId;
                     var row = new Dictionary<string, object?>
                     {
-                        ["Id"] = _nextId++,
+                        ["Id"] = nextId,
                         ["Data"] = simpleMatch.Groups[2].Value.Trim()
                     };
 
@@ -187,12 +197,20 @@ public class FakeDataStore
             // Auto-assign ID if not provided
             if (!columns.Any(c => c.Equals("Id", StringComparison.OrdinalIgnoreCase)))
             {
-                rowData["Id"] = _nextId++;
+                var nextId = _nextId++;
+                _lastInsertId = nextId;
+                rowData["Id"] = nextId;
             }
 
             for (int i = 0; i < Math.Min(columns.Count, values.Count); i++)
             {
                 rowData[columns[i]] = values[i];
+
+                // Track the last insert ID if an ID column was explicitly provided
+                if (columns[i].Equals("Id", StringComparison.OrdinalIgnoreCase) && values[i] is int explicitId)
+                {
+                    _lastInsertId = explicitId;
+                }
             }
 
             lock (_lockObject)

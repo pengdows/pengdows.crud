@@ -374,7 +374,18 @@ public partial class EntityHelper<TEntity, TRowID> :
         var provider = ctx as ISqlDialectProvider
                        ?? throw new InvalidOperationException(
                            "IDatabaseContext must implement ISqlDialectProvider and expose a non-null Dialect.");
-        var lastIdQuery = provider.Dialect.GetLastInsertedIdQuery();
+
+        string lastIdQuery;
+        try
+        {
+            lastIdQuery = provider.Dialect.GetLastInsertedIdQuery();
+        }
+        catch (NotSupportedException)
+        {
+            // Some databases (Oracle, Unknown) don't support generic last-insert-id queries
+            // This is expected behavior - just skip ID population
+            return;
+        }
         if (string.IsNullOrEmpty(lastIdQuery))
         {
             return;

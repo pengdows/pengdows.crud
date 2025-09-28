@@ -88,15 +88,12 @@ public class OracleDialectAdvancedTests
     }
 
     [Fact]
-    public void GetLastInsertedIdQuery_Should_Return_Oracle_Specific_Query()
+    public void GetLastInsertedIdQuery_Should_Throw_NotSupportedException()
     {
-        // Act
-        var query = _dialect.GetLastInsertedIdQuery();
-
-        // Assert
-        Assert.NotNull(query);
-        // Oracle typically uses RETURNING clause or sequences
-        Assert.True(query.Length > 0);
+        // Act & Assert
+        var ex = Assert.Throws<NotSupportedException>(() => _dialect.GetLastInsertedIdQuery());
+        Assert.Contains("Oracle requires sequence-specific syntax", ex.Message);
+        Assert.Contains("RETURNING clause or sequence.CURRVAL", ex.Message);
     }
 
     [Fact]
