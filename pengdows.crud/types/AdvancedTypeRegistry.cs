@@ -5,6 +5,7 @@ using System.Text.Json;
 using pengdows.crud.enums;
 using pengdows.crud.types.converters;
 using pengdows.crud.types.valueobjects;
+using pengdows.crud.types.coercion;
 
 namespace pengdows.crud.types;
 
@@ -166,6 +167,33 @@ public class AdvancedTypeRegistry
 
         return true;
     }
+
+    /// <summary>
+    /// Enhanced parameter configuration using both legacy converters and new coercion system.
+    /// Provides fallback mechanism and optimal performance.
+    /// </summary>
+    public bool TryConfigureParameterEnhanced(DbParameter parameter, Type clrType, object? value, SupportedDatabase provider)
+    {
+        // First try the legacy advanced type system for backward compatibility
+        if (TryConfigureParameter(parameter, clrType, value, provider))
+        {
+            return true;
+        }
+
+        // Fall back to the new coercion system for "weird" types
+        if (ProviderParameterFactory.TryConfigureParameter(parameter, clrType, value, provider))
+        {
+            return true;
+        }
+
+        // Final fallback: try parameter binding rules
+        return ParameterBindingRules.ApplyBindingRules(parameter, clrType, value, provider);
+    }
+
+    /// <summary>
+    /// Get the coercion registry for direct access to weird type handling.
+    /// </summary>
+    public CoercionRegistry CoercionRegistry => CoercionRegistry.Shared;
 
     private void RegisterDefaultMappings()
     {
