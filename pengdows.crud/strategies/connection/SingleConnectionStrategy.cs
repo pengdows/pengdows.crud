@@ -20,7 +20,7 @@ namespace pengdows.crud.strategies.connection;
 /// - Maximum simplicity with maximum constraints
 ///
 /// DATABASE EXAMPLES:
-/// - In-memory SQLite databases (":memory:") - data lost if connection closes
+/// - Isolated in-memory SQLite/DuckDB databases (Data Source=:memory:) where each connection has its own store
 /// - Single-user file databases that don't support concurrent connections
 /// - Embedded databases with strict single-connection limitations
 /// - Testing scenarios where connection state isolation is critical

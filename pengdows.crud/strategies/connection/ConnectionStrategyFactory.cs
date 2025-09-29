@@ -23,8 +23,9 @@ namespace pengdows.crud.strategies.connection;
 ///    └─ Production databases with proper connection pooling
 ///
 /// DATABASE-TO-STRATEGY MAPPING:
-/// - :memory: SQLite → SingleConnection (data loss if connection closes)
-/// - File SQLite → SingleWriter (single writer performance)
+/// - SQLite/DuckDB isolated :memory: → SingleConnection (each connection owns its own database)
+/// - SQLite/DuckDB shared in-memory (Mode=Memory;Cache=Shared) → SingleWriter (one writer, many readers)
+/// - File SQLite → SingleWriter (single writer coordination)
 /// - LocalDB → KeepAlive (prevent shutdown between operations)
 /// - SQL Server/PostgreSQL/MySQL → Standard (connection pooling)
 ///

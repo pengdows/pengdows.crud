@@ -21,7 +21,7 @@ namespace pengdows.crud.strategies.connection;
 ///
 /// DATABASE EXAMPLES:
 /// - SQL Server Compact Edition (SQLCE) - single writer limitation
-/// - SQLite with WAL mode - benefits from persistent writer
+/// - SQLite/DuckDB with WAL or shared in-memory cache - benefits from persistent writer
 /// - File-based databases where write locks are expensive to acquire
 /// - Any database with single-writer/multi-reader architecture
 ///
