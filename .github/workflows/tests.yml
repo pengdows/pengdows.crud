@@ -1,0 +1,82 @@
+name: Unit Tests and Coverage
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  test:
+    name: Run unit tests and collect coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore dependencies
+        run: dotnet restore pengdows.crud.sln
+
+      - name: Run unit tests with coverage
+        run: >-
+          dotnet test pengdows.crud.Tests/pengdows.crud.Tests.csproj
+          -c Release
+          --logger "trx;LogFileName=unit-tests.trx"
+          --results-directory TestResults
+          --settings coverage.runsettings
+
+      - name: Install ReportGenerator
+        run: |
+          dotnet tool install --global dotnet-reportgenerator-globaltool
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
+      - name: Create coverage summary
+        run: >-
+          reportgenerator
+          -reports:"TestResults/**/coverage.cobertura.xml"
+          -targetdir:"coverage-report"
+          -reporttypes:"TextSummary;Html"
+          -assemblyfilters:"+pengdows.crud;-pengdows.crud.Tests;-pengdows.crud.abstractions;-pengdows.crud.fakeDb;-testbed"
+          -classfilters:"-*Test*;-*Mock*"
+
+      - name: Publish coverage summary
+        run: |
+          echo '### Code Coverage Summary' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat coverage-report/Summary.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload test results
+        if: always()
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          files: TestResults/**/*.trx
+
+      - name: Upload coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            coverage-report
+            TestResults/**/*.xml
+
+      - name: Upload coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v4
+        with:
+          files: TestResults/**/coverage.cobertura.xml
+          disable_search: true
+          fail_ci_if_error: true
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
