@@ -22,17 +22,18 @@ public enum DbMode
     KeepAlive = 1,
 
     /// <summary>
-    /// For file-based databases like Access or Firebird Embedded that allow only one writer.
+    /// For databases that require a single writer but allow concurrent readers.
     /// Keeps one write connection open at all times. Allows multiple concurrent read connections.
-    /// Not intended for production use. Sqlite and DuckDB use this for file-based databases,
-    /// and are hardcoded to it in that case.
+    /// Not intended for production use. Sqlite and DuckDB use this for file-backed databases and
+    /// for named in-memory databases that opt into shared cache via cache=shared.
     /// </summary>
     SingleWriter = 2,
 
     /// <summary>
     /// For embedded or legacy databases that can only handle a single connection.
-    /// Not suitable for production systems or multithreaded apps. Sqlite and DuckDB
-    /// MUST use this for in-memory mode, and thus are hardcoded to it in that case.
+    /// Not suitable for production systems or multithreaded apps. Sqlite and DuckDB are
+    /// hardcoded to this for isolated in-memory usage (e.g., Data Source=:memory:) where
+    /// each connection would otherwise see its own private database.
     /// </summary>
     SingleConnection = 4,
 

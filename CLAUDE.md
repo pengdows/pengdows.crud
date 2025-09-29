@@ -28,7 +28,7 @@ The library follows a layered architecture with these key components:
 - Entities use attributes for table/column mapping (`TableAttribute`, `ColumnAttribute`, `IdAttribute`)
 - Audit fields supported via `CreatedBy/On`, `LastUpdatedBy/On` attributes
 - SQL dialect abstraction supports multiple databases (SQL Server, PostgreSQL, Oracle, MySQL, SQLite, etc.)
-- Connection strategies: Standard, KeepAlive, Shared, SingleWriter
+- Connection strategies: Standard, KeepAlive, SingleWriter, SingleConnection
 - Multi-tenancy support via tenant resolution
 ### Primary Key vs. Row ID (Pseudo Key)
 - `pengdows.crud/` - Core implementation
@@ -160,12 +160,14 @@ The philosophy is simple:
 
 **DbMode Enum:**
 ```csharp
+[Flags]
 public enum DbMode
 {
     Standard = 0,       // Recommended for production
     KeepAlive = 1,      // Keeps one sentinel connection open
     SingleWriter = 2,   // One pinned writer, concurrent ephemeral readers
-    SingleConnection = 4 // All work goes through one pinned connection
+    SingleConnection = 4, // All work goes through one pinned connection
+    Best = 15
 }
 ```
 
@@ -176,9 +178,9 @@ Use the lowest number (closest to Standard) possible for best results.
 
 - **KeepAlive**: Keeps a single sentinel connection open (never used for work) to prevent unloads in some embedded/local DBs. Otherwise behaves like Standard.
 
-- **SingleWriter**: Holds one persistent write connection open. Acquires ephemeral read-only connections as needed. Used automatically for file-based SQLite.
+- **SingleWriter**: Holds one persistent write connection open. Acquires ephemeral read-only connections as needed. Used automatically for file-based SQLite/DuckDB and named in-memory databases that enable `Mode=Memory;Cache=Shared` so multiple connections share one database.
 
-- **SingleConnection**: All work — reads and writes — is funneled through a single pinned connection. Used automatically for in-memory SQLite.
+- **SingleConnection**: All work — reads and writes — is funneled through a single pinned connection. Used automatically for isolated in-memory SQLite/DuckDB where each `:memory:` connection would otherwise have its own private database.
 
 **Best Practices:**
 * **Use Standard in production** for scalability and correctness

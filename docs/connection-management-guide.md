@@ -45,11 +45,12 @@ Use the lowest number (closest to Standard) possible for best results. Best, wil
 ### SingleWriter
 * Holds one persistent write connection open.
 * Acquires ephemeral read-only connections as needed.
-* Used automatically for file-based SQLite (see Connection Pooling).
+* Used automatically for file-based SQLite/DuckDB and for named in-memory databases that use `Mode=Memory;Cache=Shared` so multiple connections share the same database (see Connection Pooling).
 
 ### SingleConnection
 * All work — reads and writes — is funneled through a single pinned connection.
-* Used automatically for in-memory SQLite (see Connection Pooling).
+* Used automatically for isolated in-memory SQLite/DuckDB where each `:memory:` connection would otherwise create its own databa
+se (see Connection Pooling).
 
 ## Best Practices
 
