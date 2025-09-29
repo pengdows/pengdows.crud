@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using pengdows.crud;
 using pengdows.crud.enums;
+using pengdows.crud.types;
 using pengdows.crud.wrappers;
 
 namespace pengdows.crud.dialects;
@@ -62,6 +63,7 @@ public abstract class SqlDialect:ISqlDialect
     // Simple parameter pool - avoid repeated factory calls for hot paths
     private readonly ConcurrentQueue<DbParameter> _parameterPool = new();
     private const int MaxPoolSize = 100; // Prevent unbounded growth
+    protected static AdvancedTypeRegistry AdvancedTypes { get; } = AdvancedTypeRegistry.Shared;
 
     protected SqlDialect(DbProviderFactory factory, ILogger logger)
     {
@@ -300,57 +302,76 @@ public abstract class SqlDialect:ISqlDialect
 
     public virtual DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
-        var p = GetPooledParameter();
+        var parameter = GetPooledParameter();
 
-        // Optimized parameter name processing with caching
         if (string.IsNullOrWhiteSpace(name))
         {
             name = GenerateRandomName(5, ParameterNameMaxLength);
         }
         else if (SupportsNamedParameters)
         {
-            // Use cached trimmed names to avoid repeated string operations
             name = _trimmedNameCache.GetOrAdd(name, static n => n.TrimStart(_parameterMarkers));
         }
 
-        // Inline null check - faster than Utils.IsNullOrDbNull()
-        var valueIsNull = value is null || ReferenceEquals(value, DBNull.Value);
+        parameter.ParameterName = name;
 
-        // Batch property assignment for better performance
-        p.ParameterName = name;
-        p.DbType = type;
-        p.Value = valueIsNull ? DBNull.Value : value!;
+        var valueIsNull = value is null || ReferenceEquals(value, DBNull.Value);
+        var runtimeType = ResolveClrType(value);
+        var handled = false;
+
+        if (runtimeType != null)
+        {
+            handled = AdvancedTypes.TryConfigureParameter(parameter, runtimeType, value, DatabaseType);
+        }
+
+        if (!handled)
+        {
+            parameter.DbType = type;
+            parameter.Value = valueIsNull ? DBNull.Value : value!;
+        }
 
         if (!SupportsNamedParameters)
         {
-            p.ParameterName = string.Empty;
+            parameter.ParameterName = string.Empty;
 
-            // Use cached delegates for faster type conversions
-            if (!valueIsNull && _commonConversions.TryGetValue(p.DbType, out var converter))
+            if (!handled && !valueIsNull && _commonConversions.TryGetValue(parameter.DbType, out var converter))
             {
-                converter(p, value);
+                converter(parameter, value);
             }
         }
 
-        // Optimized final type processing - handle string length and decimal precision
-        if (!valueIsNull)
+        if (!handled && !valueIsNull)
         {
-            // Handle string types efficiently
-            if (value is string s && (p.DbType == DbType.String || p.DbType == DbType.AnsiString ||
-                                    p.DbType == DbType.StringFixedLength || p.DbType == DbType.AnsiStringFixedLength))
+            if (value is string s && (parameter.DbType == DbType.String || parameter.DbType == DbType.AnsiString ||
+                                      parameter.DbType == DbType.StringFixedLength || parameter.DbType == DbType.AnsiStringFixedLength))
             {
-                p.Size = Math.Max(s.Length, 1);
+                parameter.Size = Math.Max(s.Length, 1);
             }
-            // Handle decimal precision efficiently
-            else if (p.DbType == DbType.Decimal && value is decimal dec)
+            else if (parameter.DbType == DbType.Decimal && value is decimal dec)
             {
                 var (prec, scale) = DecimalHelpers.Infer(dec);
-                p.Precision = (byte)prec;
-                p.Scale = (byte)scale;
+                parameter.Precision = (byte)prec;
+                parameter.Scale = (byte)scale;
             }
         }
 
-        return p;
+        return parameter;
+    }
+
+    private static Type? ResolveClrType<T>(T value)
+    {
+        if (value is not null)
+        {
+            return value.GetType();
+        }
+
+        var type = typeof(T);
+        if (type == typeof(object))
+        {
+            return null;
+        }
+
+        return Nullable.GetUnderlyingType(type) ?? type;
     }
 
     public virtual DbParameter CreateDbParameter(string? name, DbType type, object? value)

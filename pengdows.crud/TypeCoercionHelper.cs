@@ -9,6 +9,7 @@ using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.enums;
+using pengdows.crud.types;
 
 #endregion
 
@@ -26,9 +27,9 @@ public enum JsonPassThrough
     PreferText
 }
 
-public sealed record TypeCoercionOptions(TimeMappingPolicy TimePolicy, JsonPassThrough JsonPreference)
+public sealed record TypeCoercionOptions(TimeMappingPolicy TimePolicy, JsonPassThrough JsonPreference, SupportedDatabase Provider)
 {
-    public static TypeCoercionOptions Default { get; } = new(TimeMappingPolicy.PreferDateTimeOffset, JsonPassThrough.PreferDocument);
+    public static TypeCoercionOptions Default { get; } = new(TimeMappingPolicy.PreferDateTimeOffset, JsonPassThrough.PreferDocument, SupportedDatabase.Unknown);
 }
 
 public static class TypeCoercionHelper
@@ -144,6 +145,16 @@ public static class TypeCoercionHelper
         if (underlyingTarget == typeof(string) && sourceType == typeof(char[]))
         {
             return new string((char[])value);
+        }
+
+        var advancedConverter = AdvancedTypeRegistry.Shared.GetConverter(underlyingTarget);
+        if (advancedConverter != null)
+        {
+            var converted = advancedConverter.FromProviderValue(value, options.Provider);
+            if (converted != null)
+            {
+                return converted;
+            }
         }
 
         try

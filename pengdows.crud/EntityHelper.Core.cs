@@ -55,7 +55,7 @@ public partial class EntityHelper<TEntity, TRowID> :
 
     private IColumnInfo? _versionColumn;
 
-    private readonly TypeCoercionOptions _coercionOptions = TypeCoercionOptions.Default;
+    private TypeCoercionOptions _coercionOptions = TypeCoercionOptions.Default;
 
     private readonly BoundedCache<string, IReadOnlyList<IColumnInfo>> _columnListCache = new(MaxCacheSize);
 
@@ -147,6 +147,7 @@ public partial class EntityHelper<TEntity, TRowID> :
         _dialect = (databaseContext as ISqlDialectProvider)?.Dialect
             ?? throw new InvalidOperationException(
                 "IDatabaseContext must implement ISqlDialectProvider and expose a non-null Dialect.");
+        _coercionOptions = _coercionOptions with { Provider = _dialect.DatabaseType };
         _tableInfo = _context.TypeMapRegistry.GetTableInfo<TEntity>() ??
                      throw new InvalidOperationException($"Type {typeof(TEntity).FullName} is not a table.");
         _columnsByNameCI = _tableInfo.Columns.ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);

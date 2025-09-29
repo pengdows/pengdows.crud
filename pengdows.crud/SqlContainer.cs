@@ -30,6 +30,11 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     private int _nextParameterId = -1;
     internal List<string> ParamSequence { get; } = new();
 
+    private TypeCoercionOptions DefaultCoercionOptions => TypeCoercionOptions.Default with
+    {
+        Provider = _dialect.DatabaseType
+    };
+
     ISqlDialect ISqlDialectProvider.Dialect => _dialect;
 
     // Primary private constructor (enforces creation via factory methods)
@@ -275,7 +280,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     {
         var value = GetParameterValue(parameterName);
         var sourceType = value?.GetType() ?? typeof(object);
-        var coerced = TypeCoercionHelper.Coerce(value, sourceType, typeof(T));
+        var coerced = TypeCoercionHelper.Coerce(value, sourceType, typeof(T), DefaultCoercionOptions);
 
         return (T)coerced!;
     }
@@ -469,7 +474,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 return (T?)value;
             }
             var targetType = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
-            return (T?)TypeCoercionHelper.Coerce(value, reader.GetFieldType(0), targetType);
+            return (T?)TypeCoercionHelper.Coerce(value, reader.GetFieldType(0), targetType, DefaultCoercionOptions);
         }
 
         // Return default for nullable types, throw for non-nullable types (following ADO.NET ExecuteScalar behavior)
@@ -530,7 +535,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             }
 
             var targetType = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
-            return (T?)TypeCoercionHelper.Coerce(result, result.GetType(), targetType);
+            return (T?)TypeCoercionHelper.Coerce(result, result.GetType(), targetType, DefaultCoercionOptions);
         }
         finally
         {

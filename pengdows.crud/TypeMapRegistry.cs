@@ -12,6 +12,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using pengdows.crud.attributes;
 using pengdows.crud.exceptions;
+using pengdows.crud.types.valueobjects;
 
 #endregion
 
@@ -349,6 +350,11 @@ public sealed class TypeMapRegistry : ITypeMapRegistry
     private static void ValidateVersionColumn(PropertyInfo property)
     {
         var type = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
+
+        if (type == typeof(RowVersion))
+        {
+            return;
+        }
 
         if (type == typeof(byte[]))
         {
