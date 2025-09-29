@@ -193,7 +193,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
         builder.Append((int)options.EnumMode);
         builder.Append('\u001F');
 
-        // Include field names and types for more robust caching
+        // Build schema with both field names and types
         for (var i = 0; i < reader.FieldCount; i++)
         {
             if (i > 0)
@@ -211,6 +211,8 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
             builder.Append(name);
             builder.Append(':');
+
+            // Include field type to ensure plans are rebuilt when column types change
             var fieldType = ResolveFieldType(reader, i);
             builder.Append(fieldType.AssemblyQualifiedName ?? fieldType.FullName ?? fieldType.Name);
         }
@@ -370,6 +372,12 @@ public sealed class DataReaderMapper : IDataReaderMapper
                 result = Enum.ToObject(enumType, fallback);
                 return true;
             case EnumParseFailureMode.SetDefaultValue:
+                if (Nullable.GetUnderlyingType(property.PropertyType) != null)
+                {
+                    result = null;
+                    return true;
+                }
+
                 var defaultValue = Activator.CreateInstance(Enum.GetUnderlyingType(enumType))!;
                 result = Enum.ToObject(enumType, defaultValue);
                 return true;

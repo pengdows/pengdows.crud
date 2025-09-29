@@ -23,6 +23,7 @@
 
     <ItemGroup>
         <ProjectReference Include="..\pengdows.crud\pengdows.crud.csproj" />
+        <ProjectReference Include="..\pengdows.crud.fakeDb\pengdows.crud.fakeDb.csproj" />
         <ProjectReference Include="..\testbed\testbed.csproj" />
     </ItemGroup>
 

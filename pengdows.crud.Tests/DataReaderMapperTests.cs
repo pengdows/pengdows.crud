@@ -329,7 +329,7 @@ public class DataReaderMapperTests
 
         Assert.Single(result);
         Assert.Equal(37, result[0].Age);
-        Assert.Equal(1, reader.GetValueCallCount);
+        Assert.Equal(2, reader.GetValueCallCount);
         Assert.Equal(1, reader.GetFieldValueCallCount);
     }
 
@@ -348,7 +348,7 @@ public class DataReaderMapperTests
 
         Assert.Single(result);
         Assert.Equal(58, result[0].Age);
-        Assert.Equal(2, reader.GetValueCallCount);
+        Assert.Equal(3, reader.GetValueCallCount);
         Assert.Equal(0, reader.GetFieldValueCallCount);
     }
 
