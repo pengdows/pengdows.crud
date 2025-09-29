@@ -326,7 +326,7 @@ public class FakeDataStore
 
             // Handle SELECT * FROM table
             var selectMatch = Regex.Match(commandText,
-                @"SELECT\s+(.+?)\s+FROM\s+([`\[\]""'\w]+)(?:\s+WHERE\s+(.+?))?(?:\s+ORDER\s+BY\s+.+)?$",
+                @"SELECT\s+([\s\S]+?)\s+FROM\s+([`\[\]""'\w]+)(?:\s+WHERE\s+([\s\S]+?))?(?:\s+ORDER\s+BY\s+.+)?$",
                 RegexOptions.IgnoreCase);
 
             if (!selectMatch.Success)
@@ -428,7 +428,15 @@ public class FakeDataStore
 
     private string CleanIdentifier(string identifier)
     {
-        return identifier.Trim().Trim('`', '[', ']', '"', '\'');
+        var cleaned = identifier.Trim().Trim('`', '[', ']', '"', '\'');
+
+        var lastDot = cleaned.LastIndexOf('.');
+        if (lastDot >= 0)
+        {
+            cleaned = cleaned.Substring(lastDot + 1).Trim('`', '[', ']', '"', '\'');
+        }
+
+        return cleaned;
     }
 
     private List<object?> ParseValues(string valuesPart, DbParameterCollection? parameters)

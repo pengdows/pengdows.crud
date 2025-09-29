@@ -269,6 +269,11 @@ public class fakeDbCommand : DbCommand
         }
 
         // Prefer queued results when present (test control)
+        if (conn != null)
+        {
+            conn.ExecutedReaderTexts.Add(CommandText);
+        }
+
         if (conn != null && conn.ReaderResults.Count > 0)
         {
             return new fakeDbDataReader(conn.ReaderResults.Dequeue());

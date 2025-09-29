@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System.Data;
+using System.Linq;
 using System.Threading.Tasks;
 using pengdows.crud.attributes;
+using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 using Xunit;
@@ -32,19 +34,44 @@ public class EntityHelperStringIdTemplateTests
     [Fact]
     public async Task RetrieveAsync_Sqlite_StringId_UsesCachedTemplate()
     {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        factory.Connections.Add(new fakeDbConnection { EmulatedProduct = SupportedDatabase.Sqlite });
-        var execConn = new fakeDbConnection { EmulatedProduct = SupportedDatabase.Sqlite };
-        execConn.EnqueueReaderResult(new[]
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite)
         {
-            new Dictionary<string, object?> { ["Id"] = "alpha", ["Name"] = "first" }
-        });
-        factory.Connections.Add(execConn);
+            EnableDataPersistence = true
+        };
+        var primaryConnection = new fakeDbConnection
+        {
+            EmulatedProduct = SupportedDatabase.Sqlite,
+            EnableDataPersistence = true
+        };
+        factory.Connections.Add(primaryConnection);
 
-        using var ctx = new DatabaseContext("Data Source=file:stringids?mode=memory&cache=shared;EmulatedProduct=Sqlite", factory, _typeMap);
+        var configuration = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=file:stringids?mode=memory&cache=shared;EmulatedProduct=Sqlite",
+            DbMode = DbMode.SingleConnection
+        };
+
+        using var ctx = new DatabaseContext(configuration, factory, loggerFactory: null, typeMapRegistry: _typeMap);
         var helper = new EntityHelper<StringIdEntity, string>(ctx);
 
+        var entity = new StringIdEntity
+        {
+            Id = "alpha",
+            Name = "first"
+        };
+        await helper.CreateAsync(entity, ctx);
+
+        var dataStoreField = typeof(fakeDbConnection).GetField("DataStore", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        var dataStore = (FakeDataStore?)dataStoreField?.GetValue(primaryConnection);
+        var storedRows = dataStore?.ExecuteReader("SELECT * FROM StringEntities", null).ToList() ?? new List<Dictionary<string, object?>>();
+        System.Console.WriteLine($"Stored rows (Sqlite): {storedRows.Count}");
+
         var result = await helper.RetrieveAsync(new[] { "alpha" });
+
+        foreach (var sql in primaryConnection.ExecutedReaderTexts)
+        {
+            System.Console.WriteLine($"Executed SQL (Sqlite): {sql}");
+        }
 
         Assert.Single(result);
         Assert.Equal("first", result[0].Name);
@@ -53,19 +80,44 @@ public class EntityHelperStringIdTemplateTests
     [Fact]
     public async Task RetrieveAsync_Postgres_StringId_UsesCachedTemplate()
     {
-        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
-        factory.Connections.Add(new fakeDbConnection { EmulatedProduct = SupportedDatabase.PostgreSql });
-        var execConn = new fakeDbConnection { EmulatedProduct = SupportedDatabase.PostgreSql };
-        execConn.EnqueueReaderResult(new[]
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql)
         {
-            new Dictionary<string, object?> { ["Id"] = "bravo", ["Name"] = "second" }
-        });
-        factory.Connections.Add(execConn);
+            EnableDataPersistence = true
+        };
+        var primaryConnection = new fakeDbConnection
+        {
+            EmulatedProduct = SupportedDatabase.PostgreSql,
+            EnableDataPersistence = true
+        };
+        factory.Connections.Add(primaryConnection);
 
-        using var ctx = new DatabaseContext("Data Source=pg;EmulatedProduct=PostgreSql", factory, _typeMap);
+        var configuration = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=pg;EmulatedProduct=PostgreSql",
+            DbMode = DbMode.SingleConnection
+        };
+
+        using var ctx = new DatabaseContext(configuration, factory, loggerFactory: null, typeMapRegistry: _typeMap);
         var helper = new EntityHelper<StringIdEntity, string>(ctx);
 
+        var entity = new StringIdEntity
+        {
+            Id = "bravo",
+            Name = "second"
+        };
+        await helper.CreateAsync(entity, ctx);
+
+        var dataStoreField = typeof(fakeDbConnection).GetField("DataStore", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        var dataStore = (FakeDataStore?)dataStoreField?.GetValue(primaryConnection);
+        var storedRows = dataStore?.ExecuteReader("SELECT * FROM StringEntities", null).ToList() ?? new List<Dictionary<string, object?>>();
+        System.Console.WriteLine($"Stored rows (Postgres): {storedRows.Count}");
+
         var result = await helper.RetrieveAsync(new[] { "bravo" });
+
+        foreach (var sql in primaryConnection.ExecutedReaderTexts)
+        {
+            System.Console.WriteLine($"Executed SQL (Postgres): {sql}");
+        }
 
         Assert.Single(result);
         Assert.Equal("second", result[0].Name);

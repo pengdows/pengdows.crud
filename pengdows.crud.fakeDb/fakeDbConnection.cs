@@ -43,6 +43,7 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
     internal object? DefaultScalarResultOnce { get; private set; }
     internal readonly Dictionary<string, Exception> CommandFailuresByText = new();
     public readonly List<string> ExecutedNonQueryTexts = new();
+    public readonly List<string> ExecutedReaderTexts = new();
 
     // Enhanced data persistence
     internal readonly FakeDataStore DataStore = new();

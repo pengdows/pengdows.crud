@@ -7,13 +7,13 @@ using pengdows.crud.enums;
 
 namespace pengdows.crud.fakeDb;
 
-public sealed class fakeDbFactory : DbProviderFactory
+public sealed partial class fakeDbFactory : DbProviderFactory
 {
     public static readonly fakeDbFactory Instance = new();
     private readonly SupportedDatabase _pretendToBe;
-    private readonly ConnectionFailureMode _failureMode;
-    private readonly Exception? _customException;
-    private readonly int? _failAfterCount;
+    private ConnectionFailureMode _failureMode;
+    private Exception? _customException;
+    private int? _failAfterCount;
     private int _sharedOpenCount;
     private bool _skipFirstOpen;
     private bool _hasOpenedOnce;
