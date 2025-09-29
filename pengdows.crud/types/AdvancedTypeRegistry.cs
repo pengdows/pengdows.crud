@@ -9,6 +9,51 @@ using pengdows.crud.types.valueobjects;
 namespace pengdows.crud.types;
 
 /// <summary>
+/// High-performance struct key to avoid tuple allocation in hot paths.
+/// </summary>
+internal readonly struct MappingKey : IEquatable<MappingKey>
+{
+    public readonly Type ClrType;
+    public readonly SupportedDatabase Provider;
+
+    public MappingKey(Type clrType, SupportedDatabase provider)
+    {
+        ClrType = clrType;
+        Provider = provider;
+    }
+
+    public bool Equals(MappingKey other)
+    {
+        return ClrType == other.ClrType && Provider == other.Provider;
+    }
+
+    public override bool Equals(object? obj)
+    {
+        return obj is MappingKey other && Equals(other);
+    }
+
+    public override int GetHashCode()
+    {
+        return HashCode.Combine(ClrType, Provider);
+    }
+}
+
+/// <summary>
+/// Cached configuration for parameter setup to avoid repeated lookups.
+/// </summary>
+internal readonly struct CachedParameterConfig
+{
+    public readonly ProviderTypeMapping Mapping;
+    public readonly IAdvancedTypeConverter? Converter;
+
+    public CachedParameterConfig(ProviderTypeMapping mapping, IAdvancedTypeConverter? converter)
+    {
+        Mapping = mapping;
+        Converter = converter;
+    }
+}
+
+/// <summary>
 /// Registry for advanced database type mappings across different providers.
 /// Handles spatial, JSON, arrays, ranges, network types, etc.
 /// </summary>
@@ -16,8 +61,11 @@ public class AdvancedTypeRegistry
 {
     public static AdvancedTypeRegistry Shared { get; } = new();
 
-    private readonly Dictionary<(Type ClrType, SupportedDatabase Provider), ProviderTypeMapping> _mappings = new();
+    private readonly Dictionary<MappingKey, ProviderTypeMapping> _mappings = new();
     private readonly Dictionary<Type, IAdvancedTypeConverter> _converters = new();
+
+    // Performance cache for frequently accessed combinations
+    private readonly Dictionary<MappingKey, CachedParameterConfig?> _parameterCache = new();
 
     public AdvancedTypeRegistry()
     {
@@ -30,7 +78,11 @@ public class AdvancedTypeRegistry
     /// </summary>
     public void RegisterMapping<T>(SupportedDatabase provider, ProviderTypeMapping mapping)
     {
-        _mappings[(typeof(T), provider)] = mapping;
+        var key = new MappingKey(typeof(T), provider);
+        _mappings[key] = mapping;
+
+        // Clear any cached config for this type to force rebuild
+        _parameterCache.Remove(key);
     }
 
     /// <summary>
@@ -38,7 +90,20 @@ public class AdvancedTypeRegistry
     /// </summary>
     public void RegisterConverter<T>(AdvancedTypeConverter<T> converter)
     {
-        _converters[typeof(T)] = converter;
+        var type = typeof(T);
+        _converters[type] = converter;
+
+        // Clear any cached configs for this type across all providers
+        var keysToRemove = new List<MappingKey>();
+        foreach (var key in _parameterCache.Keys)
+        {
+            if (key.ClrType == type)
+                keysToRemove.Add(key);
+        }
+        foreach (var key in keysToRemove)
+        {
+            _parameterCache.Remove(key);
+        }
     }
 
     /// <summary>
@@ -46,7 +111,8 @@ public class AdvancedTypeRegistry
     /// </summary>
     public ProviderTypeMapping? GetMapping(Type clrType, SupportedDatabase provider)
     {
-        return _mappings.TryGetValue((clrType, provider), out var mapping) ? mapping : null;
+        var key = new MappingKey(clrType, provider);
+        return _mappings.TryGetValue(key, out var mapping) ? mapping : null;
     }
 
     /// <summary>
@@ -59,23 +125,44 @@ public class AdvancedTypeRegistry
 
     /// <summary>
     /// Configure a DbParameter with provider-specific type information.
+    /// High-performance version with caching to avoid repeated lookups.
     /// </summary>
     public bool TryConfigureParameter(DbParameter parameter, Type clrType, object? value, SupportedDatabase provider)
     {
-        var mapping = GetMapping(clrType, provider);
-        if (mapping == null) return false;
+        var key = new MappingKey(clrType, provider);
 
-        var converter = GetConverter(clrType);
-        if (converter != null && value != null)
+        // Try cached config first for best performance
+        if (!_parameterCache.TryGetValue(key, out var cachedConfig))
         {
-            value = converter.ToProviderValue(value, provider);
+            // Build and cache the configuration
+            var mapping = _mappings.TryGetValue(key, out var foundMapping) ? foundMapping : null;
+            if (mapping == null)
+            {
+                _parameterCache[key] = null; // Cache negative result
+                return false;
+            }
+
+            var converter = _converters.TryGetValue(clrType, out var foundConverter) ? foundConverter : null;
+            cachedConfig = new CachedParameterConfig(mapping, converter);
+            _parameterCache[key] = cachedConfig;
+        }
+
+        if (cachedConfig == null)
+            return false;
+
+        var config = cachedConfig.Value;
+
+        // Apply converter if present and value is not null
+        if (config.Converter != null && value != null)
+        {
+            value = config.Converter.ToProviderValue(value, provider);
         }
 
         parameter.Value = value ?? DBNull.Value;
-        parameter.DbType = mapping.DbType;
+        parameter.DbType = config.Mapping.DbType;
 
         // Apply provider-specific configuration
-        mapping.ConfigureParameter?.Invoke(parameter, value);
+        config.Mapping.ConfigureParameter?.Invoke(parameter, value);
 
         return true;
     }
