@@ -66,7 +66,7 @@ public static class ProviderParameterFactory
             case SupportedDatabase.Sqlite:
                 ApplySqliteOptimizations(parameter, valueType);
                 break;
-            case SupportedDatabase.DuckDb:
+            case SupportedDatabase.DuckDB:
                 ApplyDuckDbOptimizations(parameter, valueType);
                 break;
         }
@@ -426,7 +426,7 @@ public static class ParameterBindingRules
                 parameter.DbType = DbType.Object;
                 break;
 
-            case SupportedDatabase.DuckDb:
+            case SupportedDatabase.DuckDB:
                 // Native LIST support
                 parameter.Value = value;
                 parameter.DbType = DbType.Object;

@@ -94,8 +94,8 @@ public class CoercionRegistry
     /// </summary>
     private void RegisterStandardCoercions()
     {
-        // Use simplified coercions for now - can be extended later
-        SimpleCoercions.RegisterAll(this);
+        // TODO: Fix SimpleCoercions signature issues and re-enable
+        // SimpleCoercions.RegisterAll(this);
 
         // TODO: Re-enable advanced coercions once signature issues are resolved
         // Tier0Coercions.RegisterAll(this);

@@ -1037,28 +1037,33 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             }
             var modified = false;
 
-            // Pooling=true if absent
-            if (!string.IsNullOrEmpty(_dialect.PoolingSettingName) &&
-                !builder.ContainsKey(_dialect.PoolingSettingName))
+            // Only configure pooling for databases that support external pooling
+            if (_dialect.SupportsExternalPooling)
             {
-                builder[_dialect.PoolingSettingName] = true;
-                modified = true;
-            }
-
-            // Min pool size if absent and pooling is enabled (Standard mode gets higher default for production scalability)
-            if (!string.IsNullOrEmpty(_dialect.MinPoolSizeSettingName) &&
-                !builder.ContainsKey(_dialect.MinPoolSizeSettingName))
-            {
-                // Only add MinPoolSize if pooling is enabled
-                var poolingEnabled = !builder.ContainsKey(_dialect.PoolingSettingName) ||
-                                   (builder.ContainsKey(_dialect.PoolingSettingName) &&
-                                    bool.TryParse(builder[_dialect.PoolingSettingName]?.ToString(), out var pooling) && pooling);
-
-                if (poolingEnabled)
+                // Pooling=true if absent
+                if (!string.IsNullOrEmpty(_dialect.PoolingSettingName) &&
+                    !builder.ContainsKey(_dialect.PoolingSettingName))
                 {
-                    var minPoolSize = ConnectionMode == DbMode.Standard ? 10 : DefaultMinPoolSize;
-                    builder[_dialect.MinPoolSizeSettingName] = minPoolSize;
+                    builder[_dialect.PoolingSettingName] = true;
                     modified = true;
+                }
+
+                // Min pool size if absent and pooling is enabled (SingleConnection mode doesn't use pooling)
+                if (!string.IsNullOrEmpty(_dialect.MinPoolSizeSettingName) &&
+                    !builder.ContainsKey(_dialect.MinPoolSizeSettingName) &&
+                    ConnectionMode != DbMode.SingleConnection)
+                {
+                    // Only add MinPoolSize if pooling is enabled
+                    var poolingEnabled = !builder.ContainsKey(_dialect.PoolingSettingName) ||
+                                       (builder.ContainsKey(_dialect.PoolingSettingName) &&
+                                        bool.TryParse(builder[_dialect.PoolingSettingName]?.ToString(), out var pooling) && pooling);
+
+                    if (poolingEnabled)
+                    {
+                        // Always default to 1 for all modes - users can explicitly raise if needed
+                        builder[_dialect.MinPoolSizeSettingName] = DefaultMinPoolSize;
+                        modified = true;
+                    }
                 }
             }
 
