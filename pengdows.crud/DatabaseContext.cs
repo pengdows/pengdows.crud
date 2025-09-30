@@ -1048,10 +1048,12 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
                     modified = true;
                 }
 
-                // Min pool size if absent and pooling is enabled (SingleConnection mode doesn't use pooling)
+                // Min pool size if absent and pooling is enabled
+                // SingleConnection and SingleWriter modes maintain persistent connections and don't use pooling
                 if (!string.IsNullOrEmpty(_dialect.MinPoolSizeSettingName) &&
                     !builder.ContainsKey(_dialect.MinPoolSizeSettingName) &&
-                    ConnectionMode != DbMode.SingleConnection)
+                    ConnectionMode != DbMode.SingleConnection &&
+                    ConnectionMode != DbMode.SingleWriter)
                 {
                     // Only add MinPoolSize if pooling is enabled
                     var poolingEnabled = !builder.ContainsKey(_dialect.PoolingSettingName) ||
@@ -1060,7 +1062,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
 
                     if (poolingEnabled)
                     {
-                        // Always default to 1 for all modes - users can explicitly raise if needed
+                        // Set to 1 to enforce pooling (user can specify higher if needed)
                         builder[_dialect.MinPoolSizeSettingName] = DefaultMinPoolSize;
                         modified = true;
                     }
@@ -1072,8 +1074,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             if (modified)
             {
                 _connectionString = builder.ConnectionString;
-                var appliedMinPoolSize = ConnectionMode == DbMode.Standard ? 10 : DefaultMinPoolSize;
-                _logger.LogDebug("Applied pooling defaults: Pooling=true, MinPoolSize={MinPoolSize}", appliedMinPoolSize);
+                _logger.LogDebug("Applied pooling defaults: Pooling=true, MinPoolSize={MinPoolSize}", DefaultMinPoolSize);
             }
         }
         catch (Exception ex)
@@ -1129,115 +1130,104 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
 
     private DbMode CoerceMode(DbMode requested, SupportedDatabase product, bool isLocalDb, bool isFirebirdEmbedded)
     {
+        // Key principle:
+        // 1. COERCE when requested mode is UNSAFE for the provider
+        // 2. HONOR when requested mode is SAFE but less functional (for testing)
+        // 3. Best mode always selects most functional safe mode
+
         switch (product)
         {
             case SupportedDatabase.Sqlite or SupportedDatabase.DuckDB:
             {
                 var kind = DetectInMemoryKind(product, _connectionString);
-                switch (kind)
+
+                // Isolated in-memory REQUIRES SingleConnection (no other mode works)
+                if (kind == InMemoryKind.Isolated)
                 {
-                    case InMemoryKind.Isolated:
+                    if (requested != DbMode.SingleConnection)
                     {
                         LogModeOverride(requested, DbMode.SingleConnection, "Isolated in-memory requires SingleConnection");
-                        return DbMode.SingleConnection;
                     }
-                    case InMemoryKind.Shared:
-                    {
-                        switch (requested)
-                        {
-                            case DbMode.Standard:
-                            {
-                                LogModeOverride(requested, DbMode.SingleWriter, "Shared in-memory prefers SingleWriter");
-                                return DbMode.SingleWriter;
-                            }
-                            case DbMode.Best:
-                            {
-                                LogModeOverride(requested, DbMode.SingleWriter, "Shared in-memory prefers SingleWriter");
-                                return DbMode.SingleWriter;
-                            }
-                            default:
-                            {
-                                return requested;
-                            }
-                        }
-                    }
+                    return DbMode.SingleConnection;
                 }
 
-                switch (requested)
+                // For shared in-memory and file-based SQLite/DuckDB:
+                // Most functional: SingleWriter
+                // UNSAFE: Standard/KeepAlive (lock contention)
+                // Safe but less functional: SingleConnection
+
+                if (requested == DbMode.Best)
                 {
-                    case DbMode.Standard:
-                    {
-                        LogModeOverride(requested, DbMode.SingleWriter, "SQLite/DuckDB file-based prefer persistent coordination");
-                        return DbMode.SingleWriter;
-                    }
-                    case DbMode.KeepAlive:
-                    {
-                        LogModeOverride(requested, DbMode.SingleWriter, "SQLite/DuckDB file-based prefer persistent coordination");
-                        return DbMode.SingleWriter;
-                    }
-                    case DbMode.Best:
-                    {
-                        LogModeOverride(requested, DbMode.SingleWriter, "SQLite/DuckDB file-based prefer persistent coordination");
-                        return DbMode.SingleWriter;
-                    }
-                    default:
-                    {
-                        return requested;
-                    }
+                    var target = kind == InMemoryKind.Shared ? DbMode.SingleWriter : DbMode.SingleWriter;
+                    LogModeOverride(requested, target, "SQLite/DuckDB: Best selects SingleWriter");
+                    return target;
                 }
+
+                // Coerce UNSAFE modes (Standard, KeepAlive) to SingleWriter
+                if (requested == DbMode.Standard || requested == DbMode.KeepAlive)
+                {
+                    LogModeOverride(requested, DbMode.SingleWriter, "SQLite/DuckDB: Standard/KeepAlive unsafe, using SingleWriter");
+                    return DbMode.SingleWriter;
+                }
+
+                // Honor safe but less functional modes (SingleConnection, SingleWriter)
+                return requested;
             }
+
             case SupportedDatabase.Firebird when isFirebirdEmbedded:
             {
-                LogModeOverride(requested, DbMode.SingleConnection, "Firebird embedded requires SingleConnection");
+                // Embedded Firebird REQUIRES SingleConnection
+                if (requested != DbMode.SingleConnection)
+                {
+                    LogModeOverride(requested, DbMode.SingleConnection, "Firebird embedded requires SingleConnection");
+                }
                 return DbMode.SingleConnection;
             }
+
             case SupportedDatabase.SqlServer when isLocalDb:
             {
-                LogModeOverride(requested, DbMode.KeepAlive, "LocalDb requires KeepAlive");
+                // LocalDB REQUIRES KeepAlive to prevent unload
+                if (requested != DbMode.KeepAlive)
+                {
+                    LogModeOverride(requested, DbMode.KeepAlive, "LocalDB requires KeepAlive");
+                }
                 return DbMode.KeepAlive;
             }
+
             case SupportedDatabase.PostgreSql
                 or SupportedDatabase.CockroachDb
                 or SupportedDatabase.MySql
                 or SupportedDatabase.MariaDb
                 or SupportedDatabase.Oracle
+                or SupportedDatabase.Firebird
                 or SupportedDatabase.SqlServer:
             {
-                switch (requested)
+                // Full server databases: all modes are SAFE
+                // Most functional: Standard
+                // Safe but less functional: SingleWriter, SingleConnection, KeepAlive
+
+                if (requested == DbMode.Best)
                 {
-                    case DbMode.SingleWriter:
-                    {
-                        return DbMode.SingleWriter;
-                    }
-                    case DbMode.Standard:
-                    {
-                        return DbMode.Standard;
-                    }
-                    case DbMode.Best:
-                    {
-                        LogModeOverride(requested, DbMode.Standard, "Full servers prefer Standard for automatic selection");
-                        return DbMode.Standard;
-                    }
-                    default:
-                    {
-                        LogModeOverride(requested, DbMode.Standard, "Full servers prefer Standard unless SingleWriter explicitly requested");
-                        return DbMode.Standard;
-                    }
+                    LogModeOverride(requested, DbMode.Standard, "Full server: Best selects Standard");
+                    return DbMode.Standard;
                 }
+
+                // Honor ANY explicit choice - all modes are safe on full servers
+                // Users can force less functional modes for testing
+                return requested;
             }
+
             default:
             {
-                break;
+                // Unknown provider
+                if (requested == DbMode.Best)
+                {
+                    LogModeOverride(requested, DbMode.Standard, "Unknown provider: Best defaults to Standard");
+                    return DbMode.Standard;
+                }
+                return requested;
             }
         }
-
-        if (requested == DbMode.Best)
-        {
-            LogModeOverride(requested, DbMode.Standard, "Unknown providers default to Standard for safety");
-            return DbMode.Standard;
-        }
-
-        return requested;
     }
 
     private void LogModeOverride(DbMode requested, DbMode resolved, string reason)

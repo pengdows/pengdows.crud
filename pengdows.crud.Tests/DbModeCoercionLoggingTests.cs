@@ -163,7 +163,7 @@ public class DbModeCoercionLoggingTests
     }
 
     [Fact]
-    public void SqlServer_KeepAliveMode_CoercesToStandard_WithWarning()
+    public void SqlServer_KeepAliveMode_CanBeForced_NoCoercion()
     {
         var provider = new ListLoggerProvider();
         using var lf = new LoggerFactory(new[] { provider });
@@ -171,11 +171,15 @@ public class DbModeCoercionLoggingTests
         {
             ConnectionString = "Data Source=test;EmulatedProduct=SqlServer",
             ProviderName = SupportedDatabase.SqlServer.ToString(),
-            DbMode = DbMode.KeepAlive
+            DbMode = DbMode.KeepAlive  // Explicit force for testing
         };
         using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.SqlServer), lf);
-        Assert.Equal(DbMode.Standard, ctx.ConnectionMode);
-        Assert.Contains(provider.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
+
+        // Users can force KeepAlive on full servers for testing
+        Assert.Equal(DbMode.KeepAlive, ctx.ConnectionMode);
+
+        // No warning should be logged for explicit mode choices
+        Assert.DoesNotContain(provider.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
     }
 
     [Fact]

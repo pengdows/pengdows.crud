@@ -146,8 +146,8 @@ public class DatabaseContextConstructorTests
         
         // Assert
         Assert.NotNull(context);
-        // Full server (SqlServer) must coerce to Standard (KeepAlive reserved for LocalDb)
-        Assert.Equal(DbMode.Standard, context.ConnectionMode);
+        // Users can force KeepAlive on full servers for testing (even though less functional)
+        Assert.Equal(DbMode.KeepAlive, context.ConnectionMode);
         Assert.Equal(ReadWriteMode.ReadWrite, context.ReadWriteMode);
         Assert.Same(typeMap, context.TypeMapRegistry);
     }
@@ -397,7 +397,7 @@ public class DatabaseContextConstructorTests
         // Assert
         var builder = new DbConnectionStringBuilder { ConnectionString = context.ConnectionString };
         Assert.True(builder.ContainsKey("Min Pool Size"));
-        Assert.Equal("10", builder["Min Pool Size"].ToString());
+        Assert.Equal("1", builder["Min Pool Size"].ToString());
     }
 
     [Fact]

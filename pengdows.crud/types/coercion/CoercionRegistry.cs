@@ -94,11 +94,11 @@ public class CoercionRegistry
     /// </summary>
     private void RegisterStandardCoercions()
     {
-        // TODO: Fix SimpleCoercions signature issues and re-enable
-        // SimpleCoercions.RegisterAll(this);
+        // Register basic coercions
+        BasicCoercions.RegisterAll(this);
 
-        // TODO: Re-enable advanced coercions once signature issues are resolved
-        // Tier0Coercions.RegisterAll(this);
+        // TODO: Re-enable advanced coercions once implemented
+        // AdvancedCoercions.RegisterAll(this);
         // ProviderSpecificCoercions.RegisterAll(this);
     }
 }
