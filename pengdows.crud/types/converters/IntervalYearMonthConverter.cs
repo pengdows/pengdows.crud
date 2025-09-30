@@ -17,7 +17,7 @@ internal sealed class IntervalYearMonthConverter : AdvancedTypeConverter<Interva
         };
     }
 
-    protected override bool TryConvertFromProvider(object value, SupportedDatabase provider, out IntervalYearMonth result)
+    public override bool TryConvertFromProvider(object value, SupportedDatabase provider, out IntervalYearMonth result)
     {
         if (value is IntervalYearMonth interval)
         {

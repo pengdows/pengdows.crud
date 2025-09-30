@@ -232,6 +232,11 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
 
     private async ValueTask DisposeConnectionAsyncCore()
     {
+        if (_connection == null)
+        {
+            return;
+        }
+
         try
         {
             if (_connection.State != ConnectionState.Closed)
@@ -253,7 +258,14 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error while disposing connection asynchronously. Falling back to synchronous dispose.");
-            _connection.Dispose();
+            try
+            {
+                _connection?.Dispose();
+            }
+            catch
+            {
+                // Connection is already disposed or in invalid state, ignore
+            }
         }
     }
 

@@ -26,6 +26,10 @@ public readonly struct RowVersion : IEquatable<RowVersion>
 
     public bool Equals(RowVersion other)
     {
+        if (_value is null && other._value is null)
+            return true;
+        if (_value is null || other._value is null)
+            return false;
         return Value.Span.SequenceEqual(other.Value.Span);
     }
 

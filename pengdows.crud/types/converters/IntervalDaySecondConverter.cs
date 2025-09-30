@@ -17,7 +17,7 @@ internal sealed class IntervalDaySecondConverter : AdvancedTypeConverter<Interva
         };
     }
 
-    protected override bool TryConvertFromProvider(object value, SupportedDatabase provider, out IntervalDaySecond result)
+    public override bool TryConvertFromProvider(object value, SupportedDatabase provider, out IntervalDaySecond result)
     {
         try
         {

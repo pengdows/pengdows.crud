@@ -23,7 +23,7 @@ public class AdvancedTypeConverterTests
 
         Assert.True(success);
         Assert.Equal(IPAddress.Parse("192.168.1.1"), result.Address);
-        Assert.Equal(24, result.PrefixLength);
+        Assert.Equal((byte?)24, result.PrefixLength);
     }
 
     [Fact]
@@ -56,7 +56,7 @@ public class AdvancedTypeConverterTests
 
         Assert.True(success);
         Assert.Equal(IPAddress.Parse("192.168.0.0"), result.Network);
-        Assert.Equal(16, result.PrefixLength);
+        Assert.Equal((byte?)16, result.PrefixLength);
     }
 
     [Fact]

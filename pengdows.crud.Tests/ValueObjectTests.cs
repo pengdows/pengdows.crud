@@ -27,7 +27,7 @@ public class ValueObjectTests
         var inet = new Inet(address, 24);
 
         Assert.Equal(address, inet.Address);
-        Assert.Equal(24, inet.PrefixLength);
+        Assert.Equal((byte?)24, inet.PrefixLength);
     }
 
     [Fact]
@@ -57,7 +57,7 @@ public class ValueObjectTests
         var inet = new Inet(address, 24);
 
         Assert.Equal(address, inet.Address);
-        Assert.Equal(24, inet.PrefixLength);
+        Assert.Equal((byte?)24, inet.PrefixLength);
     }
 
     [Fact]
@@ -67,7 +67,7 @@ public class ValueObjectTests
         var cidr = new Cidr(address, 16);
 
         Assert.Equal(address, cidr.Network);
-        Assert.Equal(16, cidr.PrefixLength);
+        Assert.Equal((byte)16, cidr.PrefixLength);
     }
 
     [Fact]

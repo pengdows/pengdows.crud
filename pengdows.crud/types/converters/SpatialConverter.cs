@@ -25,7 +25,7 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
         };
     }
 
-    protected override bool TryConvertFromProvider(object value, SupportedDatabase provider, out TSpatial result)
+    public override bool TryConvertFromProvider(object value, SupportedDatabase provider, out TSpatial result)
     {
         try
         {

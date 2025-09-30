@@ -18,7 +18,7 @@ internal sealed class PostgreSqlRangeConverter<T> : AdvancedTypeConverter<Range<
         return FormatRange(value);
     }
 
-    protected override bool TryConvertFromProvider(object value, SupportedDatabase provider, out Range<T> result)
+    public override bool TryConvertFromProvider(object value, SupportedDatabase provider, out Range<T> result)
     {
         try
         {

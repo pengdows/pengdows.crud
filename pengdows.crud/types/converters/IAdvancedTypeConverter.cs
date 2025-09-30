@@ -46,7 +46,7 @@ public abstract class AdvancedTypeConverter<T> : IAdvancedTypeConverter
         return value;
     }
 
-    protected virtual bool TryConvertFromProvider(object value, SupportedDatabase provider, out T result)
+    public virtual bool TryConvertFromProvider(object value, SupportedDatabase provider, out T result)
     {
         if (value is T typed)
         {

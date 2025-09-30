@@ -365,11 +365,11 @@ public class EntityHelperCriticalPathTests
         var helper = new EntityHelper<TestEntity, int>(context);
 
         // Run multiple concurrent operations
-        var tasks = new Task[10];
+        var tasks = new Task<ISqlContainer>[10];
         for (int i = 0; i < 10; i++)
         {
             int entityId = i;
-            tasks[i] = Task.Run(async () =>
+            tasks[i] = Task.Run(() =>
             {
                 var entity = new TestEntity { Id = entityId, Name = $"Test{entityId}" };
                 var container = helper.BuildCreate(entity);

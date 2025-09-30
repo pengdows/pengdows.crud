@@ -203,15 +203,15 @@ public class TransactionCriticalPathTests
         using var context = new DatabaseContext(config, factory);
 
         // Test different isolation profiles
-        using var tx1 = context.BeginTransaction(IsolationProfile.ReadCommitted);
+        using var tx1 = context.BeginTransaction(IsolationProfile.SafeNonBlockingReads);
         Assert.NotNull(tx1);
         tx1.Commit();
 
-        using var tx2 = context.BeginTransaction(IsolationProfile.Serializable);
+        using var tx2 = context.BeginTransaction(IsolationProfile.StrictConsistency);
         Assert.NotNull(tx2);
         tx2.Commit();
 
-        using var tx3 = context.BeginTransaction(IsolationProfile.ReadUncommitted);
+        using var tx3 = context.BeginTransaction(IsolationProfile.FastWithRisks);
         Assert.NotNull(tx3);
         tx3.Commit();
     }
@@ -294,14 +294,14 @@ public class TransactionCriticalPathTests
         {
             ConnectionString = "Data Source=test",
             DbMode = DbMode.Standard,
-            IsReadOnly = true
+            ReadWriteMode = ReadWriteMode.ReadOnly
         };
 
         using var context = new DatabaseContext(config, factory);
 
         // Read-only context should not allow write transactions
         Assert.Throws<NotSupportedException>(() =>
-            context.BeginTransaction(ExecutionType.Write));
+            context.BeginTransaction(executionType: ExecutionType.Write));
     }
 
     /// <summary>

@@ -16,7 +16,7 @@ internal sealed class MacAddressConverter : AdvancedTypeConverter<MacAddress>
         };
     }
 
-    protected override bool TryConvertFromProvider(object value, SupportedDatabase provider, out MacAddress result)
+    public override bool TryConvertFromProvider(object value, SupportedDatabase provider, out MacAddress result)
     {
         if (value is MacAddress mac)
         {

@@ -11,7 +11,7 @@ internal sealed class RowVersionConverter : AdvancedTypeConverter<RowVersion>
         return value.ToArray();
     }
 
-    protected override bool TryConvertFromProvider(object value, SupportedDatabase provider, out RowVersion result)
+    public override bool TryConvertFromProvider(object value, SupportedDatabase provider, out RowVersion result)
     {
         switch (value)
         {

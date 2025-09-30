@@ -16,7 +16,7 @@ internal sealed class InetConverter : AdvancedTypeConverter<Inet>
         };
     }
 
-    protected override bool TryConvertFromProvider(object value, SupportedDatabase provider, out Inet result)
+    public override bool TryConvertFromProvider(object value, SupportedDatabase provider, out Inet result)
     {
         if (value is Inet inet)
         {

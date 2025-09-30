@@ -12,7 +12,7 @@ internal sealed class ClobStreamConverter : AdvancedTypeConverter<TextReader>
         return value;
     }
 
-    protected override bool TryConvertFromProvider(object value, SupportedDatabase provider, out TextReader result)
+    public override bool TryConvertFromProvider(object value, SupportedDatabase provider, out TextReader result)
     {
         switch (value)
         {

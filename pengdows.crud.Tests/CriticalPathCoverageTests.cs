@@ -101,14 +101,14 @@ public class CriticalPathCoverageTests
         {
             ConnectionString = "Data Source=test",
             DbMode = DbMode.Standard,
-            IsReadOnly = true
+            ReadWriteMode = ReadWriteMode.ReadOnly
         };
 
         using var context = new DatabaseContext(config, factory);
 
         // Write operations on read-only context should fail
         Assert.Throws<NotSupportedException>(() =>
-            context.BeginTransaction(ExecutionType.Write));
+            context.BeginTransaction(executionType: ExecutionType.Write));
     }
 
     /// <summary>

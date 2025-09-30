@@ -39,6 +39,10 @@ public readonly struct Inet : IEquatable<Inet>
 
     public bool Equals(Inet other)
     {
+        if (Address is null && other.Address is null)
+            return PrefixLength == other.PrefixLength;
+        if (Address is null || other.Address is null)
+            return false;
         return Address.Equals(other.Address) && PrefixLength == other.PrefixLength;
     }
 

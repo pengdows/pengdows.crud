@@ -16,7 +16,7 @@ internal sealed class CidrConverter : AdvancedTypeConverter<Cidr>
         };
     }
 
-    protected override bool TryConvertFromProvider(object value, SupportedDatabase provider, out Cidr result)
+    public override bool TryConvertFromProvider(object value, SupportedDatabase provider, out Cidr result)
     {
         if (value is Cidr cidr)
         {

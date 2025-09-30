@@ -38,6 +38,10 @@ public readonly struct Cidr : IEquatable<Cidr>
 
     public bool Equals(Cidr other)
     {
+        if (Network is null && other.Network is null)
+            return PrefixLength == other.PrefixLength;
+        if (Network is null || other.Network is null)
+            return false;
         return Network.Equals(other.Network) && PrefixLength == other.PrefixLength;
     }
 

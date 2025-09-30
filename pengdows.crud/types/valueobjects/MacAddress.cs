@@ -37,6 +37,10 @@ public readonly struct MacAddress : IEquatable<MacAddress>
 
     public bool Equals(MacAddress other)
     {
+        if (Address is null && other.Address is null)
+            return true;
+        if (Address is null || other.Address is null)
+            return false;
         return Address.Equals(other.Address);
     }
 

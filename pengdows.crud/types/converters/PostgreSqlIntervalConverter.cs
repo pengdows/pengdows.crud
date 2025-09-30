@@ -17,7 +17,7 @@ internal sealed class PostgreSqlIntervalConverter : AdvancedTypeConverter<Postgr
         return FormatIso8601(value);
     }
 
-    protected override bool TryConvertFromProvider(object value, SupportedDatabase provider, out PostgreSqlInterval result)
+    public override bool TryConvertFromProvider(object value, SupportedDatabase provider, out PostgreSqlInterval result)
     {
         try
         {

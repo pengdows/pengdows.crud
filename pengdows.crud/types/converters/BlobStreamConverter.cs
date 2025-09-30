@@ -16,7 +16,7 @@ internal sealed class BlobStreamConverter : AdvancedTypeConverter<Stream>
         return value;
     }
 
-    protected override bool TryConvertFromProvider(object value, SupportedDatabase provider, out Stream result)
+    public override bool TryConvertFromProvider(object value, SupportedDatabase provider, out Stream result)
     {
         switch (value)
         {
