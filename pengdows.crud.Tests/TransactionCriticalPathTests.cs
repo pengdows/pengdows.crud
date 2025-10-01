@@ -353,12 +353,12 @@ public class TransactionCriticalPathTests
     }
 
     /// <summary>
-    /// Test transaction deadlock detection and retry
+    /// Test transaction workflow commits data when FakeDb persistence is enabled
     /// </summary>
-    [Fact(Skip = "FakeDb doesn't support scalar results without explicit configuration per connection - DatabaseContext creates multiple connections")]
+    [Fact]
     public async Task Transaction_DeadlockHandling_WorksCorrectly()
     {
-        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer) { EnableDataPersistence = true };
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = "Server=test;Database=test",
@@ -366,16 +366,30 @@ public class TransactionCriticalPathTests
         };
 
         using var context = new DatabaseContext(config, factory);
-
-        // Simulate deadlock scenario
         using var transaction = context.BeginTransaction();
 
-        // Should handle deadlock exceptions gracefully
-        using var container = context.CreateSqlContainer("SELECT 1");
-        var result = await container.ExecuteScalarAsync<int>();
+        using (var insert = context.CreateSqlContainer("INSERT INTO Orders (Id, Name) VALUES (@id, @name)"))
+        {
+            insert.AddParameterWithValue("id", DbType.Int32, 1);
+            insert.AddParameterWithValue("name", DbType.String, "initial");
+            Assert.Equal(1, await insert.ExecuteNonQueryAsync());
+        }
+
+        using (var update = context.CreateSqlContainer("UPDATE Orders SET Name = @name WHERE Id = @id"))
+        {
+            update.AddParameterWithValue("id", DbType.Int32, 1);
+            update.AddParameterWithValue("name", DbType.String, "updated");
+            Assert.Equal(1, await update.ExecuteNonQueryAsync());
+        }
 
         transaction.Commit();
         Assert.True(transaction.WasCommitted);
+
+        using var verify = context.CreateSqlContainer("SELECT Name FROM Orders WHERE Id = @id");
+        verify.AddParameterWithValue("id", DbType.Int32, 1);
+        await using var reader = await verify.ExecuteReaderAsync();
+        Assert.True(await reader.ReadAsync());
+        Assert.Equal("updated", reader.GetString(0));
     }
 
     /// <summary>

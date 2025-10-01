@@ -198,15 +198,15 @@ public class MariaDbDialectTests
     }
 
     [Fact]
-    public void QuotePrefix_Should_Return_Backtick()
+    public void QuotePrefix_Should_Return_DoubleQuote()
     {
-        Assert.Equal("`", _dialect.QuotePrefix);
+        Assert.Equal("\"", _dialect.QuotePrefix);
     }
 
     [Fact]
-    public void QuoteSuffix_Should_Return_Backtick()
+    public void QuoteSuffix_Should_Return_DoubleQuote()
     {
-        Assert.Equal("`", _dialect.QuoteSuffix);
+        Assert.Equal("\"", _dialect.QuoteSuffix);
     }
 
     [Fact]
@@ -216,7 +216,7 @@ public class MariaDbDialectTests
         var wrapped = _dialect.WrapObjectName("user_table");
 
         // Assert
-        Assert.Equal("`user_table`", wrapped);
+        Assert.Equal("\"user_table\"", wrapped);
     }
 
     [Fact]
@@ -228,7 +228,7 @@ public class MariaDbDialectTests
         // Assert
         Assert.Contains("mydb", wrapped);
         Assert.Contains("users", wrapped);
-        Assert.Contains("`", wrapped);
+        Assert.Contains("\"", wrapped);
     }
 
     [Fact]
@@ -451,7 +451,7 @@ public class MariaDbDialectTests
     {
         var result = _dialect.UpsertIncomingColumn("test_column");
 
-        Assert.Equal("VALUES(`test_column`)", result);
+        Assert.Equal("VALUES(\"test_column\")", result);
     }
 
     [Fact]
@@ -459,7 +459,7 @@ public class MariaDbDialectTests
     {
         var result = _dialect.UpsertIncomingColumn("user_name");
 
-        Assert.Equal("VALUES(`user_name`)", result);
+        Assert.Equal("VALUES(\"user_name\")", result);
     }
 
     [Fact]

@@ -46,12 +46,21 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
     public readonly List<string> ExecutedReaderTexts = new();
 
     // Enhanced data persistence
-    internal readonly FakeDataStore DataStore = new();
+    internal readonly FakeDataStore DataStore;
     /// <summary>
     /// Controls whether the connection should persist DML results in-memory for subsequent queries.
     /// Tests opt-in explicitly to avoid surprising behavior changes in existing suites.
     /// </summary>
     public bool EnableDataPersistence { get; set; } = false;
+
+    /// <summary>
+    /// Creates a fakeDbConnection with an optional shared data store.
+    /// If no shared store is provided, creates a new instance-level store.
+    /// </summary>
+    public fakeDbConnection(FakeDataStore? sharedDataStore = null)
+    {
+        DataStore = sharedDataStore ?? new FakeDataStore();
+    }
 
     public void EnqueueReaderResult(IEnumerable<Dictionary<string, object?>> rows)
     {

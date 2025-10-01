@@ -21,6 +21,9 @@ public sealed partial class fakeDbFactory : DbProviderFactory
     private Exception? _globalPersistentScalarException;
     public bool EnableDataPersistence { get; set; } = false;
 
+    // Shared data store across all connections from this factory
+    private readonly FakeDataStore _sharedDataStore = new();
+
     private fakeDbFactory()
     {
         _pretendToBe = SupportedDatabase.Unknown;
@@ -75,7 +78,7 @@ public sealed partial class fakeDbFactory : DbProviderFactory
             return pre;
         }
 
-        var c = new fakeDbConnection();
+        var c = new fakeDbConnection(_sharedDataStore);
         c.EmulatedProduct = _pretendToBe;
 
         // Configure failure modes based on factory settings

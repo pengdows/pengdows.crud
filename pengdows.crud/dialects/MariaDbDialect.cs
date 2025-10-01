@@ -18,11 +18,9 @@ public class MariaDbDialect : MySqlDialect
 
     // Only override what's different from MySQL
     public override SupportedDatabase DatabaseType => SupportedDatabase.MariaDb;
-    
-    // MariaDB uses backticks for quoting identifiers, not double quotes like MySQL base class
-    public override string QuotePrefix => "`";
-    public override string QuoteSuffix => "`";
-    
+
+    // MariaDB inherits ANSI double-quote quoting from MySqlDialect (matches ANSI_QUOTES sql_mode)
+
     // MariaDB uses LAST_INSERT_ID() like MySQL
     public override string GetLastInsertedIdQuery()
     {

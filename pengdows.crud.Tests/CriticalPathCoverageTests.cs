@@ -20,24 +20,29 @@ public class CriticalPathCoverageTests
     /// <summary>
     /// Test DatabaseContext initialization failure handling
     /// </summary>
-    [Fact(Skip = "FakeDb behavior changed - test needs update")]
-    public void DatabaseContext_InitializationFailure_ThrowsAndCleansUp()
+    [Fact]
+    public async Task DatabaseContext_InitializationFailure_FailsOnSecondContext()
     {
-        // Test the catch/finally blocks in DatabaseContext constructor (lines 239-254)
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         factory.SetGlobalFailureMode(ConnectionFailureMode.FailOnOpen);
 
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = "Data Source=test",
-            DbMode = DbMode.SingleConnection // This forces immediate connection
+            DbMode = DbMode.Standard
         };
 
-        // Should throw ConnectionFailedException and clean up properly
+        using (var firstContext = new DatabaseContext(config, factory))
+        using (var warmup = firstContext.CreateSqlContainer("SELECT 1"))
+        {
+            var warmupResult = await warmup.ExecuteNonQueryAsync();
+            Assert.Equal(1, warmupResult);
+        }
+
         var ex = Assert.Throws<ConnectionFailedException>(() =>
             new DatabaseContext(config, factory));
 
-        Assert.Contains("Failed to open database connection", ex.Message);
+        Assert.Contains("Failed to open database connection", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -304,22 +309,36 @@ public class CriticalPathCoverageTests
     /// <summary>
     /// Test connection failure during detection
     /// </summary>
-    [Fact(Skip = "FakeDb behavior changed - test needs update")]
-    public void DatabaseContext_ConnectionFailureDuringDetection_HandledCorrectly()
+    [Fact]
+    public async Task DatabaseContext_ConnectionFailureDuringDetection_FailsOnSubsequentInitialization()
     {
-        // Test connection disposal in error scenarios (line 850)
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         factory.SetGlobalFailureMode(ConnectionFailureMode.FailAfterCount, 1);
 
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = "Data Source=test",
-            DbMode = DbMode.KeepAlive // Forces connection
+            DbMode = DbMode.KeepAlive
         };
 
-        // Should handle connection failures during detection
-        Assert.Throws<ConnectionFailedException>(() =>
+        using (var firstContext = new DatabaseContext(config, factory))
+        using (var warmup = firstContext.CreateSqlContainer("SELECT 1"))
+        {
+            var result = await warmup.ExecuteNonQueryAsync();
+            Assert.Equal(1, result);
+        }
+
+        using (var secondContext = new DatabaseContext(config, factory))
+        using (var warmup = secondContext.CreateSqlContainer("SELECT 1"))
+        {
+            var result = await warmup.ExecuteNonQueryAsync();
+            Assert.Equal(1, result);
+        }
+
+        var ex = Assert.Throws<ConnectionFailedException>(() =>
             new DatabaseContext(config, factory));
+
+        Assert.Contains("Failed to open database connection", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

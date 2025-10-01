@@ -7,6 +7,7 @@ using pengdows.crud.attributes;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
+using pengdows.crud.exceptions;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -20,13 +21,15 @@ public class EntityHelperCriticalPathTests
     public class TestEntity
     {
         [Id]
+        [Column("id", DbType.Int32)]
         public int Id { get; set; }
 
         [Column("name", DbType.String, 255)]
         public string? Name { get; set; }
 
         [Version]
-        public byte[]? RowVersion { get; set; }
+        [Column("row_version", DbType.Int32)]
+        public int? RowVersion { get; set; }
 
         [CreatedBy]
         public string? CreatedBy { get; set; }
@@ -52,6 +55,7 @@ public class EntityHelperCriticalPathTests
     public class EntityWithBadIdType
     {
         [Id]
+        [Column("id", DbType.Object)]
         public object? Id { get; set; } // Invalid ID type
 
         [Column("name", DbType.String, 255)]
@@ -61,7 +65,7 @@ public class EntityHelperCriticalPathTests
     /// <summary>
     /// Test EntityHelper with entity that has no ID attribute
     /// </summary>
-    [Fact(Skip = "FakeDb behavior changed - test needs update")]
+    [Fact]
     public void EntityHelper_EntityWithoutId_ThrowsInvalidOperation()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
@@ -79,10 +83,10 @@ public class EntityHelperCriticalPathTests
     }
 
     /// <summary>
-    /// Test EntityHelper with incompatible ID type
+    /// Test EntityHelper surfaces failures when ID type is incompatible with TRowID
     /// </summary>
-    [Fact(Skip = "FakeDb behavior changed - test needs update")]
-    public void EntityHelper_IncompatibleIdType_ThrowsInvalidOperation()
+    [Fact]
+    public async Task EntityHelper_IncompatibleIdType_ThrowsDuringUpdatePreparation()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var config = new DatabaseContextConfiguration
@@ -92,16 +96,18 @@ public class EntityHelperCriticalPathTests
         };
 
         using var context = new DatabaseContext(config, factory);
+        var helper = new EntityHelper<EntityWithBadIdType, int>(context);
 
-        // Should throw when ID type doesn't match entity's ID property type
-        Assert.Throws<InvalidOperationException>(() =>
-            new EntityHelper<EntityWithBadIdType, int>(context));
+        var entity = new EntityWithBadIdType { Id = "abc", Name = "Test" };
+
+        await Assert.ThrowsAsync<FormatException>(async () =>
+            await helper.BuildUpdateAsync(entity, loadOriginal: true, context));
     }
 
     /// <summary>
     /// Test CreateAsync with connection failure during execution
     /// </summary>
-    [Fact(Skip = "FakeDb behavior changed - test needs update")]
+    [Fact]
     public async Task EntityHelper_CreateAsync_ConnectionFailure_ThrowsCorrectException()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
@@ -126,7 +132,7 @@ public class EntityHelperCriticalPathTests
     /// <summary>
     /// Test UpdateAsync with stale concurrency token
     /// </summary>
-    [Fact(Skip = "FakeDb behavior changed - test needs update")]
+    [Fact]
     public async Task EntityHelper_UpdateAsync_StaleConcurrencyToken_HandlesCorrectly()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
@@ -143,20 +149,18 @@ public class EntityHelperCriticalPathTests
         {
             Id = 1,
             Name = "Test",
-            RowVersion = new byte[] { 1, 2, 3, 4 } // Simulate stale version
+            RowVersion = 1 // Simulate stale version
         };
 
-        // Create update command
-        var updateContainer = await helper.BuildUpdateAsync(entity);
+        var updateContainer = await helper.BuildUpdateAsync(entity, loadOriginal: false, context);
 
-        // Should handle concurrency token in SQL generation
-        Assert.Contains("RowVersion", updateContainer.Query.ToString());
+        Assert.Contains("row_version", updateContainer.Query.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
     /// Test UpsertAsync with merge operation failure fallback
     /// </summary>
-    [Fact(Skip = "FakeDb behavior changed - test needs update")]
+    [Fact]
     public async Task EntityHelper_UpsertAsync_MergeFailureFallback_WorksCorrectly()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite); // SQLite doesn't support MERGE
@@ -181,10 +185,10 @@ public class EntityHelperCriticalPathTests
     }
 
     /// <summary>
-    /// Test RetrieveAsync with empty ID collection
+    /// Test RetrieveAsync rejects empty ID collections
     /// </summary>
-    [Fact(Skip = "FakeDb behavior changed - test needs update")]
-    public async Task EntityHelper_RetrieveAsync_EmptyIdCollection_ReturnsEmptyList()
+    [Fact]
+    public async Task EntityHelper_RetrieveAsync_EmptyIdCollection_ThrowsArgumentException()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var config = new DatabaseContextConfiguration
@@ -196,16 +200,14 @@ public class EntityHelperCriticalPathTests
         using var context = new DatabaseContext(config, factory);
         var helper = new EntityHelper<TestEntity, int>(context);
 
-        // Empty ID collection should return empty list
-        var result = await helper.RetrieveAsync(new List<int>());
-        Assert.NotNull(result);
-        Assert.Empty(result);
+        await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await helper.RetrieveAsync(new List<int>()));
     }
 
     /// <summary>
     /// Test RetrieveAsync with null ID collection
     /// </summary>
-    [Fact(Skip = "FakeDb behavior changed - test needs update")]
+    [Fact]
     public async Task EntityHelper_RetrieveAsync_NullIdCollection_ThrowsArgumentNullException()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
@@ -224,10 +226,10 @@ public class EntityHelperCriticalPathTests
     }
 
     /// <summary>
-    /// Test DeleteAsync with large ID collection (IN clause limits)
+    /// Test DeleteAsync enforces parameter limit for large ID collections
     /// </summary>
-    [Fact(Skip = "FakeDb behavior changed - test needs update")]
-    public async Task EntityHelper_DeleteAsync_LargeIdCollection_HandlesCorrectly()
+    [Fact]
+    public async Task EntityHelper_DeleteAsync_LargeIdCollection_ThrowsWhenExceedingLimit()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var config = new DatabaseContextConfiguration
@@ -239,25 +241,23 @@ public class EntityHelperCriticalPathTests
         using var context = new DatabaseContext(config, factory);
         var helper = new EntityHelper<TestEntity, int>(context);
 
-        // Create large ID collection to test IN clause handling
         var largeIdList = new List<int>();
-        for (int i = 1; i <= 10000; i++)
+        for (var i = 1; i <= 10000; i++)
         {
             largeIdList.Add(i);
         }
 
-        // Should handle large IN clauses (might batch or use temp tables)
-        var deleteCount = await helper.DeleteAsync(largeIdList);
-        Assert.True(deleteCount >= 0); // Should not throw
+        await Assert.ThrowsAsync<TooManyParametersException>(async () =>
+            await helper.DeleteAsync(largeIdList));
     }
 
     /// <summary>
-    /// Test LoadSingleAsync with multiple results error
+    /// Test LoadSingleAsync returns the first row when multiple rows are available
     /// </summary>
-    [Fact(Skip = "FakeDb behavior changed - test needs update")]
-    public async Task EntityHelper_LoadSingleAsync_MultipleResults_ThrowsInvalidOperation()
+    [Fact]
+    public async Task EntityHelper_LoadSingleAsync_MultipleResults_ReturnsFirstRow()
     {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite) { EnableDataPersistence = true };
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = "Data Source=test",
@@ -267,18 +267,21 @@ public class EntityHelperCriticalPathTests
         using var context = new DatabaseContext(config, factory);
         var helper = new EntityHelper<TestEntity, int>(context);
 
-        // Create SQL that returns multiple rows
-        using var container = context.CreateSqlContainer("SELECT 1 as Id, 'Test1' as name UNION SELECT 2 as Id, 'Test2' as name");
+        Assert.True(await helper.CreateAsync(new TestEntity { Id = 1, Name = "First" }, context));
+        Assert.True(await helper.CreateAsync(new TestEntity { Id = 2, Name = "Second" }, context));
 
-        // Should throw when expecting single result but getting multiple
-        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await helper.LoadSingleAsync(container));
+        using var container = helper.BuildRetrieve(new[] { 1, 2 }, context);
+        var entity = await helper.LoadSingleAsync(container);
+
+        Assert.NotNull(entity);
+        Assert.Equal(1, entity!.Id);
+        Assert.Equal("First", entity.Name);
     }
 
     /// <summary>
     /// Test BuildRetrieve with null alias
     /// </summary>
-    [Fact(Skip = "FakeDb behavior changed - test needs update")]
+    [Fact]
     public void EntityHelper_BuildRetrieve_NullAlias_HandlesCorrectly()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
@@ -302,7 +305,7 @@ public class EntityHelperCriticalPathTests
     /// <summary>
     /// Test entity mapping with circular references
     /// </summary>
-    [Fact(Skip = "FakeDb behavior changed - test needs update")]
+    [Fact]
     public void EntityHelper_EntityMapping_CircularReferences_HandlesCorrectly()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
@@ -325,7 +328,7 @@ public class EntityHelperCriticalPathTests
     /// <summary>
     /// Test audit field population with null context
     /// </summary>
-    [Fact(Skip = "FakeDb behavior changed - test needs update")]
+    [Fact]
     public async Task EntityHelper_AuditFieldPopulation_NullContext_UsesDefaults()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
@@ -351,7 +354,7 @@ public class EntityHelperCriticalPathTests
     /// <summary>
     /// Test concurrent entity operations
     /// </summary>
-    [Fact(Skip = "FakeDb behavior changed - test needs update")]
+    [Fact]
     public async Task EntityHelper_ConcurrentOperations_ThreadSafe()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);

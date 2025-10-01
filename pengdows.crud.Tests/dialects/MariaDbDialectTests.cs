@@ -41,14 +41,14 @@ public class MariaDbDialectTests
     {
         var d = CreateDialect();
         Assert.Equal(SupportedDatabase.MariaDb, d.DatabaseType);
-        Assert.Equal("`", d.QuotePrefix);
-        Assert.Equal("`", d.QuoteSuffix);
+        Assert.Equal("\"", d.QuotePrefix);
+        Assert.Equal("\"", d.QuoteSuffix);
         Assert.Equal("SELECT LAST_INSERT_ID()", d.GetLastInsertedIdQuery());
         Assert.True(d.SupportsIdentityColumns);
         Assert.False(d.SupportsJsonTypes);
 
-        // Backtick wrapping
-        Assert.Equal("`s`.`t`", d.WrapObjectName("s.t"));
+        // ANSI double-quote wrapping (inherited from MySqlDialect, matches ANSI_QUOTES mode)
+        Assert.Equal("\"s\".\"t\"", d.WrapObjectName("s.t"));
     }
 
     [Fact]
