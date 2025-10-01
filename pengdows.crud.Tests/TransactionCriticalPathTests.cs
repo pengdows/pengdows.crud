@@ -43,10 +43,13 @@ public class TransactionCriticalPathTests
     /// <summary>
     /// Test transaction timeout scenarios
     /// </summary>
-    [Fact(Skip = "FakeDb doesn't support scalar results without explicit configuration per connection - DatabaseContext creates multiple connections")]
+    [Fact]
     public async Task Transaction_TimeoutScenario_HandlesCorrectly()
     {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite)
+        {
+            EnableDataPersistence = true
+        };
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = "Data Source=test;Command Timeout=1",
@@ -54,14 +57,28 @@ public class TransactionCriticalPathTests
         };
 
         using var context = new DatabaseContext(config, factory);
+
+        // Create table and insert data
+        using (var createContainer = context.CreateSqlContainer("CREATE TABLE TimeoutTest (Value INTEGER)"))
+        {
+            await createContainer.ExecuteNonQueryAsync();
+        }
+
+        using (var insertContainer = context.CreateSqlContainer("INSERT INTO TimeoutTest (Value) VALUES (1)"))
+        {
+            await insertContainer.ExecuteNonQueryAsync();
+        }
+
+        // Test transaction with timeout settings
         using var transaction = context.BeginTransaction();
 
         // Should handle transaction operations with timeout settings
-        using var container = context.CreateSqlContainer("SELECT 1");
+        using var container = context.CreateSqlContainer("SELECT Value FROM TimeoutTest");
         var result = await container.ExecuteScalarAsync<int>();
 
         transaction.Commit();
         Assert.True(transaction.WasCommitted);
+        Assert.Equal(1, result);
     }
 
     /// <summary>
