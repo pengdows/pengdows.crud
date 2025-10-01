@@ -180,7 +180,7 @@ public class DbModeTests : DatabaseTestBase
             Assert.NotNull(retrieved);
             Assert.Equal("TransactionUpdate", retrieved.Name);
 
-            await transaction.CommitAsync();
+            transaction.Commit();
 
             // Assert
             Assert.Equal(DbMode.SingleConnection, singleConnContext.ConnectionMode);

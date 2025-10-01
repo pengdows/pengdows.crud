@@ -30,12 +30,12 @@ public class TransactionTests : DatabaseTestBase
             var helper = CreateEntityHelper(context);
 
             // Act
-            using var transaction = await context.BeginTransactionAsync();
+            using var transaction = context.BeginTransaction();
 
             var entity = CreateTestEntity($"Transaction-{provider}");
             await helper.CreateAsync(entity, transaction);
 
-            await transaction.CommitAsync();
+            transaction.Commit();
 
             // Assert - Changes should be visible outside transaction
             var retrieved = await helper.RetrieveOneAsync(entity.Id, context);
@@ -56,7 +56,7 @@ public class TransactionTests : DatabaseTestBase
             await helper.CreateAsync(initialEntity, context);
 
             // Act - Make changes in transaction and rollback
-            using var transaction = await context.BeginTransactionAsync();
+            using var transaction = context.BeginTransaction();
 
             var transactionEntity = CreateTestEntity($"Rollback-{provider}");
             await helper.CreateAsync(transactionEntity, transaction);
@@ -92,7 +92,7 @@ public class TransactionTests : DatabaseTestBase
             var helper = CreateEntityHelper(context);
 
             // Act
-            using var transaction = await context.BeginTransactionAsync();
+            using var transaction = context.BeginTransaction();
 
             // Initial insert
             var entity1 = CreateTestEntity($"Savepoint1-{provider}");
@@ -108,7 +108,7 @@ public class TransactionTests : DatabaseTestBase
             // Rollback to savepoint (should keep entity1, discard entity2)
             await transaction.RollbackToSavepointAsync("sp1");
 
-            await transaction.CommitAsync();
+            transaction.Commit();
 
             // Assert
             var retrieved1 = await helper.RetrieveOneAsync(entity1.Id, context);
@@ -131,7 +131,7 @@ public class TransactionTests : DatabaseTestBase
             await helper.CreateAsync(entity, context);
 
             // Act - Start transaction with Read Committed isolation
-            using var transaction = await context.BeginTransactionAsync(IsolationLevel.ReadCommitted);
+            using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
 
             // Read in transaction
             var beforeUpdate = await helper.RetrieveOneAsync(entity.Id, transaction);
@@ -147,7 +147,7 @@ public class TransactionTests : DatabaseTestBase
 
             // In Read Committed, we should see the committed change
             // Note: This behavior varies by database, but we're testing the mechanism works
-            await transaction.CommitAsync();
+            transaction.Commit();
         });
     }
 
@@ -163,7 +163,7 @@ public class TransactionTests : DatabaseTestBase
             var transferAmount = 250.00m;
 
             // Act - Perform atomic money transfer
-            using var transaction = await context.BeginTransactionAsync();
+            using var transaction = context.BeginTransaction();
 
             // Debit from account A
             using var debitContainer = context.CreateSqlContainer(@"
@@ -189,7 +189,7 @@ public class TransactionTests : DatabaseTestBase
             var creditRows = await creditContainer.ExecuteNonQueryAsync();
             Assert.Equal(1, creditRows);
 
-            await transaction.CommitAsync();
+            transaction.Commit();
 
             // Assert - Verify final balances
             var finalBalanceA = await GetAccountBalanceAsync(context, 1);
@@ -216,7 +216,7 @@ public class TransactionTests : DatabaseTestBase
             // Act - Run concurrent transactions
             var task1 = Task.Run(async () =>
             {
-                using var transaction = await context.BeginTransactionAsync();
+                using var transaction = context.BeginTransaction();
                 entity1.Name = $"Updated1-{provider}";
                 await helper.UpdateAsync(entity1, transaction);
 
@@ -225,12 +225,12 @@ public class TransactionTests : DatabaseTestBase
 
                 entity2.Value = 999;
                 await helper.UpdateAsync(entity2, transaction);
-                await transaction.CommitAsync();
+                transaction.Commit();
             });
 
             var task2 = Task.Run(async () =>
             {
-                using var transaction = await context.BeginTransactionAsync();
+                using var transaction = context.BeginTransaction();
                 entity2.Name = $"Updated2-{provider}";
                 await helper.UpdateAsync(entity2, transaction);
 
@@ -239,7 +239,7 @@ public class TransactionTests : DatabaseTestBase
 
                 entity1.Value = 888;
                 await helper.UpdateAsync(entity1, transaction);
-                await transaction.CommitAsync();
+                transaction.Commit();
             });
 
             // Assert - Both should complete (one might fail due to deadlock, but shouldn't hang)
@@ -267,7 +267,7 @@ public class TransactionTests : DatabaseTestBase
             // Act & Assert
             await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             {
-                using var transaction = await context.BeginTransactionAsync();
+                using var transaction = context.BeginTransaction();
 
                 var entity = CreateTestEntity($"Exception-{provider}");
                 await helper.CreateAsync(entity, context);
@@ -276,7 +276,7 @@ public class TransactionTests : DatabaseTestBase
                 throw new InvalidOperationException("Simulated error");
 
                 // This should not be reached
-                await transaction.CommitAsync();
+                transaction.Commit();
             });
 
             // Verify transaction was rolled back
@@ -298,7 +298,7 @@ public class TransactionTests : DatabaseTestBase
             await helper.CreateAsync(entity, context);
 
             // Act - Start readonly transaction
-            using var readonlyTransaction = await context.BeginTransactionAsync(
+            using var readonlyTransaction = context.BeginTransaction(
                 IsolationLevel.ReadCommitted, ExecutionType.Read);
 
             // Should allow read operations
@@ -310,7 +310,7 @@ public class TransactionTests : DatabaseTestBase
             var count = await countContainer.ExecuteScalarAsync<long>();
             Assert.True(count >= 1);
 
-            await readonlyTransaction.CommitAsync();
+            readonlyTransaction.Commit();
 
             _output.WriteLine($"ReadOnly transaction test completed for {provider} - read operations succeeded");
         });
@@ -335,23 +335,23 @@ public class TransactionTests : DatabaseTestBase
             await helper.CreateAsync(entity, context);
 
             // Test ReadCommitted readonly transaction
-            using (var readCommittedTxn = await context.BeginTransactionAsync(
+            using (var readCommittedTxn = context.BeginTransaction(
                 IsolationLevel.ReadCommitted, ExecutionType.Read))
             {
                 var readCommittedResult = await helper.RetrieveOneAsync(entity.Id, readCommittedTxn);
                 Assert.NotNull(readCommittedResult);
-                await readCommittedTxn.CommitAsync();
+                readCommittedTxn.Commit();
             }
 
             // Test RepeatableRead readonly transaction (if supported)
             if (SupportsRepeatableRead(provider))
             {
-                using var repeatableReadTxn = await context.BeginTransactionAsync(
+                using var repeatableReadTxn = context.BeginTransaction(
                     IsolationLevel.RepeatableRead, ExecutionType.Read);
 
                 var repeatableReadResult = await helper.RetrieveOneAsync(entity.Id, repeatableReadTxn);
                 Assert.NotNull(repeatableReadResult);
-                await repeatableReadTxn.CommitAsync();
+                repeatableReadTxn.Commit();
             }
 
             _output.WriteLine($"ReadOnly isolation level test completed for {provider}");
@@ -374,7 +374,7 @@ public class TransactionTests : DatabaseTestBase
             // Act - Run concurrent readonly and write transactions
             var readTask = Task.Run(async () =>
             {
-                using var readTxn = await context.BeginTransactionAsync(
+                using var readTxn = context.BeginTransaction(
                     IsolationLevel.ReadCommitted, ExecutionType.Read);
 
                 // Perform multiple reads
@@ -382,19 +382,19 @@ public class TransactionTests : DatabaseTestBase
                 await Task.Delay(50); // Allow time for write transaction
                 var read2 = await helper.RetrieveOneAsync(entity2.Id, readTxn);
 
-                await readTxn.CommitAsync();
+                readTxn.Commit();
                 return new[] { read1, read2 };
             });
 
             var writeTask = Task.Run(async () =>
             {
                 await Task.Delay(25); // Start after read transaction begins
-                using var writeTxn = await context.BeginTransactionAsync(
+                using var writeTxn = context.BeginTransaction(
                     IsolationLevel.ReadCommitted, ExecutionType.Write);
 
                 entity1.Name = $"Modified-{provider}";
                 await helper.UpdateAsync(entity1, writeTxn);
-                await writeTxn.CommitAsync();
+                writeTxn.Commit();
                 return true;
             });
 
@@ -427,7 +427,7 @@ public class TransactionTests : DatabaseTestBase
             }
 
             // Act - Start long-running readonly transaction
-            using var longReadTxn = await context.BeginTransactionAsync(
+            using var longReadTxn = context.BeginTransaction(
                 IsolationLevel.ReadCommitted, ExecutionType.Read);
 
             // Initial read
@@ -444,7 +444,7 @@ public class TransactionTests : DatabaseTestBase
             // Read again in readonly transaction
             var laterEntities = await helper.RetrieveAsync(entities.Select(e => e.Id), longReadTxn);
 
-            await longReadTxn.CommitAsync();
+            longReadTxn.Commit();
 
             // Assert - Readonly transaction behavior depends on isolation level
             Assert.Equal(initialCount, laterEntities.Count);
@@ -504,7 +504,7 @@ public class TransactionTests : DatabaseTestBase
 
     private static bool SupportsSavepoints(SupportedDatabase provider)
     {
-        return provider is not (SupportedDatabase.MySQL or SupportedDatabase.MariaDb);
+        return provider is not (SupportedDatabase.MySql or SupportedDatabase.MariaDb);
     }
 
     private static bool SupportsMultipleIsolationLevels(SupportedDatabase provider)
@@ -538,7 +538,7 @@ internal class TestTableCreator
             SupportedDatabase.Sqlite => CreateSqliteTableSql(),
             SupportedDatabase.PostgreSql => CreatePostgreSqlTableSql(),
             SupportedDatabase.SqlServer => CreateSqlServerTableSql(),
-            SupportedDatabase.MySQL => CreateMySqlTableSql(),
+            SupportedDatabase.MySql => CreateMySqlTableSql(),
             SupportedDatabase.MariaDb => CreateMariaDbTableSql(),
             SupportedDatabase.Oracle => CreateOracleTableSql(),
             _ => throw new NotSupportedException($"Database {_context.Product} not supported")
@@ -571,7 +571,7 @@ internal class TestTableCreator
                     [name] NVARCHAR(255) NOT NULL,
                     [balance] DECIMAL(18,2) NOT NULL DEFAULT 0.00
                 )",
-            SupportedDatabase.MySQL or SupportedDatabase.MariaDb => @"
+            SupportedDatabase.MySql or SupportedDatabase.MariaDb => @"
                 CREATE TABLE IF NOT EXISTS accounts (
                     id BIGINT PRIMARY KEY,
                     name VARCHAR(255) NOT NULL,

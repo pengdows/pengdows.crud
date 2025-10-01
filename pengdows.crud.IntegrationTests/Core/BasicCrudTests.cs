@@ -318,7 +318,7 @@ internal class TestTableCreator
             SupportedDatabase.Sqlite => CreateSqliteTableSql(),
             SupportedDatabase.PostgreSql => CreatePostgreSqlTableSql(),
             SupportedDatabase.SqlServer => CreateSqlServerTableSql(),
-            SupportedDatabase.MySQL => CreateMySqlTableSql(),
+            SupportedDatabase.MySql => CreateMySqlTableSql(),
             SupportedDatabase.MariaDb => CreateMariaDbTableSql(),
             SupportedDatabase.Oracle => CreateOracleTableSql(),
             _ => throw new NotSupportedException($"Database {_context.Product} not supported")

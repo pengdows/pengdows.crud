@@ -64,7 +64,7 @@ public class ReadOnlyConnectionTests : DatabaseTestBase
             await helper.CreateAsync(entity2, context);
 
             // Act - Start readonly transaction
-            using var readonlyTransaction = await context.BeginTransactionAsync(
+            using var readonlyTransaction = context.BeginTransaction(
                 IsolationLevel.ReadCommitted, ExecutionType.Read);
 
             // Perform read operations within readonly transaction
@@ -74,7 +74,7 @@ public class ReadOnlyConnectionTests : DatabaseTestBase
             // Query multiple records
             var allEntities = await helper.RetrieveAsync(new[] { entity1.Id, entity2.Id }, readonlyTransaction);
 
-            await readonlyTransaction.CommitAsync();
+            readonlyTransaction.Commit();
 
             // Assert
             Assert.NotNull(retrieved1);
@@ -105,7 +105,7 @@ public class ReadOnlyConnectionTests : DatabaseTestBase
             await helper.CreateAsync(entity, context);
 
             // Act - Start readonly transaction with snapshot isolation
-            using var readonlyTransaction = await context.BeginTransactionAsync(
+            using var readonlyTransaction = context.BeginTransaction(
                 IsolationLevel.Snapshot, ExecutionType.Read);
 
             // Read the entity in readonly transaction
@@ -119,7 +119,7 @@ public class ReadOnlyConnectionTests : DatabaseTestBase
             // Read again in readonly transaction - should see original value
             var snapshotRead = await helper.RetrieveOneAsync(entity.Id, readonlyTransaction);
 
-            await readonlyTransaction.CommitAsync();
+            readonlyTransaction.Commit();
 
             // Assert - Readonly transaction should have seen consistent snapshot
             Assert.NotNull(snapshotRead);
@@ -149,11 +149,11 @@ public class ReadOnlyConnectionTests : DatabaseTestBase
             // Act - Run multiple concurrent readonly operations
             var readTasks = entities.Select(async entity =>
             {
-                using var readTransaction = await context.BeginTransactionAsync(
+                using var readTransaction = context.BeginTransaction(
                     IsolationLevel.ReadCommitted, ExecutionType.Read);
 
                 var retrieved = await helper.RetrieveOneAsync(entity.Id, readTransaction);
-                await readTransaction.CommitAsync();
+                readTransaction.Commit();
 
                 return retrieved;
             }).ToArray();
@@ -179,7 +179,7 @@ public class ReadOnlyConnectionTests : DatabaseTestBase
             await CreateAccountAsync(context, 3, "Account C", 750.00m);
 
             // Act - Execute complex readonly queries
-            using var readTransaction = await context.BeginTransactionAsync(
+            using var readTransaction = context.BeginTransaction(
                 IsolationLevel.ReadCommitted, ExecutionType.Read);
 
             // Query 1: Count accounts
@@ -204,7 +204,7 @@ public class ReadOnlyConnectionTests : DatabaseTestBase
                 highBalanceAccounts.Add((reader.GetString(0), reader.GetDecimal(1)));
             }
 
-            await readTransaction.CommitAsync();
+            readTransaction.Commit();
 
             // Assert
             Assert.Equal(3, count);
@@ -221,8 +221,8 @@ public class ReadOnlyConnectionTests : DatabaseTestBase
     public async Task ReadOnlyConnection_FailureScenarios_HandleGracefully()
     {
         // This test uses FakeDb to simulate readonly connection failures
-        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
-        var connection = (FakeDbConnection)factory.CreateConnection();
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var connection = (fakeDbConnection)factory.CreateConnection();
 
         // Configure to fail on readonly operations after 2 successful opens
         connection.SetFailAfterOpenCount(2);
@@ -281,7 +281,7 @@ public class ReadOnlyConnectionTests : DatabaseTestBase
             }
 
             // Act - Start long-running readonly transaction
-            using var longReadTransaction = await context.BeginTransactionAsync(
+            using var longReadTransaction = context.BeginTransaction(
                 IsolationLevel.ReadCommitted, ExecutionType.Read);
 
             // Read initial state
@@ -299,7 +299,7 @@ public class ReadOnlyConnectionTests : DatabaseTestBase
             var laterCount = await GetTestTableCountAsync(context, longReadTransaction);
             var unchangedEntity = await helper.RetrieveOneAsync(initialEntities[0].Id, longReadTransaction);
 
-            await longReadTransaction.CommitAsync();
+            longReadTransaction.Commit();
 
             // Assert - ReadOnly transaction behavior depends on isolation level
             // For ReadCommitted, we might see some changes, but transaction should remain consistent

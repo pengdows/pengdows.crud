@@ -127,7 +127,7 @@ public class ExecutionTypeTests : DatabaseTestBase
             var helper = CreateEntityHelper(context);
 
             // Test Read transaction
-            using (var readTransaction = await context.BeginTransactionAsync(
+            using (var readTransaction = context.BeginTransaction(
                 IsolationLevel.ReadCommitted, ExecutionType.Read))
             {
                 // Create test data outside transaction first
@@ -137,13 +137,13 @@ public class ExecutionTypeTests : DatabaseTestBase
                 // Read within readonly transaction
                 var retrieved = await helper.RetrieveOneAsync(entity.Id, readTransaction);
                 Assert.NotNull(retrieved);
-                await readTransaction.CommitAsync();
+                readTransaction.Commit();
 
                 Output.WriteLine($"{provider} Read transaction completed successfully");
             }
 
             // Test Write transaction
-            using (var writeTransaction = await context.BeginTransactionAsync(
+            using (var writeTransaction = context.BeginTransaction(
                 IsolationLevel.ReadCommitted, ExecutionType.Write))
             {
                 // Write within write transaction
@@ -154,7 +154,7 @@ public class ExecutionTypeTests : DatabaseTestBase
                 var retrievedInTxn = await helper.RetrieveOneAsync(writeEntity.Id, writeTransaction);
                 Assert.NotNull(retrievedInTxn);
 
-                await writeTransaction.CommitAsync();
+                writeTransaction.Commit();
 
                 // Verify write is visible after commit
                 var retrievedAfterCommit = await helper.RetrieveOneAsync(writeEntity.Id, context);
@@ -184,25 +184,25 @@ public class ExecutionTypeTests : DatabaseTestBase
             // Act - Run concurrent read and write operations
             var readTasks = entities.Select(async (entity, index) =>
             {
-                using var readTransaction = await context.BeginTransactionAsync(
+                using var readTransaction = context.BeginTransaction(
                     IsolationLevel.ReadCommitted, ExecutionType.Read);
 
                 // Simulate some processing time
                 await Task.Delay(10 + (index * 5));
 
                 var retrieved = await helper.RetrieveOneAsync(entity.Id, readTransaction);
-                await readTransaction.CommitAsync();
+                readTransaction.Commit();
                 return retrieved;
             }).ToArray();
 
             var writeTasks = Enumerable.Range(0, 2).Select(async i =>
             {
-                using var writeTransaction = await context.BeginTransactionAsync(
+                using var writeTransaction = context.BeginTransaction(
                     IsolationLevel.ReadCommitted, ExecutionType.Write);
 
                 var newEntity = CreateTestEntity($"ConcurrentWrite{i}-{provider}");
                 await helper.CreateAsync(newEntity, writeTransaction);
-                await writeTransaction.CommitAsync();
+                writeTransaction.Commit();
                 return newEntity;
             }).ToArray();
 
@@ -277,8 +277,8 @@ public class ExecutionTypeTests : DatabaseTestBase
     public async Task ExecutionType_FailureHandling_ReadWriteDifferences()
     {
         // Test using FakeDb to simulate different failure scenarios
-        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
-        var connection = (FakeDbConnection)factory.CreateConnection();
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var connection = (fakeDbConnection)factory.CreateConnection();
 
         // Configure to fail on write operations (simulating read-only mode)
         var operationCount = 0;
@@ -337,7 +337,7 @@ public class ExecutionTypeTests : DatabaseTestBase
             var helper = CreateEntityHelper(context);
 
             // Test read execution type behavior with current DbMode
-            using var readTransaction = await context.BeginTransactionAsync(
+            using var readTransaction = context.BeginTransaction(
                 IsolationLevel.ReadCommitted, ExecutionType.Read);
 
             var entity = CreateTestEntity($"DbMode{currentMode}-{provider}");
@@ -345,15 +345,15 @@ public class ExecutionTypeTests : DatabaseTestBase
 
             var retrieved = await helper.RetrieveOneAsync(entity.Id, readTransaction);
             Assert.NotNull(retrieved);
-            await readTransaction.CommitAsync();
+            readTransaction.Commit();
 
             // Test write execution type behavior with current DbMode
-            using var writeTransaction = await context.BeginTransactionAsync(
+            using var writeTransaction = context.BeginTransaction(
                 IsolationLevel.ReadCommitted, ExecutionType.Write);
 
             var writeEntity = CreateTestEntity($"DbModeWrite{currentMode}-{provider}");
             await helper.CreateAsync(writeEntity, writeTransaction);
-            await writeTransaction.CommitAsync();
+            writeTransaction.Commit();
 
             var verifyEntity = await helper.RetrieveOneAsync(writeEntity.Id, context);
             Assert.NotNull(verifyEntity);

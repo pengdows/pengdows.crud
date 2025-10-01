@@ -1,4 +1,5 @@
 using pengdows.crud;
+using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 using pengdows.crud.IntegrationTests.Infrastructure;
 using testbed;
@@ -28,7 +29,7 @@ public class ConnectionFailureTests : IAsyncLifetime
     public async Task Connection_FailOnOpen_ThrowsAppropriateException()
     {
         // Arrange
-        var factory = FakeDbFactory.CreateFailingFactory(
+        var factory = fakeDbFactory.CreateFailingFactory(
             SupportedDatabase.Sqlite,
             ConnectionFailureMode.FailOnOpen);
 
@@ -50,7 +51,7 @@ public class ConnectionFailureTests : IAsyncLifetime
     public async Task Connection_FailOnCommand_HandlesCommandCreationFailure()
     {
         // Arrange
-        var factory = FakeDbFactory.CreateFailingFactory(
+        var factory = fakeDbFactory.CreateFailingFactory(
             SupportedDatabase.PostgreSql,
             ConnectionFailureMode.FailOnCommand);
 
@@ -72,7 +73,7 @@ public class ConnectionFailureTests : IAsyncLifetime
     public async Task Connection_FailOnTransaction_HandlesTransactionFailure()
     {
         // Arrange
-        var factory = FakeDbFactory.CreateFailingFactory(
+        var factory = fakeDbFactory.CreateFailingFactory(
             SupportedDatabase.SqlServer,
             ConnectionFailureMode.FailOnTransaction);
 
@@ -81,7 +82,7 @@ public class ConnectionFailureTests : IAsyncLifetime
         // Act & Assert
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
-            using var transaction = await context.BeginTransactionAsync();
+            using var transaction = context.BeginTransaction();
             // Transaction creation should fail
         });
 
@@ -93,8 +94,8 @@ public class ConnectionFailureTests : IAsyncLifetime
     public async Task Connection_FailAfterCount_WorksUntilThreshold()
     {
         // Arrange
-        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
-        var connection = (FakeDbConnection)factory.CreateConnection();
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var connection = (fakeDbConnection)factory.CreateConnection();
         connection.SetFailAfterOpenCount(2); // Fail after 2 successful operations
 
         using var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory);
@@ -127,8 +128,8 @@ public class ConnectionFailureTests : IAsyncLifetime
     public async Task Connection_BrokenConnection_HandlesAllOperationFailures()
     {
         // Arrange
-        var factory = new FakeDbFactory(SupportedDatabase.MySQL);
-        var connection = (FakeDbConnection)factory.CreateConnection();
+        var factory = new fakeDbFactory(SupportedDatabase.MySql);
+        var connection = (fakeDbConnection)factory.CreateConnection();
         connection.SetBroken(); // Mark connection as permanently broken
 
         using var context = new DatabaseContext("Server=localhost;Database=test;EmulatedProduct=MySQL", factory);
@@ -149,7 +150,7 @@ public class ConnectionFailureTests : IAsyncLifetime
 
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
-            using var transaction = await context.BeginTransactionAsync();
+            using var transaction = context.BeginTransaction();
         });
 
         _output.WriteLine("BrokenConnection test completed - all operations failed as expected");
@@ -160,8 +161,8 @@ public class ConnectionFailureTests : IAsyncLifetime
     {
         // Arrange
         var customException = new TimeoutException("Database connection timeout after 30 seconds");
-        var factory = new FakeDbFactory(SupportedDatabase.Oracle);
-        var connection = (FakeDbConnection)factory.CreateConnection();
+        var factory = new fakeDbFactory(SupportedDatabase.Oracle);
+        var connection = (fakeDbConnection)factory.CreateConnection();
         connection.SetFailOnOpen();
         connection.SetCustomFailureException(customException);
 
@@ -183,8 +184,8 @@ public class ConnectionFailureTests : IAsyncLifetime
     public async Task Connection_IntermittentFailures_RetriesSuccessfully()
     {
         // Arrange - Create a factory that fails intermittently
-        var factory = new FakeDbFactory(SupportedDatabase.PostgreSql);
-        var connection = (FakeDbConnection)factory.CreateConnection();
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        var connection = (fakeDbConnection)factory.CreateConnection();
 
         // Configure to fail on every other operation
         var operationCount = 0;
@@ -230,7 +231,7 @@ public class ConnectionFailureTests : IAsyncLifetime
     public async Task Connection_MultipleConcurrentFailures_HandlesGracefully()
     {
         // Arrange
-        var factory = FakeDbFactory.CreateFailingFactory(
+        var factory = fakeDbFactory.CreateFailingFactory(
             SupportedDatabase.Sqlite,
             ConnectionFailureMode.FailAfterCount,
             failAfterCount: 1);
@@ -269,8 +270,8 @@ public class ConnectionFailureTests : IAsyncLifetime
     public async Task Connection_FailureDuringTransaction_RollsBackCorrectly()
     {
         // Arrange
-        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
-        var connection = (FakeDbConnection)factory.CreateConnection();
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var connection = (fakeDbConnection)factory.CreateConnection();
 
         // Configure to fail after the transaction begins but before commit
         var commandCount = 0;
@@ -291,7 +292,7 @@ public class ConnectionFailureTests : IAsyncLifetime
         // Act & Assert
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
-            using var transaction = await context.BeginTransactionAsync();
+            using var transaction = context.BeginTransaction();
 
             var entity1 = CreateTestEntity("TxnFail1");
             await helper.CreateAsync(entity1, transaction);
@@ -299,7 +300,7 @@ public class ConnectionFailureTests : IAsyncLifetime
             var entity2 = CreateTestEntity("TxnFail2");
             await helper.CreateAsync(entity2, transaction); // This should trigger the failure
 
-            await transaction.CommitAsync();
+            transaction.Commit();
         });
 
         _output.WriteLine("FailureDuringTransaction test completed - transaction failed and rolled back");

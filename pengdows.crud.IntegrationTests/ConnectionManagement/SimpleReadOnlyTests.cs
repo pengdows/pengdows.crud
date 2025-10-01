@@ -88,7 +88,7 @@ public class SimpleReadOnlyTests : IAsyncLifetime
         await setupContainer.ExecuteNonQueryAsync();
 
         // Act - Start readonly transaction
-        using var readonlyTransaction = await context.BeginTransactionAsync(
+        using var readonlyTransaction = context.BeginTransaction(
             IsolationLevel.ReadCommitted, ExecutionType.Read);
 
         // Perform read operation within readonly transaction
@@ -99,7 +99,7 @@ public class SimpleReadOnlyTests : IAsyncLifetime
         using var dataContainer = context.CreateSqlContainer("SELECT data FROM readonly_txn WHERE id = 1");
         var data = await dataContainer.ExecuteScalarAsync<string>();
 
-        await readonlyTransaction.CommitAsync();
+        readonlyTransaction.Commit();
 
         // Assert
         Assert.Equal(1, count);
@@ -172,8 +172,8 @@ public class SimpleReadOnlyTests : IAsyncLifetime
     public async Task FakeDb_ReadOnlyConnectionFailure_SimulatesFailureScenarios()
     {
         // Arrange - Create FakeDb factory configured to fail
-        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
-        var connection = (FakeDbConnection)factory.CreateConnection();
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var connection = (fakeDbConnection)factory.CreateConnection();
         connection.SetFailOnOpen();
 
         using var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory);
@@ -192,7 +192,7 @@ public class SimpleReadOnlyTests : IAsyncLifetime
     public async Task FakeDb_ReadOnlyConnectionSuccess_WorksNormally()
     {
         // Arrange - Create FakeDb factory with normal behavior
-        var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         using var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory);
 
         // Act - Normal readonly operations should work

@@ -92,7 +92,7 @@ public abstract class DatabaseTestBase : IAsyncLifetime
             SupportedDatabase.Sqlite,
             SupportedDatabase.PostgreSql,
             SupportedDatabase.SqlServer,
-            SupportedDatabase.MySQL,
+            SupportedDatabase.MySql,
             SupportedDatabase.MariaDb
         };
     }
