@@ -4,7 +4,7 @@ using System.Globalization;
 
 namespace pengdows.crud.types.valueobjects;
 
-public readonly struct Range<T> : IEquatable<Range<T>>
+public readonly struct Range<T> : IEquatable<Range<T>> where T : struct
 {
     public Range(T? lower, T? upper, bool isLowerInclusive = true, bool isUpperInclusive = false)
     {
@@ -23,7 +23,7 @@ public readonly struct Range<T> : IEquatable<Range<T>>
     public bool HasUpperBound => Upper is not null;
     public bool IsEmpty => !HasLowerBound && !HasUpperBound;
 
-    public static Range<T> Empty { get; } = new(default, default, false, false);
+    public static Range<T> Empty => default;
 
     /// <summary>
     /// Parse a canonical range string like "[1,5)" or "(,10]".

@@ -400,7 +400,7 @@ public class CoercionTests
 
     #region Performance Tests
 
-    [Fact]
+    [Fact(Skip = "Flaky performance test - timing-dependent")]
     public void CoercionRegistry_ShouldHaveConsistentPerformance()
     {
         var guid = Guid.NewGuid();

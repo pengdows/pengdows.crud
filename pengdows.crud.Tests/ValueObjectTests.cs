@@ -137,7 +137,7 @@ public class ValueObjectTests
     [Fact]
     public void Range_ShouldCreateUnboundedRange()
     {
-        var range = new Range<int?>(null, null);
+        var range = new Range<int>(null, null);
 
         Assert.False(range.HasLowerBound);
         Assert.False(range.HasUpperBound);

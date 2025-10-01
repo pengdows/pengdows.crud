@@ -6,7 +6,7 @@ using pengdows.crud.types.valueobjects;
 
 namespace pengdows.crud.types.converters;
 
-internal sealed class PostgreSqlRangeConverter<T> : AdvancedTypeConverter<Range<T>>
+internal sealed class PostgreSqlRangeConverter<T> : AdvancedTypeConverter<Range<T>> where T : struct
 {
     protected override object? ConvertToProvider(Range<T> value, SupportedDatabase provider)
     {

@@ -1,1 +1,1 @@
-global using FakeDbFactory = pengdows.crud.fakeDb.fakeDbFactory;
+global using fakeDbFactory = pengdows.crud.fakeDb.fakeDbFactory;
