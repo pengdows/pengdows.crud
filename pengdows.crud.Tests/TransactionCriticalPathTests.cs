@@ -43,7 +43,7 @@ public class TransactionCriticalPathTests
     /// <summary>
     /// Test transaction timeout scenarios
     /// </summary>
-    [Fact(Skip = "FakeDb behavior changed - needs update")]
+    [Fact(Skip = "FakeDb doesn't support scalar results without explicit configuration per connection - DatabaseContext creates multiple connections")]
     public async Task Transaction_TimeoutScenario_HandlesCorrectly()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
@@ -338,7 +338,7 @@ public class TransactionCriticalPathTests
     /// <summary>
     /// Test transaction deadlock detection and retry
     /// </summary>
-    [Fact(Skip = "FakeDb behavior changed - needs update")]
+    [Fact(Skip = "FakeDb doesn't support scalar results without explicit configuration per connection - DatabaseContext creates multiple connections")]
     public async Task Transaction_DeadlockHandling_WorksCorrectly()
     {
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
