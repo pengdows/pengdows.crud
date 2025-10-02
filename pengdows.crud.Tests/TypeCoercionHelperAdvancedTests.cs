@@ -1,8 +1,11 @@
 using System;
 using System.Data;
+using System.Net;
 using System.Text;
 using System.Text.Json;
 using pengdows.crud;
+using pengdows.crud.enums;
+using pengdows.crud.types.valueobjects;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -75,6 +78,35 @@ public class TypeCoercionHelperAdvancedTests
         Assert.Throws<ArgumentException>(() => TypeCoercionHelper.Coerce("unknown", typeof(string), column));
     }
 
+    [Fact]
+    public void CoerceAdvancedType_UsesRegisteredConverter()
+    {
+        var column = CreateInetColumn();
+
+        var result = (Inet)TypeCoercionHelper.Coerce(
+            "192.168.1.1/24",
+            typeof(string),
+            column,
+            EnumParseFailureMode.Throw,
+            new TypeCoercionOptions(TimeMappingPolicy.PreferDateTimeOffset, JsonPassThrough.PreferDocument, SupportedDatabase.PostgreSql))!;
+
+        Assert.Equal(IPAddress.Parse("192.168.1.1"), result.Address);
+        Assert.Equal((byte)24, result.PrefixLength);
+    }
+
+    [Fact]
+    public void CoerceAdvancedType_InvalidValueThrows()
+    {
+        var column = CreateInetColumn();
+
+        Assert.Throws<InvalidCastException>(() => TypeCoercionHelper.Coerce(
+            "not-an-inet",
+            typeof(string),
+            column,
+            EnumParseFailureMode.Throw,
+            new TypeCoercionOptions(TimeMappingPolicy.PreferDateTimeOffset, JsonPassThrough.PreferDocument, SupportedDatabase.PostgreSql)));
+    }
+
     private static ColumnInfo CreateJsonColumn()
     {
         var property = typeof(SampleEntity).GetProperty(nameof(SampleEntity.Payload))!;
@@ -106,10 +138,24 @@ public class TypeCoercionHelperAdvancedTests
         };
     }
 
+    private static ColumnInfo CreateInetColumn()
+    {
+        var property = typeof(SampleEntity).GetProperty(nameof(SampleEntity.Network))!;
+        return new ColumnInfo
+        {
+            Name = "Network",
+            PropertyInfo = property,
+            DbType = DbType.String,
+            EnumType = null,
+            IsJsonType = false
+        };
+    }
+
     private sealed class SampleEntity
     {
         public SamplePayload Payload { get; set; } = new();
         public SampleState State { get; set; }
+        public Inet Network { get; set; }
     }
 
     private sealed class SamplePayload

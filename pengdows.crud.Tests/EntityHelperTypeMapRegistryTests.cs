@@ -4,6 +4,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
+[Collection("TypeRegistry")]
 public class EntityHelperTypeMapRegistryTests
 {
     private sealed class CustomTypeMapRegistry : ITypeMapRegistry

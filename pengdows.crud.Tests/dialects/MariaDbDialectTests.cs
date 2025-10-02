@@ -2,9 +2,12 @@
 
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Reflection;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
+using pengdows.crud;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
@@ -90,5 +93,53 @@ public class MariaDbDialectTests
 
         var name = await d.GetProductNameAsync(tracked);
         Assert.Equal("MariaDB", name);
+    }
+
+    [Fact]
+    public async Task GetProductNameAsync_WhenSchemaIsAlreadyMariaDb_ReturnsOriginalName()
+    {
+        var d = CreateDialect();
+        var factory = new fakeDbFactory(SupportedDatabase.MariaDb);
+        var conn = factory.CreateConnection();
+        var schema = DataSourceInformation.BuildEmptySchema(
+            "MariaDB 10.5",
+            "10.5",
+            "@p[0-9]+",
+            "@{0}",
+            64,
+            @"@\\w+",
+            @"@\\w+",
+            true);
+
+        using var tracked = new FakeTrackedConnection(conn, schema, new Dictionary<string, object>());
+
+        var name = await d.GetProductNameAsync(tracked);
+
+        Assert.Equal("MariaDB 10.5", name);
+    }
+
+    [Fact]
+    public void TryEnterReadOnlyTransaction_ExecutesReadOnlyCommand()
+    {
+        var dialect = CreateDialect();
+        var container = new Mock<ISqlContainer>(MockBehavior.Strict);
+        container
+            .Setup(c => c.ExecuteNonQueryAsync(CommandType.Text))
+            .ReturnsAsync(0)
+            .Verifiable();
+        container
+            .Setup(c => c.Dispose())
+            .Verifiable();
+
+        var transaction = new Mock<ITransactionContext>(MockBehavior.Strict);
+        transaction
+            .Setup(t => t.CreateSqlContainer("SET SESSION TRANSACTION READ ONLY;"))
+            .Returns(container.Object)
+            .Verifiable();
+
+        dialect.TryEnterReadOnlyTransaction(transaction.Object);
+
+        container.Verify();
+        transaction.Verify();
     }
 }

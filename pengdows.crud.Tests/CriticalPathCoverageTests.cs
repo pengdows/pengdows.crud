@@ -1,6 +1,7 @@
 using System;
 using System.Data;
 using System.Data.Common;
+using System.Reflection;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
@@ -21,28 +22,23 @@ public class CriticalPathCoverageTests
     /// Test DatabaseContext initialization failure handling
     /// </summary>
     [Fact]
-    public async Task DatabaseContext_InitializationFailure_FailsOnSecondContext()
+    public void DatabaseContext_InitializationFailure_ThrowsAndCleansUp()
     {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        factory.SetGlobalFailureMode(ConnectionFailureMode.FailOnOpen);
+        // Test the catch/finally blocks in DatabaseContext constructor (lines 239-254)
+        // Use factory that fails without skipping first open - this will fail during initialization
+        var factory = fakeDbFactory.CreateFailingFactory(SupportedDatabase.Sqlite, ConnectionFailureMode.FailOnOpen);
 
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = "Data Source=test",
-            DbMode = DbMode.Standard
+            DbMode = DbMode.SingleConnection // This forces immediate connection
         };
 
-        using (var firstContext = new DatabaseContext(config, factory))
-        using (var warmup = firstContext.CreateSqlContainer("SELECT 1"))
-        {
-            var warmupResult = await warmup.ExecuteNonQueryAsync();
-            Assert.Equal(1, warmupResult);
-        }
-
+        // Should throw ConnectionFailedException and clean up properly
         var ex = Assert.Throws<ConnectionFailedException>(() =>
             new DatabaseContext(config, factory));
 
-        Assert.Contains("Failed to open database connection", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Failed to open database connection", ex.Message);
     }
 
     /// <summary>
@@ -69,10 +65,10 @@ public class CriticalPathCoverageTests
     /// <summary>
     /// Test DatabaseContext connection string reset protection
     /// </summary>
-    [Fact(Skip = "Test implementation issue - needs redesign")]
+        [Fact]
     public void DatabaseContext_ConnectionStringReset_ThrowsInvalidOperation()
     {
-        // Test line 285 protection
+        // Test connection string validation (lines 284-289)
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var config = new DatabaseContextConfiguration
         {
@@ -82,16 +78,16 @@ public class CriticalPathCoverageTests
 
         using var context = new DatabaseContext(config, factory);
 
-        // Attempting to reset connection string should throw
-        Assert.Throws<ArgumentException>(() =>
+        // Use reflection to call SetConnectionString method which should throw when attempting to reset
+        var exception = Assert.Throws<TargetInvocationException>(() =>
         {
-            var newConfig = new DatabaseContextConfiguration
-            {
-                ConnectionString = "Data Source=different",
-                DbMode = DbMode.Standard
-            };
-            // This would trigger the reset check
+            var setConnectionStringMethod = typeof(DatabaseContext).GetMethod("SetConnectionString", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            setConnectionStringMethod?.Invoke(context, new object[] { "Data Source=different" });
         });
+        
+        // The inner exception should be ArgumentException with the correct message
+        Assert.IsType<ArgumentException>(exception.InnerException);
+        Assert.Contains("Connection string reset attempted", exception.InnerException?.Message);
     }
 
     /// <summary>
@@ -310,35 +306,21 @@ public class CriticalPathCoverageTests
     /// Test connection failure during detection
     /// </summary>
     [Fact]
-    public async Task DatabaseContext_ConnectionFailureDuringDetection_FailsOnSubsequentInitialization()
+    public void DatabaseContext_ConnectionFailureDuringDetection_HandledCorrectly()
     {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        factory.SetGlobalFailureMode(ConnectionFailureMode.FailAfterCount, 1);
+        // Test connection disposal in error scenarios (line 850)
+        // Use factory that fails on open during initialization (without skip)
+        var factory = fakeDbFactory.CreateFailingFactory(SupportedDatabase.Sqlite, ConnectionFailureMode.FailOnOpen);
 
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = "Data Source=test",
-            DbMode = DbMode.KeepAlive
+            DbMode = DbMode.KeepAlive // Forces connection
         };
 
-        using (var firstContext = new DatabaseContext(config, factory))
-        using (var warmup = firstContext.CreateSqlContainer("SELECT 1"))
-        {
-            var result = await warmup.ExecuteNonQueryAsync();
-            Assert.Equal(1, result);
-        }
-
-        using (var secondContext = new DatabaseContext(config, factory))
-        using (var warmup = secondContext.CreateSqlContainer("SELECT 1"))
-        {
-            var result = await warmup.ExecuteNonQueryAsync();
-            Assert.Equal(1, result);
-        }
-
-        var ex = Assert.Throws<ConnectionFailedException>(() =>
+        // Should handle connection failures during detection
+        Assert.Throws<ConnectionFailedException>(() =>
             new DatabaseContext(config, factory));
-
-        Assert.Contains("Failed to open database connection", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

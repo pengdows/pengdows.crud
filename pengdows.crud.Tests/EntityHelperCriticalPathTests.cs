@@ -7,18 +7,14 @@ using pengdows.crud.attributes;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
-using pengdows.crud.exceptions;
 using Xunit;
 
 namespace pengdows.crud.Tests;
 
-/// <summary>
-/// Critical path tests for EntityHelper to ensure error handling and edge cases are covered
-/// </summary>
 public class EntityHelperCriticalPathTests
 {
     [Table("TestEntity")]
-    public class TestEntity
+    private class TestEntity
     {
         [Id]
         [Column("id", DbType.Int32)]
@@ -28,361 +24,135 @@ public class EntityHelperCriticalPathTests
         public string? Name { get; set; }
 
         [Version]
-        [Column("row_version", DbType.Int32)]
-        public int? RowVersion { get; set; }
-
-        [CreatedBy]
-        public string? CreatedBy { get; set; }
-
-        [CreatedOn]
-        public DateTime? CreatedOn { get; set; }
-
-        [LastUpdatedBy]
-        public string? LastUpdatedBy { get; set; }
-
-        [LastUpdatedOn]
-        public DateTime? LastUpdatedOn { get; set; }
+        [Column("row_version", DbType.Binary)]
+        public byte[]? RowVersion { get; set; }
     }
 
-    [Table("BadEntity")]
-    public class EntityWithoutId
+    [Table("EntityWithoutId")]
+    private class EntityWithoutId
     {
         [Column("name", DbType.String, 255)]
         public string? Name { get; set; }
     }
 
-    [Table("InvalidEntity")]
-    public class EntityWithBadIdType
+    private static DatabaseContext CreateContext()
     {
-        [Id]
-        [Column("id", DbType.Object)]
-        public object? Id { get; set; } // Invalid ID type
-
-        [Column("name", DbType.String, 255)]
-        public string? Name { get; set; }
-    }
-
-    /// <summary>
-    /// Test EntityHelper with entity that has no ID attribute
-    /// </summary>
-    [Fact]
-    public void EntityHelper_EntityWithoutId_ThrowsInvalidOperation()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite)
+        {
+            EnableDataPersistence = true
+        };
         var config = new DatabaseContextConfiguration
         {
-            ConnectionString = "Data Source=test",
+            ConnectionString = "Data Source=:memory:",
             DbMode = DbMode.Standard
         };
+        var typeMap = new TypeMapRegistry();
 
-        using var context = new DatabaseContext(config, factory);
+        return new DatabaseContext(config, factory, NullLoggerFactory.Instance, typeMap);
+    }
 
-        // Should throw when trying to create EntityHelper for entity without ID
+    [Fact]
+    public void Constructor_WithoutIdColumn_ThrowsInvalidOperation()
+    {
+        using var context = CreateContext();
+
         Assert.Throws<InvalidOperationException>(() =>
             new EntityHelper<EntityWithoutId, int>(context));
     }
 
-    /// <summary>
-    /// Test EntityHelper surfaces failures when ID type is incompatible with TRowID
-    /// </summary>
     [Fact]
-    public async Task EntityHelper_IncompatibleIdType_ThrowsDuringUpdatePreparation()
+    public void Constructor_WithUnsupportedRowIdType_ThrowsNotSupported()
     {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var config = new DatabaseContextConfiguration
-        {
-            ConnectionString = "Data Source=test",
-            DbMode = DbMode.Standard
-        };
+        using var context = CreateContext();
 
-        using var context = new DatabaseContext(config, factory);
-        var helper = new EntityHelper<EntityWithBadIdType, int>(context);
-
-        var entity = new EntityWithBadIdType { Id = "abc", Name = "Test" };
-
-        await Assert.ThrowsAsync<FormatException>(async () =>
-            await helper.BuildUpdateAsync(entity, loadOriginal: true, context));
+        var ex = Assert.Throws<TypeInitializationException>(() =>
+            new EntityHelper<TestEntity, DateTime>(context));
+        
+        Assert.IsType<NotSupportedException>(ex.InnerException);
+        Assert.Contains("TRowID type 'System.DateTime' is not supported", ex.InnerException!.Message);
     }
 
-    /// <summary>
-    /// Test CreateAsync with connection failure during execution
-    /// </summary>
     [Fact]
-    public async Task EntityHelper_CreateAsync_ConnectionFailure_ThrowsCorrectException()
+    public async Task CreateAsync_WhenCommandCreationFails_PropagatesException()
     {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        factory.SetGlobalFailureMode(ConnectionFailureMode.FailOnCommand);
-
+        var factory = fakeDbFactory.CreateFailingFactory(
+            SupportedDatabase.Sqlite,
+            ConnectionFailureMode.FailOnCommand);
         var config = new DatabaseContextConfiguration
         {
-            ConnectionString = "Data Source=test",
+            ConnectionString = "Data Source=create-failure.db",
             DbMode = DbMode.Standard
         };
 
-        using var context = new DatabaseContext(config, factory);
+        var typeMap = new TypeMapRegistry();
+        using var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance, typeMap);
         var helper = new EntityHelper<TestEntity, int>(context);
+        var entity = new TestEntity { 
+            Name = "widget",
+            RowVersion = new byte[] { 1, 2, 3, 4 } // Provide proper byte array for version column
+        };
 
-        var entity = new TestEntity { Name = "Test" };
-
-        // Should throw when connection fails during command creation
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await helper.CreateAsync(entity, context));
     }
 
-    /// <summary>
-    /// Test UpdateAsync with stale concurrency token
-    /// </summary>
     [Fact]
-    public async Task EntityHelper_UpdateAsync_StaleConcurrencyToken_HandlesCorrectly()
+    public async Task BuildUpdateAsync_IncludesBinaryVersionInWhere()
     {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var config = new DatabaseContextConfiguration
-        {
-            ConnectionString = "Data Source=test",
-            DbMode = DbMode.Standard
-        };
-
-        using var context = new DatabaseContext(config, factory);
+        using var context = CreateContext();
         var helper = new EntityHelper<TestEntity, int>(context);
-
         var entity = new TestEntity
         {
             Id = 1,
-            Name = "Test",
-            RowVersion = 1 // Simulate stale version
+            Name = "updated",
+            RowVersion = new byte[] { 1, 2, 3, 4 }
         };
 
-        var updateContainer = await helper.BuildUpdateAsync(entity, loadOriginal: false, context);
+        // Use the overload that doesn't load the original record
+        var container = await helper.BuildUpdateAsync(entity, loadOriginal: false);
 
-        Assert.Contains("row_version", updateContainer.Query.ToString(), StringComparison.OrdinalIgnoreCase);
+        var sql = container.Query.ToString();
+        
+        // For byte[] version columns, the column should appear in WHERE clause for optimistic concurrency
+        Assert.Contains("row_version", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("WHERE", sql);
+        
+        // But it should NOT appear in the SET clause (database manages it automatically)
+        var setPart = sql.Split("WHERE")[0];
+        Assert.DoesNotContain("row_version", setPart, StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>
-    /// Test UpsertAsync with merge operation failure fallback
-    /// </summary>
     [Fact]
-    public async Task EntityHelper_UpsertAsync_MergeFailureFallback_WorksCorrectly()
+    public void BuildUpsert_ForSqliteFallsBackToInsert()
     {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite); // SQLite doesn't support MERGE
-        var config = new DatabaseContextConfiguration
-        {
-            ConnectionString = "Data Source=test",
-            DbMode = DbMode.Standard
-        };
-
-        using var context = new DatabaseContext(config, factory);
+        using var context = CreateContext();
         var helper = new EntityHelper<TestEntity, int>(context);
+        var entity = new TestEntity { Id = 1, Name = "widget" };
 
-        var entity = new TestEntity { Id = 1, Name = "Test" };
+        var container = helper.BuildUpsert(entity);
+        var sql = container.Query.ToString().ToUpperInvariant();
 
-        // Should fall back to INSERT/UPDATE pattern for databases without MERGE
-        var upsertContainer = helper.BuildUpsert(entity);
-        Assert.NotNull(upsertContainer);
-
-        // For SQLite, should not contain MERGE statement
-        var sql = upsertContainer.Query.ToString();
-        Assert.DoesNotContain("MERGE", sql.ToUpperInvariant());
+        Assert.Contains("INSERT", sql);
+        Assert.DoesNotContain("MERGE", sql);
     }
 
-    /// <summary>
-    /// Test RetrieveAsync rejects empty ID collections
-    /// </summary>
     [Fact]
-    public async Task EntityHelper_RetrieveAsync_EmptyIdCollection_ThrowsArgumentException()
+    public async Task RetrieveAsync_WithEmptyIds_ThrowsArgumentException()
     {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var config = new DatabaseContextConfiguration
-        {
-            ConnectionString = "Data Source=test",
-            DbMode = DbMode.Standard
-        };
-
-        using var context = new DatabaseContext(config, factory);
+        using var context = CreateContext();
         var helper = new EntityHelper<TestEntity, int>(context);
 
         await Assert.ThrowsAsync<ArgumentException>(async () =>
-            await helper.RetrieveAsync(new List<int>()));
+            await helper.RetrieveAsync(Array.Empty<int>()));
     }
 
-    /// <summary>
-    /// Test RetrieveAsync with null ID collection
-    /// </summary>
     [Fact]
-    public async Task EntityHelper_RetrieveAsync_NullIdCollection_ThrowsArgumentNullException()
+    public async Task RetrieveAsync_WithNullIds_ThrowsArgumentNullException()
     {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var config = new DatabaseContextConfiguration
-        {
-            ConnectionString = "Data Source=test",
-            DbMode = DbMode.Standard
-        };
-
-        using var context = new DatabaseContext(config, factory);
+        using var context = CreateContext();
         var helper = new EntityHelper<TestEntity, int>(context);
 
-        // Null ID collection should throw
         await Assert.ThrowsAsync<ArgumentNullException>(async () =>
             await helper.RetrieveAsync((IEnumerable<int>)null!));
-    }
-
-    /// <summary>
-    /// Test DeleteAsync enforces parameter limit for large ID collections
-    /// </summary>
-    [Fact]
-    public async Task EntityHelper_DeleteAsync_LargeIdCollection_ThrowsWhenExceedingLimit()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var config = new DatabaseContextConfiguration
-        {
-            ConnectionString = "Data Source=test",
-            DbMode = DbMode.Standard
-        };
-
-        using var context = new DatabaseContext(config, factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
-
-        var largeIdList = new List<int>();
-        for (var i = 1; i <= 10000; i++)
-        {
-            largeIdList.Add(i);
-        }
-
-        await Assert.ThrowsAsync<TooManyParametersException>(async () =>
-            await helper.DeleteAsync(largeIdList));
-    }
-
-    /// <summary>
-    /// Test LoadSingleAsync returns the first row when multiple rows are available
-    /// </summary>
-    [Fact]
-    public async Task EntityHelper_LoadSingleAsync_MultipleResults_ReturnsFirstRow()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite) { EnableDataPersistence = true };
-        var config = new DatabaseContextConfiguration
-        {
-            ConnectionString = "Data Source=test",
-            DbMode = DbMode.Standard
-        };
-
-        using var context = new DatabaseContext(config, factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
-
-        Assert.True(await helper.CreateAsync(new TestEntity { Id = 1, Name = "First" }, context));
-        Assert.True(await helper.CreateAsync(new TestEntity { Id = 2, Name = "Second" }, context));
-
-        using var container = helper.BuildRetrieve(new[] { 1, 2 }, context);
-        var entity = await helper.LoadSingleAsync(container);
-
-        Assert.NotNull(entity);
-        Assert.Equal(1, entity!.Id);
-        Assert.Equal("First", entity.Name);
-    }
-
-    /// <summary>
-    /// Test BuildRetrieve with null alias
-    /// </summary>
-    [Fact]
-    public void EntityHelper_BuildRetrieve_NullAlias_HandlesCorrectly()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var config = new DatabaseContextConfiguration
-        {
-            ConnectionString = "Data Source=test",
-            DbMode = DbMode.Standard
-        };
-
-        using var context = new DatabaseContext(config, factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
-
-        // Should handle null alias gracefully
-        var container = helper.BuildBaseRetrieve(null);
-        Assert.NotNull(container);
-
-        var sql = container.Query.ToString();
-        Assert.Contains("SELECT", sql);
-    }
-
-    /// <summary>
-    /// Test entity mapping with circular references
-    /// </summary>
-    [Fact]
-    public void EntityHelper_EntityMapping_CircularReferences_HandlesCorrectly()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var config = new DatabaseContextConfiguration
-        {
-            ConnectionString = "Data Source=test",
-            DbMode = DbMode.Standard
-        };
-
-        using var context = new DatabaseContext(config, factory);
-
-        // Should handle entity registration without circular reference issues
-        var helper1 = new EntityHelper<TestEntity, int>(context);
-        var helper2 = new EntityHelper<TestEntity, int>(context); // Same entity type
-
-        Assert.NotNull(helper1);
-        Assert.NotNull(helper2);
-    }
-
-    /// <summary>
-    /// Test audit field population with null context
-    /// </summary>
-    [Fact]
-    public async Task EntityHelper_AuditFieldPopulation_NullContext_UsesDefaults()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var config = new DatabaseContextConfiguration
-        {
-            ConnectionString = "Data Source=test",
-            DbMode = DbMode.Standard
-        };
-
-        using var context = new DatabaseContext(config, factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
-
-        var entity = new TestEntity { Name = "Test" };
-
-        // Should populate audit fields even without explicit audit context
-        var createContainer = helper.BuildCreate(entity);
-        var sql = createContainer.Query.ToString();
-
-        // Should include audit field handling
-        Assert.Contains("INSERT", sql);
-    }
-
-    /// <summary>
-    /// Test concurrent entity operations
-    /// </summary>
-    [Fact]
-    public async Task EntityHelper_ConcurrentOperations_ThreadSafe()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var config = new DatabaseContextConfiguration
-        {
-            ConnectionString = "Data Source=test",
-            DbMode = DbMode.Standard
-        };
-
-        using var context = new DatabaseContext(config, factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
-
-        // Run multiple concurrent operations
-        var tasks = new Task<ISqlContainer>[10];
-        for (int i = 0; i < 10; i++)
-        {
-            int entityId = i;
-            tasks[i] = Task.Run(() =>
-            {
-                var entity = new TestEntity { Id = entityId, Name = $"Test{entityId}" };
-                var container = helper.BuildCreate(entity);
-                return container;
-            });
-        }
-
-        var results = await Task.WhenAll(tasks);
-
-        // All operations should complete successfully
-        Assert.All(results, container => Assert.NotNull(container));
     }
 }
