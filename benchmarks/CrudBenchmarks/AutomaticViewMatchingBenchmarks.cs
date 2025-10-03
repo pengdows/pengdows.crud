@@ -1,6 +1,8 @@
 using System.Data;
 using BenchmarkDotNet.Attributes;
 using Dapper;
+using DotNet.Testcontainers.Builders;
+using DotNet.Testcontainers.Containers;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using pengdows.crud;
@@ -23,7 +25,11 @@ namespace CrudBenchmarks;
 [SimpleJob(warmupCount: 2, iterationCount: 3, invocationCount: 10)]
 public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
 {
+    private IContainer? _sqlServerContainer;
     private string _connStr = string.Empty;
+    private const string Password = "YourStrong@Passw0rd";
+    private const string Database = "AutoViewMatching";
+
     private IDatabaseContext _pengdowsContext = null!;
     private TypeMapRegistry _map = null!;
     private EntityHelper<OrderDetail, int> _orderDetailHelper = null!;
@@ -42,9 +48,23 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
     [GlobalSetup]
     public async Task GlobalSetup()
     {
-        // Use SQL Server Docker container - supports automatic view matching
-        _connStr = Environment.GetEnvironmentVariable("SQLSERVER_CONNECTION_STRING")
-            ?? "Server=localhost,1433;Database=AutoViewMatching;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=true;";
+        // Start SQL Server container using Testcontainers
+        _sqlServerContainer = new ContainerBuilder()
+            .WithImage("mcr.microsoft.com/mssql/server:2022-latest")
+            .WithEnvironment("ACCEPT_EULA", "Y")
+            .WithEnvironment("SA_PASSWORD", Password)
+            .WithEnvironment("MSSQL_PID", "Developer")
+            .WithPortBinding(1433, true)
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilCommandIsCompleted("/opt/mssql-tools/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", Password, "-Q", "SELECT 1"))
+            .Build();
+
+        Console.WriteLine("[BENCHMARK] Starting SQL Server container...");
+        await _sqlServerContainer.StartAsync();
+
+        var hostPort = _sqlServerContainer.GetMappedPublicPort(1433);
+        _connStr = $"Server=localhost,{hostPort};Database={Database};User Id=sa;Password={Password};TrustServerCertificate=true;Connection Timeout=30;";
+
+        Console.WriteLine($"[BENCHMARK] SQL Server container started on port {hostPort}");
 
         await CreateDatabaseAndSchemaAsync();
         await SeedDataAsync();
@@ -82,16 +102,14 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
     private async Task CreateDatabaseAndSchemaAsync()
     {
         // Create database if it doesn't exist
-        var masterConnStr = Environment.GetEnvironmentVariable("SQLSERVER_CONNECTION_STRING")
-            ?.Replace("Database=AutoViewMatching", "Database=master")
-            ?? "Server=localhost,1433;Database=master;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=true;";
+        var masterConnStr = _connStr.Replace($"Database={Database}", "Database=master");
         await using var masterConn = new SqlConnection(masterConnStr);
         await masterConn.OpenAsync();
 
-        await masterConn.ExecuteAsync(@"
-            IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = 'AutoViewMatching')
+        await masterConn.ExecuteAsync($@"
+            IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = '{Database}')
             BEGIN
-                CREATE DATABASE AutoViewMatching;
+                CREATE DATABASE [{Database}];
             END");
 
         // Create schema with indexed views for automatic matching
@@ -659,6 +677,13 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         await GlobalCleanup();
+
+        // Stop and dispose SQL Server container
+        if (_sqlServerContainer != null)
+        {
+            Console.WriteLine("[BENCHMARK] Stopping SQL Server container...");
+            await _sqlServerContainer.DisposeAsync();
+        }
     }
 
     // Entity classes

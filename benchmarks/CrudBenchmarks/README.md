@@ -6,25 +6,16 @@ Performance benchmarks for pengdows.crud comparing against Dapper and Entity Fra
 
 ### Docker (Required for some benchmarks)
 
-- **PostgreSQL benchmarks**: Use Testcontainers (automatic)
-- **SQL Server benchmarks**: Use docker-compose or custom instance
+Benchmarks use **Testcontainers** to automatically spin up and tear down database containers:
 
-```bash
-# Start SQL Server container for benchmarks
-docker-compose up -d
+- **PostgreSQL benchmarks**: Automatic Testcontainers (postgres:15-alpine)
+- **SQL Server benchmarks**: Automatic Testcontainers (SQL Server 2022)
 
-# Wait for SQL Server to be ready (about 30 seconds)
-docker-compose ps
-
-# Stop SQL Server when done
-docker-compose down
-```
-
-Or set a custom connection string:
-
-```bash
-export SQLSERVER_CONNECTION_STRING="Server=your-server;Database=master;User Id=sa;Password=YourPassword;TrustServerCertificate=true;"
-```
+**No manual Docker setup required!** Each benchmark manages its own container lifecycle:
+- Containers start automatically when the benchmark begins
+- Containers stop automatically when the benchmark completes
+- Multiple benchmarks run sequentially, not concurrently
+- No port conflicts or container management needed
 
 ## Running Benchmarks
 
@@ -74,7 +65,7 @@ dotnet run -c Release -- --job long   # More iterations, more accurate
 - **CloningPerformanceTest**: SqlContainer cloning vs traditional approach
 - **WeirdTypeCoercionBenchmarks**: Edge case type conversions
 
-### SQL Server Required (Docker or custom instance)
+### SQL Server Required (Testcontainers - automatic)
 - **IndexedViewBenchmarks**: Indexed view performance
 - **AutomaticViewMatchingBenchmarks**: SQL Server query optimizer view matching
 - **SqlServerBenchmarks**: SQL Server specific features
@@ -105,11 +96,14 @@ Benchmark results are saved to `BenchmarkDotNet.Artifacts/results/` with multipl
 
 ## Notes
 
-- BenchmarkDotNet runs in Release mode by default
-- Memory diagnostics are enabled for allocation tracking
-- PostgreSQL benchmarks use Testcontainers with postgres:15-alpine
-- Dataset sizes controlled by attributes: FilmCount=1000, ActorCount=200
-- SQL Server benchmarks now support Docker (cross-platform)
-- Insert benchmarks perform insert+delete to maintain stable dataset sizes
-- Some benchmarks may take several minutes to complete
+- **BenchmarkDotNet** runs in Release mode by default
+- **Memory diagnostics** are enabled for allocation tracking
+- **Testcontainers** automatically manage database container lifecycle
+  - PostgreSQL: postgres:15-alpine
+  - SQL Server: mcr.microsoft.com/mssql/server:2022-latest
+- **Dataset sizes** controlled by benchmark attributes (e.g., FilmCount=1000, ActorCount=200)
+- **Container management**: Each benchmark starts its own container and cleans it up when done
+- **No manual setup**: Just run the benchmarks, containers are handled automatically
+- **Sequential execution**: Benchmarks run one at a time to avoid resource conflicts
+- Some benchmarks may take several minutes to complete due to container startup and data seeding
 
