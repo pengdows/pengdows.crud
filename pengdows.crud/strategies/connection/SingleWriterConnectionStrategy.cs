@@ -40,7 +40,7 @@ internal class SingleWriterConnectionStrategy : SafeAsyncDisposableBase, IConnec
 {
     private readonly DatabaseContext _context;
 
-    public SingleWriterConnectionStrategy(DatabaseContext context)
+    internal SingleWriterConnectionStrategy(DatabaseContext context)
     {
         _context = context;
     }

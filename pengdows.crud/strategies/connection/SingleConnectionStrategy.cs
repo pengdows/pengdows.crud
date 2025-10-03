@@ -46,7 +46,7 @@ internal class SingleConnectionStrategy : SafeAsyncDisposableBase, IConnectionSt
 {
     private readonly DatabaseContext _context;
 
-    public SingleConnectionStrategy(DatabaseContext context)
+    internal SingleConnectionStrategy(DatabaseContext context)
     {
         _context = context;
     }

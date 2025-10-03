@@ -12,7 +12,7 @@ namespace pengdows.crud.dialects;
 /// </summary>
 public class DuckDbDialect : SqlDialect
 {
-    public DuckDbDialect(DbProviderFactory factory, ILogger logger)
+    internal DuckDbDialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger)
     {
     }

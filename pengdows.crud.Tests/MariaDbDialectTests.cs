@@ -570,11 +570,11 @@ public class MariaDbDialectTests
     [Fact]
     public void CreateDbParameter_Should_Handle_Special_Characters_In_Name()
     {
-        var parameter = _dialect.CreateDbParameter("test_param$123", DbType.Int32, 456);
+        var parameter = _dialect.CreateDbParameter("test_param_123", DbType.Int32, 456);
 
         Assert.Equal(DbType.Int32, parameter.DbType);
         Assert.Equal(456, parameter.Value);
-        Assert.Equal("test_param$123", parameter.ParameterName);
+        Assert.Equal("test_param_123", parameter.ParameterName);
     }
 
     [Fact]

@@ -12,7 +12,7 @@ namespace pengdows.crud.dialects;
 /// </summary>
 public class FirebirdDialect : SqlDialect
 {
-    public FirebirdDialect(DbProviderFactory factory, ILogger logger)
+    internal FirebirdDialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger)
     {
     }

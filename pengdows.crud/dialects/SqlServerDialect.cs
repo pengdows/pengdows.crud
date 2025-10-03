@@ -24,7 +24,7 @@ public class SqlServerDialect : SqlDialect
 
     private string? _sessionSettings;
 
-    public SqlServerDialect(DbProviderFactory factory, ILogger logger)
+    internal SqlServerDialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger)
     {
     }

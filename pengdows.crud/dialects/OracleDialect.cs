@@ -10,7 +10,7 @@ namespace pengdows.crud.dialects;
 /// </summary>
 public class OracleDialect : SqlDialect
 {
-    public OracleDialect(DbProviderFactory factory, ILogger logger)
+    internal OracleDialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger)
     {
     }

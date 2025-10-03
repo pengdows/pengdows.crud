@@ -11,7 +11,7 @@ namespace pengdows.crud.dialects;
 /// </summary>
 public class MariaDbDialect : MySqlDialect
 {
-    public MariaDbDialect(DbProviderFactory factory, ILogger logger)
+    internal MariaDbDialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger)
     {
     }

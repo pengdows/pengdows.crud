@@ -15,7 +15,7 @@ public class MySqlDialect : SqlDialect
     private string? _sessionSettings;
     private readonly bool _isMySqlConnector;
 
-    public MySqlDialect(DbProviderFactory factory, ILogger logger)
+    internal MySqlDialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger)
     {
         var ns = factory.GetType().Namespace ?? string.Empty;

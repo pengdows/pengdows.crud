@@ -33,7 +33,7 @@ public class StandardConnectionStrategy : SafeAsyncDisposableBase, IConnectionSt
 {
     protected readonly DatabaseContext _context;
 
-    public StandardConnectionStrategy(DatabaseContext context)
+    internal StandardConnectionStrategy(DatabaseContext context)
     {
         _context = context;
     }

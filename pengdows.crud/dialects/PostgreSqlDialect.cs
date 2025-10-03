@@ -15,7 +15,7 @@ namespace pengdows.crud.dialects;
 public class PostgreSqlDialect : SqlDialect
 {
     private string? _sessionSettings;
-    public PostgreSqlDialect(DbProviderFactory factory, ILogger logger)
+    internal PostgreSqlDialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger)
     {
     }

@@ -18,7 +18,7 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
     private readonly DbDataReader _reader;
     private readonly bool _shouldCloseConnection;
 
-    public TrackedReader(
+    internal TrackedReader(
         DbDataReader reader,
         ITrackedConnection connection,
         IAsyncDisposable connectionLocker,

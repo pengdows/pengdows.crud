@@ -13,7 +13,7 @@ public class SqliteDialect : SqlDialect
 {
     private readonly bool _systemDataSqlite;
 
-    public SqliteDialect(DbProviderFactory factory, ILogger logger)
+    internal SqliteDialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger)
     {
         var ns = factory.GetType().Namespace ?? string.Empty;

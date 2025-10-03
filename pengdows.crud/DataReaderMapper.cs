@@ -25,6 +25,10 @@ public sealed class DataReaderMapper : IDataReaderMapper
     private static readonly ConcurrentDictionary<PropertyLookupCacheKey, IReadOnlyDictionary<string, PropertyInfo>> _propertyLookupCache = new();
     private static readonly MethodInfo _getFieldValueGenericMethod = ResolveGetFieldValueMethod();
 
+    internal DataReaderMapper()
+    {
+    }
+
     private readonly record struct PlanCacheKey(Type Type, string SchemaHash, bool ColumnsOnly, EnumParseFailureMode EnumMode);
 
     public static Task<List<T>> LoadObjectsFromDataReaderAsync<T>(

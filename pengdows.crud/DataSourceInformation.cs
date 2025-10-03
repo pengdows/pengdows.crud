@@ -14,7 +14,7 @@ public class DataSourceInformation : IDataSourceInformation
     private readonly SqlDialect _dialect;
     private int? _maxOutputParameters;
 
-    public DataSourceInformation(SqlDialect dialect)
+    internal DataSourceInformation(SqlDialect dialect)
     {
         _dialect = dialect ?? throw new ArgumentNullException(nameof(dialect));
         var info = dialect.IsInitialized

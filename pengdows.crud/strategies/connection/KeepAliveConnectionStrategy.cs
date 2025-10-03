@@ -34,7 +34,7 @@ namespace pengdows.crud.strategies.connection;
 /// </summary>
 public class KeepAliveConnectionStrategy : StandardConnectionStrategy
 {
-    public KeepAliveConnectionStrategy(DatabaseContext context) : base(context)
+    internal KeepAliveConnectionStrategy(DatabaseContext context) : base(context)
     {
     }
 

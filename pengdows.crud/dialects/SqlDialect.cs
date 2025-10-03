@@ -27,6 +27,11 @@ public abstract class SqlDialect:ISqlDialect
     // Pre-compiled parameter marker trimming for faster string operations
     private static readonly char[] _parameterMarkers = { '@', ':', '?', '$' };
 
+    // Performance: Static parameter name pool to avoid allocations
+    private static readonly char[] ValidNameChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_".ToCharArray();
+    private static readonly string[] ParameterNamePool = GenerateParameterNamePool();
+    private static int _parameterNamePoolIndex;
+
     // Type conversion delegates for hot paths - compiled once, reused everywhere
     private static readonly ConcurrentDictionary<DbType, Action<DbParameter, object?>> _typeConversionCache = new();
 
@@ -310,12 +315,27 @@ public abstract class SqlDialect:ISqlDialect
         }
         else if (SupportsNamedParameters)
         {
-            name = _trimmedNameCache.GetOrAdd(name, static n => n.TrimStart(_parameterMarkers));
+            // Strip parameter marker prefix if present, then validate the remaining name
+            var nameToValidate = name;
+            if (name.Length > 0 && (name[0] == '@' || name[0] == ':' || name[0] == '?' || name[0] == '$'))
+            {
+                nameToValidate = name.Substring(1);
+                name = nameToValidate; // Use the stripped name
+            }
+
+            // Validate that parameter names only contain alphanumeric characters and underscores
+            if (!IsValidParameterName(nameToValidate))
+            {
+                throw new ArgumentException(
+                    $"Parameter name '{name}' contains invalid characters. Only alphanumeric characters and underscores are allowed.",
+                    nameof(name));
+            }
         }
 
         parameter.ParameterName = name;
 
-        var valueIsNull = value is null || ReferenceEquals(value, DBNull.Value);
+        // Performance: Inline null check to avoid method call overhead
+        var valueIsNull = value == null || value is DBNull;
         var runtimeType = ResolveClrType(value);
         var handled = false;
 
@@ -884,6 +904,57 @@ public abstract class SqlDialect:ISqlDialect
         return null;
     }
 
+    /// <summary>
+    /// Pre-generates a pool of parameter names for high-performance parameter creation.
+    /// </summary>
+    private static string[] GenerateParameterNamePool()
+    {
+        const int poolSize = 1000; // Enough for most queries
+        const int nameLength = 5;
+        var pool = new string[poolSize];
+
+        const int firstCharMax = 52; // a-zA-Z
+        var anyOtherMax = ValidNameChars.Length;
+
+        Span<char> buffer = stackalloc char[nameLength];
+        for (int p = 0; p < poolSize; p++)
+        {
+            buffer[0] = ValidNameChars[Random.Shared.Next(firstCharMax)];
+            for (var i = 1; i < nameLength; i++)
+            {
+                buffer[i] = ValidNameChars[Random.Shared.Next(anyOtherMax)];
+            }
+            pool[p] = new string(buffer);
+        }
+
+        return pool;
+    }
+
+    /// <summary>
+    /// Fast validation that parameter names only contain alphanumeric characters and underscores.
+    /// No parameter markers (@, :, ?, $) are allowed.
+    /// </summary>
+    private static bool IsValidParameterName(string name)
+    {
+        if (string.IsNullOrEmpty(name))
+            return false;
+
+        // Fast path: check each character is alphanumeric or underscore
+        for (int i = 0; i < name.Length; i++)
+        {
+            char c = name[i];
+            if (!((c >= 'a' && c <= 'z') ||
+                  (c >= 'A' && c <= 'Z') ||
+                  (c >= '0' && c <= '9') ||
+                  c == '_'))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     public virtual int? GetMajorVersion(string versionString)
     {
         return ParseVersion(versionString)?.Major;
@@ -891,17 +962,23 @@ public abstract class SqlDialect:ISqlDialect
 
     public string GenerateRandomName(int length, int parameterNameMaxLength)
     {
-        var validChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_".ToCharArray();
-        var len = Math.Min(Math.Max(length, 2), parameterNameMaxLength);
+        // Fast path: Use pre-generated name from pool if length matches
+        if (length == 5 && parameterNameMaxLength >= 5)
+        {
+            var index = Interlocked.Increment(ref _parameterNamePoolIndex);
+            return ParameterNamePool[index % ParameterNamePool.Length];
+        }
 
+        // Slow path: Generate on demand for non-standard lengths
+        var len = Math.Min(Math.Max(length, 2), parameterNameMaxLength);
         Span<char> buffer = stackalloc char[len];
         const int firstCharMax = 52; // a-zA-Z
-        var anyOtherMax = validChars.Length;
+        var anyOtherMax = ValidNameChars.Length;
 
-        buffer[0] = validChars[Random.Shared.Next(firstCharMax)];
+        buffer[0] = ValidNameChars[Random.Shared.Next(firstCharMax)];
         for (var i = 1; i < len; i++)
         {
-            buffer[i] = validChars[Random.Shared.Next(anyOtherMax)];
+            buffer[i] = ValidNameChars[Random.Shared.Next(anyOtherMax)];
         }
 
         return new string(buffer);

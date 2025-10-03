@@ -4,7 +4,7 @@ public class StubAuditValueResolver : AuditValueResolver
 {
     private readonly object _userId;
 
-    public StubAuditValueResolver(object userId)
+    internal StubAuditValueResolver(object userId)
     {
         _userId = userId;
     }

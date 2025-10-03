@@ -14,7 +14,7 @@ public sealed class IsolationResolver : IIsolationResolver
     private readonly bool _rcsi;
     private readonly HashSet<IsolationLevel> _supportedLevels;
 
-    public IsolationResolver(SupportedDatabase product, bool readCommittedSnapshotEnabled)
+    internal IsolationResolver(SupportedDatabase product, bool readCommittedSnapshotEnabled)
     {
         _product = product;
         _rcsi = readCommittedSnapshotEnabled;

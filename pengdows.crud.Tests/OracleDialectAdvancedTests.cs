@@ -527,7 +527,7 @@ public class OracleDialectAdvancedTests
     [Fact]
     public void CreateDbParameter_Should_Handle_Special_Characters()
     {
-        var parameter = _dialect.CreateDbParameter("param_with$special@chars", DbType.Int32, 123);
+        var parameter = _dialect.CreateDbParameter("param_with_valid_chars", DbType.Int32, 123);
 
         Assert.Equal(DbType.Int32, parameter.DbType);
         Assert.Equal(123, parameter.Value);
