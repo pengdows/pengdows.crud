@@ -29,6 +29,27 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore
 
+      - name: Verify fakeDb Public API guardrails
+        run: |
+          set -euo pipefail
+
+          required_files=(
+            "pengdows.crud.fakeDb/PublicAPI.Shipped.txt"
+            "pengdows.crud.fakeDb/PublicAPI.Unshipped.txt"
+          )
+
+          for file in "${required_files[@]}"; do
+            if [[ ! -f "$file" ]]; then
+              echo "❌ Missing fakeDb Public API baseline file: $file"
+              exit 1
+            fi
+
+            if ! git ls-files --error-unmatch "$file" > /dev/null 2>&1; then
+              echo "❌ fakeDb Public API baseline file is not tracked by git: $file"
+              exit 1
+            fi
+          done
+
       - name: Build solution
         run: dotnet build --no-restore --configuration Release
 
@@ -58,12 +79,27 @@ jobs:
               -classfilters:"-*Test*;-*Mock*"
 
       - name: Enforce visual coverage from HTML report
+        id: enforce_coverage
         run: |
           set -euo pipefail
 
+          min_file="coverage-minimum.txt"
+          if [[ ! -f "$min_file" ]]; then
+            echo "❌ Coverage minimum file $min_file not found"
+            exit 1
+          fi
+
+          read -r required < "$min_file" || true
+          required=$(echo "${required:-}" | tr -d '\r' | xargs)
+
+          if [[ -z "$required" ]]; then
+            echo "❌ Coverage minimum file $min_file is empty"
+            exit 1
+          fi
+
           html_file=$(find coverage-report -name "index.html" | head -n 1)
 
-          if [[ ! -f "$html_file" ]]; then
+          if [[ -z "$html_file" || ! -f "$html_file" ]]; then
             echo "❌ index.html not found!"
             exit 1
           fi
@@ -71,32 +107,137 @@ jobs:
           echo "🕵️ Dumping coverage-related lines from index.html:"
           grep -i coverage "$html_file" || true
 
-          coverage_line=$(grep -Eo '[0-9]+ of [0-9]+' "$html_file" | head -n 1)
+          read -r covered total < <(python - "$html_file" <<'PY'
+import pathlib
+import re
+import sys
 
-          if [[ -z "$coverage_line" ]]; then
-            echo "❌ Could not extract line coverage info"
-            exit 1
-          fi
+html_path = pathlib.Path(sys.argv[1])
+text = html_path.read_text(encoding="utf-8", errors="ignore")
+match = re.search(r'(\d[\d,]*) of (\d[\d,]*)', text)
+if match is None:
+    raise SystemExit("❌ Could not extract line coverage info")
 
-          covered=$(echo "$coverage_line" | cut -d' ' -f1)
-          total=$(echo "$coverage_line" | cut -d' ' -f3)
+covered = match.group(1).replace(',', '')
+total = match.group(2).replace(',', '')
+print(covered)
+print(total)
+PY
+          )
 
           if [[ -z "$covered" || -z "$total" ]]; then
             echo "❌ Could not parse covered or total line count"
             exit 1
           fi
 
-          coverage_percent=$(awk "BEGIN { printf \"%.2f\", ($covered / $total) * 100 }")
-          echo "📊 Visual Coverage (from index.html): $coverage_percent%"
+          coverage_percent=$(python - "$covered" "$total" <<'PY'
+import decimal
+import sys
 
-          required=83
-          too_low=$(awk "BEGIN { print ($coverage_percent < $required) ? 1 : 0 }")
+covered = decimal.Decimal(sys.argv[1])
+total = decimal.Decimal(sys.argv[2])
+if total == 0:
+    print("0.00")
+else:
+    percent = (covered / total) * decimal.Decimal("100")
+    print(percent.quantize(decimal.Decimal("0.01")))
+PY
+          )
+
+          echo "📊 Visual Coverage (from index.html): ${coverage_percent}%"
+
+          too_low=$(python - "$coverage_percent" "$required" <<'PY'
+import decimal
+import sys
+
+coverage = decimal.Decimal(sys.argv[1])
+required = decimal.Decimal(sys.argv[2])
+print(1 if coverage < required else 0)
+PY
+          )
+
           if [[ "$too_low" -eq 1 ]]; then
-            echo "❌ Visual code coverage $coverage_percent% is below required $required%"
+            echo "❌ Visual code coverage ${coverage_percent}% is below required ${required}%"
             exit 1
-          else
-            echo "✅ Visual code coverage $coverage_percent% meets threshold"
           fi
+
+          baseline_updated=false
+          new_minimum="$required"
+
+          should_update=$(python - "$coverage_percent" "$required" <<'PY'
+import decimal
+import sys
+
+coverage = decimal.Decimal(sys.argv[1])
+required = decimal.Decimal(sys.argv[2])
+epsilon = decimal.Decimal("0.005")
+print(1 if coverage > required + epsilon else 0)
+PY
+          )
+
+          if [[ "$should_update" -eq 1 ]]; then
+            new_minimum=$(python - "$coverage_percent" <<'PY'
+import decimal
+import sys
+
+coverage = decimal.Decimal(sys.argv[1])
+print(coverage.quantize(decimal.Decimal("0.01")))
+PY
+            )
+
+            printf "%s\n" "$new_minimum" > "$min_file"
+
+            python - "$new_minimum" <<'PY'
+import pathlib
+import sys
+
+new_value = sys.argv[1]
+config_path = pathlib.Path("codecov.yml")
+lines = config_path.read_text(encoding="utf-8").splitlines()
+
+for index, line in enumerate(lines):
+    stripped = line.lstrip()
+    if stripped.startswith("target:"):
+        indent = line[: len(line) - len(stripped)]
+        lines[index] = f"{indent}target: {new_value}%"
+        break
+else:
+    raise SystemExit("❌ Unable to locate coverage target in codecov.yml")
+
+config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+PY
+
+            baseline_updated=true
+            echo "⬆️  Coverage threshold increased to ${new_minimum}%"
+          else
+            echo "✅ Visual code coverage ${coverage_percent}% meets threshold ${required}%"
+          fi
+
+          {
+            echo "coverage_percent=${coverage_percent}"
+            echo "required=${required}"
+            echo "baseline_updated=${baseline_updated}"
+            echo "new_minimum=${new_minimum}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Open coverage baseline pull request
+        if: steps.enforce_coverage.outputs.baseline_updated == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: chore(ci): raise coverage minimum to ${{ steps.enforce_coverage.outputs.new_minimum }}%
+          branch: ci/coverage-minimum
+          delete-branch: true
+          title: chore(ci): raise coverage minimum to ${{ steps.enforce_coverage.outputs.new_minimum }}%
+          body: |
+            ## Summary
+            - raise the enforced coverage minimum to ${{ steps.enforce_coverage.outputs.new_minimum }}%
+            - update Codecov targets to match the new floor
+
+            ## Testing
+            - not run (workflow automation)
+          add-paths: |
+            coverage-minimum.txt
+            codecov.yml
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3

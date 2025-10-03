@@ -3,7 +3,7 @@ coverage:
   status:
     project:
       default:
-        target: 83%
+        target: 83.00%
         threshold: 1%
         # Only include the main pengdows.crud project
         paths:

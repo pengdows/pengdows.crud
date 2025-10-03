@@ -1,0 +1,218 @@
+#nullable enable
+namespace pengdows.crud.fakeDb
+{
+    public enum ConnectionFailureMode
+    {
+        None = 0,
+        FailOnOpen = 1,
+        FailOnCommand = 2,
+        FailOnTransaction = 3,
+        FailAfterCount = 4,
+        Broken = 5
+    }
+    public interface IFakeDbConnection : System.Data.IDbConnection, System.IAsyncDisposable
+    {
+        System.Collections.Generic.IReadOnlyCollection<int> RemainingNonQueryResults { get; }
+        System.Collections.Generic.IReadOnlyCollection<object?> RemainingScalarResults { get; }
+        System.Collections.Generic.IReadOnlyCollection<System.Collections.Generic.IEnumerable<System.Collections.Generic.Dictionary<string, object>>> RemainingReaderResults { get; }
+        System.Collections.Generic.IReadOnlyCollection<string> ExecutedNonQueryTexts { get; }
+        pengdows.crud.enums.SupportedDatabase EmulatedProduct { get; set; }
+        int OpenCount { get; }
+        int OpenAsyncCount { get; }
+        void EnqueueReaderResult(System.Collections.Generic.IEnumerable<System.Collections.Generic.Dictionary<string, object>> rows);
+        void EnqueueScalarResult(object? value);
+        void EnqueueNonQueryResult(int value);
+        void SetScalarResultForCommand(string commandText, object? value);
+        void SetServerVersion(string version);
+        void SetMaxParameterLimit(int limit);
+        int? GetMaxParameterLimit();
+        void SetFailOnOpen(bool shouldFail = true, bool skipFirstOpen = false);
+        void SetFailOnCommand(bool shouldFail = true);
+        void SetFailOnBeginTransaction(bool shouldFail = true);
+        void SetCustomFailureException(System.Exception exception);
+        void SetFailAfterOpenCount(int openCount);
+        void BreakConnection(bool skipFirst = false);
+        void ResetFailureConditions();
+        System.Data.DataTable GetSchema();
+        System.Data.DataTable GetSchema(string meta);
+        System.Threading.Tasks.Task OpenAsync(System.Threading.CancellationToken cancellationToken);
+    }
+    public interface IFakeDbFactory
+    {
+        pengdows.crud.enums.SupportedDatabase PretendToBe { get; }
+        IFakeDbConnection CreateConnection();
+        System.Data.Common.DbParameter CreateParameter();
+    }
+    public class FakeParameterCollection : System.Data.Common.DbParameterCollection
+    {
+        public FakeParameterCollection();
+        public override int Count { get; }
+        public override object SyncRoot { get; }
+        public new System.Data.Common.DbParameter this[int index] { get; set; }
+        public new System.Data.Common.DbParameter this[string parameterName] { get; }
+        public override int Add(object value);
+        public override void AddRange(System.Array values);
+        public override void Clear();
+        public override bool Contains(object value);
+        public override bool Contains(string value);
+        public override void CopyTo(System.Array array, int index);
+        public override System.Collections.IEnumerator GetEnumerator();
+        protected override System.Data.Common.DbParameter GetParameter(int index);
+        protected override System.Data.Common.DbParameter GetParameter(string parameterName);
+        public override int IndexOf(object value);
+        public override int IndexOf(string parameterName);
+        public override void Insert(int index, object value);
+        public override void Remove(object value);
+        public override void RemoveAt(int index);
+        public override void RemoveAt(string parameterName);
+        protected override void SetParameter(int index, System.Data.Common.DbParameter value);
+        protected override void SetParameter(string parameterName, System.Data.Common.DbParameter value);
+    }
+    public class fakeDbCommand : System.Data.Common.DbCommand
+    {
+        public fakeDbCommand();
+        public fakeDbCommand(System.Data.Common.DbConnection connection);
+        public override string CommandText { get; set; }
+        public override int CommandTimeout { get; set; }
+        public override System.Data.CommandType CommandType { get; set; }
+        public override bool DesignTimeVisible { get; set; }
+        public override System.Data.UpdateRowSource UpdatedRowSource { get; set; }
+        protected override System.Data.Common.DbConnection? DbConnection { get; set; }
+        protected override System.Data.Common.DbParameterCollection DbParameterCollection { get; }
+        protected override System.Data.Common.DbTransaction? DbTransaction { get; set; }
+        [System.Diagnostics.CodeAnalysis.AllowNull]
+        public new System.Data.Common.DbTransaction Transaction { get; set; }
+        public override void Cancel();
+        protected override System.Data.Common.DbParameter CreateDbParameter();
+        protected override System.Data.Common.DbDataReader ExecuteDbDataReader(System.Data.CommandBehavior behavior);
+        protected override System.Threading.Tasks.Task<System.Data.Common.DbDataReader> ExecuteDbDataReaderAsync(System.Data.CommandBehavior behavior, System.Threading.CancellationToken cancellationToken);
+        public override int ExecuteNonQuery();
+        public override System.Threading.Tasks.Task<int> ExecuteNonQueryAsync(System.Threading.CancellationToken cancellationToken);
+        public override object? ExecuteScalar();
+        public override System.Threading.Tasks.Task<object?> ExecuteScalarAsync(System.Threading.CancellationToken cancellationToken);
+        public override void Prepare();
+        public override System.Threading.Tasks.Task PrepareAsync(System.Threading.CancellationToken cancellationToken);
+        public void SetFailOnExecute(bool shouldFail = true, System.Exception? customException = null);
+    }
+    public class fakeDbConnection : System.Data.Common.DbConnection, IFakeDbConnection
+    {
+        public fakeDbConnection();
+        public System.Collections.Generic.List<string> ExecutedNonQueryTexts;
+        public System.Collections.Generic.Queue<int> NonQueryResults;
+        public System.Collections.Generic.Queue<object?> ScalarResults;
+        public override string ConnectionString { get; set; }
+        public override int ConnectionTimeout { get; }
+        public override string Database { get; }
+        public override string DataSource { get; }
+        public override string ServerVersion { get; }
+        public override System.Data.ConnectionState State { get; }
+        public pengdows.crud.enums.SupportedDatabase EmulatedProduct { get; set; }
+        public int OpenAsyncCount { get; }
+        public int OpenCount { get; }
+        public void BreakConnection(bool skipFirst = false);
+        public override void ChangeDatabase(string databaseName);
+        public override void Close();
+        public override System.Threading.Tasks.Task CloseAsync();
+        public override System.Threading.Tasks.ValueTask DisposeAsync();
+        public void EnqueueNonQueryResult(int value);
+        public void EnqueueReaderResult(System.Collections.Generic.IEnumerable<System.Collections.Generic.Dictionary<string, object>> rows);
+        public void EnqueueScalarResult(object? value);
+        public System.Data.DataTable GetSchema(string meta);
+        public System.Data.DataTable GetSchema();
+        public int? GetMaxParameterLimit();
+        public override void Open();
+        public override System.Threading.Tasks.Task OpenAsync(System.Threading.CancellationToken cancellationToken);
+        protected override System.Data.Common.DbTransaction BeginDbTransaction(System.Data.IsolationLevel isolationLevel);
+        protected override System.Data.Common.DbCommand CreateDbCommand();
+        protected override void Dispose(bool disposing);
+        public void ResetFailureConditions();
+        public void SetCustomFailureException(System.Exception exception);
+        public void SetFailAfterOpenCount(int openCount);
+        public void SetFailOnBeginTransaction(bool shouldFail = true);
+        public void SetFailOnCommand(bool shouldFail = true);
+        public void SetFailOnOpen(bool shouldFail = true, bool skipFirstOpen = false);
+        public void SetMaxParameterLimit(int limit);
+        public void SetScalarResultForCommand(string commandText, object? value);
+        public void SetServerVersion(string version);
+    }
+    public class fakeDbDataReader : System.Data.Common.DbDataReader
+    {
+        public fakeDbDataReader();
+        public fakeDbDataReader(System.Collections.Generic.IEnumerable<System.Collections.Generic.Dictionary<string, object>>? rows);
+        public override int Depth { get; }
+        public override int FieldCount { get; }
+        public override bool HasRows { get; }
+        public override bool IsClosed { get; }
+        public override int RecordsAffected { get; }
+        public override object this[int ordinal] { get; }
+        public override object this[string name] { get; }
+        public override void Close();
+        public override bool GetBoolean(int ordinal);
+        public override byte GetByte(int ordinal);
+        public override long GetBytes(int ordinal, long dataOffset, byte[]? buffer, int bufferOffset, int length);
+        public override char GetChar(int ordinal);
+        public override long GetChars(int ordinal, long dataOffset, char[]? buffer, int bufferOffset, int length);
+        public override string GetDataTypeName(int ordinal);
+        public override DateTime GetDateTime(int ordinal);
+        public override decimal GetDecimal(int ordinal);
+        public override double GetDouble(int ordinal);
+        public override System.Type GetFieldType(int ordinal);
+        public override System.Collections.IEnumerator GetEnumerator();
+        public override float GetFloat(int ordinal);
+        public override Guid GetGuid(int ordinal);
+        public override short GetInt16(int ordinal);
+        public override int GetInt32(int ordinal);
+        public override long GetInt64(int ordinal);
+        public override string GetName(int ordinal);
+        public override int GetOrdinal(string name);
+        public override System.Threading.Tasks.Task<T> GetFieldValueAsync<T>(int ordinal, System.Threading.CancellationToken cancellationToken);
+        public override object GetValue(int ordinal);
+        public override int GetValues(object[] values);
+        public override bool IsDBNull(int ordinal);
+        public override System.Threading.Tasks.Task<bool> ReadAsync(System.Threading.CancellationToken cancellationToken);
+        public override System.Data.DataTable? GetSchemaTable();
+        public override bool NextResult();
+        public override bool Read();
+    }
+    public class fakeDbFactory : System.Data.Common.DbProviderFactory, IFakeDbFactory
+    {
+        public static readonly pengdows.crud.fakeDb.fakeDbFactory Instance;
+        public fakeDbFactory(pengdows.crud.enums.SupportedDatabase pretendToBe);
+        public fakeDbFactory(string pretendToBe);
+        public fakeDbFactory(pengdows.crud.enums.SupportedDatabase pretendToBe, pengdows.crud.fakeDb.ConnectionFailureMode failureMode, System.Exception? customException = null, int? failAfterCount = null);
+        public pengdows.crud.enums.SupportedDatabase PretendToBe { get; }
+        public override System.Data.Common.DbCommand CreateCommand();
+        public override System.Data.Common.DbConnection CreateConnection();
+        public override System.Data.Common.DbParameter CreateParameter();
+        public static pengdows.crud.fakeDb.fakeDbFactory CreateFailingFactory(pengdows.crud.enums.SupportedDatabase pretendToBe, pengdows.crud.fakeDb.ConnectionFailureMode failureMode, System.Exception? customException = null, int? failAfterCount = null);
+    }
+    public class fakeDbParameter : System.Data.Common.DbParameter, System.Data.IDbDataParameter
+    {
+        public fakeDbParameter();
+        public override System.Data.DbType DbType { get; set; }
+        public override System.Data.ParameterDirection Direction { get; set; }
+        public override bool IsNullable { get; set; }
+        public override string ParameterName { get; set; }
+        public override byte Precision { get; set; }
+        public override byte Scale { get; set; }
+        public override int Size { get; set; }
+        public override string SourceColumn { get; set; }
+        public override bool SourceColumnNullMapping { get; set; }
+        public override object Value { get; set; }
+        public override void ResetDbType();
+    }
+    public class fakeDbRegistrar
+    {
+        public fakeDbRegistrar(System.Data.Common.DbProviderFactory factory);
+        public void Register(string providerInvariantName, System.Data.Common.DbProviderFactory providerFactory);
+        public void RegisterAll(System.Collections.Generic.Dictionary<string, string> providerFactories);
+    }
+    public class fakeDbTransaction : System.Data.Common.DbTransaction, System.Data.IDbTransaction
+    {
+        public fakeDbTransaction(pengdows.crud.fakeDb.fakeDbConnection fakeDbConnection, System.Data.IsolationLevel level);
+        protected override System.Data.Common.DbConnection? DbConnection { get; }
+        public override System.Data.IsolationLevel IsolationLevel { get; }
+        public override void Commit();
+        public override void Rollback();
+    }
+}

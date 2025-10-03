@@ -155,7 +155,17 @@ sc.Query.Append("SELECT CURRENT_TIMESTAMP()");
 var dt = sc.ExecuteScalar<DateTime>();
 ```
 
-For integration tests without a real database, use the `pengdows.crud.fakeDb` package:
+For integration tests without a real database, use the `pengdows.crud.fakeDb` package
+and review the [fakeDb integration guide](docs/fakeDb.md) for detailed usage patterns
+borrowed from the unit test suite:
+
+---
+
+## 🧪 Coverage Guard Rails
+
+- `coverage-minimum.txt` pins the required visual line coverage enforced by CI.
+- When coverage improves on the `main` branch, the build opens an automated PR that
+  bumps the minimum and synchronizes `codecov.yml`, ensuring the floor only rises.
 
 ```bash
 dotnet add package pengdows.crud.fakeDb

@@ -1,15 +1,19 @@
 #region
 
+using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using pengdows.crud.enums;
 
 #endregion
 
 namespace pengdows.crud.fakeDb;
 
-public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsyncDisposable
+public class fakeDbConnection : DbConnection, IFakeDbConnection
 {
     private string? _connectionString;
     private SupportedDatabase? _emulatedProduct;
@@ -168,6 +172,38 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
         _skipFirstFailOnOpen = false;
         _skipFirstBreakConnection = false;
         _factoryRef = null;
+    }
+
+    IReadOnlyCollection<IEnumerable<Dictionary<string, object>>> IFakeDbConnection.RemainingReaderResults
+    {
+        get
+        {
+            return ReaderResults.ToArray();
+        }
+    }
+
+    IReadOnlyCollection<object?> IFakeDbConnection.RemainingScalarResults
+    {
+        get
+        {
+            return ScalarResults.ToArray();
+        }
+    }
+
+    IReadOnlyCollection<int> IFakeDbConnection.RemainingNonQueryResults
+    {
+        get
+        {
+            return NonQueryResults.ToArray();
+        }
+    }
+
+    IReadOnlyCollection<string> IFakeDbConnection.ExecutedNonQueryTexts
+    {
+        get
+        {
+            return ExecutedNonQueryTexts.AsReadOnly();
+        }
     }
 
     private string GetEmulatedServerVersion()
@@ -350,6 +386,11 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
         }
     }
 
+    Task IFakeDbConnection.OpenAsync(CancellationToken cancellationToken)
+    {
+        return OpenAsync(cancellationToken);
+    }
+
     private SupportedDatabase ParseEmulatedProduct(string connStr)
     {
         if (EmulatedProduct == SupportedDatabase.Unknown)
@@ -413,12 +454,41 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
         return new fakeDbCommand(this);
     }
 
+    private void EnsureEmulatedProductFromConnectionString()
+    {
+        if (_emulatedProduct.HasValue && _emulatedProduct.Value != SupportedDatabase.Unknown)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_connectionString))
+        {
+            return;
+        }
+
+        var builder = new DbConnectionStringBuilder { ConnectionString = _connectionString };
+        if (!builder.TryGetValue("EmulatedProduct", out var raw))
+        {
+            return;
+        }
+
+        var rawValue = raw?.ToString();
+        if (!Enum.TryParse<SupportedDatabase>(rawValue, true, out var parsed))
+        {
+            throw new ArgumentException($"Invalid EmulatedProduct: {rawValue}");
+        }
+
+        EmulatedProduct = parsed;
+    }
+
     public override DataTable GetSchema()
     {
         if (_schemaTable != null)
         {
             return _schemaTable;
         }
+
+        EnsureEmulatedProductFromConnectionString();
 
         if (_emulatedProduct is null)
         {
@@ -458,6 +528,8 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
         {
             return _schemaTable;
         }
+
+        EnsureEmulatedProductFromConnectionString();
 
         if (_emulatedProduct is null)
         {
