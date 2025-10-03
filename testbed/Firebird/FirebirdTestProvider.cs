@@ -47,6 +47,8 @@ CREATE TABLE {0}test_table{1} (
     {0}id{1} BIGINT NOT NULL PRIMARY KEY,
     {0}name{1} VARCHAR(100) NOT NULL,
     {0}description{1} VARCHAR(1000) NOT NULL,
+    {0}value{1} INTEGER NOT NULL,
+    {0}is_active{1} SMALLINT NOT NULL,
     {0}created_at{1} TIMESTAMP NOT NULL,
     {0}created_by{1} VARCHAR(100) NOT NULL,
     {0}updated_at{1} TIMESTAMP NOT NULL,
