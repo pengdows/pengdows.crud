@@ -40,8 +40,9 @@ public class IndexedViewBenchmarks : IAsyncDisposable
     [GlobalSetup]
     public async Task GlobalSetup()
     {
-        // Use SQL Server LocalDB for indexed view testing
-        _connStr = "Server=(localdb)\\MSSQLLocalDB;Database=IndexedViewBenchmark;Integrated Security=true;TrustServerCertificate=true;";
+        // Use SQL Server Docker container for indexed view testing
+        _connStr = Environment.GetEnvironmentVariable("SQLSERVER_CONNECTION_STRING")
+            ?? "Server=localhost,1433;Database=IndexedViewBenchmark;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=true;";
 
         await CreateDatabaseAndSchemaAsync();
         await SeedDataAsync();
@@ -82,7 +83,9 @@ public class IndexedViewBenchmarks : IAsyncDisposable
     private async Task CreateDatabaseAndSchemaAsync()
     {
         // Create database if it doesn't exist
-        var masterConnStr = "Server=(localdb)\\MSSQLLocalDB;Database=master;Integrated Security=true;TrustServerCertificate=true;";
+        var masterConnStr = Environment.GetEnvironmentVariable("SQLSERVER_CONNECTION_STRING")
+            ?.Replace("Database=IndexedViewBenchmark", "Database=master")
+            ?? "Server=localhost,1433;Database=master;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=true;";
         await using var masterConn = new SqlConnection(masterConnStr);
         await masterConn.OpenAsync();
 
