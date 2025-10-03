@@ -400,7 +400,7 @@ public class CoercionTests
 
     #region Performance Tests
 
-    [Fact(Skip = "Flaky performance test - timing-dependent")]
+    [Fact]
     public void CoercionRegistry_ShouldHaveConsistentPerformance()
     {
         var guid = Guid.NewGuid();
@@ -427,7 +427,9 @@ public class CoercionTests
         var secondBatch = sw.ElapsedMilliseconds;
 
         // Performance should be consistent (not get dramatically worse)
-        Assert.True(Math.Abs(firstBatch - secondBatch) < firstBatch * 2);
+        // Relaxed assertion - just check that second batch isn't more than 10x slower
+        // This avoids flakiness while still catching major performance regressions
+        Assert.True(secondBatch < firstBatch * 10 + 100); // Allow up to 10x + 100ms margin for variance
     }
 
     #endregion

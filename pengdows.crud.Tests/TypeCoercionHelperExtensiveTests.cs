@@ -652,12 +652,16 @@ public class TypeCoercionHelperExtensiveTests
     public void CoerceJson_InvalidJsonString_ReturnsNullForNonStream()
     {
         var columnInfo = CreateJsonColumnInfo(typeof(TestJsonObject));
+
+        // Ensure logger is set for this test (in case another test changed it)
+        TypeCoercionHelper.Logger = _logger;
+        _logger.Messages.Clear(); // Clear any previous messages
         _logger.LogLevel = LogLevel.Debug; // Enable debug logging
-        
+
         var result = TypeCoercionHelper.Coerce("invalid-json", typeof(string), columnInfo);
-        
+
         Assert.Null(result);
-        Assert.Contains("Failed to deserialize JSON value", _logger.Messages);
+        Assert.Contains(_logger.Messages, msg => msg.Contains("Failed to deserialize JSON value"));
     }
 
     #endregion

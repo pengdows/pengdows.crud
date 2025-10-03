@@ -95,7 +95,10 @@ public static class TypeCoercionHelper
 
         options ??= TypeCoercionOptions.Default;
 
-        if (targetType.IsAssignableFrom(sourceType))
+        var underlyingTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
+
+        // Don't take fast path for DateTime types as they may need UTC conversion
+        if (targetType.IsAssignableFrom(sourceType) && underlyingTarget != typeof(DateTime) && underlyingTarget != typeof(DateTimeOffset))
         {
             return value;
         }
@@ -112,7 +115,8 @@ public static class TypeCoercionHelper
     {
         var underlyingTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
 
-        if (underlyingTarget.IsInstanceOfType(value))
+        // Don't take fast path for DateTime types as they may need UTC conversion
+        if (underlyingTarget.IsInstanceOfType(value) && underlyingTarget != typeof(DateTime) && underlyingTarget != typeof(DateTimeOffset))
         {
             return value;
         }
