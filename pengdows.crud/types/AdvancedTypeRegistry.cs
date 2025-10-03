@@ -60,7 +60,7 @@ internal readonly struct CachedParameterConfig
 /// </summary>
 public class AdvancedTypeRegistry
 {
-    public static AdvancedTypeRegistry Shared { get; } = new();
+    public static AdvancedTypeRegistry Shared { get; } = new(includeDefaults: true);
 
     private readonly Dictionary<MappingKey, ProviderTypeMapping> _mappings = new();
     private readonly Dictionary<Type, IAdvancedTypeConverter> _converters = new();
@@ -68,10 +68,13 @@ public class AdvancedTypeRegistry
     // Performance cache for frequently accessed combinations
     private readonly Dictionary<MappingKey, CachedParameterConfig?> _parameterCache = new();
 
-    public AdvancedTypeRegistry()
+    public AdvancedTypeRegistry(bool includeDefaults = false)
     {
-        RegisterDefaultMappings();
-        RegisterDefaultConverters();
+        if (includeDefaults)
+        {
+            RegisterDefaultMappings();
+            RegisterDefaultConverters();
+        }
     }
 
     /// <summary>
@@ -143,8 +146,8 @@ public class AdvancedTypeRegistry
                 return false;
             }
 
-            var converter = _converters.TryGetValue(clrType, out var foundConverter) ? foundConverter : null;
-            cachedConfig = new CachedParameterConfig(mapping, converter);
+            var initialConverter = _converters.TryGetValue(clrType, out var foundConverter) ? foundConverter : null;
+            cachedConfig = new CachedParameterConfig(mapping, initialConverter);
             _parameterCache[key] = cachedConfig;
         }
 
@@ -152,11 +155,27 @@ public class AdvancedTypeRegistry
             return false;
 
         var config = cachedConfig.Value;
+        var converter = config.Converter;
+
+        if (_converters.TryGetValue(clrType, out var latestConverter))
+        {
+            if (!ReferenceEquals(converter, latestConverter))
+            {
+                converter = latestConverter;
+                _parameterCache[key] = new CachedParameterConfig(config.Mapping, converter);
+            }
+        }
+        else if (converter != null)
+        {
+            converter = null;
+            _parameterCache[key] = new CachedParameterConfig(config.Mapping, null);
+        }
 
         // Apply converter if present and value is not null
-        if (config.Converter != null && value != null)
+        if (converter != null && value != null)
         {
-            value = config.Converter.ToProviderValue(value, provider);
+            value = converter.ToProviderValue(value, provider);
+            System.Diagnostics.Debug.WriteLine($"AdvancedTypeRegistry: converted {clrType.Name} for {provider} to {value?.GetType().FullName ?? "null"}");
         }
 
         parameter.Value = value ?? DBNull.Value;
@@ -259,17 +278,8 @@ public class AdvancedTypeRegistry
             ConfigureParameter = (param, value) =>
             {
                 param.DbType = DbType.String;
-                var type = param.GetType();
-                type.GetProperty("DataTypeName")?.SetValue(param, "jsonb");
-
-                var npgsqlDbTypeProperty = type.GetProperty("NpgsqlDbType");
-                if (npgsqlDbTypeProperty?.PropertyType.IsEnum == true)
-                {
-                    if (Enum.TryParse(npgsqlDbTypeProperty.PropertyType, "Jsonb", ignoreCase: true, out var enumValue))
-                    {
-                        npgsqlDbTypeProperty.SetValue(param, enumValue);
-                    }
-                }
+                param.GetType().GetProperty("DataTypeName")?.SetValue(param, "jsonb");
+                SetEnumProperty(param, "NpgsqlDbType", "Jsonb");
             }
         });
 
@@ -279,15 +289,7 @@ public class AdvancedTypeRegistry
             DbType = DbType.String,
             ConfigureParameter = (param, value) =>
             {
-                var type = param.GetType();
-                var mysqlDbTypeProperty = type.GetProperty("MySqlDbType");
-                if (mysqlDbTypeProperty?.PropertyType.IsEnum == true)
-                {
-                    if (Enum.TryParse(mysqlDbTypeProperty.PropertyType, "JSON", ignoreCase: true, out var enumValue))
-                    {
-                        mysqlDbTypeProperty.SetValue(param, enumValue);
-                    }
-                }
+                SetEnumProperty(param, "MySqlDbType", "JSON");
             }
         });
 
@@ -311,9 +313,8 @@ public class AdvancedTypeRegistry
             DbType = DbType.Object,
             ConfigureParameter = (param, value) =>
             {
-                var type = param.GetType();
-                type.GetProperty("SqlDbType")?.SetValue(param, Enum.Parse(type.Assembly.GetType("System.Data.SqlDbType")!, "Udt"));
-                type.GetProperty("UdtTypeName")?.SetValue(param, "geometry");
+                SetEnumProperty(param, "SqlDbType", "Udt");
+                param.GetType().GetProperty("UdtTypeName")?.SetValue(param, "geometry");
             }
         });
 
@@ -323,9 +324,8 @@ public class AdvancedTypeRegistry
             DbType = DbType.Object,
             ConfigureParameter = (param, value) =>
             {
-                var type = param.GetType();
-                type.GetProperty("SqlDbType")?.SetValue(param, Enum.Parse(type.Assembly.GetType("System.Data.SqlDbType")!, "Udt"));
-                type.GetProperty("UdtTypeName")?.SetValue(param, "geography");
+                SetEnumProperty(param, "SqlDbType", "Udt");
+                param.GetType().GetProperty("UdtTypeName")?.SetValue(param, "geography");
             }
         });
 
@@ -349,17 +349,7 @@ public class AdvancedTypeRegistry
             DbType = DbType.Object,
             ConfigureParameter = (param, value) =>
             {
-                var type = param.GetType();
-                var npgsqlDbTypeProperty = type.GetProperty("NpgsqlDbType");
-                if (npgsqlDbTypeProperty?.PropertyType.IsEnum == true)
-                {
-                    // Set to Array | Integer
-                    var enumType = npgsqlDbTypeProperty.PropertyType;
-                    var arrayFlag = Enum.Parse(enumType, "Array");
-                    var integerFlag = Enum.Parse(enumType, "Integer");
-                    var combinedValue = (int)arrayFlag | (int)integerFlag;
-                    npgsqlDbTypeProperty.SetValue(param, Enum.ToObject(enumType, combinedValue));
-                }
+                SetEnumProperty(param, "NpgsqlDbType", "Array", "Integer");
             }
         });
 
@@ -369,16 +359,7 @@ public class AdvancedTypeRegistry
             DbType = DbType.Object,
             ConfigureParameter = (param, value) =>
             {
-                var type = param.GetType();
-                var npgsqlDbTypeProperty = type.GetProperty("NpgsqlDbType");
-                if (npgsqlDbTypeProperty?.PropertyType.IsEnum == true)
-                {
-                    var enumType = npgsqlDbTypeProperty.PropertyType;
-                    var arrayFlag = Enum.Parse(enumType, "Array");
-                    var textFlag = Enum.Parse(enumType, "Text");
-                    var combinedValue = (int)arrayFlag | (int)textFlag;
-                    npgsqlDbTypeProperty.SetValue(param, Enum.ToObject(enumType, combinedValue));
-                }
+                SetEnumProperty(param, "NpgsqlDbType", "Array", "Text");
             }
         });
     }
@@ -391,15 +372,7 @@ public class AdvancedTypeRegistry
             DbType = DbType.String,
             ConfigureParameter = (param, value) =>
             {
-                var type = param.GetType();
-                var npgsqlDbTypeProperty = type.GetProperty("NpgsqlDbType");
-                if (npgsqlDbTypeProperty?.PropertyType.IsEnum == true)
-                {
-                    if (Enum.TryParse(npgsqlDbTypeProperty.PropertyType, "Int4Range", ignoreCase: true, out var enumValue))
-                    {
-                        npgsqlDbTypeProperty.SetValue(param, enumValue);
-                    }
-                }
+                SetEnumProperty(param, "NpgsqlDbType", "Int4Range");
             }
         });
 
@@ -409,15 +382,7 @@ public class AdvancedTypeRegistry
             DbType = DbType.String,
             ConfigureParameter = (param, value) =>
             {
-                var type = param.GetType();
-                var npgsqlDbTypeProperty = type.GetProperty("NpgsqlDbType");
-                if (npgsqlDbTypeProperty?.PropertyType.IsEnum == true)
-                {
-                    if (Enum.TryParse(npgsqlDbTypeProperty.PropertyType, "TsRange", ignoreCase: true, out var enumValue))
-                    {
-                        npgsqlDbTypeProperty.SetValue(param, enumValue);
-                    }
-                }
+                SetEnumProperty(param, "NpgsqlDbType", "TsRange");
             }
         });
     }
@@ -430,15 +395,7 @@ public class AdvancedTypeRegistry
             DbType = DbType.String,
             ConfigureParameter = (param, value) =>
             {
-                var type = param.GetType();
-                var npgsqlDbTypeProperty = type.GetProperty("NpgsqlDbType");
-                if (npgsqlDbTypeProperty?.PropertyType.IsEnum == true)
-                {
-                    if (Enum.TryParse(npgsqlDbTypeProperty.PropertyType, "Inet", ignoreCase: true, out var enumValue))
-                    {
-                        npgsqlDbTypeProperty.SetValue(param, enumValue);
-                    }
-                }
+                SetEnumProperty(param, "NpgsqlDbType", "Inet");
             }
         });
 
@@ -448,15 +405,7 @@ public class AdvancedTypeRegistry
             DbType = DbType.String,
             ConfigureParameter = (param, value) =>
             {
-                var type = param.GetType();
-                var npgsqlDbTypeProperty = type.GetProperty("NpgsqlDbType");
-                if (npgsqlDbTypeProperty?.PropertyType.IsEnum == true)
-                {
-                    if (Enum.TryParse(npgsqlDbTypeProperty.PropertyType, "Cidr", ignoreCase: true, out var enumValue))
-                    {
-                        npgsqlDbTypeProperty.SetValue(param, enumValue);
-                    }
-                }
+                SetEnumProperty(param, "NpgsqlDbType", "Cidr");
             }
         });
 
@@ -466,15 +415,7 @@ public class AdvancedTypeRegistry
             DbType = DbType.String,
             ConfigureParameter = (param, value) =>
             {
-                var type = param.GetType();
-                var npgsqlDbTypeProperty = type.GetProperty("NpgsqlDbType");
-                if (npgsqlDbTypeProperty?.PropertyType.IsEnum == true)
-                {
-                    if (Enum.TryParse(npgsqlDbTypeProperty.PropertyType, "MacAddr", ignoreCase: true, out var enumValue))
-                    {
-                        npgsqlDbTypeProperty.SetValue(param, enumValue);
-                    }
-                }
+                SetEnumProperty(param, "NpgsqlDbType", "MacAddr");
             }
         });
     }
@@ -487,15 +428,7 @@ public class AdvancedTypeRegistry
             DbType = DbType.Object,
             ConfigureParameter = (param, value) =>
             {
-                var type = param.GetType();
-                var npgsqlDbTypeProperty = type.GetProperty("NpgsqlDbType");
-                if (npgsqlDbTypeProperty?.PropertyType.IsEnum == true)
-                {
-                    if (Enum.TryParse(npgsqlDbTypeProperty.PropertyType, "Interval", ignoreCase: true, out var enumValue))
-                    {
-                        npgsqlDbTypeProperty.SetValue(param, enumValue);
-                    }
-                }
+                SetEnumProperty(param, "NpgsqlDbType", "Interval");
             }
         });
 
@@ -504,15 +437,7 @@ public class AdvancedTypeRegistry
             DbType = DbType.Object,
             ConfigureParameter = (param, value) =>
             {
-                var type = param.GetType();
-                var oracleDbTypeProperty = type.GetProperty("OracleDbType");
-                if (oracleDbTypeProperty?.PropertyType.IsEnum == true)
-                {
-                    if (Enum.TryParse(oracleDbTypeProperty.PropertyType, "IntervalYM", ignoreCase: true, out var enumValue))
-                    {
-                        oracleDbTypeProperty.SetValue(param, enumValue);
-                    }
-                }
+                SetEnumProperty(param, "OracleDbType", "IntervalYM");
             }
         });
 
@@ -521,15 +446,7 @@ public class AdvancedTypeRegistry
             DbType = DbType.Object,
             ConfigureParameter = (param, value) =>
             {
-                var type = param.GetType();
-                var oracleDbTypeProperty = type.GetProperty("OracleDbType");
-                if (oracleDbTypeProperty?.PropertyType.IsEnum == true)
-                {
-                    if (Enum.TryParse(oracleDbTypeProperty.PropertyType, "IntervalDS", ignoreCase: true, out var enumValue))
-                    {
-                        oracleDbTypeProperty.SetValue(param, enumValue);
-                    }
-                }
+                SetEnumProperty(param, "OracleDbType", "IntervalDS");
             }
         });
 
@@ -587,15 +504,7 @@ public class AdvancedTypeRegistry
             ConfigureParameter = (param, value) =>
             {
                 param.DbType = DbType.String;
-                var type = param.GetType();
-                var npgsqlDbTypeProperty = type.GetProperty("NpgsqlDbType");
-                if (npgsqlDbTypeProperty?.PropertyType.IsEnum == true)
-                {
-                    if (Enum.TryParse(npgsqlDbTypeProperty.PropertyType, "Text", ignoreCase: true, out var enumValue))
-                    {
-                        npgsqlDbTypeProperty.SetValue(param, enumValue);
-                    }
-                }
+                SetEnumProperty(param, "NpgsqlDbType", "Text");
             }
         });
 
@@ -605,15 +514,7 @@ public class AdvancedTypeRegistry
             DbType = DbType.Binary,
             ConfigureParameter = (param, value) =>
             {
-                var type = param.GetType();
-                var oracleDbTypeProperty = type.GetProperty("OracleDbType");
-                if (oracleDbTypeProperty?.PropertyType.IsEnum == true)
-                {
-                    if (Enum.TryParse(oracleDbTypeProperty.PropertyType, "Blob", ignoreCase: true, out var enumValue))
-                    {
-                        oracleDbTypeProperty.SetValue(param, enumValue);
-                    }
-                }
+                SetEnumProperty(param, "OracleDbType", "Blob");
             }
         });
 
@@ -622,15 +523,7 @@ public class AdvancedTypeRegistry
             DbType = DbType.String,
             ConfigureParameter = (param, value) =>
             {
-                var type = param.GetType();
-                var oracleDbTypeProperty = type.GetProperty("OracleDbType");
-                if (oracleDbTypeProperty?.PropertyType.IsEnum == true)
-                {
-                    if (Enum.TryParse(oracleDbTypeProperty.PropertyType, "Clob", ignoreCase: true, out var enumValue))
-                    {
-                        oracleDbTypeProperty.SetValue(param, enumValue);
-                    }
-                }
+                SetEnumProperty(param, "OracleDbType", "Clob");
             }
         });
     }
@@ -645,8 +538,7 @@ public class AdvancedTypeRegistry
             {
                 param.DbType = DbType.Binary;
                 param.Size = 8;
-                var type = param.GetType();
-                type.GetProperty("SqlDbType")?.SetValue(param, Enum.Parse(type.Assembly.GetType("System.Data.SqlDbType")!, "Timestamp"));
+                SetEnumProperty(param, "SqlDbType", "Timestamp");
             }
         });
 
@@ -656,17 +548,58 @@ public class AdvancedTypeRegistry
             DbType = DbType.Guid,
             ConfigureParameter = (param, value) =>
             {
-                var type = param.GetType();
-                var npgsqlDbTypeProperty = type.GetProperty("NpgsqlDbType");
-                if (npgsqlDbTypeProperty?.PropertyType.IsEnum == true)
-                {
-                    if (Enum.TryParse(npgsqlDbTypeProperty.PropertyType, "Uuid", ignoreCase: true, out var enumValue))
-                    {
-                        npgsqlDbTypeProperty.SetValue(param, enumValue);
-                    }
-                }
+                SetEnumProperty(param, "NpgsqlDbType", "Uuid");
             }
         });
+    }
+
+    private static void SetEnumProperty(DbParameter parameter, string propertyName, params string[] enumNames)
+    {
+        if (parameter == null || string.IsNullOrEmpty(propertyName) || enumNames.Length == 0)
+        {
+            return;
+        }
+
+        var property = parameter.GetType().GetProperty(propertyName);
+        if (property == null)
+        {
+            return;
+        }
+
+        var enumType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
+        if (!enumType.IsEnum)
+        {
+            return;
+        }
+
+        var enumValue = GetEnumValue(enumType, enumNames);
+        if (enumValue != null)
+        {
+            property.SetValue(parameter, enumValue);
+        }
+    }
+
+    private static object? GetEnumValue(Type enumType, string[] enumNames)
+    {
+        if (enumNames.Length == 1)
+        {
+            return Enum.TryParse(enumType, enumNames[0], ignoreCase: true, out var parsedSingle)
+                ? parsedSingle
+                : null;
+        }
+
+        long combined = 0;
+        foreach (var name in enumNames)
+        {
+            if (!Enum.TryParse(enumType, name, ignoreCase: true, out var parsedPart))
+            {
+                return null;
+            }
+
+            combined |= Convert.ToInt64(parsedPart);
+        }
+
+        return Enum.ToObject(enumType, combined);
     }
 }
 

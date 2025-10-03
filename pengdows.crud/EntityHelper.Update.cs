@@ -1,3 +1,4 @@
+using System;
 using System.Data;
 using System.Data.Common;
 using System.Globalization;
@@ -217,12 +218,75 @@ public partial class EntityHelper<TEntity, TRowID>
                     DateTimeKind.Local => new DateTimeOffset(dt),
                     _ => new DateTimeOffset(DateTime.SpecifyKind(dt, DateTimeKind.Utc), TimeSpan.Zero)
                 };
-            case string s when DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed):
-                return parsed;
+            case string s:
+                return NormalizeStringDateTimeOffset(s);
             default:
                 var converted = Convert.ToDateTime(value, CultureInfo.InvariantCulture);
                 return new DateTimeOffset(NormalizeDateTime(converted), TimeSpan.Zero);
         }
+    }
+
+    private static DateTimeOffset NormalizeStringDateTimeOffset(string raw)
+    {
+        var value = raw.Trim();
+        if (value.Length == 0)
+        {
+            throw new FormatException("Value cannot be empty.");
+        }
+
+        if (HasExplicitOffset(value))
+        {
+            if (DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsedWithOffset))
+            {
+                return parsedWithOffset;
+            }
+        }
+
+        if (DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsedDateTime))
+        {
+            return new DateTimeOffset(NormalizeDateTime(parsedDateTime), TimeSpan.Zero);
+        }
+
+        if (DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var fallback))
+        {
+            return fallback;
+        }
+
+        return DateTimeOffset.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+    }
+
+    private static bool HasExplicitOffset(string value)
+    {
+        if (value.IndexOf('Z', StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            return true;
+        }
+
+        var separatorIndex = value.LastIndexOf('T');
+        if (separatorIndex < 0)
+        {
+            separatorIndex = value.LastIndexOf('t');
+        }
+        if (separatorIndex < 0)
+        {
+            separatorIndex = value.LastIndexOf(' ');
+        }
+
+        if (separatorIndex < 0)
+        {
+            return false;
+        }
+
+        for (var i = separatorIndex + 1; i < value.Length; i++)
+        {
+            var c = value[i];
+            if (c == '+' || c == '-')
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void IncrementVersion(StringBuilder setClause, ISqlDialect dialect)

@@ -440,6 +440,7 @@ public partial class EntityHelper<TEntity, TRowID> :
         var ctx = context ?? _context;
         var sc = ctx.CreateSqlContainer();
         var dialect = GetDialect(ctx);
+        EnsureWritableIdHasValue(entity);
         // Always attempt to set audit fields if they exist - validation will happen inside SetAuditFields
         if (_hasAuditColumns)
         {
@@ -495,6 +496,42 @@ public partial class EntityHelper<TEntity, TRowID> :
             .Append(")");
 
         return sc;
+    }
+
+    private void EnsureWritableIdHasValue(TEntity entity)
+    {
+        if (_idColumn == null || !_idColumn.IsIdIsWritable)
+        {
+            return;
+        }
+
+        var property = _idColumn.PropertyInfo;
+        var underlyingType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
+        var currentValue = property.GetValue(entity);
+
+        if (underlyingType == typeof(Guid))
+        {
+            var currentGuid = currentValue switch
+            {
+                Guid g => g,
+                _ => Guid.Empty
+            };
+
+            if (currentGuid == Guid.Empty)
+            {
+                var newGuid = Guid.NewGuid();
+                property.SetValue(entity, property.PropertyType == typeof(Guid?) ? (Guid?)newGuid : newGuid);
+            }
+        }
+        else if (underlyingType == typeof(string))
+        {
+            var currentString = currentValue as string;
+            if (string.IsNullOrWhiteSpace(currentString))
+            {
+                var generated = Guid.NewGuid().ToString("D", CultureInfo.InvariantCulture);
+                property.SetValue(entity, generated);
+            }
+        }
     }
 
     /// <summary>
