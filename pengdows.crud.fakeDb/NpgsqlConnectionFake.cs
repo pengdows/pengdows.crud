@@ -1,6 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
 using pengdows.crud.fakeDb;
-using System.Data;
-using System.Data.Common;
 
 namespace Npgsql {
     public sealed class NpgsqlConnectionFake : fakeDbConnection {
@@ -8,6 +7,7 @@ namespace Npgsql {
         public override string Database => "stub";
         public override string DataSource => "stub";
         public override string ServerVersion => "15.0";
-        public override string ConnectionString { get; set; } = string.Empty;
+    [AllowNull]
+    public override string ConnectionString { get; set; } = string.Empty;
     }
 }

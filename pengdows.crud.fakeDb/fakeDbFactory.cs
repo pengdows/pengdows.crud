@@ -7,7 +7,7 @@ using pengdows.crud.enums;
 
 namespace pengdows.crud.fakeDb;
 
-public sealed partial class fakeDbFactory : DbProviderFactory
+public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
 {
     public static readonly fakeDbFactory Instance = new();
     private readonly SupportedDatabase _pretendToBe;
@@ -57,6 +57,8 @@ public sealed partial class fakeDbFactory : DbProviderFactory
         _failAfterCount = failAfterCount;
         _skipFirstOpen = skipFirstOpen;
     }
+
+    public SupportedDatabase PretendToBe => _pretendToBe;
 
     public override DbCommand CreateCommand()
     {
@@ -118,6 +120,11 @@ public sealed partial class fakeDbFactory : DbProviderFactory
         c.EnableDataPersistence = EnableDataPersistence;
 
         return c;
+    }
+
+    IFakeDbConnection IFakeDbFactory.CreateConnection()
+    {
+        return (fakeDbConnection)CreateConnection();
     }
 
     public void SetGlobalPersistentScalarException(Exception? exception)

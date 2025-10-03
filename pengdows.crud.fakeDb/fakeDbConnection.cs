@@ -1,15 +1,19 @@
 #region
 
+using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
+using System.Threading;
+using System.Threading.Tasks;
 using pengdows.crud.enums;
 
 #endregion
 
 namespace pengdows.crud.fakeDb;
 
-public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsyncDisposable
+public class fakeDbConnection : DbConnection, IFakeDbConnection
 {
     private string? _connectionString;
     private SupportedDatabase? _emulatedProduct;
@@ -250,6 +254,63 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
         _isBroken = false;
         _skipFirstFailOnOpen = false;
         _factoryRef = null;
+    }
+
+    IReadOnlyCollection<IEnumerable<Dictionary<string, object>>> IFakeDbConnection.RemainingReaderResults
+    {
+        get
+        {
+            if (ReaderResults.Count == 0)
+            {
+                return Array.Empty<IEnumerable<Dictionary<string, object>>>();
+            }
+
+            var copies = new List<IEnumerable<Dictionary<string, object>>>(ReaderResults.Count);
+            foreach (var rows in ReaderResults)
+            {
+                var clonedRows = new List<Dictionary<string, object>>();
+                foreach (var row in rows)
+                {
+                    clonedRows.Add(CloneRow(row));
+                }
+                copies.Add(clonedRows);
+            }
+
+            return copies;
+        }
+    }
+
+    IReadOnlyCollection<object?> IFakeDbConnection.RemainingScalarResults => ScalarResults.ToArray();
+
+    IReadOnlyCollection<int> IFakeDbConnection.RemainingNonQueryResults => NonQueryResults.ToArray();
+
+    IReadOnlyCollection<string> IFakeDbConnection.ExecutedNonQueryTexts => ExecutedNonQueryTexts.ToArray();
+
+    private static Dictionary<string, object> CloneRow(Dictionary<string, object?> row)
+    {
+        var clone = new Dictionary<string, object>(row.Count);
+        foreach (var kvp in row)
+        {
+            clone[kvp.Key] = kvp.Value!;
+        }
+
+        return clone;
+    }
+
+    void IFakeDbConnection.EnqueueReaderResult(IEnumerable<Dictionary<string, object>> rows)
+    {
+        var converted = new List<Dictionary<string, object?>>(rows is ICollection<Dictionary<string, object>> collection ? collection.Count : 0);
+        foreach (var row in rows)
+        {
+            var newRow = new Dictionary<string, object?>(row.Count);
+            foreach (var kvp in row)
+            {
+                newRow[kvp.Key] = kvp.Value;
+            }
+            converted.Add(newRow);
+        }
+
+        EnqueueReaderResult(converted);
     }
 
     private string GetEmulatedServerVersion()

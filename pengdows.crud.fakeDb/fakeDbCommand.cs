@@ -1,5 +1,6 @@
 #region
 
+using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
@@ -276,14 +277,15 @@ public class fakeDbCommand : DbCommand
 
         if (conn != null && conn.ReaderResults.Count > 0)
         {
-            return new fakeDbDataReader(conn.ReaderResults.Dequeue());
+            var queued = conn.ReaderResults.Dequeue();
+            return new fakeDbDataReader(ConvertRows(queued));
         }
 
         // Use data persistence if enabled
         if (conn != null && conn.EnableDataPersistence && !string.IsNullOrWhiteSpace(CommandText))
         {
             var results = conn.DataStore.ExecuteReader(CommandText, Parameters);
-            return new fakeDbDataReader(results);
+            return new fakeDbDataReader(ConvertRows(results));
         }
 
         return new fakeDbDataReader();
@@ -315,5 +317,22 @@ public class fakeDbCommand : DbCommand
     protected override DbParameter CreateDbParameter()
     {
         return new fakeDbParameter();
+    }
+
+    private static IEnumerable<Dictionary<string, object>> ConvertRows(IEnumerable<Dictionary<string, object?>> rows)
+    {
+        var converted = new List<Dictionary<string, object>>();
+
+        foreach (var row in rows)
+        {
+            var map = new Dictionary<string, object>(row.Count);
+            foreach (var kvp in row)
+            {
+                map[kvp.Key] = kvp.Value!;
+            }
+            converted.Add(map);
+        }
+
+        return converted;
     }
 }

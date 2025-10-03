@@ -1,5 +1,5 @@
-using Oracle.ManagedDataAccess.Client;
 using pengdows.crud;
+using Oracle.ManagedDataAccess.Client;
 
 namespace testbed;
 
@@ -39,7 +39,7 @@ public class ExternalOracleTestContainer : TestContainer
             await conn.OpenAsync();
             await conn.CloseAsync();
             
-            Console.WriteLine("[Oracle] Successfully connected to external Oracle instance");
+            Console.WriteLine($"[Oracle] Successfully connected to external Oracle instance");
         }
         catch (Exception ex)
         {
