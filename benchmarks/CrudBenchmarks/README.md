@@ -73,6 +73,7 @@ dotnet run -c Release -- --job long   # More iterations, more accurate
 
 ### PostgreSQL Required (Testcontainers - automatic)
 - **DatabaseSpecificFeatureBenchmarks**: PostgreSQL features (JSONB, arrays, FTS, geospatial)
+  - Note: Entity Framework comparisons will fail (NA results) - this is expected and demonstrates EF's limitations
 - **PagilaBenchmarks**: Real-world dataset benchmarks
 
 ### Multiple Databases

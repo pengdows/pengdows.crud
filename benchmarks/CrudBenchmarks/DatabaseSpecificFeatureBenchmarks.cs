@@ -16,6 +16,15 @@ namespace CrudBenchmarks;
 /// <summary>
 /// Demonstrates pengdows.crud's database-specific feature advantages that EF/Dapper cannot easily leverage.
 /// Each database has unique optimizations that pengdows.crud's dialect system can exploit.
+///
+/// NOTE: Entity Framework benchmarks are expected to fail (show as NA in results).
+/// This is intentional and demonstrates EF's limitations with advanced PostgreSQL features:
+/// - JSONB queries require client-side evaluation or raw SQL
+/// - Array operations are not natively supported
+/// - Full-text search requires extensions EF doesn't understand
+/// - Geospatial queries need PostGIS which EF can't handle natively
+///
+/// These failures highlight pengdows.crud's advantage: native database feature support.
 /// </summary>
 [MemoryDiagnoser]
 [SimpleJob(warmupCount: 3, iterationCount: 5, invocationCount: 25)]
