@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 name: Build, Test & Publish NuGet Package
 
 on:
@@ -35,8 +34,8 @@ jobs:
 
       - name: Install coverage tools
         run: |
-            dotnet tool install --global dotnet-reportgenerator-globaltool
-            echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+          dotnet tool install --global dotnet-reportgenerator-globaltool
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
 
       - name: Clean previous coverage results
         run: rm -rf ./TestResults
@@ -51,12 +50,12 @@ jobs:
 
       - name: Generate coverage report
         run: |
-            reportgenerator \
-              -reports:"TestResults/**/coverage.cobertura.xml" \
-              -targetdir:"coverage-report" \
-              -reporttypes:"Html;Cobertura" \
-              -assemblyfilters:"+pengdows.crud;-pengdows.crud.Tests;-pengdows.crud.abstractions;-pengdows.crud.fakeDb;-testbed" \
-              -classfilters:"-*Test*;-*Mock*"
+          reportgenerator \
+            -reports:"TestResults/**/coverage.cobertura.xml" \
+            -targetdir:"coverage-report" \
+            -reporttypes:"Html;Cobertura" \
+            -assemblyfilters:"+pengdows.crud;-pengdows.crud.Tests;-pengdows.crud.abstractions;-pengdows.crud.fakeDb;-testbed" \
+            -classfilters:"-*Test*;-*Mock*"
 
       - name: Enforce visual coverage from HTML report
         run: |
@@ -78,41 +77,10 @@ jobs:
             echo "❌ Could not extract line coverage info"
             exit 1
           fi
-=======
-publish:
-  name: Publish NuGet Package
-  runs-on: ubuntu-latest
-  needs: build-and-test
-  if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-  
-  steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        fetch-tags: true
 
-    - name: Setup .NET SDK
-      uses: actions/setup-dotnet@v2
-      with:
-        dotnet-version: '8.0.x'
->>>>>>> a5174f7 (supposed update)
-
-    - name: Generate version number
-      id: version
-      run: |
-        epoch=$(date +%s)
-        echo "version=1.0.${epoch}.0" >> "$GITHUB_OUTPUT"
-        echo "version_short=1.0.${epoch}" >> "$GITHUB_OUTPUT"
-
-    - name: Update version in .csproj
-      run: |
-        sed -i "s|<Version>.*</Version>|<Version>${{ steps.version.outputs.version }}</Version>|" pengdows.crud/pengdows.crud.csproj
-
-    - name: Build and pack
-      run: dotnet pack pengdows.crud/pengdows.crud.csproj -c Release
-
-<<<<<<< HEAD
+          total_covered=$(echo "$coverage_line" | cut -d' ' -f1)
+          total_lines=$(echo "$coverage_line" | cut -d' ' -f3)
+          coverage_percent=$(awk -v covered="$total_covered" -v total="$total_lines" 'BEGIN { if (total == 0) { print 0 } else { printf "%.2f", (covered / total) * 100 } }')
           required=83
           too_low=$(awk "BEGIN { print ($coverage_percent < $required) ? 1 : 0 }")
           if [[ "$too_low" -eq 1 ]]; then
@@ -135,24 +103,13 @@ publish:
         with:
           name: coverage-report
           path: coverage-report
-=======
-    - name: Push package to NuGet
-      run: dotnet nuget push pengdows.crud/bin/Release/pengdows.crud.${{ steps.version.outputs.version_short }}.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }}
 
-    - name: Commit version bump
-      run: |
-        git config user.name "github-actions[bot]"
-        git config user.email "github-actions[bot]@users.noreply.github.com"
-        git add pengdows.crud/pengdows.crud.csproj
-        git commit -m "Bump version to v${{ steps.version.outputs.version_short }}" || echo "No changes to commit"
->>>>>>> a5174f7 (supposed update)
+  publish:
+    name: Publish NuGet Package
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
-    - name: Tag the release
-      run: |
-        git tag -a "v${{ steps.version.outputs.version_short }}" -m "Release v${{ steps.version.outputs.version_short }}"
-        git push origin "v${{ steps.version.outputs.version_short }}"
-
-<<<<<<< HEAD
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -163,7 +120,7 @@ publish:
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v2
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: '8.0.x'
 
       - name: Generate version number
         id: version
@@ -171,6 +128,16 @@ publish:
           epoch=$(date +%s)
           echo "version=1.0.${epoch}.0" >> "$GITHUB_OUTPUT"
           echo "version_short=1.0.${epoch}" >> "$GITHUB_OUTPUT"
+
+      - name: Update version in project files
+        run: |
+          for project in \
+            pengdows.crud/pengdows.crud.csproj \
+            pengdows.crud.abstractions/pengdows.crud.abstractions.csproj \
+            pengdows.crud.fakeDb/pengdows.crud.fakeDb.csproj
+          do
+            sed -i "s|<Version>.*</Version>|<Version>${{ steps.version.outputs.version }}</Version>|" "$project"
+          done
 
       - name: Build
         run: dotnet build pengdows.crud.sln -c Release
@@ -186,6 +153,7 @@ publish:
           dotnet pack pengdows.crud/pengdows.crud.csproj -c Release \
             --no-build \
             -p:PackageVersion=${{ steps.version.outputs.version }}
+
       - name: Debug API Key
         run: |
           if [ -z "$NUGET_API_KEY" ]; then
@@ -196,6 +164,7 @@ publish:
           fi
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+
       - name: Push package to NuGet
         run: |
           set -euo pipefail
@@ -234,13 +203,3 @@ publish:
           body: Automated release for version v${{ steps.version.outputs.version_short }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-=======
-    - name: Create GitHub Release
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: v${{ steps.version.outputs.version_short }}
-        name: v${{ steps.version.outputs.version_short }}
-        body: "Automated release for version v${{ steps.version.outputs.version_short }}"
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
->>>>>>> a5174f7 (supposed update)
