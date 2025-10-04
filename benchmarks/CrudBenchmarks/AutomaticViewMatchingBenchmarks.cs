@@ -55,7 +55,7 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
             .WithEnvironment("SA_PASSWORD", Password)
             .WithEnvironment("MSSQL_PID", "Developer")
             .WithPortBinding(1433, true)
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilCommandIsCompleted("/opt/mssql-tools/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", Password, "-Q", "SELECT 1"))
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilPortIsAvailable(1433))
             .Build();
 
         Console.WriteLine("[BENCHMARK] Starting SQL Server container...");
@@ -65,6 +65,9 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
         _connStr = $"Server=localhost,{hostPort};Database={Database};User Id=sa;Password={Password};TrustServerCertificate=true;Connection Timeout=30;";
 
         Console.WriteLine($"[BENCHMARK] SQL Server container started on port {hostPort}");
+
+        // Wait for SQL Server to be ready with retry logic
+        await WaitForSqlServerAsync();
 
         await CreateDatabaseAndSchemaAsync();
         await SeedDataAsync();
@@ -99,6 +102,37 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
         await VerifyIndexedViewsAsync();
     }
 
+    private async Task WaitForSqlServerAsync()
+    {
+        var masterConnStr = _connStr.Replace($"Database={Database}", "Database=master");
+        Console.WriteLine("[BENCHMARK] Waiting for SQL Server to be ready...");
+
+        for (int i = 0; i < 120; i++) // 2 minutes max
+        {
+            try
+            {
+                await using var conn = new SqlConnection(masterConnStr);
+                await conn.OpenAsync();
+                var result = await conn.ExecuteScalarAsync<int>("SELECT 1");
+                if (result == 1)
+                {
+                    Console.WriteLine($"[BENCHMARK] SQL Server ready after {i + 1} attempts");
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                if (i % 10 == 0 && i > 0)
+                {
+                    Console.WriteLine($"[BENCHMARK] Waiting for SQL Server... attempt {i + 1}/120: {ex.Message}");
+                }
+                await Task.Delay(1000);
+            }
+        }
+
+        throw new TimeoutException("SQL Server did not become ready within 2 minutes");
+    }
+
     private async Task CreateDatabaseAndSchemaAsync()
     {
         // Create database if it doesn't exist
@@ -112,34 +146,29 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
                 CREATE DATABASE [{Database}];
             END");
 
-        // Create schema with indexed views for automatic matching
+        // Create schema with indexed views for automatic matching - split into batches
         await using var conn = new SqlConnection(_connStr);
         await conn.OpenAsync();
 
+        // Drop existing objects
         await conn.ExecuteAsync(@"
-            -- Drop existing objects
             IF OBJECT_ID('dbo.vw_CustomerOrderSummary', 'V') IS NOT NULL
                 DROP VIEW dbo.vw_CustomerOrderSummary;
-
             IF OBJECT_ID('dbo.vw_ProductSales', 'V') IS NOT NULL
                 DROP VIEW dbo.vw_ProductSales;
-
             IF OBJECT_ID('dbo.vw_MonthlyRevenue', 'V') IS NOT NULL
                 DROP VIEW dbo.vw_MonthlyRevenue;
-
             IF OBJECT_ID('dbo.OrderDetails', 'U') IS NOT NULL
                 DROP TABLE dbo.OrderDetails;
-
             IF OBJECT_ID('dbo.Orders', 'U') IS NOT NULL
                 DROP TABLE dbo.Orders;
-
             IF OBJECT_ID('dbo.Products', 'U') IS NOT NULL
                 DROP TABLE dbo.Products;
-
             IF OBJECT_ID('dbo.Customers', 'U') IS NOT NULL
-                DROP TABLE dbo.Customers;
+                DROP TABLE dbo.Customers;");
 
-            -- Create base tables
+        // Create base tables
+        await conn.ExecuteAsync(@"
             CREATE TABLE dbo.Customers (
                 customer_id INT IDENTITY(1,1) PRIMARY KEY,
                 company_name NVARCHAR(100) NOT NULL,
@@ -170,13 +199,12 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
                 discount DECIMAL(4,2) DEFAULT 0
             );
 
-            -- Create indexes for base tables
             CREATE INDEX IX_Orders_CustomerID_Date ON dbo.Orders(customer_id, order_date);
             CREATE INDEX IX_OrderDetails_OrderID ON dbo.OrderDetails(order_id);
-            CREATE INDEX IX_OrderDetails_ProductID ON dbo.OrderDetails(product_id);
+            CREATE INDEX IX_OrderDetails_ProductID ON dbo.OrderDetails(product_id);");
 
-            -- INDEXED VIEW 1: Customer Order Summary
-            -- This will automatically match queries that aggregate orders by customer
+        // Create first indexed view (must be in its own batch)
+        await conn.ExecuteAsync(@"
             CREATE VIEW dbo.vw_CustomerOrderSummary WITH SCHEMABINDING AS
             SELECT
                 c.customer_id,
@@ -188,13 +216,14 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
             FROM dbo.Customers c
             INNER JOIN dbo.Orders o ON c.customer_id = o.customer_id
             INNER JOIN dbo.OrderDetails od ON o.order_id = od.order_id
-            GROUP BY c.customer_id, c.company_name;
+            GROUP BY c.customer_id, c.company_name;");
 
+        await conn.ExecuteAsync(@"
             CREATE UNIQUE CLUSTERED INDEX IX_CustomerOrderSummary
-            ON dbo.vw_CustomerOrderSummary(customer_id);
+            ON dbo.vw_CustomerOrderSummary(customer_id);");
 
-            -- INDEXED VIEW 2: Product Sales Summary
-            -- Will automatically match product sales aggregation queries
+        // Create second indexed view
+        await conn.ExecuteAsync(@"
             CREATE VIEW dbo.vw_ProductSales WITH SCHEMABINDING AS
             SELECT
                 p.product_id,
@@ -206,13 +235,14 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
                 AVG(od.quantity * od.unit_price * (1 - od.discount)) as avg_revenue_per_order
             FROM dbo.Products p
             INNER JOIN dbo.OrderDetails od ON p.product_id = od.product_id
-            GROUP BY p.product_id, p.product_name, p.category_name;
+            GROUP BY p.product_id, p.product_name, p.category_name;");
 
+        await conn.ExecuteAsync(@"
             CREATE UNIQUE CLUSTERED INDEX IX_ProductSales
-            ON dbo.vw_ProductSales(product_id);
+            ON dbo.vw_ProductSales(product_id);");
 
-            -- INDEXED VIEW 3: Monthly Revenue
-            -- Will automatically match time-based revenue queries
+        // Create third indexed view
+        await conn.ExecuteAsync(@"
             CREATE VIEW dbo.vw_MonthlyRevenue WITH SCHEMABINDING AS
             SELECT
                 YEAR(o.order_date) as order_year,
@@ -222,11 +252,11 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
                 COUNT_BIG(DISTINCT o.customer_id) as unique_customers
             FROM dbo.Orders o
             INNER JOIN dbo.OrderDetails od ON o.order_id = od.order_id
-            GROUP BY YEAR(o.order_date), MONTH(o.order_date);
+            GROUP BY YEAR(o.order_date), MONTH(o.order_date);");
 
+        await conn.ExecuteAsync(@"
             CREATE UNIQUE CLUSTERED INDEX IX_MonthlyRevenue
-            ON dbo.vw_MonthlyRevenue(order_year, order_month);
-        ");
+            ON dbo.vw_MonthlyRevenue(order_year, order_month);");
     }
 
     private async Task SeedDataAsync()

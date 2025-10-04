@@ -53,7 +53,7 @@ public class IndexedViewBenchmarks : IAsyncDisposable
             .WithEnvironment("SA_PASSWORD", Password)
             .WithEnvironment("MSSQL_PID", "Developer")
             .WithPortBinding(1433, true)
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilCommandIsCompleted("/opt/mssql-tools/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", Password, "-Q", "SELECT 1"))
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilPortIsAvailable(1433))
             .Build();
 
         Console.WriteLine("[BENCHMARK] Starting SQL Server container...");
@@ -63,6 +63,9 @@ public class IndexedViewBenchmarks : IAsyncDisposable
         _connStr = $"Server=localhost,{hostPort};Database={Database};User Id=sa;Password={Password};TrustServerCertificate=true;Connection Timeout=30;";
 
         Console.WriteLine($"[BENCHMARK] SQL Server container started on port {hostPort}");
+
+        // Wait for SQL Server to be ready with retry logic
+        await WaitForSqlServerAsync();
 
         await CreateDatabaseAndSchemaAsync();
         await SeedDataAsync();
@@ -100,6 +103,37 @@ public class IndexedViewBenchmarks : IAsyncDisposable
         await VerifyIndexedViewAsync();
     }
 
+    private async Task WaitForSqlServerAsync()
+    {
+        var masterConnStr = _connStr.Replace($"Database={Database}", "Database=master");
+        Console.WriteLine("[BENCHMARK] Waiting for SQL Server to be ready...");
+
+        for (int i = 0; i < 120; i++) // 2 minutes max
+        {
+            try
+            {
+                await using var conn = new SqlConnection(masterConnStr);
+                await conn.OpenAsync();
+                var result = await conn.ExecuteScalarAsync<int>("SELECT 1");
+                if (result == 1)
+                {
+                    Console.WriteLine($"[BENCHMARK] SQL Server ready after {i + 1} attempts");
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                if (i % 10 == 0 && i > 0)
+                {
+                    Console.WriteLine($"[BENCHMARK] Waiting for SQL Server... attempt {i + 1}/120: {ex.Message}");
+                }
+                await Task.Delay(1000);
+            }
+        }
+
+        throw new TimeoutException("SQL Server did not become ready within 2 minutes");
+    }
+
     private async Task CreateDatabaseAndSchemaAsync()
     {
         // Create database if it doesn't exist
@@ -113,12 +147,12 @@ public class IndexedViewBenchmarks : IAsyncDisposable
                 CREATE DATABASE [{Database}];
             END");
 
-        // Create schema and indexed view
+        // Create schema and indexed view - must be split into separate batches
         await using var conn = new SqlConnection(_connStr);
         await conn.OpenAsync();
 
+        // Drop existing objects
         await conn.ExecuteAsync(@"
-            -- Drop existing objects
             IF OBJECT_ID('dbo.vw_CustomerOrderSummary', 'V') IS NOT NULL
                 DROP VIEW dbo.vw_CustomerOrderSummary;
 
@@ -126,9 +160,10 @@ public class IndexedViewBenchmarks : IAsyncDisposable
                 DROP TABLE dbo.Orders;
 
             IF OBJECT_ID('dbo.Customers', 'U') IS NOT NULL
-                DROP TABLE dbo.Customers;
+                DROP TABLE dbo.Customers;");
 
-            -- Create tables
+        // Create tables
+        await conn.ExecuteAsync(@"
             CREATE TABLE dbo.Customers (
                 customer_id INT IDENTITY(1,1) PRIMARY KEY,
                 company_name NVARCHAR(100) NOT NULL,
@@ -141,9 +176,10 @@ public class IndexedViewBenchmarks : IAsyncDisposable
                 order_date DATETIME2 DEFAULT GETUTCDATE(),
                 total_amount DECIMAL(18,2) NOT NULL,
                 status NVARCHAR(20) DEFAULT 'Active'
-            );
+            );");
 
-            -- Create indexed view (the key advantage)
+        // Create indexed view (must be in its own batch)
+        await conn.ExecuteAsync(@"
             CREATE VIEW dbo.vw_CustomerOrderSummary WITH SCHEMABINDING AS
             SELECT
                 customer_id,
@@ -153,15 +189,14 @@ public class IndexedViewBenchmarks : IAsyncDisposable
                 MAX(order_date) as last_order_date
             FROM dbo.Orders
             WHERE status = 'Active'
-            GROUP BY customer_id;
+            GROUP BY customer_id;");
 
-            -- Create the clustered index (makes it an indexed/materialized view)
+        // Create indexes
+        await conn.ExecuteAsync(@"
             CREATE UNIQUE CLUSTERED INDEX IX_CustomerOrderSummary_CustomerID
             ON dbo.vw_CustomerOrderSummary(customer_id);
 
-            -- Create additional indexes for performance
-            CREATE INDEX IX_Orders_CustomerID_Status ON dbo.Orders(customer_id, status);
-            ");
+            CREATE INDEX IX_Orders_CustomerID_Status ON dbo.Orders(customer_id, status);");
     }
 
     private async Task SeedDataAsync()
