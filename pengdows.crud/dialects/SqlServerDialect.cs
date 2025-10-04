@@ -1,6 +1,5 @@
 using System.Data;
 using System.Data.Common;
-using System.Text;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.wrappers;
@@ -21,6 +20,18 @@ public class SqlServerDialect : SqlDialect
         "SET CONCAT_NULL_YIELDS_NULL ON;\n" +
         "SET QUOTED_IDENTIFIER ON;\n" +
         "SET NUMERIC_ROUNDABORT OFF;";
+
+    private static readonly IReadOnlyDictionary<string, string> ExpectedSessionSettings =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["ANSI_NULLS"] = "ON",
+            ["ANSI_PADDING"] = "ON",
+            ["ANSI_WARNINGS"] = "ON",
+            ["ARITHABORT"] = "ON",
+            ["CONCAT_NULL_YIELDS_NULL"] = "ON",
+            ["QUOTED_IDENTIFIER"] = "ON",
+            ["NUMERIC_ROUNDABORT"] = "OFF"
+        };
 
     private string? _sessionSettings;
 
@@ -69,22 +80,14 @@ public class SqlServerDialect : SqlDialect
 
     public override async Task<string> GetDatabaseVersionAsync(ITrackedConnection connection)
     {
-        try
-        {
-            await using var cmd = (DbCommand)connection.CreateCommand();
-            cmd.CommandText = GetVersionQuery();
-            var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
-            if (result is null)
-            {
-                return string.Empty;
-            }
-            return result.ToString() ?? string.Empty;
-        }
-        catch (Exception ex)
-        {
-            // For direct version queries, surface error context as string (legacy behavior expected by tests)
-            return $"Error retrieving version: {ex.Message}";
-        }
+        var result = await ExecuteScalarQueryAsync(
+                connection,
+                GetVersionQuery(),
+                static value => value?.ToString() ?? string.Empty,
+                ex => $"Error retrieving version: {ex.Message}")
+            .ConfigureAwait(false);
+
+        return result ?? string.Empty;
     }
 
     public override string GetBaseSessionSettings()
@@ -124,7 +127,9 @@ public class SqlServerDialect : SqlDialect
         // Check and cache SQL Server session settings during initialization
         if (_sessionSettings == null)
         {
-            _sessionSettings = CheckSqlServerSettings(connection);
+            var result = GetSqlServerSessionSettings(connection);
+            _sessionSettings = result.Settings;
+
             if (!string.IsNullOrWhiteSpace(_sessionSettings))
             {
                 Logger.LogInformation("Applying SQL Server session settings on first connect:\n{Settings}", _sessionSettings);
@@ -134,81 +139,65 @@ public class SqlServerDialect : SqlDialect
                 Logger.LogInformation("SQL Server session settings: no changes required (already compliant)");
             }
         }
-        
+
         return productInfo;
     }
 
-
-    private string CheckSqlServerSettings(IDbConnection connection)
+    private SessionSettingsResult GetSqlServerSessionSettings(IDbConnection connection)
     {
-        try
-        {
-            var expectedSettings = new Dictionary<string, string>
+        return EvaluateSessionSettings(
+            connection,
+            conn =>
             {
-                { "ANSI_NULLS", "ON" },
-                { "ANSI_PADDING", "ON" },
-                { "ANSI_WARNINGS", "ON" },
-                { "ARITHABORT", "ON" },
-                { "CONCAT_NULL_YIELDS_NULL", "ON" },
-                { "QUOTED_IDENTIFIER", "ON" },
-                { "NUMERIC_ROUNDABORT", "OFF" }
-            };
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "DBCC USEROPTIONS"; // no trailing ';'
 
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = "DBCC USEROPTIONS"; // no trailing ';'
+                using var reader = cmd.ExecuteReader();
+                var currentSettings = new Dictionary<string, string>(ExpectedSessionSettings.Count, StringComparer.OrdinalIgnoreCase);
 
-            using var reader = cmd.ExecuteReader();
-            var currentSettings = expectedSettings.ToDictionary(kvp => kvp.Key, _ => "OFF");
-
-            while (reader.Read())
-            {
-                string settingName;
-                string settingValue;
-
-                if (reader.FieldCount == 1)
+                foreach (var kvp in ExpectedSessionSettings)
                 {
-                    settingName = reader.GetName(0).ToUpperInvariant();
-                    settingValue = reader.GetString(0);
-                }
-                else
-                {
-                    settingName = reader.GetString(0).ToUpperInvariant();
-                    settingValue = reader.GetString(1);
+                    currentSettings[kvp.Key] = "OFF";
                 }
 
-                if (expectedSettings.ContainsKey(settingName))
+                while (reader.Read())
                 {
-                    currentSettings[settingName] = settingValue == "SET" ? "ON" : "OFF";
-                }
-            }
+                    string settingName;
+                    string settingValue;
 
-            var sb = new StringBuilder();
-            foreach (var expectedSetting in expectedSettings)
-            {
-                var settingName = expectedSetting.Key;
-                var expectedValue = expectedSetting.Value;
-
-                currentSettings.TryGetValue(settingName, out var currentValue);
-
-                if (currentValue != expectedValue)
-                {
-                    if (sb.Length > 0)
+                    if (reader.FieldCount == 1)
                     {
-                        sb.AppendLine();
+                        settingName = reader.GetName(0).ToUpperInvariant();
+                        settingValue = reader.GetString(0);
                     }
-                    // Return individual SET statements; execution loop will split/execute one-by-one
-                    sb.Append($"SET {settingName} {expectedValue};");
-                }
-            }
+                    else
+                    {
+                        settingName = reader.GetString(0).ToUpperInvariant();
+                        settingValue = reader.GetString(1);
+                    }
 
-            return sb.ToString();
-        }
-        catch (Exception ex)
-        {
-            Logger.LogWarning(ex, "Failed to check SQL Server session settings, applying default settings");
-            // Provide minimal, individual statements (no NOCOUNT wrapper, no multi-batch)
-            return DefaultSessionSettings;
-        }
+                    if (!currentSettings.ContainsKey(settingName))
+                    {
+                        continue;
+                    }
+
+                    currentSettings[settingName] = string.Equals(settingValue, "SET", StringComparison.OrdinalIgnoreCase)
+                        ? "ON"
+                        : "OFF";
+                }
+
+                var script = BuildSessionSettingsScript(
+                    ExpectedSessionSettings,
+                    currentSettings,
+                    static (name, value) => $"SET {name} {value};");
+
+                return new SessionSettingsResult(script, currentSettings, false);
+            },
+            () => new SessionSettingsResult(
+                DefaultSessionSettings,
+                new Dictionary<string, string>(ExpectedSessionSettings, StringComparer.OrdinalIgnoreCase),
+                true),
+            "Failed to check SQL Server session settings, applying default settings");
     }
 
     public override Dictionary<int, SqlStandardLevel> GetMajorVersionToStandardMapping()

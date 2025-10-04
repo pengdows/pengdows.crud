@@ -23,6 +23,9 @@ public abstract class SqlDialect:ISqlDialect
 
     // Performance optimization: Cache frequently used parameter names to avoid repeated string operations
     private readonly ConcurrentDictionary<string, string> _trimmedNameCache = new();
+    private readonly ConcurrentDictionary<string, string> _wrappedNameCache = new(StringComparer.Ordinal);
+    private static readonly ConcurrentQueue<StringBuilder> _wrapNameBuilderPool = new();
+    private const int MaxPooledWrapBuilderCapacity = 512;
 
     // Pre-compiled parameter marker trimming for faster string operations
     private static readonly char[] _parameterMarkers = { '@', ':', '?', '$' };
@@ -217,30 +220,253 @@ public abstract class SqlDialect:ISqlDialect
 
     public virtual string WrapObjectName(string name)
     {
-        if (string.IsNullOrEmpty(name?.Trim()))
+        if (string.IsNullOrWhiteSpace(name))
         {
             return string.Empty;
         }
 
-        var cleaned = name.Replace(QuotePrefix, string.Empty).Replace(QuoteSuffix, string.Empty);
-        var parts = cleaned
-            .Split(CompositeIdentifierSeparator)
-            .Select(p => p.Trim())
-            .Where(p => p.Length > 0)
-            .ToArray();
-        var sb = new StringBuilder();
-
-        for (var i = 0; i < parts.Length; i++)
+        var span = name.AsSpan();
+        var trimmed = span.Trim();
+        if (trimmed.Length == 0)
         {
-            if (i > 0)
-            {
-                sb.Append(CompositeIdentifierSeparator);
-            }
-
-            sb.Append(QuotePrefix).Append(parts[i]).Append(QuoteSuffix);
+            return string.Empty;
         }
 
-        return sb.ToString();
+        var canonical = trimmed.Length == span.Length ? name : trimmed.ToString();
+        return _wrappedNameCache.GetOrAdd(canonical, static (key, state) => state.BuildWrappedObjectName(key), this);
+    }
+
+    private string BuildWrappedObjectName(string identifier)
+    {
+        var prefix = QuotePrefix;
+        var suffix = QuoteSuffix;
+        var separator = CompositeIdentifierSeparator;
+
+        var builder = RentWrapBuilder(identifier.Length + ((prefix.Length + suffix.Length) << 1));
+        try
+        {
+            var separatorSpan = separator.AsSpan();
+            var prefixSpan = prefix.AsSpan();
+            var suffixSpan = suffix.AsSpan();
+            var value = identifier.AsSpan();
+            var hasSeparator = separatorSpan.Length > 0;
+
+            var consumed = 0;
+            var wroteSegment = false;
+
+            while (consumed < value.Length)
+            {
+                var remaining = value.Slice(consumed);
+                var separatorIndex = hasSeparator ? IndexOf(remaining, separatorSpan) : -1;
+
+                ReadOnlySpan<char> segment;
+                if (separatorIndex >= 0)
+                {
+                    segment = remaining.Slice(0, separatorIndex);
+                    consumed += separatorIndex + separatorSpan.Length;
+                }
+                else
+                {
+                    segment = remaining;
+                    consumed = value.Length;
+                }
+
+                segment = TrimWhitespace(segment);
+                if (segment.Length == 0)
+                {
+                    continue;
+                }
+
+                if (wroteSegment)
+                {
+                    builder.Append(separator);
+                }
+
+                builder.Append(prefix);
+                AppendWithoutQuotes(builder, segment, prefixSpan, suffixSpan);
+                builder.Append(suffix);
+
+                wroteSegment = true;
+            }
+
+            var result = wroteSegment ? builder.ToString() : string.Empty;
+            return result;
+        }
+        finally
+        {
+            ReturnWrapBuilder(builder);
+        }
+    }
+
+    private static StringBuilder RentWrapBuilder(int capacityHint)
+    {
+        if (_wrapNameBuilderPool.TryDequeue(out var builder))
+        {
+            if (capacityHint > builder.Capacity)
+            {
+                builder.EnsureCapacity(capacityHint);
+            }
+
+            builder.Clear();
+            return builder;
+        }
+
+        return new StringBuilder(capacityHint < 64 ? 64 : capacityHint);
+    }
+
+    private static void ReturnWrapBuilder(StringBuilder builder)
+    {
+        if (builder.Capacity > MaxPooledWrapBuilderCapacity)
+        {
+            return;
+        }
+
+        builder.Clear();
+        _wrapNameBuilderPool.Enqueue(builder);
+    }
+
+    protected static string BuildSessionSettingsScript(
+        IReadOnlyDictionary<string, string> expected,
+        IReadOnlyDictionary<string, string> current,
+        Func<string, string, string> formatter)
+    {
+        if (expected.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var builder = new StringBuilder();
+        foreach (var kvp in expected)
+        {
+            current.TryGetValue(kvp.Key, out var currentValue);
+            if (string.Equals(currentValue, kvp.Value, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (builder.Length > 0)
+            {
+                builder.AppendLine();
+            }
+
+            builder.Append(formatter(kvp.Key, kvp.Value));
+        }
+
+        return builder.ToString();
+    }
+
+    protected SessionSettingsResult EvaluateSessionSettings(
+        IDbConnection connection,
+        Func<IDbConnection, SessionSettingsResult> evaluator,
+        Func<SessionSettingsResult> fallback,
+        string failureMessage)
+    {
+        try
+        {
+            return evaluator(connection);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, failureMessage);
+            return fallback();
+        }
+    }
+
+    protected async Task<T?> ExecuteScalarQueryAsync<T>(
+        ITrackedConnection connection,
+        string query,
+        Func<object?, T?> converter,
+        Func<Exception, T?>? onError = null)
+    {
+        try
+        {
+            await using var cmd = (DbCommand)connection.CreateCommand();
+            cmd.CommandText = query;
+            var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
+            return converter(result);
+        }
+        catch (Exception ex) when (onError != null)
+        {
+            return onError(ex);
+        }
+    }
+
+    protected readonly record struct SessionSettingsResult(
+        string Settings,
+        IReadOnlyDictionary<string, string> Snapshot,
+        bool UsedFallback);
+
+    private static ReadOnlySpan<char> TrimWhitespace(ReadOnlySpan<char> span)
+    {
+        var start = 0;
+        var end = span.Length - 1;
+
+        while (start <= end && char.IsWhiteSpace(span[start]))
+        {
+            start++;
+        }
+
+        while (end >= start && char.IsWhiteSpace(span[end]))
+        {
+            end--;
+        }
+
+        return start > end ? ReadOnlySpan<char>.Empty : span.Slice(start, end - start + 1);
+    }
+
+    private static void AppendWithoutQuotes(StringBuilder builder, ReadOnlySpan<char> value, ReadOnlySpan<char> prefix, ReadOnlySpan<char> suffix)
+    {
+        var index = 0;
+        while (index < value.Length)
+        {
+            if (!prefix.IsEmpty && StartsWith(value, prefix, index))
+            {
+                index += prefix.Length;
+                continue;
+            }
+
+            if (!suffix.IsEmpty && StartsWith(value, suffix, index))
+            {
+                index += suffix.Length;
+                continue;
+            }
+
+            builder.Append(value[index]);
+            index++;
+        }
+    }
+
+    private static bool StartsWith(ReadOnlySpan<char> span, ReadOnlySpan<char> value, int start)
+    {
+        if (start < 0 || start + value.Length > span.Length)
+        {
+            return false;
+        }
+
+        return span.Slice(start, value.Length).SequenceEqual(value);
+    }
+
+    private static int IndexOf(ReadOnlySpan<char> span, ReadOnlySpan<char> value)
+    {
+        if (value.Length == 0)
+        {
+            return -1;
+        }
+
+        if (value.Length == 1)
+        {
+            return span.IndexOf(value[0]);
+        }
+
+        for (var i = 0; i <= span.Length - value.Length; i++)
+        {
+            if (span.Slice(i, value.Length).SequenceEqual(value))
+            {
+                return i;
+            }
+        }
+
+        return -1;
     }
 
     public virtual string MakeParameterName(string parameterName)
@@ -730,14 +956,10 @@ public abstract class SqlDialect:ISqlDialect
         var preferred = GetVersionQuery();
         var query = !string.IsNullOrWhiteSpace(preferred) ? preferred : "SELECT version()";
 
-        await using var cmd = (DbCommand)connection.CreateCommand();
-        cmd.CommandText = query;
-        var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
-        if (result is null)
-        {
-            return string.Empty;
-        }
-        return result.ToString() ?? string.Empty;
+        var result = await ExecuteScalarQueryAsync(connection, query, static value => value?.ToString() ?? string.Empty)
+            .ConfigureAwait(false);
+
+        return result ?? string.Empty;
     }
 
     public virtual Task<string?> GetProductNameAsync(ITrackedConnection connection)

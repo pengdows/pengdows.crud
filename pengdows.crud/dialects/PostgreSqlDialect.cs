@@ -1,7 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
-using System.Text;
+using System.Linq;
 using Microsoft.Extensions.Logging;
 using pengdows.crud;
 using pengdows.crud.enums;
@@ -14,7 +15,16 @@ namespace pengdows.crud.dialects;
 /// </summary>
 public class PostgreSqlDialect : SqlDialect
 {
+    private const string DefaultSessionSettings = "SET standard_conforming_strings = on;\nSET client_min_messages = warning;";
+    private static readonly IReadOnlyDictionary<string, string> ExpectedSessionSettings =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["standard_conforming_strings"] = "on",
+            ["client_min_messages"] = "warning"
+        };
+
     private string? _sessionSettings;
+
     internal PostgreSqlDialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger)
     {
@@ -111,101 +121,92 @@ public class PostgreSqlDialect : SqlDialect
         // Check and cache PostgreSQL session settings during initialization
         if (_sessionSettings == null)
         {
-            var (settingsToApply, currentSettings) = CheckPostgreSqlSettingsWithDetails(connection);
-            _sessionSettings = settingsToApply;
+            var result = GetPostgreSqlSessionSettings(connection);
+            _sessionSettings = result.Settings;
 
+            var snapshot = string.Join(", ", result.Snapshot.Select(kv => $"{kv.Key}={kv.Value}"));
             if (!string.IsNullOrWhiteSpace(_sessionSettings))
             {
-                Logger.LogInformation("PostgreSQL session settings detected: {CurrentSettings}. Applying changes:\n{Settings}",
-                    string.Join(", ", currentSettings.Select(kv => $"{kv.Key}={kv.Value}")), _sessionSettings);
+                Logger.LogInformation("PostgreSQL session settings detected: {CurrentSettings}. Applying changes:\n{Settings}", snapshot, _sessionSettings);
             }
             else
             {
-                Logger.LogInformation("PostgreSQL session settings detected: {CurrentSettings}. No changes required (already compliant)",
-                    string.Join(", ", currentSettings.Select(kv => $"{kv.Key}={kv.Value}")));
+                Logger.LogInformation("PostgreSQL session settings detected: {CurrentSettings}. No changes required (already compliant)", snapshot);
             }
         }
 
         return productInfo;
     }
 
+    private SessionSettingsResult GetPostgreSqlSessionSettings(IDbConnection connection)
+    {
+        return EvaluateSessionSettings(
+            connection,
+            conn =>
+            {
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT name, setting FROM pg_settings WHERE name IN ('standard_conforming_strings', 'client_min_messages')";
+
+                using var reader = cmd.ExecuteReader();
+                var currentSettings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+                while (reader.Read())
+                {
+                    var settingName = reader.GetString(0);
+                    var settingValue = reader.GetString(1);
+                    currentSettings[settingName] = settingValue;
+                }
+
+                var built = BuildSessionSettingsScript(
+                    ExpectedSessionSettings,
+                    currentSettings,
+                    static (name, value) => $"SET {name} = {value};");
+
+                return new SessionSettingsResult(built, currentSettings, false);
+            },
+            () => new SessionSettingsResult(
+                DefaultSessionSettings,
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["standard_conforming_strings"] = "unknown",
+                    ["client_min_messages"] = "unknown"
+                },
+                true),
+            "Failed to check PostgreSQL session settings, applying default settings");
+    }
+
     private (string settingsToApply, Dictionary<string, string> currentSettings) CheckPostgreSqlSettingsWithDetails(IDbConnection connection)
     {
-        try
-        {
-            var expectedSettings = new Dictionary<string, string>
-            {
-                { "standard_conforming_strings", "on" },
-                { "client_min_messages", "warning" }
-            };
-
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = "SELECT name, setting FROM pg_settings WHERE name IN ('standard_conforming_strings', 'client_min_messages')";
-
-            using var reader = cmd.ExecuteReader();
-            var currentSettings = new Dictionary<string, string>();
-
-            while (reader.Read())
-            {
-                var settingName = reader.GetString(0);
-                var settingValue = reader.GetString(1);
-                currentSettings[settingName] = settingValue;
-            }
-
-            var sb = new StringBuilder();
-            foreach (var expectedSetting in expectedSettings)
-            {
-                var settingName = expectedSetting.Key;
-                var expectedValue = expectedSetting.Value;
-
-                currentSettings.TryGetValue(settingName, out var currentValue);
-
-                if (currentValue != expectedValue)
-                {
-                    if (sb.Length > 0)
-                    {
-                        sb.AppendLine();
-                    }
-
-                    sb.Append($"SET {settingName} = {expectedValue};");
-                }
-            }
-
-            return (sb.ToString(), currentSettings);
-        }
-        catch (Exception ex)
-        {
-            Logger.LogWarning(ex, "Failed to check PostgreSQL session settings, applying default settings");
-            var fallbackSettings = new Dictionary<string, string>
-            {
-                { "standard_conforming_strings", "unknown" },
-                { "client_min_messages", "unknown" }
-            };
-            var fallbackSessionSettings = @"SET standard_conforming_strings = on;
-SET client_min_messages = warning;";
-            return (fallbackSessionSettings, fallbackSettings);
-        }
+        var result = GetPostgreSqlSessionSettings(connection);
+        var snapshot = new Dictionary<string, string>(result.Snapshot, StringComparer.OrdinalIgnoreCase);
+        return (result.Settings, snapshot);
     }
 
     private string CheckPostgreSqlSettings(IDbConnection connection)
     {
-        // Use cached settings if available, otherwise detect and cache them
-        if (_sessionSettings == null)
+        if (_sessionSettings != null)
         {
-            var (settingsToApply, currentSettings) = CheckPostgreSqlSettingsWithDetails(connection);
-            _sessionSettings = settingsToApply;
-
-            if (!string.IsNullOrWhiteSpace(_sessionSettings))
-            {
-                Logger.LogInformation("PostgreSQL session settings detected: {CurrentSettings}. Applying changes:\n{Settings}",
-                    string.Join(", ", currentSettings.Select(kv => $"{kv.Key}={kv.Value}")), _sessionSettings);
-            }
-            else
-            {
-                Logger.LogInformation("PostgreSQL session settings detected: {CurrentSettings}. No changes required (already compliant)",
-                    string.Join(", ", currentSettings.Select(kv => $"{kv.Key}={kv.Value}")));
-            }
+            return _sessionSettings;
         }
+
+        var (settingsToApply, currentSettings) = CheckPostgreSqlSettingsWithDetails(connection);
+        _sessionSettings = settingsToApply;
+
+        var snapshot = string.Join(", ", currentSettings.Select(kv => $"{kv.Key}={kv.Value}"));
+        if (!string.IsNullOrWhiteSpace(_sessionSettings))
+        {
+            Logger.LogInformation(
+                "PostgreSQL session settings detected: {CurrentSettings}. Applying changes:\n{Settings}",
+                snapshot,
+                _sessionSettings);
+        }
+        else
+        {
+            Logger.LogInformation(
+                "PostgreSQL session settings detected: {CurrentSettings}. No changes required (already compliant)",
+                snapshot);
+        }
+
         return _sessionSettings;
     }
 
@@ -213,8 +214,7 @@ SET client_min_messages = warning;";
     {
         // If session settings haven't been detected yet (e.g., in testing),
         // provide fallback settings that are compatible with older PostgreSQL versions
-        return _sessionSettings ?? @"SET standard_conforming_strings = on;
-SET client_min_messages = warning;";
+        return _sessionSettings ?? DefaultSessionSettings;
     }
 
     public override string GetReadOnlySessionSettings()

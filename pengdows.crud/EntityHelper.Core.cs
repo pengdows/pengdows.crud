@@ -597,7 +597,7 @@ public partial class EntityHelper<TEntity, TRowID> :
             throw new ArgumentNullException(nameof(ids));
         }
 
-        var list = ids.Distinct().ToList();
+        var list = MaterializeDistinctIds(ids);
         if (list.Count == 0)
         {
             throw new ArgumentException("List of IDs cannot be empty.", nameof(ids));
@@ -670,7 +670,7 @@ public partial class EntityHelper<TEntity, TRowID> :
             throw new ArgumentNullException(nameof(ids));
         }
 
-        var list = ids.Distinct().ToList();
+        var list = MaterializeDistinctIds(ids);
         if (list.Count == 0)
         {
             throw new ArgumentException("List of IDs cannot be empty.", nameof(ids));
@@ -691,6 +691,53 @@ public partial class EntityHelper<TEntity, TRowID> :
     }
 
 
+    private static List<TRowID> MaterializeDistinctIds(IEnumerable<TRowID> ids)
+    {
+        var result = ids is ICollection<TRowID> collection
+            ? new List<TRowID>(collection.Count)
+            : new List<TRowID>();
+
+        var comparer = EqualityComparer<TRowID>.Default;
+        HashSet<TRowID>? seen = null;
+
+        foreach (var id in ids)
+        {
+            if (result.Count == 0)
+            {
+                result.Add(id);
+                continue;
+            }
+
+            if (seen is null)
+            {
+                var duplicate = false;
+                foreach (var existing in result)
+                {
+                    if (comparer.Equals(existing, id))
+                    {
+                        seen = new HashSet<TRowID>(result, comparer);
+                        duplicate = true;
+                        break;
+                    }
+                }
+
+                if (duplicate)
+                {
+                    continue;
+                }
+
+                result.Add(id);
+                continue;
+            }
+
+            if (seen.Add(id))
+            {
+                result.Add(id);
+            }
+        }
+
+        return result;
+    }
 
 
     public Task<TEntity?> RetrieveOneAsync(TEntity objectToRetrieve, IDatabaseContext? context = null)

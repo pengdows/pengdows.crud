@@ -11,6 +11,7 @@ using pengdows.crud.enums;
 using pengdows.crud.exceptions;
 // using pengdows.crud.strategies.connection; // superseded by strategies namespace
 using pengdows.crud.dialects;
+using pengdows.crud.@internal;
 using pengdows.crud.infrastructure;
 using pengdows.crud.isolation;
 using pengdows.crud.threading;
@@ -164,8 +165,11 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             }
             _loggerFactory = loggerFactory ?? NullLoggerFactory.Instance;
             _logger = _loggerFactory.CreateLogger<IDatabaseContext>();
-            TypeCoercionHelper.Logger =
-                _loggerFactory.CreateLogger(nameof(TypeCoercionHelper));
+            if (TypeCoercionHelper.Logger is NullLogger)
+            {
+                TypeCoercionHelper.Logger =
+                    _loggerFactory.CreateLogger(nameof(TypeCoercionHelper));
+            }
             ReadWriteMode = configuration.ReadWriteMode;
             TypeMapRegistry = typeMapRegistry ?? global::pengdows.crud.TypeMapRegistry.Instance;
             ConnectionMode = configuration.DbMode;
@@ -869,7 +873,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         {
             try
             {
-                var csb = GetFactoryConnectionStringBuilderStatic(conn, connectionString);
+                var csb = GetFactoryConnectionStringBuilderStatic(connectionString);
                 string GetVal(string key) => csb.ContainsKey(key) ? csb[key]?.ToString() ?? string.Empty : string.Empty;
                 var serverType = GetVal("ServerType").ToLowerInvariant();
                 var clientLib = GetVal("ClientLibrary").ToLowerInvariant();
@@ -896,94 +900,33 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             var schema = conn.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
             if (schema.Rows.Count > 0)
             {
-                var name = schema.Rows[0].Field<string>("DataSourceProductName") ?? string.Empty;
-                var lower = name.ToLowerInvariant();
-                if (lower.Contains("sql server"))
+                var productName = schema.Rows[0].Field<string>("DataSourceProductName");
+                var detected = DatabaseProductDetector.FromProductName(productName);
+                if (detected != SupportedDatabase.Unknown)
                 {
-                    return SupportedDatabase.SqlServer;
-                }
-
-                if (lower.Contains("mariadb"))
-                {
-                    return SupportedDatabase.MariaDb;
-                }
-
-                if (lower.Contains("mysql"))
-                {
-                    return SupportedDatabase.MySql;
-                }
-
-                if (lower.Contains("cockroach"))
-                {
-                    return SupportedDatabase.CockroachDb;
-                }
-
-                if (lower.Contains("postgres"))
-                {
-                    return SupportedDatabase.PostgreSql;
-                }
-
-                if (lower.Contains("oracle"))
-                {
-                    return SupportedDatabase.Oracle;
-                }
-
-                if (lower.Contains("sqlite"))
-                {
-                    return SupportedDatabase.Sqlite;
-                }
-
-                if (lower.Contains("firebird"))
-                {
-                    return SupportedDatabase.Firebird;
-                }
-
-                if (lower.Contains("duckdb") || lower.Contains("duck db"))
-                {
-                    return SupportedDatabase.DuckDB;
+                    return detected;
                 }
             }
         }
-        catch { }
+        catch
+        {
+            // ignored - fall back to heuristics
+        }
+
         try
         {
-            var typeName = _factory.GetType().Name.ToLowerInvariant();
-            if (typeName.Contains("sqlserver") || typeName.Contains("system.data.sqlclient"))
+            var factoryType = _factory.GetType();
+            var detected = DatabaseProductDetector.FromFactoryTypeName(factoryType.FullName ?? factoryType.Name);
+            if (detected != SupportedDatabase.Unknown)
             {
-                return SupportedDatabase.SqlServer;
-            }
-
-            if (typeName.Contains("npgsql"))
-            {
-                return SupportedDatabase.PostgreSql;
-            }
-
-            if (typeName.Contains("mysql"))
-            {
-                return SupportedDatabase.MySql;
-            }
-
-            if (typeName.Contains("sqlite"))
-            {
-                return SupportedDatabase.Sqlite;
-            }
-
-            if (typeName.Contains("oracle"))
-            {
-                return SupportedDatabase.Oracle;
-            }
-
-            if (typeName.Contains("firebird"))
-            {
-                return SupportedDatabase.Firebird;
-            }
-
-            if (typeName.Contains("duckdb"))
-            {
-                return SupportedDatabase.DuckDB;
+                return detected;
             }
         }
-        catch { }
+        catch
+        {
+            // ignored - default to unknown
+        }
+
         return SupportedDatabase.Unknown;
     }
 
@@ -1083,19 +1026,9 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         }
     }
 
-    private static DbConnectionStringBuilder GetFactoryConnectionStringBuilderStatic(ITrackedConnection conn, string connectionString)
+    private static DbConnectionStringBuilder GetFactoryConnectionStringBuilderStatic(string connectionString)
     {
-        // Use a tolerant builder; if it fails, fall back to carrying raw string under Data Source
-        var csb = new DbConnectionStringBuilder();
-        try
-        {
-            csb.ConnectionString = connectionString;
-        }
-        catch
-        {
-            try { csb["Data Source"] = connectionString; } catch { /* ignore */ }
-        }
-        return csb;
+        return ConnectionStringHelper.Create((DbConnectionStringBuilder?)null, connectionString);
     }
 
     private static bool RepresentsRawConnectionString(DbConnectionStringBuilder builder, string original)
@@ -1300,30 +1233,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     private DbConnectionStringBuilder GetFactoryConnectionStringBuilder(string connectionString)
     {
         var input = string.IsNullOrEmpty(connectionString) ? _connectionString : connectionString;
-        var csb = _factory.CreateConnectionStringBuilder() ?? new DbConnectionStringBuilder();
-        try
-        {
-            csb.ConnectionString = input;
-        }
-        catch
-        {
-            // Fall back to a tolerant builder that carries the raw string in a common key
-            var fallback = new DbConnectionStringBuilder();
-            try
-            {
-                // Prefer a commonly recognized key when possible
-                fallback["Data Source"] = input;
-            }
-            catch
-            {
-                // As a last resort, set ConnectionString on the generic builder which tolerates raw values
-                try { fallback.ConnectionString = input; } catch { /* ignore */ }
-            }
-
-            csb = fallback;
-        }
-
-        return csb;
+        return ConnectionStringHelper.Create(_factory, input);
     }
 
     private bool TryEnsureDefaultMinPoolSize(DbConnectionStringBuilder builder, int minPoolSize)

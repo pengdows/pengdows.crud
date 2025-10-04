@@ -212,6 +212,30 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             : parameterName;
     }
 
+    private static bool TryBuildAlternateParameterName(string normalizedName, out string alternateName)
+    {
+        if (normalizedName.Length < 2)
+        {
+            alternateName = string.Empty;
+            return false;
+        }
+
+        var prefix = normalizedName[0];
+        if (prefix != 'p' && prefix != 'w')
+        {
+            alternateName = string.Empty;
+            return false;
+        }
+
+        alternateName = string.Create(normalizedName.Length, normalizedName, static (span, source) =>
+        {
+            span[0] = source[0] == 'p' ? 'w' : 'p';
+            source.AsSpan(1).CopyTo(span.Slice(1));
+        });
+
+        return true;
+    }
+
     public void SetParameterValue(string parameterName, object? newValue)
     {
         var normalizedName = NormalizeParameterName(parameterName);
@@ -219,18 +243,11 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         {
             // Allow cross-prefix lookup between pN and wN for tests that use a different
             // prefix when asserting parameter values vs where they were created.
-            if (_dialect.SupportsNamedParameters && normalizedName.Length >= 2 &&
-                (normalizedName[0] == 'p' || normalizedName[0] == 'w'))
+            if (_dialect.SupportsNamedParameters &&
+                TryBuildAlternateParameterName(normalizedName, out var alternate) &&
+                _parameters.TryGetValue(alternate, out parameter))
             {
-                var alt = (normalizedName[0] == 'p' ? 'w' : 'p') + normalizedName.Substring(1);
-                if (_parameters.TryGetValue(alt, out parameter))
-                {
-                    // proceed with found alternate
-                }
-                else
-                {
-                    throw new KeyNotFoundException($"Parameter '{parameterName}' not found.");
-                }
+                // proceed with found alternate
             }
             else
             {
@@ -254,18 +271,11 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         var normalizedName = NormalizeParameterName(parameterName);
         if (!_parameters.TryGetValue(normalizedName, out var parameter))
         {
-            if (_dialect.SupportsNamedParameters && normalizedName.Length >= 2 &&
-                (normalizedName[0] == 'p' || normalizedName[0] == 'w'))
+            if (_dialect.SupportsNamedParameters &&
+                TryBuildAlternateParameterName(normalizedName, out var alternate) &&
+                _parameters.TryGetValue(alternate, out parameter))
             {
-                var alt = (normalizedName[0] == 'p' ? 'w' : 'p') + normalizedName.Substring(1);
-                if (_parameters.TryGetValue(alt, out parameter))
-                {
-                    // proceed
-                }
-                else
-                {
-                    throw new KeyNotFoundException($"Parameter '{parameterName}' not found.");
-                }
+                // proceed with found alternate
             }
             else
             {

@@ -217,10 +217,34 @@ public static class TypeCoercionHelper
             case EnumParseFailureMode.SetDefaultValue:
                 return Enum.ToObject(enumType, Activator.CreateInstance(Enum.GetUnderlyingType(enumType))!);
             case EnumParseFailureMode.SetNullAndLog:
-                Logger.LogWarning("Cannot convert '{Value}' to enum {EnumType}.", value, enumType);
+                TryLogWarning("Cannot convert '{Value}' to enum {EnumType}.", value, enumType);
                 return null;
             default:
                 return null;
+        }
+    }
+
+    private static void TryLogWarning(string message, params object?[] args)
+    {
+        try
+        {
+            Logger.LogWarning(message, args);
+        }
+        catch
+        {
+            // Swallow logging failures to avoid breaking enum parse fallbacks.
+        }
+    }
+
+    private static void TryLogDebug(string message, params object?[] args)
+    {
+        try
+        {
+            Logger.LogDebug(message, args);
+        }
+        catch
+        {
+            // Ignore logging failures in debug-only fallbacks.
         }
     }
 
@@ -444,7 +468,7 @@ public static class TypeCoercionHelper
         }
         catch (JsonException) when (value is not Stream)
         {
-            Logger.LogDebug("Failed to deserialize JSON value '{Value}' into {TargetType}", value, actualTarget);
+            TryLogDebug("Failed to deserialize JSON value '{Value}' into {TargetType}", value, actualTarget);
             return null;
         }
     }
