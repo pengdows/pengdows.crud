@@ -10,6 +10,9 @@
   </Target>
 
   <Target Name="ValidateInterfaceBaseline" AfterTargets="Build" Condition="'$(MSBuildProjectName)' == 'pengdows.crud.abstractions'">
+    <MSBuild Projects="$(MSBuildThisFileDirectory)tools/interface-api-check/InterfaceApiCheck.csproj"
+             Targets="Build"
+             Properties="Configuration=Release" />
     <Exec Command="dotnet &quot;$(MSBuildThisFileDirectory)tools/interface-api-check/bin/Release/net8.0/InterfaceApiCheck.dll&quot; --verify --assembly &quot;$(TargetPath)&quot; --baseline &quot;$(MSBuildProjectDirectory)/ApiBaseline/interfaces.txt&quot;" />
   </Target>
 </Project>
