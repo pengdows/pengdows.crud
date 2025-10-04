@@ -24,6 +24,7 @@ public class AdvancedTypeBenchmarks
     private Range<int> _rangeValue;
     private Geometry _geometryValue;
     private byte[] _rowVersionBytes;
+    private SupportedDatabase _geometryProvider;
 
     [GlobalSetup]
     public void Setup()
@@ -34,6 +35,9 @@ public class AdvancedTypeBenchmarks
         _rangeValue = new Range<int>(1, 100, true, false);
         _geometryValue = Geometry.FromWellKnownText("POINT(1 2)", 4326);
         _rowVersionBytes = new byte[] { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01 };
+        _geometryProvider = Type.GetType("Microsoft.SqlServer.Types.SqlGeometry, Microsoft.SqlServer.Types") != null
+            ? SupportedDatabase.SqlServer
+            : SupportedDatabase.PostgreSql;
     }
 
     [Benchmark(Baseline = true)]
@@ -60,7 +64,7 @@ public class AdvancedTypeBenchmarks
     [Benchmark]
     public bool ConfigureGeometryParameter()
     {
-        return _registry!.TryConfigureParameter(_parameter!, typeof(Geometry), _geometryValue, SupportedDatabase.SqlServer);
+        return _registry!.TryConfigureParameter(_parameter!, typeof(Geometry), _geometryValue, _geometryProvider);
     }
 
     [Benchmark]
@@ -113,7 +117,7 @@ public class AdvancedTypeBenchmarks
     public object? ConvertGeometryFromWKT()
     {
         var converter = _registry!.GetConverter(typeof(Geometry));
-        return converter?.FromProviderValue("POINT(1 2)", SupportedDatabase.SqlServer);
+        return converter?.FromProviderValue("POINT(1 2)", _geometryProvider);
     }
 
     /// <summary>

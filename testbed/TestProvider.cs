@@ -19,7 +19,7 @@ public class TestProvider : IAsyncTestProvider
     {
         _context = databaseContext;
         var resolver = serviceProvider.GetService<IAuditValueResolver>() ??
-                       new StubAuditValueResolver("system");
+                       new TestAuditValueResolver("system");
         _helper = new EntityHelper<TestTable, long>(databaseContext, auditValueResolver: resolver);
     }
 

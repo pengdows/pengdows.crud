@@ -563,12 +563,9 @@ public abstract class SqlDialect:ISqlDialect
         // Performance: Inline null check to avoid method call overhead
         var valueIsNull = value == null || value is DBNull;
         var runtimeType = ResolveClrType(value);
-        var handled = false;
-
-        if (runtimeType != null)
-        {
-            handled = AdvancedTypes.TryConfigureParameter(parameter, runtimeType, value, DatabaseType);
-        }
+        var handled = runtimeType != null &&
+                      AdvancedTypes.IsMappedType(runtimeType) &&
+                      AdvancedTypes.TryConfigureParameter(parameter, runtimeType, value, DatabaseType);
 
         if (!handled)
         {

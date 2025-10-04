@@ -11,18 +11,19 @@ public static class HierarchicalIdRetrievalDemo
         Console.WriteLine("=========================================\n");
 
         var logger = NullLogger.Instance;
+        var factory = SqliteFactory.Instance;
 
         // Test all database types and their strategy selection
         var dialects = new Dictionary<string, SqlDialect>
         {
-            {"PostgreSQL", new PostgreSqlDialect(SqliteFactory.Instance, logger)}, // Use SQLite factory as placeholder
-            {"SQL Server", new SqlServerDialect(SqliteFactory.Instance, logger)},
-            {"MySQL", new MySqlDialect(SqliteFactory.Instance, logger)},
-            {"MariaDB", new MariaDbDialect(SqliteFactory.Instance, logger)},
-            {"SQLite", new SqliteDialect(SqliteFactory.Instance, logger)},
-            {"Oracle", new OracleDialect(SqliteFactory.Instance, logger)},
-            {"Firebird", new FirebirdDialect(SqliteFactory.Instance, logger)},
-            {"DuckDB", new DuckDbDialect(SqliteFactory.Instance, logger)}
+            {"PostgreSQL", SqlDialectFactory.CreateDialectForType(SupportedDatabase.PostgreSql, factory, logger)},
+            {"SQL Server", SqlDialectFactory.CreateDialectForType(SupportedDatabase.SqlServer, factory, logger)},
+            {"MySQL", SqlDialectFactory.CreateDialectForType(SupportedDatabase.MySql, factory, logger)},
+            {"MariaDB", SqlDialectFactory.CreateDialectForType(SupportedDatabase.MariaDb, factory, logger)},
+            {"SQLite", SqlDialectFactory.CreateDialectForType(SupportedDatabase.Sqlite, factory, logger)},
+            {"Oracle", SqlDialectFactory.CreateDialectForType(SupportedDatabase.Oracle, factory, logger)},
+            {"Firebird", SqlDialectFactory.CreateDialectForType(SupportedDatabase.Firebird, factory, logger)},
+            {"DuckDB", SqlDialectFactory.CreateDialectForType(SupportedDatabase.DuckDB, factory, logger)}
         };
 
         Console.WriteLine("📊 Strategy Selection by Database:");
@@ -49,22 +50,22 @@ public static class HierarchicalIdRetrievalDemo
         Console.WriteLine("----------------------------");
 
         // Demonstrate RETURNING clause
-        var postgres = new PostgreSqlDialect(SqliteFactory.Instance, logger);
+        var postgres = SqlDialectFactory.CreateDialectForType(SupportedDatabase.PostgreSql, factory, logger);
         Console.WriteLine($"PostgreSQL RETURNING: {postgres.GetInsertReturningClause("user_id")}");
 
         // Demonstrate OUTPUT clause
-        var sqlServer = new SqlServerDialect(SqliteFactory.Instance, logger);
+        var sqlServer = SqlDialectFactory.CreateDialectForType(SupportedDatabase.SqlServer, factory, logger);
         Console.WriteLine($"SQL Server OUTPUT:   {sqlServer.GetInsertReturningClause("user_id")}");
 
         // Demonstrate session function
-        var mysql = new MySqlDialect(SqliteFactory.Instance, logger);
+        var mysql = SqlDialectFactory.CreateDialectForType(SupportedDatabase.MySql, factory, logger);
         Console.WriteLine($"MySQL Session Func:  {mysql.GetLastInsertedIdQuery()}");
 
         // Demonstrate correlation token
         Console.WriteLine($"Correlation Token:   {postgres.GetCorrelationTokenLookupQuery("users", "id", "insert_token", ":token")}");
 
         // Demonstrate Oracle sequence handling
-        var oracle = new OracleDialect(SqliteFactory.Instance, logger);
+        var oracle = SqlDialectFactory.CreateDialectForType(SupportedDatabase.Oracle, factory, logger);
         try
         {
             oracle.GetLastInsertedIdQuery();

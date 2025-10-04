@@ -267,44 +267,64 @@ CREATE TABLE [dbo].[film_actor] (
     [film_id] [int] NOT NULL,
     CONSTRAINT [PK_film_actor] PRIMARY KEY CLUSTERED ([actor_id] ASC, [film_id] ASC)
 );";
-        await conn.ExecuteAsync(createTablesSql);
+        const int commandTimeoutSeconds = 120;
 
-        // Clear existing data
-        await conn.ExecuteAsync("DELETE FROM [film_actor]; DBCC CHECKIDENT ('film', RESEED, 0);");
+        await conn.ExecuteAsync(createTablesSql, commandTimeout: commandTimeoutSeconds);
 
-        // Seed films in batches for better performance
-        var films = new List<object>();
+        // Clear existing data and reset identity values so film IDs remain predictable
+        await conn.ExecuteAsync("TRUNCATE TABLE [film_actor]; TRUNCATE TABLE [film];", commandTimeout: commandTimeoutSeconds);
+
+        // Use bulk copy to seed films quickly
+        var filmTable = new DataTable();
+        filmTable.Columns.Add("title", typeof(string));
+        filmTable.Columns.Add("length", typeof(int));
         for (int i = 0; i < FilmCount; i++)
         {
-            films.Add(new { title = $"Film {i}", length = 60 + (i % 120) });
+            filmTable.Rows.Add($"Film {i}", 60 + (i % 120));
         }
 
-        // Insert films in batches
-        const int batchSize = 100;
-        for (int i = 0; i < films.Count; i += batchSize)
+        await using var transaction = await conn.BeginTransactionAsync();
+
+        using (var filmBulkCopy = new SqlBulkCopy(conn, SqlBulkCopyOptions.TableLock, (SqlTransaction)transaction)
         {
-            var batch = films.Skip(i).Take(batchSize);
-            await conn.ExecuteAsync("INSERT INTO [film] ([title], [length]) VALUES (@title, @length)", batch);
+            DestinationTableName = "[dbo].[film]",
+            BatchSize = 500,
+            BulkCopyTimeout = commandTimeoutSeconds
+        })
+        {
+            filmBulkCopy.ColumnMappings.Add("title", "title");
+            filmBulkCopy.ColumnMappings.Add("length", "length");
+            await filmBulkCopy.WriteToServerAsync(filmTable);
         }
 
-        // Seed film_actor associations
-        var filmActors = new List<object>();
-        for (int i = 1; i <= ActorCount; i++)
+        // Build associations once we know film IDs will be 1..FilmCount
+        var filmActorTable = new DataTable();
+        filmActorTable.Columns.Add("actor_id", typeof(int));
+        filmActorTable.Columns.Add("film_id", typeof(int));
+        var filmStep = Math.Max(1, FilmCount / 50);
+        for (int actorId = 1; actorId <= ActorCount; actorId++)
         {
-            for (int f = i; f <= FilmCount; f += Math.Max(1, FilmCount / 50))
+            for (int filmId = actorId; filmId <= FilmCount; filmId += filmStep)
             {
-                filmActors.Add(new { a = i, f });
+                filmActorTable.Rows.Add(actorId, filmId);
             }
         }
 
-        // Insert film_actor associations in batches
-        for (int i = 0; i < filmActors.Count; i += batchSize)
+        using (var filmActorBulkCopy = new SqlBulkCopy(conn, SqlBulkCopyOptions.TableLock, (SqlTransaction)transaction)
         {
-            var batch = filmActors.Skip(i).Take(batchSize);
-            await conn.ExecuteAsync("INSERT INTO [film_actor] ([actor_id], [film_id]) VALUES (@a, @f)", batch);
+            DestinationTableName = "[dbo].[film_actor]",
+            BatchSize = 1000,
+            BulkCopyTimeout = commandTimeoutSeconds
+        })
+        {
+            filmActorBulkCopy.ColumnMappings.Add("actor_id", "actor_id");
+            filmActorBulkCopy.ColumnMappings.Add("film_id", "film_id");
+            await filmActorBulkCopy.WriteToServerAsync(filmActorTable);
         }
 
-        Console.WriteLine($"[SQL Server] Seeded {FilmCount} films and {filmActors.Count} film_actor associations");
+        await transaction.CommitAsync();
+
+        Console.WriteLine($"[SQL Server] Seeded {FilmCount} films and {filmActorTable.Rows.Count} film_actor associations");
     }
 
     [Benchmark]

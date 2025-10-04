@@ -13,11 +13,22 @@ public partial class EntityHelper<TEntity, TRowID>
     public Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null)
     {
         var ctx = context ?? _context;
-        return BuildUpdateAsync(objectToUpdate, _versionColumn != null, ctx);
+        return BuildUpdateAsync(objectToUpdate, _versionColumn != null, ctx, CancellationToken.None);
+    }
+
+    public Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, IDatabaseContext? context, CancellationToken cancellationToken)
+    {
+        var ctx = context ?? _context;
+        return BuildUpdateAsync(objectToUpdate, _versionColumn != null, ctx, cancellationToken);
+    }
+
+    public Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context = null)
+    {
+        return BuildUpdateAsync(objectToUpdate, loadOriginal, context, CancellationToken.None);
     }
 
     public async Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, bool loadOriginal,
-        IDatabaseContext? context = null)
+        IDatabaseContext? context, CancellationToken cancellationToken)
     {
         if (objectToUpdate == null)
         {
@@ -33,7 +44,7 @@ public partial class EntityHelper<TEntity, TRowID>
         var sc = ctx.CreateSqlContainer();
         var dialect = GetDialect(ctx);
 
-        var original = loadOriginal ? await LoadOriginalAsync(objectToUpdate, ctx) : null;
+        var original = loadOriginal ? await LoadOriginalAsync(objectToUpdate, ctx, cancellationToken).ConfigureAwait(false) : null;
         if (loadOriginal && original == null)
         {
             throw new InvalidOperationException("Original record not found for update.");
@@ -80,7 +91,12 @@ public partial class EntityHelper<TEntity, TRowID>
         return sc;
     }
 
-    private async Task<TEntity?> LoadOriginalAsync(TEntity objectToUpdate, IDatabaseContext? context = null)
+    private Task<TEntity?> LoadOriginalAsync(TEntity objectToUpdate, IDatabaseContext? context = null)
+    {
+        return LoadOriginalAsync(objectToUpdate, context, CancellationToken.None);
+    }
+
+    private async Task<TEntity?> LoadOriginalAsync(TEntity objectToUpdate, IDatabaseContext? context, CancellationToken cancellationToken)
     {
         var ctx = context ?? _context;
         var idValue = _idColumn!.PropertyInfo.GetValue(objectToUpdate);
@@ -100,7 +116,7 @@ public partial class EntityHelper<TEntity, TRowID>
                 return null;
             }
 
-            return await RetrieveOneAsync((TRowID)converted, ctx);
+            return await RetrieveOneAsync((TRowID)converted, ctx, cancellationToken).ConfigureAwait(false);
         }
         catch (InvalidCastException ex)
         {

@@ -196,9 +196,14 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
         await _connectionLocker.DisposeAsync().ConfigureAwait(false);
     }
 
-    public async Task<bool> ReadAsync()
+    public Task<bool> ReadAsync()
     {
-        if (await _reader.ReadAsync().ConfigureAwait(false))
+        return ReadAsync(CancellationToken.None);
+    }
+
+    public async Task<bool> ReadAsync(CancellationToken cancellationToken)
+    {
+        if (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
             return true;
         }

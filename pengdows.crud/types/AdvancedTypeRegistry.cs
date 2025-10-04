@@ -64,6 +64,7 @@ public class AdvancedTypeRegistry
 
     private readonly Dictionary<MappingKey, ProviderTypeMapping> _mappings = new();
     private readonly Dictionary<Type, IAdvancedTypeConverter> _converters = new();
+    private readonly HashSet<Type> _mappedTypes = new();
 
     // Performance cache for frequently accessed combinations
     private readonly Dictionary<MappingKey, CachedParameterConfig?> _parameterCache = new();
@@ -84,6 +85,7 @@ public class AdvancedTypeRegistry
     {
         var key = new MappingKey(typeof(T), provider);
         _mappings[key] = mapping;
+        _mappedTypes.Add(typeof(T));
 
         // Clear any cached config for this type to force rebuild
         _parameterCache.Remove(key);
@@ -185,6 +187,11 @@ public class AdvancedTypeRegistry
         config.Mapping.ConfigureParameter?.Invoke(parameter, value);
 
         return true;
+    }
+
+    internal bool IsMappedType(Type clrType)
+    {
+        return _mappedTypes.Contains(clrType);
     }
 
     /// <summary>

@@ -583,14 +583,24 @@ public partial class EntityHelper<TEntity, TRowID> :
         return sc;
     }
 
-    public async Task<int> DeleteAsync(TRowID id, IDatabaseContext? context = null)
+    public Task<int> DeleteAsync(TRowID id, IDatabaseContext? context = null)
+    {
+        return DeleteAsync(id, context, CancellationToken.None);
+    }
+
+    public async Task<int> DeleteAsync(TRowID id, IDatabaseContext? context, CancellationToken cancellationToken)
     {
         var ctx = context ?? _context;
         var sc = BuildDelete(id, ctx);
-        return await sc.ExecuteNonQueryAsync();
+        return await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<TEntity>> RetrieveAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null)
+    public Task<List<TEntity>> RetrieveAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null)
+    {
+        return RetrieveAsync(ids, context, CancellationToken.None);
+    }
+
+    public async Task<List<TEntity>> RetrieveAsync(IEnumerable<TRowID> ids, IDatabaseContext? context, CancellationToken cancellationToken)
     {
         if (ids == null)
         {
@@ -626,8 +636,8 @@ public partial class EntityHelper<TEntity, TRowID> :
                 {
                     container.SetParameterValue("p0", list[0]);
                 }
-                
-                return await LoadListAsync(container);
+
+                return await LoadListAsync(container, cancellationToken).ConfigureAwait(false);
             }
 
             if (list.Count == 2 && !dialect.SupportsSetValuedParameters)
@@ -635,35 +645,40 @@ public partial class EntityHelper<TEntity, TRowID> :
                 // Two IDs - can reuse GetByIdsTemplate for non-array dialects
                 var templates = GetContainerTemplatesForDialect(dialect, ctx);
                 using var container = templates.GetByIdsTemplate.Clone(ctx);
-                
+
                 container.SetParameterValue("p0", list[0]);
                 container.SetParameterValue("p1", list[1]);
-                
-                return await LoadListAsync(container);
+
+                return await LoadListAsync(container, cancellationToken).ConfigureAwait(false);
             }
 
             if (dialect.SupportsSetValuedParameters)
             {
                 // Prefer dynamic build for array-capable dialects to avoid provider type mismatches
                 var sc = BuildRetrieve(list, ctx);
-                return await LoadListAsync(sc);
+                return await LoadListAsync(sc, cancellationToken).ConfigureAwait(false);
             }
             else
             {
                 // Fall back to dynamic BuildRetrieve for larger lists on non-array dialects
                 var sc = BuildRetrieve(list, ctx);
-                return await LoadListAsync(sc);
+                return await LoadListAsync(sc, cancellationToken).ConfigureAwait(false);
             }
         }
         catch (Exception ex) when (ex.Message.Contains("Original record not found") || ex is AggregateException)
         {
             // Fall back to traditional method during template building or other issues
             var sc = BuildRetrieve(list, ctx);
-            return await LoadListAsync(sc);
+            return await LoadListAsync(sc, cancellationToken).ConfigureAwait(false);
         }
     }
 
-    public async Task<int> DeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null)
+    public Task<int> DeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null)
+    {
+        return DeleteAsync(ids, context, CancellationToken.None);
+    }
+
+    public async Task<int> DeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context, CancellationToken cancellationToken)
     {
         if (ids == null)
         {
@@ -687,7 +702,7 @@ public partial class EntityHelper<TEntity, TRowID> :
         var dialect = GetDialect(ctx);
         sc.Query.Append("DELETE FROM ").Append(BuildWrappedTableName(dialect));
         BuildWhere(sc.WrapObjectName(_idColumn.Name), list, sc);
-        return await sc.ExecuteNonQueryAsync();
+        return await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
     }
 
 
@@ -742,6 +757,11 @@ public partial class EntityHelper<TEntity, TRowID> :
 
     public Task<TEntity?> RetrieveOneAsync(TEntity objectToRetrieve, IDatabaseContext? context = null)
     {
+        return RetrieveOneAsync(objectToRetrieve, context, CancellationToken.None);
+    }
+
+    public Task<TEntity?> RetrieveOneAsync(TEntity objectToRetrieve, IDatabaseContext? context, CancellationToken cancellationToken)
+    {
         if (objectToRetrieve == null)
         {
             throw new ArgumentNullException(nameof(objectToRetrieve));
@@ -749,10 +769,15 @@ public partial class EntityHelper<TEntity, TRowID> :
         var ctx = context ?? _context;
         var list = new List<TEntity> { objectToRetrieve };
         var sc = BuildRetrieve(list, string.Empty, ctx);
-        return LoadSingleAsync(sc);
+        return LoadSingleAsync(sc, cancellationToken);
     }
 
-    public async Task<TEntity?> RetrieveOneAsync(TRowID id, IDatabaseContext? context = null)
+    public Task<TEntity?> RetrieveOneAsync(TRowID id, IDatabaseContext? context = null)
+    {
+        return RetrieveOneAsync(id, context, CancellationToken.None);
+    }
+
+    public async Task<TEntity?> RetrieveOneAsync(TRowID id, IDatabaseContext? context, CancellationToken cancellationToken)
     {
         var ctx = context ?? _context;
         if (_idColumn == null)
@@ -776,18 +801,23 @@ public partial class EntityHelper<TEntity, TRowID> :
         var parameter = container.CreateDbParameter(paramName, _idColumn.DbType, id);
         container.AddParameter(parameter);
 
-        return await LoadSingleAsync(container);
+        return await LoadSingleAsync(container, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<TEntity?> LoadSingleAsync(ISqlContainer sc)
+    public Task<TEntity?> LoadSingleAsync(ISqlContainer sc)
+    {
+        return LoadSingleAsync(sc, CancellationToken.None);
+    }
+
+    public async Task<TEntity?> LoadSingleAsync(ISqlContainer sc, CancellationToken cancellationToken)
     {
         if (sc == null)
         {
             throw new ArgumentNullException(nameof(sc));
         }
         // Hint provider/ADO.NET to expect a single row for minimal overhead
-        await using var reader = await sc.ExecuteReaderSingleRowAsync().ConfigureAwait(false);
-        if (await reader.ReadAsync().ConfigureAwait(false))
+        await using var reader = await sc.ExecuteReaderSingleRowAsync(cancellationToken).ConfigureAwait(false);
+        if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
             return MapReaderToObject(reader);
         }
@@ -795,7 +825,12 @@ public partial class EntityHelper<TEntity, TRowID> :
         return null;
     }
 
-    public async Task<List<TEntity>> LoadListAsync(ISqlContainer sc)
+    public Task<List<TEntity>> LoadListAsync(ISqlContainer sc)
+    {
+        return LoadListAsync(sc, CancellationToken.None);
+    }
+
+    public async Task<List<TEntity>> LoadListAsync(ISqlContainer sc, CancellationToken cancellationToken)
     {
         if (sc == null)
         {
@@ -803,9 +838,9 @@ public partial class EntityHelper<TEntity, TRowID> :
         }
         var list = new List<TEntity>();
 
-        await using var reader = await sc.ExecuteReaderAsync().ConfigureAwait(false);
+        await using var reader = await sc.ExecuteReaderAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
 
-        while (await reader.ReadAsync().ConfigureAwait(false))
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
             var obj = MapReaderToObject(reader);
             if (obj != null)
@@ -885,16 +920,27 @@ public partial class EntityHelper<TEntity, TRowID> :
     public Task<int> UpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null)
     {
         var ctx = context ?? _context;
-        return UpdateAsync(objectToUpdate, _versionColumn != null, ctx);
+        return UpdateAsync(objectToUpdate, _versionColumn != null, ctx, CancellationToken.None);
     }
 
-    public async Task<int> UpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context = null)
+    public Task<int> UpdateAsync(TEntity objectToUpdate, IDatabaseContext? context, CancellationToken cancellationToken)
+    {
+        var ctx = context ?? _context;
+        return UpdateAsync(objectToUpdate, _versionColumn != null, ctx, cancellationToken);
+    }
+
+    public Task<int> UpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context = null)
+    {
+        return UpdateAsync(objectToUpdate, loadOriginal, context, CancellationToken.None);
+    }
+
+    public async Task<int> UpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context, CancellationToken cancellationToken)
     {
         var ctx = context ?? _context;
         try
         {
-            var sc = await BuildUpdateAsync(objectToUpdate, loadOriginal, ctx);
-            return await sc.ExecuteNonQueryAsync();
+            var sc = await BuildUpdateAsync(objectToUpdate, loadOriginal, ctx, cancellationToken).ConfigureAwait(false);
+            return await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("No changes detected for update."))
         {

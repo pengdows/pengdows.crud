@@ -100,11 +100,13 @@ public class SqlContainerExtensionsTests : IAsyncLifetime
         var mockContainer = new Mock<ISqlContainer>();
         mockContainer.Setup(x => x.ExecuteNonQueryAsync(CommandType.Text))
                     .ReturnsAsync(1);
-        
+        mockContainer.Setup(x => x.ExecuteNonQueryAsync(CommandType.Text, It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(1);
+
         var result = await mockContainer.Object.ExecuteNonQueryAsync(CommandType.Text, CancellationToken.None);
-        
+
         Assert.Equal(1, result);
-        mockContainer.Verify(x => x.ExecuteNonQueryAsync(CommandType.Text), Times.Once);
+        mockContainer.Verify(x => x.ExecuteNonQueryAsync(CommandType.Text, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -135,11 +137,13 @@ public class SqlContainerExtensionsTests : IAsyncLifetime
         var mockContainer = new Mock<ISqlContainer>();
         mockContainer.Setup(x => x.ExecuteScalarAsync<string>(CommandType.Text))
                     .ReturnsAsync("test");
-        
+        mockContainer.Setup(x => x.ExecuteScalarAsync<string>(CommandType.Text, It.IsAny<CancellationToken>()))
+                    .ReturnsAsync("test");
+
         var result = await mockContainer.Object.ExecuteScalarAsync<string>(CommandType.Text, CancellationToken.None);
-        
+
         Assert.Equal("test", result);
-        mockContainer.Verify(x => x.ExecuteScalarAsync<string>(CommandType.Text), Times.Once);
+        mockContainer.Verify(x => x.ExecuteScalarAsync<string>(CommandType.Text, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -173,11 +177,13 @@ public class SqlContainerExtensionsTests : IAsyncLifetime
         var mockContainer = new Mock<ISqlContainer>();
         mockContainer.Setup(x => x.ExecuteReaderAsync(CommandType.Text))
                     .ReturnsAsync(mockReader.Object);
-        
+        mockContainer.Setup(x => x.ExecuteReaderAsync(CommandType.Text, It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(mockReader.Object);
+
         var result = await mockContainer.Object.ExecuteReaderAsync(CommandType.Text, CancellationToken.None);
-        
+
         Assert.Equal(mockReader.Object, result);
-        mockContainer.Verify(x => x.ExecuteReaderAsync(CommandType.Text), Times.Once);
+        mockContainer.Verify(x => x.ExecuteReaderAsync(CommandType.Text, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
