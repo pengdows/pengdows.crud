@@ -13,6 +13,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "pengdows.crud.abstractions"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CrudBenchmarks", "benchmarks\CrudBenchmarks\CrudBenchmarks.csproj", "{B3E9C6A4-9C4F-4D53-9F8F-1B7D1B8C5D3A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "verify-novendor", "tools\verify-novendor\verify-novendor.csproj", "{DEDE3D3F-FECC-49DA-AA4C-A31D9DADE572}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -43,9 +45,13 @@ Global
 		{6789A923-BDFC-4811-8BD9-0E091B21D435}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{6789A923-BDFC-4811-8BD9-0E091B21D435}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{6789A923-BDFC-4811-8BD9-0E091B21D435}.Release|Any CPU.Build.0 = Release|Any CPU
-		{B3E9C6A4-9C4F-4D53-9F8F-1B7D1B8C5D3A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{B3E9C6A4-9C4F-4D53-9F8F-1B7D1B8C5D3A}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{B3E9C6A4-9C4F-4D53-9F8F-1B7D1B8C5D3A}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{B3E9C6A4-9C4F-4D53-9F8F-1B7D1B8C5D3A}.Release|Any CPU.Build.0 = Release|Any CPU
-	EndGlobalSection
+                {B3E9C6A4-9C4F-4D53-9F8F-1B7D1B8C5D3A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+                {B3E9C6A4-9C4F-4D53-9F8F-1B7D1B8C5D3A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+                {B3E9C6A4-9C4F-4D53-9F8F-1B7D1B8C5D3A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+                {B3E9C6A4-9C4F-4D53-9F8F-1B7D1B8C5D3A}.Release|Any CPU.Build.0 = Release|Any CPU
+                {DEDE3D3F-FECC-49DA-AA4C-A31D9DADE572}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+                {DEDE3D3F-FECC-49DA-AA4C-A31D9DADE572}.Debug|Any CPU.Build.0 = Debug|Any CPU
+                {DEDE3D3F-FECC-49DA-AA4C-A31D9DADE572}.Release|Any CPU.ActiveCfg = Release|Any CPU
+                {DEDE3D3F-FECC-49DA-AA4C-A31D9DADE572}.Release|Any CPU.Build.0 = Release|Any CPU
+        EndGlobalSection
 EndGlobal
