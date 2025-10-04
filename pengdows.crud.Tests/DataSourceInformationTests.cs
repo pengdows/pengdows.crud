@@ -4,11 +4,11 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
+using Microsoft.Extensions.Logging.Abstractions;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
-using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.wrappers;
-using pengdows.crud.dialects;
 using Xunit;
 
 #endregion

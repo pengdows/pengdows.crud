@@ -18,5 +18,5 @@ public sealed class ColumnAttribute : Attribute
 
     public string Name { get; }
     public DbType Type { get; }
-    public int Ordinal { get; set; } = 0;
+    public int Ordinal { get; set; }
 }

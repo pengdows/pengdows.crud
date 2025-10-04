@@ -15,7 +15,6 @@ public class DatabaseContextConfigurationTests
         Assert.Equal(string.Empty, config.ProviderName);
         Assert.Equal(DbMode.Standard, config.DbMode);
         Assert.Equal(ReadWriteMode.ReadWrite, config.ReadWriteMode);
-        Assert.False(config.SetDefaultSearchPath);
     }
 
     [Fact]
@@ -54,20 +53,20 @@ public class DatabaseContextConfigurationTests
     public void ReadWriteMode_CanBeSetAndRetrieved()
     {
         var config = new DatabaseContextConfiguration();
-        
+
         config.ReadWriteMode = ReadWriteMode.ReadOnly;
-        
+
         Assert.Equal(ReadWriteMode.ReadOnly, config.ReadWriteMode);
     }
 
     [Fact]
-    public void SetDefaultSearchPath_CanBeSetAndRetrieved()
+    public void ReadWriteMode_WriteOnlyResetsToReadWrite()
     {
         var config = new DatabaseContextConfiguration();
-        
-        config.SetDefaultSearchPath = true;
-        
-        Assert.True(config.SetDefaultSearchPath);
+
+        config.ReadWriteMode = ReadWriteMode.WriteOnly;
+
+        Assert.Equal(ReadWriteMode.ReadWrite, config.ReadWriteMode);
     }
 
     [Fact]
@@ -81,13 +80,11 @@ public class DatabaseContextConfigurationTests
         config.ProviderName = providerName;
         config.DbMode = DbMode.KeepAlive;
         config.ReadWriteMode = ReadWriteMode.WriteOnly;
-        config.SetDefaultSearchPath = true;
         
         Assert.Equal(connectionString, config.ConnectionString);
         Assert.Equal(providerName, config.ProviderName);
         Assert.Equal(DbMode.KeepAlive, config.DbMode);
-        Assert.Equal(ReadWriteMode.WriteOnly, config.ReadWriteMode);
-        Assert.True(config.SetDefaultSearchPath);
+        Assert.Equal(ReadWriteMode.ReadWrite, config.ReadWriteMode);
     }
 
     [Fact]

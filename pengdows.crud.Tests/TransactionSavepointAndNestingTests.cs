@@ -3,7 +3,6 @@
 using System;
 using System.Data;
 using System.Threading.Tasks;
-using pengdows.crud.enums;
 using Xunit;
 
 #endregion
@@ -32,6 +31,6 @@ public class TransactionSavepointAndNestingTests : SqlLiteContextTestBase
         using var tx = Context.BeginTransaction();
         var asCtx = (IDatabaseContext)tx;
         Assert.Throws<InvalidOperationException>(() =>
-            asCtx.BeginTransaction(IsolationLevel.ReadCommitted, ExecutionType.Write));
+            asCtx.BeginTransaction(IsolationLevel.ReadCommitted));
     }
 }

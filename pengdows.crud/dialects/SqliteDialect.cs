@@ -11,29 +11,92 @@ namespace pengdows.crud.dialects;
 /// </summary>
 public class SqliteDialect : SqlDialect
 {
-    public SqliteDialect(DbProviderFactory factory, ILogger logger)
+    private readonly bool _systemDataSqlite;
+
+    internal SqliteDialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger)
     {
+        var ns = factory.GetType().Namespace ?? string.Empty;
+        _systemDataSqlite = ns.Contains("System.Data.SQLite", StringComparison.OrdinalIgnoreCase);
     }
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.Sqlite;
     public override string ParameterMarker => "@";
     public override bool SupportsNamedParameters => true;
+    // IMMUTABLE: SQLite SQLITE_MAX_VARIABLE_NUMBER default - do not change without extensive testing
     public override int MaxParameterLimit => 999;
+    // IMMUTABLE: SQLite identifier length limit - do not change without extensive testing
     public override int ParameterNameMaxLength => 255;
+    
+    // SQLite benefits from prepared statements with inherent prepare support
+    public override bool PrepareStatements => true;
 
     public override bool SupportsInsertOnConflict => true;
     public override bool SupportsMerge => false;
     public override bool SupportsSavepoints => true;
-    public override bool SupportsJsonTypes => IsInitialized && ProductInfo.ParsedVersion >= new Version(3, 45);
-    public override bool SupportsWindowFunctions => IsInitialized && ProductInfo.ParsedVersion >= new Version(3, 25);
-    public override bool SupportsCommonTableExpressions => IsInitialized && ProductInfo.ParsedVersion >= new Version(3, 8, 3);
+    public override bool SupportsJsonTypes => IsVersionAtLeast(3, 45);
+    public override bool SupportsWindowFunctions => IsVersionAtLeast(3, 25);
+    public override bool SupportsCommonTableExpressions => IsVersionAtLeast(3, 8, 3);
+
+    public override bool SupportsInsertReturning => IsVersionAtLeast(3, 35);
+
+    public override string GetInsertReturningClause(string idColumnName)
+    {
+        return $"RETURNING {WrapObjectName(idColumnName)}";
+    }
+
+    public override string GetLastInsertedIdQuery()
+    {
+        return "SELECT last_insert_rowid()";
+    }
 
     public override string GetVersionQuery() => "SELECT sqlite_version()";
 
+    public override string GetBaseSessionSettings()
+    {
+        return "PRAGMA foreign_keys = ON;";
+    }
+
+    public override string GetReadOnlySessionSettings()
+    {
+        return "PRAGMA query_only = ON;";
+    }
+
+    public override string? GetReadOnlyConnectionParameter()
+    {
+        return "Mode=ReadOnly";
+    }
+
+    [Obsolete]
     public override string GetConnectionSessionSettings()
     {
         return "PRAGMA foreign_keys = ON;";
+    }
+
+    public override void ApplyConnectionSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)
+    {
+        // SQLite: Only apply read-only connection parameter if not a memory database
+        if (readOnly && IsMemoryDatabase(context.ConnectionString))
+        {
+            // For memory databases, just set the connection string without read-only parameter
+            connection.ConnectionString = context.ConnectionString;
+        }
+        else
+        {
+            // Use base class implementation for non-memory databases
+            base.ApplyConnectionSettings(connection, context, readOnly);
+        }
+    }
+
+    protected override bool IsMemoryDatabase(string connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            return false;
+        }
+
+        var lower = connectionString.ToLowerInvariant();
+        return lower.Contains(":memory:") || lower.Contains("mode=memory");
     }
 
     public override DataTable GetDataSourceInformationSchema(ITrackedConnection connection)
@@ -46,7 +109,7 @@ public class SqliteDialect : SqlDialect
         return table;
     }
 
-    protected override async Task<string?> GetProductNameAsync(ITrackedConnection connection)
+    public override async Task<string?> GetProductNameAsync(ITrackedConnection connection)
     {
         try
         {
@@ -66,12 +129,12 @@ public class SqliteDialect : SqlDialect
         return null;
     }
 
-    protected override string ExtractProductNameFromVersion(string versionString)
+    public override string ExtractProductNameFromVersion(string versionString)
     {
         return "SQLite";
     }
 
-    protected override SqlStandardLevel DetermineStandardCompliance(Version? version)
+    public override SqlStandardLevel DetermineStandardCompliance(Version? version)
     {
         if (version == null)
         {
@@ -97,4 +160,10 @@ public class SqliteDialect : SqlDialect
     {
         return ex is DbException dbEx && dbEx.ErrorCode == 19;
     }
+
+    // Connection pooling properties for SQLite (provider-aware)
+    public override bool SupportsExternalPooling => _systemDataSqlite; // Microsoft.Data.Sqlite: true pooling, but no min/max keywords
+    public override string? PoolingSettingName => "Pooling"; // set only if absent; harmless for M.D.Sqlite
+    public override string? MinPoolSizeSettingName => null; // no min keyword for either
+    public override string? MaxPoolSizeSettingName => _systemDataSqlite ? "Max Pool Size" : null;
 }

@@ -1,8 +1,8 @@
 #region
 
+using System.Threading.Tasks;
 using pengdows.crud.exceptions;
 using Xunit;
-using System.Threading.Tasks;
 
 #endregion
 

@@ -27,7 +27,6 @@ public class SybaseTestContainer : TestContainer, ITestContainer
             .WithWaitStrategy(Wait.ForUnixContainer())
             .Build();
 
-        // start immediately so we can await in StartAsync
         _container.StartAsync().Wait();
     }
 
@@ -35,14 +34,10 @@ public class SybaseTestContainer : TestContainer, ITestContainer
     {
         var hostPort = _container.GetMappedPublicPort(5000);
         var cs = $"DataSource=localhost;Port={hostPort};Database=master;Uid={Username};Pwd={Password};";
-
-        // wait for ASE to be ready
         await WaitForDbToStart(AseClientFactory.Instance, cs, _container);
 
-        // create test database
         await CreateTestDatabase(cs);
 
-        // switch default catalog
         _connectionString = $"DataSource=localhost;Port={hostPort};Database={Database};Uid={Username};Pwd={Password};";
     }
 

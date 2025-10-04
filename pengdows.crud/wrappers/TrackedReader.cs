@@ -2,42 +2,47 @@
 
 using System.Data;
 using System.Data.Common;
+using System.Threading;
+using System.Threading.Tasks;
+using pengdows.crud.infrastructure;
 
 #endregion
 
 namespace pengdows.crud.wrappers;
 
-public class TrackedReader : ITrackedReader
+public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
 {
     private readonly ITrackedConnection _connection;
     private readonly IAsyncDisposable _connectionLocker;
+    private DbCommand? _command;
     private readonly DbDataReader _reader;
     private readonly bool _shouldCloseConnection;
-    private int _disposed;
 
-    public TrackedReader(DbDataReader reader,
+    internal TrackedReader(
+        DbDataReader reader,
         ITrackedConnection connection,
         IAsyncDisposable connectionLocker,
-        bool shouldCloseConnection)
+        bool shouldCloseConnection,
+        DbCommand? command = null)
     {
         _reader = reader;
         _connection = connection;
         _connectionLocker = connectionLocker;
         _shouldCloseConnection = shouldCloseConnection;
+        _command = command;
     }
 
-    public void Dispose()
+    protected override void DisposeManaged()
     {
-        if (Interlocked.CompareExchange(ref _disposed, 1, 0) == 0)
+        _command?.Dispose();
+        _reader.Dispose();
+        DisposeCommand();
+        if (_shouldCloseConnection)
         {
-            _reader.Dispose();
-            if (_shouldCloseConnection)
-            {
-                _connection.Close();
-            }
-
-            _connectionLocker.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            _connection.Close();
         }
+
+        DisposeLockerSynchronously();
     }
 
     public bool Read()
@@ -171,31 +176,34 @@ public class TrackedReader : ITrackedReader
 
     public bool NextResult()
     {
-        return false;
-        // No MARS support
+        // Multiple result sets are not supported by policy.
+        throw new NotSupportedException("Multiple result sets are not supported.");
     }
 
     public int Depth => _reader.Depth;
     public bool IsClosed => _reader.IsClosed;
     public int RecordsAffected => _reader.RecordsAffected;
 
-    public async ValueTask DisposeAsync()
+    protected override async ValueTask DisposeManagedAsync()
     {
-        if (Interlocked.CompareExchange(ref _disposed, 1, 0) == 0)
+        await _reader.DisposeAsync();
+        DisposeCommand();
+        if (_shouldCloseConnection)
         {
-            await _reader.DisposeAsync();
-            if (_shouldCloseConnection)
-            {
-                _connection.Close();
-            }
-
-            await _connectionLocker.DisposeAsync();
+            _connection.Close();
         }
+
+        await _connectionLocker.DisposeAsync().ConfigureAwait(false);
     }
 
-    public async Task<bool> ReadAsync()
+    public Task<bool> ReadAsync()
     {
-        if (await _reader.ReadAsync().ConfigureAwait(false))
+        return ReadAsync(CancellationToken.None);
+    }
+
+    public async Task<bool> ReadAsync(CancellationToken cancellationToken)
+    {
+        if (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
             return true;
         }
@@ -217,5 +225,60 @@ public class TrackedReader : ITrackedReader
     public Guid GetGuid(int i)
     {
         return _reader.GetGuid(i);
+    }
+
+    private void DisposeLockerSynchronously()
+    {
+        if (_connectionLocker == null)
+        {
+            return;
+        }
+
+        if (_connectionLocker is IDisposable disposable)
+        {
+            disposable.Dispose();
+            return;
+        }
+
+        Task.Run(async () =>
+        {
+            await _connectionLocker.DisposeAsync().ConfigureAwait(false);
+        }).GetAwaiter().GetResult();
+    }
+
+    private void DisposeCommand()
+    {
+        var command = Interlocked.Exchange(ref _command, null);
+        if (command == null)
+        {
+            return;
+        }
+
+        try
+        {
+            command.Parameters?.Clear();
+        }
+        catch
+        {
+            // Ignore failures while clearing parameters during disposal.
+        }
+
+        try
+        {
+            command.Connection = null;
+        }
+        catch
+        {
+            // Ignore providers that do not allow clearing the connection.
+        }
+
+        try
+        {
+            command.Dispose();
+        }
+        catch
+        {
+            // Ignore disposal failures so reader shutdown always succeeds.
+        }
     }
 }

@@ -1,8 +1,8 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using pengdows.crud.threading;
 using Microsoft.Extensions.Logging;
+using pengdows.crud.threading;
 using Xunit;
 
 namespace pengdows.crud.Tests.threading;

@@ -4,6 +4,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using pengdows.crud.collections;
 using Xunit;
 
@@ -615,7 +616,7 @@ public class OrderedDictionaryTests
         Assert.Equal(new KeyValuePair<string, int>("key1", 100), enumerator.Current);
         enumerator.Dispose();
 
-        var nonGenericEnumerable = (System.Collections.IEnumerable)dict;
+        var nonGenericEnumerable = (IEnumerable)dict;
         var nonGenericEnumerator = nonGenericEnumerable.GetEnumerator();
         Assert.True(nonGenericEnumerator.MoveNext());
         Assert.IsType<KeyValuePair<string, int>>(nonGenericEnumerator.Current);
@@ -630,7 +631,7 @@ public class OrderedDictionaryTests
     public void IsPrime_UtilityMethod_WorksCorrectly()
     {
         var type = typeof(OrderedDictionary<string, int>);
-        var method = type.GetMethod("IsPrime", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        var method = type.GetMethod("IsPrime", BindingFlags.NonPublic | BindingFlags.Static);
 
         if (method != null)
         {

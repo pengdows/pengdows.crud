@@ -1,26 +1,31 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- Source: `pengdows.crud/` (core), `pengdows.crud.abstractions/` (interfaces), `pengdows.crud.fakeDb/` (in-memory/fake provider), `testbed/` (integration test suite using Testcontainers and real providers).
-- Tests: `pengdows.crud.Tests/` (xUnit). Coverage artifacts stored under `TestResults/`.
-- Solution: `pengdows.crud.sln`. GitHub Actions workflow in `.github/workflows/deploy.yml`.
+- Source: `pengdows.crud/` (core), `pengdows.crud.abstractions/` (interfaces), `pengdows.crud.fakeDb/` (in-memory provider), `testbed/` (integration suite via Testcontainers).
+- Tests: `pengdows.crud.Tests/` (xUnit). Coverage and TRX under `TestResults/`.
+- Solution: `pengdows.crud.sln`. CI: `.github/workflows/deploy.yml`.
+- Benchmarks: `benchmarks/CrudBenchmarks/` (BenchmarkDotNet suite; run before shipping perf-sensitive changes).
 
 ## Build, Test, and Development Commands
 - Restore: `dotnet restore`
-- Build: `dotnet build pengdows.crud.sln -c Release` (treats warnings as errors in library projects).
-- Test (local): `dotnet test -c Release --results-directory TestResults --logger trx`.
-- Test with coverage (like CI):
+- Build: `dotnet build pengdows.crud.sln -c Release` (treats warnings as errors for libraries).
+- Test (local): `dotnet test -c Release --results-directory TestResults --logger trx`
+- Test with coverage (CI-like):
   `dotnet test -c Release --results-directory TestResults -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Exclude="[pengdows.crud.Tests]*;[pengdows.crud.abstractions]*;[pengdows.crud.fakeDb]*;[testbed]*"`
-- Pack (NuGet): `dotnet pack <project>.csproj -c Release`.
- - Run integration suite: `dotnet run -c Release --project testbed` (requires Docker for Testcontainers).
+- Pack (NuGet): `dotnet pack <project>.csproj -c Release`
+- Integration suite (requires Docker): `dotnet run -c Release --project testbed`
+- `testbed` is the integration testing app; treat it as part of the primary verification flow.
+- Whenever work is completed, ensure all unit tests and integration tests pass with no skipped tests.
+- If the intended functionality is unclear, consult the wiki (`pengdows.crud.wiki/`) or ask for clarification before proceeding.
+- Tooling: utilities are in `tools/`; run `dotnet run --project tools/verify-novendor` to ensure no vendor directories are committed.
 
 ## Coding Style & Naming Conventions
 - C# 12 on `net8.0`; `Nullable` and `ImplicitUsings` enabled.
-- Use file-scoped namespaces (e.g., `namespace pengdows.crud;`). Keep existing lowercase namespaces (`pengdows.crud.*`).
-- Indentation: 4 spaces; braces per current file style; prefer expression-bodied members when clearer.
-- Keep public APIs minimal and documented; internal where possible. No warnings allowed (`WarningsAsErrors=true`).
-- Prefer small, focused files in domain folders: `attributes/`, `dialects/`, `connection/`, `threading/`, `exceptions/`.
-- Casing: refer to the project as `fakeDb` (lowercase f, uppercase D) in docs/paths (e.g., `pengdows.crud.fakeDb`). Type names remain PascalCase (e.g., `FakeDbConnection`).
+- File-scoped namespaces; keep lowercase namespaces (`pengdows.crud.*`).
+- Indentation: 4 spaces; follow existing brace style; prefer expression-bodied members when clearer.
+- Minimize public APIs; make types/members `internal` when possible. `WarningsAsErrors=true`.
+- Organize by domain folders: `attributes/`, `dialects/`, `connection/`, `threading/`, `exceptions/`.
+- Refer to the project as `fakeDb` (lowercase f, uppercase D) in paths/docs.
 
 ## Interfaces & Extension Points
 - `IDatabaseContext`: entry point. Create via DI or `new DatabaseContext(connStr, DbProviderFactory)`. Builds `ISqlContainer`, formats names/params, and controls connections/transactions.
@@ -33,18 +38,18 @@
 - Advanced: implement `ISqlDialect`/`IDbProviderLoader` to add/override provider behavior.
 
 ## Testing Guidelines
-- Framework: xUnit (`[Fact]`, `[Theory]`). Mocks: Moq.
-- Place tests in `pengdows.crud.Tests/` mirroring namespaces; name files `*Tests.cs`.
-- Avoid real DBs in unit tests; prefer `pengdows.crud.fakeDb`. Use `testbed/` for integration against real engines via Testcontainers (Docker required).
-- Maintain or improve coverage; CI uploads Cobertura to Codecov from `TestResults/**/coverage.cobertura.xml`.
+- Framework: xUnit; mocks: Moq. Name files `*Tests.cs` and mirror source namespaces.
+- Prefer `pengdows.crud.fakeDb` for unit tests; avoid real DBs. Use `testbed/` for integration via Testcontainers.
+- Coverage artifacts live in `TestResults/`; CI publishes Cobertura from `TestResults/**/coverage.cobertura.xml`.
+- Tests for expected behavior should be written first to lock in desired outcomes before implementation changes.
+- The entire unit-test suite currently finishes in under 30 seconds; if a run approaches three minutes, terminate it and investigate for locking/hanging issues immediately.
 
 ## Commit & Pull Request Guidelines
-- Commits: short, imperative subject lines. Optional prefixes: `feat:`, `fix:`, `refactor:`, `chore:` (seen in history).
-- PRs: clear description, rationale, and scope; link issues; list behavioral changes; include tests; note provider impacts (SQL Server/PostgreSQL/etc.).
-- Ensure `dotnet build` and `dotnet test` pass locally before requesting review.
+- Commits: short, imperative; optional prefixes `feat:`, `fix:`, `refactor:`, `chore:`.
+- PRs: clear description, rationale, scope; link issues; list behavioral/provider impacts; include tests.
+- Before review: ensure `dotnet build` and `dotnet test` pass locally.
 
 ## Security & Configuration Tips
-- Never commit secrets or real connection strings. Use environment variables and local user-secrets.
-- Strong-name signing can be enabled via `SNK_PATH`; do not commit keys.
-- Never hardcode identifier quoting. Always use `WrapObjectName(...)` from `IDatabaseContext`/`ISqlContainer` and `CompositeIdentifierSeparator` for dotted names. Example: `var full = ctx.WrapObjectName("schema") + ctx.CompositeIdentifierSeparator + ctx.WrapObjectName("table");`
-- Always parameterize via `AddParameterWithValue` or `CreateDbParameter`; avoid string interpolation for values.
+- Never commit secrets or real connection strings; use environment variables and user-secrets. Strong-name via `SNK_PATH` (do not commit keys).
+- Do not hardcode identifier quoting. Use `WrapObjectName(...)` and `CompositeIdentifierSeparator` (e.g., ``var full = ctx.WrapObjectName("schema") + ctx.CompositeIdentifierSeparator + ctx.WrapObjectName("table");``).
+- Always parameterize values (`AddParameterWithValue`, `CreateDbParameter`); avoid string interpolation for SQL.

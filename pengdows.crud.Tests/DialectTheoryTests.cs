@@ -1,7 +1,7 @@
 #region
 
-using System;
 using System.Collections.Generic;
+using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 using Xunit;
@@ -33,7 +33,7 @@ public class DialectTheoryTests
         string expectedMarker,
         bool expectedNamed)
     {
-        var cfg = new pengdows.crud.configuration.DatabaseContextConfiguration
+        var cfg = new DatabaseContextConfiguration
         {
             ConnectionString = $"Data Source=test;EmulatedProduct={product}",
             DbMode = DbMode.Standard

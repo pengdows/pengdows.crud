@@ -2,9 +2,10 @@
 
 using System;
 using System.Data;
+using System.Threading.Tasks;
 using pengdows.crud.enums;
-using pengdows.crud.fakeDb;
 using pengdows.crud.exceptions;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 #endregion
@@ -26,7 +27,7 @@ public class ConnectionFailureHelperTests
     }
 
     [Fact]
-    public async System.Threading.Tasks.Task CreateFailOnCommandContext_ThrowsOnCommandCreation()
+    public async Task CreateFailOnCommandContext_ThrowsOnCommandCreation()
     {
         await using var context = ConnectionFailureHelper.CreateFailOnCommandContext();
         await using var container = context.CreateSqlContainer("SELECT 1");
@@ -183,7 +184,7 @@ public class ConnectionFailureHelperTests
     }
 
     [Fact]
-    public async System.Threading.Tasks.Task CreateFailOnCommandContext_FailsOnSqlContainerOperations()
+    public async Task CreateFailOnCommandContext_FailsOnSqlContainerOperations()
     {
         await using var context = ConnectionFailureHelper.CreateFailOnCommandContext();
 

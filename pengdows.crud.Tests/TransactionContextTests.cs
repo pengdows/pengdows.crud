@@ -7,14 +7,16 @@ using System.Data.Common;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using pengdows.crud.configuration;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
-using pengdows.crud.Tests.Mocks;
+using pengdows.crud.infrastructure;
 using pengdows.crud.strategies.connection;
+using pengdows.crud.Tests.Mocks;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
-using pengdows.crud.infrastructure;
 using Xunit;
 
 #endregion
@@ -248,7 +250,7 @@ public class TransactionContextTests
         using var tx = context.BeginTransaction();
         var name = tx.GenerateRandomName(10);
 
-        Assert.Throws<InvalidOperationException>(() => ((IDatabaseContext)tx).BeginTransaction(null));
+        Assert.Throws<InvalidOperationException>(() => tx.BeginTransaction());
         Assert.True(char.IsLetter(name[0]));
     }
 
@@ -256,7 +258,7 @@ public class TransactionContextTests
     public void BeginTransaction_WithIsolationProfile_Throws()
     {
         using var tx = CreateContext(SupportedDatabase.Sqlite).BeginTransaction();
-        Assert.Throws<InvalidOperationException>(() => ((IDatabaseContext)tx).BeginTransaction(IsolationProfile.FastWithRisks));
+        Assert.Throws<InvalidOperationException>(() => tx.BeginTransaction(IsolationProfile.FastWithRisks));
     }
 
     [Fact]
@@ -539,7 +541,7 @@ public class TransactionContextTests
 
     private static void ReplaceStrategy(DatabaseContext context, IConnectionStrategy strategy)
     {
-        var field = typeof(DatabaseContext).GetField("_connectionStrategy", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        var field = typeof(DatabaseContext).GetField("_connectionStrategy", BindingFlags.Instance | BindingFlags.NonPublic);
         field!.SetValue(context, strategy);
     }
 
@@ -582,6 +584,14 @@ public class TransactionContextTests
                     connection.Dispose();
                 }
             }
+        }
+
+        public (ISqlDialect? dialect, IDataSourceInformation? dataSourceInfo) HandleDialectDetection(
+            ITrackedConnection? initConnection,
+            DbProviderFactory factory,
+            ILoggerFactory loggerFactory)
+        {
+            return (null, null);
         }
     }
 

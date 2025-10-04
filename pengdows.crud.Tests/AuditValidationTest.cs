@@ -4,7 +4,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class AuditValidationTest : SqlLiteContextTestBase
+public class AuditValidationTest : RealSqliteContextTestBase
 {
     [Fact]
     public async Task VerifyAuditFieldsArePopulated()
@@ -12,13 +12,15 @@ public class AuditValidationTest : SqlLiteContextTestBase
         TypeMap.Register<TestEntity>();
         var helper = new EntityHelper<TestEntity, int>(Context, AuditValueResolver);
         
-        var sql = @"CREATE TABLE IF NOT EXISTS ""Test"" (""Id"" INTEGER PRIMARY KEY AUTOINCREMENT,
-                   ""Name"" TEXT UNIQUE NOT NULL,
-                   ""CreatedBy"" TEXT NOT NULL,
-                   ""CreatedOn"" TIMESTAMP NOT NULL,
-                   ""LastUpdatedBy"" TEXT NOT NULL,
-                   ""LastUpdatedOn"" TIMESTAMP NULL,
-                   ""Version"" INTEGER NOT NULL DEFAULT 0)";
+        var qp = Context.QuotePrefix;
+        var qs = Context.QuoteSuffix;
+        var sql = $@"CREATE TABLE IF NOT EXISTS {qp}Test{qs} ({qp}Id{qs} INTEGER PRIMARY KEY AUTOINCREMENT,
+                   {qp}Name{qs} TEXT UNIQUE NOT NULL,
+                   {qp}CreatedBy{qs} TEXT NOT NULL,
+                   {qp}CreatedOn{qs} TIMESTAMP NOT NULL,
+                   {qp}LastUpdatedBy{qs} TEXT NOT NULL,
+                   {qp}LastUpdatedOn{qs} TIMESTAMP NULL,
+                   {qp}Version{qs} INTEGER NOT NULL DEFAULT 0)";
         var container = Context.CreateSqlContainer(sql);
         await container.ExecuteNonQueryAsync();
         

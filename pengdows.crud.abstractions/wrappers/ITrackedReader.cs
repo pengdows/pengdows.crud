@@ -16,4 +16,11 @@ public interface ITrackedReader : IDataReader, IAsyncDisposable
     /// </summary>
     /// <returns>True if another record is available.</returns>
     Task<bool> ReadAsync();
+
+    /// <summary>
+    /// Advances the reader to the next record asynchronously with cancellation support.
+    /// </summary>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>True if another record is available.</returns>
+    Task<bool> ReadAsync(CancellationToken cancellationToken);
 }

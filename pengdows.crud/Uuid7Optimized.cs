@@ -1,20 +1,18 @@
-namespace pengdows.crud;
-
-using System;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
-using System.Threading;
+
+namespace pengdows.crud;
 
 /// <summary>
 /// Production-ready UUIDv7 generator implementing RFC 9562 with optimizations for high throughput.
-/// 
+///
 /// Features:
 /// - Spec-compliant UUIDv7 generation
 /// - Thread-local counters to eliminate CAS contention
 /// - Buffered randomness to reduce syscall overhead
 /// - Bounded clock drift handling
 /// - Monotonic ordering within process scope (up to 4096 IDs/ms per thread)
-/// 
+///
 /// Monotonicity scope: Within a process, per logical clock. Not guaranteed across machines.
 /// Throughput limit: 4096 IDs/ms per thread. Multiple threads can each generate 4096 IDs/ms independently.
 /// If multiple threads exhaust counters simultaneously, each waits independently.
@@ -31,7 +29,7 @@ public static class Uuid7Optimized
         public int Counter; // 0..4095
         public readonly byte[] RandomBuffer = new byte[1024]; // Buffered random bytes - larger buffer for fewer refills
         public int RandomIndex;
-        
+
         public V7ThreadState()
         {
             // Initialize with random data
@@ -40,17 +38,17 @@ public static class Uuid7Optimized
     }
 
     private static readonly ThreadLocal<V7ThreadState> _threadState = new(() => new V7ThreadState());
-    
+
     // Global epoch for cross-thread monotonicity hints
     private static long _globalEpochMs;
-    
+
     // Clock drift policy
     private const long MaxNegativeSkewMs = 32; // Allow 32ms backward drift
-    
+
     // Counter limits
     private const int CounterBits = 12;
     private const int CounterMax = (1 << CounterBits) - 1; // 4095
-    
+
     // Bounded wait parameters
     private const int MaxSpinCount = 128;
     private const int SleepMs = 1;
@@ -75,7 +73,7 @@ public static class Uuid7Optimized
         var nowMs = UnixTimeMs();
         var globalEpoch = Volatile.Read(ref _globalEpochMs);
         var usedMs = HandleClockDrift(nowMs, tls.LastMs, globalEpoch);
-        
+
         // Handle millisecond boundary and counter management
         if (usedMs != tls.LastMs)
         {
@@ -84,7 +82,7 @@ public static class Uuid7Optimized
             tls.Counter = 0;
             InterlockedMax(ref _globalEpochMs, usedMs);
         }
-        
+
         // Check counter overflow
         if (tls.Counter > CounterMax)
         {
@@ -94,9 +92,9 @@ public static class Uuid7Optimized
             tls.Counter = 0;
             InterlockedMax(ref _globalEpochMs, usedMs);
         }
-        
+
         var sequence = tls.Counter++;
-        
+
         return BuildSpecCompliantGuid(usedMs, sequence, tls, rfc);
     }
 
@@ -163,18 +161,18 @@ public static class Uuid7Optimized
 
         var tls = _threadState.Value!;
         Span<byte> rfc = stackalloc byte[16];
-        
+
         var nowMs = UnixTimeMs();
         var globalEpoch = Volatile.Read(ref _globalEpochMs);
         var usedMs = HandleClockDrift(nowMs, tls.LastMs, globalEpoch);
-        
+
         if (usedMs != tls.LastMs)
         {
             tls.LastMs = usedMs;
             tls.Counter = 0;
             InterlockedMax(ref _globalEpochMs, usedMs);
         }
-        
+
         if (tls.Counter > CounterMax)
         {
             usedMs = BoundedWaitNextMs(usedMs);
@@ -182,7 +180,7 @@ public static class Uuid7Optimized
             tls.Counter = 0;
             InterlockedMax(ref _globalEpochMs, usedMs);
         }
-        
+
         var sequence = tls.Counter++;
         BuildRfcBytes(usedMs, sequence, tls, rfc);
         rfc.CopyTo(dest);
@@ -196,27 +194,25 @@ public static class Uuid7Optimized
             // Normal case: time is advancing
             return Math.Max(nowMs, globalEpoch);
         }
-        
+
         // Clock went backward
         var drift = lastMs - nowMs;
-        
+
         if (drift > MaxNegativeSkewMs)
         {
             // Large backward jump: use logical clock
             return Math.Max(lastMs, globalEpoch);
         }
-        else
-        {
-            // Small drift: pin to last known time
-            return lastMs;
-        }
+
+        // Small drift: pin to last known time
+        return lastMs;
     }
 
     private static long BoundedWaitNextMs(long currentMs)
     {
         var spinCount = 0;
         long newMs;
-        
+
         do
         {
             if (spinCount < MaxSpinCount)
@@ -240,10 +236,10 @@ public static class Uuid7Optimized
                 Thread.Sleep(SleepMs);
                 spinCount = 0; // Reset spin count after sleep
             }
-            
+
             newMs = UnixTimeMs();
         } while (newMs <= currentMs);
-        
+
         return newMs;
     }
 
@@ -270,7 +266,7 @@ public static class Uuid7Optimized
             RandomNumberGenerator.Fill(tls.RandomBuffer);
             tls.RandomIndex = 0;
         }
-        
+
         // Copy from buffer instead of syscall per UUID
         new Span<byte>(tls.RandomBuffer, tls.RandomIndex, dest.Length).CopyTo(dest);
         tls.RandomIndex += dest.Length;
@@ -279,24 +275,24 @@ public static class Uuid7Optimized
     private static Guid BuildSpecCompliantGuid(long timestampMs, int sequence, V7ThreadState tls, Span<byte> rfc)
     {
         BuildRfcBytes(timestampMs, sequence, tls, rfc);
-        
+
         // Convert RFC layout to .NET Guid byte order (mixed-endian)
         Span<byte> guidBytes = stackalloc byte[16];
-        
+
         // time_low: bytes 0-3 as little-endian
         guidBytes[0] = rfc[3];
-        guidBytes[1] = rfc[2]; 
+        guidBytes[1] = rfc[2];
         guidBytes[2] = rfc[1];
         guidBytes[3] = rfc[0];
-        
-        // time_mid: bytes 4-5 as little-endian  
+
+        // time_mid: bytes 4-5 as little-endian
         guidBytes[4] = rfc[5];
         guidBytes[5] = rfc[4];
-        
+
         // time_hi_and_version: bytes 6-7 as little-endian
         guidBytes[6] = rfc[7];
         guidBytes[7] = rfc[6];
-        
+
         // clock_seq and node: bytes 8-15 as-is (big-endian)
         guidBytes[8] = rfc[8];
         guidBytes[9] = rfc[9];
@@ -313,7 +309,7 @@ public static class Uuid7Optimized
     private static void BuildRfcBytes(long timestampMs, int sequence, V7ThreadState tls, Span<byte> rfc)
     {
         // 1. Build RFC 4122 layout (big-endian timestamp)
-        
+
         // Timestamp: 48-bit big-endian (rfc[0..5])
         rfc[0] = (byte)((timestampMs >> 40) & 0xFF);
         rfc[1] = (byte)((timestampMs >> 32) & 0xFF);
@@ -330,7 +326,7 @@ public static class Uuid7Optimized
         // rand_b: 62 random bits with RFC 4122 variant (10xxxxxx in byte 8)
         Span<byte> randomBytes = stackalloc byte[8];
         FillRandomSpan(randomBytes, tls);
-        
+
         // Set variant bits (10xxxxxx) while preserving 6 random bits
         rfc[8] = (byte)((randomBytes[0] & 0x3F) | 0x80); // variant + 6 random bits
         rfc[9] = randomBytes[1];

@@ -20,13 +20,13 @@ public static class TenantServiceCollectionExtensions
         var options = new MultiTenantOptions();
         configuration.GetSection("MultiTenant").Bind(options);
 
-        // Register tenant configurations statically
-        TenantConnectionResolver.Register(options.Tenants);
-
         // Register options to enable IOptions<MultiTenantOptions>
         services.Configure<MultiTenantOptions>(configuration.GetSection("MultiTenant"));
 
-        services.AddSingleton<ITenantConnectionResolver>(TenantConnectionResolver.Instance);
+        var resolver = new TenantConnectionResolver();
+        resolver.Register(options.Tenants);
+
+        services.AddSingleton<ITenantConnectionResolver>(resolver);
         services.AddSingleton<ITenantContextRegistry, TenantContextRegistry>();
 
         return services;

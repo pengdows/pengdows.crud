@@ -7,16 +7,22 @@ using pengdows.crud.enums;
 
 namespace pengdows.crud.fakeDb;
 
-public sealed class fakeDbFactory : DbProviderFactory
+public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
 {
     public static readonly fakeDbFactory Instance = new();
     private readonly SupportedDatabase _pretendToBe;
-    private readonly ConnectionFailureMode _failureMode;
-    private readonly Exception? _customException;
-    private readonly int? _failAfterCount;
+    private ConnectionFailureMode _failureMode;
+    private Exception? _customException;
+    private int? _failAfterCount;
     private int _sharedOpenCount;
     private bool _skipFirstOpen;
     private bool _hasOpenedOnce;
+    private readonly List<fakeDbConnection> _connections = new();
+    private Exception? _globalPersistentScalarException;
+    public bool EnableDataPersistence { get; set; } = false;
+
+    // Shared data store across all connections from this factory
+    private readonly FakeDataStore _sharedDataStore = new();
 
     private fakeDbFactory()
     {
@@ -52,6 +58,8 @@ public sealed class fakeDbFactory : DbProviderFactory
         _skipFirstOpen = skipFirstOpen;
     }
 
+    public SupportedDatabase PretendToBe => _pretendToBe;
+
     public override DbCommand CreateCommand()
     {
         return new fakeDbCommand();
@@ -59,7 +67,20 @@ public sealed class fakeDbFactory : DbProviderFactory
 
     public override DbConnection CreateConnection()
     {
-        var c = new fakeDbConnection();
+        if (_connections.Count > 0)
+        {
+            var pre = _connections[0];
+            _connections.RemoveAt(0);
+            if (pre.EmulatedProduct == SupportedDatabase.Unknown)
+            {
+                pre.EmulatedProduct = _pretendToBe;
+            }
+            // Apply data persistence setting from factory
+            pre.EnableDataPersistence = EnableDataPersistence;
+            return pre;
+        }
+
+        var c = new fakeDbConnection(_sharedDataStore);
         c.EmulatedProduct = _pretendToBe;
 
         // Configure failure modes based on factory settings
@@ -71,7 +92,7 @@ public sealed class fakeDbFactory : DbProviderFactory
         switch (_failureMode)
         {
             case ConnectionFailureMode.FailOnOpen:
-                c.SetFailOnOpen(true);
+                c.SetFailOnOpen();
                 c.SetFactoryReference(this);
                 break;
             case ConnectionFailureMode.FailOnCommand:
@@ -85,11 +106,30 @@ public sealed class fakeDbFactory : DbProviderFactory
                 break;
             case ConnectionFailureMode.Broken:
                 c.SetFactoryReference(this);
-                c.BreakConnection(false); // Don't skip, factory will decide
+                c.BreakConnection(); // Don't skip, factory will decide
                 break;
         }
 
+        // Apply any factory-level exception configuration to new connections
+        if (_globalPersistentScalarException != null)
+        {
+            c.SetPersistentScalarException(_globalPersistentScalarException);
+        }
+
+        // Apply data persistence setting from factory
+        c.EnableDataPersistence = EnableDataPersistence;
+
         return c;
+    }
+
+    IFakeDbConnection IFakeDbFactory.CreateConnection()
+    {
+        return (fakeDbConnection)CreateConnection();
+    }
+
+    public void SetGlobalPersistentScalarException(Exception? exception)
+    {
+        _globalPersistentScalarException = exception;
     }
 
     public override DbParameter CreateParameter()
@@ -107,7 +147,7 @@ public sealed class fakeDbFactory : DbProviderFactory
             _skipFirstOpen = false;
             return 0; // Don't count the first open (context initialization)
         }
-        return System.Threading.Interlocked.Increment(ref _sharedOpenCount);
+        return Interlocked.Increment(ref _sharedOpenCount);
     }
 
     /// <summary>
@@ -141,6 +181,16 @@ public sealed class fakeDbFactory : DbProviderFactory
                         failureMode == ConnectionFailureMode.FailAfterCount;
         return new fakeDbFactory(pretendToBe, failureMode, customException, failAfterCount, skipFirst);
     }
+
+    // Expose created connections for tests
+    public List<fakeDbConnection> Connections => _connections;
+
+    public override DbConnectionStringBuilder? CreateConnectionStringBuilder()
+    {
+        // Return a connection string builder that supports provider-specific keys
+        // based on which database we're emulating
+        return new fakeDbConnectionStringBuilder(_pretendToBe);
+    }
 }
 
 public enum ConnectionFailureMode
@@ -152,4 +202,3 @@ public enum ConnectionFailureMode
     FailAfterCount,
     Broken
 }
-

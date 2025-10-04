@@ -10,7 +10,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class EntityHelper_IntegrationTests : SqlLiteContextTestBase
+public class EntityHelper_IntegrationTests : RealSqliteContextTestBase, IAsyncLifetime
 {
     private readonly EntityHelper<TestEntity, int> entityHelper;
 
@@ -23,7 +23,17 @@ public class EntityHelper_IntegrationTests : SqlLiteContextTestBase
         entityHelper = new EntityHelper<TestEntity, int>(Context, AuditValueResolver);
 
         Assert.Equal(DbMode.SingleConnection, Context.ConnectionMode);
-        BuildTestTable();
+    }
+
+    public new async Task InitializeAsync()
+    {
+        await base.InitializeAsync();
+        await BuildTestTable();
+    }
+
+    public new async Task DisposeAsync()
+    {
+        await base.DisposeAsync();
     }
 
     public void Dispose()
@@ -204,7 +214,7 @@ public class EntityHelper_IntegrationTests : SqlLiteContextTestBase
         var list = (await entityHelper.LoadListAsync(retrieve));
         var listOfIds = list.Select(x => x.Id).ToList();
 
-        var r = entityHelper.BuildRetrieve(listOfIds, null);
+        var r = entityHelper.BuildRetrieve(listOfIds);
         var r2 = (await entityHelper.LoadListAsync(r));
 
         Assert.True(listOfIds.Count > 0 && r2.Count == listOfIds.Count);
@@ -222,7 +232,7 @@ public class EntityHelper_IntegrationTests : SqlLiteContextTestBase
         var retrieve = entityHelper.BuildBaseRetrieve(string.Empty);
         var list = (await entityHelper.LoadListAsync(retrieve)).ToList();
 
-        var r = entityHelper.BuildRetrieve(list, null);
+        var r = entityHelper.BuildRetrieve(list);
         var r2 = (await entityHelper.LoadListAsync(r)).ToList();
 
         Assert.True(list.Count > 0 && r2.Count == list.Count);

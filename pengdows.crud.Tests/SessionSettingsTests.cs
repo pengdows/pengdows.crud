@@ -1,8 +1,8 @@
 using System.Linq;
+using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
-using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -25,8 +25,7 @@ public class SessionSettingsTests
                 ReadWriteMode = ReadWriteMode.ReadWrite
             },
             factory,
-            NullLoggerFactory.Instance,
-            null);
+            NullLoggerFactory.Instance);
 
         // Trigger a new connection in Standard mode
         using var tracked = ctx.GetConnection(ExecutionType.Read);

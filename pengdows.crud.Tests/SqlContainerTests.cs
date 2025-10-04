@@ -3,11 +3,10 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Threading.Tasks;
 using System.Reflection;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
+using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 using Xunit;
@@ -26,9 +25,24 @@ public class SqlContainerTests : SqlLiteContextTestBase
         // _connection = new SqliteConnection("Data Source=:memory:");
         // _connection.Open();
         TypeMap.Register<TestEntity>();
-        entityHelper = new EntityHelper<TestEntity, int>(Context, null);
+        entityHelper = new EntityHelper<TestEntity, int>(Context);
         Assert.Equal(DbMode.SingleConnection, Context.ConnectionMode);
         BuildTestTable();
+    }
+
+    [Fact]
+    public async Task Dispose_ReturnsParametersToDialectPool()
+    {
+        var param = Context.CreateDbParameter("p0", DbType.Int32, 1);
+        var container = Context.CreateSqlContainer();
+        container.AddParameter(param);
+
+        await container.DisposeAsync();
+
+        var reused = Context.CreateDbParameter("p1", DbType.Int32, 2);
+
+        Assert.Same(param, reused);
+        Assert.Equal(2, reused.Value);
     }
 
     public void Dispose()
@@ -91,6 +105,21 @@ public class SqlContainerTests : SqlLiteContextTestBase
 
         Assert.False(string.IsNullOrEmpty(param.ParameterName));
         Assert.Equal(1, container.ParameterCount);
+    }
+
+    [Fact]
+    public void GeneratedParameterNames_AreDeterministic_AndWithinLimit()
+    {
+        var container = Context.CreateSqlContainer();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        for (var i = 0; i < 32; i++)
+        {
+            var param = container.AddParameterWithValue(DbType.Int32, i);
+            Assert.StartsWith("p", param.ParameterName, StringComparison.OrdinalIgnoreCase);
+            Assert.True(param.ParameterName.Length <= Context.DataSourceInfo.ParameterNameMaxLength);
+            Assert.True(seen.Add(param.ParameterName));
+        }
     }
 
     [Fact]
@@ -378,9 +407,9 @@ public class SqlContainerTests : SqlLiteContextTestBase
     }
 
     [Theory]
-    [InlineData(SupportedDatabase.SqlServer, "dbo.my_proc", ExecutionType.Write, "EXEC {0} {1}")]
-    [InlineData(SupportedDatabase.PostgreSql, "my_proc", ExecutionType.Read, "SELECT * FROM {0}({1})")]
-    [InlineData(SupportedDatabase.Firebird, "dbo.my_proc", ExecutionType.Read, "SELECT * FROM {0}({1})")]
+    [InlineData(SupportedDatabase.SqlServer, "dbo.my_proc", ExecutionType.Write, "EXEC \"dbo\".\"my_proc\" {0}")]
+    [InlineData(SupportedDatabase.PostgreSql, "my_proc", ExecutionType.Read, "SELECT * FROM \"my_proc\"({0})")]
+    [InlineData(SupportedDatabase.Firebird, "dbo.my_proc", ExecutionType.Read, "SELECT * FROM \"dbo\".\"my_proc\"({0})")]
     public void WrapForStoredProc_ByProvider_FormatsCorrectly(
         SupportedDatabase product,
         string procName,
@@ -394,7 +423,7 @@ public class SqlContainerTests : SqlLiteContextTestBase
         var expectedName = ctx.MakeParameterName(param);
 
         var result = container.WrapForStoredProc(executionType);
-        var expected = string.Format(format, procName, expectedName);
+        var expected = string.Format(format, expectedName);
         Assert.Equal(expected, result);
     }
 

@@ -65,6 +65,8 @@ Due to missing or outdated .NET providers:
 - Sybase ASE
 - SQL Anywhere
 
+Note: DB2 and Sybase ASE are not planned and will not be implemented.
+
 Want support? Ask the vendor to ship a **real** ADO.NET provider.
 
 ---
@@ -160,6 +162,35 @@ For integration tests without a real database, use the `pengdows.crud.fakeDb` pa
 ```bash
 dotnet add package pengdows.crud.fakeDb
 ```
+
+---
+
+## 🧪 Running Tests Inside Docker
+
+If you do not have the .NET SDK installed locally, you can execute the full test
+suite inside a disposable Docker container using the official SDK image. The
+repository ships with `tools/run-tests-in-container.sh` to streamline the
+workflow:
+
+```bash
+./tools/run-tests-in-container.sh
+```
+
+The script mounts the current working directory, disables the first-time
+experience prompts, and runs `dotnet test -c Release` with TRX logging. You can
+override the Docker image or pass custom `dotnet` arguments:
+
+```bash
+# Use a different SDK build
+./tools/run-tests-in-container.sh --image mcr.microsoft.com/dotnet/sdk:8.0.201
+
+# Forward custom arguments to dotnet (e.g., run a single project)
+./tools/run-tests-in-container.sh -- dotnet test pengdows.crud.Tests/pengdows.crud.Tests.csproj -c Debug
+```
+
+> **Note:** Docker must be installed and running on your machine. The container
+> is ephemeral—every invocation starts fresh, so caches (NuGet packages, build
+> outputs) are isolated from your host environment.
 
 You can also map database tables to entities using attributes and work through
 `EntityHelper<TEntity, TRowID>`:

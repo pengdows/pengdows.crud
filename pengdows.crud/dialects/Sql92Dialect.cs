@@ -9,7 +9,7 @@ namespace pengdows.crud.dialects;
 /// </summary>
 public class Sql92Dialect : SqlDialect
 {
-    public Sql92Dialect(DbProviderFactory factory, ILogger logger)
+    internal Sql92Dialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger)
     {
     }

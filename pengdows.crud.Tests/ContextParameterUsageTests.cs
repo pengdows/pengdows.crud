@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
@@ -22,9 +23,9 @@ public class ContextParameterUsageTests
             Name = "foo",
             version = 1,
             CreatedBy = "u",
-            CreatedOn = System.DateTime.UtcNow,
+            CreatedOn = DateTime.UtcNow,
             LastUpdatedBy = "u",
-            LastUpdatedOn = System.DateTime.UtcNow
+            LastUpdatedOn = DateTime.UtcNow
         };
     }
 

@@ -1,20 +1,20 @@
-namespace pengdows.crud.collections;
-
-using System;
-using System.Collections.Generic;
 using System.Data.Common;
+using System.Reflection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+
+namespace pengdows.crud.collections;
 
 // Extension methods for common DB parameter scenarios
 public static class OrderedDictionaryExtensions
 {
     // Optional logger for visibility into property access failures
     // Defaults to no-op; set via OrderedDictionaryExtensions.Logger if desired.
-    private static Microsoft.Extensions.Logging.ILogger _logger = Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance;
-    public static Microsoft.Extensions.Logging.ILogger Logger
+    private static ILogger _logger = NullLogger.Instance;
+    public static ILogger Logger
     {
         get => _logger;
-        set => _logger = value ?? Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance;
+        set => _logger = value ?? NullLogger.Instance;
     }
     /// <summary>
     /// Creates a DB parameter dictionary from an object's properties
@@ -22,7 +22,7 @@ public static class OrderedDictionaryExtensions
     public static OrderedDictionary<string, object?> FromObject<T>(T obj) where T : notnull
     {
         var dict = new OrderedDictionary<string, object?>();
-        var props = typeof(T).GetProperties(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
+        var props = typeof(T).GetProperties(BindingFlags.Instance | BindingFlags.Public);
 
         foreach (var prop in props)
         {
@@ -93,7 +93,7 @@ public static class OrderedDictionaryExtensions
 
         var key = string.IsNullOrEmpty(parameter.ParameterName)
             ? throw new ArgumentException("Parameter must have a name")
-            : parameter.ParameterName.TrimStart('@', ':', '?'); // Remove database-specific prefixes
+            : parameter.ParameterName.TrimStart('@', ':', '?', '$'); // Remove database-specific prefixes
 
         dict[key] = parameter;
     }

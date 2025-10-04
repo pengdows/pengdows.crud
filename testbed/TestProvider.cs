@@ -19,14 +19,14 @@ public class TestProvider : IAsyncTestProvider
     {
         _context = databaseContext;
         var resolver = serviceProvider.GetService<IAuditValueResolver>() ??
-                       new StubAuditValueResolver("system");
+                       new TestAuditValueResolver("system");
         _helper = new EntityHelper<TestTable, long>(databaseContext, auditValueResolver: resolver);
     }
 
 
     public async Task RunTest()
     {
-        Console.WriteLine("Completed testing of provider:" + _context.Product.ToString());
+        Console.WriteLine("Completed testing of provider:" + _context.Product);
         try
         {
             Console.WriteLine("Running Create table");
@@ -66,7 +66,7 @@ public class TestProvider : IAsyncTestProvider
         }
         finally
         {
-            Console.WriteLine("Completed testing of provider:" + _context.Product.ToString());
+            Console.WriteLine("Completed testing of provider:" + _context.Product);
         }
     }
 
@@ -135,11 +135,14 @@ public class TestProvider : IAsyncTestProvider
 
         sqlContainer.Query.Clear();
         var dateType = GetDateTimeType(databaseContext.Product);
+        var boolType = GetBooleanType(databaseContext.Product);
         sqlContainer.Query.Append($@"
 CREATE TABLE {qp}test_table{qs} (
     {qp}id{qs} BIGINT NOT NULL,
     {qp}name{qs} VARCHAR(100) NOT NULL,
     {qp}description{qs} VARCHAR(1000) NOT NULL,
+    {qp}value{qs} INT NOT NULL,
+    {qp}is_active{qs} {boolType} NOT NULL,
     {qp}created_at{qs} {dateType} NOT NULL,
     {qp}created_by{qs} VARCHAR(100) NOT NULL,
     {qp}updated_at{qs} {dateType} NOT NULL,
@@ -172,7 +175,7 @@ CREATE TABLE {qp}test_table{qs} (
 
     private async Task<TestTable> RetrieveRows(long id, IDatabaseContext? db = null)
     {
-        var arr = new List<long>() { id };
+        var arr = new List<long> { id };
         var ctx = db ?? _context;
         var sc = _helper.BuildRetrieve(arr, ctx);
 
@@ -200,6 +203,23 @@ CREATE TABLE {qp}test_table{qs} (
         {
             SupportedDatabase.PostgreSql => "TIMESTAMP WITH TIME ZONE",
             _ => "DATETIME"
+        };
+    }
+
+    private static string GetBooleanType(SupportedDatabase product)
+    {
+        return product switch
+        {
+            SupportedDatabase.PostgreSql => "BOOLEAN",
+            SupportedDatabase.CockroachDb => "BOOLEAN",
+            SupportedDatabase.Sqlite => "INTEGER",
+            SupportedDatabase.DuckDB => "BOOLEAN",
+            SupportedDatabase.Firebird => "SMALLINT",
+            SupportedDatabase.Oracle => "NUMBER(1)",
+            SupportedDatabase.MySql => "BOOLEAN",
+            SupportedDatabase.MariaDb => "BOOLEAN",
+            SupportedDatabase.SqlServer => "BIT",
+            _ => "BOOLEAN"
         };
     }
 

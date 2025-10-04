@@ -2,11 +2,12 @@
 
 using System;
 using System.Collections.Generic;
-using System.Data.Common;
+using System.Data;
 using System.Threading;
 using System.Threading.Tasks;
-using Moq;
+using pengdows.crud.connection;
 using pengdows.crud.fakeDb;
+using pengdows.crud.threading;
 using pengdows.crud.wrappers;
 using Xunit;
 
@@ -16,208 +17,310 @@ namespace pengdows.crud.Tests.wrappers;
 
 public class TrackedReaderTests
 {
+    private class TestTrackedConnection : ITrackedConnection
+    {
+        public int CloseCallCount { get; private set; }
+        public bool WasClosed => CloseCallCount > 0;
+        
+        public string ConnectionString { get; set; } = "test";
+        public int ConnectionTimeout => 30;
+        public string Database => "testdb";
+        public string DataSource => "localhost";
+        public string ServerVersion => "1.0.0";
+        public ConnectionState State => ConnectionState.Open;
+        public ConnectionLocalState LocalState { get; } = new();
+
+        public void Close() => CloseCallCount++;
+        public void Dispose() => Close();
+        public ValueTask DisposeAsync() { Close(); return ValueTask.CompletedTask; }
+        public void Open() { }
+        public Task OpenAsync() => Task.CompletedTask;
+        public Task OpenAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+        public IDbTransaction BeginTransaction() => throw new NotImplementedException();
+        public IDbTransaction BeginTransaction(IsolationLevel il) => throw new NotImplementedException();
+        public void ChangeDatabase(string databaseName) => throw new NotImplementedException();
+        public IDbCommand CreateCommand() => throw new NotImplementedException();
+        public DataTable GetSchema() => new DataTable();
+        public DataTable GetSchema(string dataSourceInformation) => new DataTable();
+        public DataTable GetSchema(string collectionName, string?[]? restrictionValues) => new DataTable();
+        public ILockerAsync GetLock() => new TestLockerAsync();
+    }
+    
+    private class TestAsyncDisposable : IAsyncDisposable
+    {
+        public int DisposeCallCount { get; private set; }
+        public bool WasDisposed => DisposeCallCount > 0;
+        
+        public ValueTask DisposeAsync()
+        {
+            DisposeCallCount++;
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private class TestLockerAsync : ILockerAsync
+    {
+        public int DisposeCallCount { get; private set; }
+        public bool WasDisposed => DisposeCallCount > 0;
+
+        public Task LockAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+        
+        public Task<bool> TryLockAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(true);
+        }
+        
+        public ValueTask DisposeAsync()
+        {
+            DisposeCallCount++;
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class BlockingSynchronizationContext : SynchronizationContext
+    {
+    }
+
+    private sealed class ContextSensitiveLocker : ILockerAsync
+    {
+        private readonly SynchronizationContext _forbidden;
+        private readonly TaskCompletionSource<bool> _observedForbidden = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public ContextSensitiveLocker(SynchronizationContext forbidden)
+        {
+            _forbidden = forbidden;
+        }
+
+        public bool ObservedForbiddenContext => _observedForbidden.Task.IsCompleted && _observedForbidden.Task.Result;
+
+        public Task LockAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task<bool> TryLockAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(true);
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            var observedForbidden = SynchronizationContext.Current == _forbidden;
+            _observedForbidden.TrySetResult(observedForbidden);
+
+            // Simulate asynchronous disposal work that would capture the current context
+            await Task.Yield();
+        }
+    }
+
+    private sealed class TrackingFakeReader : fakeDbDataReader
+    {
+        public bool NextResultCalled { get; private set; }
+
+        public TrackingFakeReader() : base(Array.Empty<Dictionary<string, object>>())
+        {
+        }
+
+        public override bool NextResult()
+        {
+            NextResultCalled = true;
+            return base.NextResult();
+        }
+    }
+
     [Fact]
     public async Task ReadAsync_ReturnsFalseAndDisposes_WhenDone()
     {
-        var reader = new Mock<fakeDbDataReader>();
-        reader.SetupSequence(r => r.ReadAsync(CancellationToken.None))
-            .ReturnsAsync(false);
+        // Create empty fakeDb reader (no rows, so ReadAsync returns false)
+        using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object>>());
+        
+        var connection = new TestTrackedConnection();
+        var locker = new TestLockerAsync();
 
-        reader.Setup(r => r.DisposeAsync()).Returns(ValueTask.CompletedTask);
-
-        var connection = new Mock<ITrackedConnection>();
-        var locker = new Mock<IAsyncDisposable>();
-        locker.Setup(l => l.DisposeAsync()).Returns(ValueTask.CompletedTask);
-
-        var tracked = new TrackedReader(reader.Object, connection.Object, locker.Object, true);
+        var tracked = new TrackedReader(reader, connection, locker, true);
 
         var result = await tracked.ReadAsync();
 
         Assert.False(result);
-        locker.Verify(l => l.DisposeAsync(), Times.Once);
-        connection.Verify(c => c.Close(), Times.Once);
+        Assert.True(locker.WasDisposed);
+        Assert.True(connection.WasClosed);
     }
 
     [Fact]
     public void Read_ReturnsFalseAndDisposes_WhenDone()
     {
-        var reader = new Mock<DbDataReader>();
-        reader.Setup(r => r.Read()).Returns(false);
+        // Create empty fakeDb reader (no rows, so Read returns false)
+        using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object>>());
+        
+        var connection = new TestTrackedConnection();
+        var locker = new TestLockerAsync();
 
-        var connection = new Mock<ITrackedConnection>();
-        var locker = new Mock<IAsyncDisposable>();
-        locker.Setup(l => l.DisposeAsync()).Returns(ValueTask.CompletedTask);
-
-        var tracked = new TrackedReader(reader.Object, connection.Object, locker.Object, true);
+        var tracked = new TrackedReader(reader, connection, locker, true);
 
         var result = tracked.Read();
 
         Assert.False(result);
-        connection.Verify(c => c.Close(), Times.Once);
-        locker.Verify(l => l.DisposeAsync(), Times.Once);
+        Assert.True(connection.WasClosed);
+        Assert.True(locker.WasDisposed);
     }
 
     [Fact]
     public async Task DisposeAsync_OnlyOnce()
     {
-        var reader = new Mock<DbDataReader>();
-        reader.Setup(r => r.DisposeAsync()).Returns(ValueTask.CompletedTask);
+        using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object>>());
+        
+        var connection = new TestTrackedConnection();
+        var locker = new TestLockerAsync();
 
-        var connection = new Mock<ITrackedConnection>();
-        var locker = new Mock<IAsyncDisposable>();
-        locker.Setup(l => l.DisposeAsync()).Returns(ValueTask.CompletedTask);
-
-        var tracked = new TrackedReader(reader.Object, connection.Object, locker.Object, true);
+        var tracked = new TrackedReader(reader, connection, locker, true);
 
         await tracked.DisposeAsync();
         await tracked.DisposeAsync();
 
-        locker.Verify(l => l.DisposeAsync(), Times.Once);
-        connection.Verify(c => c.Close(), Times.Once);
+        // Should only dispose/close once despite being called twice
+        Assert.Equal(1, locker.DisposeCallCount);
+        Assert.Equal(1, connection.CloseCallCount);
     }
 
     [Fact]
     public void Dispose_OnlyOnce()
     {
-        var reader = new Mock<DbDataReader>();
-        var connection = new Mock<ITrackedConnection>();
-        var locker = new Mock<IAsyncDisposable>();
-        locker.Setup(l => l.DisposeAsync()).Returns(ValueTask.CompletedTask);
+        using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object>>());
+        
+        var connection = new TestTrackedConnection();
+        var locker = new TestLockerAsync();
 
-        var tracked = new TrackedReader(reader.Object, connection.Object, locker.Object, true);
+        var tracked = new TrackedReader(reader, connection, locker, true);
 
         tracked.Dispose();
         tracked.Dispose();
 
-        locker.Verify(l => l.DisposeAsync(), Times.Once);
-        connection.Verify(c => c.Close(), Times.Once);
+        // Should only dispose/close once despite being called twice
+        Assert.Equal(1, locker.DisposeCallCount);
+        Assert.Equal(1, connection.CloseCallCount);
     }
 
     [Fact]
     public void Accessors_ForwardToReader()
     {
-        var reader = new Mock<DbDataReader>();
-        reader.Setup(r => r.FieldCount).Returns(1);
-        reader.Setup(r => r[0]).Returns("value");
-        reader.Setup(r => r["col"]).Returns("value2");
+        var row = new Dictionary<string, object>
+        {
+            ["col"] = "value2",
+            ["field0"] = "value"
+        };
+        
+        using var reader = new fakeDbDataReader(new[] { row });
+        reader.Read(); // Position at first row
+        
+        var connection = new TestTrackedConnection();
+        var locker = new TestLockerAsync();
 
-        var tracked = new TrackedReader(reader.Object, Mock.Of<ITrackedConnection>(), Mock.Of<IAsyncDisposable>(),
-            false);
+        var tracked = new TrackedReader(reader, connection, locker, false);
 
-        Assert.Equal(1, tracked.FieldCount);
-        Assert.Equal("value", tracked[0]);
+        Assert.Equal(2, tracked.FieldCount);
+        Assert.Equal("value2", tracked[0]);  // First column "col" has "value2"
+        Assert.Equal("value", tracked[1]);   // Second column "field0" has "value"  
         Assert.Equal("value2", tracked["col"]);
+        Assert.Equal("value", tracked["field0"]);
     }
 
     [Fact]
     public void Read_DoesNotClose_WhenShouldCloseConnectionFalse()
     {
-        var reader = new Mock<DbDataReader>();
-        reader.Setup(r => r.Read()).Returns(false);
+        using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object>>());
+        var connection = new TestTrackedConnection();
+        var locker = new TestLockerAsync();
 
-        var connection = new Mock<ITrackedConnection>();
-        var locker = new Mock<IAsyncDisposable>();
-        locker.Setup(l => l.DisposeAsync()).Returns(ValueTask.CompletedTask);
-
-        var tracked = new TrackedReader(reader.Object, connection.Object, locker.Object, false);
+        var tracked = new TrackedReader(reader, connection, locker, shouldCloseConnection: false);
 
         var result = tracked.Read();
 
         Assert.False(result);
-        connection.Verify(c => c.Close(), Times.Never);
-        locker.Verify(l => l.DisposeAsync(), Times.Once);
+        Assert.False(connection.WasClosed);
+        Assert.True(locker.WasDisposed);
     }
 
     [Fact]
     public async Task ReadAsync_DisposesAfterLastRow()
     {
-        var reader = new Mock<fakeDbDataReader>();
-        reader.SetupSequence(r => r.ReadAsync(CancellationToken.None))
-            .ReturnsAsync(true)
-            .ReturnsAsync(false);
+        var rows = new[]
+        {
+            new Dictionary<string, object> { ["value"] = 1 }
+        };
 
-        reader.Setup(r => r.DisposeAsync()).Returns(ValueTask.CompletedTask);
+        using var reader = new fakeDbDataReader(rows);
+        var connection = new TestTrackedConnection();
+        var locker = new TestLockerAsync();
 
-        var connection = new Mock<ITrackedConnection>();
-        var locker = new Mock<IAsyncDisposable>();
-        locker.Setup(l => l.DisposeAsync()).Returns(ValueTask.CompletedTask);
-
-        var tracked = new TrackedReader(reader.Object, connection.Object, locker.Object, true);
+        var tracked = new TrackedReader(reader, connection, locker, shouldCloseConnection: true);
 
         var first = await tracked.ReadAsync();
         Assert.True(first);
-        connection.Verify(c => c.Close(), Times.Never);
-        locker.Verify(l => l.DisposeAsync(), Times.Never);
+        Assert.False(connection.WasClosed);
+        Assert.Equal(0, locker.DisposeCallCount);
 
         var second = await tracked.ReadAsync();
         Assert.False(second);
-        connection.Verify(c => c.Close(), Times.Once);
-        locker.Verify(l => l.DisposeAsync(), Times.Once);
+        Assert.True(connection.WasClosed);
+        Assert.True(locker.WasDisposed);
     }
 
     [Fact]
-    public void NextResult_ReturnsFalseWithoutCallingReader()
+    public void NextResult_ThrowsNotSupported_AndDoesNotCallUnderlying()
     {
-        var reader = new Mock<DbDataReader>();
-        reader.Setup(r => r.NextResult()).Throws<InvalidOperationException>();
+        var reader = new TrackingFakeReader();
+        var tracked = new TrackedReader(reader, new TestTrackedConnection(), new TestLockerAsync(), false);
 
-        var tracked = new TrackedReader(reader.Object, Mock.Of<ITrackedConnection>(), Mock.Of<IAsyncDisposable>(), false);
-
-        var result = tracked.NextResult();
-
-        Assert.False(result);
-        reader.Verify(r => r.NextResult(), Times.Never);    }
+        Assert.Throws<NotSupportedException>(() => tracked.NextResult());
+        Assert.False(reader.NextResultCalled);
+    }
 
     [Fact]
     public async Task DisposeAsync_ClosesConnection_WhenShouldCloseTrue()
     {
-        var reader = new Mock<DbDataReader>();
-        reader.Setup(r => r.DisposeAsync()).Returns(ValueTask.CompletedTask);
+        using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object>>());
+        var connection = new TestTrackedConnection();
+        var locker = new TestLockerAsync();
 
-        var connection = new Mock<ITrackedConnection>();
-        var locker = new Mock<IAsyncDisposable>();
-        locker.Setup(l => l.DisposeAsync()).Returns(ValueTask.CompletedTask);
-
-        var tracked = new TrackedReader(reader.Object, connection.Object, locker.Object, true);
+        var tracked = new TrackedReader(reader, connection, locker, shouldCloseConnection: true);
 
         await tracked.DisposeAsync();
 
-        connection.Verify(c => c.Close(), Times.Once);
-        locker.Verify(l => l.DisposeAsync(), Times.Once);
+        Assert.True(connection.WasClosed);
+        Assert.True(locker.WasDisposed);
     }
 
     [Fact]
     public async Task DisposeAsync_DoesNotCloseConnection_WhenShouldCloseFalse()
     {
-        var reader = new Mock<DbDataReader>();
-        reader.Setup(r => r.DisposeAsync()).Returns(ValueTask.CompletedTask);
+        using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object>>());
+        var connection = new TestTrackedConnection();
+        var locker = new TestLockerAsync();
 
-        var connection = new Mock<ITrackedConnection>();
-        var locker = new Mock<IAsyncDisposable>();
-        locker.Setup(l => l.DisposeAsync()).Returns(ValueTask.CompletedTask);
-
-        var tracked = new TrackedReader(reader.Object, connection.Object, locker.Object, false);
+        var tracked = new TrackedReader(reader, connection, locker, shouldCloseConnection: false);
 
         await tracked.DisposeAsync();
 
-        connection.Verify(c => c.Close(), Times.Never);
-        locker.Verify(l => l.DisposeAsync(), Times.Once);
+        Assert.False(connection.WasClosed);
+        Assert.True(locker.WasDisposed);
     }
 
     [Fact]
     public void Dispose_DoesNotCloseConnection_WhenShouldCloseFalse()
     {
-        var reader = new Mock<DbDataReader>();
-        var connection = new Mock<ITrackedConnection>();
-        var locker = new Mock<IAsyncDisposable>();
-        locker.Setup(l => l.DisposeAsync()).Returns(ValueTask.CompletedTask);
+        using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object>>());
+        var connection = new TestTrackedConnection();
+        var locker = new TestLockerAsync();
 
-        var tracked = new TrackedReader(reader.Object, connection.Object, locker.Object, false);
+        var tracked = new TrackedReader(reader, connection, locker, shouldCloseConnection: false);
 
         tracked.Dispose();
 
-        connection.Verify(c => c.Close(), Times.Never);
-        locker.Verify(l => l.DisposeAsync(), Times.Once);
+        Assert.False(connection.WasClosed);
+        Assert.True(locker.WasDisposed);
     }
 
     [Fact]
@@ -242,7 +345,7 @@ public class TrackedReaderTests
         using var reader = new fakeDbDataReader(new[] { row });
         reader.Read();
 
-        var tracked = new TrackedReader(reader, Mock.Of<ITrackedConnection>(), Mock.Of<IAsyncDisposable>(), false);
+        var tracked = new TrackedReader(reader, new TestTrackedConnection(), new TestLockerAsync(), false);
 
         Assert.True(tracked.GetBoolean(0));
         Assert.Equal((byte)1, tracked.GetByte(1));
@@ -265,5 +368,30 @@ public class TrackedReaderTests
         Assert.Equal(0, tracked.Depth);
         Assert.False(tracked.IsClosed);
         Assert.Equal(0, tracked.RecordsAffected);
+    }
+
+    [Fact]
+    public void Dispose_DoesNotInvokeLockerOnCurrentSynchronizationContext()
+    {
+        using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object>>());
+        var connection = new TestTrackedConnection();
+        var blockingContext = new BlockingSynchronizationContext();
+        var locker = new ContextSensitiveLocker(blockingContext);
+
+        var previous = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(blockingContext);
+        try
+        {
+            var tracked = new TrackedReader(reader, connection, locker, shouldCloseConnection: false);
+
+            tracked.Dispose();
+
+            Assert.False(locker.ObservedForbiddenContext);
+            Assert.False(connection.WasClosed);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
     }
 }

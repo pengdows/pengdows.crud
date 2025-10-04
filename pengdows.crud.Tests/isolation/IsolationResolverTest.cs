@@ -53,7 +53,7 @@ public class IsolationResolverTests
     {
         var resolver = new IsolationResolver(SupportedDatabase.PostgreSql, false);
 
-        Assert.Throws<InvalidOperationException>(() => resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
+        Assert.Throws<NotSupportedException>(() => resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
         Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.StrictConsistency));
     }
 

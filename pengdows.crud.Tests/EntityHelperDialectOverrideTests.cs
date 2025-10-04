@@ -1,8 +1,6 @@
-using System;
-using System.Linq;
-using Xunit;
-using pengdows.crud.fakeDb;
 using pengdows.crud.enums;
+using pengdows.crud.fakeDb;
+using Xunit;
 
 namespace pengdows.crud.Tests;
 
@@ -24,8 +22,8 @@ public class EntityHelperDialectOverrideTests
         var sql = sc.Query.ToString();
 
         // Postgres uses ':' for named parameters
-        Assert.Contains(":p0", sql);
-        Assert.DoesNotContain("@p0", sql);
+        Assert.Contains(":i0", sql);
+        Assert.DoesNotContain("@i0", sql);
     }
 
     [Fact]
@@ -61,8 +59,8 @@ public class EntityHelperDialectOverrideTests
 
         // The IN (...) list should use '@' parameter markers under SQLite
         Assert.Contains("IN (", sql);
-        Assert.Contains("@p0", sql);
-        Assert.Contains("@p1", sql);
+        Assert.Contains("@w0", sql);
+        Assert.Contains("@w1", sql);
     }
 }
 

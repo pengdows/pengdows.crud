@@ -35,11 +35,11 @@ public class ProcWrappingStrategyTests
 
         var read = sc.WrapForStoredProc(ExecutionType.Read, includeParameters: true);
         var write = sc.WrapForStoredProc(ExecutionType.Write, includeParameters: true);
-        Assert.Equal("EXEC dbo.Sqltest @p0, @p1", read);
-        Assert.Equal("EXEC dbo.Sqltest @p0, @p1", write);
+        Assert.Equal("EXEC \"dbo\".\"Sqltest\" @p0, @p1", read);
+        Assert.Equal("EXEC \"dbo\".\"Sqltest\" @p0, @p1", write);
 
         var noArgs = sc.WrapForStoredProc(ExecutionType.Read, includeParameters: false);
-        Assert.Equal("EXEC dbo.Sqltest", noArgs);
+        Assert.Equal("EXEC \"dbo\".\"Sqltest\"", noArgs);
     }
 
     [Fact]
@@ -49,10 +49,10 @@ public class ProcWrappingStrategyTests
         using var sc = CreateContainer(ctx);
 
         var s = sc.WrapForStoredProc(ExecutionType.Read, includeParameters: true);
-        Assert.Equal("CALL dbo.Sqltest(@p0, @p1)", s);
+        Assert.Equal("CALL \"dbo\".\"Sqltest\"(@p0, @p1)", s);
 
         var noArgs = sc.WrapForStoredProc(ExecutionType.Read, includeParameters: false);
-        Assert.Equal("CALL dbo.Sqltest()", noArgs);
+        Assert.Equal("CALL \"dbo\".\"Sqltest\"()", noArgs);
     }
 
     [Fact]
@@ -63,11 +63,11 @@ public class ProcWrappingStrategyTests
 
         var read = sc.WrapForStoredProc(ExecutionType.Read, includeParameters: true);
         var write = sc.WrapForStoredProc(ExecutionType.Write, includeParameters: true);
-        Assert.Equal("SELECT * FROM dbo.Sqltest(@p0, @p1)", read);
-        Assert.Equal("CALL dbo.Sqltest(@p0, @p1)", write);
+        Assert.Equal("SELECT * FROM \"dbo\".\"Sqltest\"(@p0, @p1)", read);
+        Assert.Equal("CALL \"dbo\".\"Sqltest\"(@p0, @p1)", write);
 
         var noArgs = sc.WrapForStoredProc(ExecutionType.Read, includeParameters: false);
-        Assert.Equal("SELECT * FROM dbo.Sqltest()", noArgs);
+        Assert.Equal("SELECT * FROM \"dbo\".\"Sqltest\"()", noArgs);
     }
 
     [Fact]
@@ -77,10 +77,10 @@ public class ProcWrappingStrategyTests
         using var sc = CreateContainer(ctx);
 
         var s = sc.WrapForStoredProc(ExecutionType.Read, includeParameters: true);
-        Assert.Equal("BEGIN\n\tdbo.Sqltest(@p0, @p1);\nEND;", s);
+        Assert.Equal("BEGIN\n\t\"dbo\".\"Sqltest\"(@p0, @p1);\nEND;", s);
 
         var noArgs = sc.WrapForStoredProc(ExecutionType.Write, includeParameters: false);
-        Assert.Equal("BEGIN\n\tdbo.Sqltest;\nEND;", noArgs);
+        Assert.Equal("BEGIN\n\t\"dbo\".\"Sqltest\";\nEND;", noArgs);
     }
 
     [Fact]
@@ -91,8 +91,8 @@ public class ProcWrappingStrategyTests
 
         var read = sc.WrapForStoredProc(ExecutionType.Read, includeParameters: true);
         var write = sc.WrapForStoredProc(ExecutionType.Write, includeParameters: true);
-        Assert.Equal("SELECT * FROM dbo.Sqltest(@p0, @p1)", read);
-        Assert.Equal("EXECUTE PROCEDURE dbo.Sqltest(@p0, @p1)", write);
+        Assert.Equal("SELECT * FROM \"dbo\".\"Sqltest\"(@p0, @p1)", read);
+        Assert.Equal("EXECUTE PROCEDURE \"dbo\".\"Sqltest\"(@p0, @p1)", write);
     }
 
     [Fact]

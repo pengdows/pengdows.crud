@@ -213,7 +213,7 @@ public class ParallelTestOrchestrator
         var successful = results.Count(r => r.Success);
         var failed = results.Length - successful;
 
-        Console.WriteLine($"Total: {results.Length} | Successful: {successful} | Failed: {failed}");
+    Console.WriteLine($"Total: {results.Length} | Successful: {successful} | Failed: {failed}");
         Console.WriteLine();
 
         // Results table

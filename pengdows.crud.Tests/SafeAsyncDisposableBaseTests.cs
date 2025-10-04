@@ -1,4 +1,3 @@
-#nullable enable
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -94,7 +93,6 @@ public class SafeAsyncDisposableBaseTests
         public int ManagedCount { get; private set; }
         protected override void DisposeManaged() => ManagedCount++;
     }
-
     [Fact]
     public void Dispose_OnlyOnce()
     {

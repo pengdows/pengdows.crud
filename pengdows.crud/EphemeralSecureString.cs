@@ -2,12 +2,13 @@
 
 using System.Security.Cryptography;
 using System.Text;
+using pengdows.crud.infrastructure;
 
 #endregion
 
 namespace pengdows.crud;
 
-public sealed class EphemeralSecureString : IEphemeralSecureString, IDisposable
+public sealed class EphemeralSecureString : SafeAsyncDisposableBase, IEphemeralSecureString
 {
     private const int TTL_MS = 750;
     private readonly byte[] _cipherText;
@@ -17,7 +18,6 @@ public sealed class EphemeralSecureString : IEphemeralSecureString, IDisposable
     private readonly object _lock = new();
 
     private byte[]? _cachedPlainBytes;
-    private long _disposed;
     private Timer? _timer;
 
     public EphemeralSecureString(string input)
@@ -40,10 +40,7 @@ public sealed class EphemeralSecureString : IEphemeralSecureString, IDisposable
 
     public string Reveal()
     {
-        if (Interlocked.Read(ref _disposed) == 1)
-        {
-            throw new ObjectDisposedException(nameof(EphemeralSecureString));
-        }
+        ThrowIfDisposed();
 
         lock (_lock)
         {
@@ -59,15 +56,12 @@ public sealed class EphemeralSecureString : IEphemeralSecureString, IDisposable
         }
     }
 
-    public void Dispose()
+    protected override void DisposeManaged()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) == 0)
-        {
-            ClearPlainText(null);
-            CryptographicOperations.ZeroMemory(_key);
-            CryptographicOperations.ZeroMemory(_iv);
-            CryptographicOperations.ZeroMemory(_cipherText);
-        }
+        ClearPlainText(null);
+        CryptographicOperations.ZeroMemory(_key);
+        CryptographicOperations.ZeroMemory(_iv);
+        CryptographicOperations.ZeroMemory(_cipherText);
     }
 
     public void WithRevealed(Action<string> use)

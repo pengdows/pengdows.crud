@@ -158,6 +158,14 @@ public interface ISqlContainer :ISafeAsyncDisposableBase
     Task<int> ExecuteNonQueryAsync(CommandType commandType = CommandType.Text);
 
     /// <summary>
+    /// Executes the current query as a non-query command with cancellation support.
+    /// </summary>
+    /// <param name="commandType">Type of command to execute.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>The number of rows affected.</returns>
+    Task<int> ExecuteNonQueryAsync(CommandType commandType, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Executes the query and returns the first column of the first row in the result set.
     /// </summary>
     /// <typeparam name="T">The expected return type.</typeparam>
@@ -166,11 +174,28 @@ public interface ISqlContainer :ISafeAsyncDisposableBase
     Task<T?> ExecuteScalarAsync<T>(CommandType commandType = CommandType.Text);
 
     /// <summary>
+    /// Executes the query and returns the first column of the first row with cancellation support.
+    /// </summary>
+    /// <typeparam name="T">The expected return type.</typeparam>
+    /// <param name="commandType">Type of command to execute.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>The scalar value or <c>null</c> if no results.</returns>
+    Task<T?> ExecuteScalarAsync<T>(CommandType commandType, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Executes the query and returns a tracked data reader.
     /// </summary>
     /// <param name="commandType">Type of command to execute.</param>
     /// <returns>A tracked reader over the results.</returns>
     Task<ITrackedReader> ExecuteReaderAsync(CommandType commandType = CommandType.Text);
+
+    /// <summary>
+    /// Executes the query and returns a tracked data reader with cancellation support.
+    /// </summary>
+    /// <param name="commandType">Type of command to execute.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>A tracked reader over the results.</returns>
+    Task<ITrackedReader> ExecuteReaderAsync(CommandType commandType, CancellationToken cancellationToken);
 
     /// <summary>
     /// Adds multiple parameters to the container.
@@ -197,5 +222,21 @@ public interface ISqlContainer :ISafeAsyncDisposableBase
     /// <param name="includeParameters">Whether to include parameters in the wrapper.</param>
     /// <param name="captureReturn">Whether to capture the procedure return value when supported.</param>
     string WrapForStoredProc(ExecutionType executionType, bool includeParameters = true, bool captureReturn = false);
+
+    /// <summary>
+    /// Creates a lightweight clone of this container with the same SQL query and parameter structure,
+    /// allowing parameter values to be updated without affecting the original.
+    /// </summary>
+    /// <returns>A cloned container ready for parameter value updates.</returns>
+    ISqlContainer Clone();
+
+    /// <summary>
+    /// Creates a lightweight clone of this container with the same SQL query and parameter structure,
+    /// but with a different database context. This is essential for cached containers that need to
+    /// work with different contexts (e.g., transactions, multi-tenancy).
+    /// </summary>
+    /// <param name="context">The database context to use for the cloned container. If null, uses the original context.</param>
+    /// <returns>A cloned container with the specified context, ready for parameter value updates.</returns>
+    ISqlContainer Clone(IDatabaseContext? context);
 
 }

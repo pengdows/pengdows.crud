@@ -63,4 +63,32 @@ public static class SqlContainerExtensions
 
         return container.ExecuteReaderAsync(commandType);
     }
+
+    public static Task<ITrackedReader> ExecuteReaderSingleRowAsync(
+        this ISqlContainer container,
+        CancellationToken cancellationToken = default)
+    {
+        if (container is SqlContainer concrete)
+        {
+            return concrete.ExecuteReaderSingleRowAsync(cancellationToken);
+        }
+
+        // Fallback to normal reader when container is not concrete
+        return container.ExecuteReaderAsync(CommandType.Text, cancellationToken);
+    }
+
+    // Convenience wrapper for write-path scalar (INSERT ... RETURNING / OUTPUT)
+    public static Task<T?> ExecuteScalarWriteAsync<T>(
+        this ISqlContainer container,
+        CommandType commandType = CommandType.Text,
+        CancellationToken cancellationToken = default)
+    {
+        if (container is SqlContainer concrete)
+        {
+            return concrete.ExecuteScalarWriteAsync<T>(commandType, cancellationToken);
+        }
+
+        // Fallback to read-path scalar if non-concrete (may not work for writes)
+        return container.ExecuteScalarAsync<T>(commandType, cancellationToken);
+    }
 }

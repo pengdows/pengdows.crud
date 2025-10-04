@@ -115,7 +115,7 @@ public class SqlDialectCapabilityTests
     private sealed class Sql89Dialect : Sql92Dialect
     {
         public Sql89Dialect(DbProviderFactory factory, ILogger logger) : base(factory, logger) { }
-        protected override SqlStandardLevel DetermineStandardCompliance(Version? version) => SqlStandardLevel.Sql89;
+        public override SqlStandardLevel DetermineStandardCompliance(Version? version) => SqlStandardLevel.Sql89;
     }
 
     [Fact]

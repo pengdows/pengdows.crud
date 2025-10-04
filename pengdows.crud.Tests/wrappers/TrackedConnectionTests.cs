@@ -1,8 +1,9 @@
 #region
+
 using System.Data;
 using System.Threading.Tasks;
-using pengdows.crud.fakeDb;
 using pengdows.crud.enums;
+using pengdows.crud.fakeDb;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
 using Xunit;
@@ -151,5 +152,30 @@ public class TrackedConnectionTests
         Assert.Equal(ConnectionState.Open, tracked.State);
         tracked.Close();
         Assert.Equal(ConnectionState.Closed, tracked.State);
+    }
+
+    [Fact]
+    public async Task DisposeAsync_WaitsForLockRelease_WhenSharedConnectionLocked()
+    {
+        await using var conn = new fakeDbConnection();
+        await using var tracked = new TrackedConnection(conn, isSharedConnection: true);
+
+        // Open the connection first so it can be checked as Open later
+        await tracked.OpenAsync();
+        Assert.Equal(ConnectionState.Open, conn.State);
+
+        await using var locker = tracked.GetLock();
+        await locker.LockAsync();
+
+        var disposeTask = tracked.DisposeAsync().AsTask();
+
+        var completedEarly = await Task.WhenAny(disposeTask, Task.Delay(100));
+        Assert.NotSame(disposeTask, completedEarly);
+        Assert.Equal(ConnectionState.Open, conn.State);
+
+        await locker.DisposeAsync();
+
+        await disposeTask;
+        Assert.Equal(ConnectionState.Closed, conn.State);
     }
 }

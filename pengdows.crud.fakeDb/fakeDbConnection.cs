@@ -1,15 +1,19 @@
 #region
 
+using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
+using System.Threading;
+using System.Threading.Tasks;
 using pengdows.crud.enums;
 
 #endregion
 
 namespace pengdows.crud.fakeDb;
 
-public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsyncDisposable
+public class fakeDbConnection : DbConnection, IFakeDbConnection
 {
     private string? _connectionString;
     private SupportedDatabase? _emulatedProduct;
@@ -20,6 +24,7 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
     private bool _shouldFailOnOpen;
     private bool _shouldFailOnCommand;
     private bool _shouldFailOnBeginTransaction;
+    private Exception? _closeFailureException;
     private Exception? _customFailureException;
     private int _openCallCount;
     private int? _failAfterOpenCount;
@@ -27,18 +32,41 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
     private int? _sharedFailAfterOpenCount;
     private bool _isBroken;
     private bool _skipFirstFailOnOpen;
-    private bool _skipFirstBreakConnection;
     private fakeDbFactory? _factoryRef;
+    private string? _emulatedTypeName;
     public override string DataSource => "FakeSource";
     public override string ServerVersion => GetEmulatedServerVersion();
 
-    internal readonly Queue<IEnumerable<Dictionary<string, object>>> ReaderResults = new();
+    internal readonly Queue<IEnumerable<Dictionary<string, object?>>> ReaderResults = new();
     public readonly Queue<object?> ScalarResults = new();
     public readonly Queue<int> NonQueryResults = new();
     internal readonly Dictionary<string, object?> ScalarResultsByCommand = new();
+    internal Exception? NonQueryExecuteException { get; private set; }
+    internal Exception? ScalarExecuteException { get; private set; }
+    internal Exception? PersistentScalarException { get; private set; }
+    internal object? DefaultScalarResultOnce { get; private set; }
+    internal readonly Dictionary<string, Exception> CommandFailuresByText = new();
     public readonly List<string> ExecutedNonQueryTexts = new();
+    public readonly List<string> ExecutedReaderTexts = new();
 
-    public void EnqueueReaderResult(IEnumerable<Dictionary<string, object>> rows)
+    // Enhanced data persistence
+    internal readonly FakeDataStore DataStore;
+    /// <summary>
+    /// Controls whether the connection should persist DML results in-memory for subsequent queries.
+    /// Tests opt-in explicitly to avoid surprising behavior changes in existing suites.
+    /// </summary>
+    public bool EnableDataPersistence { get; set; } = false;
+
+    /// <summary>
+    /// Creates a fakeDbConnection with an optional shared data store.
+    /// If no shared store is provided, creates a new instance-level store.
+    /// </summary>
+    public fakeDbConnection(FakeDataStore? sharedDataStore = null)
+    {
+        DataStore = sharedDataStore ?? new FakeDataStore();
+    }
+
+    public void EnqueueReaderResult(IEnumerable<Dictionary<string, object?>> rows)
     {
         ReaderResults.Enqueue(rows);
     }
@@ -58,6 +86,38 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
         ScalarResultsByCommand[commandText] = value;
     }
 
+    public void SetNonQueryExecuteException(Exception? exception)
+    {
+        NonQueryExecuteException = exception;
+    }
+
+    public void SetScalarExecuteException(Exception? exception)
+    {
+        ScalarExecuteException = exception;
+    }
+
+    public void SetPersistentScalarException(Exception? exception)
+    {
+        PersistentScalarException = exception;
+    }
+
+    public void SetDefaultScalarOnce(object? value)
+    {
+        DefaultScalarResultOnce = value;
+    }
+
+    internal object? ConsumeDefaultScalarOnce()
+    {
+        var v = DefaultScalarResultOnce;
+        DefaultScalarResultOnce = null;
+        return v;
+    }
+
+    public void SetCommandFailure(string commandText, Exception exception)
+    {
+        CommandFailuresByText[commandText] = exception;
+    }
+
     public void SetServerVersion(string version)
     {
         _serverVersion = version;
@@ -71,6 +131,33 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
     public int? GetMaxParameterLimit()
     {
         return _maxParameterLimit;
+    }
+
+    /// <summary>
+    /// Sets the emulated type name for the connection (e.g., "Npgsql.NpgsqlConnection")
+    /// This affects GetType().FullName behavior to simulate different connection types
+    /// </summary>
+    public void SetEmulatedTypeName(string typeName)
+    {
+        _emulatedTypeName = typeName;
+    }
+
+    /// <summary>
+    /// Gets the emulated type name if set, otherwise returns the actual type name
+    /// </summary>
+    public string GetEmulatedTypeName()
+    {
+        return _emulatedTypeName ?? GetType().FullName ?? "fakeDbConnection";
+    }
+
+    /// <summary>
+    /// Override for testing purposes - checks if the type name starts with the specified prefix
+    /// This is used by dialects to check connection types (e.g., "Npgsql.")
+    /// </summary>
+    public bool TypeNameStartsWith(string prefix)
+    {
+        var typeName = _emulatedTypeName ?? GetType().FullName ?? "";
+        return typeName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -166,8 +253,64 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
         _openCallCount = 0;
         _isBroken = false;
         _skipFirstFailOnOpen = false;
-        _skipFirstBreakConnection = false;
         _factoryRef = null;
+    }
+
+    IReadOnlyCollection<IEnumerable<Dictionary<string, object>>> IFakeDbConnection.RemainingReaderResults
+    {
+        get
+        {
+            if (ReaderResults.Count == 0)
+            {
+                return Array.Empty<IEnumerable<Dictionary<string, object>>>();
+            }
+
+            var copies = new List<IEnumerable<Dictionary<string, object>>>(ReaderResults.Count);
+            foreach (var rows in ReaderResults)
+            {
+                var clonedRows = new List<Dictionary<string, object>>();
+                foreach (var row in rows)
+                {
+                    clonedRows.Add(CloneRow(row));
+                }
+                copies.Add(clonedRows);
+            }
+
+            return copies;
+        }
+    }
+
+    IReadOnlyCollection<object?> IFakeDbConnection.RemainingScalarResults => ScalarResults.ToArray();
+
+    IReadOnlyCollection<int> IFakeDbConnection.RemainingNonQueryResults => NonQueryResults.ToArray();
+
+    IReadOnlyCollection<string> IFakeDbConnection.ExecutedNonQueryTexts => ExecutedNonQueryTexts.ToArray();
+
+    private static Dictionary<string, object> CloneRow(Dictionary<string, object?> row)
+    {
+        var clone = new Dictionary<string, object>(row.Count);
+        foreach (var kvp in row)
+        {
+            clone[kvp.Key] = kvp.Value!;
+        }
+
+        return clone;
+    }
+
+    void IFakeDbConnection.EnqueueReaderResult(IEnumerable<Dictionary<string, object>> rows)
+    {
+        var converted = new List<Dictionary<string, object?>>(rows is ICollection<Dictionary<string, object>> collection ? collection.Count : 0);
+        foreach (var row in rows)
+        {
+            var newRow = new Dictionary<string, object?>(row.Count);
+            foreach (var kvp in row)
+            {
+                newRow[kvp.Key] = kvp.Value;
+            }
+            converted.Add(newRow);
+        }
+
+        EnqueueReaderResult(converted);
     }
 
     private string GetEmulatedServerVersion()
@@ -231,6 +374,11 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
 
     public override void Open()
     {
+        if (_state == ConnectionState.Open)
+        {
+            return; // Already open, don't change state again
+        }
+
         if (_isBroken)
         {
             throw new InvalidOperationException("Connection is broken");
@@ -286,10 +434,8 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
                 RaiseStateChangedEvent(original);
                 return; // Exit early, don't do normal open logic
             }
-            else
-            {
-                throw new InvalidOperationException("Connection is broken");
-            }
+
+            throw new InvalidOperationException("Connection is broken");
         }
 
         OpenCount++;
@@ -302,6 +448,10 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
 
     public override void Close()
     {
+        if (_closeFailureException != null)
+        {
+            throw _closeFailureException;
+        }
         var original = _state;
         _state = ConnectionState.Closed;
         RaiseStateChangedEvent(original);
@@ -361,9 +511,11 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
             }
             else
             {
-                EmulatedProduct = Enum.TryParse<SupportedDatabase>(raw.ToString(), true, out var result)
+                // If parsing fails, default to Unknown rather than throwing
+                var rawText = raw?.ToString();
+                EmulatedProduct = Enum.TryParse<SupportedDatabase>(rawText, true, out var result)
                     ? result
-                    : throw new ArgumentException($"Invalid EmulatedProduct: {raw}");
+                    : SupportedDatabase.Unknown;
             }
         }
 
@@ -376,6 +528,14 @@ public class fakeDbConnection : DbConnection, IDbConnection, IDisposable, IAsync
         {
             OnStateChange(new StateChangeEventArgs(originalState, _state));
         }
+    }
+
+    /// <summary>
+    /// Configure the connection to throw an exception on Close/Dispose.
+    /// </summary>
+    public void SetFailOnClose(Exception? exception)
+    {
+        _closeFailureException = exception;
     }
 
     protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel)

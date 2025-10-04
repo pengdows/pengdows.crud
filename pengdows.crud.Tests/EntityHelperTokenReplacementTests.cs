@@ -28,7 +28,7 @@ public class EntityHelperTokenReplacementTests : SqlLiteContextTestBase
         var sc = helper.BuildCreate(entity);
         var sql = sc.Query.ToString();
         var replaced = helper.ReplaceDialectTokens(sql, "[", "]", ":");
-        Assert.Equal("INSERT INTO [Tokens] ([Id]) VALUES (:p0)", replaced);
+        Assert.Equal("INSERT INTO [Tokens] ([Id]) VALUES (:i0)", replaced);
     }
 
     [Fact]

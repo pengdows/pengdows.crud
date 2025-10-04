@@ -1,6 +1,7 @@
 using System.Data;
 using System.Data.Common;
 using System.Text.RegularExpressions;
+using pengdows.crud;
 using pengdows.crud.enums;
 using pengdows.crud.wrappers;
 
@@ -42,6 +43,26 @@ public interface ISqlDialect
     /// True when the dialect supports named parameters.
     /// </summary>
     bool SupportsNamedParameters { get; }
+
+    /// <summary>
+    /// Allows the dialect to render provider-specific JSON casts for parameter placeholders.
+    /// </summary>
+    /// <param name="parameterMarker">Base parameter marker (e.g., @p0).</param>
+    /// <param name="column">Column metadata describing the JSON column.</param>
+    /// <returns>Dialect-specific SQL fragment.</returns>
+    string RenderJsonArgument(string parameterMarker, IColumnInfo column);
+
+    /// <summary>
+    /// Gives the dialect a chance to stamp provider-specific metadata on JSON parameters.
+    /// </summary>
+    /// <param name="parameter">Parameter instance to update.</param>
+    /// <param name="column">Column metadata describing the JSON column.</param>
+    void TryMarkJsonParameter(DbParameter parameter, IColumnInfo column);
+
+    /// <summary>
+    /// True when the dialect supports set-valued parameters for IN-lists.
+    /// </summary>
+    bool SupportsSetValuedParameters { get; }
 
     /// <summary>
     /// Maximum number of parameters allowed in a single command.
@@ -320,14 +341,46 @@ public interface ISqlDialect
     /// <summary>
     /// Returns dialect-specific session settings to apply to a connection.
     /// </summary>
+    /// <param name="context">The database context requesting settings.</param>
+    /// <param name="readOnly">True when the session should be read-only.</param>
     /// <returns>Command text configuring session options.</returns>
+    string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly);
+
+    /// <summary>
+    /// Legacy accessor for session settings without context information.
+    /// </summary>
+    /// <returns>Command text configuring session options.</returns>
+    [Obsolete("Use the overload accepting context and readOnly.")]
     string GetConnectionSessionSettings();
 
     /// <summary>
-    /// Applies session settings to the provided connection.
+    /// Applies connection-string or provider-specific settings to the provided connection.
     /// </summary>
     /// <param name="connection">Connection to configure.</param>
+    /// <param name="context">Database context requesting the settings.</param>
+    /// <param name="readOnly">True when the connection should be read-only.</param>
+    void ApplyConnectionSettings(IDbConnection connection, IDatabaseContext context, bool readOnly);
+
+    /// <summary>
+    /// Determines whether prepare should be disabled for a connection based on an exception.
+    /// Used for per-connection runtime opt-out on first failure.
+    /// </summary>
+    /// <param name="ex">Exception thrown during prepare attempt.</param>
+    /// <returns>True if prepare should be disabled for this connection.</returns>
+    bool ShouldDisablePrepareOn(Exception ex);
+
+    /// <summary>
+    /// Legacy overload for connection settings without context information.
+    /// </summary>
+    /// <param name="connection">Connection to configure.</param>
+    [Obsolete("Use the overload accepting context and readOnly.")]
     void ApplyConnectionSettings(IDbConnection connection);
+
+    /// <summary>
+    /// Attempts to enter a read-only transaction. Implementations may be a no-op.
+    /// </summary>
+    /// <param name="transaction">Transaction context.</param>
+    void TryEnterReadOnlyTransaction(ITransactionContext transaction);
 
     /// <summary>
     /// Determines whether READ_COMMITTED_SNAPSHOT is enabled.
@@ -384,4 +437,41 @@ public interface ISqlDialect
     /// </summary>
     /// <returns>SQL query to get the last inserted identity value, or empty string if not supported.</returns>
     string GetLastInsertedIdQuery();
+
+    /// <summary>
+    /// Indicates whether INSERT statements support RETURNING or OUTPUT clauses for identity values.
+    /// </summary>
+    bool SupportsInsertReturning { get; }
+
+    /// <summary>
+    /// Generates the RETURNING or OUTPUT clause for INSERT statements to capture identity values.
+    /// </summary>
+    /// <param name="idColumnWrapped">Quoted identity column name</param>
+    /// <returns>SQL clause like " RETURNING id" or " OUTPUT INSERTED.id"</returns>
+    string RenderInsertReturningClause(string idColumnWrapped);
+
+    // Connection pooling properties
+    /// <summary>
+    /// True when the database provider supports external connection pooling.
+    /// False for in-process databases like DuckDB.
+    /// </summary>
+    bool SupportsExternalPooling { get; }
+
+    /// <summary>
+    /// The connection string parameter name for enabling/disabling pooling.
+    /// Usually "Pooling" for most providers, null if not supported.
+    /// </summary>
+    string? PoolingSettingName { get; }
+
+    /// <summary>
+    /// The connection string parameter name for minimum pool size.
+    /// Provider-specific (e.g., "Min Pool Size" vs "MinimumPoolSize"), null if not supported.
+    /// </summary>
+    string? MinPoolSizeSettingName { get; }
+
+    /// <summary>
+    /// The connection string parameter name for maximum pool size.
+    /// Provider-specific (e.g., "Max Pool Size" vs "MaximumPoolSize"), null if not supported.
+    /// </summary>
+    string? MaxPoolSizeSettingName { get; }
 }

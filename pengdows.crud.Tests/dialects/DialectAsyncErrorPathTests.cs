@@ -2,10 +2,11 @@
 
 using System;
 using System.Data;
+using System.Reflection;
+using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
-using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 #endregion
@@ -94,9 +95,7 @@ public class DialectAsyncErrorPathTests
         var factory = new fakeDbFactory(SupportedDatabase.Firebird.ToString());
         var dialect = new FirebirdDialect(factory, NullLogger.Instance);
 
-        var result = dialect.GetType()
-            .GetMethod("ExtractProductNameFromVersion", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
-            .Invoke(dialect, new object[] { "any version string" }) as string;
+        var result = dialect.ExtractProductNameFromVersion("any version string");
 
         Assert.Equal("Firebird", result);
     }
@@ -107,9 +106,7 @@ public class DialectAsyncErrorPathTests
         var factory = new fakeDbFactory(SupportedDatabase.Firebird.ToString());
         var dialect = new FirebirdDialect(factory, NullLogger.Instance);
 
-        var result = (SqlStandardLevel)dialect.GetType()
-            .GetMethod("DetermineStandardCompliance", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
-            .Invoke(dialect, new object?[] { null })!;
+        var result = dialect.DetermineStandardCompliance(null);
 
         Assert.Equal(SqlStandardLevel.Sql92, result);
     }
@@ -126,9 +123,7 @@ public class DialectAsyncErrorPathTests
         var dialect = new FirebirdDialect(factory, NullLogger.Instance);
         var version = new Version(major, minor, build);
 
-        var result = (SqlStandardLevel)dialect.GetType()
-            .GetMethod("DetermineStandardCompliance", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
-            .Invoke(dialect, new object[] { version })!;
+        var result = dialect.DetermineStandardCompliance(version);
 
         Assert.Equal(expected, result);
     }
@@ -163,7 +158,7 @@ public class DialectAsyncErrorPathTests
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite.ToString());
         var dialect = new SqliteDialect(factory, NullLogger.Instance);
 
-        var method = typeof(SqlDialect).GetMethod("TryParseMajorVersion", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        var method = typeof(SqlDialect).GetMethod("TryParseMajorVersion", BindingFlags.NonPublic | BindingFlags.Static);
 
         var result1 = (bool)method!.Invoke(null, new object[] { null!, 0 })!;
         var result2 = (bool)method.Invoke(null, new object[] { "", 0 })!;
@@ -177,7 +172,7 @@ public class DialectAsyncErrorPathTests
     [Fact]
     public void SqlDialect_TryParseMajorVersion_ValidInput_ReturnsTrue()
     {
-        var method = typeof(SqlDialect).GetMethod("TryParseMajorVersion", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        var method = typeof(SqlDialect).GetMethod("TryParseMajorVersion", BindingFlags.NonPublic | BindingFlags.Static);
 
         var parameters = new object[] { "14.2.1", 0 };
         var result = (bool)method!.Invoke(null, parameters)!;
@@ -190,7 +185,7 @@ public class DialectAsyncErrorPathTests
     [Fact]
     public void SqlDialect_GetPrime_EdgeCases_ReturnsValidPrimes()
     {
-        var method = typeof(SqlDialect).GetMethod("GetPrime", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        var method = typeof(SqlDialect).GetMethod("GetPrime", BindingFlags.NonPublic | BindingFlags.Static);
 
         var result1 = (int)method!.Invoke(null, new object[] { 1 })!;
         var result2 = (int)method.Invoke(null, new object[] { 2 })!;

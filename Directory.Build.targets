@@ -1,0 +1,15 @@
+<Project>
+  <!-- Vendor reference verification target - only runs for core assemblies -->
+  <Target Name="VerifyNoVendor" AfterTargets="Build" Condition="'$(SkipVerifyNoVendor)' != 'true' And '$(MSBuildProjectName)' != 'testbed' And '$(MSBuildProjectName)' != 'CrudBenchmarks' And '$(MSBuildProjectName)' != 'pengdows.crud.Tests' And '$(MSBuildProjectName)' != 'verify-novendor' And !$(MSBuildProjectDirectory.Contains('testbed')) And !$(MSBuildProjectDirectory.Contains('benchmarks')) And !$(MSBuildProjectDirectory.Contains('Tests'))">
+  <MSBuild Projects="$(MSBuildThisFileDirectory)tools/verify-novendor/verify-novendor.csproj"
+           Targets="Build"
+           Properties="Configuration=Debug" />
+  <Exec Command="dotnet &quot;$(MSBuildThisFileDirectory)tools/verify-novendor/bin/Debug/net8.0/verify-novendor.dll&quot; &quot;$(TargetDir)&quot;"
+        ContinueOnError="false"
+        IgnoreExitCode="false" />
+  </Target>
+
+  <Target Name="ValidateInterfaceBaseline" AfterTargets="Build" Condition="'$(MSBuildProjectName)' == 'pengdows.crud.abstractions'">
+    <Exec Command="dotnet &quot;$(MSBuildThisFileDirectory)tools/interface-api-check/bin/Release/net8.0/InterfaceApiCheck.dll&quot; --verify --assembly &quot;$(TargetPath)&quot; --baseline &quot;$(MSBuildProjectDirectory)/ApiBaseline/interfaces.txt&quot;" />
+  </Target>
+</Project>

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Data.Common;
 using System.Threading.Tasks;
@@ -78,9 +79,9 @@ public class DataSourceInformationCapabilityTests
         public override int MaxParameterLimit => 1;
         public override int ParameterNameMaxLength => 1;
         public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.None;
-        protected override Task<string> GetDatabaseVersionAsync(ITrackedConnection connection) => Task.FromResult("1.0");
-        protected override Task<string?> GetProductNameAsync(ITrackedConnection connection) => Task.FromResult<string?>("OldDB");
-        protected override SqlStandardLevel DetermineStandardCompliance(System.Version? version) => SqlStandardLevel.Sql89;
+        public override Task<string> GetDatabaseVersionAsync(ITrackedConnection connection) => Task.FromResult("1.0");
+        public override Task<string?> GetProductNameAsync(ITrackedConnection connection) => Task.FromResult<string?>("OldDB");
+        public override SqlStandardLevel DetermineStandardCompliance(Version? version) => SqlStandardLevel.Sql89;
     }
 
     [Fact]

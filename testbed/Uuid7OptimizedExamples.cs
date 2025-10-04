@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using pengdows.crud;
 
 /// <summary>
@@ -18,7 +19,7 @@ public static class Uuid7OptimizedExamples
 
         // Show thread state
         var (lastMs, counter, bufferIndex) = Uuid7Optimized.GetThreadState();
-        Console.WriteLine($"\nThread State:");
+        Console.WriteLine("\nThread State:");
         Console.WriteLine($"  Last MS: {lastMs}");
         Console.WriteLine($"  Counter: {counter}");
         Console.WriteLine($"  Buffer Index: {bufferIndex}");
@@ -64,7 +65,7 @@ public static class Uuid7OptimizedExamples
             Uuid7Optimized.NewUuid7();
         }
 
-        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var sw = Stopwatch.StartNew();
         
         for (int i = 0; i < iterations; i++)
         {
@@ -75,7 +76,7 @@ public static class Uuid7OptimizedExamples
 
         var totalMs = sw.ElapsedMilliseconds;
         var uuidsPerSecond = iterations * 1000.0 / totalMs;
-        var nsPerUuid = (double)sw.ElapsedTicks / iterations * 1_000_000_000.0 / System.Diagnostics.Stopwatch.Frequency;
+        var nsPerUuid = (double)sw.ElapsedTicks / iterations * 1_000_000_000.0 / Stopwatch.Frequency;
 
         Console.WriteLine($"Time: {totalMs:N0} ms");
         Console.WriteLine($"Rate: {uuidsPerSecond:N0} UUIDs/second");
@@ -94,7 +95,7 @@ public static class Uuid7OptimizedExamples
         var allUuids = new Guid[threadCount * uuidsPerThread];
         var tasks = new Task[threadCount];
         
-        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var sw = Stopwatch.StartNew();
 
         for (int t = 0; t < threadCount; t++)
         {
@@ -244,7 +245,7 @@ public static class Uuid7OptimizedExamples
         
         var allUuids = new Guid[totalUuids];
         var tasks = new Task[threadCount];
-        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var sw = Stopwatch.StartNew();
 
         // Generate UUIDs under high concurrency
         for (int t = 0; t < threadCount; t++)

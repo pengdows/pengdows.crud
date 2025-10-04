@@ -1,12 +1,16 @@
 #region
 
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Text;
+using Microsoft.Extensions.Logging;
 using pengdows.crud.attributes;
+using pengdows.crud.enums;
 
 #endregion
 
@@ -16,12 +20,16 @@ public sealed class DataReaderMapper : IDataReaderMapper
 {
     public static readonly IDataReaderMapper Instance = new DataReaderMapper();
 
-    public DataReaderMapper()
+    private static readonly ConcurrentDictionary<SetterCacheKey, Action<object, DbDataReader>> _setterCache = new();
+    private static readonly ConcurrentDictionary<PlanCacheKey, MapperPlan> _planCache = new();
+    private static readonly ConcurrentDictionary<PropertyLookupCacheKey, IReadOnlyDictionary<string, PropertyInfo>> _propertyLookupCache = new();
+    private static readonly MethodInfo _getFieldValueGenericMethod = ResolveGetFieldValueMethod();
+
+    internal DataReaderMapper()
     {
     }
 
-    private static readonly ConcurrentDictionary<PropertyInfo, Action<object, object?>> _setterCache = new();
-    private static readonly ConcurrentDictionary<(Type Type, string Schema, MapperOptions Options), MapperPlan> _planCache = new();
+    private readonly record struct PlanCacheKey(Type Type, string SchemaHash, bool ColumnsOnly, EnumParseFailureMode EnumMode);
 
     public static Task<List<T>> LoadObjectsFromDataReaderAsync<T>(
         IDataReader reader,
@@ -110,8 +118,8 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
         options ??= MapperOptions.Default;
 
-        var schemaHash = BuildSchemaHash(rdr);
-        var planKey = (typeof(T), schemaHash, options);
+        var schemaHash = BuildSchemaHash(rdr, options);
+        var planKey = new PlanCacheKey(typeof(T), schemaHash, options.ColumnsOnly, options.EnumMode);
 
         var plan = _planCache.GetOrAdd(planKey, _ => BuildPlan<T>(rdr, options));
 
@@ -121,17 +129,14 @@ public sealed class DataReaderMapper : IDataReaderMapper
             for (var i = 0; i < plan.Ordinals.Length; i++)
             {
                 var ordinal = plan.Ordinals[i];
-                if (await rdr.IsDBNullAsync(ordinal, cancellationToken).ConfigureAwait(false))
+                if (rdr.IsDBNull(ordinal))
                 {
                     continue;
                 }
 
                 try
                 {
-                    var raw = await rdr.GetFieldValueAsync<object>(ordinal, cancellationToken)
-                        .ConfigureAwait(false);
-                    var coerced = plan.Coercers[i](raw);
-                    plan.Setters[i](obj, coerced);
+                    plan.Setters[i](obj, rdr);
                 }
                 catch (Exception ex)
                 {
@@ -151,23 +156,10 @@ public sealed class DataReaderMapper : IDataReaderMapper
     private static MapperPlan BuildPlan<T>(DbDataReader reader, MapperOptions options)
     {
         var type = typeof(T);
-        var props = type.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.SetProperty);
-
-        IEnumerable<PropertyInfo> candidates = props;
-        if (options.ColumnsOnly)
-        {
-            candidates = candidates.Where(p => p.GetCustomAttribute<ColumnAttribute>() != null);
-        }
-
-        var propertyLookup = options.ColumnsOnly
-            ? candidates.ToDictionary(
-                p => p.GetCustomAttribute<ColumnAttribute>()!.Name,
-                StringComparer.OrdinalIgnoreCase)
-            : candidates.ToDictionary(p => p.Name, StringComparer.OrdinalIgnoreCase);
+        var propertyLookup = GetPropertyLookup(type, options);
 
         var ordinals = new List<int>();
-        var setters = new List<Action<object, object?>>();
-        var coercers = new List<Func<object, object?>>();
+        var setters = new List<Action<object, DbDataReader>>();
         var properties = new List<PropertyInfo>();
 
         for (var i = 0; i < reader.FieldCount; i++)
@@ -182,11 +174,9 @@ public sealed class DataReaderMapper : IDataReaderMapper
             if (propertyLookup.TryGetValue(name, out var prop))
             {
                 ordinals.Add(i);
-                setters.Add(GetOrCreateSetter(prop));
-                coercers.Add(value =>
-                    Utils.IsNullOrDbNull(value)
-                        ? null
-                        : TypeCoercionHelper.Coerce(value, value.GetType(), prop.PropertyType));
+                var fieldType = ResolveFieldType(reader, i);
+                var requiresCoercion = RequiresCoercion(fieldType, prop.PropertyType);
+                setters.Add(GetOrCreateSetter(prop, fieldType, requiresCoercion, options.EnumMode, i));
                 properties.Add(prop);
             }
         }
@@ -194,43 +184,287 @@ public sealed class DataReaderMapper : IDataReaderMapper
         return new MapperPlan(
             ordinals.ToArray(),
             properties.ToArray(),
-            setters.ToArray(),
-            coercers.ToArray());
+            setters.ToArray());
     }
 
-    private static string BuildSchemaHash(IDataRecord reader)
+    private static string BuildSchemaHash(DbDataReader reader, MapperOptions options)
     {
-        var names = new string[reader.FieldCount];
+        var builder = new StringBuilder();
+
+        // Include options in the hash to ensure proper cache invalidation
+        builder.Append(options.ColumnsOnly ? '1' : '0');
+        builder.Append('\u001F');
+        builder.Append((int)options.EnumMode);
+        builder.Append('\u001F');
+
+        // Build schema with both field names and types
         for (var i = 0; i < reader.FieldCount; i++)
         {
-            names[i] = reader.GetName(i);
+            if (i > 0)
+            {
+                builder.Append('|');
+            }
+
+            var name = reader.GetName(i);
+
+            // Apply name policy if specified and not in ColumnsOnly mode
+            if (!options.ColumnsOnly && options.NamePolicy != null)
+            {
+                name = options.NamePolicy(name);
+            }
+
+            builder.Append(name);
+            builder.Append(':');
+
+            // Include field type to ensure plans are rebuilt when column types change
+            var fieldType = ResolveFieldType(reader, i);
+            builder.Append(fieldType.AssemblyQualifiedName ?? fieldType.FullName ?? fieldType.Name);
         }
 
-        return string.Join("|", names);
+        return builder.ToString();
     }
 
-    private static Action<object, object?> GetOrCreateSetter(PropertyInfo prop)
+    private static Action<object, DbDataReader> GetOrCreateSetter(
+        PropertyInfo prop,
+        Type fieldType,
+        bool requiresCoercion,
+        EnumParseFailureMode enumMode,
+        int ordinal)
     {
-        return _setterCache.GetOrAdd(prop, p =>
-        {
-            var objParam = Expression.Parameter(typeof(object));
-            var valueParam = Expression.Parameter(typeof(object));
-
-            var castObj = Expression.Convert(objParam, p.DeclaringType!);
-            var castValue = Expression.Convert(valueParam, p.PropertyType);
-
-            var propertyAccess = Expression.Property(castObj, p);
-            var assignment = Expression.Assign(propertyAccess, castValue);
-
-            var lambda = Expression.Lambda<Action<object, object?>>(assignment, objParam, valueParam);
-            return lambda.Compile();
-        });
+        var key = new SetterCacheKey(prop, fieldType, requiresCoercion, enumMode, ordinal);
+        return _setterCache.GetOrAdd(key, static k => CompileSetter(k));
     }
+
+    private static Action<object, DbDataReader> CompileSetter(SetterCacheKey key)
+    {
+        var objParam = Expression.Parameter(typeof(object), "target");
+        var readerParam = Expression.Parameter(typeof(DbDataReader), "reader");
+
+        var typedTarget = Expression.Convert(objParam, key.Property.DeclaringType!);
+        var propertyAccess = Expression.Property(typedTarget, key.Property);
+
+        Expression valueExpression;
+        if (key.RequiresCoercion)
+        {
+            var getValueMethod = typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetValue))!;
+            var rawValue = Expression.Call(readerParam, getValueMethod, Expression.Constant(key.Ordinal));
+            valueExpression = Expression.Convert(
+                Expression.Call(
+                    typeof(DataReaderMapper),
+                    nameof(CoerceValue),
+                    Type.EmptyTypes,
+                    rawValue,
+                    Expression.Constant(key.Property, typeof(PropertyInfo)),
+                    Expression.Constant(key.FieldType, typeof(Type)),
+                    Expression.Constant(key.EnumMode, typeof(EnumParseFailureMode))),
+                key.Property.PropertyType);
+        }
+        else
+        {
+            Expression rawValue;
+            if (key.FieldType == typeof(object))
+            {
+                var getValueMethod = typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetValue))!;
+                rawValue = Expression.Call(readerParam, getValueMethod, Expression.Constant(key.Ordinal));
+            }
+            else
+            {
+                var getFieldValueMethod = _getFieldValueGenericMethod.MakeGenericMethod(key.FieldType);
+                rawValue = Expression.Call(readerParam, getFieldValueMethod, Expression.Constant(key.Ordinal));
+            }
+
+            valueExpression = key.Property.PropertyType == key.FieldType
+                ? rawValue
+                : Expression.Convert(rawValue, key.Property.PropertyType);
+        }
+
+        var assignment = Expression.Assign(propertyAccess, valueExpression);
+        var lambda = Expression.Lambda<Action<object, DbDataReader>>(assignment, objParam, readerParam);
+        return lambda.Compile();
+    }
+
+    private static bool RequiresCoercion(Type fieldType, Type propertyType)
+    {
+        var targetType = Nullable.GetUnderlyingType(propertyType) ?? propertyType;
+        if (targetType.IsAssignableFrom(fieldType))
+        {
+            return false;
+        }
+
+        if (targetType.IsEnum)
+        {
+            return true;
+        }
+
+        if (targetType == typeof(object))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static Type ResolveFieldType(DbDataReader reader, int ordinal)
+    {
+        try
+        {
+            return reader.GetFieldType(ordinal);
+        }
+        catch (InvalidOperationException)
+        {
+            return typeof(object);
+        }
+    }
+
+    private static object? CoerceValue(
+        object? value,
+        PropertyInfo property,
+        Type fieldType,
+        EnumParseFailureMode enumMode)
+    {
+        if (Utils.IsNullOrDbNull(value))
+        {
+            return null;
+        }
+
+        try
+        {
+            return TypeCoercionHelper.Coerce(value!, fieldType, property.PropertyType);
+        }
+        catch (Exception ex) when (TryHandleEnumFailure(value!, property, enumMode, ex, out var handled))
+        {
+            return handled;
+        }
+    }
+
+    private static bool TryHandleEnumFailure(
+        object value,
+        PropertyInfo property,
+        EnumParseFailureMode enumMode,
+        Exception exception,
+        out object? result)
+    {
+        var enumType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
+        if (!enumType.IsEnum)
+        {
+            result = default;
+            return false;
+        }
+
+        if (enumMode == EnumParseFailureMode.Throw)
+        {
+            result = default;
+            return false;
+        }
+
+        switch (enumMode)
+        {
+            case EnumParseFailureMode.SetNullAndLog:
+                TypeCoercionHelper.Logger.LogWarning(
+                    exception,
+                    "Failed to coerce value '{Value}' to enum property {Property} of type {EnumType}.",
+                    value,
+                    property.Name,
+                    enumType);
+                if (Nullable.GetUnderlyingType(property.PropertyType) != null)
+                {
+                    result = null;
+                    return true;
+                }
+
+                var fallback = Activator.CreateInstance(Enum.GetUnderlyingType(enumType))!;
+                result = Enum.ToObject(enumType, fallback);
+                return true;
+            case EnumParseFailureMode.SetDefaultValue:
+                if (Nullable.GetUnderlyingType(property.PropertyType) != null)
+                {
+                    result = null;
+                    return true;
+                }
+
+                var defaultValue = Activator.CreateInstance(Enum.GetUnderlyingType(enumType))!;
+                result = Enum.ToObject(enumType, defaultValue);
+                return true;
+            default:
+                result = null;
+                return false;
+        }
+    }
+
+    private readonly record struct SetterCacheKey(
+        PropertyInfo Property,
+        Type FieldType,
+        bool RequiresCoercion,
+        EnumParseFailureMode EnumMode,
+        int Ordinal);
+
+    private readonly record struct PropertyLookupCacheKey(Type Type, bool ColumnsOnly);
 
     private sealed record MapperPlan(
         int[] Ordinals,
         PropertyInfo[] Properties,
-        Action<object, object?>[] Setters,
-        Func<object, object?>[] Coercers);
+        Action<object, DbDataReader>[] Setters);
+
+    private static IReadOnlyDictionary<string, PropertyInfo> GetPropertyLookup(Type type, MapperOptions options)
+    {
+        var key = new PropertyLookupCacheKey(type, options.ColumnsOnly);
+        return _propertyLookupCache.GetOrAdd(key, static cacheKey => BuildPropertyLookup(cacheKey));
+    }
+
+    private static IReadOnlyDictionary<string, PropertyInfo> BuildPropertyLookup(PropertyLookupCacheKey cacheKey)
+    {
+        var properties = cacheKey.Type.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.SetProperty);
+        var comparer = StringComparer.OrdinalIgnoreCase;
+        var lookup = new Dictionary<string, PropertyInfo>(properties.Length, comparer);
+
+        for (var i = 0; i < properties.Length; i++)
+        {
+            var property = properties[i];
+            var setMethod = property.SetMethod;
+            if (setMethod == null || !setMethod.IsPublic || setMethod.IsStatic)
+            {
+                continue;
+            }
+
+            string lookupKey;
+            if (cacheKey.ColumnsOnly)
+            {
+                var column = property.GetCustomAttribute<ColumnAttribute>();
+                if (column == null)
+                {
+                    continue;
+                }
+
+                lookupKey = column.Name;
+            }
+            else
+            {
+                lookupKey = property.Name;
+            }
+
+            if (!lookup.TryAdd(lookupKey, property))
+            {
+                throw new ArgumentException(
+                    $"Duplicate column mapping detected for '{lookupKey}' on type '{cacheKey.Type.FullName}'.");
+            }
+        }
+
+        return lookup;
+    }
+
+    private static MethodInfo ResolveGetFieldValueMethod()
+    {
+        var methods = typeof(DbDataReader).GetMethods(BindingFlags.Instance | BindingFlags.Public);
+        for (var i = 0; i < methods.Length; i++)
+        {
+            var method = methods[i];
+            if (method.IsGenericMethodDefinition && method.Name == nameof(DbDataReader.GetFieldValue))
+            {
+                return method;
+            }
+        }
+
+        throw new InvalidOperationException("DbDataReader.GetFieldValue<T> method not found.");
+    }
 }
 

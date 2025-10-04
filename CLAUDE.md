@@ -11,6 +11,9 @@ pengdows.crud is a SQL-first, strongly-typed, testable data access layer for .NE
 - `pengdows.crud.fakeDb` - a complete .net DbProvider for mocking low level calls.
 - `pengdows.crud.Tests` - Comprehensive test suite
 - `testbed` - Integration testing with real databases
+- `docs/` - Connection management walkthroughs and parameter naming guidance
+- `benchmarks/CrudBenchmarks/` - BenchmarkDotNet suite for performance validation
+- `tools/verify-novendor/` - Utility to ensure vendor directories aren't committed
 
 ## Core Architecture
 
@@ -25,14 +28,13 @@ The library follows a layered architecture with these key components:
 - Entities use attributes for table/column mapping (`TableAttribute`, `ColumnAttribute`, `IdAttribute`)
 - Audit fields supported via `CreatedBy/On`, `LastUpdatedBy/On` attributes
 - SQL dialect abstraction supports multiple databases (SQL Server, PostgreSQL, Oracle, MySQL, SQLite, etc.)
-- Connection strategies: Standard, KeepAlive, Shared, SingleWriter
+- Connection strategies: Standard, KeepAlive, SingleWriter, SingleConnection
 - Multi-tenancy support via tenant resolution
-
-### Directory Structure
+### Primary Key vs. Row ID (Pseudo Key)
 - `pengdows.crud/` - Core implementation
   - `attributes/` - Entity mapping attributes
   - `dialects/` - Database-specific SQL generation
-  - `connection/` - Connection management strategies  
+  - `connection/` - Connection management strategies
   - `exceptions/` - Custom exception types
   - `isolation/` - Transaction isolation handling
   - `tenant/` - Multi-tenancy support
@@ -40,6 +42,8 @@ The library follows a layered architecture with these key components:
 - `testbed/` - Database provider testing infrastructure
 
 ## Development Commands
+
+**IMPORTANT**: Whenever changes are made to this codebase, ALL unit tests should pass and ALL integration tests (in the "testbed" app) should pass. No tests may be skipped. This ensures code quality and prevents regressions across all supported database providers. When functionality is unclear, consult the wiki (`pengdows.crud.wiki/`) first or ask for clarification before making changes.
 
 ### Build and Test
 ```bash
@@ -73,8 +77,24 @@ dotnet pack pengdows.crud.fakeDb/pengdows.crud.fakeDb.csproj -c Release
 # See .github/workflows/deploy.yml for the automated build and publish process
 ```
 
-### Testing Infrastructure
-The project includes extensive test coverage with both unit tests and integration tests. The `fakeDb` package provides mock database providers for testing without real database connections.
+### Testing Infrastructure and Guidelines
+
+**Test-Driven Development (TDD):**
+- TDD should be followed for all new features and bug fixes
+- Test coverage should be raised to and maintained at **90%** minimum
+- Write tests first, then implement functionality
+- Tests for expected behavior should be authored before touching the implementation so regressions are caught immediately.
+- Ensure tests are comprehensive, including edge cases and error conditions
+- Unit tests normally complete in well under 30 seconds; if a run exceeds three minutes, stop it and diagnose the likely locking problem right away.
+
+**Test Coverage Requirements:**
+- Maintain minimum **90% test coverage** across all projects
+- Use meaningful test names that describe the behavior being tested
+- Test both success and failure scenarios
+- Include integration tests for database-specific functionality
+
+**FakeDb Infrastructure:**
+The `fakeDb` package provides mock database providers for testing without real database connections. If fakeDb doesn't support something needed for testing, **expand it to support the required functionality** rather than working around limitations.
 
 #### Connection Breaking for Testing
 The enhanced `FakeDbConnection` supports sophisticated connection failure simulation:
@@ -94,7 +114,7 @@ connection.SetFailAfterOpenCount(3);
 
 // Factory-level failure configuration
 var factory = FakeDbFactory.CreateFailingFactory(
-    SupportedDatabase.PostgreSql, 
+    SupportedDatabase.PostgreSql,
     ConnectionFailureMode.FailOnOpen);
 
 // Helper for database context testing
@@ -103,7 +123,7 @@ using var context = ConnectionFailureHelper.CreateFailOnOpenContext();
 
 Connection failure modes include:
 - `FailOnOpen` - Connection fails when opening
-- `FailOnCommand` - Connection fails when creating commands  
+- `FailOnCommand` - Connection fails when creating commands
 - `FailOnTransaction` - Connection fails when beginning transactions
 - `FailAfterCount` - Connection works for N operations then fails
 - `Broken` - Connection is permanently broken
@@ -122,8 +142,69 @@ Connection failure modes include:
 - Support for MERGE statements where available (SQL Server, Oracle, Firebird, PostgreSQL 15+)
 - Schema-aware operations with proper object name quoting
 
-### Connection Management  
-- Configurable connection lifecycle (New, Shared, KeepAlive)
+### Connection Management and DbMode
+
+**pengdows.crud** handles connections with a strong bias toward performance, predictability, and safe concurrency.
+At the heart of this is **DbMode**, which defines how each DatabaseContext manages its connection lifecycle.
+
+**Overview:**
+The philosophy is simple:
+* Open connections late — only when needed
+* Close connections early — as soon as possible
+* Respect database-specific quirks (see Connection Pooling for SQLite and LocalDB rules)
+
+**Advantages:**
+* Prevents exhausting your connection pool
+* Avoids leaking resources or unclosed connections
+* Reduces cost in cloud environments by minimizing active resource usage
+
+**DbMode Enum:**
+```csharp
+[Flags]
+public enum DbMode
+{
+    Standard = 0,       // Recommended for production
+    KeepAlive = 1,      // Keeps one sentinel connection open
+    SingleWriter = 2,   // One pinned writer, concurrent ephemeral readers
+    SingleConnection = 4, // All work goes through one pinned connection
+    Best = 15
+}
+```
+
+**Mode Descriptions:**
+Use the lowest number (closest to Standard) possible for best results.
+
+- **Standard**: Recommended for production. Each operation opens a new connection from the pool and closes it after use, unless inside a transaction. Fully supports parallelism and provider connection pooling.
+
+- **KeepAlive**: Keeps a single sentinel connection open (never used for work) to prevent unloads in some embedded/local DBs. Otherwise behaves like Standard.
+
+- **SingleWriter**: Holds one persistent write connection open. Acquires ephemeral read-only connections as needed. Used automatically for file-based SQLite/DuckDB and named in-memory databases that enable `Mode=Memory;Cache=Shared` so multiple connections share one database.
+
+- **SingleConnection**: All work — reads and writes — is funneled through a single pinned connection. Used automatically for isolated in-memory SQLite/DuckDB where each `:memory:` connection would otherwise have its own private database.
+
+**Best Practices:**
+* **Use Standard in production** for scalability and correctness
+* KeepAlive, SingleWriter, and SingleConnection are best suited for embedded/local DBs or dev/test
+* Each DatabaseContext can be safely used as a singleton (via DI or subclassing)
+
+**Benefits:**
+* Avoids connection starvation and excessive licensing costs (per active connection)
+* Plays well with provider-managed pooling
+* Handles embedded/local DB quirks without manual intervention
+
+**Integration with Transactions:**
+* Inside a TransactionContext, the pinned connection stays open for the life of the transaction
+* Outside transactions, connections are opened per-operation and closed immediately after
+
+**Observability:**
+* Tracks current and max open connections with thread-safe `Interlocked` counters
+* Useful for tuning pool sizes and spotting load issues
+
+**Timeout Recommendations:**
+* Set connection timeouts as **low as reasonable** to avoid hanging on transient failures
+* Because pengdows.crud reconnects for every call, long timeouts are unnecessary
+
+**Connection Strategy Implementation:**
 - Transaction scoping via TransactionContext
 - Isolation level management per database
 - Connection strategy patterns for different use cases
@@ -136,7 +217,7 @@ Connection failure modes include:
 
 **CRUD Operations (All async, return Task):**
 - `DeleteAsync(TRowID id, IDatabaseContext? context = null)` - Delete by ID, returns affected row count
-- `DeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null)` - Bulk delete, returns affected row count  
+- `DeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null)` - Bulk delete, returns affected row count
 - `RetrieveAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null)` - Load multiple entities by IDs
 - `UpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null)` - Update entity, returns affected row count
 - `UpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context = null)` - Update with original loading
@@ -224,7 +305,7 @@ Extends IDatabaseContext for transactional operations:
 
 **Transaction State:**
 - `WasCommitted` - Whether transaction was committed
-- `WasRolledBack` - Whether transaction was rolled back  
+- `WasRolledBack` - Whether transaction was rolled back
 - `IsCompleted` - Whether transaction is completed
 - `IsolationLevel` - Current isolation level
 
@@ -305,7 +386,7 @@ var entity = new TestEntity { Name = "Test" };
 var createContainer = helper.BuildCreate(entity);
 await createContainer.ExecuteNonQueryAsync();
 
-// Update  
+// Update
 var updateContainer = await helper.BuildUpdateAsync(entity);
 var rowsAffected = await updateContainer.ExecuteNonQueryAsync();
 
@@ -335,7 +416,7 @@ Assert.Throws<InvalidOperationException>(() => connection.Open());
 **Factory-Level Configuration:**
 ```csharp
 var factory = FakeDbFactory.CreateFailingFactory(
-    SupportedDatabase.PostgreSql, 
+    SupportedDatabase.PostgreSql,
     ConnectionFailureMode.FailOnOpen);
 ```
 

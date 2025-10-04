@@ -1,0 +1,707 @@
+using System;
+using System.Collections;
+using System.Data;
+using System.Data.Common;
+using System.Text.Json;
+using pengdows.crud.enums;
+using pengdows.crud.types.valueobjects;
+
+namespace pengdows.crud.types.coercion;
+
+/// <summary>
+/// Tier 0 coercions for high-impact database types.
+/// </summary>
+public static class Tier0Coercions
+{
+    public static void RegisterAll(CoercionRegistry registry)
+    {
+        registry.Register(new GuidCoercion());
+        registry.Register(new RowVersionCoercion());
+        registry.Register(new JsonValueCoercion());
+        registry.Register(new JsonElementCoercion());
+        registry.Register(new JsonDocumentCoercion());
+        registry.Register(new HStoreCoercion());
+        registry.Register(new TimeSpanCoercion());
+        registry.Register(new DateTimeOffsetCoercion());
+        registry.Register(new IntArrayCoercion());
+        registry.Register(new StringArrayCoercion());
+        registry.Register(new IntRangeCoercion());
+        registry.Register(new DateTimeRangeCoercion());
+        registry.Register(new DecimalRangeCoercion());
+    }
+}
+
+/// <summary>
+/// UUID/GUID coercion for cross-database support.
+/// </summary>
+public class GuidCoercion : DbCoercion<Guid>
+{
+    public override bool TryRead(in DbValue src, out Guid value)
+    {
+        if (src.IsNull)
+        {
+            value = default;
+            return false;
+        }
+
+        // Direct Guid
+        if (src.RawValue is Guid guid)
+        {
+            value = guid;
+            return true;
+        }
+
+        // Byte array (16 bytes)
+        if (src.RawValue is byte[] bytes && bytes.Length == 16)
+        {
+            value = new Guid(bytes);
+            return true;
+        }
+
+        // String with various formats
+        if (src.RawValue is string str)
+        {
+            return Guid.TryParse(str, out value);
+        }
+
+        value = default;
+        return false;
+    }
+
+    public override bool TryWrite(Guid? value, DbParameter parameter)
+    {
+        if (!value.HasValue)
+        {
+            parameter.Value = DBNull.Value;
+            parameter.DbType = DbType.Guid;
+            return true;
+        }
+
+        parameter.Value = value.Value;
+        parameter.DbType = DbType.Guid;
+        return true;
+    }
+}
+
+/// <summary>
+/// SQL Server rowversion/timestamp coercion.
+/// </summary>
+public class RowVersionCoercion : DbCoercion<byte[]>
+{
+    public override bool TryRead(in DbValue src, out byte[]? value)
+    {
+        if (src.IsNull)
+        {
+            value = null;
+            return true;
+        }
+
+        if (src.RawValue is byte[] bytes)
+        {
+            if (bytes.Length != 8)
+            {
+                value = null;
+                return false;
+            }
+            value = bytes;
+            return true;
+        }
+
+        // Some providers might return as ulong
+        if (src.RawValue is ulong ulongValue)
+        {
+            value = BitConverter.GetBytes(ulongValue);
+            if (BitConverter.IsLittleEndian)
+                Array.Reverse(value);
+            return true;
+        }
+
+        value = null;
+        return false;
+    }
+
+    public override bool TryWrite(byte[]? value, DbParameter parameter)
+    {
+        if (value == null)
+        {
+            parameter.Value = DBNull.Value;
+        }
+        else if (value.Length == 8)
+        {
+            parameter.Value = value;
+        }
+        else
+        {
+            return false;
+        }
+
+        parameter.DbType = DbType.Binary;
+        parameter.Size = 8;
+        return true;
+    }
+}
+
+/// <summary>
+/// JsonValue coercion for JSON database types.
+/// </summary>
+public class JsonValueCoercion : DbCoercion<JsonValue>
+{
+    public override bool TryRead(in DbValue src, out JsonValue value)
+    {
+        if (src.IsNull)
+        {
+            value = new JsonValue("null");
+            return true;
+        }
+
+        if (src.RawValue is string jsonText)
+        {
+            try
+            {
+                value = JsonValue.Parse(jsonText);
+                return true;
+            }
+            catch (JsonException)
+            {
+                value = default;
+                return false;
+            }
+        }
+
+        if (src.RawValue is JsonDocument doc)
+        {
+            value = new JsonValue(doc);
+            return true;
+        }
+
+        if (src.RawValue is JsonElement element)
+        {
+            value = new JsonValue(element);
+            return true;
+        }
+
+        value = default;
+        return false;
+    }
+
+    public override bool TryWrite(JsonValue? value, DbParameter parameter)
+    {
+        if (!value.HasValue)
+        {
+            parameter.Value = DBNull.Value;
+        }
+        else
+        {
+            parameter.Value = value.Value.AsString();
+        }
+
+        parameter.DbType = DbType.String;
+        return true;
+    }
+}
+
+/// <summary>
+/// JsonElement coercion for System.Text.Json integration.
+/// </summary>
+public class JsonElementCoercion : DbCoercion<JsonElement>
+{
+    public override bool TryRead(in DbValue src, out JsonElement value)
+    {
+        if (src.IsNull)
+        {
+            value = JsonDocument.Parse("null").RootElement;
+            return true;
+        }
+
+        if (src.RawValue is JsonElement element)
+        {
+            value = element;
+            return true;
+        }
+
+        if (src.RawValue is string jsonText)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(jsonText);
+                value = doc.RootElement.Clone();
+                return true;
+            }
+            catch (JsonException)
+            {
+                value = default;
+                return false;
+            }
+        }
+
+        value = default;
+        return false;
+    }
+
+    public override bool TryWrite(JsonElement? value, DbParameter parameter)
+    {
+        if (!value.HasValue)
+        {
+            parameter.Value = DBNull.Value;
+        }
+        else
+        {
+            parameter.Value = JsonSerializer.Serialize(value.Value);
+        }
+
+        parameter.DbType = DbType.String;
+        return true;
+    }
+}
+
+/// <summary>
+/// JsonDocument coercion.
+/// </summary>
+public class JsonDocumentCoercion : DbCoercion<JsonDocument>
+{
+    public override bool TryRead(in DbValue src, out JsonDocument? value)
+    {
+        if (src.IsNull)
+        {
+            value = null;
+            return true;
+        }
+
+        if (src.RawValue is JsonDocument doc)
+        {
+            value = doc;
+            return true;
+        }
+
+        if (src.RawValue is string jsonText)
+        {
+            try
+            {
+                value = JsonDocument.Parse(jsonText);
+                return true;
+            }
+            catch (JsonException)
+            {
+                value = null;
+                return false;
+            }
+        }
+
+        value = null;
+        return false;
+    }
+
+    public override bool TryWrite(JsonDocument? value, DbParameter parameter)
+    {
+        if (value == null)
+        {
+            parameter.Value = DBNull.Value;
+        }
+        else
+        {
+            parameter.Value = JsonSerializer.Serialize(value.RootElement);
+        }
+
+        parameter.DbType = DbType.String;
+        return true;
+    }
+}
+
+/// <summary>
+/// PostgreSQL HSTORE coercion.
+/// </summary>
+public class HStoreCoercion : DbCoercion<HStore>
+{
+    public override bool TryRead(in DbValue src, out HStore value)
+    {
+        if (src.IsNull)
+        {
+            value = new HStore(new System.Collections.Generic.Dictionary<string, string?>());
+            return true;
+        }
+
+        if (src.RawValue is string hstoreText)
+        {
+            try
+            {
+                value = HStore.Parse(hstoreText);
+                return true;
+            }
+            catch (FormatException)
+            {
+                value = default;
+                return false;
+            }
+        }
+
+        value = default;
+        return false;
+    }
+
+    public override bool TryWrite(HStore? value, DbParameter parameter)
+    {
+        if (!value.HasValue)
+        {
+            parameter.Value = DBNull.Value;
+        }
+        else
+        {
+            parameter.Value = value.Value.ToString();
+        }
+
+        parameter.DbType = DbType.String;
+        return true;
+    }
+}
+
+/// <summary>
+/// TimeSpan coercion for time/interval types.
+/// </summary>
+public class TimeSpanCoercion : DbCoercion<TimeSpan>
+{
+    public override bool TryRead(in DbValue src, out TimeSpan value)
+    {
+        if (src.IsNull)
+        {
+            value = default;
+            return false;
+        }
+
+        if (src.RawValue is TimeSpan ts)
+        {
+            value = ts;
+            return true;
+        }
+
+        if (src.RawValue is string timeText)
+        {
+            return TimeSpan.TryParse(timeText, out value);
+        }
+
+        // Handle intervals from PostgreSQL as double (seconds)
+        if (src.RawValue is double seconds)
+        {
+            value = TimeSpan.FromSeconds(seconds);
+            return true;
+        }
+
+        value = default;
+        return false;
+    }
+
+    public override bool TryWrite(TimeSpan? value, DbParameter parameter)
+    {
+        if (!value.HasValue)
+        {
+            parameter.Value = DBNull.Value;
+        }
+        else
+        {
+            parameter.Value = value.Value;
+        }
+
+        parameter.DbType = DbType.Time;
+        return true;
+    }
+}
+
+/// <summary>
+/// DateTimeOffset coercion for timezone-aware timestamps.
+/// </summary>
+public class DateTimeOffsetCoercion : DbCoercion<DateTimeOffset>
+{
+    public override bool TryRead(in DbValue src, out DateTimeOffset value)
+    {
+        if (src.IsNull)
+        {
+            value = default;
+            return false;
+        }
+
+        if (src.RawValue is DateTimeOffset dto)
+        {
+            value = dto;
+            return true;
+        }
+
+        if (src.RawValue is DateTime dt)
+        {
+            value = new DateTimeOffset(dt);
+            return true;
+        }
+
+        if (src.RawValue is string dateText)
+        {
+            return DateTimeOffset.TryParse(dateText, out value);
+        }
+
+        value = default;
+        return false;
+    }
+
+    public override bool TryWrite(DateTimeOffset? value, DbParameter parameter)
+    {
+        if (!value.HasValue)
+        {
+            parameter.Value = DBNull.Value;
+        }
+        else
+        {
+            parameter.Value = value.Value;
+        }
+
+        parameter.DbType = DbType.DateTimeOffset;
+        return true;
+    }
+}
+
+/// <summary>
+/// Integer array coercion for PostgreSQL arrays.
+/// </summary>
+public class IntArrayCoercion : DbCoercion<int[]>
+{
+    public override bool TryRead(in DbValue src, out int[]? value)
+    {
+        if (src.IsNull)
+        {
+            value = null;
+            return true;
+        }
+
+        if (src.RawValue is int[] intArray)
+        {
+            value = intArray;
+            return true;
+        }
+
+        // Handle as comma-separated string for other providers
+        if (src.RawValue is string arrayText)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(arrayText))
+                {
+                    value = Array.Empty<int>();
+                    return true;
+                }
+
+                var parts = arrayText.Split(',', StringSplitOptions.RemoveEmptyEntries);
+                value = new int[parts.Length];
+
+                for (int i = 0; i < parts.Length; i++)
+                {
+                    if (!int.TryParse(parts[i].Trim(), out value[i]))
+                    {
+                        value = null;
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+            catch
+            {
+                value = null;
+                return false;
+            }
+        }
+
+        value = null;
+        return false;
+    }
+
+    public override bool TryWrite(int[]? value, DbParameter parameter)
+    {
+        if (value == null)
+        {
+            parameter.Value = DBNull.Value;
+        }
+        else
+        {
+            parameter.Value = value;
+        }
+
+        parameter.DbType = DbType.Object;
+        return true;
+    }
+}
+
+/// <summary>
+/// String array coercion for PostgreSQL arrays.
+/// </summary>
+public class StringArrayCoercion : DbCoercion<string[]>
+{
+    public override bool TryRead(in DbValue src, out string[]? value)
+    {
+        if (src.IsNull)
+        {
+            value = null;
+            return true;
+        }
+
+        if (src.RawValue is string[] stringArray)
+        {
+            value = stringArray;
+            return true;
+        }
+
+        value = null;
+        return false;
+    }
+
+    public override bool TryWrite(string[]? value, DbParameter parameter)
+    {
+        if (value == null)
+        {
+            parameter.Value = DBNull.Value;
+        }
+        else
+        {
+            parameter.Value = value;
+        }
+
+        parameter.DbType = DbType.Object;
+        return true;
+    }
+}
+
+/// <summary>
+/// Integer range coercion for PostgreSQL int4range.
+/// </summary>
+public class IntRangeCoercion : DbCoercion<Range<int>>
+{
+    public override bool TryRead(in DbValue src, out Range<int> value)
+    {
+        if (src.IsNull)
+        {
+            value = Range<int>.Empty;
+            return true;
+        }
+
+        if (src.RawValue is string rangeText)
+        {
+            try
+            {
+                value = Range<int>.Parse(rangeText);
+                return true;
+            }
+            catch (FormatException)
+            {
+                value = default;
+                return false;
+            }
+        }
+
+        value = default;
+        return false;
+    }
+
+    public override bool TryWrite(Range<int>? value, DbParameter parameter)
+    {
+        if (!value.HasValue)
+        {
+            parameter.Value = DBNull.Value;
+        }
+        else
+        {
+            parameter.Value = value.Value.ToString();
+        }
+
+        parameter.DbType = DbType.String;
+        return true;
+    }
+}
+
+/// <summary>
+/// DateTime range coercion for PostgreSQL tsrange.
+/// </summary>
+public class DateTimeRangeCoercion : DbCoercion<Range<DateTime>>
+{
+    public override bool TryRead(in DbValue src, out Range<DateTime> value)
+    {
+        if (src.IsNull)
+        {
+            value = Range<DateTime>.Empty;
+            return true;
+        }
+
+        if (src.RawValue is string rangeText)
+        {
+            try
+            {
+                value = Range<DateTime>.Parse(rangeText);
+                return true;
+            }
+            catch (FormatException)
+            {
+                value = default;
+                return false;
+            }
+        }
+
+        value = default;
+        return false;
+    }
+
+    public override bool TryWrite(Range<DateTime>? value, DbParameter parameter)
+    {
+        if (!value.HasValue)
+        {
+            parameter.Value = DBNull.Value;
+        }
+        else
+        {
+            parameter.Value = value.Value.ToString();
+        }
+
+        parameter.DbType = DbType.String;
+        return true;
+    }
+}
+
+/// <summary>
+/// Decimal range coercion for PostgreSQL numrange.
+/// </summary>
+public class DecimalRangeCoercion : DbCoercion<Range<decimal>>
+{
+    public override bool TryRead(in DbValue src, out Range<decimal> value)
+    {
+        if (src.IsNull)
+        {
+            value = Range<decimal>.Empty;
+            return true;
+        }
+
+        if (src.RawValue is string rangeText)
+        {
+            try
+            {
+                value = Range<decimal>.Parse(rangeText);
+                return true;
+            }
+            catch (FormatException)
+            {
+                value = default;
+                return false;
+            }
+        }
+
+        value = default;
+        return false;
+    }
+
+    public override bool TryWrite(Range<decimal>? value, DbParameter parameter)
+    {
+        if (!value.HasValue)
+        {
+            parameter.Value = DBNull.Value;
+        }
+        else
+        {
+            parameter.Value = value.Value.ToString();
+        }
+
+        parameter.DbType = DbType.String;
+        return true;
+    }
+}

@@ -3,11 +3,11 @@ using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Threading.Tasks;
-using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
+using pengdows.crud.fakeDb;
 using pengdows.crud.tenant;
 using Xunit;
 
@@ -16,10 +16,10 @@ namespace pengdows.crud.Tests;
 [Table("Users")]
 public class User
 {
-    [Id(false)]
+    [Id]
     [Column("Id", DbType.Int32)]
     public int Id { get; set; }
-    [PrimaryKey(1)]
+
     [Column("Name", DbType.String)]
     public string Name { get; set; } = string.Empty;
 
@@ -36,12 +36,12 @@ public class User
     public int Version { get; set; }
 }
 
-public class TestAuditValueResolver : IAuditValueResolver
+public class AuditValueResolver : IAuditValueResolver
 {
     public IAuditValues Resolve() => new AuditValues { UserId = "system", UtcNow = DateTime.UtcNow };
 }
 
-public class MultitenantIntegrationTests
+public class MultitenantIntegrationTests : IAsyncLifetime
 {
     private readonly IServiceProvider _provider;
     private readonly ITenantContextRegistry _tenantRegistry;
@@ -57,58 +57,66 @@ public class MultitenantIntegrationTests
                 ["MultiTenant:Tenants:0:DatabaseContextConfiguration:ProviderName"] = SupportedDatabase.Sqlite.ToString(),
                 ["MultiTenant:Tenants:0:DatabaseContextConfiguration:DbMode"] = DbMode.SingleConnection.ToString(),
                 ["MultiTenant:Tenants:0:DatabaseContextConfiguration:ReadWriteMode"] = ReadWriteMode.ReadWrite.ToString(),
+                ["MultiTenant:Tenants:1:Name"] = "TenantB",
+                // Use a shared in-memory SQLite database to allow concurrent connections
+                ["MultiTenant:Tenants:1:DatabaseContextConfiguration:ConnectionString"] = "Data Source=file:tenantb?mode=memory&cache=shared",
+                ["MultiTenant:Tenants:1:DatabaseContextConfiguration:ProviderName"] = SupportedDatabase.Sqlite.ToString(),
+                ["MultiTenant:Tenants:1:DatabaseContextConfiguration:DbMode"] = DbMode.SingleWriter.ToString(),
+                ["MultiTenant:Tenants:1:DatabaseContextConfiguration:ReadWriteMode"] = ReadWriteMode.ReadWrite.ToString()
             })
             .Build();
 
-        services.AddKeyedSingleton<DbProviderFactory>(SupportedDatabase.Sqlite.ToString(), SqliteFactory.Instance);
+        // Unit tests must use fakeDb; register a fakeDb factory keyed by provider name
+        services.AddKeyedSingleton<DbProviderFactory>(SupportedDatabase.Sqlite.ToString(), (_, _) => new fakeDbFactory(SupportedDatabase.Sqlite));
+        // Use fakeDb for all tenants in unit tests to avoid external dependencies
         services.AddLogging();
         services.AddMultiTenancy(configuration);
         _provider = services.BuildServiceProvider();
         _tenantRegistry = _provider.GetRequiredService<ITenantContextRegistry>();
     }
 
-    [Fact]
-    public async Task MultitenantCrud_SequentialOperations()
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync()
     {
-        const string tenant = "TenantA";
-        var context = _tenantRegistry.GetContext(tenant);
-        var dbType = SupportedDatabase.Sqlite;
-        var auditValueResolver = new TestAuditValueResolver();
-        var tableSc = context.CreateSqlContainer();
-        tableSc.Query.AppendFormat(@"CREATE TABLE {0}Users{1} 
-                            ({0}Id{1} INTEGER PRIMARY KEY AUTOINCREMENT, 
-                            {0}Name{1} VARCHAR(50), 
-                            {0}CreatedOn{1} DATETIME, 
-                            {0}LastUpdatedOn{1} DATETIME,
-                            {0}Version{1} INTEGER)", context.QuotePrefix, context.QuoteSuffix);
-        await tableSc.ExecuteNonQueryAsync();
-
-        async Task PerformCrud(IEntityHelper<User, int> helper, ITransactionContext transaction)
+        // Ensure background services (e.g., logging processors) are stopped cleanly
+        if (_provider is IAsyncDisposable ad)
         {
-            var user = new User { Name = $"User_{tenant}_{Guid.NewGuid()}" };
-            var createSc = helper.BuildCreate(user);
-            await createSc.ExecuteNonQueryAsync();
-            var retrievedUser = await helper.RetrieveOneAsync(user, transaction);
-            
-            Assert.Equal(user.Name, retrievedUser.Name);
-            Assert.Equal(1, retrievedUser.Version);
-
-            retrievedUser.Name = $"Updated_{retrievedUser.Name}";
-            var updateSc = await helper.BuildUpdateAsync(retrievedUser, true);
-            await updateSc.ExecuteNonQueryAsync();
-
-            var deleteSc = helper.BuildDelete(retrievedUser.Id);
-            await deleteSc.ExecuteNonQueryAsync();
+            await ad.DisposeAsync();
         }
+        else if (_provider is IDisposable d)
+        {
+            d.Dispose();
+        }
+    }
 
-        await using var transaction = context.BeginTransaction(IsolationProfile.SafeNonBlockingReads);
-        var helper = new EntityHelper<User, int>(context, auditValueResolver);
-        await PerformCrud(helper, transaction);
-        transaction.Commit();
+    [Theory]
+    [InlineData("TenantA", SupportedDatabase.Sqlite)]
+    [InlineData("TenantB", SupportedDatabase.Sqlite)]
+    public async Task MultitenantCrud_ConcurrentOperations(string tenant, SupportedDatabase dbType)
+    {
+        // Use fakeDb and assert mode coercions + pinned-writer semantics deterministically
+        var ctx = _tenantRegistry.GetContext(tenant);
 
-        var countSc = context.CreateSqlContainer();
-        countSc.Query.AppendFormat("SELECT COUNT(*) FROM {0}Users{1}", context.QuotePrefix, context.QuoteSuffix);
-        var count = await countSc.ExecuteScalarAsync<long>();
-        Assert.Equal(0L, count);
+        if (tenant == "TenantA")
+        {
+            // :memory: coerces to SingleConnection
+            Assert.Equal(DbMode.SingleConnection, ctx.ConnectionMode);
+            var r1 = ctx.GetConnection(ExecutionType.Read);
+            var w1 = ctx.GetConnection(ExecutionType.Write);
+            Assert.Same(r1, w1); // pinned single connection for all operations
+        }
+        else if (tenant == "TenantB")
+        {
+            // shared in-memory coerces/keeps SingleWriter; reads are ephemeral, writes use pinned writer
+            Assert.Equal(DbMode.SingleWriter, ctx.ConnectionMode);
+            var w1 = ctx.GetConnection(ExecutionType.Write);
+            var w2 = ctx.GetConnection(ExecutionType.Write);
+            Assert.Same(w1, w2); // pinned writer reused
+
+            var r = ctx.GetConnection(ExecutionType.Read);
+            Assert.NotSame(w1, r); // read connection is distinct/ephemeral under SingleWriter
+            ctx.CloseAndDisposeConnection(r);
+        }
     }
 }

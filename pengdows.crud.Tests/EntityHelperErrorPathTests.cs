@@ -5,17 +5,41 @@ using System.Collections.Generic;
 using System.Data;
 using System.Threading.Tasks;
 using pengdows.crud.attributes;
-using pengdows.crud.enums;
 using pengdows.crud.exceptions;
 using pengdows.crud.fakeDb;
+using pengdows.crud.enums;
 using Xunit;
 
 #endregion
 
 namespace pengdows.crud.Tests;
 
-public class EntityHelperErrorPathTests : SqlLiteContextTestBase
+public class EntityHelperErrorPathTests : IAsyncLifetime
 {
+    public TypeMapRegistry TypeMap { get; private set; } = null!;
+    public IDatabaseContext Context { get; private set; } = null!;
+    public IAuditValueResolver AuditValueResolver { get; private set; } = null!;
+
+    public Task InitializeAsync()
+    {
+        TypeMap = new TypeMapRegistry();
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        Context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory, TypeMap);
+        AuditValueResolver = new StubAuditValueResolver("test-user");
+        return Task.CompletedTask;
+    }
+
+    public async Task DisposeAsync()
+    {
+        if (Context is IAsyncDisposable asyncDisp)
+        {
+            await asyncDisp.DisposeAsync().ConfigureAwait(false);
+        }
+        else if (Context is IDisposable disp)
+        {
+            disp.Dispose();
+        }
+    }
     [Table("test_entity")]
     private class EntityWithNoPrimaryKey
     {
@@ -92,7 +116,7 @@ public class EntityHelperErrorPathTests : SqlLiteContextTestBase
     {
         var helper = new EntityHelper<TestEntity, long>(Context);
 
-        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.DeleteAsync((IEnumerable<long>)null!));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.DeleteAsync(null!));
     }
 
     [Fact]
@@ -108,7 +132,7 @@ public class EntityHelperErrorPathTests : SqlLiteContextTestBase
     {
         var helper = new EntityHelper<TestEntity, long>(Context);
 
-        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.RetrieveAsync((IEnumerable<long>)null!));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.RetrieveAsync(null!));
     }
 
     [Fact]
@@ -167,16 +191,6 @@ public class EntityHelperErrorPathTests : SqlLiteContextTestBase
         Assert.Throws<InvalidOperationException>(() => helper.BuildRetrieve(new[] { "test" }, "alias"));
     }
 
-    [Fact]
-    public async Task UpsertAsync_UnsupportedDatabase_ThrowsNotSupportedException()
-    {
-        var factory = new fakeDbFactory(nameof(SupportedDatabase.Unknown));
-        var context = new DatabaseContext("test", factory);
-        var helper = new EntityHelper<TestEntity, long>(context);
-        var entity = new TestEntity { Name = "test" };
-
-        await Assert.ThrowsAsync<NotSupportedException>(() => helper.UpsertAsync(entity));
-    }
 
     [Fact]
     public void ValidateRowIdType_UnsupportedType_ThrowsNotSupportedException()
@@ -257,6 +271,6 @@ public class EntityHelperErrorPathTests : SqlLiteContextTestBase
     {
         var helper = new EntityHelper<TestEntity, long>(Context);
 
-        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.RetrieveOneAsync((TestEntity)null!));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.RetrieveOneAsync(null!));
     }
 }

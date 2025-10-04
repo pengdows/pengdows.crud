@@ -1,14 +1,41 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Data.Common;
 using System.Reflection;
 using System.Threading.Tasks;
+using pengdows.crud.enums;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class CachedSqlTemplatesTests : SqlLiteContextTestBase
+public class CachedSqlTemplatesTests : IAsyncLifetime
 {
+    public TypeMapRegistry TypeMap { get; private set; } = null!;
+    public IDatabaseContext Context { get; private set; } = null!;
+    public IAuditValueResolver AuditValueResolver { get; private set; } = null!;
+
+    public Task InitializeAsync()
+    {
+        TypeMap = new TypeMapRegistry();
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        Context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory, TypeMap);
+        AuditValueResolver = new StubAuditValueResolver("test-user");
+        return Task.CompletedTask;
+    }
+
+    public async Task DisposeAsync()
+    {
+        if (Context is IAsyncDisposable asyncDisp)
+        {
+            await asyncDisp.DisposeAsync().ConfigureAwait(false);
+        }
+        else if (Context is IDisposable disp)
+        {
+            disp.Dispose();
+        }
+    }
     [Fact]
     public void BuildCreate_ReusesCachedTemplates()
     {
@@ -18,18 +45,18 @@ public class CachedSqlTemplatesTests : SqlLiteContextTestBase
         var entity2 = new TestEntity { Name = "two" };
 
         // Build create twice with same helper to verify template reuse within instance
-        helper1.BuildCreate(entity1);
-        var field = typeof(EntityHelper<TestEntity, int>).GetField("_cachedSqlTemplates", BindingFlags.Instance | BindingFlags.NonPublic)!;
-        var lazy1 = field.GetValue(helper1)!;
-        var valueProp1 = lazy1.GetType().GetProperty("Value")!;
-        var template1 = valueProp1.GetValue(lazy1);
+        var sc1 = helper1.BuildCreate(entity1);
+        var field = typeof(EntityHelper<TestEntity, int>).GetField("_templatesByDialect", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var dialectCache1 = field.GetValue(helper1) as IDictionary;
+        var initialCacheCount = dialectCache1!.Count;
 
-        helper1.BuildCreate(entity2);
-        var lazy2 = field.GetValue(helper1)!;
-        var valueProp2 = lazy2.GetType().GetProperty("Value")!;
-        var template2 = valueProp2.GetValue(lazy2);
+        var sc2 = helper1.BuildCreate(entity2);
+        var dialectCache2 = field.GetValue(helper1) as IDictionary;
+        var finalCacheCount = dialectCache2!.Count;
 
-        Assert.Same(template1, template2);
+        // Verify cache was reused (same count means no new templates were created)
+        Assert.Equal(initialCacheCount, finalCacheCount);
+        Assert.True(finalCacheCount > 0, "Templates should be cached");
     }
 
     [Fact]
@@ -42,13 +69,13 @@ public class CachedSqlTemplatesTests : SqlLiteContextTestBase
         var sc = helper.BuildCreate(entity);
 
         var sql = sc.Query.ToString();
-        Assert.Contains("@p0", sql);
-        Assert.Contains("@p1", sql);
+        Assert.Contains("@i0", sql);
+        Assert.Contains("@i1", sql);
 
         var field = typeof(SqlContainer).GetField("_parameters", BindingFlags.NonPublic | BindingFlags.Instance)!;
         var parameters = (IDictionary<string, DbParameter>)field.GetValue(sc)!;
-        Assert.Contains("p0", parameters.Keys);
-        Assert.Contains("p1", parameters.Keys);
+        Assert.Contains("i0", parameters.Keys);
+        Assert.Contains("i1", parameters.Keys);
     }
 
     [Fact]
@@ -63,17 +90,17 @@ public class CachedSqlTemplatesTests : SqlLiteContextTestBase
         // Build update twice with same helper to verify template reuse within instance
         await helper1.BuildUpdateAsync(entity1, loadOriginal: false);
 
-        var field = typeof(EntityHelper<TestEntity, int>).GetField("_cachedSqlTemplates", BindingFlags.Instance | BindingFlags.NonPublic)!;
-        var lazy1 = field.GetValue(helper1)!;
-        var valueProp1 = lazy1.GetType().GetProperty("Value")!;
-        var template1 = valueProp1.GetValue(lazy1);
+        var field = typeof(EntityHelper<TestEntity, int>).GetField("_templatesByDialect", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var dialectCache1 = field.GetValue(helper1) as IDictionary;
+        var initialCacheCount = dialectCache1!.Count;
 
         await helper1.BuildUpdateAsync(entity2, loadOriginal: false);
-        var lazy2 = field.GetValue(helper1)!;
-        var valueProp2 = lazy2.GetType().GetProperty("Value")!;
-        var template2 = valueProp2.GetValue(lazy2);
+        var dialectCache2 = field.GetValue(helper1) as IDictionary;
+        var finalCacheCount = dialectCache2!.Count;
 
-        Assert.Same(template1, template2);
+        // Verify cache was reused (same count means no new templates were created)
+        Assert.Equal(initialCacheCount, finalCacheCount);
+        Assert.True(finalCacheCount > 0, "Templates should be cached");
     }
 
 

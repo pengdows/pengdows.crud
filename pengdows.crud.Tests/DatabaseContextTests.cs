@@ -2,16 +2,18 @@
 #region
 
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Linq;
-using System.Threading.Tasks;
 using System.Runtime.Serialization;
+using System.Threading.Tasks;
 using Moq;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
+using pengdows.crud.isolation;
 using pengdows.crud.Tests.Mocks;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
@@ -197,7 +199,7 @@ public class DatabaseContextTests
     {
         var factory = new fakeDbFactory(product);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory,
-            readWriteMode: ReadWriteMode.WriteOnly);
+            readWriteMode: 0);
         Assert.Throws<InvalidOperationException>(() => context.AssertIsReadConnection());
     }
 
@@ -289,13 +291,15 @@ public class DatabaseContextTests
     }
 
     [Fact]
-    public void BeginTransaction_ReadOnly_InvalidIsolation_Throws()
+    public void BeginTransaction_ReadOnly_DefaultsToResolverLevel()
     {
         var product = SupportedDatabase.Sqlite;
         var factory = new fakeDbFactory(product);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
-        Assert.Throws<InvalidOperationException>(
-            () => context.BeginTransaction(IsolationLevel.ReadCommitted, ExecutionType.Read));
+        using var tx = context.BeginTransaction(readOnly: true);
+        var expected = new IsolationResolver(product, context.RCSIEnabled)
+            .Resolve(IsolationProfile.SafeNonBlockingReads);
+        Assert.Equal(expected, tx.IsolationLevel);
     }
 
     [Fact]
@@ -314,25 +318,13 @@ public class DatabaseContextTests
     }
 
     [Fact]
-    public void BeginTransaction_ReadOnly_SingleWriter_DisposesEphemeralConnection()
+    public void BeginTransaction_ReadOnly_UnsupportedIsolation_Throws()
     {
         var product = SupportedDatabase.Sqlite;
-        var config = new DatabaseContextConfiguration
-        {
-            ConnectionString = $"Data Source=:memory:;EmulatedProduct={product}",
-            ProviderName = product.ToString(),
-            DbMode = DbMode.SingleWriter
-        };
         var factory = new fakeDbFactory(product);
-        var context = new DatabaseContext(config, factory);
-        Assert.Equal(1, context.NumberOfOpenConnections);
-
-        using (context.BeginTransaction(executionType: ExecutionType.Read))
-        {
-            Assert.Equal(1, context.NumberOfOpenConnections);
-        }
-
-        Assert.Equal(1, context.NumberOfOpenConnections);
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
+        Assert.Throws<InvalidOperationException>(
+            () => context.BeginTransaction(IsolationLevel.Snapshot, ExecutionType.Read));
     }
 
     [Fact]
@@ -510,7 +502,9 @@ public class DatabaseContextTests
 
         _ = new DatabaseContext(config, factory);
 
-        Assert.Empty(factory.Connection.ExecutedCommands);
+        // Should execute DBCC USEROPTIONS to check settings, but no SET commands since settings are already correct
+        Assert.Contains("DBCC USEROPTIONS", factory.Connection.ExecutedCommands);
+        Assert.DoesNotContain(factory.Connection.ExecutedCommands, cmd => cmd.Contains("SET"));
     }
 
     [Fact]
@@ -526,7 +520,7 @@ public class DatabaseContextTests
 
         _ = new DatabaseContext(config, factory);
 
-        Assert.Contains("PRAGMA foreign_keys = ON;", factory.Connection.ExecutedCommands);
+        Assert.Contains("PRAGMA foreign_keys = ON", factory.Connection.ExecutedCommands);
     }
 
     [Fact]
@@ -542,7 +536,9 @@ public class DatabaseContextTests
 
         _ = new DatabaseContext(config, factory);
 
-        Assert.Empty(factory.Connection.ExecutedCommands);
+        // Should execute DBCC USEROPTIONS to check settings, but no SET commands since settings are already correct
+        Assert.Contains("DBCC USEROPTIONS", factory.Connection.ExecutedCommands);
+        Assert.DoesNotContain(factory.Connection.ExecutedCommands, cmd => cmd.Contains("SET"));
     }
 
     private sealed class RecordingFactory : DbProviderFactory
@@ -594,6 +590,84 @@ public class DatabaseContextTests
             _record.Add(CommandText);
             return base.ExecuteNonQuery();
         }
+
+        protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior)
+        {
+            _record.Add(CommandText);
+            
+            // Mock DBCC USEROPTIONS to return correct settings so SqlServerDialect doesn't generate session settings
+            if (CommandText.Trim().Equals("DBCC USEROPTIONS", StringComparison.OrdinalIgnoreCase))
+            {
+                return new SqlServerSettingsDataReader();
+            }
+            
+            return base.ExecuteDbDataReader(behavior);
+        }
+    }
+
+    private sealed class SqlServerSettingsDataReader : DbDataReader
+    {
+        private readonly List<(string Setting, string Value)> _settings = new()
+        {
+            ("ANSI_NULLS", "SET"),
+            ("ANSI_PADDING", "SET"), 
+            ("ANSI_WARNINGS", "SET"),
+            ("ARITHABORT", "SET"),
+            ("CONCAT_NULL_YIELDS_NULL", "SET"),
+            ("QUOTED_IDENTIFIER", "SET"),
+            ("NUMERIC_ROUNDABORT", "NOT SET")
+        };
+        
+        private int _index = -1;
+        
+        public override bool GetBoolean(int ordinal) => throw new InvalidOperationException();
+        public override byte GetByte(int ordinal) => throw new InvalidOperationException();
+        public override long GetBytes(int ordinal, long dataOffset, byte[]? buffer, int bufferOffset, int length) => throw new InvalidOperationException();
+        public override char GetChar(int ordinal) => throw new InvalidOperationException();
+        public override long GetChars(int ordinal, long dataOffset, char[]? buffer, int bufferOffset, int length) => throw new InvalidOperationException();
+        public override string GetDataTypeName(int ordinal) => throw new InvalidOperationException();
+        public override DateTime GetDateTime(int ordinal) => throw new InvalidOperationException();
+        public override decimal GetDecimal(int ordinal) => throw new InvalidOperationException();
+        public override double GetDouble(int ordinal) => throw new InvalidOperationException();
+        public override Type GetFieldType(int ordinal) => throw new InvalidOperationException();
+        public override float GetFloat(int ordinal) => throw new InvalidOperationException();
+        public override Guid GetGuid(int ordinal) => throw new InvalidOperationException();
+        public override short GetInt16(int ordinal) => throw new InvalidOperationException();
+        public override int GetInt32(int ordinal) => throw new InvalidOperationException();
+        public override long GetInt64(int ordinal) => throw new InvalidOperationException();
+        public override string GetName(int ordinal) => throw new InvalidOperationException();
+        public override int GetOrdinal(string name) => throw new InvalidOperationException();
+        
+        public override string GetString(int ordinal)
+        {
+            if (_index < 0 || _index >= _settings.Count)
+                throw new InvalidOperationException();
+                
+            return ordinal switch
+            {
+                0 => _settings[_index].Setting,
+                1 => _settings[_index].Value,
+                _ => throw new InvalidOperationException()
+            };
+        }
+        
+        public override object GetValue(int ordinal) => GetString(ordinal);
+        public override int GetValues(object[] values) => throw new InvalidOperationException();
+        public override bool IsDBNull(int ordinal) => false;
+        public override int FieldCount => 2;
+        public override object this[int ordinal] => GetString(ordinal);
+        public override object this[string name] => throw new InvalidOperationException();
+        public override int RecordsAffected => 0;
+        public override bool HasRows => _settings.Count > 0;
+        public override bool IsClosed => false;
+        public override bool NextResult() => false;
+        public override bool Read() 
+        {
+            _index++;
+            return _index < _settings.Count;
+        }
+        public override int Depth => 0;
+        public override IEnumerator GetEnumerator() => ((IEnumerable)_settings).GetEnumerator();
     }
 
     [Fact]
