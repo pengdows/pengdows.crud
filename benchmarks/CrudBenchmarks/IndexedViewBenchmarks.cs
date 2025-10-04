@@ -179,13 +179,15 @@ public class IndexedViewBenchmarks : IAsyncDisposable
             );");
 
         // Create indexed view (must be in its own batch)
+        // Note: AVG() not allowed in indexed views, use SUM/COUNT_BIG instead
         await conn.ExecuteAsync(@"
             CREATE VIEW dbo.vw_CustomerOrderSummary WITH SCHEMABINDING AS
             SELECT
                 customer_id,
                 COUNT_BIG(*) as order_count,
                 SUM(total_amount) as total_amount,
-                AVG(total_amount) as avg_order_amount,
+                SUM(total_amount) as sum_order_amount,
+                COUNT_BIG(*) as count_for_avg,
                 MAX(order_date) as last_order_date
             FROM dbo.Orders
             WHERE status = 'Active'
@@ -378,11 +380,17 @@ public class IndexedViewBenchmarks : IAsyncDisposable
         [pengdows.crud.attributes.Column("total_amount", DbType.Decimal)]
         public decimal TotalAmount { get; set; }
 
-        [pengdows.crud.attributes.Column("avg_order_amount", DbType.Decimal)]
-        public decimal AvgOrderAmount { get; set; }
+        [pengdows.crud.attributes.Column("sum_order_amount", DbType.Decimal)]
+        public decimal SumOrderAmount { get; set; }
+
+        [pengdows.crud.attributes.Column("count_for_avg", DbType.Int64)]
+        public long CountForAvg { get; set; }
 
         [pengdows.crud.attributes.Column("last_order_date", DbType.DateTime2)]
         public DateTime LastOrderDate { get; set; }
+
+        // Computed property for average
+        public decimal AvgOrderAmount => CountForAvg > 0 ? SumOrderAmount / CountForAvg : 0;
     }
 
     // Entity Framework entities

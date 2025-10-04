@@ -204,6 +204,7 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
             CREATE INDEX IX_OrderDetails_ProductID ON dbo.OrderDetails(product_id);");
 
         // Create first indexed view (must be in its own batch)
+        // Note: AVG() not allowed in indexed views, use SUM/COUNT_BIG instead
         await conn.ExecuteAsync(@"
             CREATE VIEW dbo.vw_CustomerOrderSummary WITH SCHEMABINDING AS
             SELECT
@@ -211,7 +212,8 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
                 c.company_name,
                 COUNT_BIG(*) as order_count,
                 SUM(od.quantity * od.unit_price * (1 - od.discount)) as total_revenue,
-                AVG(od.quantity * od.unit_price * (1 - od.discount)) as avg_order_value,
+                SUM(od.quantity * od.unit_price * (1 - od.discount)) as sum_order_value,
+                COUNT_BIG(*) as count_for_avg,
                 MAX(o.order_date) as last_order_date
             FROM dbo.Customers c
             INNER JOIN dbo.Orders o ON c.customer_id = o.customer_id
@@ -232,7 +234,8 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
                 COUNT_BIG(*) as order_frequency,
                 SUM(od.quantity) as total_quantity_sold,
                 SUM(od.quantity * od.unit_price * (1 - od.discount)) as total_revenue,
-                AVG(od.quantity * od.unit_price * (1 - od.discount)) as avg_revenue_per_order
+                SUM(od.quantity * od.unit_price * (1 - od.discount)) as sum_revenue_per_order,
+                COUNT_BIG(*) as count_for_avg
             FROM dbo.Products p
             INNER JOIN dbo.OrderDetails od ON p.product_id = od.product_id
             GROUP BY p.product_id, p.product_name, p.category_name;");
