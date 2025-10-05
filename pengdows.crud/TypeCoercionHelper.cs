@@ -15,23 +15,6 @@ using pengdows.crud.types;
 
 namespace pengdows.crud;
 
-public enum TimeMappingPolicy
-{
-    PreferDateTimeOffset,
-    ForceUtcDateTime
-}
-
-public enum JsonPassThrough
-{
-    PreferDocument,
-    PreferText
-}
-
-public sealed record TypeCoercionOptions(TimeMappingPolicy TimePolicy, JsonPassThrough JsonPreference, SupportedDatabase Provider)
-{
-    public static TypeCoercionOptions Default { get; } = new(TimeMappingPolicy.PreferDateTimeOffset, JsonPassThrough.PreferDocument, SupportedDatabase.Unknown);
-}
-
 public static class TypeCoercionHelper
 {
     private static readonly Type GuidType = typeof(Guid);
