@@ -30,6 +30,13 @@ jobs:
       - name: Build solution
         run: dotnet build --no-restore --configuration Release
 
+      - name: Verify interface baselines
+        run: |
+          dotnet run --project tools/interface-api-check/InterfaceApiCheck.csproj --configuration Release -- \
+            --verify \
+            --baseline pengdows.crud.abstractions/ApiBaseline/interfaces.txt \
+            --assembly pengdows.crud.abstractions/bin/Release/net8.0/pengdows.crud.abstractions.dll
+
       - name: Install coverage tools
         run: |
           dotnet tool install --global dotnet-reportgenerator-globaltool
