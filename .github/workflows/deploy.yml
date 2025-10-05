@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 name: Build, Test & Publish NuGet Package
 
 on:
@@ -78,41 +77,18 @@ jobs:
             echo "❌ Could not extract line coverage info"
             exit 1
           fi
-=======
-publish:
-  name: Publish NuGet Package
-  runs-on: ubuntu-latest
-  needs: build-and-test
-  if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-  
-  steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        fetch-tags: true
 
-    - name: Setup .NET SDK
-      uses: actions/setup-dotnet@v2
-      with:
-        dotnet-version: '8.0.x'
->>>>>>> a5174f7 (supposed update)
+          covered=$(echo "$coverage_line" | cut -d' ' -f1)
+          total=$(echo "$coverage_line" | cut -d' ' -f3)
 
-    - name: Generate version number
-      id: version
-      run: |
-        epoch=$(date +%s)
-        echo "version=1.0.${epoch}.0" >> "$GITHUB_OUTPUT"
-        echo "version_short=1.0.${epoch}" >> "$GITHUB_OUTPUT"
+          if [[ -z "$covered" || -z "$total" ]]; then
+            echo "❌ Could not parse covered or total line count"
+            exit 1
+          fi
 
-    - name: Update version in .csproj
-      run: |
-        sed -i "s|<Version>.*</Version>|<Version>${{ steps.version.outputs.version }}</Version>|" pengdows.crud/pengdows.crud.csproj
+          coverage_percent=$(awk "BEGIN { printf \"%.2f\", ($covered / $total) * 100 }")
+          echo "📊 Visual Coverage (from index.html): $coverage_percent%"
 
-    - name: Build and pack
-      run: dotnet pack pengdows.crud/pengdows.crud.csproj -c Release
-
-<<<<<<< HEAD
           required=83
           too_low=$(awk "BEGIN { print ($coverage_percent < $required) ? 1 : 0 }")
           if [[ "$too_low" -eq 1 ]]; then
@@ -135,24 +111,13 @@ publish:
         with:
           name: coverage-report
           path: coverage-report
-=======
-    - name: Push package to NuGet
-      run: dotnet nuget push pengdows.crud/bin/Release/pengdows.crud.${{ steps.version.outputs.version_short }}.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }}
 
-    - name: Commit version bump
-      run: |
-        git config user.name "github-actions[bot]"
-        git config user.email "github-actions[bot]@users.noreply.github.com"
-        git add pengdows.crud/pengdows.crud.csproj
-        git commit -m "Bump version to v${{ steps.version.outputs.version_short }}" || echo "No changes to commit"
->>>>>>> a5174f7 (supposed update)
+  publish:
+    name: Publish NuGet Package
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
-    - name: Tag the release
-      run: |
-        git tag -a "v${{ steps.version.outputs.version_short }}" -m "Release v${{ steps.version.outputs.version_short }}"
-        git push origin "v${{ steps.version.outputs.version_short }}"
-
-<<<<<<< HEAD
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -234,13 +199,3 @@ publish:
           body: Automated release for version v${{ steps.version.outputs.version_short }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-=======
-    - name: Create GitHub Release
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: v${{ steps.version.outputs.version_short }}
-        name: v${{ steps.version.outputs.version_short }}
-        body: "Automated release for version v${{ steps.version.outputs.version_short }}"
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
->>>>>>> a5174f7 (supposed update)
