@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
+using pengdows.crud.exceptions;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 using Xunit;
@@ -486,6 +487,23 @@ public class DatabaseContextConstructorTests
         // Assert
         Assert.Equal(DbMode.Standard, context.ConnectionMode);
         Assert.Equal(SupportedDatabase.Unknown, context.Product);
+    }
+
+    [Fact]
+    public void Constructor_Throws_When_Persistent_Mode_Probe_Fails_For_Known_Provider()
+    {
+        // Arrange
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=fail;",
+            DbMode = DbMode.KeepAlive,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        var factory = new ThrowingOpenFactory();
+
+        // Act & Assert
+        Assert.Throws<ConnectionFailedException>(() => new DatabaseContext(config, factory, NullLoggerFactory.Instance));
     }
 
     private sealed class ThrowingOpenFactory : DbProviderFactory

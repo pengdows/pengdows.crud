@@ -780,18 +780,28 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             {
                 initConn.Open();
             }
-            catch (Exception)
+            catch (Exception ex)
             {
                 // For Standard/Best with Unknown providers, allow constructor to proceed without an open
                 // connection so dialect falls back to SQL-92 and operations surface errors later.
-                if ((ConnectionMode == DbMode.Standard || ConnectionMode == DbMode.Best) && IsEmulatedUnknown(_connectionString))
+                if ((ConnectionMode == DbMode.Standard || ConnectionMode == DbMode.Best || ConnectionMode == DbMode.KeepAlive
+                        || ConnectionMode == DbMode.SingleConnection || ConnectionMode == DbMode.SingleWriter)
+                    && IsEmulatedUnknown(_connectionString))
                 {
-                    try { initConn.Dispose(); } catch { /* ignore */ }
+                    try
+                    {
+                        initConn.Dispose();
+                    }
+                    catch
+                    {
+                        // ignored: attempting to clean up failed connection
+                    }
+
                     initConn = null;
                 }
                 else
                 {
-                    throw new ConnectionFailedException("Failed to open database connection.");
+                    throw new ConnectionFailedException("Failed to open database connection.", ex);
                 }
             }
 
