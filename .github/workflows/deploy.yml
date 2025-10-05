@@ -180,7 +180,12 @@ jobs:
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
 
+      - name: Note protected branch push skip
+        if: ${{ github.ref_protected }}
+        run: echo "Branch is protected; skipping automated commit, push, and tag steps."
+
       - name: Commit version bump
+        if: ${{ !github.ref_protected }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -188,9 +193,11 @@ jobs:
           git commit -m "Bump version to v${{ steps.version.outputs.version_short }}" || echo "No changes to commit"
 
       - name: Push version bump commit
+        if: ${{ !github.ref_protected }}
         run: git push origin HEAD:main
 
       - name: Tag the release
+        if: ${{ !github.ref_protected }}
         run: |
           git tag -a "v${{ steps.version.outputs.version_short }}" -m "Release v${{ steps.version.outputs.version_short }}"
           git push origin "v${{ steps.version.outputs.version_short }}"
@@ -201,5 +208,6 @@ jobs:
           tag_name: v${{ steps.version.outputs.version_short }}
           name: v${{ steps.version.outputs.version_short }}
           body: Automated release for version v${{ steps.version.outputs.version_short }}
+          target_commitish: ${{ github.sha }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
