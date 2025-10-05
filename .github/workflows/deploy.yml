@@ -53,6 +53,14 @@ jobs:
             --results-directory ./TestResults \
             --settings coverage.runsettings
 
+      - name: Run integration suite
+        run: |
+          dotnet run --no-build --configuration Release --project testbed/testbed.csproj
+
+      - name: Run benchmarks
+        run: |
+          dotnet run --no-build --configuration Release --project benchmarks/CrudBenchmarks/CrudBenchmarks.csproj
+
       - name: Generate coverage report
         run: |
           reportgenerator \
