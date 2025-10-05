@@ -3,11 +3,13 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Net;
 using System.Reflection;
 using System.Threading.Tasks;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
+using pengdows.crud.types.valueobjects;
 using Xunit;
 
 #endregion
@@ -312,6 +314,44 @@ public class DataReaderMapperTests
 
         Assert.Single(result);
         Assert.Equal(42, result[0].Age);
+    }
+
+    [Fact]
+    public async Task LoadAsync_WithAdvancedTypeAndProvider_SuccessfullyCoerces()
+    {
+        var reader = new fakeDbDataReader(new[]
+        {
+            new Dictionary<string, object>
+            {
+                ["Address"] = "192.168.1.24"
+            }
+        });
+
+        var options = new MapperOptions(
+            CoercionOptions: TypeCoercionOptions.Default with
+            {
+                Provider = SupportedDatabase.PostgreSql
+            });
+
+        var result = await DataReaderMapper.LoadAsync<AdvancedTypeEntity>(reader, options);
+
+        Assert.Single(result);
+        Assert.Equal(new Inet(IPAddress.Parse("192.168.1.24")), result[0].Address);
+    }
+
+    [Fact]
+    public async Task LoadAsync_WithAdvancedTypeAndMissingProvider_ThrowsWhenStrict()
+    {
+        var reader = new fakeDbDataReader(new[]
+        {
+            new Dictionary<string, object>
+            {
+                ["Address"] = "192.168.1.24"
+            }
+        });
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => DataReaderMapper.LoadAsync<AdvancedTypeEntity>(reader, new MapperOptions(Strict: true)));
     }
 
     [Fact]
@@ -627,6 +667,11 @@ public class DataReaderMapperTests
     private class EnumEntity
     {
         public SampleState State { get; set; }
+    }
+
+    private class AdvancedTypeEntity
+    {
+        public Inet Address { get; set; }
     }
 
     private class TypeConversionEntity

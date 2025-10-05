@@ -29,7 +29,12 @@ public sealed class DataReaderMapper : IDataReaderMapper
     {
     }
 
-    private readonly record struct PlanCacheKey(Type Type, string SchemaHash, bool ColumnsOnly, EnumParseFailureMode EnumMode);
+    private readonly record struct PlanCacheKey(
+        Type Type,
+        string SchemaHash,
+        bool ColumnsOnly,
+        EnumParseFailureMode EnumMode,
+        TypeCoercionOptions CoercionOptions);
 
     public static Task<List<T>> LoadObjectsFromDataReaderAsync<T>(
         IDataReader reader,
@@ -118,8 +123,10 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
         options ??= MapperOptions.Default;
 
+        var coercionOptions = options.EffectiveCoercionOptions;
+
         var schemaHash = BuildSchemaHash(rdr, options);
-        var planKey = new PlanCacheKey(typeof(T), schemaHash, options.ColumnsOnly, options.EnumMode);
+        var planKey = new PlanCacheKey(typeof(T), schemaHash, options.ColumnsOnly, options.EnumMode, coercionOptions);
 
         var plan = _planCache.GetOrAdd(planKey, _ => BuildPlan<T>(rdr, options));
 
@@ -176,7 +183,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
                 ordinals.Add(i);
                 var fieldType = ResolveFieldType(reader, i);
                 var requiresCoercion = RequiresCoercion(fieldType, prop.PropertyType);
-                setters.Add(GetOrCreateSetter(prop, fieldType, requiresCoercion, options.EnumMode, i));
+                setters.Add(GetOrCreateSetter(prop, fieldType, requiresCoercion, options.EnumMode, options.EffectiveCoercionOptions, i));
                 properties.Add(prop);
             }
         }
@@ -229,9 +236,10 @@ public sealed class DataReaderMapper : IDataReaderMapper
         Type fieldType,
         bool requiresCoercion,
         EnumParseFailureMode enumMode,
+        TypeCoercionOptions coercionOptions,
         int ordinal)
     {
-        var key = new SetterCacheKey(prop, fieldType, requiresCoercion, enumMode, ordinal);
+        var key = new SetterCacheKey(prop, fieldType, requiresCoercion, enumMode, ordinal, coercionOptions);
         return _setterCache.GetOrAdd(key, static k => CompileSetter(k));
     }
 
@@ -256,7 +264,8 @@ public sealed class DataReaderMapper : IDataReaderMapper
                     rawValue,
                     Expression.Constant(key.Property, typeof(PropertyInfo)),
                     Expression.Constant(key.FieldType, typeof(Type)),
-                    Expression.Constant(key.EnumMode, typeof(EnumParseFailureMode))),
+                    Expression.Constant(key.EnumMode, typeof(EnumParseFailureMode)),
+                    Expression.Constant(key.CoercionOptions, typeof(TypeCoercionOptions))),
                 key.Property.PropertyType);
         }
         else
@@ -320,7 +329,8 @@ public sealed class DataReaderMapper : IDataReaderMapper
         object? value,
         PropertyInfo property,
         Type fieldType,
-        EnumParseFailureMode enumMode)
+        EnumParseFailureMode enumMode,
+        TypeCoercionOptions options)
     {
         if (Utils.IsNullOrDbNull(value))
         {
@@ -329,7 +339,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
         try
         {
-            return TypeCoercionHelper.Coerce(value!, fieldType, property.PropertyType);
+            return TypeCoercionHelper.Coerce(value!, fieldType, property.PropertyType, options);
         }
         catch (Exception ex) when (TryHandleEnumFailure(value!, property, enumMode, ex, out var handled))
         {
@@ -396,7 +406,8 @@ public sealed class DataReaderMapper : IDataReaderMapper
         Type FieldType,
         bool RequiresCoercion,
         EnumParseFailureMode EnumMode,
-        int Ordinal);
+        int Ordinal,
+        TypeCoercionOptions CoercionOptions);
 
     private readonly record struct PropertyLookupCacheKey(Type Type, bool ColumnsOnly);
 
