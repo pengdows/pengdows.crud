@@ -1,7 +1,10 @@
 #region
 
 using System;
+using System.Data;
 using System.Data.Common;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
@@ -441,6 +444,118 @@ public class DatabaseContextConstructorTests
         // Assert
         var builder = new DbConnectionStringBuilder { ConnectionString = context.ConnectionString };
         Assert.False(builder.ContainsKey("Min Pool Size"));
+    }
+
+    [Fact]
+    public void Constructor_Allows_Standard_Mode_When_Probe_Open_Fails_For_Unknown()
+    {
+        // Arrange
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=fail;EmulatedProduct=Unknown;",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        var factory = new ThrowingOpenFactory();
+
+        // Act
+        using var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
+
+        // Assert
+        Assert.Equal(DbMode.Standard, context.ConnectionMode);
+        Assert.Equal(SupportedDatabase.Unknown, context.Product);
+    }
+
+    [Fact]
+    public void Constructor_Falls_Back_To_Standard_When_Persistent_Mode_Probe_Fails()
+    {
+        // Arrange
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=fail;EmulatedProduct=Unknown;",
+            DbMode = DbMode.KeepAlive,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        var factory = new ThrowingOpenFactory();
+
+        // Act
+        using var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
+
+        // Assert
+        Assert.Equal(DbMode.Standard, context.ConnectionMode);
+        Assert.Equal(SupportedDatabase.Unknown, context.Product);
+    }
+
+    private sealed class ThrowingOpenFactory : DbProviderFactory
+    {
+        public override DbConnection CreateConnection()
+        {
+            return new ThrowingOpenConnection();
+        }
+
+        public override DbConnectionStringBuilder CreateConnectionStringBuilder()
+        {
+            return new DbConnectionStringBuilder();
+        }
+
+        private sealed class ThrowingOpenConnection : DbConnection
+        {
+            private ConnectionState _state = ConnectionState.Closed;
+
+            public override string ConnectionString { get; set; } = string.Empty;
+
+            public override string Database => "Throwing";
+
+            public override string DataSource => "Throwing";
+
+            public override string ServerVersion => "1.0";
+
+            public override int ConnectionTimeout => 0;
+
+            public override ConnectionState State => _state;
+
+            public override void ChangeDatabase(string databaseName)
+            {
+                throw new NotSupportedException();
+            }
+
+            public override void Close()
+            {
+                _state = ConnectionState.Closed;
+            }
+
+            public override void Open()
+            {
+                throw new InvalidOperationException("Probe open failed.");
+            }
+
+            public override Task OpenAsync(CancellationToken cancellationToken)
+            {
+                return Task.FromException(new InvalidOperationException("Probe open failed."));
+            }
+
+            protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel)
+            {
+                throw new NotSupportedException();
+            }
+
+            protected override DbCommand CreateDbCommand()
+            {
+                throw new NotSupportedException();
+            }
+
+            public override DataTable GetSchema()
+            {
+                return new DataTable();
+            }
+
+            public override DataTable GetSchema(string collectionName)
+            {
+                return new DataTable();
+            }
+        }
     }
 
     private sealed class RejectingBuilderFactory : DbProviderFactory

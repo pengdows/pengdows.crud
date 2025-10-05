@@ -154,9 +154,9 @@ public class AdvancedTypeBenchmarks
         public override DbType DbType { get; set; }
         public override ParameterDirection Direction { get; set; }
         public override bool IsNullable { get; set; }
-        public override string ParameterName { get; set; } = string.Empty;
+        public override string? ParameterName { get; set; } = string.Empty;
         public override int Size { get; set; }
-        public override string SourceColumn { get; set; } = string.Empty;
+        public override string? SourceColumn { get; set; } = string.Empty;
         public override bool SourceColumnNullMapping { get; set; }
         public override object? Value { get; set; }
 

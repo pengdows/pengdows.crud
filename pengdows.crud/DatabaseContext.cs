@@ -796,7 +796,10 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             }
 
             // 3) Detect product/capabilities once
-            var (product, isFirebirdEmbedded, isLocalDb) = DetectProductAndTopology(initConn, _connectionString);
+            var detectionResult = initConn != null
+                ? DetectProductAndTopology(initConn, _connectionString)
+                : (SupportedDatabase.Unknown, false, false);
+            var (product, isFirebirdEmbedded, isLocalDb) = detectionResult;
 
             // Optional: RCSI prefetch (SQL Server only)
             bool rcsi = false;
@@ -828,17 +831,28 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             // Pooling defaults will be applied after dialect detection
 
             // 5) Apply provider/session settings according to final mode
-            if (ConnectionMode is DbMode.KeepAlive or DbMode.SingleConnection or DbMode.SingleWriter)
+            if (initConn == null)
             {
-                ApplyPersistentConnectionSessionSettings(initConn);
-                SetPersistentConnection(initConn);
-                initConn = null; // context owns it now
+                if (ConnectionMode is DbMode.KeepAlive or DbMode.SingleConnection or DbMode.SingleWriter)
+                {
+                    LogModeOverride(ConnectionMode, DbMode.Standard, "Initial probe connection unavailable; using Standard mode.");
+                    ConnectionMode = DbMode.Standard;
+                }
             }
             else
             {
-                // Standard: apply per-connection session hints that must be present during dialect init
-                SetupConnectionSessionSettingsForProvider(initConn);
-                // Do NOT SetPersistentConnection
+                if (ConnectionMode is DbMode.KeepAlive or DbMode.SingleConnection or DbMode.SingleWriter)
+                {
+                    ApplyPersistentConnectionSessionSettings(initConn);
+                    SetPersistentConnection(initConn);
+                    initConn = null; // context owns it now
+                }
+                else
+                {
+                    // Standard: apply per-connection session hints that must be present during dialect init
+                    SetupConnectionSessionSettingsForProvider(initConn);
+                    // Do NOT SetPersistentConnection
+                }
             }
 
             // 7) Isolation resolver after product/RCSI known
@@ -983,30 +997,35 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             // Only configure pooling for databases that support external pooling
             if (_dialect.SupportsExternalPooling)
             {
+                var poolingSetting = _dialect.PoolingSettingName;
+
                 // Pooling=true if absent
-                if (!string.IsNullOrEmpty(_dialect.PoolingSettingName) &&
-                    !builder.ContainsKey(_dialect.PoolingSettingName))
+                if (!string.IsNullOrEmpty(poolingSetting) && !builder.ContainsKey(poolingSetting))
                 {
-                    builder[_dialect.PoolingSettingName] = true;
+                    builder[poolingSetting] = true;
                     modified = true;
                 }
 
                 // Min pool size if absent and pooling is enabled
                 // SingleConnection and SingleWriter modes maintain persistent connections and don't use pooling
-                if (!string.IsNullOrEmpty(_dialect.MinPoolSizeSettingName) &&
-                    !builder.ContainsKey(_dialect.MinPoolSizeSettingName) &&
+                var minPoolSetting = _dialect.MinPoolSizeSettingName;
+                if (!string.IsNullOrEmpty(minPoolSetting) &&
+                    !builder.ContainsKey(minPoolSetting) &&
                     ConnectionMode != DbMode.SingleConnection &&
                     ConnectionMode != DbMode.SingleWriter)
                 {
-                    // Only add MinPoolSize if pooling is enabled
-                    var poolingEnabled = !builder.ContainsKey(_dialect.PoolingSettingName) ||
-                                       (builder.ContainsKey(_dialect.PoolingSettingName) &&
-                                        bool.TryParse(builder[_dialect.PoolingSettingName]?.ToString(), out var pooling) && pooling);
+                    var poolingEnabled = true;
+                    if (!string.IsNullOrEmpty(poolingSetting))
+                    {
+                        poolingEnabled = !builder.ContainsKey(poolingSetting) ||
+                                         (builder.ContainsKey(poolingSetting) &&
+                                          bool.TryParse(builder[poolingSetting]?.ToString(), out var pooling) && pooling);
+                    }
 
                     if (poolingEnabled)
                     {
                         // Set to 1 to enforce pooling (user can specify higher if needed)
-                        builder[_dialect.MinPoolSizeSettingName] = DefaultMinPoolSize;
+                        builder[minPoolSetting] = DefaultMinPoolSize;
                         modified = true;
                     }
                 }
