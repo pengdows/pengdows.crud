@@ -171,7 +171,7 @@ public static class TypeCoercionHelper
         }
     }
 
-    private static object? CoerceEnum(object value, Type enumType, EnumParseFailureMode parseMode, Type targetType)
+    private static object CoerceEnum(object value, Type enumType, EnumParseFailureMode parseMode, Type targetType)
     {
         if (enumType.IsInstanceOfType(value))
         {

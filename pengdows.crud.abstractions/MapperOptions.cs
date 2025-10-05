@@ -10,11 +10,8 @@ public sealed record MapperOptions(
     bool Strict = false,
     bool ColumnsOnly = false,
     Func<string, string>? NamePolicy = null,
-    EnumParseFailureMode EnumMode = EnumParseFailureMode.Throw,
-    TypeCoercionOptions? CoercionOptions = null)
+    EnumParseFailureMode EnumMode = EnumParseFailureMode.Throw)
 {
     public static readonly MapperOptions Default = new();
-
-    public TypeCoercionOptions EffectiveCoercionOptions => CoercionOptions ?? TypeCoercionOptions.Default;
 }
 

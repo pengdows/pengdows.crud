@@ -34,8 +34,8 @@ jobs:
 
       - name: Install coverage tools
         run: |
-          dotnet tool install --global dotnet-reportgenerator-globaltool
-          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+            dotnet tool install --global dotnet-reportgenerator-globaltool
+            echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
 
       - name: Clean previous coverage results
         run: rm -rf ./TestResults
@@ -50,12 +50,12 @@ jobs:
 
       - name: Generate coverage report
         run: |
-          reportgenerator \
-            -reports:"TestResults/**/coverage.cobertura.xml" \
-            -targetdir:"coverage-report" \
-            -reporttypes:"Html;Cobertura" \
-            -assemblyfilters:"+pengdows.crud;-pengdows.crud.Tests;-pengdows.crud.abstractions;-pengdows.crud.fakeDb;-testbed" \
-            -classfilters:"-*Test*;-*Mock*"
+            reportgenerator \
+              -reports:"TestResults/**/coverage.cobertura.xml" \
+              -targetdir:"coverage-report" \
+              -reporttypes:"Html;Cobertura" \
+              -assemblyfilters:"+pengdows.crud;-pengdows.crud.Tests;-pengdows.crud.abstractions;-pengdows.crud.fakeDb;-testbed" \
+              -classfilters:"-*Test*;-*Mock*"
 
       - name: Enforce visual coverage from HTML report
         run: |
@@ -78,9 +78,17 @@ jobs:
             exit 1
           fi
 
-          total_covered=$(echo "$coverage_line" | cut -d' ' -f1)
-          total_lines=$(echo "$coverage_line" | cut -d' ' -f3)
-          coverage_percent=$(awk -v covered="$total_covered" -v total="$total_lines" 'BEGIN { if (total == 0) { print 0 } else { printf "%.2f", (covered / total) * 100 } }')
+          covered=$(echo "$coverage_line" | cut -d' ' -f1)
+          total=$(echo "$coverage_line" | cut -d' ' -f3)
+
+          if [[ -z "$covered" || -z "$total" ]]; then
+            echo "❌ Could not parse covered or total line count"
+            exit 1
+          fi
+
+          coverage_percent=$(awk "BEGIN { printf \"%.2f\", ($covered / $total) * 100 }")
+          echo "📊 Visual Coverage (from index.html): $coverage_percent%"
+
           required=83
           too_low=$(awk "BEGIN { print ($coverage_percent < $required) ? 1 : 0 }")
           if [[ "$too_low" -eq 1 ]]; then
@@ -120,7 +128,7 @@ jobs:
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v2
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: 8.0.x
 
       - name: Generate version number
         id: version
@@ -128,16 +136,6 @@ jobs:
           epoch=$(date +%s)
           echo "version=1.0.${epoch}.0" >> "$GITHUB_OUTPUT"
           echo "version_short=1.0.${epoch}" >> "$GITHUB_OUTPUT"
-
-      - name: Update version in project files
-        run: |
-          for project in \
-            pengdows.crud/pengdows.crud.csproj \
-            pengdows.crud.abstractions/pengdows.crud.abstractions.csproj \
-            pengdows.crud.fakeDb/pengdows.crud.fakeDb.csproj
-          do
-            sed -i "s|<Version>.*</Version>|<Version>${{ steps.version.outputs.version }}</Version>|" "$project"
-          done
 
       - name: Build
         run: dotnet build pengdows.crud.sln -c Release
@@ -153,7 +151,6 @@ jobs:
           dotnet pack pengdows.crud/pengdows.crud.csproj -c Release \
             --no-build \
             -p:PackageVersion=${{ steps.version.outputs.version }}
-
       - name: Debug API Key
         run: |
           if [ -z "$NUGET_API_KEY" ]; then
@@ -164,7 +161,6 @@ jobs:
           fi
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
-
       - name: Push package to NuGet
         run: |
           set -euo pipefail
