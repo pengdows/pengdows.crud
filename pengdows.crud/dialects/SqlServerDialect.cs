@@ -1,4 +1,3 @@
-using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
@@ -23,7 +22,7 @@ public class SqlServerDialect : SqlDialect
         "SET QUOTED_IDENTIFIER ON;\n" +
         "SET NUMERIC_ROUNDABORT OFF;";
 
-    private static readonly FrozenDictionary<string, string> ExpectedSessionSettings =
+    private static readonly IReadOnlyDictionary<string, string> ExpectedSessionSettings =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             ["ANSI_NULLS"] = "ON",
@@ -33,7 +32,7 @@ public class SqlServerDialect : SqlDialect
             ["CONCAT_NULL_YIELDS_NULL"] = "ON",
             ["QUOTED_IDENTIFIER"] = "ON",
             ["NUMERIC_ROUNDABORT"] = "OFF"
-        }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        };
 
     private string? _sessionSettings;
 

@@ -1,5 +1,5 @@
 using System.Collections.Concurrent;
-using System.Collections.Frozen;
+using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Text;
@@ -40,7 +40,7 @@ public abstract class SqlDialect:ISqlDialect
     private static readonly ConcurrentDictionary<DbType, Action<DbParameter, object?>> _typeConversionCache = new();
 
     // Precompiled common type conversions to avoid repeated pattern matching
-    private static readonly FrozenDictionary<DbType, Action<DbParameter, object?>> _commonConversions =
+    private static readonly IReadOnlyDictionary<DbType, Action<DbParameter, object?>> _commonConversions =
         new Dictionary<DbType, Action<DbParameter, object?>>
         {
             [DbType.Guid] = static (p, v) =>
@@ -68,7 +68,7 @@ public abstract class SqlDialect:ISqlDialect
                     p.Value = dto.DateTime;
                 }
             }
-        }.ToFrozenDictionary();
+        };
 
     // Simple parameter pool - avoid repeated factory calls for hot paths
     private readonly ConcurrentQueue<DbParameter> _parameterPool = new();

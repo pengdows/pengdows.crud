@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
@@ -17,12 +16,12 @@ namespace pengdows.crud.dialects;
 public class PostgreSqlDialect : SqlDialect
 {
     private const string DefaultSessionSettings = "SET standard_conforming_strings = on;\nSET client_min_messages = warning;";
-    private static readonly FrozenDictionary<string, string> ExpectedSessionSettings =
+    private static readonly IReadOnlyDictionary<string, string> ExpectedSessionSettings =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             ["standard_conforming_strings"] = "on",
             ["client_min_messages"] = "warning"
-        }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        };
 
     private string? _sessionSettings;
 
