@@ -9,12 +9,14 @@ using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
+using pengdows.crud.@internal;
+using pengdows.crud.metrics;
 
 #endregion
 
 namespace pengdows.crud;
 
-public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, IContextIdentity, ISqlDialectProvider
+public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, IContextIdentity, ISqlDialectProvider, IMetricsCollectorAccessor
 {
     private readonly ITrackedConnection _connection;
     private readonly IDatabaseContext _context;
@@ -25,6 +27,9 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
     private readonly IDbTransaction _transaction;
     private readonly IsolationLevel _resolvedIsolationLevel;
     private readonly bool _isReadOnly;
+    private readonly MetricsCollector? _metricsCollector;
+    private readonly long _transactionMetricsStart;
+    private int _metricsCompleted;
 
     private int _committed; // 0 = no, 1 = yes
     private int _rolledBack; // 0 = no, 1 = yes
@@ -47,6 +52,11 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
                            "IDatabaseContext must implement ISqlDialectProvider and expose a non-null Dialect.");
         _dialect = provider.Dialect;
         RootId = ((IContextIdentity)_context).RootId;
+        _metricsCollector = (context as IMetricsCollectorAccessor)?.MetricsCollector;
+        if (_metricsCollector != null)
+        {
+            _transactionMetricsStart = _metricsCollector.TransactionStarted();
+        }
 
         executionType ??= (_context.IsReadOnlyConnection || _isReadOnly) ? ExecutionType.Read : ExecutionType.Write;
 
@@ -104,6 +114,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
     public ITypeMapRegistry TypeMapRegistry => _context.TypeMapRegistry;
     public IDataSourceInformation DataSourceInfo => _context.DataSourceInfo;
     public string SessionSettingsPreamble => _context.SessionSettingsPreamble;
+    public DatabaseMetrics Metrics => _context.Metrics;
 
     public ILockerAsync GetLock()
     {
@@ -198,6 +209,8 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
     {
         return _dialect.WrapObjectName(name);
     }
+
+    MetricsCollector? IMetricsCollectorAccessor.MetricsCollector => _metricsCollector;
 
     public string MakeParameterName(DbParameter dbParameter)
     {
@@ -388,6 +401,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         }
 
         _context.CloseAndDisposeConnection(_connection);
+        CompleteTransactionMetrics();
     }
 
     private async Task CompleteTransactionAsync(Func<Task> action, bool markCommitted)
@@ -409,6 +423,22 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         }
 
         await _context.CloseAndDisposeConnectionAsync(_connection).ConfigureAwait(false);
+        CompleteTransactionMetrics();
+    }
+
+    private void CompleteTransactionMetrics()
+    {
+        if (_metricsCollector == null)
+        {
+            return;
+        }
+
+        if (Interlocked.Exchange(ref _metricsCompleted, 1) != 0)
+        {
+            return;
+        }
+
+        _metricsCollector.TransactionCompleted(_transactionMetricsStart);
     }
 
     // Kept for backward compatibility with existing internal calls
@@ -446,6 +476,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         _transaction.Dispose();
         _userLock.Dispose();
         _completionLock.Dispose();
+        CompleteTransactionMetrics();
     }
 
     protected override async ValueTask DisposeManagedAsync()
@@ -493,6 +524,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
 
         _userLock.Dispose();
         _completionLock.Dispose();
+        CompleteTransactionMetrics();
     }
 
     private void EnsureConnectionIsOpen()

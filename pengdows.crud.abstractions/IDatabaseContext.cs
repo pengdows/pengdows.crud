@@ -4,6 +4,7 @@ using System.Data;
 using System.Data.Common;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
+using pengdows.crud.metrics;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
 
@@ -66,6 +67,11 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// Current number of open connections. Usually 0 for DbMode.Standard, 1 otherwise.
     /// </summary>
     long NumberOfOpenConnections { get; }
+
+    /// <summary>
+    /// Snapshot of metrics collected for this context.
+    /// </summary>
+    DatabaseMetrics Metrics { get; }
 
     /// <summary>
     /// Detected database product (e.g., PostgreSQL, Oracle).

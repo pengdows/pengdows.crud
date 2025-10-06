@@ -18,12 +18,13 @@ using pengdows.crud.threading;
 using pengdows.crud.wrappers;
 using pengdows.crud.strategies.connection;
 using pengdows.crud.strategies.proc;
+using pengdows.crud.metrics;
 
 #endregion
 
 namespace pengdows.crud;
 
-public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IContextIdentity, ISqlDialectProvider
+public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IContextIdentity, ISqlDialectProvider, IMetricsCollectorAccessor
 {
     private readonly DbProviderFactory _factory;
     private readonly ILoggerFactory _loggerFactory;
@@ -54,6 +55,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     private bool? _rcsiPrefetch;
     private int _initializing; // 0 = false, 1 = true
     private bool _sessionSettingsAppliedOnOpen;
+    private readonly MetricsCollector _metricsCollector;
 
     public Guid RootId { get; } = Guid.NewGuid();
 
@@ -176,6 +178,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             _factory = factory ?? throw new ArgumentNullException(nameof(factory));
             _forceManualPrepare = configuration.ForceManualPrepare;
             _disablePrepare = configuration.DisablePrepare;
+            _metricsCollector = new MetricsCollector(configuration.MetricsOptions ?? MetricsOptions.Default);
 
             var initialConnection = InitializeInternals(configuration);
 
@@ -384,6 +387,8 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     public int MaxOutputParameters => _dataSourceInfo.MaxOutputParameters;
     public long MaxNumberOfConnections => Interlocked.Read(ref _maxNumberOfOpenConnections);
     public long NumberOfOpenConnections => Interlocked.Read(ref _connectionCount);
+
+    public DatabaseMetrics Metrics => CreateMetricsSnapshot();
     
     /// <summary>
     /// Gets the total number of connections created during the lifetime of this context.
@@ -491,6 +496,51 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     public string GenerateRandomName(int length = 5, int parameterNameMaxLength = 30)
     {
        return _dialect.GenerateRandomName(length, parameterNameMaxLength);
+    }
+
+    MetricsCollector? IMetricsCollectorAccessor.MetricsCollector => _metricsCollector;
+
+    private DatabaseMetrics CreateMetricsSnapshot()
+    {
+        var snapshot = _metricsCollector.CreateSnapshot();
+        return new DatabaseMetrics(
+            SaturateToInt(NumberOfOpenConnections),
+            SaturateToInt(MaxNumberOfConnections),
+            snapshot.ConnectionsOpened,
+            snapshot.ConnectionsClosed,
+            snapshot.AvgConnectionHoldMs,
+            snapshot.LongLivedConnections,
+            snapshot.CommandsExecuted,
+            snapshot.CommandsFailed,
+            snapshot.CommandsTimedOut,
+            snapshot.CommandsCancelled,
+            snapshot.AvgCommandMs,
+            snapshot.P95CommandMs,
+            snapshot.P99CommandMs,
+            snapshot.MaxParametersObserved,
+            snapshot.RowsReadTotal,
+            snapshot.RowsAffectedTotal,
+            snapshot.PreparedStatements,
+            snapshot.StatementsCached,
+            snapshot.StatementsEvicted,
+            snapshot.TransactionsActive,
+            snapshot.TransactionsMax,
+            snapshot.AvgTransactionMs);
+    }
+
+    private static int SaturateToInt(long value)
+    {
+        if (value >= int.MaxValue)
+        {
+            return int.MaxValue;
+        }
+
+        if (value <= int.MinValue)
+        {
+            return int.MinValue;
+        }
+
+        return (int)value;
     }
 
 
@@ -697,7 +747,8 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             firstOpenHandler,
             onDispose: conn => { _logger.LogDebug("Connection disposed."); },
             null,
-            isSharedConnection
+            isSharedConnection,
+            _metricsCollector
         );
         return tracked;
     }
