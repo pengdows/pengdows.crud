@@ -1,5 +1,6 @@
 #region
 
+using System;
 using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
@@ -115,6 +116,12 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
     public IDataSourceInformation DataSourceInfo => _context.DataSourceInfo;
     public string SessionSettingsPreamble => _context.SessionSettingsPreamble;
     public DatabaseMetrics Metrics => _context.Metrics;
+
+    public event EventHandler<DatabaseMetrics> MetricsUpdated
+    {
+        add => _context.MetricsUpdated += value;
+        remove => _context.MetricsUpdated -= value;
+    }
 
     public ILockerAsync GetLock()
     {

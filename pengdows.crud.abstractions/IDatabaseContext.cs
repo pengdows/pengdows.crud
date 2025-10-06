@@ -1,5 +1,6 @@
 ﻿#region
 
+using System;
 using System.Data;
 using System.Data.Common;
 using pengdows.crud.enums;
@@ -72,6 +73,12 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// Snapshot of metrics collected for this context.
     /// </summary>
     DatabaseMetrics Metrics { get; }
+
+    /// <summary>
+    /// Raised whenever the metrics collector records a new observation.
+    /// Subscribers receive the latest snapshot for the context.
+    /// </summary>
+    event EventHandler<DatabaseMetrics> MetricsUpdated;
 
     /// <summary>
     /// Detected database product (e.g., PostgreSQL, Oracle).

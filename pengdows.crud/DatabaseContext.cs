@@ -4,6 +4,7 @@ using System.Data;
 using System.Data.Common;
 using System.Globalization;
 using System.Reflection;
+using System.Threading;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
@@ -56,6 +57,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     private int _initializing; // 0 = false, 1 = true
     private bool _sessionSettingsAppliedOnOpen;
     private readonly MetricsCollector _metricsCollector;
+    private EventHandler<DatabaseMetrics>? _metricsUpdated;
 
     public Guid RootId { get; } = Guid.NewGuid();
 
@@ -179,6 +181,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             _forceManualPrepare = configuration.ForceManualPrepare;
             _disablePrepare = configuration.DisablePrepare;
             _metricsCollector = new MetricsCollector(configuration.MetricsOptions ?? MetricsOptions.Default);
+            _metricsCollector.MetricsChanged += OnMetricsCollectorUpdated;
 
             var initialConnection = InitializeInternals(configuration);
 
@@ -389,6 +392,12 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     public long NumberOfOpenConnections => Interlocked.Read(ref _connectionCount);
 
     public DatabaseMetrics Metrics => CreateMetricsSnapshot();
+
+    public event EventHandler<DatabaseMetrics> MetricsUpdated
+    {
+        add => _metricsUpdated += value;
+        remove => _metricsUpdated -= value;
+    }
     
     /// <summary>
     /// Gets the total number of connections created during the lifetime of this context.
@@ -526,6 +535,18 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             snapshot.TransactionsActive,
             snapshot.TransactionsMax,
             snapshot.AvgTransactionMs);
+    }
+
+    private void OnMetricsCollectorUpdated()
+    {
+        var handler = Volatile.Read(ref _metricsUpdated);
+        if (handler == null)
+        {
+            return;
+        }
+
+        var metrics = CreateMetricsSnapshot();
+        handler.Invoke(this, metrics);
     }
 
     private static int SaturateToInt(long value)
@@ -1639,6 +1660,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
 
     protected override void DisposeManaged()
     {
+        _metricsCollector.MetricsChanged -= OnMetricsCollectorUpdated;
         try
         {
             _connection?.Dispose();
@@ -1656,6 +1678,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
 
     protected override async ValueTask DisposeManagedAsync()
     {
+        _metricsCollector.MetricsChanged -= OnMetricsCollectorUpdated;
         try
         {
             if (_connection is IAsyncDisposable ad)

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Threading;
 using System.Threading.Tasks;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
@@ -100,5 +101,61 @@ public class DatabaseMetricsTests
         var metrics = context.Metrics;
         Assert.Equal(0, metrics.TransactionsActive);
         Assert.True(metrics.TransactionsMax >= 1);
+    }
+
+    [Fact]
+    public async Task MetricsUpdated_EventRaisesLatestSnapshot()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        factory.Connections.Add(new fakeDbConnection());
+
+        await using var context = new DatabaseContext("Data Source=:memory:", factory);
+
+        var commandConnection = new fakeDbConnection();
+        commandConnection.EnqueueScalarResult(1);
+        factory.Connections.Add(commandConnection);
+
+        DatabaseMetrics? observed = null;
+        var invocations = 0;
+        var signal = new TaskCompletionSource<DatabaseMetrics>(TaskCreationOptions.RunContinuationsAsynchronously);
+        context.MetricsUpdated += (_, metrics) =>
+        {
+            observed = metrics;
+            Interlocked.Increment(ref invocations);
+            signal.TrySetResult(metrics);
+        };
+
+        var container = context.CreateSqlContainer("SELECT 1");
+        var value = await container.ExecuteScalarAsync<int>().ConfigureAwait(false);
+        Assert.Equal(1, value);
+
+        var snapshot = await signal.Task.WaitAsync(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
+        Assert.NotNull(observed);
+        Assert.True(snapshot.CommandsExecuted >= 1);
+        Assert.True(Volatile.Read(ref invocations) >= 1);
+    }
+
+    [Fact]
+    public async Task MetricsUpdated_UnsubscribedHandlerNotInvoked()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        factory.Connections.Add(new fakeDbConnection());
+
+        await using var context = new DatabaseContext("Data Source=:memory:", factory);
+
+        var commandConnection = new fakeDbConnection();
+        commandConnection.EnqueueScalarResult(1);
+        factory.Connections.Add(commandConnection);
+
+        var invoked = false;
+        EventHandler<DatabaseMetrics>? handler = (_, _) => invoked = true;
+        context.MetricsUpdated += handler;
+        context.MetricsUpdated -= handler;
+
+        var container = context.CreateSqlContainer("SELECT 1");
+        var value = await container.ExecuteScalarAsync<int>().ConfigureAwait(false);
+        Assert.Equal(1, value);
+
+        Assert.False(invoked);
     }
 }

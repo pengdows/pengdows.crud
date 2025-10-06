@@ -13,6 +13,7 @@ internal sealed class MetricsCollector
     private readonly Ewma _connectionHold = new(64);
     private readonly Ewma _transactionDuration = new(32);
     private readonly PercentileRing? _percentileRing;
+    private Action? _metricsChanged;
 
     private int _connectionsCurrent;
     private int _connectionsMax;
@@ -43,6 +44,12 @@ internal sealed class MetricsCollector
         }
     }
 
+    internal event Action MetricsChanged
+    {
+        add => AddHandler(ref _metricsChanged, value);
+        remove => RemoveHandler(ref _metricsChanged, value);
+    }
+
     internal static double ToMilliseconds(long ticks)
     {
         if (ticks <= 0)
@@ -58,29 +65,35 @@ internal sealed class MetricsCollector
         var current = Interlocked.Increment(ref _connectionsCurrent);
         UpdateMax(ref _connectionsMax, current);
         Interlocked.Increment(ref _connectionsOpened);
+        NotifyUpdated();
     }
 
     internal void ConnectionClosed(double holdDurationMs)
     {
         Decrement(ref _connectionsCurrent);
         Interlocked.Increment(ref _connectionsClosed);
-        if (holdDurationMs <= 0d)
+        if (holdDurationMs > 0d)
         {
-            return;
+            _connectionHold.AddSample(holdDurationMs);
+            if (holdDurationMs >= _options.LongConnectionThreshold.TotalMilliseconds)
+            {
+                Interlocked.Increment(ref _longLivedConnections);
+            }
         }
 
-        _connectionHold.AddSample(holdDurationMs);
-        if (holdDurationMs >= _options.LongConnectionThreshold.TotalMilliseconds)
-        {
-            Interlocked.Increment(ref _longLivedConnections);
-        }
+        NotifyUpdated();
     }
 
     internal long CommandStarted(int parameterCount)
     {
         if (parameterCount > 0)
         {
+            var previous = Volatile.Read(ref _maxParametersObserved);
             UpdateMax(ref _maxParametersObserved, parameterCount);
+            if (parameterCount > previous)
+            {
+                NotifyUpdated();
+            }
         }
 
         return Stopwatch.GetTimestamp();
@@ -95,6 +108,7 @@ internal sealed class MetricsCollector
         }
 
         Interlocked.Increment(ref _commandsExecuted);
+        NotifyUpdated();
     }
 
     internal void CommandCancelled(long startTimestamp)
@@ -102,6 +116,7 @@ internal sealed class MetricsCollector
         RecordCommandDuration(startTimestamp, success: false);
         Interlocked.Increment(ref _commandsCancelled);
         Interlocked.Increment(ref _commandsFailed);
+        NotifyUpdated();
     }
 
     internal void CommandTimedOut(long startTimestamp)
@@ -109,12 +124,14 @@ internal sealed class MetricsCollector
         RecordCommandDuration(startTimestamp, success: false);
         Interlocked.Increment(ref _commandsTimedOut);
         Interlocked.Increment(ref _commandsFailed);
+        NotifyUpdated();
     }
 
     internal void CommandFailed(long startTimestamp)
     {
         RecordCommandDuration(startTimestamp, success: false);
         Interlocked.Increment(ref _commandsFailed);
+        NotifyUpdated();
     }
 
     internal void RecordRowsRead(long count)
@@ -125,6 +142,7 @@ internal sealed class MetricsCollector
         }
 
         Interlocked.Add(ref _rowsReadTotal, count);
+        NotifyUpdated();
     }
 
     internal void RecordRowsAffected(long count)
@@ -135,16 +153,19 @@ internal sealed class MetricsCollector
         }
 
         Interlocked.Add(ref _rowsAffectedTotal, count);
+        NotifyUpdated();
     }
 
     internal void RecordPreparedStatement()
     {
         Interlocked.Increment(ref _preparedStatements);
+        NotifyUpdated();
     }
 
     internal void RecordStatementCached()
     {
         Interlocked.Increment(ref _statementsCached);
+        NotifyUpdated();
     }
 
     internal void RecordStatementEvicted(int count)
@@ -155,12 +176,14 @@ internal sealed class MetricsCollector
         }
 
         Interlocked.Add(ref _statementsEvicted, count);
+        NotifyUpdated();
     }
 
     internal long TransactionStarted()
     {
         var active = Interlocked.Increment(ref _transactionsActive);
         UpdateMax(ref _transactionsMax, active);
+        NotifyUpdated();
         return Stopwatch.GetTimestamp();
     }
 
@@ -172,6 +195,8 @@ internal sealed class MetricsCollector
         {
             _transactionDuration.AddSample(duration);
         }
+
+        NotifyUpdated();
     }
 
     internal MetricsSnapshot CreateSnapshot()
@@ -198,6 +223,46 @@ internal sealed class MetricsCollector
             Volatile.Read(ref _transactionsActive),
             Volatile.Read(ref _transactionsMax),
             _transactionDuration.GetValue());
+    }
+
+    private static void AddHandler(ref Action? field, Action handler)
+    {
+        if (handler == null)
+        {
+            return;
+        }
+
+        Action? current;
+        Action? updated;
+        do
+        {
+            current = Volatile.Read(ref field);
+            updated = (Action?)Delegate.Combine(current, handler);
+        }
+        while (Interlocked.CompareExchange(ref field, updated, current) != current);
+    }
+
+    private static void RemoveHandler(ref Action? field, Action handler)
+    {
+        if (handler == null)
+        {
+            return;
+        }
+
+        Action? current;
+        Action? updated;
+        do
+        {
+            current = Volatile.Read(ref field);
+            updated = (Action?)Delegate.Remove(current, handler);
+        }
+        while (Interlocked.CompareExchange(ref field, updated, current) != current);
+    }
+
+    private void NotifyUpdated()
+    {
+        var handler = Volatile.Read(ref _metricsChanged);
+        handler?.Invoke();
     }
 
     private void RecordCommandDuration(long startTimestamp, bool success)
