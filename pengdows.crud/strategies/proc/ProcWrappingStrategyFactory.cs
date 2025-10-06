@@ -1,10 +1,12 @@
+using System.Collections.Frozen;
+using System.Collections.Generic;
 using pengdows.crud.enums;
 
 namespace pengdows.crud.strategies.proc;
 
 internal static class ProcWrappingStrategyFactory
 {
-    private static readonly IReadOnlyDictionary<ProcWrappingStyle, IProcWrappingStrategy> _cache =
+    private static readonly FrozenDictionary<ProcWrappingStyle, IProcWrappingStrategy> _cache =
         new Dictionary<ProcWrappingStyle, IProcWrappingStrategy>
         {
             [ProcWrappingStyle.Exec] = new ExecProcWrappingStrategy(),
@@ -13,7 +15,7 @@ internal static class ProcWrappingStrategyFactory
             [ProcWrappingStyle.Oracle] = new OracleProcWrappingStrategy(),
             [ProcWrappingStyle.ExecuteProcedure] = new ExecuteProcedureWrappingStrategy(),
             [ProcWrappingStyle.None] = new UnsupportedProcWrappingStrategy()
-        };
+        }.ToFrozenDictionary();
 
     public static IProcWrappingStrategy Create(ProcWrappingStyle style)
     {
