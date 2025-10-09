@@ -54,6 +54,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     private readonly bool? _forceManualPrepare;
     private readonly bool? _disablePrepare;
     private bool? _rcsiPrefetch;
+    private bool? _snapshotIsolationPrefetch;
     private int _initializing; // 0 = false, 1 = true
     private bool _sessionSettingsAppliedOnOpen;
     private readonly MetricsCollector _metricsCollector;
@@ -214,10 +215,12 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             if (initialConnection != null)
             {
                 RCSIEnabled = _rcsiPrefetch ?? _dialect.IsReadCommittedSnapshotOn(initialConnection);
+                SnapshotIsolationEnabled = _snapshotIsolationPrefetch ?? _dialect.IsSnapshotIsolationOn(initialConnection);
             }
             else
             {
                 RCSIEnabled = false;
+                SnapshotIsolationEnabled = false;
             }
 
             // Apply session settings for persistent connections now that dialect is initialized
@@ -242,7 +245,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
                 Interlocked.Exchange(ref _maxNumberOfOpenConnections, 0);
             }
 
-            _isolationResolver = new IsolationResolver(Product, RCSIEnabled);
+            _isolationResolver = new IsolationResolver(Product, RCSIEnabled, SnapshotIsolationEnabled);
 
             // Connection strategy is created in InitializeInternals(finally) via ConnectionStrategyFactory
         }
@@ -302,6 +305,8 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     public bool IsReadOnlyConnection => _isReadConnection && !_isWriteConnection;
     public bool RCSIEnabled { get; private set; }
 
+    public bool SnapshotIsolationEnabled { get; private set; }
+
     public ILockerAsync GetLock()
     {
         ThrowIfDisposed();
@@ -334,7 +339,18 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
 
             if (isolationLevel is null)
             {
-                isolationLevel = _isolationResolver.Resolve(IsolationProfile.SafeNonBlockingReads);
+                var resolution = _isolationResolver.ResolveWithDetail(IsolationProfile.SafeNonBlockingReads);
+                isolationLevel = resolution.Level;
+                if (resolution.Degraded)
+                {
+                    _logger.LogWarning(
+                        "Isolation profile {Profile} degraded to {Level} for {Product}; SnapshotIsolationEnabled={SnapshotEnabled}, RCSIEnabled={RcsiEnabled}.",
+                        resolution.Profile,
+                        resolution.Level,
+                        Product,
+                        SnapshotIsolationEnabled,
+                        RCSIEnabled);
+                }
             }
             else
             {
@@ -872,6 +888,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
 
             // Optional: RCSI prefetch (SQL Server only)
             bool rcsi = false;
+            bool snapshotIsolation = false;
             if (product == SupportedDatabase.SqlServer)
             {
                 try
@@ -882,8 +899,19 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
                     rcsi = v switch { bool b => b, byte by => by != 0, short s => s != 0, int i => i != 0, _ => Convert.ToInt32(v ?? 0) != 0 };
                 }
                 catch { /* ignore prefetch failures */ }
+
+                try
+                {
+                    using var cmd = initConn.CreateCommand();
+                    cmd.CommandText = "SELECT snapshot_isolation_state FROM sys.databases WHERE name = DB_NAME()";
+                    var value = cmd.ExecuteScalar();
+                    var state = value switch { bool b => b ? 1 : 0, byte by => by, short s => s, int i => i, _ => Convert.ToInt32(value ?? 0) };
+                    snapshotIsolation = state == 1;
+                }
+                catch { /* ignore prefetch failures */ }
             }
             _rcsiPrefetch = rcsi;
+            _snapshotIsolationPrefetch = snapshotIsolation;
 
             if (initConn != null && config.DbMode == DbMode.Standard)
             {
@@ -914,7 +942,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             }
 
             // 7) Isolation resolver after product/RCSI known
-            _isolationResolver = new IsolationResolver(product, RCSIEnabled);
+            _isolationResolver = new IsolationResolver(product, RCSIEnabled, SnapshotIsolationEnabled);
 
             // 8) Return the open initConn only for Standard (caller disposes). For persistent modes we returned null.
             return initConn;

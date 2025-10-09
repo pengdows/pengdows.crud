@@ -16,9 +16,13 @@ public class IsolationLevelSupportTests
 {
     [Theory]
     [MemberData(nameof(GetSupportedLevelExpectations))]
-    public void GetSupportedLevels_MatchesExpectations(SupportedDatabase database, bool rcsiEnabled, IsolationLevel[] expected)
+    public void GetSupportedLevels_MatchesExpectations(
+        SupportedDatabase database,
+        bool rcsiEnabled,
+        bool allowSnapshotIsolation,
+        IsolationLevel[] expected)
     {
-        var resolver = new IsolationResolver(database, rcsiEnabled);
+        var resolver = new IsolationResolver(database, rcsiEnabled, allowSnapshotIsolation);
         var actual = resolver.GetSupportedLevels().OrderBy(level => level).ToArray();
 
         Assert.Equal(expected.OrderBy(level => level).ToArray(), actual);
@@ -29,12 +33,14 @@ public class IsolationLevelSupportTests
     {
         var sqlResolver = new IsolationResolver(
             SupportedDatabase.SqlServer,
-            readCommittedSnapshotEnabled: true);
+            readCommittedSnapshotEnabled: true,
+            allowSnapshotIsolation: true);
         Assert.Throws<InvalidOperationException>(() => sqlResolver.Validate(IsolationLevel.Chaos));
 
         var pgResolver = new IsolationResolver(
             SupportedDatabase.PostgreSql,
-            readCommittedSnapshotEnabled: false);
+            readCommittedSnapshotEnabled: false,
+            allowSnapshotIsolation: false);
         Assert.Throws<InvalidOperationException>(() => pgResolver.Validate(IsolationLevel.ReadUncommitted));
     }
 
@@ -43,6 +49,7 @@ public class IsolationLevelSupportTests
         yield return new object[]
         {
             SupportedDatabase.SqlServer,
+            true,
             true,
             new[]
             {
@@ -58,6 +65,7 @@ public class IsolationLevelSupportTests
         {
             SupportedDatabase.PostgreSql,
             false,
+            false,
             new[]
             {
                 IsolationLevel.ReadCommitted,
@@ -69,6 +77,7 @@ public class IsolationLevelSupportTests
         yield return new object[]
         {
             SupportedDatabase.MySql,
+            false,
             false,
             new[]
             {
@@ -82,6 +91,7 @@ public class IsolationLevelSupportTests
         yield return new object[]
         {
             SupportedDatabase.DuckDB,
+            false,
             false,
             new[]
             {

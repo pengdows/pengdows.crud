@@ -160,6 +160,8 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
 
     bool RCSIEnabled { get; }
 
+    bool SnapshotIsolationEnabled { get; }
+
     /// <summary>
     /// Returns an async-compatible lock for this context instance.
     /// </summary>

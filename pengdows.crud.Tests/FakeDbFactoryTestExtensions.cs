@@ -108,6 +108,7 @@ internal static class fakeDbFactoryTestExtensions
         primaryConnection.ScalarResultsByCommand["PRAGMA version"] = "Test Database 1.0";
         // SQL Server specific queries
         primaryConnection.ScalarResultsByCommand["SELECT CAST(is_read_committed_snapshot_on AS int) FROM sys.databases WHERE name = DB_NAME()"] = 0;
+        primaryConnection.ScalarResultsByCommand["SELECT snapshot_isolation_state FROM sys.databases WHERE name = DB_NAME()"] = 0;
         
         // Set up operation results for CreateAsync phase
         primaryConnection.EnqueueNonQueryResult(rowsAffected); // For INSERT statement
@@ -137,6 +138,7 @@ internal static class fakeDbFactoryTestExtensions
             fx.ScalarResultsByCommand["SELECT version()"] = "Test Database 1.0";
             fx.ScalarResultsByCommand["PRAGMA version"] = "Test Database 1.0";
             fx.ScalarResultsByCommand["SELECT CAST(is_read_committed_snapshot_on AS int) FROM sys.databases WHERE name = DB_NAME()"] = 0;
+            fx.ScalarResultsByCommand["SELECT snapshot_isolation_state FROM sys.databases WHERE name = DB_NAME()"] = 0;
             // Set up ID retrieval queries
             fx.ScalarResultsByCommand["SELECT SCOPE_IDENTITY()"] = generatedId;
             fx.ScalarResultsByCommand["SELECT last_insert_rowid()"] = generatedId;

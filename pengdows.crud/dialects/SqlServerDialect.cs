@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Globalization;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.wrappers;
@@ -117,6 +118,17 @@ public class SqlServerDialect : SqlDialect
         var val = cmd.ExecuteScalar();
         var v = val is int i ? i : Convert.ToInt32(val ?? 0);
         return v == 1;
+    }
+
+    public override bool IsSnapshotIsolationOn(ITrackedConnection conn)
+    {
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT snapshot_isolation_state FROM sys.databases WHERE name = DB_NAME()";
+        var value = cmd.ExecuteScalar();
+        var state = value is int i
+            ? i
+            : Convert.ToInt32(value ?? 0, CultureInfo.InvariantCulture);
+        return state == 1;
     }
 
     // SQL Server uses base class ApplyConnectionSettings implementation

@@ -297,9 +297,45 @@ public class DatabaseContextTests
         var factory = new fakeDbFactory(product);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
         using var tx = context.BeginTransaction(readOnly: true);
-        var expected = new IsolationResolver(product, context.RCSIEnabled)
+        var expected = new IsolationResolver(product, context.RCSIEnabled, context.SnapshotIsolationEnabled)
             .Resolve(IsolationProfile.SafeNonBlockingReads);
         Assert.Equal(expected, tx.IsolationLevel);
+    }
+
+    [Fact]
+    public void SnapshotIsolationEnabled_PrefetchRecognizesEnabledState()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        factory.SetIdPopulationResult(null);
+
+        foreach (var connection in factory.Connections)
+        {
+            connection.ScalarResultsByCommand["SELECT CAST(is_read_committed_snapshot_on AS int) FROM sys.databases WHERE name = DB_NAME()"] = 1;
+            connection.ScalarResultsByCommand["SELECT snapshot_isolation_state FROM sys.databases WHERE name = DB_NAME()"] = 1;
+        }
+
+        using var context = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory);
+
+        Assert.True(context.RCSIEnabled);
+        Assert.True(context.SnapshotIsolationEnabled);
+    }
+
+    [Fact]
+    public void SnapshotIsolationEnabled_FalseWhenDatabaseDisablesSnapshotIsolation()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        factory.SetIdPopulationResult(null);
+
+        foreach (var connection in factory.Connections)
+        {
+            connection.ScalarResultsByCommand["SELECT CAST(is_read_committed_snapshot_on AS int) FROM sys.databases WHERE name = DB_NAME()"] = 1;
+            connection.ScalarResultsByCommand["SELECT snapshot_isolation_state FROM sys.databases WHERE name = DB_NAME()"] = 0;
+        }
+
+        using var context = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory);
+
+        Assert.True(context.RCSIEnabled);
+        Assert.False(context.SnapshotIsolationEnabled);
     }
 
     [Fact]

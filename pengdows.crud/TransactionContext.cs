@@ -108,6 +108,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
     public long MaxNumberOfConnections => _context.MaxNumberOfConnections;
     public bool IsReadOnlyConnection => _context.IsReadOnlyConnection || _isReadOnly;
     public bool RCSIEnabled => _context.RCSIEnabled;
+    public bool SnapshotIsolationEnabled => _context.SnapshotIsolationEnabled;
     public string ConnectionString => _context.ConnectionString;
     public int MaxParameterLimit => _context.MaxParameterLimit;
     public int MaxOutputParameters => (_dialect as SqlDialect)?.MaxOutputParameters ?? 0;

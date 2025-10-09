@@ -730,6 +730,11 @@ public abstract class SqlDialect:ISqlDialect
         return false;
     }
 
+    public virtual bool IsSnapshotIsolationOn(ITrackedConnection connection)
+    {
+        return false;
+    }
+
     public virtual bool IsUniqueViolation(DbException ex)
     {
         return false;

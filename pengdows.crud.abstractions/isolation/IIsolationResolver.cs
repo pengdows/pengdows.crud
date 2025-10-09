@@ -18,6 +18,12 @@ public interface IIsolationResolver
     IsolationLevel Resolve(IsolationProfile profile);
 
     /// <summary>
+    /// Maps an <see cref="IsolationProfile"/> to a concrete <see cref="IsolationLevel"/> and
+    /// surfaces whether the mapping had to be degraded for the current database capabilities.
+    /// </summary>
+    IsolationResolution ResolveWithDetail(IsolationProfile profile);
+
+    /// <summary>
     /// Validates that the supplied isolation level is supported.
     /// </summary>
     void Validate(IsolationLevel level);
