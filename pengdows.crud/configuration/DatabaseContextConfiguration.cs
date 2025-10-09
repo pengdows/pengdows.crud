@@ -1,6 +1,7 @@
 #region
 
 using pengdows.crud.enums;
+using pengdows.crud.metrics;
 
 #endregion
 
@@ -31,4 +32,5 @@ public class DatabaseContextConfiguration : IDatabaseContextConfiguration
 
     public bool? ForceManualPrepare { get; set; }
     public bool? DisablePrepare { get; set; }
+    public MetricsOptions MetricsOptions { get; set; } = MetricsOptions.Default;
 }

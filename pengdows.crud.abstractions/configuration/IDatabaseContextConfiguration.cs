@@ -1,6 +1,7 @@
 #region
 
 using pengdows.crud.enums;
+using pengdows.crud.metrics;
 
 #endregion
 
@@ -42,5 +43,10 @@ public interface IDatabaseContextConfiguration
     /// Takes precedence over ForceManualPrepare.
     /// </summary>
     bool? DisablePrepare { get; set; }
+
+    /// <summary>
+    /// Metrics collection options for the associated <see cref="IDatabaseContext"/>.
+    /// </summary>
+    MetricsOptions MetricsOptions { get; set; }
 }
 

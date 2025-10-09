@@ -105,6 +105,29 @@ public class SqlServerDialectSettingsTests
     }
 
     [Fact]
+    public async Task GetConnectionSessionSettings_LowercaseKeys_ReturnsEmpty()
+    {
+        var rows = new[]
+        {
+            new Dictionary<string, object> { { "ansi_nulls", "SET" } },
+            new Dictionary<string, object> { { "ansi_padding", "SET" } },
+            new Dictionary<string, object> { { "ansi_warnings", "SET" } },
+            new Dictionary<string, object> { { "arithabort", "SET" } },
+            new Dictionary<string, object> { { "concat_null_yields_null", "SET" } },
+            new Dictionary<string, object> { { "quoted_identifier", "SET" } },
+            new Dictionary<string, object> { { "numeric_roundabort", "OFF" } }
+        };
+        await using var conn = BuildConnection(rows);
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var dialect = new SqlServerDialect(factory, NullLogger<SqlServerDialect>.Instance);
+        await dialect.DetectDatabaseInfoAsync(conn);
+        using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory);
+        var settings = dialect.GetConnectionSessionSettings(ctx, false);
+
+        Assert.Equal(string.Empty, settings);
+    }
+
+    [Fact]
     public async Task GetConnectionSessionSettings_QuotedIdentifierOff_BuildsSettingsScript()
     {
         var rows = new[]

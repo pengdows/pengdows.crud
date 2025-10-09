@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.connection;
+using pengdows.crud.@internal;
 using pengdows.crud.infrastructure;
 using pengdows.crud.threading;
 
@@ -29,6 +30,9 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
     private static readonly TimeSpan SharedDisposeTimeout = TimeSpan.FromSeconds(5);
 
     private int _wasOpened;
+    private readonly MetricsCollector? _metricsCollector;
+    private readonly StateChangeEventHandler? _metricsHandler;
+    private long _openTimestamp;
     
     /// <summary>
     /// Per-connection state for prepare behavior tracking
@@ -42,7 +46,8 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
         Action<DbConnection>? onFirstOpen = null,
         Action<DbConnection>? onDispose = null,
         ILogger<TrackedConnection>? logger = null,
-        bool isSharedConnection = false
+        bool isSharedConnection = false,
+        MetricsCollector? metricsCollector = null
     )
     {
         _connection = conn ?? throw new ArgumentNullException(nameof(conn));
@@ -51,6 +56,7 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
         _onDispose = onDispose;
         _logger = logger ?? NullLogger<TrackedConnection>.Instance;
         _name = Guid.NewGuid().ToString();
+        _metricsCollector = metricsCollector;
         if (isSharedConnection)
         {
             _isSharedConnection = true;
@@ -65,6 +71,40 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
         if (_onStateChange != null)
         {
             _connection.StateChange += _onStateChange;
+        }
+
+        if (_metricsCollector != null)
+        {
+            _metricsHandler = HandleMetricsStateChange;
+            _connection.StateChange += _metricsHandler;
+        }
+    }
+
+    private void HandleMetricsStateChange(object? sender, StateChangeEventArgs args)
+    {
+        if (_metricsCollector == null)
+        {
+            return;
+        }
+
+        switch (args.CurrentState)
+        {
+            case ConnectionState.Open:
+            {
+                _metricsCollector.ConnectionOpened();
+                Interlocked.Exchange(ref _openTimestamp, Stopwatch.GetTimestamp());
+                break;
+            }
+            case ConnectionState.Closed:
+            case ConnectionState.Broken:
+            {
+                var openedAt = Interlocked.Exchange(ref _openTimestamp, 0);
+                var duration = openedAt == 0
+                    ? 0d
+                    : MetricsCollector.ToMilliseconds(Stopwatch.GetTimestamp() - openedAt);
+                _metricsCollector.ConnectionClosed(duration);
+                break;
+            }
         }
     }
 
@@ -228,6 +268,7 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
 
         _onDispose?.Invoke(_connection);
         _connection.Dispose();
+        DetachMetricsHandler();
     }
 
     private async ValueTask DisposeConnectionAsyncCore()
@@ -266,6 +307,15 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
             {
                 // Connection is already disposed or in invalid state, ignore
             }
+        }
+        DetachMetricsHandler();
+    }
+
+    private void DetachMetricsHandler()
+    {
+        if (_metricsHandler != null)
+        {
+            _connection.StateChange -= _metricsHandler;
         }
     }
 

@@ -36,16 +36,25 @@ public sealed class ConnectionLocalState
     /// <summary>
     /// Marks this shape as prepared
     /// </summary>
-    public void MarkShapePrepared(string shapeHash)
+    public bool MarkShapePrepared(string shapeHash, out int evicted)
     {
+        evicted = 0;
         if (_prepared.TryAdd(shapeHash, 0))
         {
             _order.Enqueue(shapeHash);
             while (_prepared.Count > _maxPrepared && _order.TryDequeue(out var old))
             {
-                _prepared.TryRemove(old, out _);
+                if (_prepared.TryRemove(old, out _))
+                {
+                    evicted++;
+                }
             }
+
+            return true;
         }
+
+        evicted = 0;
+        return false;
     }
 
     /// <summary>

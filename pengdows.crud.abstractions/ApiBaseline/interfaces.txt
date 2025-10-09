@@ -118,6 +118,7 @@ method pengdows.crud.dialects.ISqlDialect::GetLastInsertedIdQuery() -> string
 method pengdows.crud.dialects.ISqlDialect::GetMajorVersion(string) -> System.Nullable`1<int>
 method pengdows.crud.dialects.ISqlDialect::GetVersionQuery() -> string
 method pengdows.crud.dialects.ISqlDialect::IsReadCommittedSnapshotOn(pengdows.crud.wrappers.ITrackedConnection) -> bool
+method pengdows.crud.dialects.ISqlDialect::IsSnapshotIsolationOn(pengdows.crud.wrappers.ITrackedConnection) -> bool
 method pengdows.crud.dialects.ISqlDialect::IsUniqueViolation(System.Data.Common.DbException) -> bool
 method pengdows.crud.dialects.ISqlDialect::MakeParameterName(System.Data.Common.DbParameter) -> string
 method pengdows.crud.dialects.ISqlDialect::MakeParameterName(string) -> string
@@ -132,6 +133,7 @@ method pengdows.crud.dialects.ISqlDialect::UpsertIncomingColumn(string) -> strin
 method pengdows.crud.dialects.ISqlDialect::WrapObjectName(string) -> string
 method pengdows.crud.isolation.IIsolationResolver::GetSupportedLevels() -> System.Collections.Generic.IReadOnlySet`1<System.Data.IsolationLevel>
 method pengdows.crud.isolation.IIsolationResolver::Resolve(pengdows.crud.enums.IsolationProfile) -> System.Data.IsolationLevel
+method pengdows.crud.isolation.IIsolationResolver::ResolveWithDetail(pengdows.crud.enums.IsolationProfile) -> pengdows.crud.isolation.IsolationResolution
 method pengdows.crud.isolation.IIsolationResolver::Validate(System.Data.IsolationLevel) -> void
 method pengdows.crud.tenant.ITenantConnectionResolver::GetDatabaseContextConfiguration(string) -> pengdows.crud.configuration.IDatabaseContextConfiguration
 method pengdows.crud.tenant.ITenantContextRegistry::GetContext(string) -> pengdows.crud.IDatabaseContext
@@ -212,6 +214,7 @@ property pengdows.crud.IDatabaseContext::Product : pengdows.crud.enums.Supported
 property pengdows.crud.IDatabaseContext::QuotePrefix : string { get; }
 property pengdows.crud.IDatabaseContext::QuoteSuffix : string { get; }
 property pengdows.crud.IDatabaseContext::RCSIEnabled : bool { get; }
+property pengdows.crud.IDatabaseContext::SnapshotIsolationEnabled : bool { get; }
 property pengdows.crud.IDatabaseContext::SessionSettingsPreamble : string { get; }
 property pengdows.crud.IDatabaseContext::SupportsNamedParameters : bool { get; }
 property pengdows.crud.IDatabaseContext::TypeMapRegistry : pengdows.crud.ITypeMapRegistry { get; }

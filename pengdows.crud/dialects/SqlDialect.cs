@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Text;
@@ -39,34 +40,35 @@ public abstract class SqlDialect:ISqlDialect
     private static readonly ConcurrentDictionary<DbType, Action<DbParameter, object?>> _typeConversionCache = new();
 
     // Precompiled common type conversions to avoid repeated pattern matching
-    private static readonly Dictionary<DbType, Action<DbParameter, object?>> _commonConversions = new()
-    {
-        [DbType.Guid] = static (p, v) =>
+    private static readonly IReadOnlyDictionary<DbType, Action<DbParameter, object?>> _commonConversions =
+        new Dictionary<DbType, Action<DbParameter, object?>>
         {
-            p.DbType = DbType.String;
-            if (v is Guid guid)
+            [DbType.Guid] = static (p, v) =>
             {
-                p.Value = guid.ToString();
-                p.Size = 36;
-            }
-        },
-        [DbType.Boolean] = static (p, v) =>
-        {
-            p.DbType = DbType.Int16;
-            if (v is bool b)
+                p.DbType = DbType.String;
+                if (v is Guid guid)
+                {
+                    p.Value = guid.ToString();
+                    p.Size = 36;
+                }
+            },
+            [DbType.Boolean] = static (p, v) =>
             {
-                p.Value = b ? (short)1 : (short)0;
-            }
-        },
-        [DbType.DateTimeOffset] = static (p, v) =>
-        {
-            p.DbType = DbType.DateTime;
-            if (v is DateTimeOffset dto)
+                p.DbType = DbType.Int16;
+                if (v is bool b)
+                {
+                    p.Value = b ? (short)1 : (short)0;
+                }
+            },
+            [DbType.DateTimeOffset] = static (p, v) =>
             {
-                p.Value = dto.DateTime;
+                p.DbType = DbType.DateTime;
+                if (v is DateTimeOffset dto)
+                {
+                    p.Value = dto.DateTime;
+                }
             }
-        }
-    };
+        };
 
     // Simple parameter pool - avoid repeated factory calls for hot paths
     private readonly ConcurrentQueue<DbParameter> _parameterPool = new();
@@ -724,6 +726,11 @@ public abstract class SqlDialect:ISqlDialect
     }
 
     public virtual bool IsReadCommittedSnapshotOn(ITrackedConnection connection)
+    {
+        return false;
+    }
+
+    public virtual bool IsSnapshotIsolationOn(ITrackedConnection connection)
     {
         return false;
     }

@@ -4,6 +4,7 @@ using System.Data;
 using System.Data.Common;
 using System.Globalization;
 using System.Reflection;
+using System.Threading;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
@@ -18,12 +19,13 @@ using pengdows.crud.threading;
 using pengdows.crud.wrappers;
 using pengdows.crud.strategies.connection;
 using pengdows.crud.strategies.proc;
+using pengdows.crud.metrics;
 
 #endregion
 
 namespace pengdows.crud;
 
-public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IContextIdentity, ISqlDialectProvider
+public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IContextIdentity, ISqlDialectProvider, IMetricsCollectorAccessor
 {
     private readonly DbProviderFactory _factory;
     private readonly ILoggerFactory _loggerFactory;
@@ -52,8 +54,11 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     private readonly bool? _forceManualPrepare;
     private readonly bool? _disablePrepare;
     private bool? _rcsiPrefetch;
+    private bool? _snapshotIsolationPrefetch;
     private int _initializing; // 0 = false, 1 = true
     private bool _sessionSettingsAppliedOnOpen;
+    private readonly MetricsCollector _metricsCollector;
+    private EventHandler<DatabaseMetrics>? _metricsUpdated;
 
     public Guid RootId { get; } = Guid.NewGuid();
 
@@ -176,6 +181,8 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             _factory = factory ?? throw new ArgumentNullException(nameof(factory));
             _forceManualPrepare = configuration.ForceManualPrepare;
             _disablePrepare = configuration.DisablePrepare;
+            _metricsCollector = new MetricsCollector(configuration.MetricsOptions ?? MetricsOptions.Default);
+            _metricsCollector.MetricsChanged += OnMetricsCollectorUpdated;
 
             var initialConnection = InitializeInternals(configuration);
 
@@ -208,10 +215,12 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             if (initialConnection != null)
             {
                 RCSIEnabled = _rcsiPrefetch ?? _dialect.IsReadCommittedSnapshotOn(initialConnection);
+                SnapshotIsolationEnabled = _snapshotIsolationPrefetch ?? _dialect.IsSnapshotIsolationOn(initialConnection);
             }
             else
             {
                 RCSIEnabled = false;
+                SnapshotIsolationEnabled = false;
             }
 
             // Apply session settings for persistent connections now that dialect is initialized
@@ -236,7 +245,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
                 Interlocked.Exchange(ref _maxNumberOfOpenConnections, 0);
             }
 
-            _isolationResolver = new IsolationResolver(Product, RCSIEnabled);
+            _isolationResolver = new IsolationResolver(Product, RCSIEnabled, SnapshotIsolationEnabled);
 
             // Connection strategy is created in InitializeInternals(finally) via ConnectionStrategyFactory
         }
@@ -296,6 +305,8 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     public bool IsReadOnlyConnection => _isReadConnection && !_isWriteConnection;
     public bool RCSIEnabled { get; private set; }
 
+    public bool SnapshotIsolationEnabled { get; private set; }
+
     public ILockerAsync GetLock()
     {
         ThrowIfDisposed();
@@ -328,7 +339,18 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
 
             if (isolationLevel is null)
             {
-                isolationLevel = _isolationResolver.Resolve(IsolationProfile.SafeNonBlockingReads);
+                var resolution = _isolationResolver.ResolveWithDetail(IsolationProfile.SafeNonBlockingReads);
+                isolationLevel = resolution.Level;
+                if (resolution.Degraded)
+                {
+                    _logger.LogWarning(
+                        "Isolation profile {Profile} degraded to {Level} for {Product}; SnapshotIsolationEnabled={SnapshotEnabled}, RCSIEnabled={RcsiEnabled}.",
+                        resolution.Profile,
+                        resolution.Level,
+                        Product,
+                        SnapshotIsolationEnabled,
+                        RCSIEnabled);
+                }
             }
             else
             {
@@ -384,6 +406,14 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     public int MaxOutputParameters => _dataSourceInfo.MaxOutputParameters;
     public long MaxNumberOfConnections => Interlocked.Read(ref _maxNumberOfOpenConnections);
     public long NumberOfOpenConnections => Interlocked.Read(ref _connectionCount);
+
+    public DatabaseMetrics Metrics => CreateMetricsSnapshot();
+
+    public event EventHandler<DatabaseMetrics> MetricsUpdated
+    {
+        add => _metricsUpdated += value;
+        remove => _metricsUpdated -= value;
+    }
     
     /// <summary>
     /// Gets the total number of connections created during the lifetime of this context.
@@ -491,6 +521,63 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     public string GenerateRandomName(int length = 5, int parameterNameMaxLength = 30)
     {
        return _dialect.GenerateRandomName(length, parameterNameMaxLength);
+    }
+
+    MetricsCollector? IMetricsCollectorAccessor.MetricsCollector => _metricsCollector;
+
+    private DatabaseMetrics CreateMetricsSnapshot()
+    {
+        var snapshot = _metricsCollector.CreateSnapshot();
+        return new DatabaseMetrics(
+            SaturateToInt(NumberOfOpenConnections),
+            SaturateToInt(MaxNumberOfConnections),
+            snapshot.ConnectionsOpened,
+            snapshot.ConnectionsClosed,
+            snapshot.AvgConnectionHoldMs,
+            snapshot.LongLivedConnections,
+            snapshot.CommandsExecuted,
+            snapshot.CommandsFailed,
+            snapshot.CommandsTimedOut,
+            snapshot.CommandsCancelled,
+            snapshot.AvgCommandMs,
+            snapshot.P95CommandMs,
+            snapshot.P99CommandMs,
+            snapshot.MaxParametersObserved,
+            snapshot.RowsReadTotal,
+            snapshot.RowsAffectedTotal,
+            snapshot.PreparedStatements,
+            snapshot.StatementsCached,
+            snapshot.StatementsEvicted,
+            snapshot.TransactionsActive,
+            snapshot.TransactionsMax,
+            snapshot.AvgTransactionMs);
+    }
+
+    private void OnMetricsCollectorUpdated()
+    {
+        var handler = Volatile.Read(ref _metricsUpdated);
+        if (handler == null)
+        {
+            return;
+        }
+
+        var metrics = CreateMetricsSnapshot();
+        handler.Invoke(this, metrics);
+    }
+
+    private static int SaturateToInt(long value)
+    {
+        if (value >= int.MaxValue)
+        {
+            return int.MaxValue;
+        }
+
+        if (value <= int.MinValue)
+        {
+            return int.MinValue;
+        }
+
+        return (int)value;
     }
 
 
@@ -697,7 +784,8 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             firstOpenHandler,
             onDispose: conn => { _logger.LogDebug("Connection disposed."); },
             null,
-            isSharedConnection
+            isSharedConnection,
+            _metricsCollector
         );
         return tracked;
     }
@@ -800,6 +888,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
 
             // Optional: RCSI prefetch (SQL Server only)
             bool rcsi = false;
+            bool snapshotIsolation = false;
             if (product == SupportedDatabase.SqlServer)
             {
                 try
@@ -810,8 +899,19 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
                     rcsi = v switch { bool b => b, byte by => by != 0, short s => s != 0, int i => i != 0, _ => Convert.ToInt32(v ?? 0) != 0 };
                 }
                 catch { /* ignore prefetch failures */ }
+
+                try
+                {
+                    using var cmd = initConn.CreateCommand();
+                    cmd.CommandText = "SELECT snapshot_isolation_state FROM sys.databases WHERE name = DB_NAME()";
+                    var value = cmd.ExecuteScalar();
+                    var state = value switch { bool b => b ? 1 : 0, byte by => by, short s => s, int i => i, _ => Convert.ToInt32(value ?? 0) };
+                    snapshotIsolation = state == 1;
+                }
+                catch { /* ignore prefetch failures */ }
             }
             _rcsiPrefetch = rcsi;
+            _snapshotIsolationPrefetch = snapshotIsolation;
 
             if (initConn != null && config.DbMode == DbMode.Standard)
             {
@@ -842,7 +942,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             }
 
             // 7) Isolation resolver after product/RCSI known
-            _isolationResolver = new IsolationResolver(product, RCSIEnabled);
+            _isolationResolver = new IsolationResolver(product, RCSIEnabled, SnapshotIsolationEnabled);
 
             // 8) Return the open initConn only for Standard (caller disposes). For persistent modes we returned null.
             return initConn;
@@ -1588,6 +1688,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
 
     protected override void DisposeManaged()
     {
+        _metricsCollector.MetricsChanged -= OnMetricsCollectorUpdated;
         try
         {
             _connection?.Dispose();
@@ -1605,6 +1706,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
 
     protected override async ValueTask DisposeManagedAsync()
     {
+        _metricsCollector.MetricsChanged -= OnMetricsCollectorUpdated;
         try
         {
             if (_connection is IAsyncDisposable ad)

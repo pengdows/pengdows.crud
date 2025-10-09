@@ -14,6 +14,7 @@ using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.strategies.proc;
 using pengdows.crud.wrappers;
+using pengdows.crud.@internal;
 
 #endregion
 
@@ -29,6 +30,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     private int _outputParameterCount;
     private int _nextParameterId = -1;
     internal List<string> ParamSequence { get; } = new();
+
+    private MetricsCollector? MetricsCollector => (_context as IMetricsCollectorAccessor)?.MetricsCollector;
 
     private TypeCoercionOptions DefaultCoercionOptions => TypeCoercionOptions.Default with
     {
@@ -438,6 +441,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         _context.AssertIsWriteConnection();
         ITrackedConnection? conn = null;
         DbCommand? cmd = null;
+        var metrics = MetricsCollector;
+        var startTimestamp = metrics?.CommandStarted(_parameters.Count) ?? 0;
         try
         {
             await using var contextLocker = _context.GetLock();
@@ -457,8 +462,25 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             await using var connectionLocker = conn.GetLock();
             await connectionLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             cmd = await PrepareAndCreateCommandAsync(conn, commandType, ExecutionType.Write, cancellationToken).ConfigureAwait(false);
-
-            return await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            var result = await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            metrics?.CommandSucceeded(startTimestamp, result);
+            metrics?.RecordRowsAffected(result);
+            return result;
+        }
+        catch (OperationCanceledException)
+        {
+            metrics?.CommandCancelled(startTimestamp);
+            throw;
+        }
+        catch (Exception ex) when (IsTimeout(ex))
+        {
+            metrics?.CommandTimedOut(startTimestamp);
+            throw;
+        }
+        catch
+        {
+            metrics?.CommandFailed(startTimestamp);
+            throw;
         }
         finally
         {
@@ -514,6 +536,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         _context.AssertIsWriteConnection();
         ITrackedConnection? conn = null;
         DbCommand? cmd = null;
+        var metrics = MetricsCollector;
+        var startTimestamp = metrics?.CommandStarted(_parameters.Count) ?? 0;
         try
         {
             await using var contextLocker = _context.GetLock();
@@ -536,16 +560,43 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             if (result is null || result is DBNull)
             {
                 var isNullable = !typeof(T).IsValueType || Nullable.GetUnderlyingType(typeof(T)) != null;
-                return isNullable ? default : throw new InvalidOperationException("ExecuteScalarWriteAsync expected a value but found none.");
+                if (!isNullable)
+                {
+                    metrics?.CommandFailed(startTimestamp);
+                    throw new InvalidOperationException("ExecuteScalarWriteAsync expected a value but found none.");
+                }
+
+                metrics?.CommandSucceeded(startTimestamp, 0);
+                return default;
             }
 
             if (typeof(T) == typeof(object))
             {
+                metrics?.RecordRowsRead(1);
+                metrics?.CommandSucceeded(startTimestamp, 0);
                 return (T?)result;
             }
 
             var targetType = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
-            return (T?)TypeCoercionHelper.Coerce(result, result.GetType(), targetType, DefaultCoercionOptions);
+            var coerced = (T?)TypeCoercionHelper.Coerce(result, result.GetType(), targetType, DefaultCoercionOptions);
+            metrics?.RecordRowsRead(coerced is null ? 0 : 1);
+            metrics?.CommandSucceeded(startTimestamp, 0);
+            return coerced;
+        }
+        catch (OperationCanceledException)
+        {
+            metrics?.CommandCancelled(startTimestamp);
+            throw;
+        }
+        catch (Exception ex) when (IsTimeout(ex))
+        {
+            metrics?.CommandTimedOut(startTimestamp);
+            throw;
+        }
+        catch
+        {
+            metrics?.CommandFailed(startTimestamp);
+            throw;
         }
         finally
         {
@@ -564,6 +615,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
         ITrackedConnection conn;
         DbCommand? cmd = null;
+        var metrics = MetricsCollector;
+        var startTimestamp = metrics?.CommandStarted(_parameters.Count) ?? 0;
         try
         {
             await using var contextLocker = _context.GetLock();
@@ -590,14 +643,31 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             // otherwise, we will have the connection set to autoclose so that we
             //close the underlying connection when the DbDataReader is closed;
             var dr = await cmd.ExecuteReaderAsync(behavior, cancellationToken).ConfigureAwait(false);
+            metrics?.CommandSucceeded(startTimestamp, 0);
             var trackedReader = new TrackedReader(
                 dr,
                 conn,
                 connectionLocker,
                 behavior == CommandBehavior.CloseConnection,
-                cmd);
+                cmd,
+                metrics);
             cmd = null;
             return trackedReader;
+        }
+        catch (OperationCanceledException)
+        {
+            metrics?.CommandCancelled(startTimestamp);
+            throw;
+        }
+        catch (Exception ex) when (IsTimeout(ex))
+        {
+            metrics?.CommandTimedOut(startTimestamp);
+            throw;
+        }
+        catch
+        {
+            metrics?.CommandFailed(startTimestamp);
+            throw;
         }
         finally
         {
@@ -614,6 +684,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
         ITrackedConnection conn;
         DbCommand? cmd = null;
+        var metrics = MetricsCollector;
+        var startTimestamp = metrics?.CommandStarted(_parameters.Count) ?? 0;
         try
         {
             await using var contextLocker = _context.GetLock();
@@ -630,14 +702,31 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 : (CommandBehavior.CloseConnection | CommandBehavior.SingleRow);
 
             var dr = await cmd.ExecuteReaderAsync(behavior, cancellationToken).ConfigureAwait(false);
+            metrics?.CommandSucceeded(startTimestamp, 0);
             var trackedReader = new TrackedReader(
                 dr,
                 conn,
                 connectionLocker,
                 (behavior & CommandBehavior.CloseConnection) == CommandBehavior.CloseConnection,
-                cmd);
+                cmd,
+                metrics);
             cmd = null;
             return trackedReader;
+        }
+        catch (OperationCanceledException)
+        {
+            metrics?.CommandCancelled(startTimestamp);
+            throw;
+        }
+        catch (Exception ex) when (IsTimeout(ex))
+        {
+            metrics?.CommandTimedOut(startTimestamp);
+            throw;
+        }
+        catch
+        {
+            metrics?.CommandFailed(startTimestamp);
+            throw;
         }
         finally
         {
@@ -752,7 +841,15 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         try
         {
             cmd.Prepare();
-            conn.LocalState.MarkShapePrepared(sqlText);
+            MetricsCollector?.RecordPreparedStatement();
+            if (conn.LocalState.MarkShapePrepared(sqlText, out var evicted))
+            {
+                MetricsCollector?.RecordStatementCached();
+                if (evicted > 0)
+                {
+                    MetricsCollector?.RecordStatementEvicted(evicted);
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -796,6 +893,13 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     private Task PrepareCommandAsync(DbCommand _)
     {
         return Task.CompletedTask;
+    }
+
+    private static bool IsTimeout(Exception exception)
+    {
+        return exception is TimeoutException ||
+               exception.GetType().Name.Contains("Timeout", StringComparison.OrdinalIgnoreCase) ||
+               exception.Message.Contains("timeout", StringComparison.OrdinalIgnoreCase);
     }
 
     private Task OpenConnectionAsync(ITrackedConnection conn, CancellationToken cancellationToken)

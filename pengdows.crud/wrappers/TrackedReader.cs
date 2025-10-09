@@ -4,6 +4,7 @@ using System.Data;
 using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
+using pengdows.crud.@internal;
 using pengdows.crud.infrastructure;
 
 #endregion
@@ -17,23 +18,29 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
     private DbCommand? _command;
     private readonly DbDataReader _reader;
     private readonly bool _shouldCloseConnection;
+    private readonly MetricsCollector? _metricsCollector;
+    private long _rowsRead;
+    private int _metricsRecorded;
 
     internal TrackedReader(
         DbDataReader reader,
         ITrackedConnection connection,
         IAsyncDisposable connectionLocker,
         bool shouldCloseConnection,
-        DbCommand? command = null)
+        DbCommand? command = null,
+        MetricsCollector? metricsCollector = null)
     {
         _reader = reader;
         _connection = connection;
         _connectionLocker = connectionLocker;
         _shouldCloseConnection = shouldCloseConnection;
         _command = command;
+        _metricsCollector = metricsCollector;
     }
 
     protected override void DisposeManaged()
     {
+        RecordMetricsOnce();
         _command?.Dispose();
         _reader.Dispose();
         DisposeCommand();
@@ -49,6 +56,7 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
     {
         if (_reader.Read())
         {
+            Interlocked.Increment(ref _rowsRead);
             return true;
         }
 
@@ -186,6 +194,7 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
 
     protected override async ValueTask DisposeManagedAsync()
     {
+        RecordMetricsOnce();
         await _reader.DisposeAsync();
         DisposeCommand();
         if (_shouldCloseConnection)
@@ -205,6 +214,7 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
     {
         if (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
+            Interlocked.Increment(ref _rowsRead);
             return true;
         }
 
@@ -225,6 +235,30 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
     public Guid GetGuid(int i)
     {
         return _reader.GetGuid(i);
+    }
+
+    private void RecordMetricsOnce()
+    {
+        if (_metricsCollector == null)
+        {
+            return;
+        }
+
+        if (Interlocked.Exchange(ref _metricsRecorded, 1) != 0)
+        {
+            return;
+        }
+
+        if (_rowsRead > 0)
+        {
+            _metricsCollector.RecordRowsRead(_rowsRead);
+        }
+
+        var affected = _reader.RecordsAffected;
+        if (affected > 0)
+        {
+            _metricsCollector.RecordRowsAffected(affected);
+        }
     }
 
     private void DisposeLockerSynchronously()
