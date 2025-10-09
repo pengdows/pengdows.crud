@@ -1,5 +1,6 @@
 #region
 
+using System;
 using System.Collections.Generic;
 using System.Data;
 using pengdows.crud.enums;
@@ -13,7 +14,6 @@ public sealed class IsolationResolver : IIsolationResolver
     private readonly SupportedDatabase _product;
     private readonly Dictionary<IsolationProfile, IsolationLevel> _profileMap;
     private readonly bool _rcsi;
-    private readonly bool _allowSnapshotIsolation;
     private readonly HashSet<IsolationLevel> _supportedLevels;
 
     internal IsolationResolver(
@@ -21,11 +21,15 @@ public sealed class IsolationResolver : IIsolationResolver
         bool readCommittedSnapshotEnabled,
         bool allowSnapshotIsolation)
     {
+        if (!Enum.IsDefined(typeof(SupportedDatabase), product))
+        {
+            throw new NotSupportedException($"Database {product} is not supported by the isolation resolver.");
+        }
+
         _product = product;
         _rcsi = readCommittedSnapshotEnabled;
-        _allowSnapshotIsolation = allowSnapshotIsolation;
-        _supportedLevels = BuildSupportedIsolationLevels(product, _allowSnapshotIsolation);
-        _profileMap = BuildProfileMapping(product, _allowSnapshotIsolation);
+        _supportedLevels = BuildSupportedIsolationLevels(product, allowSnapshotIsolation);
+        _profileMap = BuildProfileMapping(product, allowSnapshotIsolation);
     }
 
     public IsolationLevel Resolve(IsolationProfile profile)
@@ -40,18 +44,26 @@ public sealed class IsolationResolver : IIsolationResolver
             throw new NotSupportedException($"Profile {profile} not supported for {_product}");
         }
 
+        var originalLevel = level;
         var degraded = false;
+
         if (_product == SupportedDatabase.SqlServer && profile == IsolationProfile.SafeNonBlockingReads)
         {
             if (level == IsolationLevel.Snapshot && !_supportedLevels.Contains(IsolationLevel.Snapshot))
             {
                 level = IsolationLevel.ReadCommitted;
-                degraded = !_rcsi;
+                degraded = true;
             }
-            else if (level == IsolationLevel.ReadCommitted)
+
+            if (level == IsolationLevel.ReadCommitted && !_rcsi)
             {
-                degraded = !_rcsi;
+                degraded = true;
             }
+        }
+
+        if (level != originalLevel)
+        {
+            degraded = true;
         }
 
         Validate(level);

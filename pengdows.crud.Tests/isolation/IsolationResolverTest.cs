@@ -61,14 +61,14 @@ public class IsolationResolverTests
     }
 
     [Fact]
-    public void ResolveWithDetail_SqlServer_RcsiEnabledAvoidsDegradation()
+    public void ResolveWithDetail_SqlServer_RcsiEnabledSignalsSnapshotFallback()
     {
         var resolver = new IsolationResolver(SupportedDatabase.SqlServer, true, false);
 
         var resolution = resolver.ResolveWithDetail(IsolationProfile.SafeNonBlockingReads);
 
         Assert.Equal(IsolationLevel.ReadCommitted, resolution.Level);
-        Assert.False(resolution.Degraded);
+        Assert.True(resolution.Degraded);
     }
 
     [Fact]
