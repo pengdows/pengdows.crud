@@ -31,6 +31,7 @@ public class ProcWrappingStrategyLookupBenchmarks
         ProcWrappingStyle.PostgreSQL,
         ProcWrappingStyle.Oracle,
         ProcWrappingStyle.ExecuteProcedure,
+        ProcWrappingStyle.None,
         (ProcWrappingStyle)999
     };
 
