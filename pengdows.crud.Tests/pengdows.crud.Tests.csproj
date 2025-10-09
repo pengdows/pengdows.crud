@@ -26,6 +26,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\pengdows.crud.abstractions\pengdows.crud.abstractions.csproj" />
     <ProjectReference Include="..\pengdows.crud.fakeDb\pengdows.crud.fakeDb.csproj" />
     <ProjectReference Include="..\pengdows.crud\pengdows.crud.csproj" />
   </ItemGroup>
