@@ -8,5 +8,5 @@ namespace pengdows.crud;
 
 public sealed record TypeCoercionOptions(TimeMappingPolicy TimePolicy, JsonPassThrough JsonPreference, SupportedDatabase Provider)
 {
-    public static TypeCoercionOptions Default { get; } = new(TypeMappingPolicy.PreferDateTimeOffset, JsonPassThrough.PreferDocument, SupportedDatabase.Unknown);
+    public static TypeCoercionOptions Default { get; } = new(TimeMappingPolicy.PreferDateTimeOffset, JsonPassThrough.PreferDocument, SupportedDatabase.Unknown);
 }

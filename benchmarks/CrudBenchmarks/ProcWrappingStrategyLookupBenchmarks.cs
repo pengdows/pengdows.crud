@@ -2,7 +2,6 @@ using System.Collections.Frozen;
 using System.Collections.Generic;
 using BenchmarkDotNet.Attributes;
 using pengdows.crud.enums;
-using pengdows.crud.strategies.proc;
 
 namespace CrudBenchmarks;
 
@@ -10,18 +9,18 @@ namespace CrudBenchmarks;
 [SimpleJob(warmupCount: 3, iterationCount: 12)]
 public class ProcWrappingStrategyLookupBenchmarks
 {
-    private static readonly Dictionary<ProcWrappingStyle, IProcWrappingStrategy> MutableCache =
+    private static readonly Dictionary<ProcWrappingStyle, object> MutableCache =
         new()
         {
-            [ProcWrappingStyle.Exec] = new ExecProcWrappingStrategy(),
-            [ProcWrappingStyle.Call] = new CallProcWrappingStrategy(),
-            [ProcWrappingStyle.PostgreSQL] = new PostgresProcWrappingStrategy(),
-            [ProcWrappingStyle.Oracle] = new OracleProcWrappingStrategy(),
-            [ProcWrappingStyle.ExecuteProcedure] = new ExecuteProcedureWrappingStrategy(),
-            [ProcWrappingStyle.None] = new UnsupportedProcWrappingStrategy()
+            [ProcWrappingStyle.Exec] = new object(),
+            [ProcWrappingStyle.Call] = new object(),
+            [ProcWrappingStyle.PostgreSQL] = new object(),
+            [ProcWrappingStyle.Oracle] = new object(),
+            [ProcWrappingStyle.ExecuteProcedure] = new object(),
+            [ProcWrappingStyle.None] = new object()
         };
 
-    private static readonly FrozenDictionary<ProcWrappingStyle, IProcWrappingStrategy> FrozenCache =
+    private static readonly FrozenDictionary<ProcWrappingStyle, object> FrozenCache =
         MutableCache.ToFrozenDictionary();
 
     private static readonly ProcWrappingStyle[] LookupSequence =

@@ -59,6 +59,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     private bool _sessionSettingsAppliedOnOpen;
     private readonly MetricsCollector _metricsCollector;
     private EventHandler<DatabaseMetrics>? _metricsUpdated;
+    private int _metricsHasActivity;
 
     public Guid RootId { get; } = Guid.NewGuid();
 
@@ -395,6 +396,13 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         ExecutionType executionType = ExecutionType.Write,
         bool? readOnly = null)
     {
+        if (isolationProfile == IsolationProfile.SafeNonBlockingReads
+            && Product == SupportedDatabase.PostgreSql)
+        {
+            throw new NotSupportedException(
+                "IsolationProfile.SafeNonBlockingReads requires read-committed snapshot semantics, which PostgreSQL does not provide.");
+        }
+
         var level = _isolationResolver.Resolve(isolationProfile);
         return BeginTransaction(level, executionType, readOnly);
     }
@@ -562,7 +570,29 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         }
 
         var metrics = CreateMetricsSnapshot();
+        if (Volatile.Read(ref _metricsHasActivity) == 0)
+        {
+            if (!HasCommandActivity(in metrics))
+            {
+                return;
+            }
+
+            Interlocked.Exchange(ref _metricsHasActivity, 1);
+        }
+
         handler.Invoke(this, metrics);
+    }
+
+    private static bool HasCommandActivity(in DatabaseMetrics metrics)
+    {
+        return metrics.CommandsExecuted > 0
+               || metrics.CommandsFailed > 0
+               || metrics.CommandsTimedOut > 0
+               || metrics.CommandsCancelled > 0
+               || metrics.RowsReadTotal > 0
+               || metrics.RowsAffectedTotal > 0
+               || metrics.TransactionsActive > 0
+               || metrics.TransactionsMax > 0;
     }
 
     private static int SaturateToInt(long value)

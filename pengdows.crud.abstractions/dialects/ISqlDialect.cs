@@ -390,6 +390,13 @@ public interface ISqlDialect
     bool IsReadCommittedSnapshotOn(ITrackedConnection connection);
 
     /// <summary>
+    /// Determines whether SNAPSHOT isolation level is enabled.
+    /// </summary>
+    /// <param name="connection">Connection to check.</param>
+    /// <returns>True if snapshot isolation is enabled.</returns>
+    bool IsSnapshotIsolationOn(ITrackedConnection connection);
+
+    /// <summary>
     /// Determines whether the given exception represents a unique constraint violation.
     /// </summary>
     /// <param name="ex">Exception to inspect.</param>

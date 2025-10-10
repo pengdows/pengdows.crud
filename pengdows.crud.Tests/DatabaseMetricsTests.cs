@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
+using pengdows.crud.metrics;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -31,10 +32,16 @@ public class DatabaseMetricsTests
     public async Task ExecuteScalarAsync_TimeoutIsTrackedAsFailure()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        await using var context = new DatabaseContext("Data Source=:memory:", factory);
+
+        // Add failingConnection BEFORE creating context
         var failingConnection = new fakeDbConnection();
         failingConnection.SetCommandFailure("SELECT 1", new TimeoutException("boom"));
         factory.Connections.Add(failingConnection);
+
+        await using var context = new DatabaseContext("Data Source=:memory:", factory);
+
+        // Re-assert the failure after initialization probes to ensure the test command hits the timeout path.
+        failingConnection.SetCommandFailure("SELECT 1", new TimeoutException("boom"));
 
         var container = context.CreateSqlContainer("SELECT 1");
 
@@ -49,6 +56,8 @@ public class DatabaseMetricsTests
     public async Task ExecuteReaderAsync_TracksRowsRead()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+
+        // Add connection with reader results BEFORE creating context
         var connection = new fakeDbConnection();
         connection.EnqueueReaderResult(new[]
         {
@@ -58,11 +67,22 @@ public class DatabaseMetricsTests
         factory.Connections.Add(connection);
 
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var container = context.CreateSqlContainer("SELECT value FROM data");
-        await using var reader = await container.ExecuteReaderAsync().ConfigureAwait(false);
 
-        while (await reader.ReadAsync().ConfigureAwait(false))
+        // Initialization probes consume queued results, so re-prime the connection for the actual command.
+        connection.EnqueueReaderResult(new[]
         {
+            new Dictionary<string, object?> { { "value", 1 } },
+            new Dictionary<string, object?> { { "value", 2 } }
+        });
+
+        var container = context.CreateSqlContainer("SELECT value FROM data");
+
+        await using (var reader = await container.ExecuteReaderAsync().ConfigureAwait(false))
+        {
+            while (await reader.ReadAsync().ConfigureAwait(false))
+            {
+                // Read all rows
+            }
         }
 
         var metrics = context.Metrics;
@@ -75,7 +95,6 @@ public class DatabaseMetricsTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
-
         await using (var tx = context.BeginTransaction())
         {
             await Task.Delay(10).ConfigureAwait(false);
@@ -92,7 +111,6 @@ public class DatabaseMetricsTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
-
         await using (context.BeginTransaction())
         {
             await Task.Delay(5).ConfigureAwait(false);
@@ -107,13 +125,22 @@ public class DatabaseMetricsTests
     public async Task MetricsUpdated_EventRaisesLatestSnapshot()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        factory.Connections.Add(new fakeDbConnection());
+
+        // Add connection with reader results BEFORE creating context
+        var commandConnection = new fakeDbConnection();
+        commandConnection.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { { "value", 1 } }
+        });
+        factory.Connections.Add(commandConnection);
 
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
 
-        var commandConnection = new fakeDbConnection();
-        commandConnection.EnqueueScalarResult(1);
-        factory.Connections.Add(commandConnection);
+        // Initialization probes consume queued results, so re-prime the connection for the actual command.
+        commandConnection.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { { "value", 1 } }
+        });
 
         DatabaseMetrics? observed = null;
         var invocations = 0;
@@ -139,13 +166,22 @@ public class DatabaseMetricsTests
     public async Task MetricsUpdated_UnsubscribedHandlerNotInvoked()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        factory.Connections.Add(new fakeDbConnection());
+
+        // Add connection with reader results BEFORE creating context
+        var commandConnection = new fakeDbConnection();
+        commandConnection.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { { "value", 1 } }
+        });
+        factory.Connections.Add(commandConnection);
 
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
 
-        var commandConnection = new fakeDbConnection();
-        commandConnection.EnqueueScalarResult(1);
-        factory.Connections.Add(commandConnection);
+        // Initialization probes consume queued results, so re-prime the connection for the actual command.
+        commandConnection.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { { "value", 1 } }
+        });
 
         var invoked = false;
         EventHandler<DatabaseMetrics>? handler = (_, _) => invoked = true;

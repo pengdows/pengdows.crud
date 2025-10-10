@@ -40,7 +40,7 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
     public ConnectionLocalState LocalState { get; } = new();
 
 
-    protected internal TrackedConnection(
+    internal TrackedConnection(
         DbConnection conn,
         StateChangeEventHandler? onStateChange = null,
         Action<DbConnection>? onFirstOpen = null,

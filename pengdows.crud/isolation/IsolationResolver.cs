@@ -49,14 +49,15 @@ public sealed class IsolationResolver : IIsolationResolver
 
         if (_product == SupportedDatabase.SqlServer && profile == IsolationProfile.SafeNonBlockingReads)
         {
+            // Ideal is Snapshot; if we have to use ReadCommitted, it's degraded
             if (level == IsolationLevel.Snapshot && !_supportedLevels.Contains(IsolationLevel.Snapshot))
             {
                 level = IsolationLevel.ReadCommitted;
                 degraded = true;
             }
-
-            if (level == IsolationLevel.ReadCommitted && !_rcsi)
+            else if (level == IsolationLevel.ReadCommitted)
             {
+                // Using ReadCommitted instead of Snapshot is always degraded for SafeNonBlockingReads
                 degraded = true;
             }
         }

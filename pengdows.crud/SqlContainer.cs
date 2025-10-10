@@ -13,6 +13,7 @@ using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.strategies.proc;
+using pengdows.crud.threading;
 using pengdows.crud.wrappers;
 using pengdows.crud.@internal;
 
@@ -615,15 +616,17 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
         ITrackedConnection conn;
         DbCommand? cmd = null;
+        ILockerAsync? connectionLocker = null;
         var metrics = MetricsCollector;
         var startTimestamp = metrics?.CommandStarted(_parameters.Count) ?? 0;
+        var lockTransferred = false;
         try
         {
             await using var contextLocker = _context.GetLock();
             await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             var isTransaction = _context is ITransactionContext;
             conn = _context.GetConnection(ExecutionType.Read, isTransaction);
-            var connectionLocker = conn.GetLock();
+            connectionLocker = conn.GetLock();
             await connectionLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             cmd = await PrepareAndCreateCommandAsync(conn, commandType, ExecutionType.Read, cancellationToken).ConfigureAwait(false);
 
@@ -652,6 +655,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 cmd,
                 metrics);
             cmd = null;
+            lockTransferred = true; // TrackedReader now owns the lock
             return trackedReader;
         }
         catch (OperationCanceledException)
@@ -671,6 +675,18 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }
         finally
         {
+            // If lock wasn't transferred to TrackedReader, release it here
+            if (!lockTransferred && connectionLocker != null)
+            {
+                try
+                {
+                    await connectionLocker.DisposeAsync().ConfigureAwait(false);
+                }
+                catch
+                {
+                    // Ignore disposal errors in finally block
+                }
+            }
             //no matter what we do NOT close the underlying connection
             //or dispose it here—the reader manages command disposal.
             Cleanup(null, null, ExecutionType.Read);
@@ -684,15 +700,17 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
         ITrackedConnection conn;
         DbCommand? cmd = null;
+        ILockerAsync? connectionLocker = null;
         var metrics = MetricsCollector;
         var startTimestamp = metrics?.CommandStarted(_parameters.Count) ?? 0;
+        var lockTransferred = false;
         try
         {
             await using var contextLocker = _context.GetLock();
             await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             var isTransaction = _context is ITransactionContext;
             conn = _context.GetConnection(ExecutionType.Read, isTransaction);
-            var connectionLocker = conn.GetLock();
+            connectionLocker = conn.GetLock();
             await connectionLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             cmd = await PrepareAndCreateCommandAsync(conn, CommandType.Text, ExecutionType.Read, cancellationToken).ConfigureAwait(false);
 
@@ -711,6 +729,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 cmd,
                 metrics);
             cmd = null;
+            lockTransferred = true; // TrackedReader now owns the lock
             return trackedReader;
         }
         catch (OperationCanceledException)
@@ -730,6 +749,18 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }
         finally
         {
+            // If lock wasn't transferred to TrackedReader, release it here
+            if (!lockTransferred && connectionLocker != null)
+            {
+                try
+                {
+                    await connectionLocker.DisposeAsync().ConfigureAwait(false);
+                }
+                catch
+                {
+                    // Ignore disposal errors in finally block
+                }
+            }
             // Command lifetime is managed by the returned reader for read operations.
             Cleanup(null, null, ExecutionType.Read);
         }
