@@ -68,12 +68,12 @@ public class CoercionTests
 
     #endregion
 
-    #region RowVersion Tests
+    #region ByteArray Tests
 
     [Fact]
-    public void RowVersionCoercion_ShouldHandle8ByteArray()
+    public void ByteArrayCoercion_ShouldHandleByteArray()
     {
-        var bytes = new byte[] { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01 };
+        var bytes = new byte[] { 0x00, 0x01, 0x02, 0x03, 0x04 };
         var dbValue = new DbValue(bytes);
 
         var success = _registry.TryRead(dbValue, typeof(byte[]), out var result);
@@ -83,27 +83,31 @@ public class CoercionTests
     }
 
     [Fact]
-    public void RowVersionCoercion_ShouldRejectWrongLength()
+    public void ByteArrayCoercion_ShouldHandleReadOnlyMemory()
     {
-        var bytes = new byte[] { 0x01, 0x02, 0x03 }; // Wrong length
-        var dbValue = new DbValue(bytes);
+        var bytes = new byte[] { 0x01, 0x02, 0x03 };
+        var memory = new ReadOnlyMemory<byte>(bytes);
+        var dbValue = new DbValue(memory);
 
         var success = _registry.TryRead(dbValue, typeof(byte[]), out var result);
 
-        Assert.False(success);
+        Assert.True(success);
+        Assert.Equal(bytes, result);
     }
 
     [Fact]
-    public void RowVersionCoercion_ShouldHandleULong()
+    public void ByteArrayCoercion_ShouldHandleArraySegment()
     {
-        var ulongValue = 12345UL;
-        var dbValue = new DbValue(ulongValue);
+        var bytes = new byte[] { 0x01, 0x02, 0x03, 0x04, 0x05 };
+        var segment = new ArraySegment<byte>(bytes, 1, 3);
+        var dbValue = new DbValue(segment);
 
         var success = _registry.TryRead(dbValue, typeof(byte[]), out var result);
 
         Assert.True(success);
         var resultBytes = (byte[])result!;
-        Assert.Equal(8, resultBytes.Length);
+        Assert.Equal(3, resultBytes.Length);
+        Assert.Equal(new byte[] { 0x02, 0x03, 0x04 }, resultBytes);
     }
 
     #endregion

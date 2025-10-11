@@ -94,12 +94,11 @@ public class CoercionRegistry
     /// </summary>
     private void RegisterStandardCoercions()
     {
-        // Register basic coercions
+        // Register basic coercions (primitives, JSON, arrays, ranges)
         BasicCoercions.RegisterAll(this);
 
-        // TODO: Re-enable advanced coercions once implemented
-        // AdvancedCoercions.RegisterAll(this);
-        // ProviderSpecificCoercions.RegisterAll(this);
+        // Register advanced coercions (spatial, network, temporal, LOBs)
+        AdvancedCoercions.RegisterAll(this);
     }
 }
 

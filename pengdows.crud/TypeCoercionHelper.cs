@@ -104,16 +104,7 @@ public static class TypeCoercionHelper
             return value;
         }
 
-        if (underlyingTarget == GuidType)
-        {
-            return CoerceGuid(value);
-        }
-
-        if (underlyingTarget == typeof(bool))
-        {
-            return CoerceBoolean(value);
-        }
-
+        // Policy-aware type handling (DateTime/DateTimeOffset require policy context)
         if (underlyingTarget == typeof(DateTimeOffset))
         {
             return CoerceDateTimeOffset(value, options);
@@ -124,16 +115,20 @@ public static class TypeCoercionHelper
             return CoerceDateTime(value, options);
         }
 
-        if (underlyingTarget == typeof(decimal))
+        // Primary path: Use unified CoercionRegistry system for other types
+        var dbValue = new types.coercion.DbValue(value, sourceType);
+        if (types.coercion.CoercionRegistry.Shared.TryRead(dbValue, underlyingTarget, out var coercedValue, options.Provider))
         {
-            return Convert.ToDecimal(value, CultureInfo.InvariantCulture);
+            return coercedValue;
         }
 
+        // Fallback: char[] to string conversion (not in coercion registry)
         if (underlyingTarget == typeof(string) && sourceType == typeof(char[]))
         {
             return new string((char[])value);
         }
 
+        // Legacy path: Try advanced converter for backward compatibility
         var advancedConverter = AdvancedTypeRegistry.Shared.GetConverter(underlyingTarget);
         if (advancedConverter != null)
         {
@@ -144,6 +139,7 @@ public static class TypeCoercionHelper
             }
         }
 
+        // Final fallback: Convert.ChangeType
         try
         {
             return Convert.ChangeType(value, underlyingTarget, CultureInfo.InvariantCulture);
