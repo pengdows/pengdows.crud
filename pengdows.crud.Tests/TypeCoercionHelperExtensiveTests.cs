@@ -68,11 +68,12 @@ public class TypeCoercionHelperExtensiveTests
     public void TypeCoercionOptions_CustomValues()
     {
         var options = new TypeCoercionOptions(
-            TimeMappingPolicy.ForceUtcDateTime, 
-            JsonPassThrough.PreferText, 
+            TimeMappingPolicy.ForceUtcDateTime,
+            JsonPassThrough.PreferText,
             SupportedDatabase.PostgreSql);
-        
+
         Assert.Equal(TimeMappingPolicy.ForceUtcDateTime, options.TimePolicy);
+        Assert.NotEqual(TypeCoercionOptions.Default.TimePolicy, options.TimePolicy);
         Assert.Equal(JsonPassThrough.PreferText, options.JsonPreference);
         Assert.Equal(SupportedDatabase.PostgreSql, options.Provider);
     }
