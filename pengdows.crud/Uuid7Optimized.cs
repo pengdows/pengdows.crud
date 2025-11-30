@@ -4,6 +4,50 @@ using System.Security.Cryptography;
 namespace pengdows.crud;
 
 /// <summary>
+/// Clock synchronization mode for UUID7 generation.
+/// Affects drift tolerance and wait behavior.
+/// </summary>
+public enum Uuid7ClockMode
+{
+    /// <summary>
+    /// PTP/PHC disciplined clocks (±0.1–1.0 ms accuracy).
+    /// Tight skew tolerance, shorter spin waits, prefer fail-fast on burst.
+    /// Ideal for: PTP-synced clusters (EKS Nitro, on-prem PTP).
+    /// </summary>
+    PtpSynced,
+
+    /// <summary>
+    /// Standard NTP synchronization (±1–10 ms accuracy).
+    /// Conservative skew tolerance, longer spin waits, blocking on burst.
+    /// Ideal for: Most cloud environments with good NTP.
+    /// </summary>
+    NtpSynced,
+
+    /// <summary>
+    /// Single process/instance generating all writes.
+    /// Generous skew tolerance, no cross-node ordering concerns.
+    /// Ideal for: Single-writer services, embedded systems.
+    /// </summary>
+    SingleInstance
+}
+
+/// <summary>
+/// Configuration options for UUID7 generation behavior.
+/// </summary>
+/// <param name="Mode">Clock synchronization mode (PTP, NTP, or single instance)</param>
+/// <param name="MaxNegativeSkewMs">Maximum backward clock drift tolerated before using logical clock (ms)</param>
+/// <param name="MaxSpinCount">Maximum spin-wait cycles before sleeping on counter overflow</param>
+/// <param name="SleepMs">Sleep duration when spin limit exceeded (ms)</param>
+/// <param name="FailFastOnBurst">If true, TryNewUuid7 returns false on counter overflow instead of blocking</param>
+public sealed record Uuid7Options(
+    Uuid7ClockMode Mode = Uuid7ClockMode.NtpSynced,
+    int MaxNegativeSkewMs = 5,
+    int MaxSpinCount = 128,
+    int SleepMs = 1,
+    bool FailFastOnBurst = false
+);
+
+/// <summary>
 /// Production-ready UUIDv7 generator implementing RFC 9562 with optimizations for high throughput.
 ///
 /// Features:
@@ -12,13 +56,14 @@ namespace pengdows.crud;
 /// - Buffered randomness to reduce syscall overhead
 /// - Bounded clock drift handling
 /// - Monotonic ordering within process scope (up to 4096 IDs/ms per thread)
+/// - Configurable clock modes (PTP, NTP, SingleInstance) for different deployment scenarios
 ///
 /// Monotonicity scope: Within a process, per logical clock. Not guaranteed across machines.
 /// Throughput limit: 4096 IDs/ms per thread. Multiple threads can each generate 4096 IDs/ms independently.
 /// If multiple threads exhaust counters simultaneously, each waits independently.
 /// Clock rollback: Bounded drift with logical clock fallback.
 /// </summary>
-public static class Uuid7Optimized
+public static partial class Uuid7Optimized
 {
     /// <summary>
     /// Thread-local state for lock-free UUID generation
@@ -42,16 +87,89 @@ public static class Uuid7Optimized
     // Global epoch for cross-thread monotonicity hints
     private static long _globalEpochMs;
 
-    // Clock drift policy
-    private const long MaxNegativeSkewMs = 32; // Allow 32ms backward drift
+    // Configurable options (defaults to NTP mode)
+    private static Uuid7Options _opts = DefaultsFor(Uuid7ClockMode.NtpSynced);
 
-    // Counter limits
+    // Counter limits (immutable)
     private const int CounterBits = 12;
     private const int CounterMax = (1 << CounterBits) - 1; // 4095
 
-    // Bounded wait parameters
-    private const int MaxSpinCount = 128;
-    private const int SleepMs = 1;
+    /// <summary>
+    /// Configure UUID7 generation behavior based on clock synchronization mode.
+    /// Call this at application startup before generating any UUIDs.
+    /// </summary>
+    /// <param name="options">Configuration options, or null to use NTP defaults</param>
+    public static void Configure(Uuid7Options? options = null)
+    {
+        if (options is null)
+        {
+            _opts = DefaultsFor(Uuid7ClockMode.NtpSynced);
+            return;
+        }
+
+        // Get defaults for the mode
+        var defaults = DefaultsFor(options.Mode);
+
+        // Detect if user provided explicit non-default values
+        // Record defaults: MaxNegativeSkewMs=5, MaxSpinCount=128, SleepMs=1, FailFastOnBurst=false
+        bool usedRecordDefaults =
+            options.MaxNegativeSkewMs == 5 &&
+            options.MaxSpinCount == 128 &&
+            options.SleepMs == 1 &&
+            options.FailFastOnBurst == false;
+
+        // If user only specified Mode (using record defaults for everything else),
+        // give them mode-specific defaults
+        if (usedRecordDefaults)
+        {
+            _opts = defaults;
+            return;
+        }
+
+        // User specified custom values - apply mode-specific clamping
+        _opts = new Uuid7Options(
+            Mode: options.Mode,
+            MaxNegativeSkewMs: options.Mode switch
+            {
+                Uuid7ClockMode.PtpSynced => Math.Min(options.MaxNegativeSkewMs, 1),
+                Uuid7ClockMode.SingleInstance => options.MaxNegativeSkewMs,
+                _ => Math.Max(options.MaxNegativeSkewMs, 5)
+            },
+            MaxSpinCount: options.Mode switch
+            {
+                Uuid7ClockMode.PtpSynced => Math.Min(options.MaxSpinCount, 64),
+                Uuid7ClockMode.SingleInstance => options.MaxSpinCount,
+                _ => Math.Max(options.MaxSpinCount, 128)
+            },
+            SleepMs: options.SleepMs,
+            FailFastOnBurst: options.FailFastOnBurst
+        );
+    }
+
+    /// <summary>
+    /// Get default options for a given clock mode
+    /// </summary>
+    private static Uuid7Options DefaultsFor(Uuid7ClockMode mode) => mode switch
+    {
+        Uuid7ClockMode.PtpSynced => new(
+            mode,
+            MaxNegativeSkewMs: 1,
+            MaxSpinCount: 64,
+            SleepMs: 1,
+            FailFastOnBurst: true),
+        Uuid7ClockMode.SingleInstance => new(
+            mode,
+            MaxNegativeSkewMs: 32,
+            MaxSpinCount: 128,
+            SleepMs: 1,
+            FailFastOnBurst: false),
+        _ => new(
+            mode,
+            MaxNegativeSkewMs: 5,
+            MaxSpinCount: 128,
+            SleepMs: 1,
+            FailFastOnBurst: false),
+    };
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static long UnixTimeMs()
@@ -198,7 +316,7 @@ public static class Uuid7Optimized
         // Clock went backward
         var drift = lastMs - nowMs;
 
-        if (drift > MaxNegativeSkewMs)
+        if (drift > _opts.MaxNegativeSkewMs)
         {
             // Large backward jump: use logical clock
             return Math.Max(lastMs, globalEpoch);
@@ -215,7 +333,7 @@ public static class Uuid7Optimized
 
         do
         {
-            if (spinCount < MaxSpinCount)
+            if (spinCount < _opts.MaxSpinCount)
             {
                 if (spinCount < 64)
                 {
@@ -233,7 +351,7 @@ public static class Uuid7Optimized
             }
             else
             {
-                Thread.Sleep(SleepMs);
+                Thread.Sleep(_opts.SleepMs);
                 spinCount = 0; // Reset spin count after sleep
             }
 

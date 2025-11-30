@@ -8,12 +8,16 @@ pengdows.crud is a SQL-first, strongly-typed, testable data access layer for .NE
 
 - `pengdows.crud` - Core library with EntityHelper, DatabaseContext, and SQL dialects
 - `pengdows.crud.abstractions` - Interfaces and enums
-- `pengdows.crud.fakeDb` - a complete .net DbProvider for mocking low level calls.
-- `pengdows.crud.Tests` - Comprehensive test suite
-- `testbed` - Integration testing with real databases
+- `pengdows.crud.fakeDb` - a complete .net DbProvider for mocking low level calls
+- `pengdows.crud.Tests` - Comprehensive unit test suite
+- `pengdows.crud.IntegrationTests` - Database-specific integration tests
+- `testbed` - Multi-database provider testing orchestrator (requires Docker)
 - `docs/` - Connection management walkthroughs and parameter naming guidance
 - `benchmarks/CrudBenchmarks/` - BenchmarkDotNet suite for performance validation
-- `tools/verify-novendor/` - Utility to ensure vendor directories aren't committed
+- `tools/` - Build and validation utilities:
+  - `verify-novendor/` - Ensures vendor directories aren't committed
+  - `interface-api-check/` - Validates interface API changes
+  - `run-tests-in-container.sh` - Runs tests in Docker without local .NET SDK
 
 ## Core Architecture
 
@@ -43,15 +47,36 @@ The library follows a layered architecture with these key components:
 
 ## Development Commands
 
-**IMPORTANT**: Whenever changes are made to this codebase, ALL unit tests should pass and ALL integration tests (in the "testbed" app) should pass. No tests may be skipped. This ensures code quality and prevents regressions across all supported database providers. When functionality is unclear, consult the wiki (`pengdows.crud.wiki/`) first or ask for clarification before making changes.
+**CRITICAL REQUIREMENTS**:
+- **ALL CODE MUST BE WRITTEN USING TDD** - Write tests FIRST, then implementation
+- **ALL CODE MUST BE TESTED** - No untested code is acceptable
+- ALL unit tests must pass
+- ALL integration tests must pass
+- NO tests may be skipped
+- When functionality is unclear, consult the wiki (`pengdows.crud.wiki/`) first or ask for clarification before making changes
 
 ### Build and Test
 ```bash
 # Build entire solution
 dotnet build pengdows.crud.sln
 
-# Run all tests
+# Run all unit tests
 dotnet test pengdows.crud.Tests/pengdows.crud.Tests.csproj
+
+# Run all tests with coverage (as in CI)
+dotnet test --configuration Release \
+  --collect:"XPlat Code Coverage" \
+  --results-directory ./TestResults \
+  --settings coverage.runsettings
+
+# Run integration tests
+dotnet test pengdows.crud.IntegrationTests/pengdows.crud.IntegrationTests.csproj
+
+# Run testbed for database provider testing (requires Docker)
+cd testbed && dotnet run
+
+# Run tests in Docker (no local .NET SDK required)
+./tools/run-tests-in-container.sh
 
 # Run specific test by name
 dotnet test --filter "MethodName=TestMethodName"
@@ -79,16 +104,29 @@ dotnet pack pengdows.crud.fakeDb/pengdows.crud.fakeDb.csproj -c Release
 
 ### Testing Infrastructure and Guidelines
 
-**Test-Driven Development (TDD):**
-- TDD should be followed for all new features and bug fixes
-- Test coverage should be raised to and maintained at **90%** minimum
-- Write tests first, then implement functionality
-- Tests for expected behavior should be authored before touching the implementation so regressions are caught immediately.
-- Ensure tests are comprehensive, including edge cases and error conditions
-- Unit tests normally complete in well under 30 seconds; if a run exceeds three minutes, stop it and diagnose the likely locking problem right away.
+**Test-Driven Development (TDD) - MANDATORY:**
+
+**YOU MUST FOLLOW TDD FOR ALL CODE CHANGES. THIS IS NON-NEGOTIABLE.**
+
+The TDD workflow is:
+1. **Write the test FIRST** - Before writing any implementation code
+2. **Run the test** - Verify it fails (red)
+3. **Write minimal implementation** - Make the test pass (green)
+4. **Refactor** - Improve code while keeping tests green
+5. **Repeat** - For every feature, bug fix, or change
+
+**TDD Requirements:**
+- Tests MUST be written before implementation code
+- ALL code MUST have corresponding tests
+- Tests for expected behavior must be authored before touching the implementation
+- Tests must be comprehensive, including edge cases and error conditions
+- Unit tests should complete in well under 30 seconds; if a run exceeds three minutes, stop it and diagnose the likely locking problem right away
+- Database-specific features require integration tests in `pengdows.crud.IntegrationTests`
+- NO implementation code without tests - this is a hard rule
 
 **Test Coverage Requirements:**
-- Maintain minimum **90% test coverage** across all projects
+- CI enforces minimum **83% line coverage** (see .github/workflows/deploy.yml)
+- Target **90% test coverage** for new features and bug fixes
 - Use meaningful test names that describe the behavior being tested
 - Test both success and failure scenarios
 - Include integration tests for database-specific functionality
@@ -442,7 +480,14 @@ Assert.Throws<InvalidOperationException>(() => context.GetConnection(ExecutionTy
 - Don't forget to register entity types with TypeMapRegistry in tests
 - Use correct `ExecutionType` (Read vs Write) for connections
 
-**When Adding Tests:**
+**When Writing Code (TDD Process):**
+1. **FIRST**: Write tests that define the expected behavior
+2. **SECOND**: Run tests to confirm they fail
+3. **THIRD**: Write the minimal implementation to make tests pass
+4. **FOURTH**: Refactor while keeping tests green
+5. **NEVER**: Write implementation code before tests
+
+**Test Requirements:**
 - Follow existing patterns for SQL dialect implementations
 - Use the attribute-based entity mapping consistently
 - Ensure new features work across all supported database providers
@@ -450,3 +495,4 @@ Assert.Throws<InvalidOperationException>(() => context.GetConnection(ExecutionTy
 - Maintain backwards compatibility in public APIs
 - Use `await using` for proper async disposal
 - Test both success and failure scenarios
+- Every method, every branch, every edge case must be tested

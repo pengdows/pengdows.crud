@@ -442,6 +442,79 @@ public class AdvancedTypeConverterTests
     }
 
     [Fact]
+    public void BlobStreamConverter_ShouldConvertFromReadOnlyMemoryByte()
+    {
+        var converter = new BlobStreamConverter();
+        var bytes = new byte[] { 1, 2, 3, 4 };
+        var memory = new ReadOnlyMemory<byte>(bytes);
+        var success = converter.TryConvertFromProvider(memory, SupportedDatabase.SqlServer, out var result);
+
+        Assert.True(success);
+        Assert.IsType<MemoryStream>(result);
+        var buffer = new byte[4];
+        result.Read(buffer, 0, 4);
+        Assert.Equal(bytes, buffer);
+    }
+
+    [Fact]
+    public void BlobStreamConverter_ShouldConvertFromArraySegment()
+    {
+        var converter = new BlobStreamConverter();
+        var bytes = new byte[] { 1, 2, 3, 4, 5 };
+        var segment = new ArraySegment<byte>(bytes, 1, 3); // Middle 3 bytes
+        var success = converter.TryConvertFromProvider(segment, SupportedDatabase.SqlServer, out var result);
+
+        Assert.True(success);
+        Assert.IsType<MemoryStream>(result);
+        var buffer = new byte[3];
+        result.Read(buffer, 0, 3);
+        Assert.Equal(new byte[] { 2, 3, 4 }, buffer);
+    }
+
+    [Fact]
+    public void BlobStreamConverter_ShouldFailOnArraySegmentWithNullArray()
+    {
+        var converter = new BlobStreamConverter();
+        var segment = new ArraySegment<byte>(); // Default, has null array
+        var success = converter.TryConvertFromProvider(segment, SupportedDatabase.SqlServer, out var result);
+
+        Assert.False(success);
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void BlobStreamConverter_ShouldFailOnInvalidInput()
+    {
+        var converter = new BlobStreamConverter();
+        var success = converter.TryConvertFromProvider("not a stream", SupportedDatabase.SqlServer, out var result);
+
+        Assert.False(success);
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void BlobStreamConverter_ShouldHandleStreamException()
+    {
+        var converter = new BlobStreamConverter();
+        var badStream = new ThrowingStream();
+        var success = converter.TryConvertFromProvider(badStream, SupportedDatabase.SqlServer, out var result);
+
+        Assert.False(success);
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void BlobStreamConverter_ToProviderValue_ShouldNotSeekNonSeekableStream()
+    {
+        var converter = new BlobStreamConverter();
+        var stream = new NonSeekableStream(new byte[] { 1, 2, 3 });
+        var result = converter.ToProviderValue(stream, SupportedDatabase.SqlServer);
+
+        Assert.Same(stream, result);
+        // Just verify it doesn't throw on non-seekable stream
+    }
+
+    [Fact]
     public void ClobStreamConverter_ShouldConvertFromString()
     {
         var converter = new ClobStreamConverter();
@@ -468,6 +541,63 @@ public class AdvancedTypeConverterTests
 
         var readText = result.ReadToEnd();
         Assert.Equal(text, readText);
+    }
+
+    [Fact]
+    public void ClobStreamConverter_ShouldConvertFromTextReader()
+    {
+        var converter = new ClobStreamConverter();
+        var text = "TextReader input";
+        var reader = new StringReader(text);
+        var success = converter.TryConvertFromProvider(reader, SupportedDatabase.Oracle, out var result);
+
+        Assert.True(success);
+        Assert.Same(reader, result);
+    }
+
+    [Fact]
+    public void ClobStreamConverter_ShouldConvertFromReadOnlyMemoryChar()
+    {
+        var converter = new ClobStreamConverter();
+        var text = "Memory input";
+        var memory = new ReadOnlyMemory<char>(text.ToCharArray());
+        var success = converter.TryConvertFromProvider(memory, SupportedDatabase.Oracle, out var result);
+
+        Assert.True(success);
+        Assert.IsType<StringReader>(result);
+        Assert.Equal(text, result.ReadToEnd());
+    }
+
+    [Fact]
+    public void ClobStreamConverter_ShouldFailOnInvalidInput()
+    {
+        var converter = new ClobStreamConverter();
+        var success = converter.TryConvertFromProvider(12345, SupportedDatabase.Oracle, out var result);
+
+        Assert.False(success);
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void ClobStreamConverter_ShouldHandleStreamException()
+    {
+        var converter = new ClobStreamConverter();
+        // Create a stream that will throw when StreamReader tries to use it
+        var badStream = new UnreadableStream();
+        var success = converter.TryConvertFromProvider(badStream, SupportedDatabase.Oracle, out var result);
+
+        Assert.False(success);
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void ClobStreamConverter_ToProviderValue_ReturnsInputValue()
+    {
+        var converter = new ClobStreamConverter();
+        var reader = new StringReader("test");
+        var result = converter.ToProviderValue(reader, SupportedDatabase.Oracle);
+
+        Assert.Same(reader, result);
     }
 
     #endregion
@@ -504,6 +634,77 @@ public class AdvancedTypeConverterTests
         var success = converter.TryConvertFromProvider("invalid", SupportedDatabase.SqlServer, out var result);
 
         Assert.False(success);
+    }
+
+    [Fact]
+    public void RowVersionConverter_ShouldConvertFromRowVersion()
+    {
+        var converter = new RowVersionConverter();
+        var bytes = new byte[] { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03 };
+        var rowVersion = RowVersion.FromBytes(bytes);
+        var success = converter.TryConvertFromProvider(rowVersion, SupportedDatabase.SqlServer, out var result);
+
+        Assert.True(success);
+        Assert.Equal(rowVersion.ToArray(), result.ToArray());
+    }
+
+    [Fact]
+    public void RowVersionConverter_ShouldConvertFromArraySegment()
+    {
+        var converter = new RowVersionConverter();
+        var bytes = new byte[] { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04 };
+        var segment = new ArraySegment<byte>(bytes);
+        var success = converter.TryConvertFromProvider(segment, SupportedDatabase.SqlServer, out var result);
+
+        Assert.True(success);
+        Assert.Equal(bytes, result.ToArray());
+    }
+
+    [Fact]
+    public void RowVersionConverter_ShouldHandleByteArrayException()
+    {
+        var converter = new RowVersionConverter();
+        // Invalid byte array (wrong length)
+        var bytes = new byte[] { 0x01 }; // RowVersion needs 8 bytes
+        var success = converter.TryConvertFromProvider(bytes, SupportedDatabase.SqlServer, out var result);
+
+        Assert.False(success);
+    }
+
+    [Fact]
+    public void RowVersionConverter_ShouldHandleMemoryException()
+    {
+        var converter = new RowVersionConverter();
+        // Invalid memory (wrong length)
+        var bytes = new byte[] { 0x01, 0x02 };
+        var memory = new ReadOnlyMemory<byte>(bytes);
+        var success = converter.TryConvertFromProvider(memory, SupportedDatabase.SqlServer, out var result);
+
+        Assert.False(success);
+    }
+
+    [Fact]
+    public void RowVersionConverter_ShouldHandleArraySegmentException()
+    {
+        var converter = new RowVersionConverter();
+        // Invalid array segment (wrong length)
+        var bytes = new byte[] { 0x01, 0x02, 0x03 };
+        var segment = new ArraySegment<byte>(bytes);
+        var success = converter.TryConvertFromProvider(segment, SupportedDatabase.SqlServer, out var result);
+
+        Assert.False(success);
+    }
+
+    [Fact]
+    public void RowVersionConverter_ToProviderValue_ReturnsByteArray()
+    {
+        var converter = new RowVersionConverter();
+        var bytes = new byte[] { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05 };
+        var rowVersion = RowVersion.FromBytes(bytes);
+        var result = converter.ToProviderValue(rowVersion, SupportedDatabase.SqlServer);
+
+        Assert.IsType<byte[]>(result);
+        Assert.Equal(bytes, (byte[])result!);
     }
 
     #endregion
@@ -565,5 +766,90 @@ public class AdvancedTypeConverterTests
     {
         public FakeNpgsqlGeometry(byte[] bytes) => AsBinary = bytes;
         public byte[] AsBinary { get; }
+    }
+
+    // Helper class to simulate a stream that throws on Seek
+    private sealed class ThrowingStream : Stream
+    {
+        public override bool CanRead => true;
+        public override bool CanSeek => true;
+        public override bool CanWrite => false;
+        public override long Length => 0;
+        public override long Position { get; set; }
+
+        public override void Flush() { }
+
+        public override int Read(byte[] buffer, int offset, int count) => 0;
+
+        public override long Seek(long offset, SeekOrigin origin)
+            => throw new InvalidOperationException("Seek failed");
+
+        public override void SetLength(long value)
+            => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count)
+            => throw new NotSupportedException();
+    }
+
+    // Helper class to simulate a stream that reports as not readable
+    private sealed class UnreadableStream : Stream
+    {
+        public override bool CanRead => false; // Not readable
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => 0;
+        public override long Position { get; set; }
+
+        public override void Flush() { }
+
+        public override int Read(byte[] buffer, int offset, int count)
+            => throw new NotSupportedException();
+
+        public override long Seek(long offset, SeekOrigin origin)
+            => throw new NotSupportedException();
+
+        public override void SetLength(long value)
+            => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count)
+            => throw new NotSupportedException();
+    }
+
+    // Helper class to simulate a non-seekable stream
+    private sealed class NonSeekableStream : Stream
+    {
+        private readonly MemoryStream _inner;
+
+        public NonSeekableStream(byte[] data) => _inner = new MemoryStream(data);
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false; // Not seekable
+        public override bool CanWrite => false;
+        public override long Length => _inner.Length;
+        public override long Position
+        {
+            get => _inner.Position;
+            set => throw new NotSupportedException();
+        }
+
+        public override void Flush() => _inner.Flush();
+
+        public override int Read(byte[] buffer, int offset, int count)
+            => _inner.Read(buffer, offset, count);
+
+        public override long Seek(long offset, SeekOrigin origin)
+            => throw new NotSupportedException();
+
+        public override void SetLength(long value)
+            => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count)
+            => throw new NotSupportedException();
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) _inner?.Dispose();
+            base.Dispose(disposing);
+        }
     }
 }
