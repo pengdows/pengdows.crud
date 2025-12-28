@@ -26,6 +26,20 @@ public partial class EntityHelper<TEntity, TRowID>
         return obj;
     }
 
+    // Optimized version that accepts a pre-built plan to avoid repeated hash calculation
+    // Used by LoadListAsync and LoadSingleAsync to hoist plan building outside the loop
+    private TEntity MapReaderToObjectWithPlan(ITrackedReader reader, ColumnPlan[] plan)
+    {
+        var obj = new TEntity();
+
+        for (var idx = 0; idx < plan.Length; idx++)
+        {
+            plan[idx].Apply(reader, obj);
+        }
+
+        return obj;
+    }
+
     private ColumnPlan[] GetOrBuildRecordsetPlan(ITrackedReader reader)
     {
         // Compute a stronger hash for the recordset shape: field count + names + types

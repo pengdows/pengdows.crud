@@ -819,7 +819,9 @@ public partial class EntityHelper<TEntity, TRowID> :
         await using var reader = await sc.ExecuteReaderSingleRowAsync(cancellationToken).ConfigureAwait(false);
         if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            return MapReaderToObject(reader);
+            // Reader optimization: build plan once before processing row
+            var plan = GetOrBuildRecordsetPlan(reader);
+            return MapReaderToObjectWithPlan(reader, plan);
         }
 
         return null;
@@ -840,9 +842,20 @@ public partial class EntityHelper<TEntity, TRowID> :
 
         await using var reader = await sc.ExecuteReaderAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
 
+        // Reader optimization: hoist plan building outside the loop
+        // Build plan once based on first row's schema, then reuse for all rows
+        // This avoids hash calculation and GetName/GetFieldType calls on every row
+        ColumnPlan[]? plan = null;
+
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            var obj = MapReaderToObject(reader);
+            // Build plan on first row
+            if (plan == null)
+            {
+                plan = GetOrBuildRecordsetPlan(reader);
+            }
+
+            var obj = MapReaderToObjectWithPlan(reader, plan);
             if (obj != null)
             {
                 list.Add(obj);
