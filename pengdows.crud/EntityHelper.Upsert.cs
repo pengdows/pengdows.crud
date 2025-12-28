@@ -20,7 +20,9 @@ public partial class EntityHelper<TEntity, TRowID>
         }
 
         var ctx = context ?? _context;
-        var sc = BuildUpsert(entity, ctx);
+        // BuildUpsert creates a dynamic container - proper disposal required to avoid resource leaks
+        // Use async disposal for async operations
+        await using var sc = BuildUpsert(entity, ctx);
         return await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
     }
 
@@ -318,6 +320,10 @@ public partial class EntityHelper<TEntity, TRowID>
             .ToList();
 
         var updateSet = new StringBuilder();
+        // PostgreSQL MERGE does not allow target alias on left side of UPDATE SET
+        // SQL Server/Oracle do allow it
+        var targetPrefix = dialect.MergeUpdateRequiresTargetAlias ? "t." : "";
+
         foreach (var column in GetCachedUpdatableColumns())
         {
             if (_auditValueResolver == null && column.IsLastUpdatedBy)
@@ -330,13 +336,13 @@ public partial class EntityHelper<TEntity, TRowID>
                 updateSet.Append(", ");
             }
 
-            updateSet.Append($"t.{dialect.WrapObjectName(column.Name)} = s.{dialect.WrapObjectName(column.Name)}");
+            updateSet.Append($"{targetPrefix}{dialect.WrapObjectName(column.Name)} = s.{dialect.WrapObjectName(column.Name)}");
         }
 
         if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
         {
             updateSet.Append(
-                $", t.{dialect.WrapObjectName(_versionColumn.Name)} = t.{dialect.WrapObjectName(_versionColumn.Name)} + 1");
+                $", {targetPrefix}{dialect.WrapObjectName(_versionColumn.Name)} = {targetPrefix}{dialect.WrapObjectName(_versionColumn.Name)} + 1");
         }
 
         var keys = _tableInfo.PrimaryKeys;
@@ -351,10 +357,9 @@ public partial class EntityHelper<TEntity, TRowID>
         var sc = ctx.CreateSqlContainer();
         sc.Query.Append("MERGE INTO ")
             .Append(BuildWrappedTableName(dialect))
-            .Append(" AS t USING (VALUES (")
+            .Append(" t USING (VALUES (")
             .Append(string.Join(", ", values))
-            .Append(")")
-            .Append(" AS s (")
+            .Append(")) AS s (")
             .Append(string.Join(", ", srcColumns))
             .Append(") ON ")
             .Append(join)

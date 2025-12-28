@@ -150,7 +150,7 @@ public static class TypeCoercionHelper
         }
     }
 
-    private static object CoerceEnum(object value, Type enumType, EnumParseFailureMode parseMode, Type targetType)
+    private static object? CoerceEnum(object value, Type enumType, EnumParseFailureMode parseMode, Type targetType)
     {
         if (enumType.IsInstanceOfType(value))
         {
@@ -346,6 +346,10 @@ public static class TypeCoercionHelper
                 return DateTime.SpecifyKind(ConvertToUtc(dt), DateTimeKind.Utc);
             case DateTimeOffset dto:
                 return DateTime.SpecifyKind(dto.UtcDateTime, DateTimeKind.Utc);
+            case string s when string.IsNullOrWhiteSpace(s):
+                // Treat empty/whitespace strings as invalid for DateTime
+                // This handles SQLite returning empty strings for TIMESTAMP columns
+                throw new InvalidCastException($"Cannot convert value '{value}' to DateTime.");
             case string s when DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dto):
                 return DateTime.SpecifyKind(dto.UtcDateTime, DateTimeKind.Utc);
             case string s when DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt):

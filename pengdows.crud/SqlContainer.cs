@@ -1,6 +1,7 @@
 #region
 
 using System.Data;
+using System.Diagnostics;
 using System.Data.Common;
 using System.Globalization;
 using System.Text;
@@ -23,6 +24,8 @@ namespace pengdows.crud;
 
 public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectProvider
 {
+    private static readonly Regex ParamPlaceholderRegex = new(@"\{P\}([A-Za-z_][A-Za-z0-9_]*)", RegexOptions.Compiled);
+
     private readonly IDatabaseContext _context;
     private readonly ISqlDialect _dialect;
 
@@ -31,6 +34,10 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     private int _outputParameterCount;
     private int _nextParameterId = -1;
     internal List<string> ParamSequence { get; } = new();
+
+    // Performance optimization: cache rendered command text to avoid repeated Query.ToString() calls
+    private string? _cachedCommandText;
+    private bool _commandTextDirty = true;
 
     private MetricsCollector? MetricsCollector => (_context as IMetricsCollectorAccessor)?.MetricsCollector;
 
@@ -109,7 +116,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     internal string RenderParams(string sql)
     {
         ParamSequence.Clear();
-        return Regex.Replace(sql, "\\{P\\}([A-Za-z_][A-Za-z0-9_]*)", m =>
+        return ParamPlaceholderRegex.Replace(sql, m =>
         {
             var name = m.Groups[1].Value;
             ParamSequence.Add(name);
@@ -211,9 +218,22 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     {
         // Normalize so lookups work with or without a leading marker
         // (e.g., @p0, :p0, ?p0, $p0 -> p0) for named providers.
-        return _dialect.SupportsNamedParameters
-            ? parameterName.TrimStart('@', ':', '?', '$')
-            : parameterName;
+        if (!_dialect.SupportsNamedParameters)
+        {
+            return parameterName;
+        }
+
+        // Span-based optimization: only allocate if we need to strip a prefix
+        if (parameterName.Length > 0)
+        {
+            var firstChar = parameterName[0];
+            if (firstChar == '@' || firstChar == ':' || firstChar == '?' || firstChar == '$')
+            {
+                return parameterName.Substring(1);
+            }
+        }
+
+        return parameterName;
     }
 
     private static bool TryBuildAlternateParameterName(string normalizedName, out string alternateName)
@@ -320,6 +340,9 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         ReturnParametersToPool();
         _outputParameterCount = 0;
         ParamSequence.Clear();
+        // Invalidate cached command text when query is cleared
+        _cachedCommandText = null;
+        _commandTextDirty = true;
     }
 
     public string WrapForStoredProc(ExecutionType executionType, bool includeParameters = true, bool captureReturn = false)
@@ -777,13 +800,24 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }
     }
 
-
     private async Task<DbCommand> PrepareAndCreateCommandAsync(
         ITrackedConnection conn,
         CommandType commandType,
         ExecutionType executionType,
         CancellationToken cancellationToken)
     {
+        var traceTimings = _logger.IsEnabled(LogLevel.Debug);
+        long tStart = 0;
+        long tOpened = 0;
+        long tCmdText = 0;
+        long tCmdCreated = 0;
+        long tParamsAdded = 0;
+        long tPrepared = 0;
+        if (traceTimings)
+        {
+            tStart = Stopwatch.GetTimestamp();
+        }
+
         if (commandType == CommandType.TableDirect)
         {
             throw new NotSupportedException("TableDirect isn't supported.");
@@ -795,13 +829,51 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }
 
         await OpenConnectionAsync(conn, cancellationToken).ConfigureAwait(false);
-        var cmd = CreateCommand(conn);
-        cmd.CommandType = CommandType.Text;
+        if (traceTimings)
+        {
+            tOpened = Stopwatch.GetTimestamp();
+        }
 
-        // Compute command text once to avoid double ToString() and guard logging
-        var cmdText = (commandType == CommandType.StoredProcedure)
-            ? WrapForStoredProc(executionType, includeParameters: true)
-            : Query.ToString();
+        // Performance optimization: cache command text to avoid repeated Query.ToString() calls
+        string cmdText;
+        if (commandType == CommandType.StoredProcedure)
+        {
+            cmdText = WrapForStoredProc(executionType, includeParameters: true);
+        }
+        else if (_cachedCommandText != null && !_commandTextDirty)
+        {
+            // Reuse cached command text - huge win for template reuse patterns
+            cmdText = _cachedCommandText;
+        }
+        else
+        {
+            // Render and cache the command text
+            cmdText = Query.ToString();
+
+            // For non-stored-proc queries, render parameter placeholders
+            // This is CRITICAL for positional-parameter providers (MySQL, SQLite, etc.)
+            // RenderParams() populates ParamSequence and replaces {P}name with ? or @name
+            if (cmdText.Contains("{P}"))
+            {
+                cmdText = RenderParams(cmdText);
+            }
+
+            // Cache the rendered command text for reuse
+            _cachedCommandText = cmdText;
+            _commandTextDirty = false;
+        }
+
+        if (traceTimings)
+        {
+            tCmdText = Stopwatch.GetTimestamp();
+        }
+
+        var cmd = CreateCommand(conn);
+        if (traceTimings)
+        {
+            tCmdCreated = Stopwatch.GetTimestamp();
+        }
+        cmd.CommandType = CommandType.Text;
 
         if (_logger.IsEnabled(LogLevel.Information))
         {
@@ -809,26 +881,22 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }
         if (_parameters.Count > 0 && _logger.IsEnabled(LogLevel.Debug))
         {
+            // SECURITY: Never log parameter values - they may contain credentials, tokens, PII
+            // Log only metadata: name, type, size, direction
             var paramDump = string.Join(", ",
-                _parameters.Values.Select(p => $"{p.ParameterName}={p.Value ?? "NULL"}"));
+                _parameters.Values.Select(p =>
+                {
+                    var sizeInfo = p.Size > 0 ? $"({p.Size})" : "";
+                    var dirInfo = p.Direction != ParameterDirection.Input ? $" {p.Direction}" : "";
+                    return $"{p.ParameterName}:{p.DbType}{sizeInfo}{dirInfo}";
+                }));
             _logger.LogDebug("Parameters: {Parameters}", paramDump);
         }
         cmd.CommandText = cmdText;
-        if (_parameters.Count > _context.MaxParameterLimit)
-        {
-            throw new InvalidOperationException(
-                $"Query exceeds the maximum parameter limit of {_context.MaxParameterLimit} for {_context.DatabaseProductName}.");
-        }
-
         if (_context.SupportsNamedParameters)
         {
-            var unique = new HashSet<DbParameter>();
             foreach (var param in _parameters.Values)
             {
-                if (!unique.Add(param))
-                {
-                    continue;
-                }
                 // Preserve normalized names expected by tests (no marker in ParameterName)
                 cmd.Parameters.Add(param);
             }
@@ -844,8 +912,38 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             }
         }
 
+        if (traceTimings)
+        {
+            tParamsAdded = Stopwatch.GetTimestamp();
+        }
+
         // Apply per-text prepare logic
         MaybePrepareCommand(cmd, conn);
+        if (traceTimings)
+        {
+            tPrepared = Stopwatch.GetTimestamp();
+        }
+
+        if (traceTimings)
+        {
+            var openUs = TicksToMicroseconds(tOpened - tStart);
+            var textUs = TicksToMicroseconds(tCmdText - tOpened);
+            var cmdUs = TicksToMicroseconds(tCmdCreated - tCmdText);
+            var paramsUs = TicksToMicroseconds(tParamsAdded - tCmdCreated);
+            var prepareUs = TicksToMicroseconds(tPrepared - tParamsAdded);
+            var totalUs = TicksToMicroseconds(tPrepared - tStart);
+            _logger.LogDebug(
+                "SQL timing [{ExecutionType}/{CommandType}] params={ParamCount} open={OpenUs:0.000}us text={TextUs:0.000}us cmd={CmdUs:0.000}us params={ParamsUs:0.000}us prepare={PrepareUs:0.000}us total={TotalUs:0.000}us",
+                executionType,
+                commandType,
+                _parameters.Count,
+                openUs,
+                textUs,
+                cmdUs,
+                paramsUs,
+                prepareUs,
+                totalUs);
+        }
 
         return cmd;
     }
@@ -933,6 +1031,16 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                exception.Message.Contains("timeout", StringComparison.OrdinalIgnoreCase);
     }
 
+    private static double TicksToMicroseconds(long ticks)
+    {
+        if (ticks <= 0)
+        {
+            return 0d;
+        }
+
+        return ticks * 1_000_000d / Stopwatch.Frequency;
+    }
+
     private Task OpenConnectionAsync(ITrackedConnection conn, CancellationToken cancellationToken)
     {
         if (conn.State != ConnectionState.Open)
@@ -988,13 +1096,30 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                             ?? _dialect;
         var clone = new SqlContainer(targetContext, targetDialect, null, _logger);
 
-        // Copy the SQL query content to the pooled StringBuilder
-        clone.Query.Clear();
-        clone.Query.Append(Query);
+        // OPTIMIZATION: Share cached command text instead of copying StringBuilder
+        // This is a massive win for template cloning patterns - avoids Query.ToString() on every clone
+        if (_cachedCommandText != null && !_commandTextDirty)
+        {
+            // Template has been rendered - share the immutable command text
+            clone._cachedCommandText = _cachedCommandText;
+            clone._commandTextDirty = false;
+
+            // Copy just the query length for validation (actual text is cached)
+            clone.Query.Clear();
+            clone.Query.Append(Query);
+        }
+        else
+        {
+            // Template not yet rendered or modified - copy StringBuilder content
+            clone.Query.Clear();
+            clone.Query.Append(Query);
+            clone._commandTextDirty = true;
+        }
 
         // Copy the WHERE flag
         clone.HasWhereAppended = HasWhereAppended;
 
+        // OPTIMIZATION: Reuse parameter objects when possible (provider pooling handles this)
         // Clone all parameters with the same names and types but allow value updates
         // Use the target context's dialect for parameter creation
         foreach (var kvp in _parameters)
@@ -1014,11 +1139,29 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             clone.AddParameter(clonedParam);
         }
 
-        // Copy parameter sequence for rendering
-        clone.ParamSequence.AddRange(ParamSequence);
+        // Copy parameter sequence for rendering (reuse cached if available)
+        if (ParamSequence.Count > 0)
+        {
+            clone.ParamSequence.AddRange(ParamSequence);
+        }
         clone._outputParameterCount = _outputParameterCount;
 
         return clone;
+    }
+
+    /// <summary>
+    /// Internal method to reset execution state for container reuse.
+    /// Preserves query and parameters but clears execution-specific state.
+    /// Used for high-performance pooling scenarios.
+    /// </summary>
+    internal void Reset()
+    {
+        // Don't clear ParamSequence or cached command text - those are reusable
+        // Just reset output parameter count
+        _outputParameterCount = 0;
+
+        // Note: Query, parameters, HasWhereAppended, and cached command text are preserved
+        // This allows the container to be reused with the same query/parameters
     }
 
     protected override void DisposeManaged()
@@ -1027,6 +1170,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         ReturnParametersToPool();
         _outputParameterCount = 0;
         ParamSequence.Clear();
+        _cachedCommandText = null;  // Clear cache on disposal
+        _commandTextDirty = true;
         StringBuilderPool.Return(Query);
     }
 
