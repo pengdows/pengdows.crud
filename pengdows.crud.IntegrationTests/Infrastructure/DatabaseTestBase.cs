@@ -23,7 +23,7 @@ public abstract class DatabaseTestBase : IAsyncLifetime
     {
         Output = output;
 
-        var builder = Host.CreateApplicationBuilder();
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder();
         builder.Services.AddScoped<IAuditValueResolver, StringAuditContextProvider>();
         Host = builder.Build();
     }
@@ -45,7 +45,7 @@ public abstract class DatabaseTestBase : IAsyncLifetime
                 if (container != null)
                 {
                     TestContainers[provider] = container;
-                    var context = container.CreateDatabaseContext(Host.Services);
+                    var context = await container.GetDatabaseContextAsync(Host.Services);
                     DatabaseContexts[provider] = context;
 
                     // Run any provider-specific setup

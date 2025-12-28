@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.DependencyInjection;
 using pengdows.crud;
+using pengdows.crud.enums;
 using testbed.Cockroach;
 
 namespace testbed;
@@ -15,6 +16,34 @@ public class ParallelTestOrchestrator
     {
         _services = services;
         _includeOracle = includeOracle;
+    }
+
+    /// <summary>
+    /// Create and start a test container for a specific database provider.
+    /// Used by integration tests that need individual containers.
+    /// </summary>
+    public async Task<ITestContainer?> CreateContainerAsync(SupportedDatabase provider)
+    {
+        ITestContainer? container = provider switch
+        {
+            SupportedDatabase.Sqlite => new SqliteTestContainer(),
+            SupportedDatabase.PostgreSql => new PostgreSqlTestContainer(),
+            SupportedDatabase.SqlServer => new SqlServerTestContainer(),
+            SupportedDatabase.MySql => new MySqlTestContainer(),
+            SupportedDatabase.MariaDb => new MariaDbContainer(),
+            SupportedDatabase.Oracle when _includeOracle => new ExternalOracleTestContainer(),
+            SupportedDatabase.Firebird => new FirebirdSqlTestContainer(),
+            SupportedDatabase.CockroachDb => new CockroachDbTestContainer(),
+            SupportedDatabase.DuckDB => new DuckDbTestContainer(),
+            _ => null
+        };
+
+        if (container != null)
+        {
+            await container.StartAsync();
+        }
+
+        return container;
     }
 
     public async Task<IReadOnlyCollection<TestResult>> RunAllTestsAsync(
