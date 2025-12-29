@@ -199,7 +199,7 @@ public class EntityHelperCreateAsyncErrorTests
     }
 
     [Fact]
-    public async Task CreateAsync_Should_Handle_Connection_Acquisition_Failure()
+    public void CreateAsync_Should_Handle_Connection_Acquisition_Failure()
     {
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);

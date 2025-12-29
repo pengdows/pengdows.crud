@@ -138,7 +138,7 @@ public class TrackedConnectionTests
         Assert.Equal("Data Source=test", tracked.ConnectionString);
 
         tracked.ConnectionString = null;
-        Assert.Null(tracked.ConnectionString);
+        Assert.Equal(string.Empty, tracked.ConnectionString);
     }
 
     [Fact]

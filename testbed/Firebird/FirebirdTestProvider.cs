@@ -41,7 +41,7 @@ END
             Console.WriteLine("Drop failed: " + ex.Message);
         }
 
-        sqlContainer.Query.Clear();
+        sqlContainer.Clear();
         sqlContainer.Query.AppendFormat(@"
 CREATE TABLE {0}test_table{1} (
     {0}id{1} BIGINT NOT NULL PRIMARY KEY,

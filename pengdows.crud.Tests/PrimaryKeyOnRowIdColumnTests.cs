@@ -33,6 +33,6 @@ public class PrimaryKeyOnRowIdColumnTests
         [PrimaryKey(1)]
         [Id]
         [Column("column_name", DbType.String)]
-        public string ColumnName { get; set; }
+        public string ColumnName { get; set; } = string.Empty;
     }
 }

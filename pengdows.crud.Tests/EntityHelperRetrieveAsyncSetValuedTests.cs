@@ -38,8 +38,8 @@ public class EntityHelperRetrieveAsyncSetValuedTests
         // Queue rows for the select execution
         execConn.EnqueueReaderResult(new[]
         {
-            new Dictionary<string, object> { ["Id"] = 1, ["Name"] = "a" },
-            new Dictionary<string, object> { ["Id"] = 2, ["Name"] = "b" }
+            new Dictionary<string, object?> { ["Id"] = 1, ["Name"] = "a" },
+            new Dictionary<string, object?> { ["Id"] = 2, ["Name"] = "b" }
         });
         factory.Connections.Add(execConn);
 
@@ -61,8 +61,8 @@ public class EntityHelperRetrieveAsyncSetValuedTests
         var execConn = new fakeDbConnection { EmulatedProduct = SupportedDatabase.Sqlite };
         execConn.EnqueueReaderResult(new[]
         {
-            new Dictionary<string, object> { ["Id"] = 1, ["Name"] = "x" },
-            new Dictionary<string, object> { ["Id"] = 3, ["Name"] = "z" }
+            new Dictionary<string, object?> { ["Id"] = 1, ["Name"] = "x" },
+            new Dictionary<string, object?> { ["Id"] = 3, ["Name"] = "z" }
         });
         factory.Connections.Add(execConn);
 
@@ -75,4 +75,3 @@ public class EntityHelperRetrieveAsyncSetValuedTests
         Assert.Equal(3, result[1].Id);
     }
 }
-

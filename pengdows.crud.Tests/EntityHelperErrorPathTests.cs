@@ -33,7 +33,7 @@ public class EntityHelperErrorPathTests : IAsyncLifetime
     {
         if (Context is IAsyncDisposable asyncDisp)
         {
-            await asyncDisp.DisposeAsync().ConfigureAwait(false);
+            await asyncDisp.DisposeAsync();
         }
         else if (Context is IDisposable disp)
         {
@@ -84,7 +84,7 @@ public class EntityHelperErrorPathTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task UpdateAsync_EntityWithNoPrimaryKey_ThrowsNotSupportedException()
+    public void UpdateAsync_EntityWithNoPrimaryKey_ThrowsNotSupportedException()
     {
         Assert.Throws<InvalidOperationException>(() => new EntityHelper<EntityWithNoPrimaryKey, int>(Context));
     }
@@ -98,7 +98,7 @@ public class EntityHelperErrorPathTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task UpsertAsync_EntityWithNoPrimaryKey_ThrowsNotSupportedException()
+    public void UpsertAsync_EntityWithNoPrimaryKey_ThrowsNotSupportedException()
     {
         Assert.Throws<InvalidOperationException>(() => new EntityHelper<EntityWithNoPrimaryKey, int>(Context));
     }

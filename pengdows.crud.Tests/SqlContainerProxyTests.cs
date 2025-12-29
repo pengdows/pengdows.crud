@@ -20,7 +20,7 @@ public class SqlContainerProxyTests : SqlLiteContextTestBase
     public void WrapObjectName_Null_ReturnsEmpty()
     {
         var sc = Context.CreateSqlContainer();
-        Assert.Equal(string.Empty, sc.WrapObjectName(null));
+        Assert.Equal(string.Empty, sc.WrapObjectName(null!));
     }
 
     [Fact]
@@ -49,7 +49,7 @@ public class SqlContainerProxyTests : SqlLiteContextTestBase
     public void MakeParameterName_NullString_ReturnsMarker()
     {
         var sc = Context.CreateSqlContainer();
-        Assert.Equal(Context.DataSourceInfo.ParameterMarker, sc.MakeParameterName((string)null));
+        Assert.Equal(Context.DataSourceInfo.ParameterMarker, sc.MakeParameterName((string)null!));
     }
 
     [Fact]
@@ -88,7 +88,7 @@ public class SqlContainerProxyTests : SqlLiteContextTestBase
     public void CreateDbParameter_WithoutName_NullValue_UsesDbNull()
     {
         var sc = Context.CreateSqlContainer();
-        var p = sc.CreateDbParameter<string>(DbType.String, null);
+        var p = sc.CreateDbParameter<string?>(DbType.String, null);
 
         Assert.False(string.IsNullOrEmpty(p.ParameterName));
         Assert.Equal(DbType.String, p.DbType);

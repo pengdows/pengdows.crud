@@ -2,6 +2,7 @@
 
 using System;
 using System.Data;
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
@@ -17,7 +18,13 @@ public class OracleDialectAdditionalTests
     private sealed class FakeOracleConnection : IDbConnection
     {
         public int StatementCacheSize { get; set; } = 0; // property discovered via reflection
-        public string ConnectionString { get; set; } = string.Empty;
+        private string _connectionString = string.Empty;
+        [AllowNull]
+        public string ConnectionString
+        {
+            get => _connectionString;
+            set => _connectionString = value ?? string.Empty;
+        }
         public int ConnectionTimeout => 0;
         public string Database => string.Empty;
         public ConnectionState State => ConnectionState.Closed;
@@ -69,4 +76,3 @@ public class OracleDialectAdditionalTests
         Assert.True(conn.StatementCacheSize >= 64);
     }
 }
-

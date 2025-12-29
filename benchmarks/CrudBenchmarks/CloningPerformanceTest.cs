@@ -52,7 +52,7 @@ public class CloningPerformanceTest
     {
         // New approach: Clone cached container and update parameter
         var clone = _cachedContainer.Clone();
-        clone.SetParameterValue("w0", new[] { _filmId });
+        clone.SetParameterValue("w0", _filmId);
         return clone;
     }
 

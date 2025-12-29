@@ -39,18 +39,18 @@ public class FakeTrackedConnection : TrackedConnection, ITrackedConnection
             {
                 fake.EnqueueReaderResult(new[]
                 {
-                    new Dictionary<string, object> { { "version", value } }
+                    new Dictionary<string, object?> { { "version", value } }
                 });
             }
             else
             {
-                fake.EnqueueReaderResult(Array.Empty<Dictionary<string, object>>());
+                fake.EnqueueReaderResult(Array.Empty<Dictionary<string, object?>>());
             }
 
             // Result for version query
             fake.EnqueueReaderResult(new[]
             {
-                new Dictionary<string, object> { { "version", value } }
+                new Dictionary<string, object?> { { "version", value } }
             });
 
             // Configure scalar results by command text

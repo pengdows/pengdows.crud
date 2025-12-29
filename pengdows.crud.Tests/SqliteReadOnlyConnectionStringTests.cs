@@ -1,6 +1,7 @@
 #region
 
 using System.Data;
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
@@ -15,7 +16,13 @@ public class SqliteReadOnlyConnectionStringTests
 {
     private sealed class Conn : IDbConnection
     {
-        public string ConnectionString { get; set; } = string.Empty;
+        private string _connectionString = string.Empty;
+        [AllowNull]
+        public string ConnectionString
+        {
+            get => _connectionString;
+            set => _connectionString = value ?? string.Empty;
+        }
         public int ConnectionTimeout => 0; public string Database => string.Empty; public ConnectionState State => ConnectionState.Closed; public string DataSource => string.Empty;
         public void ChangeDatabase(string databaseName) { } public void Close() { } public IDbTransaction BeginTransaction() => null!; public IDbTransaction BeginTransaction(IsolationLevel il) => null!; public void Open() { } public void Dispose() { }
         public IDbCommand CreateCommand() => new fakeDbCommand();
@@ -34,4 +41,3 @@ public class SqliteReadOnlyConnectionStringTests
         Assert.Contains("Mode=ReadOnly", conn.ConnectionString);
     }
 }
-

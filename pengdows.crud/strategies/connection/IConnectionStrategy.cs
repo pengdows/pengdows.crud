@@ -55,8 +55,11 @@ internal interface IConnectionStrategy
     /// Strategy decides whether to reuse initialization connection, create throwaway connection, etc.
     /// Returns (dialect, dataSourceInfo) or (null, null) if fallback SQL-92 should be used.
     /// </summary>
+    /// <param name="initConnection">Optional connection for dialect detection</param>
+    /// <param name="factory">Optional factory for creating connections. Null when using DbDataSource.</param>
+    /// <param name="loggerFactory">Logger factory for diagnostic output</param>
     (ISqlDialect? dialect, IDataSourceInformation? dataSourceInfo) HandleDialectDetection(
         ITrackedConnection? initConnection,
-        DbProviderFactory factory,
+        DbProviderFactory? factory,
         ILoggerFactory loggerFactory);
 }

@@ -184,7 +184,7 @@ public class TransactionContextTests
     {
         var context = CreateContext(SupportedDatabase.Sqlite);
         using var tx = context.BeginTransaction();
-        Assert.Equal(string.Empty, tx.WrapObjectName(null));
+        Assert.Equal(string.Empty, tx.WrapObjectName(null!));
     }
 
     [Fact]
@@ -217,7 +217,7 @@ public class TransactionContextTests
     {
         var context = CreateContext(SupportedDatabase.Sqlite);
         using var tx = context.BeginTransaction();
-        Assert.Equal(context.DataSourceInfo.ParameterMarker, tx.MakeParameterName((string)null));
+        Assert.Equal(context.DataSourceInfo.ParameterMarker, tx.MakeParameterName((string)null!));
     }
 
     [Fact]
@@ -588,7 +588,7 @@ public class TransactionContextTests
 
         public (ISqlDialect? dialect, IDataSourceInformation? dataSourceInfo) HandleDialectDetection(
             ITrackedConnection? initConnection,
-            DbProviderFactory factory,
+            DbProviderFactory? factory,
             ILoggerFactory loggerFactory)
         {
             return (null, null);

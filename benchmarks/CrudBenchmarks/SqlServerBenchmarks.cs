@@ -337,7 +337,7 @@ CREATE TABLE [dbo].[film_actor] (
     public async Task<Film?> GetFilmById_Mine_WithCloning()
     {
         var clone = _cachedFilmRetrieveContainer.Clone();
-        clone.SetParameterValue("w0", new[] { _filmId });
+        clone.SetParameterValue("w0", _filmId);
         return await _filmHelper.LoadSingleAsync(clone);
     }
 

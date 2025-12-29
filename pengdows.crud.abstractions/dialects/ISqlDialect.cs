@@ -246,6 +246,13 @@ public interface ISqlDialect
     bool RequiresStoredProcParameterNameMatch { get; }
 
     /// <summary>
+    /// Indicates whether MERGE UPDATE SET clause requires table alias prefix on target columns.
+    /// SQL Server, Oracle: true (allows `UPDATE SET t.col = value`)
+    /// PostgreSQL: false (requires `UPDATE SET col = value`, will error with alias prefix)
+    /// </summary>
+    bool MergeUpdateRequiresTargetAlias { get; }
+
+    /// <summary>
     /// True when the dialect supports namespaces or schemas.
     /// </summary>
     bool SupportsNamespaces { get; }

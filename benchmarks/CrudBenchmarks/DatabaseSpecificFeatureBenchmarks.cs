@@ -315,7 +315,8 @@ public class DatabaseSpecificFeatureBenchmarks : IAsyncDisposable
         // This may force client-side evaluation since EF's JSON support is limited
         return await _efContext.Products
             .AsNoTracking()
-            .Where(p => p.Specifications != null && p.Specifications.Contains("Brand5"))
+            .Where(p => p.Specifications != null
+                && EF.Functions.JsonContains(p.Specifications, "{\"brand\":\"Brand5\"}"))
             .ToListAsync();
     }
 
@@ -511,6 +512,7 @@ public class DatabaseSpecificFeatureBenchmarks : IAsyncDisposable
         public Guid ExternalUuid { get; set; }
 
         [pengdows.crud.attributes.Column("metadata", DbType.Object)]
+        [pengdows.crud.attributes.Json]
         public string? Metadata { get; set; }
 
         [pengdows.crud.attributes.Column("created_at", DbType.DateTime)]

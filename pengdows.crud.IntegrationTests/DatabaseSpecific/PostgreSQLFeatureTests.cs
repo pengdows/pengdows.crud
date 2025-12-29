@@ -1,4 +1,5 @@
 using System.Data;
+using System.Text.Json;
 using pengdows.crud;
 using pengdows.crud.enums;
 using pengdows.crud.IntegrationTests.Infrastructure;
@@ -144,7 +145,7 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
                 FROM tagged_items
                 WHERE tags @> ");
             container.Query.Append(container.MakeParameterName("searchTags"));
-            container.AddParameterWithValue("searchTags", DbType.Object, "{\"premium\",\"featured\"}");
+            container.AddParameterWithValue("searchTags", DbType.Object, new[] { "premium", "featured" });
 
             var results = new List<(long Id, string Name)>();
             using var reader = await container.ExecuteReaderAsync();
@@ -246,7 +247,8 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
             insertContainer.Query.Append(insertContainer.MakeParameterName("specs"));
             insertContainer.Query.Append(")");
             insertContainer.AddParameterWithValue("name", DbType.String, "Conflict Test Product");
-            insertContainer.AddParameterWithValue("specs", DbType.Object, "{\"version\": 1}");
+            using var insertSpecs = JsonDocument.Parse("{\"version\": 1}");
+            insertContainer.AddParameterWithValue("specs", DbType.Object, insertSpecs);
 
             await insertContainer.ExecuteNonQueryAsync();
 
@@ -260,11 +262,12 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
             upsertContainer.Query.Append(@")
                 ON CONFLICT (name)
                 DO UPDATE SET
-                    specifications = EXCLUDED.specifications || products.specifications,
+                    specifications = products.specifications || EXCLUDED.specifications,
                     updated_at = CURRENT_TIMESTAMP");
 
             upsertContainer.AddParameterWithValue("name", DbType.String, "Conflict Test Product");
-            upsertContainer.AddParameterWithValue("specs", DbType.Object, "{\"version\": 2, \"updated\": true}");
+            using var upsertSpecs = JsonDocument.Parse("{\"version\": 2, \"updated\": true}");
+            upsertContainer.AddParameterWithValue("specs", DbType.Object, upsertSpecs);
 
             var affectedRows = await upsertContainer.ExecuteNonQueryAsync();
 
@@ -334,7 +337,7 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
             ("Galaxy S24", "{\"brand\": \"Samsung\", \"model\": \"S24\", \"color\": \"white\"}")
         };
 
-        foreach (var (name, specs) in products)
+        foreach (var (name, specsJson) in products)
         {
             using var container = context.CreateSqlContainer(@"
                 INSERT INTO products (name, specifications) VALUES (");
@@ -343,7 +346,8 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
             container.Query.Append(container.MakeParameterName("specs"));
             container.Query.Append(")");
             container.AddParameterWithValue("name", DbType.String, name);
-            container.AddParameterWithValue("specs", DbType.Object, specs);
+            using var specsDoc = JsonDocument.Parse(specsJson);
+            container.AddParameterWithValue("specs", DbType.Object, specsDoc);
 
             await container.ExecuteNonQueryAsync();
         }
@@ -368,7 +372,8 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
         container.Query.Append(container.MakeParameterName("specs"));
         container.Query.Append(")");
         container.AddParameterWithValue("name", DbType.String, "MacBook Pro M3");
-        container.AddParameterWithValue("specs", DbType.Object, complexProduct);
+        using var specsDoc = JsonDocument.Parse(complexProduct);
+        container.AddParameterWithValue("specs", DbType.Object, specsDoc);
 
         await container.ExecuteNonQueryAsync();
     }
@@ -392,7 +397,7 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
             container.Query.Append(container.MakeParameterName("tags"));
             container.Query.Append(")");
             container.AddParameterWithValue("name", DbType.String, name);
-            container.AddParameterWithValue("tags", DbType.Object, "{" + string.Join(",", tags.Select(t => $"\"{t}\"")) + "}");
+            container.AddParameterWithValue("tags", DbType.Object, tags);
 
             await container.ExecuteNonQueryAsync();
         }

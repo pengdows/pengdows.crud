@@ -1,9 +1,11 @@
 using System.Data;
+using System.Diagnostics;
 using BenchmarkDotNet.Attributes;
 using Dapper;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Npgsql;
 using pengdows.crud;
 using pengdows.crud.attributes;
@@ -27,6 +29,7 @@ public class PagilaBenchmarks : IAsyncDisposable
     private IContainer? _container;
     private string _connStr = string.Empty;
     private IDatabaseContext _ctx = null!;
+    private ILoggerFactory? _loggerFactory;
     private TypeMapRegistry _map = null!;
     private EntityHelper<Film, int> _filmHelper = null!;
     private EntityHelper<FilmActor, int> _filmActorHelper = null!;
@@ -46,7 +49,12 @@ public class PagilaBenchmarks : IAsyncDisposable
     private (int actorId, int filmId) _compositeKey;
     private long _runCounter;
     [ThreadStatic] private static string? _currentBenchmarkLabel;
-    private bool _collectPerIteration = false; // Disable for representative benchmarks
+    private bool _collectPerIteration = true; // Enable per-iteration pg_stat_statements for DB time analysis
+    private bool _timingEnabled;
+    private long _breakdownBuildTicks;
+    private long _breakdownExecuteTicks;
+    private long _breakdownMapTicks;
+    private int _breakdownOps;
 
     [GlobalSetup]
     public async Task GlobalSetup()
@@ -91,7 +99,15 @@ public class PagilaBenchmarks : IAsyncDisposable
             ReadWriteMode = ReadWriteMode.ReadWrite,
             DbMode = DbMode.Standard
         };
-        _ctx = new DatabaseContext(cfg, NpgsqlFactory.Instance, null, _map);
+        _timingEnabled = IsTimingEnabled();
+        if (_timingEnabled)
+        {
+            _loggerFactory = new LoggerFactory(new ILoggerProvider[]
+            {
+                new SimpleConsoleLoggerProvider(LogLevel.Debug)
+            });
+        }
+        _ctx = new DatabaseContext(cfg, NpgsqlFactory.Instance, _loggerFactory, _map);
 
         // Verify the actual mode being used
         Console.WriteLine($"[BENCHMARK] Configured DbMode: {cfg.DbMode}");
@@ -153,6 +169,7 @@ public class PagilaBenchmarks : IAsyncDisposable
         {
             await _dapperDataSource.DisposeAsync();
         }
+        _loggerFactory?.Dispose();
 
         // Dump Postgres statistics for analysis
         try
@@ -177,6 +194,11 @@ public class PagilaBenchmarks : IAsyncDisposable
         {
             PgStats.ResetAsync(_connStr).GetAwaiter().GetResult();
         }
+
+        _breakdownBuildTicks = 0;
+        _breakdownExecuteTicks = 0;
+        _breakdownMapTicks = 0;
+        _breakdownOps = 0;
     }
 
     [IterationCleanup]
@@ -186,6 +208,14 @@ public class PagilaBenchmarks : IAsyncDisposable
         {
             var label = _currentBenchmarkLabel ?? "(unknown)";
             PgStats.DumpSummaryAsync(_connStr, label).GetAwaiter().GetResult();
+            if (label.Contains("_Mine", StringComparison.OrdinalIgnoreCase))
+            {
+                DumpPengdowsMetrics(label);
+            }
+            if (label == nameof(GetFilmById_Mine_Breakdown))
+            {
+                DumpBreakdownMetrics(label);
+            }
         }
     }
 
@@ -274,11 +304,139 @@ CREATE TABLE film_actor (
         await tx.CommitAsync();
     }
 
+    private void DumpPengdowsMetrics(string label)
+    {
+        var metrics = _ctx.Metrics;
+        Console.WriteLine(
+            $"[METRICS] {label} conn_open_avg={metrics.AvgConnectionOpenMs:0.000}ms " +
+            $"conn_close_avg={metrics.AvgConnectionCloseMs:0.000}ms " +
+            $"conn_hold_avg={metrics.AvgConnectionHoldMs:0.000}ms " +
+            $"cmd_avg={metrics.AvgCommandMs:0.000}ms " +
+            $"p95={metrics.P95CommandMs:0.000}ms p99={metrics.P99CommandMs:0.000}ms");
+    }
+
+    private static bool IsTimingEnabled()
+    {
+        var value = Environment.GetEnvironmentVariable("PENGDOWS_SQL_TIMING");
+        return value == "1" || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private sealed class SimpleConsoleLoggerProvider : ILoggerProvider
+    {
+        private readonly LogLevel _minLevel;
+
+        public SimpleConsoleLoggerProvider(LogLevel minLevel)
+        {
+            _minLevel = minLevel;
+        }
+
+        public ILogger CreateLogger(string categoryName)
+        {
+            return new SimpleConsoleLogger(categoryName, _minLevel);
+        }
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private sealed class SimpleConsoleLogger : ILogger
+    {
+        private readonly string _category;
+        private readonly LogLevel _minLevel;
+
+        public SimpleConsoleLogger(string category, LogLevel minLevel)
+        {
+            _category = category;
+            _minLevel = minLevel;
+        }
+
+        public IDisposable BeginScope<TState>(TState state) where TState : notnull => NoopScope.Instance;
+
+        public bool IsEnabled(LogLevel logLevel) => logLevel >= _minLevel;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            if (!IsEnabled(logLevel))
+            {
+                return;
+            }
+
+            var message = formatter(state, exception);
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                return;
+            }
+
+            Console.WriteLine($"[LOG] {_category} {logLevel}: {message}");
+            if (exception != null)
+            {
+                Console.WriteLine(exception);
+            }
+        }
+
+        private sealed class NoopScope : IDisposable
+        {
+            public static readonly NoopScope Instance = new();
+
+            public void Dispose()
+            {
+            }
+        }
+    }
+
+    private void DumpBreakdownMetrics(string label)
+    {
+        if (_breakdownOps == 0)
+        {
+            return;
+        }
+
+        var scale = 1000d / Stopwatch.Frequency;
+        var buildUs = (_breakdownBuildTicks / (double)_breakdownOps) * scale;
+        var execUs = (_breakdownExecuteTicks / (double)_breakdownOps) * scale;
+        var mapUs = (_breakdownMapTicks / (double)_breakdownOps) * scale;
+
+        Console.WriteLine(
+            $"[BREAKDOWN] {label} build={buildUs:0.000}us execute={execUs:0.000}us map={mapUs:0.000}us");
+    }
+
     [Benchmark]
     public async Task<Film?> GetFilmById_Mine()
     {
         _currentBenchmarkLabel = nameof(GetFilmById_Mine);
         return await _filmHelper.RetrieveOneAsync(_filmId, _ctx);
+    }
+
+    [Benchmark]
+    public async Task<Film?> GetFilmById_Mine_Breakdown()
+    {
+        _currentBenchmarkLabel = nameof(GetFilmById_Mine_Breakdown);
+
+        var t0 = Stopwatch.GetTimestamp();
+        using var sc = _filmHelper.BuildRetrieve(new[] { _filmId }, _ctx);
+        var t1 = Stopwatch.GetTimestamp();
+        await using var reader = await sc.ExecuteReaderSingleRowAsync();
+        var t2 = Stopwatch.GetTimestamp();
+
+        Film? result = null;
+        if (await reader.ReadAsync())
+        {
+            result = _filmHelper.MapReaderToObject(reader);
+        }
+
+        var t3 = Stopwatch.GetTimestamp();
+        _breakdownBuildTicks += t1 - t0;
+        _breakdownExecuteTicks += t2 - t1;
+        _breakdownMapTicks += t3 - t2;
+        _breakdownOps++;
+
+        return result;
     }
 
     [Benchmark]

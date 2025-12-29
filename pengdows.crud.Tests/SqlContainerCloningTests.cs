@@ -259,7 +259,7 @@ namespace pengdows.crud.Tests
             Assert.Equal(3, clonedContainer.ParameterCount);
             Assert.Equal(123, clonedContainer.GetParameterValue<int>("id"));
             Assert.Equal("John", clonedContainer.GetParameterValue<string>("name"));
-            Assert.Equal(true, clonedContainer.GetParameterValue<bool>("active"));
+            Assert.True(clonedContainer.GetParameterValue<bool>("active"));
         }
 
         [Fact]

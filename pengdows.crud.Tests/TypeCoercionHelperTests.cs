@@ -22,7 +22,7 @@ public class TypeCoercionHelperTests
     private sealed class TestColumnInfo : IColumnInfo
     {
         public string Name { get; init; } = "Test";
-        public PropertyInfo PropertyInfo { get; init; }
+        public PropertyInfo PropertyInfo { get; init; } = typeof(TestColumnInfo).GetProperty(nameof(Name))!;
         public bool IsId { get; init; }
         public DbType DbType { get; set; }
         public bool IsNonUpdateable { get; set; }

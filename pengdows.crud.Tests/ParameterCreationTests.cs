@@ -50,7 +50,7 @@ public class ParameterCreationTests
     public void CreateDbParameter_NoName_NullValue_UsesDbNull()
     {
         var dialect = CreateDialect();
-        var p = dialect.CreateDbParameter<string>(DbType.String, null);
+        var p = dialect.CreateDbParameter<string?>(DbType.String, null);
 
         Assert.False(string.IsNullOrEmpty(p.ParameterName));
         Assert.Equal(DbType.String, p.DbType);

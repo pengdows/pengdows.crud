@@ -1,5 +1,7 @@
 using Microsoft.Data.Sqlite;
 using pengdows.crud;
+using pengdows.crud.configuration;
+using pengdows.crud.enums;
 
 namespace testbed;
 
@@ -20,10 +22,16 @@ public class SqliteTestContainer : TestContainer
             throw new InvalidOperationException("Container not started yet.");
         }
 
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = _connectionString,
+            DbMode = DbMode.Best
+        };
         var context = new DatabaseContext(
-            _connectionString,
+            config,
             SqliteFactory.Instance,
-            null!);
+            null,
+            new TypeMapRegistry());
         return Task.FromResult<IDatabaseContext>(context);
     }
 }

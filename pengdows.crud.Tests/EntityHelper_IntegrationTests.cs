@@ -36,12 +36,6 @@ public class EntityHelper_IntegrationTests : RealSqliteContextTestBase, IAsyncLi
         await base.DisposeAsync();
     }
 
-    public void Dispose()
-    {
-        Context.Dispose();
-    }
-
-
     [Fact]
     public void QuoteProperties_DelegateToContext()
     {
@@ -252,7 +246,7 @@ public class EntityHelper_IntegrationTests : RealSqliteContextTestBase, IAsyncLi
         var retrieve = entityHelper.BuildBaseRetrieve("a");
         var x = await entityHelper.LoadListAsync(retrieve);
         var foundList = x.FindAll(itm => itm.Name == s);
-        Assert.Equal(1, foundList.Count);
+        Assert.Single(foundList);
         var found = foundList.First();
         Assert.True(found.Name == tmp.Name);
         entityHelper.BuildDelete(found.Id);

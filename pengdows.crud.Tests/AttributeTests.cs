@@ -29,6 +29,7 @@ public class AttributeTests
     public void IdAttribute_CanBeApplied()
     {
         var prop = typeof(Dummy).GetProperty(nameof(Dummy.Id));
+        Assert.NotNull(prop);
         var attr = prop.GetCustomAttribute<IdAttribute>();
         Assert.NotNull(attr);
     }

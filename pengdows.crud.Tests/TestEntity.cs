@@ -18,7 +18,7 @@ public class TestEntity
 
     [PrimaryKey(1)]
     [Column("Name", DbType.String)]
-    public string Name { get; set; }
+    public string Name { get; set; } = string.Empty;
 
     [CreatedOn]
     [Column("CreatedOn", DbType.DateTime)]
@@ -26,7 +26,7 @@ public class TestEntity
 
     [CreatedBy]
     [Column("CreatedBy", DbType.String)]
-    public string CreatedBy { get; set; }
+    public string CreatedBy { get; set; } = string.Empty;
 
     [LastUpdatedOn]
     [Column("LastUpdatedOn", DbType.DateTime)]
@@ -34,7 +34,7 @@ public class TestEntity
 
     [LastUpdatedBy]
     [Column("LastUpdatedBy", DbType.String)]
-    public string LastUpdatedBy { get; set; }
+    public string LastUpdatedBy { get; set; } = string.Empty;
 
     [Version]
     [Column("Version", DbType.Int32)]

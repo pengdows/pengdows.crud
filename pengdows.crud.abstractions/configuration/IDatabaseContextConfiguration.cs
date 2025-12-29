@@ -45,6 +45,12 @@ public interface IDatabaseContextConfiguration
     bool? DisablePrepare { get; set; }
 
     /// <summary>
+    /// Gets or sets whether metrics collection is enabled for this context.
+    /// When false (default), no metrics collection overhead is incurred.
+    /// </summary>
+    bool EnableMetrics { get; set; }
+
+    /// <summary>
     /// Metrics collection options for the associated <see cref="IDatabaseContext"/>.
     /// </summary>
     MetricsOptions MetricsOptions { get; set; }

@@ -11,5 +11,5 @@ namespace pengdows.crud.Tests;
 public class NoKeyEntity
 {
     [Column("Value", DbType.String)]
-    public string Value { get; set; }
+    public string Value { get; set; } = string.Empty;
 }

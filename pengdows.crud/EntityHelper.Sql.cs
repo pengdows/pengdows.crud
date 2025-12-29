@@ -115,9 +115,13 @@ public partial class EntityHelper<TEntity, TRowID>
         {
             var name = $"i{i}";
             paramNames.Add(name);
-            var placeholder = dialect.SupportsNamedParameters 
+            var placeholder = dialect.SupportsNamedParameters
                 ? dialect.ParameterMarker + name
                 : dialect.ParameterMarker;
+            if (insertColumns[i].IsJsonType)
+            {
+                placeholder = dialect.RenderJsonArgument(placeholder, insertColumns[i]);
+            }
             valuePlaceholders.Add(placeholder);
         }
 
@@ -157,9 +161,8 @@ public partial class EntityHelper<TEntity, TRowID>
         // Build pre-configured containers with parameters for common operations
         var templates = new CachedContainerTemplates();
         
-        // GetById - single ID parameter
-        var singleIdTemplateCount = dialect.SupportsSetValuedParameters ? 2 : 1;
-        templates.GetByIdTemplate = BuildRetrieveInternal(CreateTemplateRowIds(singleIdTemplateCount), "", context, deduplicate: false);
+        // GetById - always use single-parameter equality for minimal per-call overhead
+        templates.GetByIdTemplate = BuildRetrieveInternal(CreateTemplateRowIds(1), "", context, deduplicate: false);
 
         // GetByIds - array parameter (will be updated with actual IDs)
         templates.GetByIdsTemplate = BuildRetrieveInternal(CreateTemplateRowIds(2), "", context, deduplicate: false);

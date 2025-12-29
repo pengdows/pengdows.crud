@@ -33,7 +33,7 @@ public class SqlLiteContextTestBase : IAsyncLifetime
     {
         if (Context is IAsyncDisposable asyncDisp)
         {
-            await asyncDisp.DisposeAsync().ConfigureAwait(false);
+            await asyncDisp.DisposeAsync();
         }
         else if (Context is IDisposable disp)
         {

@@ -26,7 +26,7 @@ public class fakeDbCommand : DbCommand
     }
 
     [AllowNull]
-    public override string CommandText { get; set; }
+    public override string CommandText { get; set; } = string.Empty;
     public override int CommandTimeout { get; set; }
     public override CommandType CommandType { get; set; }
     public override bool DesignTimeVisible { get; set; }

@@ -55,7 +55,7 @@ public class TenantConfigurationTests
         Assert.NotNull(config.DatabaseContextConfiguration);
         Assert.Equal(string.Empty, config.DatabaseContextConfiguration.ConnectionString);
         Assert.Equal(string.Empty, config.DatabaseContextConfiguration.ProviderName);
-        Assert.Equal(DbMode.Standard, config.DatabaseContextConfiguration.DbMode);
+        Assert.Equal(DbMode.Best, config.DatabaseContextConfiguration.DbMode);
     }
 
     [Fact]

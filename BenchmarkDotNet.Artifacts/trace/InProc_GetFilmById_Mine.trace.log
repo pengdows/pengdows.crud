@@ -1,0 +1,15 @@
+
+Provider Name                           Keywords            Level               Enabled By
+Microsoft-DotNETCore-SampleProfiler     0x0000F00000000000  Informational(4)    --profile 
+Microsoft-Windows-DotNETRuntime         0x00000014C14FCCBD  Informational(4)    --profile 
+
+Process        : /usr/lib/dotnet/dotnet
+Output File    : /home/alaricd/prj/pengdows/pengdows.crud/BenchmarkDotNet.Artifacts/trace/InProc_GetFilmById_Mine.speedscope.json
+Trace Duration : 00:00:00:20
+
+
+Stopping the trace. This may take several minutes depending on the application being traced.
+
+Trace completed.
+Processing trace data file '/home/alaricd/prj/pengdows/pengdows.crud/BenchmarkDotNet.Artifacts/trace/InProc_GetFilmById_Mine.speedscope.json' to create a new Speedscope file '/home/alaricd/prj/pengdows/pengdows.crud/BenchmarkDotNet.Artifacts/trace/InProc_GetFilmById_Mine.speedscope.speedscope.json'.
+Conversion complete

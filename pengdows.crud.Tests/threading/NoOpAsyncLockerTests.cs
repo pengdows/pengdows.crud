@@ -40,5 +40,12 @@ namespace pengdows.crud.Tests.threading
             await NoOpAsyncLocker.Instance.DisposeAsync();
             await NoOpAsyncLocker.Instance.LockAsync(cts.Token);
         }
+
+        [Fact]
+        public async Task DisposeAsync_DoesNotMarkDisposed()
+        {
+            await NoOpAsyncLocker.Instance.DisposeAsync();
+            Assert.False(NoOpAsyncLocker.Instance.IsDisposed);
+        }
     }
 }

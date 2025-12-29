@@ -1,6 +1,7 @@
 using System;
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
 using pengdows.crud.fakeDb;
@@ -17,18 +18,20 @@ public sealed class ThrowingConnection : fakeDbConnection
 
         public ThrowingCommand(DbConnection connection) => _connection = connection;
 
-        public override string? CommandText { get; set; }
+        [AllowNull]
+        public override string CommandText { get; set; } = string.Empty;
         public override int CommandTimeout { get; set; }
         public override CommandType CommandType { get; set; }
         public override bool DesignTimeVisible { get; set; }
         public override UpdateRowSource UpdatedRowSource { get; set; }
+        [AllowNull]
         protected override DbConnection DbConnection { get => _connection; set { } }
         protected override DbParameterCollection DbParameterCollection { get; } = new FakeParameterCollection();
         protected override DbTransaction? DbTransaction { get; set; }
 
         public override void Cancel() { }
         public override int ExecuteNonQuery() => throw new InvalidOperationException();
-        public override object? ExecuteScalar() => throw new InvalidOperationException();
+        public override object ExecuteScalar() => throw new InvalidOperationException();
         public override void Prepare() { }
         protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) => throw new InvalidOperationException();
         protected override Task<DbDataReader> ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken) => throw new InvalidOperationException();

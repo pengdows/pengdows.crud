@@ -88,6 +88,9 @@ public class DialectCoverageTests
     [MemberData(nameof(DialectData))]
     public void WrapObjectName_WrapsIdentifier(SqlDialect dialect, string quote, bool supportsNamed, string marker, bool supportsSavepoints)
     {
+        _ = supportsNamed;
+        _ = marker;
+        _ = supportsSavepoints;
         var wrapped = dialect.WrapObjectName("schema.table");
         Assert.Equal($"{quote}schema{quote}.{quote}table{quote}", wrapped);
         Assert.NotEqual("schema.table", wrapped);
@@ -97,7 +100,11 @@ public class DialectCoverageTests
     [MemberData(nameof(DialectData))]
     public void WrapObjectName_Null_ReturnsEmpty(SqlDialect dialect, string quote, bool supportsNamed, string marker, bool supportsSavepoints)
     {
-        var wrapped = dialect.WrapObjectName(null);
+        _ = quote;
+        _ = supportsNamed;
+        _ = marker;
+        _ = supportsSavepoints;
+        var wrapped = dialect.WrapObjectName(null!);
         Assert.Equal(string.Empty, wrapped);
         Assert.NotNull(wrapped);
     }
@@ -105,7 +112,9 @@ public class DialectCoverageTests
     [Theory]
     [MemberData(nameof(DialectData))]
     public void MakeParameterName_UsesMarker(SqlDialect dialect, string quote, bool supportsNamed, string marker, bool supportsSavepoints)
-        {
+    {
+        _ = quote;
+        _ = supportsSavepoints;
         var name = dialect.MakeParameterName("p");
         if (supportsNamed)
         {
@@ -130,6 +139,9 @@ public class DialectCoverageTests
     [MemberData(nameof(DialectData))]
     public void SupportsSavepoints_ReportsCapability(SqlDialect dialect, string quote, bool supportsNamed, string marker, bool supportsSavepoints)
     {
+        _ = quote;
+        _ = supportsNamed;
+        _ = marker;
         Assert.Equal(supportsSavepoints, dialect.SupportsSavepoints);
         if (supportsSavepoints)
         {

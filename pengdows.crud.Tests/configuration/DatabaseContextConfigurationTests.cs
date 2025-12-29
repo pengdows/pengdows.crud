@@ -13,7 +13,7 @@ public class DatabaseContextConfigurationTests
         
         Assert.Equal(string.Empty, config.ConnectionString);
         Assert.Equal(string.Empty, config.ProviderName);
-        Assert.Equal(DbMode.Standard, config.DbMode);
+        Assert.Equal(DbMode.Best, config.DbMode);
         Assert.Equal(ReadWriteMode.ReadWrite, config.ReadWriteMode);
     }
 

@@ -341,7 +341,7 @@ public class CriticalPathCoverageTests
 
         // Heuristic failures should not prevent context creation
         Assert.NotNull(context);
-        Assert.NotNull(context.Product);
+        Assert.NotEqual(SupportedDatabase.Unknown, context.Product);
     }
 
     /// <summary>

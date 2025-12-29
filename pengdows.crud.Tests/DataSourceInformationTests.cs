@@ -175,7 +175,7 @@ public class DataSourceInformationTests
 
         // Assert: named parameters flags
         Assert.True(info.SupportsNamedParameters);
-        Assert.NotEqual(false, info.SupportsNamedParameters);
+        Assert.True(info.SupportsNamedParameters);
         Assert.Equal(expectedRequiresStoredProcParameterNameMatch, info.RequiresStoredProcParameterNameMatch);
 
         // Assert: output parameter limits
@@ -217,7 +217,7 @@ public class DataSourceInformationTests
         var conn = (fakeDbConnection)factory.CreateConnection();
         conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}";
 
-        var row = new Dictionary<string, object> { { "version", "3.0" } };
+        var row = new Dictionary<string, object?> { { "version", "3.0" } };
         // One result for IsSqliteAsync, one for GetVersionAsync, and one for IsSqliteSync
         conn.EnqueueReaderResult(new[] { row });
         conn.EnqueueReaderResult(new[] { row });

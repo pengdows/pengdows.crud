@@ -5,6 +5,7 @@ using System.Data;
 using System.Linq;
 using pengdows.crud.attributes;
 using pengdows.crud.exceptions;
+using pengdows.crud.types.valueobjects;
 using Xunit;
 
 #endregion
@@ -436,7 +437,7 @@ public class TypeMapRegistryTests
         public int Id { get; set; }
 
         [Column("Payload", DbType.String)]
-        public string Payload { get; set; } = string.Empty;
+        public JsonValue Payload { get; set; }
     }
 
     [Table("WhitespaceColumns")]
@@ -458,7 +459,7 @@ public class TypeMapRegistryTests
         public int Id { get; set; }
 
         [Column("Payload", DbType.Binary)]
-        public byte[] Payload { get; set; } = Array.Empty<byte>();
+        public JsonValue Payload { get; set; }
     }
 
     [Table("DuplicateColumns")]

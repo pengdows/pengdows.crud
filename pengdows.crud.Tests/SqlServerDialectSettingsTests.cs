@@ -1,6 +1,8 @@
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
@@ -24,12 +26,14 @@ public class SqlServerDialectSettingsTests
             _reader = reader;
         }
 
-        public override string CommandText { get; set; }
+        [AllowNull]
+        public override string CommandText { get; set; } = string.Empty;
         public override int CommandTimeout { get; set; }
         public override CommandType CommandType { get; set; }
         public override bool DesignTimeVisible { get; set; }
         public override UpdateRowSource UpdatedRowSource { get; set; }
 
+        [AllowNull]
         protected override DbConnection DbConnection
         {
             get => _connection;
@@ -38,11 +42,11 @@ public class SqlServerDialectSettingsTests
 
         protected override DbParameterCollection DbParameterCollection { get; } = new FakeParameterCollection();
 
-        protected override DbTransaction DbTransaction { get; set; }
+        protected override DbTransaction? DbTransaction { get; set; }
 
         public override void Cancel() { }
         public override int ExecuteNonQuery() => 0;
-        public override object ExecuteScalar() => null;
+        public override object ExecuteScalar() => DBNull.Value;
         public override void Prepare() { }
 
         protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) => _reader;

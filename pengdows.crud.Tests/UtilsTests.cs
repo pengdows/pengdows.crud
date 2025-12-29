@@ -100,9 +100,9 @@ public class UtilsTests
     [InlineData("text")]
     [InlineData(null)]
     [InlineData(true)]
-    public void IsZeroNumeric_ReturnsFalse_ForNonZeroOrInvalid(object value)
+    public void IsZeroNumeric_ReturnsFalse_ForNonZeroOrInvalid(object? value)
     {
-        Assert.False(Utils.IsZeroNumeric(value));
+        Assert.False(Utils.IsZeroNumeric(value!));
     }
 
     [Fact]

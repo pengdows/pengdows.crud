@@ -7,7 +7,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Linq;
-using System.Runtime.Serialization;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Moq;
 using pengdows.crud.configuration;
@@ -76,7 +76,7 @@ public class DatabaseContextTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory);
-        var result = context.WrapObjectName(null);
+        var result = context.WrapObjectName(null!);
         Assert.Equal(string.Empty, result);
     }
 
@@ -188,8 +188,12 @@ public class DatabaseContextTests
     public void AssertIsWriteConnection_WhenFalse_Throws(SupportedDatabase product)
     {
         var factory = new fakeDbFactory(product);
-        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory,
-            readWriteMode: ReadWriteMode.ReadOnly);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = $"Data Source=test;EmulatedProduct={product}",
+            ReadWriteMode = ReadWriteMode.ReadOnly
+        };
+        var context = new DatabaseContext(config, factory);
         Assert.Throws<InvalidOperationException>(() => context.AssertIsWriteConnection());
     }
 
@@ -198,8 +202,12 @@ public class DatabaseContextTests
     public void AssertIsReadConnection_WhenFalse_Throws(SupportedDatabase product)
     {
         var factory = new fakeDbFactory(product);
-        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory,
-            readWriteMode: 0);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = $"Data Source=test;EmulatedProduct={product}",
+            ReadWriteMode = 0
+        };
+        var context = new DatabaseContext(config, factory);
         Assert.Throws<InvalidOperationException>(() => context.AssertIsReadConnection());
     }
 
@@ -241,8 +249,12 @@ public class DatabaseContextTests
     {
         var product = SupportedDatabase.SqlServer;
         var factory = new fakeDbFactory(product);
-        var context =
-            new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory, mode: DbMode.Standard);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = $"Data Source=test;EmulatedProduct={product}",
+            DbMode = DbMode.Standard
+        };
+        var context = new DatabaseContext(config, factory);
         Assert.Equal(DbMode.Standard, context.ConnectionMode);
         var conn = context.GetConnection(ExecutionType.Read);
         conn.Open();
@@ -451,7 +463,7 @@ public class DatabaseContextTests
     [Fact]
     public void Product_WithoutDataSourceInfo_ReturnsUnknown()
     {
-        var context = (DatabaseContext)FormatterServices.GetUninitializedObject(typeof(DatabaseContext));
+        var context = (DatabaseContext)RuntimeHelpers.GetUninitializedObject(typeof(DatabaseContext));
 
         Assert.Equal(SupportedDatabase.Unknown, context.Product);
 
@@ -473,7 +485,7 @@ public class DatabaseContextTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=PostgreSql", factory);
-        Assert.Equal(context.DataSourceInfo.ParameterMarker, context.MakeParameterName((string)null));
+        Assert.Equal(context.DataSourceInfo.ParameterMarker, context.MakeParameterName((string)null!));
     }
 
     [Fact]

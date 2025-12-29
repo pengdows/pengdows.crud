@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
 using pengdows.crud.connection;
@@ -21,8 +22,14 @@ public class TrackedReaderTests
     {
         public int CloseCallCount { get; private set; }
         public bool WasClosed => CloseCallCount > 0;
-        
-        public string ConnectionString { get; set; } = "test";
+
+        private string _connectionString = "test";
+        [AllowNull]
+        public string ConnectionString
+        {
+            get => _connectionString;
+            set => _connectionString = value ?? string.Empty;
+        }
         public int ConnectionTimeout => 30;
         public string Database => "testdb";
         public string DataSource => "localhost";

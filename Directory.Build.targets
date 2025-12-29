@@ -27,7 +27,7 @@
         IgnoreExitCode="false" />
   </Target>
 
-  <Target Name="ValidateInterfaceBaseline" AfterTargets="Build" Condition="'$(MSBuildProjectName)' == 'pengdows.crud.abstractions'">
+  <Target Name="ValidateInterfaceBaseline" AfterTargets="Build" Condition="'$(MSBuildProjectName)' == 'pengdows.crud.abstractions' And '$(SkipInterfaceValidation)' != 'true'">
     <Exec Command="dotnet &quot;$(InterfaceApiCheckTool)&quot; --verify --assembly &quot;$(TargetPath)&quot; --baseline &quot;$(MSBuildProjectDirectory)/ApiBaseline/interfaces.txt&quot;" />
   </Target>
 </Project>

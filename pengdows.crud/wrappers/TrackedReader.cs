@@ -41,9 +41,10 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
     protected override void DisposeManaged()
     {
         RecordMetricsOnce();
-        _command?.Dispose();
-        _reader.Dispose();
+        // DisposeCommand() handles command disposal (clears params, nulls connection, disposes)
+        // Do NOT call _command?.Dispose() directly here - it would double-dispose
         DisposeCommand();
+        _reader.Dispose();
         if (_shouldCloseConnection)
         {
             _connection.Close();

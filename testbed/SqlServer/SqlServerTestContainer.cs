@@ -69,7 +69,7 @@ public class SqlServerTestContainer : TestContainer
         }
 
         return Task.FromResult<IDatabaseContext>(
-            new DatabaseContext(_connectionString, SqlClientFactory.Instance, null!));
+            new DatabaseContext(_connectionString, SqlClientFactory.Instance, new TypeMapRegistry()));
     }
 
     protected override ValueTask DisposeAsyncCore()

@@ -133,7 +133,7 @@ public class TestProvider : IAsyncTestProvider
             // Table did not exist, ignore
         }
 
-        sqlContainer.Query.Clear();
+        sqlContainer.Clear();
         var dateType = GetDateTimeType(databaseContext.Product);
         var boolType = GetBooleanType(databaseContext.Product);
         sqlContainer.Query.Append($@"
@@ -233,16 +233,16 @@ CREATE TABLE {qp}test_table{qs} (
                     "CREATE OR ALTER PROCEDURE dbo.ReturnFive AS BEGIN RETURN 5 END");
                 await sc.ExecuteNonQueryAsync();
 
-                sc.Query.Clear();
+                sc.Clear();
                 sc.Query.Append("dbo.ReturnFive");
                 var wrapped = sc.WrapForStoredProc(ExecutionType.Read, captureReturn: true);
-                sc.Query.Clear();
+                sc.Clear();
                 sc.Query.Append(wrapped);
                 var value = await sc.ExecuteScalarAsync<int>();
                 if (value != 5)
                     throw new Exception($"Expected return value 5 but got {value}");
 
-                sc.Query.Clear();
+                sc.Clear();
                 sc.Query.Append("DROP PROCEDURE dbo.ReturnFive");
                 await sc.ExecuteNonQueryAsync();
                 break;

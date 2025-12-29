@@ -104,7 +104,7 @@ public class ConnectionBreakingExamples
     }
 
     [Fact]
-    public async Task Example_CommandExecutionFailures()
+    public void Example_CommandExecutionFailures()
     {
         // Connection works, but commands fail to execute
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);

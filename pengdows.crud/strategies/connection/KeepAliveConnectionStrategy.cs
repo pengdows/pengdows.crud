@@ -107,7 +107,7 @@ public class KeepAliveConnectionStrategy : StandardConnectionStrategy
 
     public override (ISqlDialect? dialect, IDataSourceInformation? dataSourceInfo) HandleDialectDetection(
         ITrackedConnection? initConnection,
-        DbProviderFactory factory,
+        DbProviderFactory? factory,
         ILoggerFactory loggerFactory)
     {
         var detectionTarget = initConnection ?? _context.PersistentConnection;
@@ -126,9 +126,14 @@ public class KeepAliveConnectionStrategy : StandardConnectionStrategy
                 detectionTarget.Open();
             }
 
-            var dialect = SqlDialectFactory.CreateDialect(detectionTarget, factory, loggerFactory);
-            var dataSourceInfo = new DataSourceInformation(dialect);
-            return (dialect, dataSourceInfo);
+            if (factory != null)
+            {
+                var dialect = SqlDialectFactory.CreateDialect(detectionTarget, factory, loggerFactory);
+                var dataSourceInfo = new DataSourceInformation(dialect);
+                return (dialect, dataSourceInfo);
+            }
+
+            return (null, null);
         }
         catch
         {

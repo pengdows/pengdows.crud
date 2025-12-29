@@ -31,6 +31,12 @@ public class DuckDbDialect : SqlDialect
     // DuckDB has excellent SQL standard compliance and modern features
     public override bool SupportsMerge => IsVersionAtLeast(1, 4); // MERGE support added in v1.4.0
     public override bool SupportsMergeReturning => IsVersionAtLeast(1, 4); // MERGE RETURNING support added in v1.4.0
+
+    // DuckDB MERGE does NOT allow table alias on left side of UPDATE SET
+    // Correct: UPDATE SET col = value
+    // Error:   UPDATE SET t.col = value  -- "SET columns cannot be qualified"
+    public override bool MergeUpdateRequiresTargetAlias => false;
+
     public override bool SupportsInsertOnConflict => true; // ON CONFLICT support
     public override bool SupportsJsonTypes => true; // Excellent JSON support
     public override bool SupportsArrayTypes => true; // Strong array support

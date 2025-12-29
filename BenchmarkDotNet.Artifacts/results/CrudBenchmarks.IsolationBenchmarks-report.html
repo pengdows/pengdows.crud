@@ -2,7 +2,7 @@
 <html lang='en'>
 <head>
 <meta charset='utf-8' />
-<title>CrudBenchmarks.IsolationBenchmarks-20250909-155300</title>
+<title>CrudBenchmarks.IsolationBenchmarks-20251222-161113</title>
 
 <style type="text/css">
 	table { border-collapse: collapse; display: block; width: 100%; overflow: auto; }
@@ -14,23 +14,27 @@
 <body>
 <pre><code>
 BenchmarkDotNet v0.14.0, Ubuntu 24.04.3 LTS (Noble Numbat)
-AMD Ryzen 9 5950X, 2 CPU, 8 logical and 8 physical cores
-.NET SDK 8.0.119
-  [Host]     : .NET 8.0.19 (8.0.1925.36514), X64 RyuJIT AVX2
-  Job-WMMJVD : .NET 8.0.19 (8.0.1925.36514), X64 RyuJIT AVX2
-  Dry        : .NET 8.0.19 (8.0.1925.36514), X64 RyuJIT AVX2
+AMD Ryzen 9 5950X, 1 CPU, 8 logical and 8 physical cores
+.NET SDK 8.0.122
+  [Host]     : .NET 8.0.22 (8.0.2225.52707), X64 RyuJIT AVX2
+  Job-LXTBWT : .NET 8.0.22 (8.0.2225.52707), X64 RyuJIT AVX2
 </code></pre>
-<pre><code></code></pre>
+<pre><code>IterationCount=10  WarmupCount=3  
+</code></pre>
 
 <table>
-<thead><tr><th>Method                     </th><th>Job </th><th>IterationCount</th><th>LaunchCount</th><th>RunStrategy</th><th>UnrollFactor</th><th>WarmupCount</th><th>Mean</th><th>Error</th><th>Ratio</th><th>RatioSD</th><th>Alloc Ratio</th>
+<thead><tr><th>Method                     </th><th>Mean   </th><th>Error</th><th>StdDev</th><th>Ratio</th><th>RatioSD</th><th>Gen0</th><th>Gen1</th><th>Allocated</th><th>Alloc Ratio</th>
 </tr>
-</thead><tbody><tr><td>SqlGeneration_Mine_BuildContainer</td><td>Job-WMMJVD</td><td>10</td><td>Default</td><td>Default</td><td>16</td><td>3</td><td>NA</td><td>NA</td><td>?</td><td>?</td><td>?</td>
-</tr><tr><td>SqlGeneration_Mine_GetSql</td><td>Job-WMMJVD</td><td>10</td><td>Default</td><td>Default</td><td>16</td><td>3</td><td>NA</td><td>NA</td><td>?</td><td>?</td><td>?</td>
-</tr><tr><td>SqlGeneration_Static</td><td>Job-WMMJVD</td><td>10</td><td>Default</td><td>Default</td><td>16</td><td>3</td><td>NA</td><td>NA</td><td>?</td><td>?</td><td>?</td>
-</tr><tr><td>SqlGeneration_Mine_BuildContainer</td><td>Dry</td><td>1</td><td>1</td><td>ColdStart</td><td>1</td><td>1</td><td>NA</td><td>NA</td><td>?</td><td>?</td><td>?</td>
-</tr><tr><td>SqlGeneration_Mine_GetSql</td><td>Dry</td><td>1</td><td>1</td><td>ColdStart</td><td>1</td><td>1</td><td>NA</td><td>NA</td><td>?</td><td>?</td><td>?</td>
-</tr><tr><td>SqlGeneration_Static</td><td>Dry</td><td>1</td><td>1</td><td>ColdStart</td><td>1</td><td>1</td><td>NA</td><td>NA</td><td>?</td><td>?</td><td>?</td>
+</thead><tbody><tr><td>SqlGeneration_Mine_BuildContainer</td><td>581.4681 ns</td><td>18.9146 ns</td><td>12.5109 ns</td><td>1.000</td><td>0.03</td><td>0.1402</td><td>-</td><td>2352 B</td><td>1.00</td>
+</tr><tr><td>SqlGeneration_Mine_GetSql</td><td>605.2598 ns</td><td>26.0960 ns</td><td>17.2609 ns</td><td>1.041</td><td>0.04</td><td>0.1507</td><td>-</td><td>2536 B</td><td>1.08</td>
+</tr><tr><td>SqlGeneration_Static</td><td>0.2388 ns</td><td>0.0171 ns</td><td>0.0090 ns</td><td>0.000</td><td>0.00</td><td>-</td><td>-</td><td>-</td><td>0.00</td>
+</tr><tr><td>ObjectLoading_Mine</td><td>6,245.9692 ns</td><td>587.1492 ns</td><td>388.3629 ns</td><td>10.746</td><td>0.67</td><td>0.3662</td><td>0.3586</td><td>6248 B</td><td>2.66</td>
+</tr><tr><td>ObjectLoading_Mine_DirectReader</td><td>2,505.4273 ns</td><td>35.2786 ns</td><td>23.3346 ns</td><td>4.311</td><td>0.10</td><td>0.2708</td><td>-</td><td>4536 B</td><td>1.93</td>
+</tr><tr><td>ObjectLoading_Dapper</td><td>2,503.6594 ns</td><td>51.1193 ns</td><td>33.8123 ns</td><td>4.308</td><td>0.10</td><td>0.2708</td><td>-</td><td>4536 B</td><td>1.93</td>
+</tr><tr><td>ParameterCreation_Mine</td><td>86.7233 ns</td><td>0.7631 ns</td><td>0.4541 ns</td><td>0.149</td><td>0.00</td><td>0.0076</td><td>-</td><td>128 B</td><td>0.05</td>
+</tr><tr><td>ParameterCreation_Dapper</td><td>4.4286 ns</td><td>0.2250 ns</td><td>0.1488 ns</td><td>0.008</td><td>0.00</td><td>0.0014</td><td>-</td><td>24 B</td><td>0.01</td>
+</tr><tr><td>ConnectionOverhead_Mine</td><td>2,352.2975 ns</td><td>64.5227 ns</td><td>42.6777 ns</td><td>4.047</td><td>0.11</td><td>0.2441</td><td>-</td><td>4128 B</td><td>1.76</td>
+</tr><tr><td>ConnectionOverhead_Direct</td><td>2,330.1180 ns</td><td>38.3838 ns</td><td>25.3885 ns</td><td>4.009</td><td>0.09</td><td>0.2441</td><td>-</td><td>4128 B</td><td>1.76</td>
 </tr></tbody></table>
 </body>
 </html>

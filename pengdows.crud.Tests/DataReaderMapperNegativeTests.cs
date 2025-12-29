@@ -123,7 +123,7 @@ public class DataReaderMapperNegativeTests
         public string GetName(int i) => string.Empty;
         public string GetDataTypeName(int i) => string.Empty;
         public Type GetFieldType(int i) => typeof(object);
-        public object? GetValue(int i) => null;
+        public object GetValue(int i) => DBNull.Value;
         public int GetValues(object[] values) => 0;
         public int GetOrdinal(string name) => -1;
         public bool GetBoolean(int i) => false;
@@ -143,7 +143,7 @@ public class DataReaderMapperNegativeTests
         public IDataReader GetData(int i) => this;
         public bool IsDBNull(int i) => true;
 
-        public object? this[int i] => null;
-        public object? this[string name] => null;
+        public object this[int i] => DBNull.Value;
+        public object this[string name] => DBNull.Value;
     }
 }

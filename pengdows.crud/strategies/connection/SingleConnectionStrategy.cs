@@ -95,14 +95,14 @@ internal class SingleConnectionStrategy : SafeAsyncDisposableBase, IConnectionSt
 
     public (ISqlDialect? dialect, IDataSourceInformation? dataSourceInfo) HandleDialectDetection(
         ITrackedConnection? initConnection,
-        DbProviderFactory factory,
+        DbProviderFactory? factory,
         ILoggerFactory loggerFactory)
     {
         // SingleConnection strategy: use the persistent connection for detection
         // The initConnection becomes the single persistent connection, so reuse it
         var connectionForDetection = _context.PersistentConnection ?? initConnection;
 
-        if (connectionForDetection != null)
+        if (connectionForDetection != null && factory != null)
         {
             var dialect = SqlDialectFactory.CreateDialect(connectionForDetection, factory, loggerFactory);
             var dataSourceInfo = new DataSourceInformation(dialect);

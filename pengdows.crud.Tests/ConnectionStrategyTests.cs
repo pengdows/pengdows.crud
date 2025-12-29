@@ -184,6 +184,52 @@ public class ConnectionStrategyTests
     }
 
     [Fact]
+    public void SingleConnection_ReadOnlyMode_ReturnsPersistentForReads()
+    {
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:;EmulatedProduct=Sqlite",
+            DbMode = DbMode.SingleConnection,
+            ReadWriteMode = ReadWriteMode.ReadOnly
+        };
+        using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Sqlite));
+        Assert.Equal(DbMode.SingleConnection, ctx.ConnectionMode);
+        Assert.NotNull(ctx.PersistentConnection);
+
+        var read1 = ctx.GetConnection(ExecutionType.Read);
+        var read2 = ctx.GetConnection(ExecutionType.Read, isShared: true);
+
+        Assert.Same(ctx.PersistentConnection, read1);
+        Assert.Same(read1, read2);
+
+        ctx.CloseAndDisposeConnection(read1);
+        Assert.True(ctx.NumberOfOpenConnections >= 1);
+    }
+
+    [Fact]
+    public void StandardRequested_IsolatedInMemory_CoercesToSingleConnection_ForReads()
+    {
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:;EmulatedProduct=Sqlite",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+        using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Sqlite));
+
+        Assert.Equal(DbMode.SingleConnection, ctx.ConnectionMode);
+        Assert.NotNull(ctx.PersistentConnection);
+
+        var read = ctx.GetConnection(ExecutionType.Read);
+        var readShared = ctx.GetConnection(ExecutionType.Read, isShared: true);
+        var write = ctx.GetConnection(ExecutionType.Write);
+
+        Assert.Same(ctx.PersistentConnection, read);
+        Assert.Same(read, readShared);
+        Assert.Same(read, write);
+    }
+
+    [Fact]
     public async Task SingleWriter_ReadGetsNew_WriteGetsPersistent()
     {
         await using var ctx = CreateContext(DbMode.SingleWriter, SupportedDatabase.Sqlite, "file.db");

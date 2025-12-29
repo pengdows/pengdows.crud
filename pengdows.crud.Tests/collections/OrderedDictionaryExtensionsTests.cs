@@ -166,7 +166,7 @@ public class OrderedDictionaryExtensionsTests
 
         Assert.True(result);
         Assert.Equal("value1", value);
-        Assert.Equal(0, dict.Count);
+        Assert.Empty(dict);
     }
 
     [Fact]
@@ -191,7 +191,7 @@ public class OrderedDictionaryExtensionsTests
 
         dict.AddDbParameter(param);
 
-        Assert.Equal(1, dict.Count);
+        Assert.Single(dict);
         Assert.True(dict.ContainsKey("param1"));
         Assert.Equal(param, dict["param1"]);
     }
@@ -233,7 +233,7 @@ public class OrderedDictionaryExtensionsTests
 
         dict.AddDbParameter(null!);
 
-        Assert.Equal(0, dict.Count);
+        Assert.Empty(dict);
     }
 
     [Fact]
@@ -275,7 +275,7 @@ public class OrderedDictionaryExtensionsTests
         dict.AddDbParameter(param1);
         dict.AddDbParameter(param2);
 
-        Assert.Equal(1, dict.Count);
+        Assert.Single(dict);
         Assert.Equal(param2, dict["param1"]);
         Assert.Equal("updated", dict["param1"].Value);
     }
@@ -375,9 +375,9 @@ public class OrderedDictionaryExtensionsTests
         var parameters = paramDict.GetParametersInOrder().ToArray();
 
         Assert.True(parameters.Length >= 4);
-        Assert.Contains(parameters, p => p.ParameterName == "@Name" && p.Value.Equals("Integration Test"));
-        Assert.Contains(parameters, p => p.ParameterName == "@Age" && p.Value.Equals(25));
-        Assert.Contains(parameters, p => p.ParameterName == "@IsActive" && p.Value.Equals(true));
+        Assert.Contains(parameters, p => p.ParameterName == "@Name" && Equals(p.Value, "Integration Test"));
+        Assert.Contains(parameters, p => p.ParameterName == "@Age" && Equals(p.Value, 25));
+        Assert.Contains(parameters, p => p.ParameterName == "@IsActive" && Equals(p.Value, true));
     }
 
     [Fact]
@@ -400,7 +400,7 @@ public class OrderedDictionaryExtensionsTests
 
         var dict = OrderedDictionaryExtensions.FromObject(obj);
 
-        Assert.Equal(0, dict.Count);
+        Assert.Empty(dict);
     }
 
     [Fact]
@@ -522,6 +522,6 @@ public class OrderedDictionaryExtensionsTests
 
         Assert.True(result);
         Assert.Equal(param, removedParam);
-        Assert.Equal(0, dict.Count);
+        Assert.Empty(dict);
     }
 }

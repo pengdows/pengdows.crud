@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Data.Common;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -21,7 +22,7 @@ public class TenantTests
     }
 
     [Fact]
-    public void TenantContextRegistry_ResolvesContextFromKeyedFactory()
+    public async Task TenantContextRegistry_ResolvesContextFromKeyedFactory()
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -38,12 +39,12 @@ public class TenantTests
 
         using var ctx = registry.GetContext("tenant1");
         using var sc = ctx.CreateSqlContainer("SELECT 1");
-        var affected = sc.ExecuteNonQueryAsync().GetAwaiter().GetResult();
+        var affected = await sc.ExecuteNonQueryAsync();
         Assert.Equal(1, affected); // fake provider default non-query result
     }
 
     [Fact]
-    public void TenantServiceCollectionExtensions_RegistersResolverAndRegistry()
+    public async Task TenantServiceCollectionExtensions_RegistersResolverAndRegistry()
     {
         var dict = new Dictionary<string, string?>
         {
@@ -66,7 +67,7 @@ public class TenantTests
         var registry = sp.GetRequiredService<ITenantContextRegistry>();
         using var ctx = registry.GetContext("tenant-di-a");
         using var sc = ctx.CreateSqlContainer("SELECT 1");
-        var affected = sc.ExecuteNonQueryAsync().GetAwaiter().GetResult();
+        var affected = await sc.ExecuteNonQueryAsync();
         Assert.Equal(1, affected);
     }
 }

@@ -29,7 +29,8 @@ public class TestTableCreator
         };
 
         using var container = _context.CreateSqlContainer(sql);
-        await container.ExecuteNonQueryAsync();
+        var result = await container.ExecuteNonQueryAsync();
+        Console.WriteLine($"[TestTableCreator] Created {_context.Product} table, result={result}, DbMode={((DatabaseContext)_context).ConnectionMode}");
     }
 
     public async Task CreateAccountTableAsync()
@@ -83,60 +84,56 @@ public class TestTableCreator
     }
 
     private string CreateSqliteTableSql() => @"
-        CREATE TABLE IF NOT EXISTS TestTable (
-            Id INTEGER PRIMARY KEY AUTOINCREMENT,
-            Name TEXT NOT NULL,
-            Value INTEGER NOT NULL,
-            Description TEXT,
-            IsActive INTEGER NOT NULL DEFAULT 1,
-            CreatedOn TEXT NOT NULL,
-            CreatedBy TEXT,
-            LastUpdatedOn TEXT,
-            LastUpdatedBy TEXT,
-            Version INTEGER NOT NULL DEFAULT 1
+        CREATE TABLE IF NOT EXISTS test_table (
+            id BIGINT PRIMARY KEY,
+            name TEXT NOT NULL,
+            value INTEGER NOT NULL,
+            description TEXT,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            created_by TEXT,
+            updated_at TEXT,
+            updated_by TEXT
         )";
 
     private string CreatePostgreSqlTableSql() => @"
-        CREATE TABLE IF NOT EXISTS TestTable (
-            Id BIGSERIAL PRIMARY KEY,
-            Name VARCHAR(255) NOT NULL,
-            Value INTEGER NOT NULL,
-            Description TEXT,
-            IsActive BOOLEAN NOT NULL DEFAULT TRUE,
-            CreatedOn TIMESTAMP NOT NULL DEFAULT NOW(),
-            CreatedBy VARCHAR(100),
-            LastUpdatedOn TIMESTAMP,
-            LastUpdatedBy VARCHAR(100),
-            Version INTEGER NOT NULL DEFAULT 1
+        CREATE TABLE IF NOT EXISTS test_table (
+            id BIGINT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            value INTEGER NOT NULL,
+            description TEXT,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            created_by VARCHAR(100),
+            updated_at TIMESTAMP,
+            updated_by VARCHAR(100)
         )";
 
     private string CreateSqlServerTableSql() => @"
-        IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[TestTable]') AND type in (N'U'))
-        CREATE TABLE [dbo].[TestTable] (
-            [Id] BIGINT IDENTITY(1,1) PRIMARY KEY,
-            [Name] NVARCHAR(255) NOT NULL,
-            [Value] INT NOT NULL,
-            [Description] NVARCHAR(MAX),
-            [IsActive] BIT NOT NULL DEFAULT 1,
-            [CreatedOn] DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
-            [CreatedBy] NVARCHAR(100),
-            [LastUpdatedOn] DATETIME2,
-            [LastUpdatedBy] NVARCHAR(100),
-            [Version] INT NOT NULL DEFAULT 1
+        IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[test_table]') AND type in (N'U'))
+        CREATE TABLE [dbo].[test_table] (
+            [id] BIGINT PRIMARY KEY,
+            [name] NVARCHAR(255) NOT NULL,
+            [value] INT NOT NULL,
+            [description] NVARCHAR(MAX),
+            [is_active] BIT NOT NULL DEFAULT 1,
+            [created_at] DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+            [created_by] NVARCHAR(100),
+            [updated_at] DATETIME2,
+            [updated_by] NVARCHAR(100)
         )";
 
     private string CreateMySqlTableSql() => @"
-        CREATE TABLE IF NOT EXISTS TestTable (
-            Id BIGINT AUTO_INCREMENT PRIMARY KEY,
-            Name VARCHAR(255) NOT NULL,
-            Value INT NOT NULL,
-            Description TEXT,
-            IsActive BOOLEAN NOT NULL DEFAULT TRUE,
-            CreatedOn TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            CreatedBy VARCHAR(100),
-            LastUpdatedOn TIMESTAMP NULL,
-            LastUpdatedBy VARCHAR(100),
-            Version INT NOT NULL DEFAULT 1
+        CREATE TABLE IF NOT EXISTS test_table (
+            id BIGINT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            value INT NOT NULL,
+            description TEXT,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            created_by VARCHAR(100),
+            updated_at TIMESTAMP NULL,
+            updated_by VARCHAR(100)
         )";
 
     private string CreateMariaDbTableSql() => CreateMySqlTableSql(); // Same as MySQL
@@ -145,20 +142,19 @@ public class TestTableCreator
         DECLARE
             table_exists NUMBER;
         BEGIN
-            SELECT COUNT(*) INTO table_exists FROM user_tables WHERE table_name = 'TESTTABLE';
+            SELECT COUNT(*) INTO table_exists FROM user_tables WHERE table_name = 'TEST_TABLE';
             IF table_exists = 0 THEN
                 EXECUTE IMMEDIATE '
-                    CREATE TABLE TestTable (
-                        Id NUMBER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
-                        Name VARCHAR2(255) NOT NULL,
-                        Value NUMBER NOT NULL,
-                        Description CLOB,
-                        IsActive NUMBER(1) DEFAULT 1 NOT NULL,
-                        CreatedOn TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-                        CreatedBy VARCHAR2(100),
-                        LastUpdatedOn TIMESTAMP,
-                        LastUpdatedBy VARCHAR2(100),
-                        Version NUMBER DEFAULT 1 NOT NULL
+                    CREATE TABLE test_table (
+                        id NUMBER PRIMARY KEY,
+                        name VARCHAR2(255) NOT NULL,
+                        value NUMBER NOT NULL,
+                        description CLOB,
+                        is_active NUMBER(1) DEFAULT 1 NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                        created_by VARCHAR2(100),
+                        updated_at TIMESTAMP,
+                        updated_by VARCHAR2(100)
                     )';
             END IF;
         END;";

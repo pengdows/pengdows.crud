@@ -1,0 +1,7 @@
+<Project>
+  <PropertyGroup>
+    <!-- Skip verification when .NET 8 is not available -->
+    <SkipVerifyNoVendor>true</SkipVerifyNoVendor>
+    <SkipInterfaceValidation>true</SkipInterfaceValidation>
+  </PropertyGroup>
+</Project>

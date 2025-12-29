@@ -19,6 +19,6 @@ public class PostgreSqlDialectInheritanceTests
     public void PostgreSqlDialect_Does_Not_Inherit_From_Sql92Dialect()
     {
         var dialect = new PostgreSqlDialect(new fakeDbFactory(SupportedDatabase.PostgreSql), NullLogger<PostgreSqlDialect>.Instance);
-        Assert.False(dialect is Sql92Dialect);
+        Assert.False(typeof(Sql92Dialect).IsAssignableFrom(dialect.GetType()));
     }
 }

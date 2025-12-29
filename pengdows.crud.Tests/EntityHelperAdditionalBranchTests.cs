@@ -48,7 +48,7 @@ public class EntityHelperAdditionalBranchTests : SqlLiteContextTestBase
     }
 
     [Fact]
-    public async Task BuildUpdateAsync_LoadOriginal_IdConversionFail_Throws()
+    public void BuildUpdateAsync_LoadOriginal_IdConversionFail_Throws()
     {
         var ex = Assert.Throws<TypeInitializationException>(() => new EntityHelper<BranchEntity, DateTime>(Context, AuditValueResolver));
         Assert.NotNull(ex.InnerException);
@@ -68,4 +68,3 @@ public class EntityHelperAdditionalBranchTests : SqlLiteContextTestBase
         Assert.Contains("Original record not found", ex.Message);
     }
 }
-

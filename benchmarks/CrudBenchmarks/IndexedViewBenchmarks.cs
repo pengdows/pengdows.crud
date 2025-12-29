@@ -187,8 +187,7 @@ public class IndexedViewBenchmarks : IAsyncDisposable
                 COUNT_BIG(*) as order_count,
                 SUM(total_amount) as total_amount,
                 SUM(total_amount) as sum_order_amount,
-                COUNT_BIG(*) as count_for_avg,
-                MAX(order_date) as last_order_date
+                COUNT_BIG(*) as count_for_avg
             FROM dbo.Orders
             WHERE status = 'Active'
             GROUP BY customer_id;");
@@ -257,11 +256,17 @@ public class IndexedViewBenchmarks : IAsyncDisposable
 
         // Check if indexed view will be used (requires ARITHABORT ON)
         await conn.ExecuteAsync("SET ARITHABORT ON");
-        var plan = await conn.QuerySingleOrDefaultAsync<string>(@"
-            SET SHOWPLAN_TEXT ON;
-            SELECT customer_id, order_count FROM dbo.vw_CustomerOrderSummary WHERE customer_id = 1;
-            SET SHOWPLAN_TEXT OFF;
-        ");
+        string? plan = null;
+        try
+        {
+            await conn.ExecuteAsync("SET SHOWPLAN_TEXT ON");
+            plan = await conn.QuerySingleOrDefaultAsync<string>(
+                "SELECT customer_id, order_count FROM dbo.vw_CustomerOrderSummary WHERE customer_id = 1");
+        }
+        finally
+        {
+            await conn.ExecuteAsync("SET SHOWPLAN_TEXT OFF");
+        }
 
         if (plan?.Contains("vw_CustomerOrderSummary") == true)
         {
@@ -309,8 +314,7 @@ public class IndexedViewBenchmarks : IAsyncDisposable
                 CustomerId = g.Key,
                 OrderCount = g.Count(),
                 TotalAmount = g.Sum(o => o.TotalAmount),
-                AvgOrderAmount = g.Average(o => o.TotalAmount),
-                LastOrderDate = g.Max(o => o.OrderDate)
+                AvgOrderAmount = g.Average(o => o.TotalAmount)
             })
             .FirstOrDefaultAsync();
     }
@@ -347,8 +351,8 @@ public class IndexedViewBenchmarks : IAsyncDisposable
         return await _directSqlConnection.QuerySingleOrDefaultAsync<CustomerOrderSummary>(@"
             SET ARITHABORT ON;
             SELECT customer_id as CustomerId, order_count as OrderCount,
-                   total_amount as TotalAmount, avg_order_amount as AvgOrderAmount,
-                   last_order_date as LastOrderDate
+                   total_amount as TotalAmount, sum_order_amount as SumOrderAmount,
+                   count_for_avg as CountForAvg
             FROM dbo.vw_CustomerOrderSummary
             WHERE customer_id = @customerId",
             new { customerId = _testCustomerId });
@@ -385,9 +389,6 @@ public class IndexedViewBenchmarks : IAsyncDisposable
 
         [pengdows.crud.attributes.Column("count_for_avg", DbType.Int64)]
         public long CountForAvg { get; set; }
-
-        [pengdows.crud.attributes.Column("last_order_date", DbType.DateTime2)]
-        public DateTime LastOrderDate { get; set; }
 
         // Computed property for average
         public decimal AvgOrderAmount => CountForAvg > 0 ? SumOrderAmount / CountForAvg : 0;

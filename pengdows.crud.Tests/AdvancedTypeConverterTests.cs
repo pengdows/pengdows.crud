@@ -296,7 +296,7 @@ public class AdvancedTypeConverterTests
         var success = converter.TryConvertFromProvider(timeSpan, SupportedDatabase.PostgreSql, out var result);
 
         Assert.True(success);
-        Assert.NotNull(result);
+        Assert.NotEqual(default, result);
     }
 
     [Fact]

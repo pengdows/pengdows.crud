@@ -12,12 +12,12 @@ namespace pengdows.crud.Tests;
 
 public class WriteProcWithReturnTests
 {
-    private DatabaseContext _dbContext;
+    private DatabaseContext _dbContext = null!;
 
     private SqlContainer SetupContainer(SupportedDatabase product)
     {
         _dbContext = new DatabaseContext($"DataSource=:memory:;EmulatedProduct={product}", new fakeDbFactory(product));
-        var sc = _dbContext.CreateSqlContainer("dbo.Sqltest") as SqlContainer;
+        var sc = (SqlContainer)_dbContext.CreateSqlContainer("dbo.Sqltest");
         for (var i = 0; i < 2; i++)
         {
             sc.AddParameterWithValue($"p{i}", DbType.Int32, i);

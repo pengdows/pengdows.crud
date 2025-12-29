@@ -1,6 +1,7 @@
 using System;
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Text.Json;
 using pengdows.crud.enums;
@@ -222,14 +223,28 @@ public class AdvancedTypeRegistryTests
     // Mock parameter class for testing
     private class TestDbParameter : DbParameter
     {
+        private string _parameterName = string.Empty;
+        private string _sourceColumn = string.Empty;
+
         public override DbType DbType { get; set; }
         public override ParameterDirection Direction { get; set; }
         public override bool IsNullable { get; set; }
-        public override string ParameterName { get; set; } = string.Empty;
+        [AllowNull]
+        public override string ParameterName
+        {
+            get => _parameterName;
+            set => _parameterName = value ?? string.Empty;
+        }
         public override int Size { get; set; }
-        public override string SourceColumn { get; set; } = string.Empty;
+        [AllowNull]
+        public override string SourceColumn
+        {
+            get => _sourceColumn;
+            set => _sourceColumn = value ?? string.Empty;
+        }
         public override bool SourceColumnNullMapping { get; set; }
-        public override object? Value { get; set; }
+        [AllowNull]
+        public override object Value { get; set; } = DBNull.Value;
 
         public override void ResetDbType()
         {

@@ -96,14 +96,14 @@ internal class SingleWriterConnectionStrategy : SafeAsyncDisposableBase, IConnec
 
     public (ISqlDialect? dialect, IDataSourceInformation? dataSourceInfo) HandleDialectDetection(
         ITrackedConnection? initConnection,
-        DbProviderFactory factory,
+        DbProviderFactory? factory,
         ILoggerFactory loggerFactory)
     {
         // SingleWriter strategy: use the persistent connection for detection
         // The initConnection becomes the persistent connection, so reuse it for dialect detection
         var connectionForDetection = _context.PersistentConnection ?? initConnection;
 
-        if (connectionForDetection != null)
+        if (connectionForDetection != null && factory != null)
         {
             var dialect = SqlDialectFactory.CreateDialect(connectionForDetection, factory, loggerFactory);
             var dataSourceInfo = new DataSourceInformation(dialect);

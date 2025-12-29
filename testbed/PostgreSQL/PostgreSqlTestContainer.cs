@@ -46,7 +46,7 @@ public class PostgreSqlTestContainer : TestContainer
         }
 
         return Task.FromResult<IDatabaseContext>(
-            new DatabaseContext(_connectionString, NpgsqlFactory.Instance, null!));
+            new DatabaseContext(_connectionString, NpgsqlFactory.Instance, new TypeMapRegistry()));
     }
 
     protected override ValueTask DisposeAsyncCore()

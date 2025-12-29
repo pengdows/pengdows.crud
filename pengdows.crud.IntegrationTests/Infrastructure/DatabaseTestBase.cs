@@ -30,31 +30,46 @@ public abstract class DatabaseTestBase : IAsyncLifetime
 
     public virtual async Task InitializeAsync()
     {
+        var totalStart = DateTime.UtcNow;
+        Output.WriteLine($"[{totalStart:HH:mm:ss.fff}] Starting test initialization...");
+
         await Host.StartAsync();
+        Output.WriteLine($"[{DateTime.UtcNow:HH:mm:ss.fff}] Host started (took {(DateTime.UtcNow - totalStart).TotalMilliseconds:F0}ms)");
 
         var providers = GetSupportedProviders();
         var orchestrator = new ParallelTestOrchestrator(Host.Services, ShouldIncludeOracle());
+        Output.WriteLine($"[{DateTime.UtcNow:HH:mm:ss.fff}] Testing against {providers.Count()} providers: {string.Join(", ", providers)}");
 
         foreach (var provider in providers)
         {
             try
             {
-                Output.WriteLine($"Initializing {provider} test environment...");
+                var providerStart = DateTime.UtcNow;
+                Output.WriteLine($"[{providerStart:HH:mm:ss.fff}] Initializing {provider} test environment...");
 
                 var container = await orchestrator.CreateContainerAsync(provider);
+                Output.WriteLine($"[{DateTime.UtcNow:HH:mm:ss.fff}] {provider} container created (took {(DateTime.UtcNow - providerStart).TotalMilliseconds:F0}ms)");
+
                 if (container != null)
                 {
                     TestContainers[provider] = container;
+
+                    var contextStart = DateTime.UtcNow;
                     var context = await container.GetDatabaseContextAsync(Host.Services);
+                    Output.WriteLine($"[{DateTime.UtcNow:HH:mm:ss.fff}] {provider} context created (took {(DateTime.UtcNow - contextStart).TotalMilliseconds:F0}ms)");
+
                     DatabaseContexts[provider] = context;
 
                     // Run any provider-specific setup
+                    var setupStart = DateTime.UtcNow;
+                    Output.WriteLine($"[{DateTime.UtcNow:HH:mm:ss.fff}] {provider} calling SetupDatabaseAsync...");
                     await SetupDatabaseAsync(provider, context);
+                    Output.WriteLine($"[{DateTime.UtcNow:HH:mm:ss.fff}] {provider} setup completed (took {(DateTime.UtcNow - setupStart).TotalMilliseconds:F0}ms)");
                 }
             }
             catch (Exception ex)
             {
-                Output.WriteLine($"Failed to initialize {provider}: {ex.Message}");
+                Output.WriteLine($"[{DateTime.UtcNow:HH:mm:ss.fff}] ❌ Failed to initialize {provider}: {ex.Message}");
                 // Continue with other providers
             }
         }
@@ -63,6 +78,8 @@ public abstract class DatabaseTestBase : IAsyncLifetime
         {
             throw new InvalidOperationException("No database providers could be initialized for testing");
         }
+
+        Output.WriteLine($"[{DateTime.UtcNow:HH:mm:ss.fff}] ✅ All initialization complete (total: {(DateTime.UtcNow - totalStart).TotalMilliseconds:F0}ms)");
     }
 
     public virtual async Task DisposeAsync()
@@ -87,7 +104,7 @@ public abstract class DatabaseTestBase : IAsyncLifetime
     /// </summary>
     protected virtual IEnumerable<SupportedDatabase> GetSupportedProviders()
     {
-        return new[]
+        var providers = new[]
         {
             SupportedDatabase.Sqlite,
             SupportedDatabase.PostgreSql,
@@ -95,6 +112,28 @@ public abstract class DatabaseTestBase : IAsyncLifetime
             SupportedDatabase.MySql,
             SupportedDatabase.MariaDb
         };
+
+        var only = Environment.GetEnvironmentVariable("INTEGRATION_ONLY");
+        if (string.IsNullOrWhiteSpace(only))
+        {
+            return providers;
+        }
+
+        var filtered = new List<SupportedDatabase>();
+        foreach (var token in only.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (Enum.TryParse<SupportedDatabase>(token, true, out var parsed))
+            {
+                filtered.Add(parsed);
+            }
+        }
+
+        if (filtered.Count == 0)
+        {
+            throw new InvalidOperationException($"INTEGRATION_ONLY did not match any SupportedDatabase values: '{only}'.");
+        }
+
+        return providers.Where(filtered.Contains).ToArray();
     }
 
     /// <summary>
@@ -111,21 +150,27 @@ public abstract class DatabaseTestBase : IAsyncLifetime
     protected async Task RunTestAgainstAllProvidersAsync(Func<SupportedDatabase, IDatabaseContext, Task> testAction)
     {
         var failures = new List<(SupportedDatabase Provider, Exception Error)>();
+        var testStart = DateTime.UtcNow;
 
         foreach (var (provider, context) in DatabaseContexts)
         {
             try
             {
-                Output.WriteLine($"Running test against {provider}...");
+                var providerStart = DateTime.UtcNow;
+                Output.WriteLine($"[{providerStart:HH:mm:ss.fff}] ▶️ {provider} test starting");
+                Output.WriteLine($"[{providerStart:HH:mm:ss.fff}] Running test against {provider}...");
                 await testAction(provider, context);
-                Output.WriteLine($"✅ {provider} test completed successfully");
+                Output.WriteLine($"[{DateTime.UtcNow:HH:mm:ss.fff}] ✅ {provider} test finished");
+                Output.WriteLine($"[{DateTime.UtcNow:HH:mm:ss.fff}] ✅ {provider} test completed successfully (took {(DateTime.UtcNow - providerStart).TotalMilliseconds:F0}ms)");
             }
             catch (Exception ex)
             {
-                Output.WriteLine($"❌ {provider} test failed: {ex.Message}");
+                Output.WriteLine($"[{DateTime.UtcNow:HH:mm:ss.fff}] ❌ {provider} test failed: {ex.Message}");
                 failures.Add((provider, ex));
             }
         }
+
+        Output.WriteLine($"[{DateTime.UtcNow:HH:mm:ss.fff}] Test execution across all providers complete (total: {(DateTime.UtcNow - testStart).TotalMilliseconds:F0}ms)");
 
         if (failures.Any())
         {

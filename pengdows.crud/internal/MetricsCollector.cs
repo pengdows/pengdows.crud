@@ -11,6 +11,8 @@ internal sealed class MetricsCollector
     private readonly MetricsOptions _options;
     private readonly Ewma _commandDuration = new(64);
     private readonly Ewma _connectionHold = new(64);
+    private readonly Ewma _connectionOpenDuration = new(64);
+    private readonly Ewma _connectionCloseDuration = new(64);
     private readonly Ewma _transactionDuration = new(32);
     private readonly PercentileRing? _percentileRing;
     private Action? _metricsChanged;
@@ -81,6 +83,28 @@ internal sealed class MetricsCollector
             }
         }
 
+        NotifyUpdated();
+    }
+
+    internal void RecordConnectionOpenDuration(double durationMs)
+    {
+        if (durationMs <= 0d)
+        {
+            return;
+        }
+
+        _connectionOpenDuration.AddSample(durationMs);
+        NotifyUpdated();
+    }
+
+    internal void RecordConnectionCloseDuration(double durationMs)
+    {
+        if (durationMs <= 0d)
+        {
+            return;
+        }
+
+        _connectionCloseDuration.AddSample(durationMs);
         NotifyUpdated();
     }
 
@@ -206,6 +230,8 @@ internal sealed class MetricsCollector
             Interlocked.Read(ref _connectionsOpened),
             Interlocked.Read(ref _connectionsClosed),
             _connectionHold.GetValue(),
+            _connectionOpenDuration.GetValue(),
+            _connectionCloseDuration.GetValue(),
             Interlocked.Read(ref _longLivedConnections),
             Interlocked.Read(ref _commandsExecuted),
             Interlocked.Read(ref _commandsFailed),
@@ -314,6 +340,8 @@ internal sealed class MetricsCollector
         long ConnectionsOpened,
         long ConnectionsClosed,
         double AvgConnectionHoldMs,
+        double AvgConnectionOpenMs,
+        double AvgConnectionCloseMs,
         long LongLivedConnections,
         long CommandsExecuted,
         long CommandsFailed,
@@ -335,6 +363,8 @@ internal sealed class MetricsCollector
         public long ConnectionsOpened { get; } = ConnectionsOpened;
         public long ConnectionsClosed { get; } = ConnectionsClosed;
         public double AvgConnectionHoldMs { get; } = AvgConnectionHoldMs;
+        public double AvgConnectionOpenMs { get; } = AvgConnectionOpenMs;
+        public double AvgConnectionCloseMs { get; } = AvgConnectionCloseMs;
         public long LongLivedConnections { get; } = LongLivedConnections;
         public long CommandsExecuted { get; } = CommandsExecuted;
         public long CommandsFailed { get; } = CommandsFailed;

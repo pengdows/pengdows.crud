@@ -76,8 +76,8 @@ public class TransactionCriticalPathTests
         using var context = new DatabaseContext("Host=localhost;Database=test", factory);
 
         using var transaction = context.BeginTransaction();
-        await transaction.SavepointAsync("sp_test").ConfigureAwait(false);
-        await transaction.RollbackToSavepointAsync("sp_test").ConfigureAwait(false);
+        await transaction.SavepointAsync("sp_test");
+        await transaction.RollbackToSavepointAsync("sp_test");
         transaction.Commit();
 
         Assert.True(transaction.WasCommitted);

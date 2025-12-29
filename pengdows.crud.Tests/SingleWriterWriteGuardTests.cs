@@ -66,7 +66,7 @@ public class SingleWriterWriteGuardTests
 
         public (ISqlDialect? dialect, IDataSourceInformation? dataSourceInfo) HandleDialectDetection(
             ITrackedConnection? initConnection,
-            DbProviderFactory factory,
+            DbProviderFactory? factory,
             ILoggerFactory loggerFactory)
         {
             return (null, null);

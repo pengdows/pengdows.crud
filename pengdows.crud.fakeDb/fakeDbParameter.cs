@@ -16,12 +16,12 @@ public class fakeDbParameter : DbParameter, IDbDataParameter
     public override bool IsNullable { get; set; }
 
     [AllowNull]
-    public override string ParameterName { get; set; }
+    public override string ParameterName { get; set; } = string.Empty;
 
     [AllowNull]
-    public override string SourceColumn { get; set; }
+    public override string SourceColumn { get; set; } = string.Empty;
     [AllowNull]
-    public override object Value { get; set; }
+    public override object Value { get; set; } = DBNull.Value;
 
     public override int Size { get; set; }
     public override byte Precision { get; set; }
@@ -32,4 +32,3 @@ public class fakeDbParameter : DbParameter, IDbDataParameter
         DbType = DbType.Object;
     }
 }
-

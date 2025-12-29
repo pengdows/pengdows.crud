@@ -59,7 +59,7 @@ public class EntityHelperJsonEgressTests
         var field = typeof(SqlContainer).GetField("_parameters", BindingFlags.Instance | BindingFlags.NonPublic);
         var dictionary = (IDictionary<string, DbParameter>)field!.GetValue(sqlContainer)!;
 
-        return Assert.Single(dictionary.Values.Where(p => p.Value is string text && text == expectedJson));
+        return Assert.Single(dictionary.Values, p => p.Value is string text && text == expectedJson);
     }
 
     [Table("JsonEntities")]

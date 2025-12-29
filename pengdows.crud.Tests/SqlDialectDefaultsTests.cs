@@ -47,7 +47,7 @@ public class SqlDialectDefaultsTests
         Assert.NotEqual("@", dialect.ParameterMarker);
 
         Assert.True(dialect.SupportsNamedParameters);
-        Assert.NotEqual(false, dialect.SupportsNamedParameters);
+        Assert.True(dialect.SupportsNamedParameters);
 
         Assert.Equal(255, dialect.MaxParameterLimit);
         Assert.NotEqual(256, dialect.MaxParameterLimit);
@@ -59,7 +59,7 @@ public class SqlDialectDefaultsTests
         Assert.NotEqual(ProcWrappingStyle.Call, dialect.ProcWrappingStyle);
 
         Assert.False(dialect.SupportsNamespaces);
-        Assert.NotEqual(true, dialect.SupportsNamespaces);
+        Assert.False(dialect.SupportsNamespaces);
     }
 
     [Fact]
@@ -73,7 +73,7 @@ public class SqlDialectDefaultsTests
         Assert.NotEqual("?", dialect.ParameterMarker);
 
         Assert.True(dialect.SupportsNamedParameters);
-        Assert.NotEqual(false, dialect.SupportsNamedParameters);
+        Assert.True(dialect.SupportsNamedParameters);
 
         Assert.Equal(10, dialect.MaxParameterLimit);
         Assert.NotEqual(255, dialect.MaxParameterLimit);
@@ -85,6 +85,6 @@ public class SqlDialectDefaultsTests
         Assert.NotEqual(ProcWrappingStyle.None, dialect.ProcWrappingStyle);
 
         Assert.True(dialect.SupportsNamespaces);
-        Assert.NotEqual(false, dialect.SupportsNamespaces);
+        Assert.True(dialect.SupportsNamespaces);
     }
 }

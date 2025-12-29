@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics;
 using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
@@ -179,6 +180,13 @@ public abstract class SqlDialect:ISqlDialect
     public virtual bool SupportsSavepoints => false;
     public virtual bool RequiresStoredProcParameterNameMatch => false;
     public virtual bool SupportsNamespaces => false; // SQL-92 does not require schema support
+
+    /// <summary>
+    /// Indicates whether MERGE UPDATE SET clause requires table alias prefix on target columns.
+    /// SQL Server, Oracle: true (allows `UPDATE SET t.col = value`)
+    /// PostgreSQL: false (requires `UPDATE SET col = value`, will error with alias prefix)
+    /// </summary>
+    public virtual bool MergeUpdateRequiresTargetAlias => true; // SQL-92 MERGE allows it (SQL Server, Oracle)
 
     /// <summary>
     /// Indicates whether this dialect represents an unknown database using the SQL-92 fallback.
@@ -503,21 +511,23 @@ public abstract class SqlDialect:ISqlDialect
     /// <summary>
     /// Get a parameter from the pool or create a new one. For internal use by hot paths.
     /// </summary>
-    private DbParameter GetPooledParameter()
+    private DbParameter GetPooledParameter(out bool pooled)
     {
-        if (_parameterPool.TryDequeue(out var pooled))
+        if (_parameterPool.TryDequeue(out var param))
         {
+            pooled = true;
             // Reset pooled parameter to clean state
-            pooled.ParameterName = string.Empty;
-            pooled.Value = null;
-            pooled.DbType = DbType.Object;
-            pooled.Direction = ParameterDirection.Input;
-            pooled.Size = 0;
-            pooled.Precision = 0;
-            pooled.Scale = 0;
-            return pooled;
+            param.ParameterName = string.Empty;
+            param.Value = null;
+            param.DbType = DbType.Object;
+            param.Direction = ParameterDirection.Input;
+            param.Size = 0;
+            param.Precision = 0;
+            param.Scale = 0;
+            return param;
         }
 
+        pooled = false;
         return Factory.CreateParameter() ?? throw new InvalidOperationException("Failed to create parameter.");
     }
 
@@ -535,7 +545,9 @@ public abstract class SqlDialect:ISqlDialect
 
     public virtual DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
-        var parameter = GetPooledParameter();
+        var traceTimings = Logger.IsEnabled(LogLevel.Debug) && IsParameterTimingEnabled();
+        var start = traceTimings ? Stopwatch.GetTimestamp() : 0;
+        var parameter = GetPooledParameter(out var pooled);
 
         if (string.IsNullOrWhiteSpace(name))
         {
@@ -600,7 +612,35 @@ public abstract class SqlDialect:ISqlDialect
             }
         }
 
+        if (traceTimings)
+        {
+            var elapsedUs = TicksToMicroseconds(Stopwatch.GetTimestamp() - start);
+            Logger.LogDebug(
+                "DbParameter timing pooled={Pooled} dbType={DbType} hasValue={HasValue} handled={Handled} elapsed={ElapsedUs:0.000}us",
+                pooled,
+                type,
+                !valueIsNull,
+                handled,
+                elapsedUs);
+        }
+
         return parameter;
+    }
+
+    private static bool IsParameterTimingEnabled()
+    {
+        var value = Environment.GetEnvironmentVariable("PENGDOWS_PARAM_TIMING");
+        return value == "1" || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static double TicksToMicroseconds(long ticks)
+    {
+        if (ticks <= 0)
+        {
+            return 0d;
+        }
+
+        return ticks * 1_000_000d / Stopwatch.Frequency;
     }
 
     private static Type? ResolveClrType<T>(T value)

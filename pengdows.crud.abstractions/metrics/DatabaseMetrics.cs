@@ -8,6 +8,8 @@ namespace pengdows.crud.metrics;
 /// <param name="ConnectionsOpened">Total connections opened since context creation.</param>
 /// <param name="ConnectionsClosed">Total connections closed since context creation.</param>
 /// <param name="AvgConnectionHoldMs">Exponential weighted moving average of connection hold duration in milliseconds.</param>
+/// <param name="AvgConnectionOpenMs">Exponential weighted moving average of connection open duration in milliseconds.</param>
+/// <param name="AvgConnectionCloseMs">Exponential weighted moving average of connection close duration in milliseconds.</param>
 /// <param name="LongLivedConnections">Count of connections held longer than the configured threshold.</param>
 /// <param name="CommandsExecuted">Total commands that completed successfully.</param>
 /// <param name="CommandsFailed">Total commands that failed.</param>
@@ -31,6 +33,8 @@ public readonly record struct DatabaseMetrics(
     long ConnectionsOpened,
     long ConnectionsClosed,
     double AvgConnectionHoldMs,
+    double AvgConnectionOpenMs,
+    double AvgConnectionCloseMs,
     long LongLivedConnections,
     long CommandsExecuted,
     long CommandsFailed,

@@ -17,7 +17,7 @@ public class ColumnInfoTests
         var column = new ColumnInfo
         {
             Name = "IntValue",
-            PropertyInfo = typeof(Sample).GetProperty(nameof(Sample.IntValue)),
+            PropertyInfo = typeof(Sample).GetProperty(nameof(Sample.IntValue))!,
             DbType = DbType.Int32
         };
 
@@ -32,7 +32,7 @@ public class ColumnInfoTests
         var column = new ColumnInfo
         {
             Name = "StringValue",
-            PropertyInfo = typeof(Sample).GetProperty(nameof(Sample.StringValue)),
+            PropertyInfo = typeof(Sample).GetProperty(nameof(Sample.StringValue))!,
             DbType = DbType.String
         };
 
@@ -47,7 +47,7 @@ public class ColumnInfoTests
         var column = new ColumnInfo
         {
             Name = "EnumValue",
-            PropertyInfo = typeof(Sample).GetProperty(nameof(Sample.EnumValue)),
+            PropertyInfo = typeof(Sample).GetProperty(nameof(Sample.EnumValue))!,
             DbType = DbType.String,
             EnumType = typeof(TestEnum)
         };
@@ -63,7 +63,7 @@ public class ColumnInfoTests
         var column = new ColumnInfo
         {
             Name = "EnumValue",
-            PropertyInfo = typeof(Sample).GetProperty(nameof(Sample.EnumValue)),
+            PropertyInfo = typeof(Sample).GetProperty(nameof(Sample.EnumValue))!,
             DbType = DbType.Int32,
             EnumType = typeof(TestEnum),
             EnumUnderlyingType = Enum.GetUnderlyingType(typeof(TestEnum))
@@ -80,7 +80,7 @@ public class ColumnInfoTests
         var column = new ColumnInfo
         {
             Name = "StringValue",
-            PropertyInfo = typeof(Sample).GetProperty(nameof(Sample.StringValue)),
+            PropertyInfo = typeof(Sample).GetProperty(nameof(Sample.StringValue))!,
             DbType = DbType.String
         };
 
@@ -98,7 +98,7 @@ public class ColumnInfoTests
     private class Sample
     {
         public int IntValue { get; set; }
-        public string StringValue { get; set; }
+        public string? StringValue { get; set; }
         public TestEnum EnumValue { get; set; }
     }
 }

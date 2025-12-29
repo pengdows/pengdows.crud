@@ -47,7 +47,7 @@ public class CancellationTokenIntegrationTests : IAsyncLifetime
     {
         if (_context is IAsyncDisposable asyncDisp)
         {
-            await asyncDisp.DisposeAsync().ConfigureAwait(false);
+            await asyncDisp.DisposeAsync();
         }
         else if (_context is IDisposable disp)
         {

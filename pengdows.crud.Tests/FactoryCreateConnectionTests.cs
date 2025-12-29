@@ -1,6 +1,7 @@
 using System;
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -65,7 +66,13 @@ public class FactoryCreateConnectionTests
     private sealed class BreakableDbConnection : DbConnection
     {
         private ConnectionState _state = ConnectionState.Closed;
-        public override string ConnectionString { get; set; } = string.Empty;
+        private string _connectionString = string.Empty;
+        [AllowNull]
+        public override string ConnectionString
+        {
+            get => _connectionString;
+            set => _connectionString = value ?? string.Empty;
+        }
         public override string Database => "Breakable";
         public override string DataSource => "Breakable";
         public override string ServerVersion => "1.0";

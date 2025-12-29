@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
@@ -17,13 +18,15 @@ public class SingleWriterConnectionBehaviorTest
         
         protected override DbCommand CreateDbCommand() => new RecordingCommand(this, Commands);
 
-        public override string ConnectionString 
-        { 
+        [AllowNull]
+        public override string ConnectionString
+        {
             get => base.ConnectionString;
-            set 
-            { 
-                ConnectionStrings.Add(value);
-                base.ConnectionString = value; 
+            set
+            {
+                var normalized = value ?? string.Empty;
+                ConnectionStrings.Add(normalized);
+                base.ConnectionString = normalized;
             }
         }
     }

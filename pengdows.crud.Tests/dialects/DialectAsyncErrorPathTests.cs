@@ -147,7 +147,8 @@ public class DialectAsyncErrorPathTests
         var factory = new fakeDbFactory(SupportedDatabase.DuckDB.ToString());
         var dialect = new DuckDbDialect(factory, NullLogger.Instance);
 
-        var settings = dialect.GetConnectionSessionSettings();
+        using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=DuckDB", factory);
+        var settings = dialect.GetConnectionSessionSettings(ctx, readOnly: false);
 
         Assert.NotNull(settings);
     }

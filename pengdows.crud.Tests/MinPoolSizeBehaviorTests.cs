@@ -38,7 +38,7 @@ public class MinPoolSizeBehaviorTests
         var connectionString = context.ConnectionString;
 
         // Assert
-        var builder = factory.CreateConnectionStringBuilder();
+        var builder = factory.CreateConnectionStringBuilder() ?? new DbConnectionStringBuilder();
         builder.ConnectionString = connectionString;
 
         var dialect = context.Dialect;
@@ -78,7 +78,7 @@ public class MinPoolSizeBehaviorTests
         // KeepAlive should be honored when explicitly requested (for testing/debugging)
         Assert.Equal(DbMode.KeepAlive, context.ConnectionMode);
 
-        var builder = factory.CreateConnectionStringBuilder();
+        var builder = factory.CreateConnectionStringBuilder() ?? new DbConnectionStringBuilder();
         builder.ConnectionString = connectionString;
 
         var dialect = context.Dialect;
@@ -116,7 +116,7 @@ public class MinPoolSizeBehaviorTests
         var connectionString = context.ConnectionString;
 
         // Assert
-        var builder = factory.CreateConnectionStringBuilder();
+        var builder = factory.CreateConnectionStringBuilder() ?? new DbConnectionStringBuilder();
         builder.ConnectionString = connectionString;
 
         var dialect = context.Dialect;
@@ -152,7 +152,7 @@ public class MinPoolSizeBehaviorTests
         var connectionString = context.ConnectionString;
 
         // Assert
-        var builder = factory.CreateConnectionStringBuilder();
+        var builder = factory.CreateConnectionStringBuilder() ?? new DbConnectionStringBuilder();
         builder.ConnectionString = connectionString;
 
         var dialect = context.Dialect;
@@ -184,7 +184,7 @@ public class MinPoolSizeBehaviorTests
         var connectionString = context.ConnectionString;
 
         // Assert
-        var builder = factory.CreateConnectionStringBuilder();
+        var builder = factory.CreateConnectionStringBuilder() ?? new DbConnectionStringBuilder();
         builder.ConnectionString = connectionString;
 
         var dialect = context.Dialect;
@@ -228,7 +228,7 @@ public class MinPoolSizeBehaviorTests
         var connectionString = context.ConnectionString;
 
         // Assert
-        var builder = factory.CreateConnectionStringBuilder();
+        var builder = factory.CreateConnectionStringBuilder() ?? new DbConnectionStringBuilder();
         builder.ConnectionString = connectionString;
 
         var dialect = context.Dialect;
@@ -260,7 +260,7 @@ public class MinPoolSizeBehaviorTests
         var connectionString = context.ConnectionString;
 
         // Assert
-        var builder = factory.CreateConnectionStringBuilder();
+        var builder = factory.CreateConnectionStringBuilder() ?? new DbConnectionStringBuilder();
         builder.ConnectionString = connectionString;
 
         var dialect = context.Dialect;

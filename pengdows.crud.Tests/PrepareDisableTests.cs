@@ -4,7 +4,9 @@ using System;
 using System.Collections;
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
@@ -26,7 +28,12 @@ public class PrepareDisableTests
     {
         private string _cs = string.Empty;
         private ConnectionState _state = ConnectionState.Closed;
-        public override string ConnectionString { get => _cs; set => _cs = value; }
+        [AllowNull]
+        public override string ConnectionString
+        {
+            get => _cs;
+            set => _cs = value ?? string.Empty;
+        }
         public override string Database => "test";
         public override string DataSource => "test";
         public override string ServerVersion => "1.0";
@@ -42,12 +49,14 @@ public class PrepareDisableTests
     {
         private readonly DbConnection _conn;
         public ThrowOnPrepareCommand(DbConnection conn) { _conn = conn; }
+        [AllowNull]
         public override string CommandText { get; set; } = string.Empty;
         public override int CommandTimeout { get; set; }
         public override CommandType CommandType { get; set; } = CommandType.Text;
+        [AllowNull]
         protected override DbConnection DbConnection { get => _conn; set { } }
         protected override DbParameterCollection DbParameterCollection { get; } = new DummyParams();
-        protected override DbTransaction DbTransaction { get; set; } = null!;
+        protected override DbTransaction? DbTransaction { get; set; }
         public override bool DesignTimeVisible { get; set; }
         public override UpdateRowSource UpdatedRowSource { get; set; }
         public override void Cancel() { }
@@ -73,12 +82,26 @@ public class PrepareDisableTests
         }
         private sealed class DummyParam : DbParameter
         {
+            private string _parameterName = string.Empty;
+            private string _sourceColumn = string.Empty;
+
             public override DbType DbType { get; set; }
             public override ParameterDirection Direction { get; set; }
             public override bool IsNullable { get; set; }
-            public override string ParameterName { get; set; } = string.Empty;
-            public override string SourceColumn { get; set; } = string.Empty;
-            public override object? Value { get; set; }
+            [AllowNull]
+            public override string ParameterName
+            {
+                get => _parameterName;
+                set => _parameterName = value ?? string.Empty;
+            }
+            [AllowNull]
+            public override string SourceColumn
+            {
+                get => _sourceColumn;
+                set => _sourceColumn = value ?? string.Empty;
+            }
+            [AllowNull]
+            public override object Value { get; set; } = DBNull.Value;
             public override bool SourceColumnNullMapping { get; set; }
             public override int Size { get; set; }
             public override void ResetDbType() { }
@@ -86,7 +109,7 @@ public class PrepareDisableTests
     }
 
     [Fact]
-    public void PrepareFailure_DisablesPrepare_And_LogsOnce()
+    public async Task PrepareFailure_DisablesPrepare_And_LogsOnce()
     {
         var provider = new ListLoggerProvider();
         using var lf = new LoggerFactory(new[] { provider });
@@ -102,13 +125,13 @@ public class PrepareDisableTests
         // First attempt will try Prepare() and disable it due to exception
         using (var sc = ctx.CreateSqlContainer("SELECT 1"))
         {
-            sc.ExecuteNonQueryAsync().GetAwaiter().GetResult();
+            await sc.ExecuteNonQueryAsync();
         }
 
         // Second attempt should not try Prepare again (same persistent connection), so no additional debug logs
         using (var sc = ctx.CreateSqlContainer("SELECT 1"))
         {
-            sc.ExecuteNonQueryAsync().GetAwaiter().GetResult();
+            await sc.ExecuteNonQueryAsync();
         }
 
         var disabledLogs = provider.Entries
@@ -118,7 +141,7 @@ public class PrepareDisableTests
     }
 
     [Fact]
-    public void DisablePrepare_True_DoesNotAttemptPrepare()
+    public async Task DisablePrepare_True_DoesNotAttemptPrepare()
     {
         var provider = new ListLoggerProvider();
         using var lf = new LoggerFactory(new[] { provider });
@@ -131,13 +154,13 @@ public class PrepareDisableTests
         };
         using var ctx = new DatabaseContext(cfg, new ThrowOnPrepareFactory(), lf);
         using var sc = ctx.CreateSqlContainer("SELECT 1");
-        sc.ExecuteNonQueryAsync().GetAwaiter().GetResult();
+        await sc.ExecuteNonQueryAsync();
         // No debug log about disabling because prepare was never attempted
         Assert.DoesNotContain(provider.Entries, e => e.Message.Contains("Disabled prepare"));
     }
 
     [Fact]
-    public void StandardMode_TwoCommands_DisablePrepare_OncePerConnection()
+    public async Task StandardMode_TwoCommands_DisablePrepare_OncePerConnection()
     {
         var provider = new ListLoggerProvider();
         using var lf = new LoggerFactory(new[] { provider });
@@ -153,11 +176,11 @@ public class PrepareDisableTests
         // Standard mode uses ephemeral connections; each attempt will disable prepare for its own connection
         using (var sc = ctx.CreateSqlContainer("SELECT 1"))
         {
-            sc.ExecuteNonQueryAsync().GetAwaiter().GetResult();
+            await sc.ExecuteNonQueryAsync();
         }
         using (var sc = ctx.CreateSqlContainer("SELECT 1"))
         {
-            sc.ExecuteNonQueryAsync().GetAwaiter().GetResult();
+            await sc.ExecuteNonQueryAsync();
         }
 
         var disabledLogs = provider.Entries

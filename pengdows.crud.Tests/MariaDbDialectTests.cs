@@ -157,29 +157,30 @@ public class MariaDbDialectTests
     public void GetConnectionSessionSettings_Should_Return_MariaDb_Settings()
     {
         // Act
-        var settings = _dialect.GetConnectionSessionSettings();
+        using var context = new DatabaseContext("Data Source=test;EmulatedProduct=MariaDb", _factory);
+        var settings = _dialect.GetConnectionSessionSettings(context, readOnly: false);
 
         // Assert
         Assert.NotNull(settings); // Should return settings or empty string
     }
 
     [Fact]
-    public void SupportsWindowFunctions_Should_Return_True_For_Modern_MariaDb()
+    public async Task SupportsWindowFunctions_Should_Return_True_For_Modern_MariaDb()
     {
         // MariaDB 10.2+ supports window functions; initialize dialect first
         var connection = _factory.CreateConnection();
         var trackedConnection = new TrackedConnection(connection, "mariadb_test", NullLogger.Instance);
-        _ = _dialect.DetectDatabaseInfoAsync(trackedConnection).GetAwaiter().GetResult();
+        _ = await _dialect.DetectDatabaseInfoAsync(trackedConnection);
         Assert.True(_dialect.SupportsWindowFunctions);
     }
 
     [Fact]
-    public void SupportsCommonTableExpressions_Should_Return_True()
+    public async Task SupportsCommonTableExpressions_Should_Return_True()
     {
         // MariaDB 10.2+ supports CTEs; initialize dialect first
         var connection = _factory.CreateConnection();
         var trackedConnection = new TrackedConnection(connection, "mariadb_test", NullLogger.Instance);
-        _ = _dialect.DetectDatabaseInfoAsync(trackedConnection).GetAwaiter().GetResult();
+        _ = await _dialect.DetectDatabaseInfoAsync(trackedConnection);
         Assert.True(_dialect.SupportsCommonTableExpressions);
     }
 

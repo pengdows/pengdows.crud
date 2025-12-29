@@ -31,6 +31,13 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     string ConnectionString { get; }
 
     /// <summary>
+    /// Gets the DbDataSource if one was provided (e.g., NpgsqlDataSource).
+    /// When available, provides better performance through shared prepared statement caching.
+    /// Null if using traditional DbProviderFactory approach.
+    /// </summary>
+    DbDataSource? DataSource { get; }
+
+    /// <summary>
     /// Type mapping registry for compiled accessors, enum coercions, and JSON handlers.
     /// </summary>
     ITypeMapRegistry TypeMapRegistry { get; }

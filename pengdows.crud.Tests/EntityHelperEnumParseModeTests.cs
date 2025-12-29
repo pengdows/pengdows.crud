@@ -69,7 +69,9 @@ public class EntityHelperEnumParseModeTests : SqlLiteContextTestBase
     {
         var helper = new EntityHelper<EnumModeEntity, int>(Context);
         var sql = "@p SELECT \"Name\" FROM \"T\" WHERE \"Id\"=@id";
+        #pragma warning disable CS0618 // Type or member is obsolete
         var replaced = helper.ReplaceDialectTokens(sql, "[", "]", ":");
+        #pragma warning restore CS0618 // Type or member is obsolete
         Assert.Contains(":p", replaced);
         Assert.Contains("[Name]", replaced);
         Assert.Contains("[T]", replaced);

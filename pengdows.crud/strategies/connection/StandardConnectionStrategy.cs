@@ -66,15 +66,20 @@ public class StandardConnectionStrategy : SafeAsyncDisposableBase, IConnectionSt
 
     public virtual (ISqlDialect? dialect, IDataSourceInformation? dataSourceInfo) HandleDialectDetection(
         ITrackedConnection? initConnection,
-        DbProviderFactory factory,
+        DbProviderFactory? factory,
         ILoggerFactory loggerFactory)
     {
         // Standard strategy: reuse the initialization connection for detection, then dispose it
         if (initConnection != null)
         {
-            var dialect = SqlDialectFactory.CreateDialect(initConnection, factory, loggerFactory);
-            var dataSourceInfo = new DataSourceInformation(dialect);
-            return (dialect, dataSourceInfo);
+            // When using DbDataSource, factory is created from the connection and will not be null
+            // When factory is null, fall back to SQL-92 dialect
+            if (factory != null)
+            {
+                var dialect = SqlDialectFactory.CreateDialect(initConnection, factory, loggerFactory);
+                var dataSourceInfo = new DataSourceInformation(dialect);
+                return (dialect, dataSourceInfo);
+            }
         }
 
         return (null, null);

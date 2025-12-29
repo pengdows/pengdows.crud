@@ -93,8 +93,9 @@ public class MultitenantIntegrationTests : IAsyncLifetime
     [Theory]
     [InlineData("TenantA", SupportedDatabase.Sqlite)]
     [InlineData("TenantB", SupportedDatabase.Sqlite)]
-    public async Task MultitenantCrud_ConcurrentOperations(string tenant, SupportedDatabase dbType)
+    public Task MultitenantCrud_ConcurrentOperations(string tenant, SupportedDatabase dbType)
     {
+        _ = dbType;
         // Use fakeDb and assert mode coercions + pinned-writer semantics deterministically
         var ctx = _tenantRegistry.GetContext(tenant);
 
@@ -118,5 +119,7 @@ public class MultitenantIntegrationTests : IAsyncLifetime
             Assert.NotSame(w1, r); // read connection is distinct/ephemeral under SingleWriter
             ctx.CloseAndDisposeConnection(r);
         }
+
+        return Task.CompletedTask;
     }
 }

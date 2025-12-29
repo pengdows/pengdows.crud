@@ -85,4 +85,3 @@ public class SingleWriterReadOnlyConnectionTests
         Assert.Contains(factory.Connections[1].Commands, c => c.Contains("query_only"));
     }
 }
-

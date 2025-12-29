@@ -50,7 +50,7 @@ public class MySqlTestContainer : TestContainer
         }
 
         return Task.FromResult<IDatabaseContext>(
-            new DatabaseContext(_connectionString, MySqlClientFactory.Instance, null!));
+            new DatabaseContext(_connectionString, MySqlClientFactory.Instance, new TypeMapRegistry()));
     }
 
     protected override ValueTask DisposeAsyncCore()

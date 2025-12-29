@@ -55,7 +55,7 @@ public class SqlContainerCriticalPathTests
         using var container = context.CreateSqlContainer("UPDATE widgets SET name = 'test'");
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            container.ExecuteNonQueryAsync()).ConfigureAwait(false);
+            container.ExecuteNonQueryAsync());
 
         Assert.Contains("Simulated command creation failure", exception.Message, StringComparison.OrdinalIgnoreCase);
     }

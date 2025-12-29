@@ -185,4 +185,41 @@ public class RealAsyncLockerTests
         Assert.Equal(1, semaphore.CurrentCount);
         await Assert.ThrowsAsync<ObjectDisposedException>(() => locker.LockAsync(cts.Token));
     }
+
+    [Fact]
+    public async Task LockAsync_CalledTwiceWithCount1_DeadlocksInProduction()
+    {
+        // CRITICAL BUG INVESTIGATION: With SemaphoreSlim(1,1) (the real production scenario),
+        // calling LockAsync() twice on the same instance causes a DEADLOCK
+
+        // In production, shared connections use count 1
+        var semaphore = new SemaphoreSlim(1, 1);
+        var locker = new RealAsyncLocker(semaphore);
+
+        // First call succeeds
+        await locker.LockAsync();
+        Assert.Equal(0, semaphore.CurrentCount);
+
+        // Second call on SAME instance should ideally throw InvalidOperationException,
+        // but instead it DEADLOCKS because:
+        // 1. It waits on semaphore (line 23 of RealAsyncLocker)
+        // 2. Semaphore is held by the first call (same instance!)
+        // 3. The _lockState check on line 24 never executes
+        // 4. Infinite wait for itself to release
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+
+        // This demonstrates the deadlock - it will timeout
+        await Assert.ThrowsAsync<OperationCanceledException>(async () =>
+        {
+            await locker.LockAsync(cts.Token);
+        });
+
+        // After timeout, semaphore is still held (deadlocked state)
+        Assert.Equal(0, semaphore.CurrentCount);
+
+        // NOTE: The existing test "LockAsync_AlreadyAcquired_Throws" uses SemaphoreSlim(2,2)
+        // which is why it doesn't deadlock - both WaitAsync() calls succeed immediately.
+        // That's not the real production scenario.
+    }
 }

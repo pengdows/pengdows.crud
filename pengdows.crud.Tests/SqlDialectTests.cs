@@ -26,7 +26,7 @@ public class SqlDialectTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.PostgreSql}", factory);
-        Assert.Equal(string.Empty, ctx.WrapObjectName(null));
+        Assert.Equal(string.Empty, ctx.WrapObjectName(null!));
         Assert.Equal(string.Empty, ctx.WrapObjectName(string.Empty));
     }
 

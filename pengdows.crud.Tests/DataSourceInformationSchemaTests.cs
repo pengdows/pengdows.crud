@@ -91,6 +91,6 @@ public class DataSourceInformationSchemaTests
 
         Assert.Equal("Unknown Database (SQL-92 Compatible)", schema.Rows[0].Field<string>("DataSourceProductName"));
         Assert.True(schema.Rows[0].Field<bool>("SupportsNamedParameters"));
-        Assert.NotEqual(false, schema.Rows[0].Field<bool>("SupportsNamedParameters"));
+        Assert.True(schema.Rows[0].Field<bool>("SupportsNamedParameters"));
     }
 }

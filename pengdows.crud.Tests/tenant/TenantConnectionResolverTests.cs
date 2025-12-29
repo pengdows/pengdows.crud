@@ -105,13 +105,13 @@ public class TenantConnectionResolverTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public void Register_InvalidTenant_ShouldThrow(string invalidTenant)
+    public void Register_InvalidTenant_ShouldThrow(string? invalidTenant)
     {
         var config = new DatabaseContextConfiguration();
 
         var resolver = new TenantConnectionResolver();
         var ex = Assert.Throws<ArgumentNullException>(() =>
-            resolver.Register(invalidTenant, config));
+            resolver.Register(invalidTenant!, config));
 
         Assert.Equal("tenant", ex.ParamName);
     }

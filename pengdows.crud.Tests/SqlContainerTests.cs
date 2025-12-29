@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
+using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 using Xunit;
@@ -15,7 +16,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class SqlContainerTests : SqlLiteContextTestBase
+public class SqlContainerTests : SqlLiteContextTestBase, IDisposable
 {
     private readonly EntityHelper<TestEntity, int> entityHelper;
 
@@ -27,7 +28,7 @@ public class SqlContainerTests : SqlLiteContextTestBase
         TypeMap.Register<TestEntity>();
         entityHelper = new EntityHelper<TestEntity, int>(Context);
         Assert.Equal(DbMode.SingleConnection, Context.ConnectionMode);
-        BuildTestTable();
+        BuildTestTable().GetAwaiter().GetResult();
     }
 
     [Fact]
@@ -45,7 +46,7 @@ public class SqlContainerTests : SqlLiteContextTestBase
         Assert.Equal(2, reused.Value);
     }
 
-    public void Dispose()
+    void IDisposable.Dispose()
     {
         Context.Dispose();
     }
@@ -91,7 +92,7 @@ public class SqlContainerTests : SqlLiteContextTestBase
     public void AddParameter_Null_DoesNothing()
     {
         var container = Context.CreateSqlContainer();
-        container.AddParameter(null);
+        container.AddParameter(null!);
 
         Assert.Equal(0, container.ParameterCount);
     }
@@ -355,6 +356,7 @@ public class SqlContainerTests : SqlLiteContextTestBase
         AssertProperNumberOfConnectionsForMode();
     }
 
+    [Fact]
     public void Dispose_ClearsQueryAndParameters()
     {
         var container = Context.CreateSqlContainer();
@@ -501,7 +503,13 @@ public class SqlContainerTests : SqlLiteContextTestBase
         mockLogger.SetLogLevel(LogLevel.Critical); // Disable info logging
         var loggerFactory = new TestLoggerFactory(mockLogger);
         
-        await using var context = new DatabaseContext("Data Source=:memory:", SqliteFactory.Instance, TypeMap, DbMode.Standard, ReadWriteMode.ReadWrite, loggerFactory);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+        await using var context = new DatabaseContext(config, SqliteFactory.Instance, loggerFactory, TypeMap);
         await using var container = context.CreateSqlContainer("SELECT 1");
         await using var reader = await container.ExecuteReaderAsync();
         
@@ -515,7 +523,13 @@ public class SqlContainerTests : SqlLiteContextTestBase
         mockLogger.SetLogLevel(LogLevel.Information); // Enable info logging
         var loggerFactory = new TestLoggerFactory(mockLogger);
         
-        await using var context = new DatabaseContext("Data Source=:memory:", SqliteFactory.Instance, TypeMap, DbMode.Standard, ReadWriteMode.ReadWrite, loggerFactory);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+        await using var context = new DatabaseContext(config, SqliteFactory.Instance, loggerFactory, TypeMap);
         await using var container = context.CreateSqlContainer("SELECT 42");
         await using var reader = await container.ExecuteReaderAsync();
         // Multiple info logs can occur during initialization; just ensure something was logged at Info level
@@ -529,7 +543,13 @@ public class SqlContainerTests : SqlLiteContextTestBase
         mockLogger.SetLogLevel(LogLevel.Information);
         var loggerFactory = new TestLoggerFactory(mockLogger);
 
-        await using var context = new DatabaseContext("Data Source=:memory:", SqliteFactory.Instance, TypeMap, DbMode.Standard, ReadWriteMode.ReadWrite, loggerFactory);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+        await using var context = new DatabaseContext(config, SqliteFactory.Instance, loggerFactory, TypeMap);
         await using var container = context.CreateSqlContainer("MyStoredProc");
         container.AddParameterWithValue("param1", DbType.String, "value1");
 
@@ -545,7 +565,7 @@ public class SqlContainerTests : SqlLiteContextTestBase
 
         public void SetLogLevel(LogLevel level) => _minLogLevel = level;
 
-        public IDisposable BeginScope<TState>(TState state) => null!;
+        public IDisposable BeginScope<TState>(TState state) where TState : notnull => NullScope.Instance;
         public bool IsEnabled(LogLevel logLevel) => logLevel >= _minLogLevel;
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
         {
@@ -568,5 +588,11 @@ public class SqlContainerTests : SqlLiteContextTestBase
         public void Dispose() { }
         public ILogger CreateLogger(string categoryName) => _logger;
         public void AddProvider(ILoggerProvider provider) { }
+    }
+
+    private sealed class NullScope : IDisposable
+    {
+        public static readonly NullScope Instance = new();
+        public void Dispose() { }
     }
 }

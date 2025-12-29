@@ -34,6 +34,8 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     private bool _skipFirstFailOnOpen;
     private fakeDbFactory? _factoryRef;
     private string? _emulatedTypeName;
+    private Action? _customOpenBehavior;
+    private Action? _customCommandBehavior;
     public override string DataSource => "FakeSource";
     public override string ServerVersion => GetEmulatedServerVersion();
 
@@ -203,6 +205,32 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     }
 
     /// <summary>
+    /// Marks the connection as permanently broken - all operations will fail
+    /// </summary>
+    public void SetBroken()
+    {
+        SetFailOnOpen(true);
+        SetFailOnCommand(true);
+        SetFailOnBeginTransaction(true);
+    }
+
+    /// <summary>
+    /// Sets custom behavior for Open() calls
+    /// </summary>
+    public void SetCustomOpenBehavior(Action customBehavior)
+    {
+        _customOpenBehavior = customBehavior;
+    }
+
+    /// <summary>
+    /// Sets custom behavior for CreateCommand() calls
+    /// </summary>
+    public void SetCustomCommandBehavior(Action customBehavior)
+    {
+        _customCommandBehavior = customBehavior;
+    }
+
+    /// <summary>
     /// Sets the connection to fail after N successful open operations across the entire factory
     /// </summary>
     internal void SetSharedFailAfterOpenCount(fakeDbFactory factory, int openCount)
@@ -354,7 +382,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     [AllowNull]
     public override string ConnectionString
     {
-        get => _connectionString!;
+        get => _connectionString ?? string.Empty;
         set => _connectionString = value;
     }
 
@@ -438,6 +466,9 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
             throw new InvalidOperationException("Connection is broken");
         }
 
+        // Invoke custom open behavior if set
+        _customOpenBehavior?.Invoke();
+
         OpenCount++;
         ParseEmulatedProduct(ConnectionString);
         var originalState = _state;
@@ -500,11 +531,11 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         }
     }
 
-    private SupportedDatabase ParseEmulatedProduct(string connStr)
+    private SupportedDatabase ParseEmulatedProduct(string? connStr)
     {
         if (EmulatedProduct == SupportedDatabase.Unknown)
         {
-            var builder = new DbConnectionStringBuilder { ConnectionString = connStr };
+            var builder = new DbConnectionStringBuilder { ConnectionString = connStr ?? string.Empty };
             if (!builder.TryGetValue("EmulatedProduct", out var raw))
             {
                 EmulatedProduct = SupportedDatabase.Unknown;
@@ -569,6 +600,9 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         {
             throw new InvalidOperationException("Cannot create command on broken connection");
         }
+
+        // Invoke custom command behavior if set
+        _customCommandBehavior?.Invoke();
 
         return new fakeDbCommand(this);
     }

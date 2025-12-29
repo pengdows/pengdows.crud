@@ -1,4 +1,4 @@
-# Indexed View Performance Proof
+/# Indexed View Performance Proof
 
 This document demonstrates the theoretical performance differences the IndexedViewBenchmarks would reveal.
 

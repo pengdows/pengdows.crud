@@ -41,7 +41,7 @@ public class ProcWrappingStyleTests
     private SqlContainer SetupParameterWrapTest(SupportedDatabase product)
     {
         var ctx = new DatabaseContext($"DataSource=:memory:;EmulatedProduct={product}", new fakeDbFactory(product));
-        var sc = ctx.CreateSqlContainer("dbo.Sqltest") as SqlContainer;
+        var sc = (SqlContainer)ctx.CreateSqlContainer("dbo.Sqltest");
         for (var i = 0; i < 10; i++)
         {
             sc.AddParameterWithValue($"p{i}", DbType.Int32, i);

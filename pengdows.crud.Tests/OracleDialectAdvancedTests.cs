@@ -156,7 +156,8 @@ public class OracleDialectAdvancedTests
     public void GetConnectionSessionSettings_Should_Return_Oracle_Settings()
     {
         // Act
-        var settings = _dialect.GetConnectionSessionSettings();
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=Oracle", _factory);
+        var settings = _dialect.GetConnectionSessionSettings(context, readOnly: false);
 
         // Assert
         Assert.NotNull(settings); // Should return settings or empty string

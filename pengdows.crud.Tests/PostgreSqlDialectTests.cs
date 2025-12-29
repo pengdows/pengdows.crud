@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Threading.Tasks;
 using Moq;
@@ -146,7 +147,8 @@ public class PostgreSqlDialectTests
     public void GetConnectionSessionSettings_Should_Return_Session_Settings()
     {
         // Act
-        var settings = _dialect.GetConnectionSessionSettings();
+        var context = new DatabaseContext("Host=localhost;Database=test;EmulatedProduct=PostgreSql", _factory);
+        var settings = _dialect.GetConnectionSessionSettings(context, readOnly: false);
 
         // Assert
         Assert.NotNull(settings); // Should return some settings or empty string
@@ -424,7 +426,7 @@ public class PostgreSqlDialectTests
     {
         var method = typeof(PostgreSqlDialect).GetMethod("DetermineStandardCompliance",
             BindingFlags.NonPublic | BindingFlags.Instance);
-        var result = (SqlStandardLevel)method!.Invoke(_dialect, new object[] { null })!;
+        var result = (SqlStandardLevel)method!.Invoke(_dialect, new object?[] { null })!;
 
         Assert.Equal(SqlStandardLevel.Sql2008, result);
     }
@@ -810,7 +812,13 @@ public class PostgreSqlDialectTests
 
     private class TestConnection : DbConnection
     {
-        public override string ConnectionString { get; set; } = string.Empty;
+        private string _connectionString = string.Empty;
+        [AllowNull]
+        public override string ConnectionString
+        {
+            get => _connectionString;
+            set => _connectionString = value ?? string.Empty;
+        }
         public override string Database => "test";
         public override string DataSource => "localhost";
         public override string ServerVersion => "1.0";

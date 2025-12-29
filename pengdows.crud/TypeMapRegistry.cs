@@ -504,17 +504,12 @@ public sealed class TypeMapRegistry : ITypeMapRegistry
 
     private static bool ShouldInferJson(Type type)
     {
-        if (type == typeof(string) || type == typeof(JsonDocument) || type == typeof(JsonElement))
+        if (type == typeof(JsonDocument) || type == typeof(JsonElement) || type == typeof(types.valueobjects.JsonValue))
         {
             return true;
         }
 
         if (typeof(JsonNode).IsAssignableFrom(type))
-        {
-            return true;
-        }
-
-        if (type == typeof(byte[]) || type == typeof(char[]))
         {
             return true;
         }

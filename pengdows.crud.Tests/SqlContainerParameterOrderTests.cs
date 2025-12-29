@@ -126,7 +126,7 @@ public class SqlContainerParameterOrderTests : SqlLiteContextTestBase
             ExecutionType.Read,
             CancellationToken.None
         })!;
-        var cmd = await task.ConfigureAwait(false);
+        var cmd = await task;
         try
         {
             Assert.Equal(2, container.ParamSequence.Count);
@@ -162,7 +162,7 @@ public class SqlContainerParameterOrderTests : SqlLiteContextTestBase
             ExecutionType.Read,
             CancellationToken.None
         })!;
-        var cmd = await task.ConfigureAwait(false);
+        var cmd = await task;
         try
         {
             Assert.Equal("a", cmd.Parameters[0].ParameterName);

@@ -129,6 +129,7 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
         {
             stopwatch.Stop();
             _logger.LogDebug("Connection opened in {ElapsedMilliseconds} ms", stopwatch.ElapsedMilliseconds);
+            _metricsCollector?.RecordConnectionOpenDuration(stopwatch.ElapsedMilliseconds);
         }
 
         TriggerFirstOpen();
@@ -183,6 +184,7 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
         {
             stopwatch.Stop();
             _logger.LogDebug("Connection opened in {ElapsedMilliseconds} ms", stopwatch.ElapsedMilliseconds);
+            _metricsCollector?.RecordConnectionOpenDuration(stopwatch.ElapsedMilliseconds);
         }
 
         TriggerFirstOpen();
@@ -258,7 +260,7 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
             if (_connection.State != ConnectionState.Closed)
             {
                 _logger.LogWarning("Connection {Name} was still open during Dispose. Closing.", _name);
-                _connection.Close();
+                CloseWithMetrics();
             }
         }
         catch (Exception ex)
@@ -266,6 +268,7 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
             _logger.LogError(ex, "Error while closing connection during Dispose.");
         }
 
+        LocalState.Reset();
         _onDispose?.Invoke(_connection);
         _connection.Dispose();
         DetachMetricsHandler();
@@ -283,7 +286,7 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
             if (_connection.State != ConnectionState.Closed)
             {
                 _logger.LogWarning("Connection {Name} was still open during DisposeAsync. Closing.", _name);
-                _connection.Close();
+                CloseWithMetrics();
             }
         }
         catch (Exception ex)
@@ -291,6 +294,7 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
             _logger.LogError(ex, "Error while closing connection during DisposeAsync.");
         }
 
+        LocalState.Reset();
         _onDispose?.Invoke(_connection);
         try
         {
@@ -338,7 +342,7 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
 
     public void Close()
     {
-        _connection.Close();
+        CloseWithMetrics();
     }
 
     public IDbCommand CreateCommand()
@@ -365,4 +369,23 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
     }
 
     #endregion
+
+    private void CloseWithMetrics()
+    {
+        if (_connection.State == ConnectionState.Closed)
+        {
+            return;
+        }
+
+        var stopwatch = Stopwatch.StartNew();
+        try
+        {
+            _connection.Close();
+        }
+        finally
+        {
+            stopwatch.Stop();
+            _metricsCollector?.RecordConnectionCloseDuration(stopwatch.ElapsedMilliseconds);
+        }
+    }
 }

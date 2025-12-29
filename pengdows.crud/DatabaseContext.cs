@@ -27,7 +27,8 @@ namespace pengdows.crud;
 
 public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IContextIdentity, ISqlDialectProvider, IMetricsCollectorAccessor
 {
-    private readonly DbProviderFactory _factory;
+    private readonly DbProviderFactory? _factory;
+    private readonly DbDataSource? _dataSource;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<IDatabaseContext> _logger;
     private IConnectionStrategy _connectionStrategy = null!;
@@ -57,7 +58,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     private bool? _snapshotIsolationPrefetch;
     private int _initializing; // 0 = false, 1 = true
     private bool _sessionSettingsAppliedOnOpen;
-    private readonly MetricsCollector _metricsCollector;
+    private readonly MetricsCollector? _metricsCollector;
     private EventHandler<DatabaseMetrics>? _metricsUpdated;
     private int _metricsHasActivity;
 
@@ -182,8 +183,150 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             _factory = factory ?? throw new ArgumentNullException(nameof(factory));
             _forceManualPrepare = configuration.ForceManualPrepare;
             _disablePrepare = configuration.DisablePrepare;
-            _metricsCollector = new MetricsCollector(configuration.MetricsOptions ?? MetricsOptions.Default);
-            _metricsCollector.MetricsChanged += OnMetricsCollectorUpdated;
+            if (configuration.EnableMetrics)
+            {
+                _metricsCollector = new MetricsCollector(configuration.MetricsOptions ?? MetricsOptions.Default);
+                _metricsCollector.MetricsChanged += OnMetricsCollectorUpdated;
+            }
+
+            var initialConnection = InitializeInternals(configuration);
+
+            // Build strategies now that mode is final (moved from InitializeInternals)
+            _connectionStrategy = ConnectionStrategyFactory.Create(this, ConnectionMode);
+            _procWrappingStrategy = ProcWrappingStrategyFactory.Create(_procWrappingStyle);
+
+            // Delegate dialect detection to the strategy
+            var (dialect, dataSourceInfo) = _connectionStrategy.HandleDialectDetection(initialConnection, _factory, _loggerFactory);
+
+            if (dialect != null && dataSourceInfo != null)
+            {
+                _dialect = (SqlDialect)dialect;
+                _dataSourceInfo = (DataSourceInformation)dataSourceInfo;
+            }
+            else
+            {
+                // Fall back to a safe SQL-92 dialect when detection fails
+                var logger = _loggerFactory.CreateLogger<SqlDialect>();
+                _dialect = new Sql92Dialect(_factory, logger);
+                _dialect.InitializeUnknownProductInfo();
+                _dataSourceInfo = new DataSourceInformation(_dialect);
+            }
+            Name = _dataSourceInfo.DatabaseProductName;
+            _procWrappingStyle = _dataSourceInfo.ProcWrappingStyle;
+
+            // Apply pooling defaults now that we have the final mode and dialect
+            ApplyDefaultPoolingDefaults();
+
+            if (initialConnection != null)
+            {
+                RCSIEnabled = _rcsiPrefetch ?? _dialect.IsReadCommittedSnapshotOn(initialConnection);
+                SnapshotIsolationEnabled = _snapshotIsolationPrefetch ?? _dialect.IsSnapshotIsolationOn(initialConnection);
+            }
+            else
+            {
+                RCSIEnabled = false;
+                SnapshotIsolationEnabled = false;
+            }
+
+            // Apply session settings for persistent connections now that dialect is initialized
+            if (ConnectionMode != DbMode.Standard)
+            {
+                if (initialConnection != null)
+                {
+                    ApplyPersistentConnectionSessionSettings(initialConnection);
+                }
+                else if (PersistentConnection is not null)
+                {
+                    ApplyPersistentConnectionSessionSettings(PersistentConnection);
+                }
+            }
+
+            // For Standard mode, dispose the connection after dialect initialization is complete
+            if (ConnectionMode == DbMode.Standard && initialConnection != null)
+            {
+                initialConnection.Dispose();
+                // Reset counters to "fresh" state after initialization probe
+                Interlocked.Exchange(ref _connectionCount, 0);
+                Interlocked.Exchange(ref _maxNumberOfOpenConnections, 0);
+            }
+
+            _isolationResolver = new IsolationResolver(Product, RCSIEnabled, SnapshotIsolationEnabled);
+
+            // Connection strategy is created in InitializeInternals(finally) via ConnectionStrategyFactory
+        }
+        catch (Exception e)
+        {
+            _logger?.LogError(e.Message);
+            throw;
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _initializing, 0);
+            if (initLocker is IAsyncDisposable iad)
+            {
+                iad.DisposeAsync().GetAwaiter().GetResult();
+            }
+            else if (initLocker is IDisposable id)
+            {
+                id.Dispose();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Creates a new DatabaseContext using a DbDataSource (e.g., NpgsqlDataSource).
+    /// This provides better performance through shared prepared statement caching.
+    /// </summary>
+    /// <summary>
+    /// Initializes a new DatabaseContext using a DbDataSource for connection creation.
+    /// The DataSource provides better performance through shared prepared statement caching,
+    /// while the factory is still required for creating parameters and other provider objects.
+    /// </summary>
+    /// <param name="configuration">Database configuration</param>
+    /// <param name="dataSource">Data source for creating connections (e.g., NpgsqlDataSource)</param>
+    /// <param name="factory">Provider factory for creating parameters and other objects</param>
+    /// <param name="loggerFactory">Optional logger factory</param>
+    /// <param name="typeMapRegistry">Optional type map registry</param>
+    public DatabaseContext(
+        IDatabaseContextConfiguration configuration,
+        DbDataSource dataSource,
+        DbProviderFactory factory,
+        ILoggerFactory? loggerFactory = null,
+        ITypeMapRegistry? typeMapRegistry = null)
+    {
+        ILockerAsync? initLocker = null;
+        try
+        {
+            initLocker = GetLock();
+            initLocker.LockAsync().GetAwaiter().GetResult();
+            Interlocked.Exchange(ref _initializing, 1);
+            if (configuration is null)
+            {
+                throw new ArgumentNullException(nameof(configuration));
+            }
+            if (string.IsNullOrWhiteSpace(configuration.ConnectionString))
+            {
+                throw new ArgumentException("ConnectionString is required.", nameof(configuration.ConnectionString));
+            }
+            _loggerFactory = loggerFactory ?? NullLoggerFactory.Instance;
+            _logger = _loggerFactory.CreateLogger<IDatabaseContext>();
+            if (TypeCoercionHelper.Logger is NullLogger)
+            {
+                TypeCoercionHelper.Logger =
+                    _loggerFactory.CreateLogger(nameof(TypeCoercionHelper));
+            }
+            ReadWriteMode = configuration.ReadWriteMode;
+            TypeMapRegistry = typeMapRegistry ?? global::pengdows.crud.TypeMapRegistry.Instance;
+            ConnectionMode = configuration.DbMode;
+            _dataSource = dataSource ?? throw new ArgumentNullException(nameof(dataSource));
+            _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+            _forceManualPrepare = configuration.ForceManualPrepare;
+            _disablePrepare = configuration.DisablePrepare;
+            if (configuration.EnableMetrics)
+            {
+                _metricsCollector = new MetricsCollector(configuration.MetricsOptions ?? MetricsOptions.Default);
+                _metricsCollector.MetricsChanged += OnMetricsCollectorUpdated;
+            }
 
             var initialConnection = InitializeInternals(configuration);
 
@@ -291,6 +434,13 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
 
     // Expose original requested mode for internal strategy decisions
     public string ConnectionString => _connectionString;
+
+    /// <summary>
+    /// Gets the DbDataSource if one was provided (e.g., NpgsqlDataSource).
+    /// When available, provides better performance through shared prepared statement caching.
+    /// Null if using traditional DbProviderFactory approach.
+    /// </summary>
+    public DbDataSource? DataSource => _dataSource;
 
     private void SetConnectionString(string value)
     {
@@ -535,6 +685,14 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
 
     private DatabaseMetrics CreateMetricsSnapshot()
     {
+        if (_metricsCollector == null)
+        {
+            return new DatabaseMetrics(
+                SaturateToInt(NumberOfOpenConnections),
+                SaturateToInt(MaxNumberOfConnections),
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        }
+
         var snapshot = _metricsCollector.CreateSnapshot();
         return new DatabaseMetrics(
             SaturateToInt(NumberOfOpenConnections),
@@ -542,6 +700,8 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             snapshot.ConnectionsOpened,
             snapshot.ConnectionsClosed,
             snapshot.AvgConnectionHoldMs,
+            snapshot.AvgConnectionOpenMs,
+            snapshot.AvgConnectionCloseMs,
             snapshot.LongLivedConnections,
             snapshot.CommandsExecuted,
             snapshot.CommandsFailed,
@@ -669,10 +829,24 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     {
         SanitizeConnectionString(connectionString);
 
-        var connection = _factory.CreateConnection() ??
+        // Prefer DataSource over Factory for better performance (shared prepared statement cache)
+        DbConnection connection;
+        if (_dataSource != null)
+        {
+            connection = _dataSource.CreateConnection();
+            // Connection string is already configured in the DataSource
+        }
+        else if (_factory != null)
+        {
+            connection = _factory.CreateConnection() ??
                          throw new InvalidOperationException("Factory returned null DbConnection.");
-        connection.ConnectionString = ConnectionString;
-        _dialect?.ApplyConnectionSettings(connection, this, readOnly);
+            connection.ConnectionString = ConnectionString;
+            _dialect?.ApplyConnectionSettings(connection, this, readOnly);
+        }
+        else
+        {
+            throw new InvalidOperationException("Neither DataSource nor Factory is available.");
+        }
         
         // Increment total connections created counter when a new connection is actually created
         Interlocked.Increment(ref _totalConnectionsCreated);
@@ -919,7 +1093,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             // Optional: RCSI prefetch (SQL Server only)
             bool rcsi = false;
             bool snapshotIsolation = false;
-            if (product == SupportedDatabase.SqlServer)
+            if (initConn != null && product == SupportedDatabase.SqlServer)
             {
                 try
                 {
@@ -958,17 +1132,20 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             // Pooling defaults will be applied after dialect detection
 
             // 5) Apply provider/session settings according to final mode
-            if (ConnectionMode is DbMode.KeepAlive or DbMode.SingleConnection or DbMode.SingleWriter)
+            if (initConn != null)
             {
-                ApplyPersistentConnectionSessionSettings(initConn);
-                SetPersistentConnection(initConn);
-                initConn = null; // context owns it now
-            }
-            else
-            {
-                // Standard: apply per-connection session hints that must be present during dialect init
-                SetupConnectionSessionSettingsForProvider(initConn);
-                // Do NOT SetPersistentConnection
+                if (ConnectionMode is DbMode.KeepAlive or DbMode.SingleConnection or DbMode.SingleWriter)
+                {
+                    ApplyPersistentConnectionSessionSettings(initConn);
+                    SetPersistentConnection(initConn);
+                    initConn = null; // context owns it now
+                }
+                else
+                {
+                    // Standard: apply per-connection session hints that must be present during dialect init
+                    SetupConnectionSessionSettingsForProvider(initConn);
+                    // Do NOT SetPersistentConnection
+                }
             }
 
             // 7) Isolation resolver after product/RCSI known
@@ -987,7 +1164,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     }
 
     /// <summary>Detects DB product/topology with a single parse.</summary>
-    private (SupportedDatabase product, bool isFirebirdEmbedded, bool isLocalDb) DetectProductAndTopology(ITrackedConnection conn, string connectionString)
+    private (SupportedDatabase product, bool isFirebirdEmbedded, bool isLocalDb) DetectProductAndTopology(ITrackedConnection? conn, string connectionString)
     {
         var product = InferProduct(conn);
         bool isLocalDb = false;
@@ -1003,7 +1180,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         {
             try
             {
-                var csb = GetFactoryConnectionStringBuilderStatic(connectionString);
+                var csb = GetFactoryConnectionStringBuilderStatic(connectionString ?? string.Empty);
                 string GetVal(string key) => csb.ContainsKey(key) ? csb[key]?.ToString() ?? string.Empty : string.Empty;
                 var serverType = GetVal("ServerType").ToLowerInvariant();
                 var clientLib = GetVal("ClientLibrary").ToLowerInvariant();
@@ -1023,18 +1200,21 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
         return (product, isFirebirdEmbedded, isLocalDb);
     }
 
-    private SupportedDatabase InferProduct(ITrackedConnection conn)
+    private SupportedDatabase InferProduct(ITrackedConnection? conn)
     {
         try
         {
-            var schema = conn.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
-            if (schema.Rows.Count > 0)
+            if (conn != null)
             {
-                var productName = schema.Rows[0].Field<string>("DataSourceProductName");
-                var detected = DatabaseProductDetector.FromProductName(productName);
-                if (detected != SupportedDatabase.Unknown)
+                var schema = conn.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
+                if (schema.Rows.Count > 0)
                 {
-                    return detected;
+                    var productName = schema.Rows[0].Field<string>("DataSourceProductName");
+                    var detected = DatabaseProductDetector.FromProductName(productName);
+                    if (detected != SupportedDatabase.Unknown)
+                    {
+                        return detected;
+                    }
                 }
             }
         }
@@ -1113,30 +1293,34 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
             // Only configure pooling for databases that support external pooling
             if (_dialect.SupportsExternalPooling)
             {
+                var poolingSettingName = _dialect.PoolingSettingName;
+                var minPoolSettingName = _dialect.MinPoolSizeSettingName;
+
                 // Pooling=true if absent
-                if (!string.IsNullOrEmpty(_dialect.PoolingSettingName) &&
-                    !builder.ContainsKey(_dialect.PoolingSettingName))
+                if (!string.IsNullOrEmpty(poolingSettingName) &&
+                    !builder.ContainsKey(poolingSettingName))
                 {
-                    builder[_dialect.PoolingSettingName] = true;
+                    builder[poolingSettingName] = true;
                     modified = true;
                 }
 
                 // Min pool size if absent and pooling is enabled
                 // SingleConnection and SingleWriter modes maintain persistent connections and don't use pooling
-                if (!string.IsNullOrEmpty(_dialect.MinPoolSizeSettingName) &&
-                    !builder.ContainsKey(_dialect.MinPoolSizeSettingName) &&
+                if (!string.IsNullOrEmpty(minPoolSettingName) &&
+                    !builder.ContainsKey(minPoolSettingName) &&
                     ConnectionMode != DbMode.SingleConnection &&
                     ConnectionMode != DbMode.SingleWriter)
                 {
                     // Only add MinPoolSize if pooling is enabled
-                    var poolingEnabled = !builder.ContainsKey(_dialect.PoolingSettingName) ||
-                                       (builder.ContainsKey(_dialect.PoolingSettingName) &&
-                                        bool.TryParse(builder[_dialect.PoolingSettingName]?.ToString(), out var pooling) && pooling);
+                    var poolingEnabled = string.IsNullOrEmpty(poolingSettingName) ||
+                                       !builder.ContainsKey(poolingSettingName) ||
+                                       (builder.ContainsKey(poolingSettingName) &&
+                                        bool.TryParse(builder[poolingSettingName]?.ToString(), out var pooling) && pooling);
 
                     if (poolingEnabled)
                     {
                         // Set to 1 to enforce pooling (user can specify higher if needed)
-                        builder[_dialect.MinPoolSizeSettingName] = DefaultMinPoolSize;
+                        builder[minPoolSettingName] = DefaultMinPoolSize;
                         modified = true;
                     }
                 }
@@ -1315,16 +1499,25 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     {
         var cs = (connectionString ?? string.Empty).Trim();
         var s = cs.ToLowerInvariant();
+        var normalized = s.Replace(" ", string.Empty);
         if (product == SupportedDatabase.Sqlite)
         {
-            bool modeMem = s.Contains("mode=memory") || s.Contains("filename=:memory:") || s.Contains("data source=:memory:");
+            var dataSource = TryGetDataSourcePath(connectionString ?? string.Empty) ?? string.Empty;
+            var dataSourceLower = dataSource.ToLowerInvariant();
+            var dataSourceIsMemory = dataSourceLower.Contains(":memory:");
+            bool modeMem = normalized.Contains("mode=memory") ||
+                           normalized.Contains("filename=:memory:") ||
+                           normalized.Contains("datasource=:memory:") ||
+                           dataSourceIsMemory;
             if (!modeMem)
             {
                 return InMemoryKind.None;
             }
 
-            bool cacheShared = s.Contains("cache=shared");
-            bool dsIsLiteralMem = s.Contains("data source=:memory:") || s.Contains("filename=:memory:");
+            bool cacheShared = normalized.Contains("cache=shared");
+            bool dsIsLiteralMem = dataSourceIsMemory ||
+                                  normalized.Contains("datasource=:memory:") ||
+                                  normalized.Contains("filename=:memory:");
             if (cacheShared && !dsIsLiteralMem)
             {
                 return InMemoryKind.Shared; // e.g., file:name?mode=memory&cache=shared
@@ -1718,7 +1911,10 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
 
     protected override void DisposeManaged()
     {
-        _metricsCollector.MetricsChanged -= OnMetricsCollectorUpdated;
+        if (_metricsCollector != null)
+        {
+            _metricsCollector.MetricsChanged -= OnMetricsCollectorUpdated;
+        }
         try
         {
             _connection?.Dispose();
@@ -1736,7 +1932,10 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
 
     protected override async ValueTask DisposeManagedAsync()
     {
-        _metricsCollector.MetricsChanged -= OnMetricsCollectorUpdated;
+        if (_metricsCollector != null)
+        {
+            _metricsCollector.MetricsChanged -= OnMetricsCollectorUpdated;
+        }
         try
         {
             if (_connection is IAsyncDisposable ad)

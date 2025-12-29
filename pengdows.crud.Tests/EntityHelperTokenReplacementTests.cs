@@ -27,7 +27,9 @@ public class EntityHelperTokenReplacementTests : SqlLiteContextTestBase
         var entity = new TokenEntity { Id = 1 };
         var sc = helper.BuildCreate(entity);
         var sql = sc.Query.ToString();
+        #pragma warning disable CS0618 // Type or member is obsolete
         var replaced = helper.ReplaceDialectTokens(sql, "[", "]", ":");
+        #pragma warning restore CS0618 // Type or member is obsolete
         Assert.Equal("INSERT INTO [Tokens] ([Id]) VALUES (:i0)", replaced);
     }
 
@@ -35,7 +37,8 @@ public class EntityHelperTokenReplacementTests : SqlLiteContextTestBase
     public void ReplaceDialectTokens_NullSql_Throws()
     {
         var helper = new EntityHelper<TokenEntity, int>(Context);
+        #pragma warning disable CS0618 // Type or member is obsolete
         Assert.Throws<ArgumentNullException>(() => helper.ReplaceDialectTokens(null!, "[", "]", ":"));
+        #pragma warning restore CS0618 // Type or member is obsolete
     }
 }
-

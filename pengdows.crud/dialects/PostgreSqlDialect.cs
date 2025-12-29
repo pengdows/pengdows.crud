@@ -58,6 +58,11 @@ public class PostgreSqlDialect : SqlDialect
     public override bool SupportsJsonTable => IsVersionAtLeast(18);
     public override bool SupportsMergeReturning => IsVersionAtLeast(18);
 
+    // PostgreSQL MERGE does NOT allow table alias on left side of UPDATE SET
+    // Correct: UPDATE SET col = value
+    // Error:   UPDATE SET t.col = value  -- "column 't' of relation 'table' does not exist"
+    public override bool MergeUpdateRequiresTargetAlias => false;
+
     public override bool SupportsInsertReturning => true;
 
     public override string GetInsertReturningClause(string idColumnName)

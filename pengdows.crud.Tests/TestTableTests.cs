@@ -19,6 +19,7 @@ public class TestTableTests
     public void IdProperty_ShouldHave_IdAndColumnAttributes()
     {
         var prop = typeof(TestTable).GetProperty("Id");
+        Assert.NotNull(prop);
 
         Assert.NotNull(prop.GetCustomAttribute<IdAttribute>());
     
@@ -32,6 +33,7 @@ public class TestTableTests
     public void NameProperty_ShouldHave_EnumColumnAttribute()
     {
         var prop = typeof(TestTable).GetProperty("Name");
+        Assert.NotNull(prop);
 
         var enumAttr = prop.GetCustomAttribute<EnumColumnAttribute>();
         Assert.NotNull(enumAttr);
@@ -42,6 +44,7 @@ public class TestTableTests
     public void CreatedAt_ShouldHave_CreatedOnAttribute()
     {
         var prop = typeof(TestTable).GetProperty("CreatedAt");
+        Assert.NotNull(prop);
         Assert.NotNull(prop.GetCustomAttribute<CreatedOnAttribute>());
     }
 
@@ -49,6 +52,7 @@ public class TestTableTests
     public void JsonProperty_ShouldHave_JsonAttribute()
     {
         var prop = typeof(TestTable).GetProperty("JsonProperty");
+        Assert.NotNull(prop);
         Assert.NotNull(prop.GetCustomAttribute<JsonAttribute>());
     }
 
@@ -56,6 +60,7 @@ public class TestTableTests
     public void NonUpdateableColumn_ShouldHave_NonUpdateableAttribute()
     {
         var prop = typeof(TestTable).GetProperty("NonUpdateableColumn");
+        Assert.NotNull(prop);
         Assert.NotNull(prop.GetCustomAttribute<NonUpdateableAttribute>());
     }
 

@@ -161,7 +161,7 @@ public class MaterializedViewBenchmarks : IAsyncDisposable
                 var amount = 100 + random.Next(1, 1000);
                 await conn.ExecuteAsync(@"
                     INSERT INTO orders (customer_id, total_amount, order_date)
-                    VALUES (@customerId, @amount, NOW() - INTERVAL '@daysAgo days')",
+                    VALUES (@customerId, @amount, NOW() - (@daysAgo * INTERVAL '1 day'))",
                     new {
                         customerId,
                         amount,

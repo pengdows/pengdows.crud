@@ -72,7 +72,7 @@ public class AdditionalCoverageTests : SqlLiteContextTestBase
     }
 
     [Fact]
-    public async Task SqlContainer_Clone_CreatesIndependentCopy()
+    public void SqlContainer_Clone_CreatesIndependentCopy()
     {
         // Arrange
         var container = Context.CreateSqlContainer("SELECT 1");
