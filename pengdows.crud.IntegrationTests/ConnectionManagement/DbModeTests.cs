@@ -129,7 +129,7 @@ public class DbModeTests : DatabaseTestBase
             var allEntities = await helper.RetrieveAsync(new[] { entity1.Id, entity2.Id }, singleWriterContext);
 
             // Write operation (update)
-            entity1.Name = $"Updated-{provider}";
+            entity1.Name = NameEnum.Test2;
             await helper.UpdateAsync(entity1, singleWriterContext);
 
             // Assert
@@ -171,9 +171,9 @@ public class DbModeTests : DatabaseTestBase
             await helper.CreateAsync(entity2, singleConnContext);
 
             // Use transaction to test single connection behavior
-            using var transaction = await singleConnContext.BeginTransactionAsync();
+            using var transaction = singleConnContext.BeginTransaction();
 
-            entity1.Name = "TransactionUpdate";
+            entity1.Name = NameEnum.Test;
             await helper.UpdateAsync(entity1, transaction);
 
             var retrieved = await helper.RetrieveOneAsync(entity1.Id, transaction);
@@ -342,55 +342,5 @@ public class DbModeTests : DatabaseTestBase
         return connectionString.Contains("Pooling=")
             ? connectionString
             : $"{connectionString};Pooling={poolingValue}";
-    }
-}
-
-/// <summary>
-/// Helper class for test table creation (minimal version for this test file)
-/// </summary>
-internal class TestTableCreator
-{
-    private readonly IDatabaseContext _context;
-
-    public TestTableCreator(IDatabaseContext context)
-    {
-        _context = context;
-    }
-
-    public async Task CreateTestTableAsync()
-    {
-        var sql = _context.Product switch
-        {
-            SupportedDatabase.Sqlite => @"
-                CREATE TABLE IF NOT EXISTS TestTable (
-                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    Name TEXT NOT NULL,
-                    Value INTEGER NOT NULL,
-                    Description TEXT,
-                    IsActive INTEGER NOT NULL DEFAULT 1,
-                    CreatedOn TEXT NOT NULL,
-                    CreatedBy TEXT,
-                    LastUpdatedOn TEXT,
-                    LastUpdatedBy TEXT,
-                    Version INTEGER NOT NULL DEFAULT 1
-                )",
-            SupportedDatabase.PostgreSql => @"
-                CREATE TABLE IF NOT EXISTS TestTable (
-                    Id BIGSERIAL PRIMARY KEY,
-                    Name VARCHAR(255) NOT NULL,
-                    Value INTEGER NOT NULL,
-                    Description TEXT,
-                    IsActive BOOLEAN NOT NULL DEFAULT TRUE,
-                    CreatedOn TIMESTAMP NOT NULL DEFAULT NOW(),
-                    CreatedBy VARCHAR(100),
-                    LastUpdatedOn TIMESTAMP,
-                    LastUpdatedBy VARCHAR(100),
-                    Version INTEGER NOT NULL DEFAULT 1
-                )",
-            _ => throw new NotSupportedException($"Database {_context.Product} not supported in this test")
-        };
-
-        using var container = _context.CreateSqlContainer(sql);
-        await container.ExecuteNonQueryAsync();
     }
 }

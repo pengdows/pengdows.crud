@@ -113,7 +113,7 @@ public class ReadOnlyConnectionTests : DatabaseTestBase
             Assert.NotNull(initialRead);
 
             // Concurrently modify the entity outside the readonly transaction
-            entity.Name = $"Modified-{provider}";
+            entity.Name = NameEnum.Test2;
             await helper.UpdateAsync(entity, context);
 
             // Read again in readonly transaction - should see original value
@@ -292,7 +292,7 @@ public class ReadOnlyConnectionTests : DatabaseTestBase
             await helper.CreateAsync(newEntity, context);
 
             // Update existing entity outside readonly transaction
-            initialEntities[0].Name = $"Updated-{provider}";
+            initialEntities[0].Name = NameEnum.Test2;
             await helper.UpdateAsync(initialEntities[0], context);
 
             // Read again in readonly transaction after external changes

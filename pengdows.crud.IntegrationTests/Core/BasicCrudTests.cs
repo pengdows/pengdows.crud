@@ -30,7 +30,7 @@ public class BasicCrudTests : DatabaseTestBase
         {
             // Arrange
             var helper = CreateEntityHelper(context);
-            var entity = CreateTestEntity($"Test-{provider}-{Guid.NewGuid()}", 42);
+            var entity = CreateTestEntity(NameEnum.Test, 42);
 
             // Act
             var result = await helper.CreateAsync(entity, context);
@@ -54,7 +54,7 @@ public class BasicCrudTests : DatabaseTestBase
         {
             // Arrange
             var helper = CreateEntityHelper(context);
-            var entity = CreateTestEntity($"Retrieve-{provider}", 99);
+            var entity = CreateTestEntity(NameEnum.Test, 99);
             await helper.CreateAsync(entity, context);
 
             // Act
@@ -94,9 +94,9 @@ public class BasicCrudTests : DatabaseTestBase
             var helper = CreateEntityHelper(context);
             var entities = new[]
             {
-                CreateTestEntity($"Multi1-{provider}", 10),
-                CreateTestEntity($"Multi2-{provider}", 20),
-                CreateTestEntity($"Multi3-{provider}", 30)
+                CreateTestEntity(NameEnum.Test, 10),
+                CreateTestEntity(NameEnum.Test, 20),
+                CreateTestEntity(NameEnum.Test, 30)
             };
 
             // Insert test data
@@ -123,11 +123,11 @@ public class BasicCrudTests : DatabaseTestBase
         {
             // Arrange
             var helper = CreateEntityHelper(context);
-            var entity = CreateTestEntity($"Update-{provider}", 100);
+            var entity = CreateTestEntity(NameEnum.Test, 100);
             await helper.CreateAsync(entity, context);
 
             // Act - Update the entity
-            entity.Name = $"Updated-{provider}";
+            entity.Name = NameEnum.Test2;
             entity.Value = 999;
             var updateCount = await helper.UpdateAsync(entity, context);
 
@@ -149,7 +149,7 @@ public class BasicCrudTests : DatabaseTestBase
         {
             // Arrange
             var helper = CreateEntityHelper(context);
-            var entity = CreateTestEntity($"NonExistent-{provider}", 500);
+            var entity = CreateTestEntity(NameEnum.Test, 500);
             entity.Id = -999999; // Non-existent ID
 
             // Act
@@ -167,7 +167,7 @@ public class BasicCrudTests : DatabaseTestBase
         {
             // Arrange
             var helper = CreateEntityHelper(context);
-            var entity = CreateTestEntity($"Delete-{provider}", 200);
+            var entity = CreateTestEntity(NameEnum.Test, 200);
             await helper.CreateAsync(entity, context);
 
             // Act
@@ -191,9 +191,9 @@ public class BasicCrudTests : DatabaseTestBase
             var helper = CreateEntityHelper(context);
             var entities = new[]
             {
-                CreateTestEntity($"BulkDelete1-{provider}", 301),
-                CreateTestEntity($"BulkDelete2-{provider}", 302),
-                CreateTestEntity($"BulkDelete3-{provider}", 303)
+                CreateTestEntity(NameEnum.Test, 301),
+                CreateTestEntity(NameEnum.Test, 302),
+                CreateTestEntity(NameEnum.Test, 303)
             };
 
             foreach (var entity in entities)
@@ -222,7 +222,7 @@ public class BasicCrudTests : DatabaseTestBase
         {
             // Arrange
             var helper = CreateEntityHelper(context);
-            var entity = CreateTestEntity($"UpsertNew-{provider}", 400);
+            var entity = CreateTestEntity(NameEnum.Test, 400);
 
             // Act
             var upsertCount = await helper.UpsertAsync(entity, context);
@@ -252,11 +252,11 @@ public class BasicCrudTests : DatabaseTestBase
 
             // Arrange
             var helper = CreateEntityHelper(context);
-            var entity = CreateTestEntity($"UpsertExisting-{provider}", 500);
+            var entity = CreateTestEntity(NameEnum.Test, 500);
             await helper.CreateAsync(entity, context);
 
             // Act - Upsert with changes
-            entity.Name = $"UpsertUpdated-{provider}";
+            entity.Name = NameEnum.Test2;
             entity.Value = 999;
             var upsertCount = await helper.UpsertAsync(entity, context);
 
@@ -273,12 +273,12 @@ public class BasicCrudTests : DatabaseTestBase
 
     private EntityHelper<TestTable, long> CreateEntityHelper(IDatabaseContext context)
     {
-        var auditResolver = Host.Services.GetService<IAuditValueResolver>() ??
+        var auditResolver = Host.Services.GetService(typeof(IAuditValueResolver)) as IAuditValueResolver ??
                            new StringAuditContextProvider();
         return new EntityHelper<TestTable, long>(context, auditValueResolver: auditResolver);
     }
 
-    private static TestTable CreateTestEntity(string name, int value)
+    private static TestTable CreateTestEntity(NameEnum name, int value)
     {
         return new TestTable
         {
@@ -297,115 +297,4 @@ public class BasicCrudTests : DatabaseTestBase
                           SupportedDatabase.Firebird or
                           SupportedDatabase.PostgreSql; // PostgreSQL 15+
     }
-}
-
-/// <summary>
-/// Helper class to create test tables across different database providers
-/// </summary>
-internal class TestTableCreator
-{
-    private readonly IDatabaseContext _context;
-
-    public TestTableCreator(IDatabaseContext context)
-    {
-        _context = context;
-    }
-
-    public async Task CreateTestTableAsync()
-    {
-        var sql = _context.Product switch
-        {
-            SupportedDatabase.Sqlite => CreateSqliteTableSql(),
-            SupportedDatabase.PostgreSql => CreatePostgreSqlTableSql(),
-            SupportedDatabase.SqlServer => CreateSqlServerTableSql(),
-            SupportedDatabase.MySql => CreateMySqlTableSql(),
-            SupportedDatabase.MariaDb => CreateMariaDbTableSql(),
-            SupportedDatabase.Oracle => CreateOracleTableSql(),
-            _ => throw new NotSupportedException($"Database {_context.Product} not supported")
-        };
-
-        using var container = _context.CreateSqlContainer(sql);
-        await container.ExecuteNonQueryAsync();
-    }
-
-    private string CreateSqliteTableSql() => @"
-        CREATE TABLE IF NOT EXISTS TestTable (
-            Id INTEGER PRIMARY KEY AUTOINCREMENT,
-            Name TEXT NOT NULL,
-            Value INTEGER NOT NULL,
-            Description TEXT,
-            IsActive INTEGER NOT NULL DEFAULT 1,
-            CreatedOn TEXT NOT NULL,
-            CreatedBy TEXT,
-            LastUpdatedOn TEXT,
-            LastUpdatedBy TEXT,
-            Version INTEGER NOT NULL DEFAULT 1
-        )";
-
-    private string CreatePostgreSqlTableSql() => @"
-        CREATE TABLE IF NOT EXISTS TestTable (
-            Id BIGSERIAL PRIMARY KEY,
-            Name VARCHAR(255) NOT NULL,
-            Value INTEGER NOT NULL,
-            Description TEXT,
-            IsActive BOOLEAN NOT NULL DEFAULT TRUE,
-            CreatedOn TIMESTAMP NOT NULL DEFAULT NOW(),
-            CreatedBy VARCHAR(100),
-            LastUpdatedOn TIMESTAMP,
-            LastUpdatedBy VARCHAR(100),
-            Version INTEGER NOT NULL DEFAULT 1
-        )";
-
-    private string CreateSqlServerTableSql() => @"
-        IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[TestTable]') AND type in (N'U'))
-        CREATE TABLE [dbo].[TestTable] (
-            [Id] BIGINT IDENTITY(1,1) PRIMARY KEY,
-            [Name] NVARCHAR(255) NOT NULL,
-            [Value] INT NOT NULL,
-            [Description] NVARCHAR(MAX),
-            [IsActive] BIT NOT NULL DEFAULT 1,
-            [CreatedOn] DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
-            [CreatedBy] NVARCHAR(100),
-            [LastUpdatedOn] DATETIME2,
-            [LastUpdatedBy] NVARCHAR(100),
-            [Version] INT NOT NULL DEFAULT 1
-        )";
-
-    private string CreateMySqlTableSql() => @"
-        CREATE TABLE IF NOT EXISTS TestTable (
-            Id BIGINT AUTO_INCREMENT PRIMARY KEY,
-            Name VARCHAR(255) NOT NULL,
-            Value INT NOT NULL,
-            Description TEXT,
-            IsActive BOOLEAN NOT NULL DEFAULT TRUE,
-            CreatedOn TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            CreatedBy VARCHAR(100),
-            LastUpdatedOn TIMESTAMP NULL,
-            LastUpdatedBy VARCHAR(100),
-            Version INT NOT NULL DEFAULT 1
-        )";
-
-    private string CreateMariaDbTableSql() => CreateMySqlTableSql(); // Same as MySQL
-
-    private string CreateOracleTableSql() => @"
-        DECLARE
-            table_exists NUMBER;
-        BEGIN
-            SELECT COUNT(*) INTO table_exists FROM user_tables WHERE table_name = 'TESTTABLE';
-            IF table_exists = 0 THEN
-                EXECUTE IMMEDIATE '
-                    CREATE TABLE TestTable (
-                        Id NUMBER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
-                        Name VARCHAR2(255) NOT NULL,
-                        Value NUMBER NOT NULL,
-                        Description CLOB,
-                        IsActive NUMBER(1) DEFAULT 1 NOT NULL,
-                        CreatedOn TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-                        CreatedBy VARCHAR2(100),
-                        LastUpdatedOn TIMESTAMP,
-                        LastUpdatedBy VARCHAR2(100),
-                        Version NUMBER DEFAULT 1 NOT NULL
-                    )';
-            END IF;
-        END;";
 }

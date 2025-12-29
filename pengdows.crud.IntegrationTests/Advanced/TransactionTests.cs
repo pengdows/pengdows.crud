@@ -62,10 +62,10 @@ public class TransactionTests : DatabaseTestBase
             await helper.CreateAsync(transactionEntity, transaction);
 
             // Update existing entity
-            initialEntity.Name = $"Modified-{provider}";
+            initialEntity.Name = NameEnum.Test2;
             await helper.UpdateAsync(initialEntity, transaction);
 
-            await transaction.RollbackAsync();
+            transaction.Rollback();
 
             // Assert - Transaction changes should not be visible
             var rollbackEntity = await helper.RetrieveOneAsync(transactionEntity.Id, context);
@@ -138,7 +138,7 @@ public class TransactionTests : DatabaseTestBase
             Assert.NotNull(beforeUpdate);
 
             // Simulate concurrent update outside transaction
-            entity.Name = $"Updated-{provider}";
+            entity.Name = NameEnum.Test2;
             await helper.UpdateAsync(entity, context);
 
             // Read again in same transaction - should see the committed change (Read Committed)
@@ -217,7 +217,7 @@ public class TransactionTests : DatabaseTestBase
             var task1 = Task.Run(async () =>
             {
                 using var transaction = context.BeginTransaction();
-                entity1.Name = $"Updated1-{provider}";
+                entity1.Name = NameEnum.Test2;
                 await helper.UpdateAsync(entity1, transaction);
 
                 // Small delay to increase chance of conflict
@@ -231,7 +231,7 @@ public class TransactionTests : DatabaseTestBase
             var task2 = Task.Run(async () =>
             {
                 using var transaction = context.BeginTransaction();
-                entity2.Name = $"Updated2-{provider}";
+                entity2.Name = NameEnum.Test2;
                 await helper.UpdateAsync(entity2, transaction);
 
                 // Small delay to increase chance of conflict
@@ -312,7 +312,7 @@ public class TransactionTests : DatabaseTestBase
 
             readonlyTransaction.Commit();
 
-            _output.WriteLine($"ReadOnly transaction test completed for {provider} - read operations succeeded");
+            Output.WriteLine($"ReadOnly transaction test completed for {provider} - read operations succeeded");
         });
     }
 
@@ -324,7 +324,7 @@ public class TransactionTests : DatabaseTestBase
             // Skip if provider doesn't support multiple isolation levels
             if (!SupportsMultipleIsolationLevels(provider))
             {
-                _output.WriteLine($"Skipping isolation level test for {provider} - limited isolation support");
+                Output.WriteLine($"Skipping isolation level test for {provider} - limited isolation support");
                 return;
             }
 
@@ -354,7 +354,7 @@ public class TransactionTests : DatabaseTestBase
                 repeatableReadTxn.Commit();
             }
 
-            _output.WriteLine($"ReadOnly isolation level test completed for {provider}");
+            Output.WriteLine($"ReadOnly isolation level test completed for {provider}");
         });
     }
 
@@ -392,7 +392,7 @@ public class TransactionTests : DatabaseTestBase
                 using var writeTxn = context.BeginTransaction(
                     IsolationLevel.ReadCommitted, ExecutionType.Write);
 
-                entity1.Name = $"Modified-{provider}";
+                entity1.Name = NameEnum.Test2;
                 await helper.UpdateAsync(entity1, writeTxn);
                 writeTxn.Commit();
                 return true;
@@ -406,7 +406,7 @@ public class TransactionTests : DatabaseTestBase
             Assert.NotNull(readResults[1]);
             Assert.True(writeResult);
 
-            _output.WriteLine($"Concurrent read/write transaction test completed for {provider}");
+            Output.WriteLine($"Concurrent read/write transaction test completed for {provider}");
         });
     }
 
@@ -450,7 +450,7 @@ public class TransactionTests : DatabaseTestBase
             Assert.Equal(initialCount, laterEntities.Count);
             Assert.All(laterEntities, e => Assert.NotNull(e));
 
-            _output.WriteLine($"Long-running readonly transaction maintained consistency for {provider}: {laterEntities.Count} entities");
+            Output.WriteLine($"Long-running readonly transaction maintained consistency for {provider}: {laterEntities.Count} entities");
         });
     }
 
@@ -516,167 +516,4 @@ public class TransactionTests : DatabaseTestBase
     {
         return provider is SupportedDatabase.SqlServer or SupportedDatabase.PostgreSql or SupportedDatabase.Oracle;
     }
-}
-
-/// <summary>
-/// Extended test table creator that includes additional tables for advanced tests
-/// </summary>
-internal class TestTableCreator
-{
-    private readonly IDatabaseContext _context;
-
-    public TestTableCreator(IDatabaseContext context)
-    {
-        _context = context;
-    }
-
-    public async Task CreateTestTableAsync()
-    {
-        // Basic test table creation logic from previous file
-        var sql = _context.Product switch
-        {
-            SupportedDatabase.Sqlite => CreateSqliteTableSql(),
-            SupportedDatabase.PostgreSql => CreatePostgreSqlTableSql(),
-            SupportedDatabase.SqlServer => CreateSqlServerTableSql(),
-            SupportedDatabase.MySql => CreateMySqlTableSql(),
-            SupportedDatabase.MariaDb => CreateMariaDbTableSql(),
-            SupportedDatabase.Oracle => CreateOracleTableSql(),
-            _ => throw new NotSupportedException($"Database {_context.Product} not supported")
-        };
-
-        using var container = _context.CreateSqlContainer(sql);
-        await container.ExecuteNonQueryAsync();
-    }
-
-    public async Task CreateAccountTableAsync()
-    {
-        var sql = _context.Product switch
-        {
-            SupportedDatabase.Sqlite => @"
-                CREATE TABLE IF NOT EXISTS accounts (
-                    id INTEGER PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    balance DECIMAL(18,2) NOT NULL DEFAULT 0.00
-                )",
-            SupportedDatabase.PostgreSql => @"
-                CREATE TABLE IF NOT EXISTS accounts (
-                    id BIGINT PRIMARY KEY,
-                    name VARCHAR(255) NOT NULL,
-                    balance DECIMAL(18,2) NOT NULL DEFAULT 0.00
-                )",
-            SupportedDatabase.SqlServer => @"
-                IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[accounts]') AND type in (N'U'))
-                CREATE TABLE [dbo].[accounts] (
-                    [id] BIGINT PRIMARY KEY,
-                    [name] NVARCHAR(255) NOT NULL,
-                    [balance] DECIMAL(18,2) NOT NULL DEFAULT 0.00
-                )",
-            SupportedDatabase.MySql or SupportedDatabase.MariaDb => @"
-                CREATE TABLE IF NOT EXISTS accounts (
-                    id BIGINT PRIMARY KEY,
-                    name VARCHAR(255) NOT NULL,
-                    balance DECIMAL(18,2) NOT NULL DEFAULT 0.00
-                )",
-            SupportedDatabase.Oracle => @"
-                DECLARE
-                    table_exists NUMBER;
-                BEGIN
-                    SELECT COUNT(*) INTO table_exists FROM user_tables WHERE table_name = 'ACCOUNTS';
-                    IF table_exists = 0 THEN
-                        EXECUTE IMMEDIATE '
-                            CREATE TABLE accounts (
-                                id NUMBER PRIMARY KEY,
-                                name VARCHAR2(255) NOT NULL,
-                                balance DECIMAL(18,2) DEFAULT 0.00 NOT NULL
-                            )';
-                    END IF;
-                END;",
-            _ => throw new NotSupportedException($"Database {_context.Product} not supported")
-        };
-
-        using var container = _context.CreateSqlContainer(sql);
-        await container.ExecuteNonQueryAsync();
-    }
-
-    // Simplified table creation methods (full implementations would be in the previous file)
-    private string CreateSqliteTableSql() => @"
-        CREATE TABLE IF NOT EXISTS TestTable (
-            Id INTEGER PRIMARY KEY AUTOINCREMENT,
-            Name TEXT NOT NULL,
-            Value INTEGER NOT NULL,
-            Description TEXT,
-            IsActive INTEGER NOT NULL DEFAULT 1,
-            CreatedOn TEXT NOT NULL,
-            CreatedBy TEXT,
-            LastUpdatedOn TEXT,
-            LastUpdatedBy TEXT,
-            Version INTEGER NOT NULL DEFAULT 1
-        )";
-
-    private string CreatePostgreSqlTableSql() => @"
-        CREATE TABLE IF NOT EXISTS TestTable (
-            Id BIGSERIAL PRIMARY KEY,
-            Name VARCHAR(255) NOT NULL,
-            Value INTEGER NOT NULL,
-            Description TEXT,
-            IsActive BOOLEAN NOT NULL DEFAULT TRUE,
-            CreatedOn TIMESTAMP NOT NULL DEFAULT NOW(),
-            CreatedBy VARCHAR(100),
-            LastUpdatedOn TIMESTAMP,
-            LastUpdatedBy VARCHAR(100),
-            Version INTEGER NOT NULL DEFAULT 1
-        )";
-
-    private string CreateSqlServerTableSql() => @"
-        IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[TestTable]') AND type in (N'U'))
-        CREATE TABLE [dbo].[TestTable] (
-            [Id] BIGINT IDENTITY(1,1) PRIMARY KEY,
-            [Name] NVARCHAR(255) NOT NULL,
-            [Value] INT NOT NULL,
-            [Description] NVARCHAR(MAX),
-            [IsActive] BIT NOT NULL DEFAULT 1,
-            [CreatedOn] DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
-            [CreatedBy] NVARCHAR(100),
-            [LastUpdatedOn] DATETIME2,
-            [LastUpdatedBy] NVARCHAR(100),
-            [Version] INT NOT NULL DEFAULT 1
-        )";
-
-    private string CreateMySqlTableSql() => @"
-        CREATE TABLE IF NOT EXISTS TestTable (
-            Id BIGINT AUTO_INCREMENT PRIMARY KEY,
-            Name VARCHAR(255) NOT NULL,
-            Value INT NOT NULL,
-            Description TEXT,
-            IsActive BOOLEAN NOT NULL DEFAULT TRUE,
-            CreatedOn TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            CreatedBy VARCHAR(100),
-            LastUpdatedOn TIMESTAMP NULL,
-            LastUpdatedBy VARCHAR(100),
-            Version INT NOT NULL DEFAULT 1
-        )";
-
-    private string CreateMariaDbTableSql() => CreateMySqlTableSql();
-
-    private string CreateOracleTableSql() => @"
-        DECLARE
-            table_exists NUMBER;
-        BEGIN
-            SELECT COUNT(*) INTO table_exists FROM user_tables WHERE table_name = 'TESTTABLE';
-            IF table_exists = 0 THEN
-                EXECUTE IMMEDIATE '
-                    CREATE TABLE TestTable (
-                        Id NUMBER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
-                        Name VARCHAR2(255) NOT NULL,
-                        Value NUMBER NOT NULL,
-                        Description CLOB,
-                        IsActive NUMBER(1) DEFAULT 1 NOT NULL,
-                        CreatedOn TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-                        CreatedBy VARCHAR2(100),
-                        LastUpdatedOn TIMESTAMP,
-                        LastUpdatedBy VARCHAR2(100),
-                        Version NUMBER DEFAULT 1 NOT NULL
-                    )';
-            END IF;
-        END;";
 }
