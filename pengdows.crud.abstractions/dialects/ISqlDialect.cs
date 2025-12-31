@@ -300,6 +300,11 @@ public interface ISqlDialect
     string UpsertIncomingColumn(string columnName);
 
     /// <summary>
+    /// Optional alias used to reference incoming values during upsert.
+    /// </summary>
+    string? UpsertIncomingAlias { get; }
+
+    /// <summary>
     /// Creates a parameter with the specified name, type, and value.
     /// </summary>
     /// <typeparam name="T">Parameter value type.</typeparam>

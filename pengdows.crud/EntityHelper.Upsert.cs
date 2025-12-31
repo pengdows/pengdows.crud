@@ -264,7 +264,15 @@ public partial class EntityHelper<TEntity, TRowID>
             .Append(string.Join(", ", columns))
             .Append(") VALUES (")
             .Append(string.Join(", ", values))
-            .Append(") ON DUPLICATE KEY UPDATE ")
+            .Append(")");
+
+        var incomingAlias = dialect.UpsertIncomingAlias;
+        if (!string.IsNullOrEmpty(incomingAlias))
+        {
+            sc.Query.Append(" AS ").Append(dialect.WrapObjectName(incomingAlias));
+        }
+
+        sc.Query.Append(" ON DUPLICATE KEY UPDATE ")
             .Append(updateSet);
 
         sc.AddParameters(parameters);

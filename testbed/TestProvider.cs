@@ -3,6 +3,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using pengdows.crud;
 using pengdows.crud.enums;
+using System.Text.Json;
 
 #endregion
 
@@ -161,7 +162,7 @@ CREATE TABLE {qp}test_table{qs} (
         {
             Id = id,
             Name = name,
-            Description = ctx.GenerateRandomName()
+            Description = JsonSerializer.Serialize(ctx.GenerateRandomName())
         };
         var sq = _helper.BuildCreate(t, ctx);
         var rows = await sq.ExecuteNonQueryAsync();

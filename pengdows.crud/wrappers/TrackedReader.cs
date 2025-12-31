@@ -12,11 +12,9 @@ namespace pengdows.crud.wrappers;
 
 public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
 {
-    private readonly ITrackedConnection _connection;
     private readonly IAsyncDisposable _connectionLocker;
     private DbCommand? _command;
     private readonly DbDataReader _reader;
-    private readonly bool _shouldCloseConnection;
 
     internal TrackedReader(
         DbDataReader reader,
@@ -26,9 +24,9 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
         DbCommand? command = null)
     {
         _reader = reader;
-        _connection = connection;
         _connectionLocker = connectionLocker;
-        _shouldCloseConnection = shouldCloseConnection;
+        _ = connection;
+        _ = shouldCloseConnection;
         _command = command;
     }
 
@@ -37,10 +35,6 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
         _command?.Dispose();
         _reader.Dispose();
         DisposeCommand();
-        if (_shouldCloseConnection)
-        {
-            _connection.Close();
-        }
 
         DisposeLockerSynchronously();
     }
@@ -188,10 +182,6 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
     {
         await _reader.DisposeAsync();
         DisposeCommand();
-        if (_shouldCloseConnection)
-        {
-            _connection.Close();
-        }
 
         await _connectionLocker.DisposeAsync().ConfigureAwait(false);
     }

@@ -7,7 +7,7 @@ public abstract class SafeAsyncDisposableBase : ISafeAsyncDisposableBase, IDispo
 {
     // 0 = active, 1 = disposed (or disposing)
     private int _disposed;
-    public bool IsDisposed => Volatile.Read(ref _disposed) != 0;
+    public bool IsDisposed => TrackDisposeState && Volatile.Read(ref _disposed) != 0;
 
     public void Dispose()
     {
@@ -122,5 +122,18 @@ public abstract class SafeAsyncDisposableBase : ISafeAsyncDisposableBase, IDispo
         throw new ObjectDisposedException(GetType().FullName);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private bool TryBeginDispose() => Interlocked.Exchange(ref _disposed, 1) == 0;
+    private bool TryBeginDispose()
+    {
+        if (!TrackDisposeState)
+        {
+            return true;
+        }
+
+        return Interlocked.Exchange(ref _disposed, 1) == 0;
+    }
+
+    /// <summary>
+    /// Allows derived types to opt out of disposal state tracking when they are stateless/singleton.
+    /// </summary>
+    protected virtual bool TrackDisposeState => true;
 }

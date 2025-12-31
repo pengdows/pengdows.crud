@@ -498,6 +498,8 @@ public abstract class SqlDialect:ISqlDialect
         return $"EXCLUDED.{WrapObjectName(columnName)}";
     }
 
+    public virtual string? UpsertIncomingAlias => null;
+
     /// <summary>
     /// Get a parameter from the pool or create a new one. For internal use by hot paths.
     /// </summary>

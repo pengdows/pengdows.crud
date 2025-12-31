@@ -146,7 +146,7 @@ public class TrackedReaderTests
 
         Assert.False(result);
         Assert.True(locker.WasDisposed);
-        Assert.True(connection.WasClosed);
+        Assert.False(connection.WasClosed);
     }
 
     [Fact]
@@ -163,7 +163,7 @@ public class TrackedReaderTests
         var result = tracked.Read();
 
         Assert.False(result);
-        Assert.True(connection.WasClosed);
+        Assert.False(connection.WasClosed);
         Assert.True(locker.WasDisposed);
     }
 
@@ -180,9 +180,9 @@ public class TrackedReaderTests
         await tracked.DisposeAsync();
         await tracked.DisposeAsync();
 
-        // Should only dispose/close once despite being called twice
+        // Should only dispose once despite being called twice
         Assert.Equal(1, locker.DisposeCallCount);
-        Assert.Equal(1, connection.CloseCallCount);
+        Assert.Equal(0, connection.CloseCallCount);
     }
 
     [Fact]
@@ -198,9 +198,9 @@ public class TrackedReaderTests
         tracked.Dispose();
         tracked.Dispose();
 
-        // Should only dispose/close once despite being called twice
+        // Should only dispose once despite being called twice
         Assert.Equal(1, locker.DisposeCallCount);
-        Assert.Equal(1, connection.CloseCallCount);
+        Assert.Equal(0, connection.CloseCallCount);
     }
 
     [Fact]
@@ -264,7 +264,7 @@ public class TrackedReaderTests
 
         var second = await tracked.ReadAsync();
         Assert.False(second);
-        Assert.True(connection.WasClosed);
+        Assert.False(connection.WasClosed);
         Assert.True(locker.WasDisposed);
     }
 
@@ -279,7 +279,7 @@ public class TrackedReaderTests
     }
 
     [Fact]
-    public async Task DisposeAsync_ClosesConnection_WhenShouldCloseTrue()
+    public async Task DisposeAsync_DoesNotCloseConnection_WhenShouldCloseTrue()
     {
         using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object>>());
         var connection = new TestTrackedConnection();
@@ -289,7 +289,7 @@ public class TrackedReaderTests
 
         await tracked.DisposeAsync();
 
-        Assert.True(connection.WasClosed);
+        Assert.False(connection.WasClosed);
         Assert.True(locker.WasDisposed);
     }
 

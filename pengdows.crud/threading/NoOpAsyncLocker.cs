@@ -10,6 +10,8 @@ internal sealed class NoOpAsyncLocker : SafeAsyncDisposableBase, ILockerAsync
     {
     }
 
+    protected override bool TrackDisposeState => false;
+
     public Task LockAsync(CancellationToken cancellationToken = default)
     {
         return Task.CompletedTask;

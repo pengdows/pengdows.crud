@@ -86,6 +86,7 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 
 - SessionSettingsPreamble is applied once per physical connection, at open.
   - Not reapplied when a connection is reused from pool or pinned.
+- Session settings are enforced at physical connection open. Do not mutate session-scoped settings mid-connection when using pooling.
 - ReadWriteMode.ReadOnly:
   - Every opened connection must enforce read-only at connection string and session level (e.g., `ApplicationIntent=ReadOnly`, `SET TRANSACTION READ ONLY`, `PRAGMA query_only = 1`).
   - Write attempts bubble provider errors (not pre-guarded in code).
@@ -142,4 +143,3 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 ---
 
 This contract is authoritative — implement according to these rules, and contributors must not deviate.
-

@@ -153,8 +153,18 @@ public class MySqlDialect : SqlDialect
 
     public override string UpsertIncomingColumn(string columnName)
     {
+        if (UseUpsertAlias)
+        {
+            return $"{WrapObjectName(UpsertIncomingAlias!)}.{WrapObjectName(columnName)}";
+        }
+
         return $"VALUES({WrapObjectName(columnName)})";
     }
+
+    public override string? UpsertIncomingAlias => UseUpsertAlias ? "incoming" : null;
+
+    private bool UseUpsertAlias =>
+        IsInitialized && ProductInfo.ParsedVersion is { } version && version >= new Version(8, 0, 20);
 
     public override void TryEnterReadOnlyTransaction(ITransactionContext transaction)
     {
