@@ -6,7 +6,6 @@ using System.Data;
 using System.Data.Common;
 using System.Globalization;
 using System.Reflection;
-using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -206,7 +205,7 @@ public partial class EntityHelper<TEntity, TRowID> :
         var dialectSuffix = _dialect.QuoteSuffix;
         var dialectMarker = _dialect.ParameterMarker;
 
-        var sb = new StringBuilder(sql.Length);
+        var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
         var inQuote = false;
 
         for (var i = 0; i < sql.Length; i++)
@@ -1006,7 +1005,7 @@ private IReadOnlyList<IColumnInfo> ResolveUpsertKey_MOVED()
             IncrementVersion(setClause, dialect);
         }
 
-        var where = new StringBuilder();
+        var where = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
         for (var i = 0; i < keyCols.Count; i++)
         {
             if (i > 0)
@@ -1022,7 +1021,7 @@ private IReadOnlyList<IColumnInfo> ResolveUpsertKey_MOVED()
             where.Append($"{dialect.WrapObjectName(key.Name)} = {dialect.MakeParameterName(p)}");
         }
 
-        var sql = $"UPDATE {BuildWrappedTableName(dialect)} SET {setClause} WHERE {where}";
+        var sql = $"UPDATE {BuildWrappedTableName(dialect)} SET {setClause} WHERE {where.ToString()}";
         if (_versionColumn != null)
         {
             var vv = _versionColumn.MakeParameterValueFromField(updated);
@@ -1130,7 +1129,7 @@ private IReadOnlyList<IColumnInfo> ResolveUpsertKey_MOVED()
             return dialect.WrapObjectName(_tableInfo.Name);
         }
 
-        var sb = new StringBuilder();
+        var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
         sb.Append(dialect.WrapObjectName(_tableInfo.Schema));
         sb.Append(dialect.CompositeIdentifierSeparator);
         sb.Append(dialect.WrapObjectName(_tableInfo.Name));

@@ -1,6 +1,6 @@
 using System;
 using System.Buffers.Binary;
-using System.Text;
+using pengdows.crud.@internal;
 using pengdows.crud.enums;
 using pengdows.crud.types.valueobjects;
 
@@ -119,7 +119,7 @@ internal sealed class GeographyConverter : SpatialConverter<Geography>
             return 0;
         }
 
-        var sb = new StringBuilder();
+        var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
         for (var i = colon + 1; i < json.Length; i++)
         {
             var c = json[i];

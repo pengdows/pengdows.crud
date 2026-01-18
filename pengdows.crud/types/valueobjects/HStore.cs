@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
+using pengdows.crud.@internal;
 
 namespace pengdows.crud.types.valueobjects;
 
@@ -101,7 +101,7 @@ public readonly struct HStore : IEquatable<HStore>, IEnumerable<KeyValuePair<str
         if (_data == null || _data.Count == 0)
             return "";
 
-        var sb = new StringBuilder();
+        var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
         bool first = true;
 
         foreach (var pair in _data)
@@ -128,7 +128,7 @@ public readonly struct HStore : IEquatable<HStore>, IEnumerable<KeyValuePair<str
     private static IEnumerable<string> SplitHStorePairs(string hstore)
     {
         var pairs = new List<string>();
-        var sb = new StringBuilder();
+        var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
         bool inQuotes = false;
         bool escaped = false;
 
@@ -186,7 +186,7 @@ public readonly struct HStore : IEquatable<HStore>, IEnumerable<KeyValuePair<str
         if (!needsQuoting)
             return value;
 
-        var sb = new StringBuilder();
+        var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
         sb.Append('"');
 
         foreach (char c in value)
@@ -212,7 +212,7 @@ public readonly struct HStore : IEquatable<HStore>, IEnumerable<KeyValuePair<str
             escapedValue = escapedValue[1..^1];
         }
 
-        var sb = new StringBuilder();
+        var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
         bool escaped = false;
 
         foreach (char c in escapedValue)

@@ -1,0 +1,12 @@
+#nullable enable
+using System;
+
+namespace pengdows.crud.@internal;
+
+internal static class SbLite
+{
+    public const int DefaultStack = 1024;
+
+    public static StringBuilderLite Create(Span<char> scratch)
+        => new StringBuilderLite(scratch);
+}

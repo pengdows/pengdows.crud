@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using pengdows.crud;
 using pengdows.crud.enums;
+using pengdows.crud.@internal;
 using pengdows.crud.types;
 using pengdows.crud.wrappers;
 
@@ -345,7 +346,7 @@ public abstract class SqlDialect:ISqlDialect
             return string.Empty;
         }
 
-        var builder = new StringBuilder();
+        var builder = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
         foreach (var kvp in expected)
         {
             current.TryGetValue(kvp.Key, out var currentValue);

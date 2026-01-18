@@ -22,6 +22,34 @@ public class EntityHelperOrderingTests : SqlLiteContextTestBase
     }
 
     [Fact]
+    public void BuildBaseRetrieve_ExactSql_NoAlias()
+    {
+        TypeMap.Register<OrderedEntity>();
+        var helper = new EntityHelper<OrderedEntity, int>(Context);
+        var sc = helper.BuildBaseRetrieve(string.Empty);
+        var wrappedA = Context.WrapObjectName("A");
+        var wrappedB = Context.WrapObjectName("B");
+        var wrappedTable = Context.WrapObjectName("Ordered");
+        var expected = $"SELECT {wrappedA}, {wrappedB}\nFROM {wrappedTable}";
+        Assert.Equal(expected, sc.Query.ToString());
+    }
+
+    [Fact]
+    public void BuildBaseRetrieve_ExactSql_WithAlias()
+    {
+        TypeMap.Register<OrderedEntity>();
+        var helper = new EntityHelper<OrderedEntity, int>(Context);
+        var alias = "a";
+        var sc = helper.BuildBaseRetrieve(alias);
+        var wrappedAlias = Context.WrapObjectName(alias);
+        var wrappedA = Context.WrapObjectName("A");
+        var wrappedB = Context.WrapObjectName("B");
+        var wrappedTable = Context.WrapObjectName("Ordered");
+        var expected = $"SELECT {wrappedAlias}.{wrappedA}, {wrappedAlias}.{wrappedB}\nFROM {wrappedTable} {wrappedAlias}";
+        Assert.Equal(expected, sc.Query.ToString());
+    }
+
+    [Fact]
     public void BuildBaseRetrieve_DefaultsToPropertyOrderWithoutOrdinals()
     {
         TypeMap.Register<DefaultEntity>();
@@ -46,6 +74,33 @@ public class EntityHelperOrderingTests : SqlLiteContextTestBase
         var aIndex = query.IndexOf("\"A\" = @", StringComparison.Ordinal);
         var bIndex = query.IndexOf("\"B\" = @", StringComparison.Ordinal);
         Assert.True(aIndex < bIndex, "Primary key column A should appear before B in the query");
+    }
+
+    [Fact]
+    public void BuildWhereByPrimaryKey_ExactSql_SingleCompositeKey()
+    {
+        TypeMap.Register<OrderedEntity>();
+        var helper = new EntityHelper<OrderedEntity, int>(Context);
+        var sc = Context.CreateSqlContainer();
+        helper.BuildWhereByPrimaryKey(new[] { new OrderedEntity { A = 1, B = 2 } }, sc);
+        var expected = "\n WHERE (\"A\" = @k0 AND \"B\" = @k1)";
+        Assert.Equal(expected, sc.Query.ToString());
+    }
+
+    [Fact]
+    public void BuildWhereByPrimaryKey_ExactSql_MultipleCompositeKeys()
+    {
+        TypeMap.Register<OrderedEntity>();
+        var helper = new EntityHelper<OrderedEntity, int>(Context);
+        var sc = Context.CreateSqlContainer();
+        var list = new[]
+        {
+            new OrderedEntity { A = 1, B = 2 },
+            new OrderedEntity { A = 3, B = 4 }
+        };
+        helper.BuildWhereByPrimaryKey(list, sc);
+        var expected = "\n WHERE (\"A\" = @k0 AND \"B\" = @k1) OR (\"A\" = @k2 AND \"B\" = @k3)";
+        Assert.Equal(expected, sc.Query.ToString());
     }
 
     [Fact]
@@ -104,4 +159,3 @@ public class EntityHelperOrderingTests : SqlLiteContextTestBase
         public int B { get; set; }
     }
 }
-

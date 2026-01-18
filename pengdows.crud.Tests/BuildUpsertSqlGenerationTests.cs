@@ -1,6 +1,7 @@
 using System;
 using System.Data;
 using pengdows.crud.attributes;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 using Xunit;
@@ -83,6 +84,105 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
         Assert.DoesNotContain("+ 1", sql);
     }
 
+    [Fact]
+    public void BuildUpsert_OnConflict_UpdateSet_IsStable()
+    {
+        TypeMap.Register<UpsertLiteEntity>();
+        var helper = new EntityHelper<UpsertLiteEntity, int>(Context);
+        var entity = new UpsertLiteEntity { Id = 1, Name = "v", Version = 1 };
+        var sc = helper.BuildUpsert(entity);
+        var sql = sc.Query.ToString();
+        var dialect = ((ISqlDialectProvider)Context).Dialect;
+        var columns = BuildInsertColumns(Context);
+        var values = BuildInsertValues(dialect);
+        var updateSet = BuildConflictUpdateSet(Context, dialect);
+        var expected = $"INSERT INTO {Context.WrapObjectName("UpsertLite")} ({columns}) VALUES ({values}) " +
+                       $"ON CONFLICT ({Context.WrapObjectName("Id")}) DO UPDATE SET {updateSet}";
+        Assert.Equal(expected, sql);
+    }
+
+    [Fact]
+    public void BuildUpsert_OnDuplicate_UpdateSet_IsStable()
+    {
+        var typeMap = new TypeMapRegistry();
+        typeMap.Register<UpsertLiteEntity>();
+        var factory = new fakeDbFactory(SupportedDatabase.MySql);
+        using var context = new DatabaseContext("Data Source=test;EmulatedProduct=MySql", factory, typeMap);
+        var helper = new EntityHelper<UpsertLiteEntity, int>(context);
+        var entity = new UpsertLiteEntity { Id = 1, Name = "v", Version = 1 };
+        var sc = helper.BuildUpsert(entity);
+        var sql = sc.Query.ToString();
+        var dialect = ((ISqlDialectProvider)context).Dialect;
+        var columns = BuildInsertColumns(context);
+        var values = BuildInsertValues(dialect);
+        var updateSet = BuildConflictUpdateSet(context, dialect);
+        var expected = $"INSERT INTO {context.WrapObjectName("UpsertLite")} ({columns}) VALUES ({values}) " +
+                       $"ON DUPLICATE KEY UPDATE {updateSet}";
+        Assert.Equal(expected, sql);
+    }
+
+    [Fact]
+    public void BuildUpsert_Merge_UpdateSet_IsStable()
+    {
+        var typeMap = new TypeMapRegistry();
+        typeMap.Register<UpsertLiteEntity>();
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        using var context = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory, typeMap);
+        var helper = new EntityHelper<UpsertLiteEntity, int>(context);
+        var entity = new UpsertLiteEntity { Id = 1, Name = "v", Version = 1 };
+        var sc = helper.BuildUpsert(entity);
+        var sql = sc.Query.ToString();
+        var dialect = ((ISqlDialectProvider)context).Dialect;
+        var table = context.WrapObjectName("UpsertLite");
+        var wrappedId = context.WrapObjectName("Id");
+        var wrappedName = context.WrapObjectName("Name");
+        var wrappedVersion = context.WrapObjectName("Version");
+        var values = BuildInsertValues(dialect);
+        var srcColumns = string.Join(", ", new[] { wrappedId, wrappedName, wrappedVersion });
+        var insertValues = string.Join(", ", new[] { $"s.{wrappedId}", $"s.{wrappedName}", $"s.{wrappedVersion}" });
+        var updateSet = BuildMergeUpdateSet(context, dialect);
+        var expected = $"MERGE INTO {table} t USING (VALUES ({values})) AS s ({srcColumns}) ON " +
+                       $"t.{wrappedId} = s.{wrappedId} WHEN MATCHED THEN UPDATE SET {updateSet} " +
+                       $"WHEN NOT MATCHED THEN INSERT ({srcColumns}) VALUES ({insertValues});";
+        Assert.Equal(expected, sql);
+    }
+
+    private static string BuildInsertColumns(IDatabaseContext context)
+    {
+        return string.Join(", ", new[]
+        {
+            context.WrapObjectName("Id"),
+            context.WrapObjectName("Name"),
+            context.WrapObjectName("Version")
+        });
+    }
+
+    private static string BuildInsertValues(ISqlDialect dialect)
+    {
+        return string.Join(", ", new[]
+        {
+            dialect.MakeParameterName("i0"),
+            dialect.MakeParameterName("i1"),
+            dialect.MakeParameterName("i2")
+        });
+    }
+
+    private static string BuildConflictUpdateSet(IDatabaseContext context, ISqlDialect dialect)
+    {
+        var wrappedName = context.WrapObjectName("Name");
+        var wrappedVersion = context.WrapObjectName("Version");
+        return $"{wrappedName} = {dialect.UpsertIncomingColumn("Name")}, {wrappedVersion} = {wrappedVersion} + 1";
+    }
+
+    private static string BuildMergeUpdateSet(IDatabaseContext context, ISqlDialect dialect)
+    {
+        var targetPrefix = dialect.MergeUpdateRequiresTargetAlias ? "t." : "";
+        var wrappedName = context.WrapObjectName("Name");
+        var wrappedVersion = context.WrapObjectName("Version");
+        return $"{targetPrefix}{wrappedName} = s.{wrappedName}, " +
+               $"{targetPrefix}{wrappedVersion} = {targetPrefix}{wrappedVersion} + 1";
+    }
+
     [Table("ByteVersion")]
     private class ByteVersionEntity
     {
@@ -96,5 +196,20 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
         [Version]
         [Column("Version", DbType.Binary)]
         public byte[] Version { get; set; } = Array.Empty<byte>();
+    }
+
+    [Table("UpsertLite")]
+    private class UpsertLiteEntity
+    {
+        [Id]
+        [Column("Id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [Column("Name", DbType.String)]
+        public string Name { get; set; } = string.Empty;
+
+        [Version]
+        [Column("Version", DbType.Int32)]
+        public int Version { get; set; }
     }
 }

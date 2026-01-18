@@ -1,6 +1,5 @@
 using System.Data;
 using System.Data.Common;
-using System.Text;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.@internal;
@@ -28,14 +27,15 @@ public partial class EntityHelper<TEntity, TRowID>
                 .Select(col => (hasAlias
                     ? dialect.WrapObjectName(alias) + dialect.CompositeIdentifierSeparator
                     : string.Empty) + dialect.WrapObjectName(col.Name));
-            var sb = new StringBuilder();
-            sb.Append("SELECT ")
-                .Append(string.Join(", ", selectList))
-                .Append("\nFROM ")
-                .Append(BuildWrappedTableName(dialect));
+            var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+            sb.Append("SELECT ");
+            sb.Append(string.Join(", ", selectList));
+            sb.Append("\nFROM ");
+            sb.Append(BuildWrappedTableName(dialect));
             if (hasAlias)
             {
-                sb.Append(' ').Append(dialect.WrapObjectName(alias));
+                sb.Append(' ');
+                sb.Append(dialect.WrapObjectName(alias));
             }
 
             return sb.ToString();
@@ -131,7 +131,7 @@ public partial class EntityHelper<TEntity, TRowID>
 
         var parameters = new List<DbParameter>();
         var wrappedAlias = BuildAliasPrefix(alias);
-        var sb = new StringBuilder();
+        var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
         var counters = new ClauseCounters();
         var index = 0;
 
@@ -152,7 +152,7 @@ public partial class EntityHelper<TEntity, TRowID>
 
         sc.AddParameters(parameters);
         AppendWherePrefix(sc);
-        sc.Query.Append(sb);
+        sc.Query.Append(sb.ToString());
     }
 
     private void ValidateWhereInputs(IReadOnlyCollection<TEntity>? listOfObjects, ISqlContainer _)
@@ -180,7 +180,8 @@ public partial class EntityHelper<TEntity, TRowID>
     private string BuildPrimaryKeyClause(TEntity entity, IReadOnlyList<IColumnInfo> keys, string alias,
         List<DbParameter> parameters, ISqlDialect dialect, ClauseCounters counters)
     {
-        var clause = new StringBuilder("(");
+        var clause = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+        clause.Append('(');
         for (var i = 0; i < keys.Count; i++)
         {
             if (i > 0)

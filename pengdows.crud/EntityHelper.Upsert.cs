@@ -1,6 +1,5 @@
 using System.Data;
 using System.Data.Common;
-using System.Text;
 using pengdows.crud.@internal;
 
 namespace pengdows.crud;
@@ -142,7 +141,7 @@ public partial class EntityHelper<TEntity, TRowID>
             }
         }
 
-        var updateSet = new StringBuilder();
+        var updateSet = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
         foreach (var column in GetCachedUpdatableColumns())
         {
             if (_auditValueResolver == null && column.IsLastUpdatedBy)
@@ -184,7 +183,7 @@ public partial class EntityHelper<TEntity, TRowID>
             .Append(") ON CONFLICT (")
             .Append(conflictTarget)
             .Append(") DO UPDATE SET ")
-            .Append(updateSet);
+            .Append(updateSet.ToString());
 
         sc.AddParameters(parameters);
         return sc;
@@ -232,7 +231,7 @@ public partial class EntityHelper<TEntity, TRowID>
             values.Add(placeholder);
         }
 
-        var updateSet = new StringBuilder();
+        var updateSet = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
         foreach (var column in GetCachedUpdatableColumns())
         {
             if (_auditValueResolver == null && column.IsLastUpdatedBy)
@@ -267,7 +266,7 @@ public partial class EntityHelper<TEntity, TRowID>
             .Append(") VALUES (")
             .Append(string.Join(", ", values))
             .Append(") ON DUPLICATE KEY UPDATE ")
-            .Append(updateSet);
+            .Append(updateSet.ToString());
 
         sc.AddParameters(parameters);
         return sc;
@@ -319,7 +318,7 @@ public partial class EntityHelper<TEntity, TRowID>
             .Select(c => dialect.WrapObjectName(c.Name))
             .ToList();
 
-        var updateSet = new StringBuilder();
+        var updateSet = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
         // PostgreSQL MERGE does not allow target alias on left side of UPDATE SET
         // SQL Server/Oracle do allow it
         var targetPrefix = dialect.MergeUpdateRequiresTargetAlias ? "t." : "";
@@ -364,7 +363,7 @@ public partial class EntityHelper<TEntity, TRowID>
             .Append(") ON ")
             .Append(join)
             .Append(" WHEN MATCHED THEN UPDATE SET ")
-            .Append(updateSet)
+            .Append(updateSet.ToString())
             .Append(" WHEN NOT MATCHED THEN INSERT (")
             .Append(string.Join(", ", insertColumns))
             .Append(") VALUES (")

@@ -7,10 +7,10 @@ using System.Data.Common;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using System.Text;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
+using pengdows.crud.@internal;
 
 #endregion
 
@@ -189,7 +189,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
     private static string BuildSchemaHash(DbDataReader reader, MapperOptions options)
     {
-        var builder = new StringBuilder();
+        var builder = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
 
         // Include options in the hash to ensure proper cache invalidation
         builder.Append(options.ColumnsOnly ? '1' : '0');
@@ -467,4 +467,3 @@ public sealed class DataReaderMapper : IDataReaderMapper
         throw new InvalidOperationException("DbDataReader.GetFieldValue<T> method not found.");
     }
 }
-

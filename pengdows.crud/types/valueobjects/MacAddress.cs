@@ -1,6 +1,6 @@
 using System;
 using System.Net.NetworkInformation;
-using System.Text;
+using pengdows.crud.@internal;
 
 namespace pengdows.crud.types.valueobjects;
 
@@ -21,7 +21,7 @@ public readonly struct MacAddress : IEquatable<MacAddress>
             return string.Empty;
         }
 
-        var sb = new StringBuilder(bytes.Length * 3 - 1);
+        var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
         for (var i = 0; i < bytes.Length; i++)
         {
             if (i > 0)
