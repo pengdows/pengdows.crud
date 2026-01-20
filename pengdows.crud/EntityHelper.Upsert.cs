@@ -168,21 +168,42 @@ public partial class EntityHelper<TEntity, TRowID>
             throw new NotSupportedException("Upsert requires an Id or a composite primary key.");
         }
 
-        var conflictCols = (keys.Count > 0 ? keys : new List<IColumnInfo> { _idColumn! })
-            .Select(k => dialect.WrapObjectName(k.Name));
-
-        var conflictTarget = string.Join(", ", conflictCols);
+        var conflictCols = keys.Count > 0 ? keys : new List<IColumnInfo> { _idColumn! };
 
         var sc = ctx.CreateSqlContainer();
         sc.Query.Append("INSERT INTO ")
             .Append(BuildWrappedTableName(dialect))
-            .Append(" (")
-            .Append(string.Join(", ", columns))
-            .Append(") VALUES (")
-            .Append(string.Join(", ", values))
-            .Append(") ON CONFLICT (")
-            .Append(conflictTarget)
-            .Append(") DO UPDATE SET ")
+            .Append(" (");
+        for (var i = 0; i < columns.Count; i++)
+        {
+            if (i > 0)
+            {
+                sc.Query.Append(", ");
+            }
+
+            sc.Query.Append(columns[i]);
+        }
+        sc.Query.Append(") VALUES (");
+        for (var i = 0; i < values.Count; i++)
+        {
+            if (i > 0)
+            {
+                sc.Query.Append(", ");
+            }
+
+            sc.Query.Append(values[i]);
+        }
+        sc.Query.Append(") ON CONFLICT (");
+        for (var i = 0; i < conflictCols.Count; i++)
+        {
+            if (i > 0)
+            {
+                sc.Query.Append(", ");
+            }
+
+            sc.Query.Append(dialect.WrapObjectName(conflictCols[i].Name));
+        }
+        sc.Query.Append(") DO UPDATE SET ")
             .Append(updateSet.ToString());
 
         sc.AddParameters(parameters);
@@ -261,11 +282,27 @@ public partial class EntityHelper<TEntity, TRowID>
         var sc = ctx.CreateSqlContainer();
         sc.Query.Append("INSERT INTO ")
             .Append(BuildWrappedTableName(dialect))
-            .Append(" (")
-            .Append(string.Join(", ", columns))
-            .Append(") VALUES (")
-            .Append(string.Join(", ", values))
-            .Append(") ON DUPLICATE KEY UPDATE ")
+            .Append(" (");
+        for (var i = 0; i < columns.Count; i++)
+        {
+            if (i > 0)
+            {
+                sc.Query.Append(", ");
+            }
+
+            sc.Query.Append(columns[i]);
+        }
+        sc.Query.Append(") VALUES (");
+        for (var i = 0; i < values.Count; i++)
+        {
+            if (i > 0)
+            {
+                sc.Query.Append(", ");
+            }
+
+            sc.Query.Append(values[i]);
+        }
+        sc.Query.Append(") ON DUPLICATE KEY UPDATE ")
             .Append(updateSet.ToString());
 
         sc.AddParameters(parameters);
@@ -314,9 +351,11 @@ public partial class EntityHelper<TEntity, TRowID>
             values.Add(placeholder);
         }
 
-        var insertColumns = GetCachedInsertableColumns()
-            .Select(c => dialect.WrapObjectName(c.Name))
-            .ToList();
+        var insertColumns = new List<string>();
+        foreach (var column in GetCachedInsertableColumns())
+        {
+            insertColumns.Add(dialect.WrapObjectName(column.Name));
+        }
 
         var updateSet = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
         // PostgreSQL MERGE does not allow target alias on left side of UPDATE SET
@@ -350,25 +389,72 @@ public partial class EntityHelper<TEntity, TRowID>
             throw new NotSupportedException("Upsert requires an Id or a composite primary key.");
         }
 
-        var join = string.Join(" AND ", (keys.Count > 0 ? keys : new List<IColumnInfo> { _idColumn! })
-            .Select(k => $"t.{dialect.WrapObjectName(k.Name)} = s.{dialect.WrapObjectName(k.Name)}"));
+        var joinCols = keys.Count > 0 ? keys : new List<IColumnInfo> { _idColumn! };
+        var join = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+        for (var i = 0; i < joinCols.Count; i++)
+        {
+            if (i > 0)
+            {
+                join.Append(" AND ");
+            }
+
+            join.Append("t.");
+            join.Append(dialect.WrapObjectName(joinCols[i].Name));
+            join.Append(" = s.");
+            join.Append(dialect.WrapObjectName(joinCols[i].Name));
+        }
 
         var sc = ctx.CreateSqlContainer();
         sc.Query.Append("MERGE INTO ")
             .Append(BuildWrappedTableName(dialect))
             .Append(" t USING (VALUES (")
-            .Append(string.Join(", ", values))
-            .Append(")) AS s (")
-            .Append(string.Join(", ", srcColumns))
-            .Append(") ON ")
-            .Append(join)
+            ;
+        for (var i = 0; i < values.Count; i++)
+        {
+            if (i > 0)
+            {
+                sc.Query.Append(", ");
+            }
+
+            sc.Query.Append(values[i]);
+        }
+        sc.Query.Append(")) AS s (");
+        for (var i = 0; i < srcColumns.Count; i++)
+        {
+            if (i > 0)
+            {
+                sc.Query.Append(", ");
+            }
+
+            sc.Query.Append(srcColumns[i]);
+        }
+        sc.Query.Append(") ON ")
+            .Append(join.ToString())
             .Append(" WHEN MATCHED THEN UPDATE SET ")
             .Append(updateSet.ToString())
             .Append(" WHEN NOT MATCHED THEN INSERT (")
-            .Append(string.Join(", ", insertColumns))
-            .Append(") VALUES (")
-            .Append(string.Join(", ", insertColumns.Select(c => "s." + c)))
-            .Append(");");
+            ;
+        for (var i = 0; i < insertColumns.Count; i++)
+        {
+            if (i > 0)
+            {
+                sc.Query.Append(", ");
+            }
+
+            sc.Query.Append(insertColumns[i]);
+        }
+        sc.Query.Append(") VALUES (");
+        for (var i = 0; i < insertColumns.Count; i++)
+        {
+            if (i > 0)
+            {
+                sc.Query.Append(", ");
+            }
+
+            sc.Query.Append("s.");
+            sc.Query.Append(insertColumns[i]);
+        }
+        sc.Query.Append(");");
 
         sc.AddParameters(parameters);
         return sc;

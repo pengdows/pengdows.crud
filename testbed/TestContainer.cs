@@ -35,6 +35,14 @@ public abstract class TestContainer : SafeAsyncDisposableBase, ITestContainer
     protected async Task WaitForDbToStart(DbProviderFactory instance, string connectionString, IContainer container,
         int numberOfSecondsToWait = 60)
     {
+        var overrideTimeout = Environment.GetEnvironmentVariable("TESTBED_STARTUP_TIMEOUT_SECONDS");
+        if (!string.IsNullOrWhiteSpace(overrideTimeout)
+            && int.TryParse(overrideTimeout, out var overrideSeconds)
+            && overrideSeconds > 0)
+        {
+            numberOfSecondsToWait = overrideSeconds;
+        }
+
         var csb = instance.CreateConnectionStringBuilder() ?? new DbConnectionStringBuilder();
         csb.ConnectionString = connectionString;
 

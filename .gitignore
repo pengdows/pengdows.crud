@@ -1,7 +1,6 @@
 bin/
 obj/
 /packages/
-node_modules/
 riderModule.iml
 /_ReSharper.Caches/
 *.zip
@@ -29,3 +28,7 @@ Untitled.json
 benchmarks/CrudBenchmarks/BenchmarkDotNet.Artifacts/
 
 BenchmarkDotNet.Artifacts/*.log
+BenchmarkDotNet.Artifacts/
+node_modules/
+temp-broken-tests/
+output.txt

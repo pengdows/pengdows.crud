@@ -45,14 +45,19 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
         // Do NOT call _command?.Dispose() directly here - it would double-dispose
         DisposeCommand();
         _reader.Dispose();
-        if (_shouldCloseConnection)
-        {
-            _connection.Close();
-        }
+        // Connection lifecycle is managed by connection strategies, not by the reader
+        // The _shouldCloseConnection parameter is retained for backwards compatibility but ignored
 
         DisposeLockerSynchronously();
     }
 
+    /// <summary>
+    /// Advances the reader to the next record.
+    /// </summary>
+    /// <returns><c>true</c> if another record is available; otherwise <c>false</c>.</returns>
+    /// <remarks>
+    /// <para><strong>Auto-disposal:</strong> This reader auto-disposes on end-of-results (when this method returns <c>false</c>).</para>
+    /// </remarks>
     public bool Read()
     {
         if (_reader.Read())
@@ -198,19 +203,32 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
         RecordMetricsOnce();
         await _reader.DisposeAsync();
         DisposeCommand();
-        if (_shouldCloseConnection)
-        {
-            _connection.Close();
-        }
+        // Connection lifecycle is managed by connection strategies, not by the reader
+        // The _shouldCloseConnection parameter is retained for backwards compatibility but ignored
 
         await _connectionLocker.DisposeAsync().ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Advances the reader to the next record asynchronously.
+    /// </summary>
+    /// <returns><c>true</c> if another record is available; otherwise <c>false</c>.</returns>
+    /// <remarks>
+    /// <para><strong>Auto-disposal:</strong> This reader auto-disposes on end-of-results (when this method returns <c>false</c>).</para>
+    /// </remarks>
     public Task<bool> ReadAsync()
     {
         return ReadAsync(CancellationToken.None);
     }
 
+    /// <summary>
+    /// Advances the reader to the next record asynchronously with cancellation support.
+    /// </summary>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns><c>true</c> if another record is available; otherwise <c>false</c>.</returns>
+    /// <remarks>
+    /// <para><strong>Auto-disposal:</strong> This reader auto-disposes on end-of-results (when this method returns <c>false</c>).</para>
+    /// </remarks>
     public async Task<bool> ReadAsync(CancellationToken cancellationToken)
     {
         if (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))

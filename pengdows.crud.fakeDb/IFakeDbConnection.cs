@@ -18,6 +18,10 @@ public interface IFakeDbConnection : IDbConnection, IAsyncDisposable
 
     int OpenAsyncCount { get; }
 
+    int CloseCount { get; }
+
+    int DisposeCount { get; }
+
     IReadOnlyCollection<IEnumerable<Dictionary<string, object>>> RemainingReaderResults { get; }
 
     IReadOnlyCollection<object?> RemainingScalarResults { get; }

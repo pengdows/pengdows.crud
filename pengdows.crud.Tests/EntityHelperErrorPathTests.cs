@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Threading.Tasks;
 using pengdows.crud.attributes;
+using pengdows.crud.configuration;
 using pengdows.crud.exceptions;
 using pengdows.crud.fakeDb;
 using pengdows.crud.enums;
@@ -170,17 +171,34 @@ public class EntityHelperErrorPathTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task TooManyParameters_ThrowsTooManyParametersException()
+    public async Task RetrieveAsync_LargeIdList_ChunksToStayWithinParameterLimit()
     {
-        var helper = new EntityHelper<TestEntity, long>(Context);
-        var manyIds = new List<long>();
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite)
+        {
+            EnableDataPersistence = true
+        };
+        var connection = new fakeDbConnection();
+        factory.Connections.Add(connection);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:;EmulatedProduct=Sqlite",
+            DbMode = DbMode.SingleConnection
+        };
+        using var context = new DatabaseContext(config, factory, null, new TypeMapRegistry());
+        var helper = new EntityHelper<TestEntity, long>(context);
+        var limit = context.MaxParameterLimit;
+        var manyIds = new List<long>(limit + 2);
 
-        for (int i = 0; i < 100000; i++)
+        for (var i = 0; i < limit + 2; i++)
         {
             manyIds.Add(i);
         }
 
-        await Assert.ThrowsAsync<TooManyParametersException>(() => helper.RetrieveAsync(manyIds));
+        connection.ExecutedReaderTexts.Clear();
+        var results = await helper.RetrieveAsync(manyIds, context);
+
+        Assert.NotNull(results);
+        Assert.Equal(2, connection.ExecutedReaderTexts.Count);
     }
 
     [Fact]

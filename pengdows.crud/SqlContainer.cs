@@ -323,6 +323,57 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
     public DbCommand CreateCommand(ITrackedConnection conn)
     {
+        var dbCommand = CreateRawCommand(conn);
+
+        if (Query.Length == 0)
+        {
+            return dbCommand;
+        }
+
+        // Mirror the normal execution path so manually-created commands are usable.
+        var cmdText = Query.ToString();
+        if (cmdText.Contains("{P}"))
+        {
+            cmdText = RenderParams(cmdText);
+        }
+
+        dbCommand.CommandType = CommandType.Text;
+        dbCommand.CommandText = cmdText;
+
+        if (_parameters.Count > _context.MaxParameterLimit)
+        {
+            throw new InvalidOperationException(
+                $"Query exceeds the maximum parameter limit of {_context.MaxParameterLimit} for {_context.DatabaseProductName}.");
+        }
+
+        if (_context.SupportsNamedParameters)
+        {
+            var unique = new HashSet<DbParameter>();
+            foreach (var param in _parameters.Values)
+            {
+                if (!unique.Add(param))
+                {
+                    continue;
+                }
+                dbCommand.Parameters.Add(param);
+            }
+        }
+        else
+        {
+            foreach (var name in ParamSequence)
+            {
+                if (_parameters.TryGetValue(name, out var param))
+                {
+                    dbCommand.Parameters.Add(param);
+                }
+            }
+        }
+
+        return dbCommand;
+    }
+
+    private DbCommand CreateRawCommand(ITrackedConnection conn)
+    {
         var cmd = conn.CreateCommand();
         if (_context is TransactionContext transactionContext)
         {
@@ -393,10 +444,38 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             if (_context.SupportsNamedParameters)
             {
                 // Trust that dev has set correct names
-                return string.Join(", ", _parameters.Values.Select(p => _context.MakeParameterName(p)));
+                var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+                var index = 0;
+                foreach (var param in _parameters.Values)
+                {
+                    if (index++ > 0)
+                    {
+                        sb.Append(", ");
+                    }
+
+                    sb.Append(_context.MakeParameterName(param));
+                }
+
+                return sb.ToString();
             }
 
-            return string.Join(", ", Enumerable.Repeat("?", _parameters.Count));
+            if (_parameters.Count == 0)
+            {
+                return string.Empty;
+            }
+
+            var positional = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+            for (var i = 0; i < _parameters.Count; i++)
+            {
+                if (i > 0)
+                {
+                    positional.Append(", ");
+                }
+
+                positional.Append('?');
+            }
+
+            return positional.ToString();
         }
     }
 
@@ -868,7 +947,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             tCmdText = Stopwatch.GetTimestamp();
         }
 
-        var cmd = CreateCommand(conn);
+        var cmd = CreateRawCommand(conn);
         if (traceTimings)
         {
             tCmdCreated = Stopwatch.GetTimestamp();
@@ -883,14 +962,24 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         {
             // SECURITY: Never log parameter values - they may contain credentials, tokens, PII
             // Log only metadata: name, type, size, direction
-            var paramDump = string.Join(", ",
-                _parameters.Values.Select(p =>
+            var paramDump = new StringBuilder();
+            var index = 0;
+            foreach (var p in _parameters.Values)
+            {
+                if (index++ > 0)
                 {
-                    var sizeInfo = p.Size > 0 ? $"({p.Size})" : "";
-                    var dirInfo = p.Direction != ParameterDirection.Input ? $" {p.Direction}" : "";
-                    return $"{p.ParameterName}:{p.DbType}{sizeInfo}{dirInfo}";
-                }));
-            _logger.LogDebug("Parameters: {Parameters}", paramDump);
+                    paramDump.Append(", ");
+                }
+
+                var sizeInfo = p.Size > 0 ? $"({p.Size})" : "";
+                var dirInfo = p.Direction != ParameterDirection.Input ? $" {p.Direction}" : "";
+                paramDump.Append(p.ParameterName);
+                paramDump.Append(':');
+                paramDump.Append(p.DbType.ToString());
+                paramDump.Append(sizeInfo);
+                paramDump.Append(dirInfo);
+            }
+            _logger.LogDebug("Parameters: {Parameters}", paramDump.ToString());
         }
         cmd.CommandText = cmdText;
         if (_context.SupportsNamedParameters)

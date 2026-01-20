@@ -20,8 +20,8 @@ public sealed class DataReaderMapper : IDataReaderMapper
 {
     public static readonly IDataReaderMapper Instance = new DataReaderMapper();
 
-    private static readonly ConcurrentDictionary<SetterCacheKey, Action<object, DbDataReader>> _setterCache = new();
-    private static readonly ConcurrentDictionary<PlanCacheKey, MapperPlan> _planCache = new();
+    private static readonly ConcurrentDictionary<SetterCacheKey, Delegate> _setterCache = new();
+    private static readonly ConcurrentDictionary<PlanCacheKey, object> _planCache = new();
     private static readonly ConcurrentDictionary<PropertyLookupCacheKey, IReadOnlyDictionary<string, PropertyInfo>> _propertyLookupCache = new();
     private static readonly MethodInfo _getFieldValueGenericMethod = ResolveGetFieldValueMethod();
 
@@ -121,7 +121,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
         var schemaHash = BuildSchemaHash(rdr, options);
         var planKey = new PlanCacheKey(typeof(T), schemaHash, options.ColumnsOnly, options.EnumMode);
 
-        var plan = _planCache.GetOrAdd(planKey, _ => BuildPlan<T>(rdr, options));
+        var plan = (MapperPlan<T>)_planCache.GetOrAdd(planKey, _ => BuildPlan<T>(rdr, options));
 
         while (await rdr.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
@@ -153,13 +153,13 @@ public sealed class DataReaderMapper : IDataReaderMapper
         }
     }
 
-    private static MapperPlan BuildPlan<T>(DbDataReader reader, MapperOptions options)
+    private static MapperPlan<T> BuildPlan<T>(DbDataReader reader, MapperOptions options)
     {
         var type = typeof(T);
         var propertyLookup = GetPropertyLookup(type, options);
 
         var ordinals = new List<int>();
-        var setters = new List<Action<object, DbDataReader>>();
+        var setters = new List<Action<T, DbDataReader>>();
         var properties = new List<PropertyInfo>();
 
         for (var i = 0; i < reader.FieldCount; i++)
@@ -176,12 +176,12 @@ public sealed class DataReaderMapper : IDataReaderMapper
                 ordinals.Add(i);
                 var fieldType = ResolveFieldType(reader, i);
                 var requiresCoercion = RequiresCoercion(fieldType, prop.PropertyType);
-                setters.Add(GetOrCreateSetter(prop, fieldType, requiresCoercion, options.EnumMode, i));
+                setters.Add(GetOrCreateSetter<T>(prop, fieldType, requiresCoercion, options.EnumMode, i));
                 properties.Add(prop);
             }
         }
 
-        return new MapperPlan(
+        return new MapperPlan<T>(
             ordinals.ToArray(),
             properties.ToArray(),
             setters.ToArray());
@@ -224,24 +224,23 @@ public sealed class DataReaderMapper : IDataReaderMapper
         return builder.ToString();
     }
 
-    private static Action<object, DbDataReader> GetOrCreateSetter(
+    private static Action<T, DbDataReader> GetOrCreateSetter<T>(
         PropertyInfo prop,
         Type fieldType,
         bool requiresCoercion,
         EnumParseFailureMode enumMode,
         int ordinal)
     {
-        var key = new SetterCacheKey(prop, fieldType, requiresCoercion, enumMode, ordinal);
-        return _setterCache.GetOrAdd(key, static k => CompileSetter(k));
+        var key = new SetterCacheKey(typeof(T), prop, fieldType, requiresCoercion, enumMode, ordinal);
+        return (Action<T, DbDataReader>)_setterCache.GetOrAdd(key, static k => CompileSetter<T>(k));
     }
 
-    private static Action<object, DbDataReader> CompileSetter(SetterCacheKey key)
+    private static Action<T, DbDataReader> CompileSetter<T>(SetterCacheKey key)
     {
-        var objParam = Expression.Parameter(typeof(object), "target");
+        var objParam = Expression.Parameter(typeof(T), "target");
         var readerParam = Expression.Parameter(typeof(DbDataReader), "reader");
 
-        var typedTarget = Expression.Convert(objParam, key.Property.DeclaringType!);
-        var propertyAccess = Expression.Property(typedTarget, key.Property);
+        var propertyAccess = Expression.Property(objParam, key.Property);
 
         Expression valueExpression;
         if (key.RequiresCoercion)
@@ -279,7 +278,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
         }
 
         var assignment = Expression.Assign(propertyAccess, valueExpression);
-        var lambda = Expression.Lambda<Action<object, DbDataReader>>(assignment, objParam, readerParam);
+        var lambda = Expression.Lambda<Action<T, DbDataReader>>(assignment, objParam, readerParam);
         return lambda.Compile();
     }
 
@@ -392,6 +391,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
     }
 
     private readonly record struct SetterCacheKey(
+        Type TargetType,
         PropertyInfo Property,
         Type FieldType,
         bool RequiresCoercion,
@@ -400,10 +400,10 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
     private readonly record struct PropertyLookupCacheKey(Type Type, bool ColumnsOnly);
 
-    private sealed record MapperPlan(
+    private sealed record MapperPlan<T>(
         int[] Ordinals,
         PropertyInfo[] Properties,
-        Action<object, DbDataReader>[] Setters);
+        Action<T, DbDataReader>[] Setters);
 
     private static IReadOnlyDictionary<string, PropertyInfo> GetPropertyLookup(Type type, MapperOptions options)
     {

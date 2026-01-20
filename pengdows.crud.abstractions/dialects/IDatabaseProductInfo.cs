@@ -32,7 +32,11 @@ public interface IDatabaseProductInfo
     SupportedDatabase DatabaseType { get; set; }
 
     /// <summary>
-    /// Highest SQL standard level the database claims to comply with.
+    /// SQL feature capability tier indicating which features are available.
+    /// <para>
+    /// This is NOT a measure of ISO SQL standard conformance, but rather a heuristic
+    /// for estimating feature availability based on database version.
+    /// </para>
     /// </summary>
     SqlStandardLevel StandardCompliance { get; set; }
 }

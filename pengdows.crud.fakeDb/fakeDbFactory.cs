@@ -18,6 +18,7 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
     private bool _skipFirstOpen;
     private bool _hasOpenedOnce;
     private readonly List<fakeDbConnection> _connections = new();
+    private readonly List<fakeDbConnection> _createdConnections = new();
     private Exception? _globalPersistentScalarException;
     public bool EnableDataPersistence { get; set; } = false;
 
@@ -77,6 +78,7 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
             }
             // Apply data persistence setting from factory
             pre.EnableDataPersistence = EnableDataPersistence;
+            _createdConnections.Add(pre);
             return pre;
         }
 
@@ -119,6 +121,7 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
         // Apply data persistence setting from factory
         c.EnableDataPersistence = EnableDataPersistence;
 
+        _createdConnections.Add(c);
         return c;
     }
 
@@ -182,8 +185,15 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
         return new fakeDbFactory(pretendToBe, failureMode, customException, failAfterCount, skipFirst);
     }
 
-    // Expose created connections for tests
+    /// <summary>
+    /// Pre-enqueue connections to be returned by CreateConnection
+    /// </summary>
     public List<fakeDbConnection> Connections => _connections;
+
+    /// <summary>
+    /// All connections created by this factory (for test assertions)
+    /// </summary>
+    public IReadOnlyList<fakeDbConnection> CreatedConnections => _createdConnections;
 
     public override DbConnectionStringBuilder? CreateConnectionStringBuilder()
     {

@@ -34,7 +34,195 @@ The library follows a layered architecture with these key components:
 - SQL dialect abstraction supports multiple databases (SQL Server, PostgreSQL, Oracle, MySQL, SQLite, etc.)
 - Connection strategies: Standard, KeepAlive, SingleWriter, SingleConnection
 - Multi-tenancy support via tenant resolution
-### Primary Key vs. Row ID (Pseudo Key)
+
+### CRITICAL: Pseudo Key (Row ID) vs Primary Key (Business Key)
+
+**THIS IS A FUNDAMENTAL DESIGN PRINCIPLE. DO NOT CONFUSE THESE CONCEPTS.**
+
+pengdows.crud distinguishes between two types of keys:
+
+#### Pseudo Key / Row ID (`[Id]` attribute)
+- **What it is**: A surrogate identifier for the row itself, typically auto-increment or GUID
+- **Always single column** - never composite
+- **Purpose**: Easy lookup, foreign key references, EntityHelper operations
+- **Required by EntityHelper** for `CreateAsync`, `UpdateAsync`, `DeleteAsync(TRowID)`, etc.
+- **Attribute**: `[Id]` or `[Id(false)]` for DB-generated (autoincrement)
+
+#### Primary Key / Business Key (`[PrimaryKey]` attribute)
+- **What it is**: The natural/business key - the reason the row exists in business terms
+- **Can be composite** (multiple columns)
+- **Purpose**: Business uniqueness constraint
+- **Database level**: Creates unique index, no nulls, often determines physical row ordering (clustered)
+- **Attribute**: `[PrimaryKey(order)]` where order defines column sequence
+
+#### Example: Order Line Items
+```csharp
+[Table("order_items")]
+public class OrderItem
+{
+    [Id(false)]  // Pseudo key - DB-generated, used by EntityHelper
+    [Column("id", DbType.Int64)]
+    public long Id { get; set; }
+
+    [PrimaryKey(1)]  // Business key part 1
+    [Column("order_id", DbType.Int32)]
+    public int OrderId { get; set; }
+
+    [PrimaryKey(2)]  // Business key part 2
+    [Column("product_id", DbType.Int32)]
+    public int ProductId { get; set; }
+
+    [Column("quantity", DbType.Int32)]
+    public int Quantity { get; set; }
+}
+```
+
+**Database DDL:**
+```sql
+CREATE TABLE order_items (
+    id INTEGER PRIMARY KEY,              -- Pseudo key (clustered)
+    order_id INTEGER NOT NULL,
+    product_id INTEGER NOT NULL,
+    quantity INTEGER NOT NULL,
+    UNIQUE (order_id, product_id)        -- Business key constraint
+);
+```
+
+**Key Rules:**
+1. `[Id]` and `[PrimaryKey]` are MUTUALLY EXCLUSIVE - never both on the same column
+2. EntityHelper REQUIRES an `[Id]` column for CRUD operations
+3. `[PrimaryKey]` defines business uniqueness, enforced via UNIQUE constraint
+4. Both can coexist on DIFFERENT columns - pseudo key for operations, business key for domain integrity
+5. `RetrieveOneAsync(TEntity)` uses `[PrimaryKey]` columns for lookup
+6. `DeleteAsync(TRowID)` uses the `[Id]` column
+
+### Version Column (Optimistic Concurrency)
+
+The `[Version]` attribute enables optimistic concurrency control:
+
+| Operation | Behavior |
+|-----------|----------|
+| **Create** | If version is null/0, automatically set to 1 |
+| **Update** | Increments version by 1 in SET clause; adds `WHERE version = @currentVersion` |
+
+**Conflict detection:** If `UpdateAsync` returns 0 rows affected, another process modified the row (version mismatch).
+
+### Upsert Behavior
+
+`UpsertAsync` / `BuildUpsert` determines insert vs update based on conflict key:
+
+1. **Primary choice:** `[PrimaryKey]` columns (if any defined)
+2. **Fallback:** `[Id]` column ONLY if writable (`[Id(true)]` or `[Id]`)
+3. **Error:** Throws if no `[PrimaryKey]` AND `[Id]` is not writable (`[Id(false)]`)
+
+**SQL generated depends on database:**
+- SQL Server/Oracle: `MERGE`
+- PostgreSQL: `INSERT ... ON CONFLICT`
+- MySQL/MariaDB: `INSERT ... ON DUPLICATE KEY UPDATE`
+
+### Id Attribute: Writable vs Non-Writable
+
+| Attribute | Meaning | INSERT behavior |
+|-----------|---------|-----------------|
+| `[Id]` or `[Id(true)]` | Client provides value | Id column included in INSERT |
+| `[Id(false)]` | DB generates value (autoincrement/identity) | Id column omitted from INSERT |
+
+**SQL Server note:** Attempting to insert a value into an IDENTITY column throws an error unless `SET IDENTITY_INSERT ON`.
+
+### Multi-Tenancy
+
+pengdows.crud uses **context-per-tenant** (not query filtering):
+
+- Each tenant gets a separate `DatabaseContext` (different connection string/database)
+- Request resolves which context to use
+- All operations use that context - no additional filtering required
+- **No "WHERE tenant_id = X" injection** - tenants are physically separated
+
+### ExecutionType (Read vs Write)
+
+`ExecutionType` declares intent so the context can provide the appropriate connection:
+
+| Type | Intent | Connection behavior |
+|------|--------|---------------------|
+| `ExecutionType.Read` | Read-only operation | May get ephemeral or shared connection |
+| `ExecutionType.Write` | Modifying operation | Gets write-capable connection |
+
+In `SingleWriter` mode, this determines whether you get the pinned write connection or an ephemeral read connection.
+
+### TypeMapRegistry.Register<T>()
+
+**Explicit registration is NOT required.** `GetTableInfo<T>()` uses `GetOrAdd` - auto-builds on first access.
+
+```csharp
+// These are equivalent:
+typeMap.Register<MyEntity>();           // Explicit pre-registration
+typeMap.GetTableInfo<MyEntity>();       // Auto-registers on first call
+new EntityHelper<MyEntity, long>(ctx);  // Also triggers auto-registration
+```
+
+### Enum Storage
+
+Enum storage format is determined by `DbType` in the `[Column]` attribute:
+
+| DbType | Storage |
+|--------|---------|
+| `DbType.String` | Stored as enum name (string) |
+| Numeric (`Int32`, etc.) | Stored as underlying numeric value |
+
+**Throws** if DbType is neither string nor numeric.
+
+```csharp
+[Column("status", DbType.String)]    // Stored as "Active", "Inactive", etc.
+public StatusEnum Status { get; set; }
+
+[Column("priority", DbType.Int32)]   // Stored as 0, 1, 2, etc.
+public PriorityEnum Priority { get; set; }
+```
+
+### RetrieveOneAsync(TEntity) Requirements
+
+`RetrieveOneAsync(TEntity objectToRetrieve)` uses `[PrimaryKey]` columns to find the row.
+
+**If no `[PrimaryKey]` columns defined:** Throws `"No primary keys found for type {TypeName}"`
+
+This method is for lookup by business key. Use `RetrieveOneAsync(TRowID id)` for lookup by pseudo key.
+
+### CRITICAL: Audit Field Behavior
+
+**BOTH CreatedBy/On AND LastUpdatedBy/On are set on CREATE.**
+
+This is intentional design - it allows "last modified" queries without checking if the entity was ever updated.
+
+| Operation | CreatedBy | CreatedOn | LastUpdatedBy | LastUpdatedOn |
+|-----------|-----------|-----------|---------------|---------------|
+| **Create** | SET | SET | SET | SET |
+| **Update** | unchanged | unchanged | SET | SET |
+
+**Requirements:**
+- If entity has `[CreatedBy]` or `[LastUpdatedBy]`, you MUST provide `IAuditValueResolver`
+- Without resolver + user audit fields = `InvalidOperationException` at runtime
+- Time-only audit fields (`[CreatedOn]`, `[LastUpdatedOn]`) work without resolver (uses `DateTime.UtcNow`)
+
+**Example:**
+```csharp
+// Entity with audit fields
+[Table("orders")]
+public class Order
+{
+    [Id] public long Id { get; set; }
+    [Column("total")] public decimal Total { get; set; }
+
+    [CreatedOn] [Column("created_at")] public DateTime CreatedAt { get; set; }
+    [CreatedBy] [Column("created_by")] public string CreatedBy { get; set; }
+    [LastUpdatedOn] [Column("updated_at")] public DateTime UpdatedAt { get; set; }
+    [LastUpdatedBy] [Column("updated_by")] public string UpdatedBy { get; set; }
+}
+
+// MUST provide resolver when using user audit fields
+var helper = new EntityHelper<Order, long>(context, auditValueResolver: myResolver);
+```
+
+### Project Structure
 - `pengdows.crud/` - Core implementation
   - `attributes/` - Entity mapping attributes
   - `dialects/` - Database-specific SQL generation

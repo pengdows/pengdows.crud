@@ -55,4 +55,20 @@ public readonly struct Inet : IEquatable<Inet>
     {
         return HashCode.Combine(Address, PrefixLength);
     }
+
+    public static Inet Parse(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            throw new FormatException("inet value cannot be empty.");
+
+        var parts = text.Split('/', 2);
+        var address = IPAddress.Parse(parts[0]);
+        byte? prefix = null;
+        if (parts.Length == 2 && !string.IsNullOrEmpty(parts[1]))
+        {
+            prefix = byte.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        return new Inet(address, prefix);
+    }
 }

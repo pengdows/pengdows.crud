@@ -16,6 +16,53 @@ using pengdows.crud.threading;
 
 namespace pengdows.crud.wrappers;
 
+/// <summary>
+/// Wraps a DbConnection with lifecycle tracking, async support, and connection-level locking.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <strong>Lock Semantics:</strong>
+/// </para>
+/// <para>
+/// TrackedConnection provides connection-level locking through <see cref="GetLock()"/>. The lock type depends
+/// on whether the connection is shared (persistent) or ephemeral:
+/// </para>
+/// <list type="bullet">
+///   <item><description>
+///     <b>Shared connections (isSharedConnection=true):</b> Returns <see cref="RealAsyncLocker"/> backed by
+///     <see cref="SemaphoreSlim"/>. This serializes access to the connection, ensuring only one operation
+///     at a time can use it. Used in SingleWriter and SingleConnection modes.
+///   </description></item>
+///   <item><description>
+///     <b>Ephemeral connections (isSharedConnection=false):</b> Returns <see cref="NoOpAsyncLocker"/>.
+///     No locking overhead since each operation gets its own connection. Used in Standard and KeepAlive modes
+///     (and for read connections in SingleWriter mode).
+///   </description></item>
+/// </list>
+/// <para>
+/// <strong>Lifecycle Management:</strong>
+/// </para>
+/// <para>
+/// TrackedConnection manages connection state and fires callbacks at key lifecycle points:
+/// </para>
+/// <list type="bullet">
+///   <item><description><b>First open:</b> onFirstOpen callback (used for session settings)</description></item>
+///   <item><description><b>State changes:</b> onStateChange callback (used for metrics)</description></item>
+///   <item><description><b>Disposal:</b> onDispose callback (used for connection counting)</description></item>
+/// </list>
+/// <para>
+/// <strong>Shared vs Ephemeral:</strong>
+/// </para>
+/// <para>
+/// The isSharedConnection parameter determines ownership and locking behavior:
+/// </para>
+/// <list type="bullet">
+///   <item><description><b>Shared (true):</b> Connection is owned by DatabaseContext, stays open across operations,
+///   requires synchronization (RealAsyncLocker), never returned to provider pool.</description></item>
+///   <item><description><b>Ephemeral (false):</b> Connection is owned by the operation, closed after use,
+///   no synchronization needed (NoOpAsyncLocker), returned to provider pool on disposal.</description></item>
+/// </list>
+/// </remarks>
 public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
 {
     private readonly DbConnection _connection;
@@ -154,6 +201,29 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
     }
 
 
+    /// <summary>
+    /// Gets the connection-level lock for synchronization.
+    /// </summary>
+    /// <returns>
+    /// <see cref="RealAsyncLocker"/> for shared connections (serializes access),
+    /// <see cref="NoOpAsyncLocker"/> for ephemeral connections (no-op, zero overhead).
+    /// </returns>
+    /// <remarks>
+    /// <para>
+    /// This is part of the two-level locking strategy:
+    /// </para>
+    /// <list type="number">
+    ///   <item><description>Context lock (DatabaseContext.GetLock): Always NoOp</description></item>
+    ///   <item><description>Connection lock (this method): Real or NoOp depending on shared vs ephemeral</description></item>
+    /// </list>
+    /// <para>
+    /// <strong>Shared connections:</strong> Lock prevents concurrent use of the same physical connection.
+    /// </para>
+    /// <para>
+    /// <strong>Ephemeral connections:</strong> Each operation has its own connection, no contention possible,
+    /// lock is no-op for performance.
+    /// </para>
+    /// </remarks>
     public ILockerAsync GetLock()
     {
         return _lockFactory();

@@ -53,6 +53,7 @@ public class PostgreSqlDialect : SqlDialect
 
     public override bool SupportsInsertOnConflict => true;
     public override bool SupportsMerge => IsVersionAtLeast(15);
+    public override bool SupportsSavepoints => true;
     public override bool SupportsJsonTypes => IsVersionAtLeast(9);
     public override bool SupportsSqlJsonConstructors => IsVersionAtLeast(18);
     public override bool SupportsJsonTable => IsVersionAtLeast(18);

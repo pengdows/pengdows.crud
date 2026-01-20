@@ -17,7 +17,7 @@ public class DialectCoverageTests
             "\"",
             true,
             "@",
-            false
+            true // MySQL supports savepoints since 5.0.3
         };
 
         yield return new object[]
@@ -26,7 +26,7 @@ public class DialectCoverageTests
             "\"",
             true,
             ":",
-            false
+            true // Oracle supports savepoints
         };
 
         yield return new object[]
@@ -35,7 +35,7 @@ public class DialectCoverageTests
             "\"",
             true,
             "$",
-            false
+            true // DuckDB supports savepoints since v0.2.0
         };
 
         yield return new object[]
@@ -44,7 +44,7 @@ public class DialectCoverageTests
             "\"",
             true,
             "@",
-            false
+            false // SQL-92 base dialect does not assume savepoint support
         };
 
         yield return new object[]
@@ -53,7 +53,7 @@ public class DialectCoverageTests
             "\"",
             true,
             ":",
-            false
+            true // PostgreSQL supports savepoints
         };
 
         yield return new object[]
@@ -62,7 +62,7 @@ public class DialectCoverageTests
             "\"",
             true,
             "@",
-            false
+            true // SQL Server supports savepoints (SAVE TRANSACTION)
         };
 
         yield return new object[]
@@ -151,5 +151,53 @@ public class DialectCoverageTests
         {
             Assert.False(dialect.SupportsSavepoints);
         }
+    }
+
+    [Fact]
+    public void SqlServerDialect_GetSavepointSql_UsesSaveTransactionSyntax()
+    {
+        var dialect = new SqlServerDialect(new fakeDbFactory(SupportedDatabase.SqlServer), NullLogger<SqlServerDialect>.Instance);
+        var sql = dialect.GetSavepointSql("test_sp");
+        Assert.Equal("SAVE TRANSACTION test_sp", sql);
+    }
+
+    [Fact]
+    public void SqlServerDialect_GetRollbackToSavepointSql_UsesRollbackTransactionSyntax()
+    {
+        var dialect = new SqlServerDialect(new fakeDbFactory(SupportedDatabase.SqlServer), NullLogger<SqlServerDialect>.Instance);
+        var sql = dialect.GetRollbackToSavepointSql("test_sp");
+        Assert.Equal("ROLLBACK TRANSACTION test_sp", sql);
+    }
+
+    [Fact]
+    public void PostgreSqlDialect_GetSavepointSql_UsesStandardSyntax()
+    {
+        var dialect = new PostgreSqlDialect(new fakeDbFactory(SupportedDatabase.PostgreSql), NullLogger<PostgreSqlDialect>.Instance);
+        var sql = dialect.GetSavepointSql("test_sp");
+        Assert.Equal("SAVEPOINT test_sp", sql);
+    }
+
+    [Fact]
+    public void PostgreSqlDialect_GetRollbackToSavepointSql_UsesStandardSyntax()
+    {
+        var dialect = new PostgreSqlDialect(new fakeDbFactory(SupportedDatabase.PostgreSql), NullLogger<PostgreSqlDialect>.Instance);
+        var sql = dialect.GetRollbackToSavepointSql("test_sp");
+        Assert.Equal("ROLLBACK TO SAVEPOINT test_sp", sql);
+    }
+
+    [Fact]
+    public void MySqlDialect_GetSavepointSql_UsesStandardSyntax()
+    {
+        var dialect = new MySqlDialect(new fakeDbFactory(SupportedDatabase.MySql), NullLogger<MySqlDialect>.Instance);
+        var sql = dialect.GetSavepointSql("test_sp");
+        Assert.Equal("SAVEPOINT test_sp", sql);
+    }
+
+    [Fact]
+    public void SqliteDialect_GetSavepointSql_UsesStandardSyntax()
+    {
+        var dialect = new SqliteDialect(new fakeDbFactory(SupportedDatabase.Sqlite), NullLogger<SqliteDialect>.Instance);
+        var sql = dialect.GetSavepointSql("my_savepoint");
+        Assert.Equal("SAVEPOINT my_savepoint", sql);
     }
 }

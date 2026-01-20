@@ -44,6 +44,7 @@ public class MySqlDialect : SqlDialect
 
     public override bool SupportsOnDuplicateKey => true; // Available since MySQL 4.1 (2004) - safe to assume
     public override bool SupportsMerge => false;
+    public override bool SupportsSavepoints => true; // Available since MySQL 5.0.3 (2005)
     public override bool SupportsJsonTypes => IsInitialized && ProductInfo.ParsedVersion?.Major >= 5;
     public override bool SupportsWindowFunctions => IsInitialized && ProductInfo.ParsedVersion?.Major >= 8;
     public override bool SupportsCommonTableExpressions => IsInitialized && ProductInfo.ParsedVersion?.Major >= 8;
@@ -119,7 +120,7 @@ public class MySqlDialect : SqlDialect
 
     public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
     {
-        var baseSettings = _sessionSettings ?? DefaultSqlMode;
+        var baseSettings = string.IsNullOrWhiteSpace(_sessionSettings) ? DefaultSqlMode : _sessionSettings;
         
         if (readOnly)
         {

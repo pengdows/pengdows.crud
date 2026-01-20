@@ -324,7 +324,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
 
         using var cmd = _connection.CreateCommand();
         cmd.Transaction = _transaction;
-        cmd.CommandText = $"SAVEPOINT {name}";
+        cmd.CommandText = _dialect.GetSavepointSql(name);
         if (cmd is DbCommand db)
         {
             await db.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
@@ -349,7 +349,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
 
         using var cmd = _connection.CreateCommand();
         cmd.Transaction = _transaction;
-        cmd.CommandText = $"ROLLBACK TO SAVEPOINT {name}";
+        cmd.CommandText = _dialect.GetRollbackToSavepointSql(name);
         if (cmd is DbCommand db)
         {
             await db.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);

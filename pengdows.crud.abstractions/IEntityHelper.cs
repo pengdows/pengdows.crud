@@ -13,6 +13,14 @@ namespace pengdows.crud;
 /// Provides SQL generation, mapping, and binding logic for a specific entity type.
 /// Used for CRUD generation, parameter naming, and object materialization.
 /// </summary>
+/// <remarks>
+/// <para><strong>Version 2.0 Breaking Change:</strong></para>
+/// <para>
+/// <c>IEntityHelper&lt;TEntity, TRowID&gt;</c> will be renamed to <c>ITableSql&lt;TEntity, TRowID&gt;</c> in version 2.0.
+/// A compatibility shim will be provided during the transition period.
+/// See VERSION_2.0_PLANNING.md for migration details.
+/// </para>
+/// </remarks>
 public interface IEntityHelper<TEntity, TRowID> where TEntity : class, new()
 {
     /// <summary>
@@ -257,6 +265,66 @@ public interface IEntityHelper<TEntity, TRowID> where TEntity : class, new()
     Task<List<TEntity>> RetrieveAsync(IEnumerable<TRowID> ids, IDatabaseContext? context, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Streams entities matching the provided row IDs, yielding results as they are read from the database.
+    /// This method is memory-efficient for large ID lists as it does not materialize the entire list in memory.
+    /// </summary>
+    /// <param name="ids">Collection of row IDs to retrieve</param>
+    /// <param name="context">Optional database context. If null, uses the helper's default context.</param>
+    /// <returns>An async stream of entities matching the provided IDs</returns>
+    /// <remarks>
+    /// <para>
+    /// This method is ideal for processing large sets of entities without loading them all into memory at once.
+    /// It internally builds a SELECT statement with the provided IDs and streams results using <see cref="LoadStreamAsync"/>.
+    /// </para>
+    /// <para>
+    /// The stream can be enumerated multiple times, with each enumeration executing a new database query.
+    /// Breaking from the enumeration early will dispose the reader and stop processing remaining results.
+    /// </para>
+    /// <para>
+    /// Override <paramref name="context"/> only when executing within a transaction created from the parent database context.
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// Process a large number of entities without loading all into memory:
+    /// <code>
+    /// // Stream 10,000 orders without loading all into memory
+    /// var orderIds = await GetAllOrderIdsAsync();
+    /// await foreach (var order in helper.RetrieveStreamAsync(orderIds))
+    /// {
+    ///     await ProcessOrderAsync(order);
+    ///
+    ///     // Can break early without loading remaining orders
+    ///     if (shouldStop)
+    ///         break;
+    /// }
+    /// </code>
+    /// </example>
+    IAsyncEnumerable<TEntity> RetrieveStreamAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null);
+
+    /// <summary>
+    /// Streams entities matching the provided row IDs with cancellation support.
+    /// </summary>
+    /// <param name="ids">Collection of row IDs to retrieve</param>
+    /// <param name="context">Optional database context. If null, uses the helper's default context.</param>
+    /// <param name="cancellationToken">Cancellation token to observe during enumeration</param>
+    /// <returns>An async stream of entities matching the provided IDs</returns>
+    /// <remarks>
+    /// This method supports cancellation via the provided token. The cancellation will be observed
+    /// during database operations and iteration. Cancelling will dispose resources and stop enumeration.
+    /// </remarks>
+    /// <example>
+    /// Stream with cancellation support:
+    /// <code>
+    /// var cts = new CancellationTokenSource();
+    /// await foreach (var entity in helper.RetrieveStreamAsync(ids, null, cts.Token))
+    /// {
+    ///     await ProcessAsync(entity);
+    /// }
+    /// </code>
+    /// </example>
+    IAsyncEnumerable<TEntity> RetrieveStreamAsync(IEnumerable<TRowID> ids, IDatabaseContext? context, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Executes a DELETE for all provided row IDs (pseudo keys) and returns the number of affected rows.
     /// </summary>
     /// <remarks>
@@ -425,6 +493,57 @@ public interface IEntityHelper<TEntity, TRowID> where TEntity : class, new()
     /// Loads a list of objects using the provided SQL container with cancellation support.
     /// </summary>
     Task<List<TEntity>> LoadListAsync(ISqlContainer sc, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Streams objects using the provided SQL container, yielding results as they are read from the database.
+    /// This method is memory-efficient for large result sets as it does not materialize the entire list in memory.
+    /// </summary>
+    /// <param name="sc">The SQL container with the query to execute.</param>
+    /// <returns>An async enumerable stream of entities.</returns>
+    /// <remarks>
+    /// Use this method when processing large result sets to avoid loading all rows into memory at once.
+    /// The underlying database reader remains open while enumerating, so ensure you consume the stream
+    /// or dispose of it properly. Supports cancellation via the async enumerable pattern.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var sc = helper.BuildBaseRetrieve("e");
+    /// sc.Query.Append(" WHERE e.Status = 'Active'");
+    ///
+    /// await foreach (var entity in helper.LoadStreamAsync(sc))
+    /// {
+    ///     await ProcessEntityAsync(entity);
+    /// }
+    /// </code>
+    /// </example>
+    IAsyncEnumerable<TEntity> LoadStreamAsync(ISqlContainer sc);
+
+    /// <summary>
+    /// Streams objects using the provided SQL container with cancellation support,
+    /// yielding results as they are read from the database.
+    /// This method is memory-efficient for large result sets as it does not materialize the entire list in memory.
+    /// </summary>
+    /// <param name="sc">The SQL container with the query to execute.</param>
+    /// <param name="cancellationToken">Token to cancel the streaming operation.</param>
+    /// <returns>An async enumerable stream of entities.</returns>
+    /// <remarks>
+    /// Use this method when processing large result sets to avoid loading all rows into memory at once.
+    /// The underlying database reader remains open while enumerating, so ensure you consume the stream
+    /// or dispose of it properly.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var sc = helper.BuildBaseRetrieve("e");
+    /// sc.Query.Append(" WHERE e.CreatedDate > @startDate");
+    /// sc.AddParameterWithValue("startDate", DbType.DateTime, DateTime.UtcNow.AddDays(-30));
+    ///
+    /// await foreach (var entity in helper.LoadStreamAsync(sc, cancellationToken))
+    /// {
+    ///     await ProcessEntityAsync(entity, cancellationToken);
+    /// }
+    /// </code>
+    /// </example>
+    IAsyncEnumerable<TEntity> LoadStreamAsync(ISqlContainer sc, CancellationToken cancellationToken);
 
     /// <summary>
     /// Generates a formatted parameter name based on the provided DbParameter.

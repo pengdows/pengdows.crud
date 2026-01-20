@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics;
-using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using pengdows.crud;
@@ -27,9 +26,6 @@ public abstract class SqlDialect:ISqlDialect
     // Performance optimization: Cache frequently used parameter names to avoid repeated string operations
     private readonly ConcurrentDictionary<string, string> _trimmedNameCache = new();
     private readonly ConcurrentDictionary<string, string> _wrappedNameCache = new(StringComparer.Ordinal);
-    private static readonly ConcurrentQueue<StringBuilder> _wrapNameBuilderPool = new();
-    private const int MaxPooledWrapBuilderCapacity = 512;
-
     // Pre-compiled parameter marker trimming for faster string operations
     private static readonly char[] _parameterMarkers = { '@', ':', '?', '$' };
 
@@ -179,6 +175,19 @@ public abstract class SqlDialect:ISqlDialect
     public virtual bool SupportsInsertOnConflict => false; // PostgreSQL, SQLite extension
     public virtual bool SupportsOnDuplicateKey => false; // MySQL, MariaDB extension
     public virtual bool SupportsSavepoints => false;
+
+    /// <summary>
+    /// Gets the SQL statement to create a savepoint with the given name.
+    /// Override for databases with non-standard syntax (e.g., SQL Server uses SAVE TRANSACTION).
+    /// </summary>
+    public virtual string GetSavepointSql(string name) => $"SAVEPOINT {name}";
+
+    /// <summary>
+    /// Gets the SQL statement to rollback to a savepoint with the given name.
+    /// Override for databases with non-standard syntax (e.g., SQL Server uses ROLLBACK TRANSACTION).
+    /// </summary>
+    public virtual string GetRollbackToSavepointSql(string name) => $"ROLLBACK TO SAVEPOINT {name}";
+
     public virtual bool RequiresStoredProcParameterNameMatch => false;
     public virtual bool SupportsNamespaces => false; // SQL-92 does not require schema support
 
@@ -253,87 +262,55 @@ public abstract class SqlDialect:ISqlDialect
         var suffix = QuoteSuffix;
         var separator = CompositeIdentifierSeparator;
 
-        var builder = RentWrapBuilder(identifier.Length + ((prefix.Length + suffix.Length) << 1));
-        try
+        var capacityHint = identifier.Length + ((prefix.Length + suffix.Length) << 1);
+        var stackSize = capacityHint > SbLite.DefaultStack ? capacityHint : SbLite.DefaultStack;
+        var builder = SbLite.Create(stackalloc char[stackSize]);
+        var separatorSpan = separator.AsSpan();
+        var prefixSpan = prefix.AsSpan();
+        var suffixSpan = suffix.AsSpan();
+        var value = identifier.AsSpan();
+        var hasSeparator = separatorSpan.Length > 0;
+
+        var consumed = 0;
+        var wroteSegment = false;
+
+        while (consumed < value.Length)
         {
-            var separatorSpan = separator.AsSpan();
-            var prefixSpan = prefix.AsSpan();
-            var suffixSpan = suffix.AsSpan();
-            var value = identifier.AsSpan();
-            var hasSeparator = separatorSpan.Length > 0;
+            var remaining = value.Slice(consumed);
+            var separatorIndex = hasSeparator ? IndexOf(remaining, separatorSpan) : -1;
 
-            var consumed = 0;
-            var wroteSegment = false;
-
-            while (consumed < value.Length)
+            ReadOnlySpan<char> segment;
+            if (separatorIndex >= 0)
             {
-                var remaining = value.Slice(consumed);
-                var separatorIndex = hasSeparator ? IndexOf(remaining, separatorSpan) : -1;
-
-                ReadOnlySpan<char> segment;
-                if (separatorIndex >= 0)
-                {
-                    segment = remaining.Slice(0, separatorIndex);
-                    consumed += separatorIndex + separatorSpan.Length;
-                }
-                else
-                {
-                    segment = remaining;
-                    consumed = value.Length;
-                }
-
-                segment = TrimWhitespace(segment);
-                if (segment.Length == 0)
-                {
-                    continue;
-                }
-
-                if (wroteSegment)
-                {
-                    builder.Append(separator);
-                }
-
-                builder.Append(prefix);
-                AppendWithoutQuotes(builder, segment, prefixSpan, suffixSpan);
-                builder.Append(suffix);
-
-                wroteSegment = true;
+                segment = remaining.Slice(0, separatorIndex);
+                consumed += separatorIndex + separatorSpan.Length;
+            }
+            else
+            {
+                segment = remaining;
+                consumed = value.Length;
             }
 
-            var result = wroteSegment ? builder.ToString() : string.Empty;
-            return result;
-        }
-        finally
-        {
-            ReturnWrapBuilder(builder);
-        }
-    }
-
-    private static StringBuilder RentWrapBuilder(int capacityHint)
-    {
-        if (_wrapNameBuilderPool.TryDequeue(out var builder))
-        {
-            if (capacityHint > builder.Capacity)
+            segment = TrimWhitespace(segment);
+            if (segment.Length == 0)
             {
-                builder.EnsureCapacity(capacityHint);
+                continue;
             }
 
-            builder.Clear();
-            return builder;
+            if (wroteSegment)
+            {
+                builder.Append(separator);
+            }
+
+            builder.Append(prefix);
+            AppendWithoutQuotes(ref builder, segment, prefixSpan, suffixSpan);
+            builder.Append(suffix);
+
+            wroteSegment = true;
         }
 
-        return new StringBuilder(capacityHint < 64 ? 64 : capacityHint);
-    }
-
-    private static void ReturnWrapBuilder(StringBuilder builder)
-    {
-        if (builder.Capacity > MaxPooledWrapBuilderCapacity)
-        {
-            return;
-        }
-
-        builder.Clear();
-        _wrapNameBuilderPool.Enqueue(builder);
+        var result = wroteSegment ? builder.ToString() : string.Empty;
+        return result;
     }
 
     protected static string BuildSessionSettingsScript(
@@ -425,7 +402,7 @@ public abstract class SqlDialect:ISqlDialect
         return start > end ? ReadOnlySpan<char>.Empty : span.Slice(start, end - start + 1);
     }
 
-    private static void AppendWithoutQuotes(StringBuilder builder, ReadOnlySpan<char> value, ReadOnlySpan<char> prefix, ReadOnlySpan<char> suffix)
+    private static void AppendWithoutQuotes(ref StringBuilderLite builder, ReadOnlySpan<char> value, ReadOnlySpan<char> prefix, ReadOnlySpan<char> suffix)
     {
         var index = 0;
         while (index < value.Length)
@@ -577,7 +554,7 @@ public abstract class SqlDialect:ISqlDialect
 
         // Performance: Inline null check to avoid method call overhead
         var valueIsNull = value == null || value is DBNull;
-        var runtimeType = ResolveClrType(value);
+        var runtimeType = valueIsNull ? null : ResolveClrType(value);
         var handled = runtimeType != null &&
                       AdvancedTypes.IsMappedType(runtimeType) &&
                       AdvancedTypes.TryConfigureParameter(parameter, runtimeType, value, DatabaseType);
@@ -646,18 +623,13 @@ public abstract class SqlDialect:ISqlDialect
 
     private static Type? ResolveClrType<T>(T value)
     {
-        if (value is not null)
-        {
-            return value.GetType();
-        }
-
         var type = typeof(T);
-        if (type == typeof(object))
+        if (type != typeof(object))
         {
-            return null;
+            return Nullable.GetUnderlyingType(type) ?? type;
         }
 
-        return Nullable.GetUnderlyingType(type) ?? type;
+        return value?.GetType();
     }
 
     public virtual DbParameter CreateDbParameter(string? name, DbType type, object? value)

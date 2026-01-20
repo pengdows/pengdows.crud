@@ -18,6 +18,7 @@ public sealed class OrderedDictionary<TKey, TValue> : IDictionary<TKey, TValue>,
 {
     // No artificial MaxCapacity/MaxBucketSize
     private const int DefaultCapacity = 16;
+    private const int SmallCapacity = 8;
 
     // Use struct for better cache locality and reduced allocations
     private struct Entry
@@ -92,6 +93,12 @@ public sealed class OrderedDictionary<TKey, TValue> : IDictionary<TKey, TValue>,
         _freeList = 0;                            // 0 = none
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private int GetEntryIndexAt(int orderIndex)
+    {
+        return _buckets.Length == 0 ? orderIndex : _insertionOrder[orderIndex] - 1;
+    }
+
     public void Add(TKey key, TValue value)
     {
         var modified = TryInsert(key, value, InsertionBehavior.ThrowOnExisting);
@@ -105,11 +112,16 @@ public sealed class OrderedDictionary<TKey, TValue> : IDictionary<TKey, TValue>,
         var count = _count;
         if (count > 0)
         {
-            Debug.Assert(_buckets != null);
-
-            Array.Clear(_buckets, 0, _buckets.Length);    // 0 = empty
-            Array.Clear(_entries, 0, count);
-            Array.Clear(_insertionOrder, 0, _insertionOrder.Length);
+            if (_buckets.Length == 0)
+            {
+                Array.Clear(_entries, 0, count);
+            }
+            else
+            {
+                Array.Clear(_buckets, 0, _buckets.Length);    // 0 = empty
+                Array.Clear(_entries, 0, count);
+                Array.Clear(_insertionOrder, 0, _insertionOrder.Length);
+            }
 
             _count = 0;
             _freeList = 0;      // 0 = none
@@ -136,7 +148,7 @@ public sealed class OrderedDictionary<TKey, TValue> : IDictionary<TKey, TValue>,
         // Use insertion order for consistent ordering
         for (int i = 0; i < Count; i++)
         {
-            int entryIndex = _insertionOrder[i] - 1;
+            int entryIndex = GetEntryIndexAt(i);
             ref var entry = ref _entries[entryIndex];
             array[arrayIndex++] = new KeyValuePair<TKey, TValue>(entry.Key, entry.Value);
         }
@@ -153,7 +165,7 @@ public sealed class OrderedDictionary<TKey, TValue> : IDictionary<TKey, TValue>,
     {
         ArgumentNullException.ThrowIfNull(key);
 
-        if (_buckets != null)
+        if (_buckets.Length != 0)
         {
             Debug.Assert(_entries != null);
 
@@ -174,6 +186,16 @@ public sealed class OrderedDictionary<TKey, TValue> : IDictionary<TKey, TValue>,
             }
         }
 
+        var smallComparer = _comparer;
+        for (int i = 0; i < _count; i++)
+        {
+            ref var entry = ref _entries[i];
+            if (smallComparer.Equals(entry.Key, key))
+            {
+                return ref entry.Value;
+            }
+        }
+
         return ref Unsafe.NullRef<TValue>();
     }
 
@@ -181,11 +203,46 @@ public sealed class OrderedDictionary<TKey, TValue> : IDictionary<TKey, TValue>,
     {
         ArgumentNullException.ThrowIfNull(key);
 
-        if (_buckets == null || _buckets.Length == 0)
+        if (_entries.Length == 0)
         {
-            Initialize(DefaultCapacity);
+            _entries = new Entry[SmallCapacity];
         }
-        Debug.Assert(_buckets != null && _entries != null);
+
+        if (_buckets.Length == 0)
+        {
+            var smallComparer = _comparer;
+            for (int i = 0; i < _count; i++)
+            {
+                if (smallComparer.Equals(_entries[i].Key, key))
+                {
+                    if (behavior == InsertionBehavior.ThrowOnExisting)
+                    {
+                        ThrowAddingDuplicateWithKeyArgumentException(key);
+                    }
+                    if (behavior == InsertionBehavior.NoneIfExists)
+                    {
+                        return false;
+                    }
+
+                    _entries[i].Value = value;
+                    _version++;
+                    return true;
+                }
+            }
+
+            if (_count < _entries.Length)
+            {
+                var smallHash = (uint)smallComparer.GetHashCode(key);
+                _entries[_count].HashCode = smallHash;
+                _entries[_count].Key = key;
+                _entries[_count].Value = value;
+                _count++;
+                _version++;
+                return true;
+            }
+
+            Resize(DefaultCapacity);
+        }
 
         var comparer = _comparer;
         var hashCode = (uint)comparer.GetHashCode(key);
@@ -261,7 +318,7 @@ public sealed class OrderedDictionary<TKey, TValue> : IDictionary<TKey, TValue>,
     {
         ArgumentNullException.ThrowIfNull(key);
 
-        if (_buckets != null)
+        if (_buckets.Length != 0)
         {
             Debug.Assert(_entries != null);
 
@@ -304,6 +361,24 @@ public sealed class OrderedDictionary<TKey, TValue> : IDictionary<TKey, TValue>,
 
                 lastPlus1 = iPlus1;
                 iPlus1 = entry.Next;
+            }
+
+            return false;
+        }
+
+        var smallComparer = _comparer;
+        for (int i = 0; i < _count; i++)
+        {
+            if (smallComparer.Equals(_entries[i].Key, key))
+            {
+                for (int j = i; j < _count - 1; j++)
+                {
+                    _entries[j] = _entries[j + 1];
+                }
+                _entries[_count - 1] = default!;
+                _count--;
+                _version++;
+                return true;
             }
         }
 
@@ -383,7 +458,13 @@ public sealed class OrderedDictionary<TKey, TValue> : IDictionary<TKey, TValue>,
 
         if (Count == 0)
         {
-            Resize(DefaultCapacity);
+            _entries = Array.Empty<Entry>();
+            _buckets = Array.Empty<int>();
+            _insertionOrder = Array.Empty<int>();
+            _count = 0;
+            _freeList = 0;
+            _freeCount = 0;
+            _version++;
             return;
         }
 
@@ -409,11 +490,11 @@ public sealed class OrderedDictionary<TKey, TValue> : IDictionary<TKey, TValue>,
         var newEntries = new Entry[newSize];
         var newInsertionOrder = new int[newSize];
 
-        // Rebuild from insertion order - only copy active entries
+        // Rebuild from insertion order (or small array) - only copy active entries
         int activeCount = Count;
         for (int k = 0; k < activeCount; k++)
         {
-            int oldIndex = _insertionOrder[k] - 1;
+            int oldIndex = _buckets.Length == 0 ? k : _insertionOrder[k] - 1;
             ref readonly var oldEntry = ref _entries[oldIndex];
 
             // Place entries sequentially for better cache locality
@@ -540,7 +621,7 @@ public sealed class OrderedDictionary<TKey, TValue> : IDictionary<TKey, TValue>,
 
             if (_index < _dictionary.Count)
             {
-                int entryIndex = _dictionary._insertionOrder[_index] - 1;
+                int entryIndex = _dictionary.GetEntryIndexAt(_index);
                 ref var entry = ref _dictionary._entries[entryIndex];
                 _current = new KeyValuePair<TKey, TValue>(entry.Key, entry.Value);
                 _index++;
@@ -599,7 +680,7 @@ public sealed class OrderedDictionary<TKey, TValue> : IDictionary<TKey, TValue>,
             // Use insertion order
             for (int i = 0; i < _dict.Count; i++)
             {
-                int entryIndex = _dict._insertionOrder[i] - 1;
+                int entryIndex = _dict.GetEntryIndexAt(i);
                 array[arrayIndex++] = _dict._entries[entryIndex].Key;
             }
         }
@@ -639,7 +720,7 @@ public sealed class OrderedDictionary<TKey, TValue> : IDictionary<TKey, TValue>,
             var comparer = EqualityComparer<TValue>.Default;
             for (int i = 0; i < _dict.Count; i++)
             {
-                int entryIndex = _dict._insertionOrder[i] - 1;
+                int entryIndex = _dict.GetEntryIndexAt(i);
                 if (comparer.Equals(_dict._entries[entryIndex].Value, item))
                 {
                     return true;
@@ -657,7 +738,7 @@ public sealed class OrderedDictionary<TKey, TValue> : IDictionary<TKey, TValue>,
             // Use insertion order
             for (int i = 0; i < _dict.Count; i++)
             {
-                int entryIndex = _dict._insertionOrder[i] - 1;
+                int entryIndex = _dict.GetEntryIndexAt(i);
                 array[arrayIndex++] = _dict._entries[entryIndex].Value;
             }
         }
@@ -701,7 +782,7 @@ public sealed class OrderedDictionary<TKey, TValue> : IDictionary<TKey, TValue>,
 
             if (_index < _dict.Count)
             {
-                int entryIndex = _dict._insertionOrder[_index] - 1;
+                int entryIndex = _dict.GetEntryIndexAt(_index);
                 _current = _dict._entries[entryIndex].Key;
                 _index++;
                 return true;
@@ -757,7 +838,7 @@ public sealed class OrderedDictionary<TKey, TValue> : IDictionary<TKey, TValue>,
 
             if (_index < _dict.Count)
             {
-                int entryIndex = _dict._insertionOrder[_index] - 1;
+                int entryIndex = _dict.GetEntryIndexAt(_index);
                 _current = _dict._entries[entryIndex].Value;
                 _index++;
                 return true;

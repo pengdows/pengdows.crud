@@ -5,6 +5,64 @@ using pengdows.crud.types.valueobjects;
 
 namespace pengdows.crud.types.converters;
 
+/// <summary>
+/// Converts between database interval values and <see cref="PostgreSqlInterval"/> value objects.
+/// Supports PostgreSQL's native INTERVAL type with years, months, days, and sub-day time components.
+/// </summary>
+/// <remarks>
+/// <para><strong>Provider-specific behavior:</strong></para>
+/// <list type="bullet">
+/// <item><description><strong>PostgreSQL:</strong> Maps to INTERVAL type. Supports years, months, days, hours, minutes, seconds, and microseconds.</description></item>
+/// <item><description><strong>CockroachDB:</strong> Maps to INTERVAL type (PostgreSQL compatible).</description></item>
+/// <item><description><strong>Other databases:</strong> No native PostgreSQL-style interval type. Fallback to application-level storage.</description></item>
+/// </list>
+/// <para><strong>Supported conversions from database:</strong></para>
+/// <list type="bullet">
+/// <item><description>PostgreSqlInterval → PostgreSqlInterval (pass-through)</description></item>
+/// <item><description>TimeSpan → PostgreSqlInterval (converts via PostgreSqlInterval.FromTimeSpan)</description></item>
+/// <item><description>string → PostgreSqlInterval (parses ISO 8601 duration or PostgreSQL interval format)</description></item>
+/// <item><description>NpgsqlTimeSpan → PostgreSqlInterval (converts Npgsql provider-specific type via reflection)</description></item>
+/// </list>
+/// <para><strong>Format:</strong> Supports ISO 8601 duration format (P3Y6M4DT12H30M5S) and PostgreSQL text format.
+/// Output format is ISO 8601 for PostgreSQL/CockroachDB providers.</para>
+/// <para><strong>Components:</strong> PostgreSqlInterval has three fields: Months (includes years), Days, and Microseconds (sub-day time).
+/// This matches PostgreSQL's internal representation.</para>
+/// <para><strong>Thread safety:</strong> Converter instances are thread-safe. PostgreSqlInterval value objects are immutable and thread-safe.</para>
+/// </remarks>
+/// <example>
+/// <code>
+/// // Entity with interval
+/// [Table("events")]
+/// public class Event
+/// {
+///     [Id]
+///     [Column("id", DbType.Int32)]
+///     public int Id { get; set; }
+///
+///     [Column("duration", DbType.Object)]
+///     public PostgreSqlInterval Duration { get; set; }
+/// }
+///
+/// // Create with interval (3 years, 6 months, 4 days, 12 hours, 30 minutes)
+/// var evt = new Event
+/// {
+///     Duration = new PostgreSqlInterval(months: 42, days: 4, microseconds: 45000000000) // 12.5 hours in microseconds
+/// };
+/// await helper.CreateAsync(evt);
+///
+/// // Convert from TimeSpan
+/// var evt2 = new Event
+/// {
+///     Duration = PostgreSqlInterval.FromTimeSpan(TimeSpan.FromHours(24))
+/// };
+/// await helper.CreateAsync(evt2);
+///
+/// // Retrieve and use
+/// var retrieved = await helper.RetrieveOneAsync(evt.Id);
+/// Console.WriteLine($"Months: {retrieved.Duration.Months}");  // 42
+/// Console.WriteLine($"Days: {retrieved.Duration.Days}");      // 4
+/// </code>
+/// </example>
 internal sealed class PostgreSqlIntervalConverter : AdvancedTypeConverter<PostgreSqlInterval>
 {
     protected override object? ConvertToProvider(PostgreSqlInterval value, SupportedDatabase provider)

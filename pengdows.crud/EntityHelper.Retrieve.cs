@@ -23,13 +23,23 @@ public partial class EntityHelper<TEntity, TRowID>
         var sql = GetCachedQuery(cacheKey, () =>
         {
             var hasAlias = !string.IsNullOrWhiteSpace(alias);
-            var selectList = _tableInfo.OrderedColumns
-                .Select(col => (hasAlias
-                    ? dialect.WrapObjectName(alias) + dialect.CompositeIdentifierSeparator
-                    : string.Empty) + dialect.WrapObjectName(col.Name));
             var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
             sb.Append("SELECT ");
-            sb.Append(string.Join(", ", selectList));
+            for (var i = 0; i < _tableInfo.OrderedColumns.Count; i++)
+            {
+                if (i > 0)
+                {
+                    sb.Append(", ");
+                }
+
+                if (hasAlias)
+                {
+                    sb.Append(dialect.WrapObjectName(alias));
+                    sb.Append(dialect.CompositeIdentifierSeparator);
+                }
+
+                sb.Append(dialect.WrapObjectName(_tableInfo.OrderedColumns[i].Name));
+            }
             sb.Append("\nFROM ");
             sb.Append(BuildWrappedTableName(dialect));
             if (hasAlias)
@@ -349,8 +359,23 @@ public partial class EntityHelper<TEntity, TRowID>
             _whereParameterNames.GetOrAdd(keyIn, _ => names);
         }
 
-        var inCore = GetCachedQuery(keyIn,
-            () => string.Concat(wrappedColumnName, " IN (", string.Join(", ", names), ")"));
+        var inCore = GetCachedQuery(keyIn, () =>
+        {
+            var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+            sb.Append(wrappedColumnName);
+            sb.Append(" IN (");
+            for (var i = 0; i < names.Length; i++)
+            {
+                if (i > 0)
+                {
+                    sb.Append(", ");
+                }
+
+                sb.Append(names[i]);
+            }
+            sb.Append(')');
+            return sb.ToString();
+        });
 
         AppendWherePrefix(sqlContainer);
         if (hasNull)

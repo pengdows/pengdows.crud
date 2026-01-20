@@ -400,6 +400,10 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
 
     public int OpenAsyncCount { get; private set; }
 
+    public int CloseCount { get; private set; }
+
+    public int DisposeCount { get; private set; }
+
     public override void Open()
     {
         if (_state == ConnectionState.Open)
@@ -483,6 +487,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         {
             throw _closeFailureException;
         }
+        CloseCount++;
         var original = _state;
         _state = ConnectionState.Closed;
         RaiseStateChangedEvent(original);
@@ -495,12 +500,17 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
 
     protected override void Dispose(bool disposing)
     {
+        if (disposing)
+        {
+            DisposeCount++;
+        }
         Close();
         base.Dispose(disposing);
     }
 
     public override async ValueTask DisposeAsync()
     {
+        DisposeCount++;
         await CloseAsync();
         await base.DisposeAsync();
     }

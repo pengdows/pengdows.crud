@@ -18,6 +18,14 @@ namespace pengdows.crud;
 /// Handles parameter creation, connection lifetime, quoting logic,
 /// transaction configuration, and dialect-specific behavior.
 /// </summary>
+/// <remarks>
+/// <para><strong>Version 2.0 Breaking Change:</strong></para>
+/// <para>
+/// <c>IDatabaseContext</c> will be renamed to <c>IDatabaseCoordinator</c> in version 2.0.
+/// A compatibility shim will be provided during the transition period.
+/// See VERSION_2.0_PLANNING.md for migration details.
+/// </para>
+/// </remarks>
 public interface IDatabaseContext : ISafeAsyncDisposableBase
 {
     /// <summary>

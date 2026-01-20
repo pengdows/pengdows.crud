@@ -143,7 +143,7 @@ public class TrackedReaderTests
     {
         // Create empty fakeDb reader (no rows, so ReadAsync returns false)
         using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object>>());
-        
+
         var connection = new TestTrackedConnection();
         var locker = new TestLockerAsync();
 
@@ -153,7 +153,7 @@ public class TrackedReaderTests
 
         Assert.False(result);
         Assert.True(locker.WasDisposed);
-        Assert.True(connection.WasClosed);
+        Assert.False(connection.WasClosed); // Connection lifecycle managed by strategies, not reader
     }
 
     [Fact]
@@ -161,7 +161,7 @@ public class TrackedReaderTests
     {
         // Create empty fakeDb reader (no rows, so Read returns false)
         using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object>>());
-        
+
         var connection = new TestTrackedConnection();
         var locker = new TestLockerAsync();
 
@@ -170,7 +170,7 @@ public class TrackedReaderTests
         var result = tracked.Read();
 
         Assert.False(result);
-        Assert.True(connection.WasClosed);
+        Assert.False(connection.WasClosed); // Connection lifecycle managed by strategies, not reader
         Assert.True(locker.WasDisposed);
     }
 
@@ -178,7 +178,7 @@ public class TrackedReaderTests
     public async Task DisposeAsync_OnlyOnce()
     {
         using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object>>());
-        
+
         var connection = new TestTrackedConnection();
         var locker = new TestLockerAsync();
 
@@ -187,16 +187,17 @@ public class TrackedReaderTests
         await tracked.DisposeAsync();
         await tracked.DisposeAsync();
 
-        // Should only dispose/close once despite being called twice
+        // Should only dispose locker once despite being called twice
+        // Connection is NOT closed by reader
         Assert.Equal(1, locker.DisposeCallCount);
-        Assert.Equal(1, connection.CloseCallCount);
+        Assert.Equal(0, connection.CloseCallCount); // Connection lifecycle managed by strategies, not reader
     }
 
     [Fact]
     public void Dispose_OnlyOnce()
     {
         using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object>>());
-        
+
         var connection = new TestTrackedConnection();
         var locker = new TestLockerAsync();
 
@@ -205,9 +206,10 @@ public class TrackedReaderTests
         tracked.Dispose();
         tracked.Dispose();
 
-        // Should only dispose/close once despite being called twice
+        // Should only dispose locker once despite being called twice
+        // Connection is NOT closed by reader
         Assert.Equal(1, locker.DisposeCallCount);
-        Assert.Equal(1, connection.CloseCallCount);
+        Assert.Equal(0, connection.CloseCallCount); // Connection lifecycle managed by strategies, not reader
     }
 
     [Fact]
@@ -271,7 +273,7 @@ public class TrackedReaderTests
 
         var second = await tracked.ReadAsync();
         Assert.False(second);
-        Assert.True(connection.WasClosed);
+        Assert.False(connection.WasClosed); // Connection lifecycle managed by strategies, not reader
         Assert.True(locker.WasDisposed);
     }
 
@@ -296,7 +298,7 @@ public class TrackedReaderTests
 
         await tracked.DisposeAsync();
 
-        Assert.True(connection.WasClosed);
+        Assert.False(connection.WasClosed); // Connection lifecycle managed by strategies, not reader
         Assert.True(locker.WasDisposed);
     }
 

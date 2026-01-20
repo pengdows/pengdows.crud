@@ -111,7 +111,11 @@ public interface IDataSourceInformation
     bool RequiresStoredProcParameterNameMatch { get; }
 
     /// <summary>
-    /// Gets the SQL standard compliance level for the detected database.
+    /// Gets the SQL feature capability tier for the detected database.
+    /// <para>
+    /// This indicates roughly which SQL features are available (e.g., CTEs, window functions).
+    /// This is NOT a measure of ISO SQL standard conformance.
+    /// </para>
     /// </summary>
     SqlStandardLevel StandardCompliance { get; }
 

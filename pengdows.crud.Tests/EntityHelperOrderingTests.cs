@@ -12,16 +12,6 @@ namespace pengdows.crud.Tests;
 public class EntityHelperOrderingTests : SqlLiteContextTestBase
 {
     [Fact]
-    public void BuildBaseRetrieve_OrdersColumnsByOrdinal()
-    {
-        TypeMap.Register<OrderedEntity>();
-        var helper = new EntityHelper<OrderedEntity, int>(Context);
-        var sc = helper.BuildBaseRetrieve(string.Empty);
-        var query = sc.Query.ToString();
-        Assert.Contains("SELECT \"A\", \"B\"", query);
-    }
-
-    [Fact]
     public void BuildBaseRetrieve_ExactSql_NoAlias()
     {
         TypeMap.Register<OrderedEntity>();
@@ -47,6 +37,16 @@ public class EntityHelperOrderingTests : SqlLiteContextTestBase
         var wrappedTable = Context.WrapObjectName("Ordered");
         var expected = $"SELECT {wrappedAlias}.{wrappedA}, {wrappedAlias}.{wrappedB}\nFROM {wrappedTable} {wrappedAlias}";
         Assert.Equal(expected, sc.Query.ToString());
+    }
+
+    [Fact]
+    public void BuildBaseRetrieve_OrdersColumnsByOrdinal()
+    {
+        TypeMap.Register<OrderedEntity>();
+        var helper = new EntityHelper<OrderedEntity, int>(Context);
+        var sc = helper.BuildBaseRetrieve(string.Empty);
+        var query = sc.Query.ToString();
+        Assert.Contains("SELECT \"A\", \"B\"", query);
     }
 
     [Fact]

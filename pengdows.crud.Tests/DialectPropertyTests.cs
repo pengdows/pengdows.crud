@@ -32,7 +32,8 @@ public class DialectPropertyTests
                 false,
                 false,
                 true,
-                false)
+                false,
+                true) // SupportsSavepoints
         };
 
         yield return new object[]
@@ -54,7 +55,8 @@ public class DialectPropertyTests
                 false,
                 false,
                 false,
-                true)
+                true,
+                true) // SupportsSavepoints - MySQL 5.0.3+
         };
 
         yield return new object[]
@@ -76,7 +78,8 @@ public class DialectPropertyTests
                 true,
                 true,
                 true,
-                true)
+                true,
+                true) // SupportsSavepoints
         };
 
         yield return new object[]
@@ -98,7 +101,8 @@ public class DialectPropertyTests
                 true,
                 true,
                 true,
-                true)
+                true,
+                true) // SupportsSavepoints
         };
 
         yield return new object[]
@@ -120,7 +124,8 @@ public class DialectPropertyTests
                 true,
                 true,
                 true,
-                true)
+                true,
+                true) // SupportsSavepoints (SAVE TRANSACTION)
         };
 
         yield return new object[]
@@ -142,7 +147,8 @@ public class DialectPropertyTests
                 false,
                 false,
                 false,
-                false)
+                false,
+                true) // SupportsSavepoints
         };
 
         yield return new object[]
@@ -164,7 +170,8 @@ public class DialectPropertyTests
                 true,
                 true,
                 true,
-                true)
+                true,
+                true) // SupportsSavepoints - DuckDB v0.2.0+
         };
     }
 
@@ -238,6 +245,9 @@ public class DialectPropertyTests
 
         Assert.Equal(expected.SupportsNamespaces, dialect.SupportsNamespaces);
         Assert.NotEqual(!expected.SupportsNamespaces, dialect.SupportsNamespaces);
+
+        Assert.Equal(expected.SupportsSavepoints, dialect.SupportsSavepoints);
+        Assert.NotEqual(!expected.SupportsSavepoints, dialect.SupportsSavepoints);
     }
 
     public record DialectProps(
@@ -256,5 +266,6 @@ public class DialectPropertyTests
         bool SupportsWindowFunctions,
         bool SupportsCommonTableExpressions,
         bool SupportsArrayTypes,
-        bool SupportsNamespaces);
+        bool SupportsNamespaces,
+        bool SupportsSavepoints);
 }

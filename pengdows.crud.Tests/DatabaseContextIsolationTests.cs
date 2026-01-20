@@ -3,6 +3,7 @@
 using System;
 using System.Data;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.fakeDb;
 using Xunit;
 
@@ -49,7 +50,33 @@ public class DatabaseContextIsolationTests
     {
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.PostgreSql}",
             new fakeDbFactory(SupportedDatabase.PostgreSql.ToString()));
-        Assert.Throws<NotSupportedException>(() => context.BeginTransaction(IsolationProfile.SafeNonBlockingReads));
+        Assert.Throws<TransactionModeNotSupportedException>(() => context.BeginTransaction(IsolationProfile.SafeNonBlockingReads));
+    }
+
+    [Theory]
+    [InlineData(SupportedDatabase.SqlServer)]
+    [InlineData(SupportedDatabase.MySql)]
+    [InlineData(SupportedDatabase.MariaDb)]
+    [InlineData(SupportedDatabase.Oracle)]
+    public void BeginTransaction_ProfileRequiresRcsi_DoesNotThrowForOtherProviders(SupportedDatabase product)
+    {
+        var factory = new fakeDbFactory(product.ToString());
+        if (product == SupportedDatabase.SqlServer)
+        {
+            var connection = new fakeDbConnection();
+            connection.SetScalarResultForCommand(
+                "SELECT snapshot_isolation_state FROM sys.databases WHERE name = DB_NAME()",
+                1);
+            connection.SetScalarResultForCommand(
+                "SELECT is_read_committed_snapshot_on FROM sys.databases WHERE name = DB_NAME()",
+                1);
+            factory.Connections.Add(connection);
+        }
+
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
+
+        using var tx = context.BeginTransaction(IsolationProfile.SafeNonBlockingReads);
+        Assert.NotNull(tx);
     }
 
     [Fact]

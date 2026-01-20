@@ -5,6 +5,32 @@ using pengdows.crud.types.valueobjects;
 
 namespace pengdows.crud.types.converters;
 
+/// <summary>
+/// Base converter for spatial data types supporting Well-Known Binary (WKB), Well-Known Text (WKT), and GeoJSON formats.
+/// Provides cross-database spatial type conversion with SRID (Spatial Reference Identifier) support.
+/// </summary>
+/// <typeparam name="TSpatial">The spatial value object type (Geometry or Geography).</typeparam>
+/// <remarks>
+/// <para><strong>Provider-specific behavior:</strong></para>
+/// <list type="bullet">
+/// <item><description><strong>SQL Server:</strong> Uses Microsoft.SqlServer.Types (SqlGeometry/SqlGeography). Supports WKB, WKT, SRID.</description></item>
+/// <item><description><strong>PostgreSQL:</strong> Uses PostGIS extension. Supports EWKB (Extended WKB with SRID), EWKT, WKB, WKT. Requires PostGIS installed.</description></item>
+/// <item><description><strong>CockroachDB:</strong> PostGIS-compatible spatial types.</description></item>
+/// <item><description><strong>MySQL:</strong> Uses native spatial types (GEOMETRY, POINT, etc.) with WKB format.</description></item>
+/// <item><description><strong>Oracle:</strong> Uses SDO_GEOMETRY type. Requires provider-specific objects via WithProviderValue().</description></item>
+/// </list>
+/// <para><strong>Supported input formats from database:</strong></para>
+/// <list type="bullet">
+/// <item><description>byte[] → WKB (Well-Known Binary) or EWKB (Extended WKB with SRID prefix)</description></item>
+/// <item><description>string → WKT (Well-Known Text) like "POINT(1 2)" or EWKT like "SRID=4326;POINT(1 2)"</description></item>
+/// <item><description>Provider-specific types → Automatic detection and conversion (SqlGeometry, PostGIS types, etc.)</description></item>
+/// </list>
+/// <para><strong>Output formats to database:</strong> Automatically selects optimal format per provider
+/// (EWKB for PostgreSQL, provider types for SQL Server/Oracle, WKB for MySQL).</para>
+/// <para><strong>SRID handling:</strong> Spatial Reference System Identifier specifies coordinate system.
+/// Default is 0 (unspecified). Common: 4326 (WGS84 lat/lon for GPS), 3857 (Web Mercator).</para>
+/// <para><strong>Thread safety:</strong> Converter instances are thread-safe. Spatial value objects are immutable and thread-safe.</para>
+/// </remarks>
 internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpatial>
     where TSpatial : SpatialValue
 {

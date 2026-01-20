@@ -104,14 +104,22 @@ public abstract class DatabaseTestBase : IAsyncLifetime
     /// </summary>
     protected virtual IEnumerable<SupportedDatabase> GetSupportedProviders()
     {
-        var providers = new[]
+        var providers = new List<SupportedDatabase>
         {
             SupportedDatabase.Sqlite,
             SupportedDatabase.PostgreSql,
             SupportedDatabase.SqlServer,
             SupportedDatabase.MySql,
-            SupportedDatabase.MariaDb
+            SupportedDatabase.MariaDb,
+            SupportedDatabase.Firebird,
+            SupportedDatabase.CockroachDb,
+            SupportedDatabase.DuckDB
         };
+
+        if (ShouldIncludeOracle())
+        {
+            providers.Add(SupportedDatabase.Oracle);
+        }
 
         var only = Environment.GetEnvironmentVariable("INTEGRATION_ONLY");
         if (string.IsNullOrWhiteSpace(only))
@@ -191,6 +199,48 @@ public abstract class DatabaseTestBase : IAsyncLifetime
         }
 
         await testAction(context);
+    }
+
+    protected IAuditValueResolver GetAuditResolver()
+    {
+        return Host.Services.GetService<IAuditValueResolver>()
+               ?? new StringAuditContextProvider();
+    }
+
+    protected static async Task DropTableIfExistsAsync(IDatabaseContext context, string tableName)
+    {
+        var wrappedTable = context.WrapObjectName(tableName);
+        using var container = context.CreateSqlContainer($"DROP TABLE {wrappedTable}");
+        try
+        {
+            await container.ExecuteNonQueryAsync();
+        }
+        catch (Exception ex) when (IsTableMissingException(ex))
+        {
+            // Table was not present; swallow
+        }
+    }
+
+    protected async Task<IDatabaseContext> CreateAdditionalContextAsync(SupportedDatabase provider)
+    {
+        if (!TestContainers.TryGetValue(provider, out var container))
+        {
+            throw new InvalidOperationException($"Provider {provider} is not available for additional contexts.");
+        }
+
+        return await container.GetDatabaseContextAsync(Host.Services);
+    }
+
+    private static bool IsTableMissingException(Exception ex)
+    {
+        var message = ex.Message?.ToLowerInvariant() ?? string.Empty;
+        return message.Contains("does not exist")
+               || message.Contains("doesn't exist")
+               || message.Contains("no such table")
+               || message.Contains("table unknown")
+               || message.Contains("table not found")
+               || message.Contains("invalid object name")
+               || message.Contains("ora-00942");
     }
 
     protected static bool ShouldIncludeOracle() => string.Equals(

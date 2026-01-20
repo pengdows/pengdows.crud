@@ -55,6 +55,20 @@ public readonly struct Cidr : IEquatable<Cidr>
         return HashCode.Combine(Network, PrefixLength);
     }
 
+    public static Cidr Parse(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            throw new FormatException("cidr value cannot be empty.");
+
+        var parts = text.Split('/', 2);
+        if (parts.Length != 2)
+            throw new FormatException("cidr requires network/prefix format.");
+
+        var address = IPAddress.Parse(parts[0]);
+        var prefix = byte.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture);
+        return new Cidr(address, prefix);
+    }
+
     private static IPAddress Canonicalize(IPAddress address, byte prefixLength)
     {
         var bytes = address.GetAddressBytes();

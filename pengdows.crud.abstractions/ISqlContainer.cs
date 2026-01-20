@@ -187,6 +187,33 @@ public interface ISqlContainer :ISafeAsyncDisposableBase
     /// </summary>
     /// <param name="commandType">Type of command to execute.</param>
     /// <returns>A tracked reader over the results.</returns>
+    /// <remarks>
+    /// <para><strong>Reader-as-lease:</strong></para>
+    /// <para>
+    /// The returned <see cref="ITrackedReader"/> holds the connection lock for its entire lifetime.
+    /// The lock is acquired when the reader is created and released only when the reader is disposed.
+    /// </para>
+    /// <para><strong>Required usage:</strong></para>
+    /// <para>
+    /// Always use <c>await using</c> (or <c>using</c>). The reader auto-disposes when it reaches end-of-results,
+    /// but you must still dispose on early termination (e.g., <c>break</c> in a loop).
+    /// </para>
+    /// <para><strong>Transactions:</strong></para>
+    /// <para>
+    /// When executed inside a transaction, the reader holds the transaction connection lock.
+    /// Dispose the reader before issuing additional commands on the same transaction.
+    /// </para>
+    /// <example>
+    /// <code>
+    /// await using var reader = await container.ExecuteReaderAsync();
+    /// while (await reader.ReadAsync())
+    /// {
+    ///     // consume row
+    /// }
+    /// // Lock released here
+    /// </code>
+    /// </example>
+    /// </remarks>
     Task<ITrackedReader> ExecuteReaderAsync(CommandType commandType = CommandType.Text);
 
     /// <summary>
@@ -195,6 +222,17 @@ public interface ISqlContainer :ISafeAsyncDisposableBase
     /// <param name="commandType">Type of command to execute.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <returns>A tracked reader over the results.</returns>
+    /// <remarks>
+    /// <para><strong>Reader-as-lease:</strong></para>
+    /// <para>
+    /// The returned <see cref="ITrackedReader"/> holds the connection lock for its entire lifetime.
+    /// Cancellation does not dispose the reader; always use <c>await using</c> to release the lock on cancellation paths.
+    /// </para>
+    /// <para><strong>Transactions:</strong></para>
+    /// <para>
+    /// In transaction contexts, dispose the reader before issuing additional commands on the same transaction connection.
+    /// </para>
+    /// </remarks>
     Task<ITrackedReader> ExecuteReaderAsync(CommandType commandType, CancellationToken cancellationToken);
 
     /// <summary>

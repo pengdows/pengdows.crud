@@ -241,6 +241,20 @@ public interface ISqlDialect
     bool SupportsSavepoints { get; }
 
     /// <summary>
+    /// Gets the SQL statement to create a savepoint with the given name.
+    /// </summary>
+    /// <param name="name">The savepoint name.</param>
+    /// <returns>The SQL statement (e.g., "SAVEPOINT name" or "SAVE TRANSACTION name").</returns>
+    string GetSavepointSql(string name);
+
+    /// <summary>
+    /// Gets the SQL statement to rollback to a savepoint with the given name.
+    /// </summary>
+    /// <param name="name">The savepoint name.</param>
+    /// <returns>The SQL statement (e.g., "ROLLBACK TO SAVEPOINT name" or "ROLLBACK TRANSACTION name").</returns>
+    string GetRollbackToSavepointSql(string name);
+
+    /// <summary>
     /// Indicates whether stored procedure parameter names must match exactly.
     /// </summary>
     bool RequiresStoredProcParameterNameMatch { get; }

@@ -55,6 +55,14 @@ public class PagilaBenchmarks : IAsyncDisposable
     private long _breakdownExecuteTicks;
     private long _breakdownMapTicks;
     private int _breakdownOps;
+    private long _dapperBreakdownBuildTicks;
+    private long _dapperBreakdownExecuteTicks;
+    private long _dapperBreakdownMapTicks;
+    private int _dapperBreakdownOps;
+    private long _efBreakdownBuildTicks;
+    private long _efBreakdownExecuteTicks;
+    private long _efBreakdownMapTicks;
+    private int _efBreakdownOps;
 
     [GlobalSetup]
     public async Task GlobalSetup()
@@ -199,6 +207,14 @@ public class PagilaBenchmarks : IAsyncDisposable
         _breakdownExecuteTicks = 0;
         _breakdownMapTicks = 0;
         _breakdownOps = 0;
+        _dapperBreakdownBuildTicks = 0;
+        _dapperBreakdownExecuteTicks = 0;
+        _dapperBreakdownMapTicks = 0;
+        _dapperBreakdownOps = 0;
+        _efBreakdownBuildTicks = 0;
+        _efBreakdownExecuteTicks = 0;
+        _efBreakdownMapTicks = 0;
+        _efBreakdownOps = 0;
     }
 
     [IterationCleanup]
@@ -214,7 +230,18 @@ public class PagilaBenchmarks : IAsyncDisposable
             }
             if (label == nameof(GetFilmById_Mine_Breakdown))
             {
-                DumpBreakdownMetrics(label);
+                DumpBreakdownMetrics(label, _breakdownBuildTicks, _breakdownExecuteTicks, _breakdownMapTicks,
+                    _breakdownOps);
+            }
+            if (label == nameof(GetFilmById_Dapper_Breakdown))
+            {
+                DumpBreakdownMetrics(label, _dapperBreakdownBuildTicks, _dapperBreakdownExecuteTicks,
+                    _dapperBreakdownMapTicks, _dapperBreakdownOps);
+            }
+            if (label == nameof(GetFilmById_EntityFramework_NoTracking_Breakdown))
+            {
+                DumpBreakdownMetrics(label, _efBreakdownBuildTicks, _efBreakdownExecuteTicks,
+                    _efBreakdownMapTicks, _efBreakdownOps);
             }
         }
     }
@@ -390,17 +417,17 @@ CREATE TABLE film_actor (
         }
     }
 
-    private void DumpBreakdownMetrics(string label)
+    private void DumpBreakdownMetrics(string label, long buildTicks, long executeTicks, long mapTicks, int ops)
     {
-        if (_breakdownOps == 0)
+        if (ops == 0)
         {
             return;
         }
 
         var scale = 1000d / Stopwatch.Frequency;
-        var buildUs = (_breakdownBuildTicks / (double)_breakdownOps) * scale;
-        var execUs = (_breakdownExecuteTicks / (double)_breakdownOps) * scale;
-        var mapUs = (_breakdownMapTicks / (double)_breakdownOps) * scale;
+        var buildUs = (buildTicks / (double)ops) * scale;
+        var execUs = (executeTicks / (double)ops) * scale;
+        var mapUs = (mapTicks / (double)ops) * scale;
 
         Console.WriteLine(
             $"[BREAKDOWN] {label} build={buildUs:0.000}us execute={execUs:0.000}us map={mapUs:0.000}us");
@@ -435,6 +462,60 @@ CREATE TABLE film_actor (
         _breakdownExecuteTicks += t2 - t1;
         _breakdownMapTicks += t3 - t2;
         _breakdownOps++;
+
+        return result;
+    }
+
+    [Benchmark]
+    public async Task<Film?> GetFilmById_Dapper_Breakdown()
+    {
+        _currentBenchmarkLabel = nameof(GetFilmById_Dapper_Breakdown);
+
+        await using var conn = await _dapperDataSource.OpenConnectionAsync();
+        var t0 = Stopwatch.GetTimestamp();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "select film_id as \"Id\", title as \"Title\", length as \"Length\" from film where film_id=@id";
+        var param = cmd.CreateParameter();
+        param.ParameterName = "id";
+        param.Value = _filmId;
+        cmd.Parameters.Add(param);
+        var t1 = Stopwatch.GetTimestamp();
+
+        await using var reader = await cmd.ExecuteReaderAsync(CommandBehavior.SingleRow);
+        var t2 = Stopwatch.GetTimestamp();
+
+        Film? result = null;
+        if (await reader.ReadAsync())
+        {
+            var parser = SqlMapper.GetRowParser<Film>(reader);
+            result = parser(reader);
+        }
+        var t3 = Stopwatch.GetTimestamp();
+
+        _dapperBreakdownBuildTicks += t1 - t0;
+        _dapperBreakdownExecuteTicks += t2 - t1;
+        _dapperBreakdownMapTicks += t3 - t2;
+        _dapperBreakdownOps++;
+
+        return result;
+    }
+
+    [Benchmark]
+    public async Task<EfFilm?> GetFilmById_EntityFramework_NoTracking_Breakdown()
+    {
+        _currentBenchmarkLabel = nameof(GetFilmById_EntityFramework_NoTracking_Breakdown);
+
+        var t0 = Stopwatch.GetTimestamp();
+        var query = _efDbContext.Films.AsNoTracking().Where(f => f.Id == _filmId);
+        var t1 = Stopwatch.GetTimestamp();
+
+        var result = await query.FirstOrDefaultAsync();
+        var t2 = Stopwatch.GetTimestamp();
+
+        _efBreakdownBuildTicks += t1 - t0;
+        _efBreakdownExecuteTicks += t2 - t1;
+        _efBreakdownMapTicks += 0;
+        _efBreakdownOps++;
 
         return result;
     }

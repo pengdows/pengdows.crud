@@ -49,6 +49,7 @@ public class DuckDbDialect : SqlDialect
     public override bool SupportsRowPatternMatching => false; // Not yet supported
     public override bool SupportsMultidimensionalArrays => true; // Nested structures
     public override bool SupportsInsertReturning => true; // DuckDB supports RETURNING clause
+    public override bool SupportsSavepoints => true; // DuckDB supports savepoints since v0.2.0
 
     // Database encryption support (DuckDB 1.4.0+)
     public virtual bool SupportsEncryption => IsVersionAtLeast(1, 4); // AES-256-GCM encryption with ATTACH

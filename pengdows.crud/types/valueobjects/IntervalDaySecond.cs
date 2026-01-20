@@ -45,4 +45,85 @@ public readonly struct IntervalDaySecond : IEquatable<IntervalDaySecond>
         var residual = value - TimeSpan.FromDays(days);
         return new IntervalDaySecond(days, residual);
     }
+
+    public static IntervalDaySecond Parse(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return new IntervalDaySecond(0, TimeSpan.Zero);
+
+        var trimmed = text.Trim();
+        if (trimmed.StartsWith("P", StringComparison.OrdinalIgnoreCase))
+            trimmed = trimmed.Substring(1);
+
+        var timeIndex = trimmed.IndexOf('T');
+        string? datePart = trimmed;
+        string? timePart = null;
+        if (timeIndex >= 0)
+        {
+            datePart = trimmed.Substring(0, timeIndex);
+            timePart = trimmed.Substring(timeIndex + 1);
+        }
+
+        var days = 0;
+        if (!string.IsNullOrEmpty(datePart))
+        {
+            var buffer = string.Empty;
+            foreach (var c in datePart)
+            {
+                if (char.IsDigit(c) || c == '-' || c == '+')
+                {
+                    buffer += c;
+                    continue;
+                }
+
+                if (buffer.Length == 0)
+                    continue;
+
+                if (c == 'D' || c == 'd')
+                {
+                    days = int.Parse(buffer, System.Globalization.CultureInfo.InvariantCulture);
+                }
+
+                buffer = string.Empty;
+            }
+        }
+
+        var hours = 0;
+        var minutes = 0;
+        var seconds = 0.0;
+
+        if (!string.IsNullOrEmpty(timePart))
+        {
+            var buffer = string.Empty;
+            foreach (var c in timePart)
+            {
+                if (char.IsDigit(c) || c == '-' || c == '+' || c == '.')
+                {
+                    buffer += c;
+                    continue;
+                }
+
+                if (buffer.Length == 0)
+                    continue;
+
+                switch (c)
+                {
+                    case 'H' or 'h':
+                        hours = int.Parse(buffer, System.Globalization.CultureInfo.InvariantCulture);
+                        break;
+                    case 'M' or 'm':
+                        minutes = int.Parse(buffer, System.Globalization.CultureInfo.InvariantCulture);
+                        break;
+                    case 'S' or 's':
+                        seconds = double.Parse(buffer, System.Globalization.CultureInfo.InvariantCulture);
+                        break;
+                }
+
+                buffer = string.Empty;
+            }
+        }
+
+        var timeSpan = TimeSpan.FromHours(hours) + TimeSpan.FromMinutes(minutes) + TimeSpan.FromSeconds(seconds);
+        return new IntervalDaySecond(days, timeSpan);
+    }
 }

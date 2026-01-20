@@ -6,6 +6,7 @@ using System.Data;
 using System.Data.Common;
 using System.Globalization;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -19,6 +20,19 @@ using pengdows.crud.wrappers;
 
 namespace pengdows.crud;
 
+/// <summary>
+/// Provides SQL generation and CRUD operations for entities mapped to database tables.
+/// </summary>
+/// <typeparam name="TEntity">The entity type to operate on.</typeparam>
+/// <typeparam name="TRowID">The row ID type (must be primitive integer, Guid, or string).</typeparam>
+/// <remarks>
+/// <para><strong>Version 2.0 Breaking Change:</strong></para>
+/// <para>
+/// <c>EntityHelper&lt;TEntity, TRowID&gt;</c> will be renamed to <c>TableSql&lt;TEntity, TRowID&gt;</c> in version 2.0
+/// to better reflect its role as the primary SQL generation and execution API. A compatibility shim will be
+/// provided during the transition period. See VERSION_2.0_PLANNING.md for migration details.
+/// </para>
+/// </remarks>
 public partial class EntityHelper<TEntity, TRowID> :
     IEntityHelper<TEntity, TRowID> where TEntity : class, new()
 {
@@ -461,8 +475,10 @@ public partial class EntityHelper<TEntity, TRowID> :
         }
 
         var template = GetTemplatesForDialect(dialect);
-        var columns = new List<string>();
-        var placeholders = new List<string>();
+
+        sc.Query.Append("INSERT INTO ")
+            .Append(BuildWrappedTableName(dialect))
+            .Append(" (");
 
         for (var i = 0; i < template.InsertColumns.Count; i++)
         {
@@ -476,23 +492,35 @@ public partial class EntityHelper<TEntity, TRowID> :
                 dialect.TryMarkJsonParameter(param, column);
             }
             sc.AddParameter(param);
-            columns.Add(dialect.WrapObjectName(column.Name));
-            var marker = dialect.MakeParameterName(param);
+
+            if (i > 0)
+            {
+                sc.Query.Append(", ");
+            }
+
+            sc.Query.Append(dialect.WrapObjectName(column.Name));
+        }
+
+        sc.Query.Append(") VALUES (");
+
+        for (var i = 0; i < template.InsertColumns.Count; i++)
+        {
+            var column = template.InsertColumns[i];
+            var marker = dialect.MakeParameterName(template.InsertParameterNames[i]);
             if (column.IsJsonType)
             {
                 marker = dialect.RenderJsonArgument(marker, column);
             }
 
-            placeholders.Add(marker);
+            if (i > 0)
+            {
+                sc.Query.Append(", ");
+            }
+
+            sc.Query.Append(marker);
         }
 
-        sc.Query.Append("INSERT INTO ")
-            .Append(BuildWrappedTableName(dialect))
-            .Append(" (")
-            .Append(string.Join(", ", columns))
-            .Append(") VALUES (")
-            .Append(string.Join(", ", placeholders))
-            .Append(")");
+        sc.Query.Append(")");
 
         return sc;
     }
@@ -614,6 +642,22 @@ public partial class EntityHelper<TEntity, TRowID> :
 
         var ctx = context ?? _context;
         var dialect = GetDialect(ctx);
+
+        if (!dialect.SupportsSetValuedParameters && ctx.MaxParameterLimit > 0 && list.Count > ctx.MaxParameterLimit)
+        {
+            var results = new List<TEntity>(list.Count);
+            var limit = ctx.MaxParameterLimit;
+            for (var offset = 0; offset < list.Count; offset += limit)
+            {
+                var count = Math.Min(limit, list.Count - offset);
+                var chunk = list.GetRange(offset, count);
+                var sc = BuildRetrieve(chunk, ctx);
+                var chunkResults = await LoadListAsync(sc, cancellationToken).ConfigureAwait(false);
+                results.AddRange(chunkResults);
+            }
+
+            return results;
+        }
         
         // Try to use cached templates for better performance, but fall back to traditional method
         // to avoid circular dependency during template building
@@ -669,6 +713,87 @@ public partial class EntityHelper<TEntity, TRowID> :
             // Fall back to traditional method during template building or other issues
             var sc = BuildRetrieve(list, ctx);
             return await LoadListAsync(sc, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    public IAsyncEnumerable<TEntity> RetrieveStreamAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null)
+    {
+        return RetrieveStreamAsync(ids, context, CancellationToken.None);
+    }
+
+    public async IAsyncEnumerable<TEntity> RetrieveStreamAsync(IEnumerable<TRowID> ids, IDatabaseContext? context, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        if (ids == null)
+        {
+            throw new ArgumentNullException(nameof(ids));
+        }
+
+        var list = MaterializeDistinctIds(ids);
+        if (list.Count == 0)
+        {
+            // Empty ID list - return empty stream
+            yield break;
+        }
+
+        var ctx = context ?? _context;
+
+        // Get the container to use (with try-catch for error handling)
+        var container = GetRetrieveContainer(list, ctx);
+
+        // Stream results from the container
+        await foreach (var entity in LoadStreamAsync(container, cancellationToken).ConfigureAwait(false))
+        {
+            yield return entity;
+        }
+    }
+
+    private ISqlContainer GetRetrieveContainer(IReadOnlyList<TRowID> list, IDatabaseContext ctx)
+    {
+        var dialect = GetDialect(ctx);
+
+        // Try to use cached templates for better performance, but fall back to traditional method
+        // to avoid circular dependency during template building
+        try
+        {
+            // For small lists, use cached template for better performance
+            // For larger lists, fall back to BuildRetrieve to handle dynamic parameter lists correctly
+            if (list.Count == 1)
+            {
+                // Single ID - reuse GetByIdTemplate
+                var templates = GetContainerTemplatesForDialect(dialect, ctx);
+                var container = templates.GetByIdTemplate.Clone(ctx);
+
+                if (dialect.SupportsSetValuedParameters)
+                {
+                    container.SetParameterValue("p0", list.ToArray());
+                }
+                else
+                {
+                    container.SetParameterValue("p0", list[0]);
+                }
+
+                return container;
+            }
+
+            if (list.Count == 2 && !dialect.SupportsSetValuedParameters)
+            {
+                // Two IDs - can reuse GetByIdsTemplate for non-array dialects
+                var templates = GetContainerTemplatesForDialect(dialect, ctx);
+                var container = templates.GetByIdsTemplate.Clone(ctx);
+
+                container.SetParameterValue("p0", list[0]);
+                container.SetParameterValue("p1", list[1]);
+
+                return container;
+            }
+
+            // Fall back to dynamic BuildRetrieve for larger lists
+            return BuildRetrieve(list, ctx);
+        }
+        catch (Exception ex) when (ex.Message.Contains("Original record not found") || ex is AggregateException)
+        {
+            // Fall back to traditional method during template building or other issues
+            return BuildRetrieve(list, ctx);
         }
     }
 
@@ -862,6 +987,66 @@ public partial class EntityHelper<TEntity, TRowID> :
         }
 
         return list;
+    }
+
+    public async IAsyncEnumerable<TEntity> LoadStreamAsync(ISqlContainer sc)
+    {
+        if (sc == null)
+        {
+            throw new ArgumentNullException(nameof(sc));
+        }
+
+        await using var reader = await sc.ExecuteReaderAsync(CommandType.Text, CancellationToken.None).ConfigureAwait(false);
+
+        // Reader optimization: hoist plan building outside the loop
+        // Build plan once based on first row's schema, then reuse for all rows
+        // This avoids hash calculation and GetName/GetFieldType calls on every row
+        ColumnPlan[]? plan = null;
+
+        while (await reader.ReadAsync(CancellationToken.None).ConfigureAwait(false))
+        {
+            // Build plan on first row
+            if (plan == null)
+            {
+                plan = GetOrBuildRecordsetPlan(reader);
+            }
+
+            var obj = MapReaderToObjectWithPlan(reader, plan);
+            if (obj != null)
+            {
+                yield return obj;
+            }
+        }
+    }
+
+    public async IAsyncEnumerable<TEntity> LoadStreamAsync(ISqlContainer sc, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        if (sc == null)
+        {
+            throw new ArgumentNullException(nameof(sc));
+        }
+
+        await using var reader = await sc.ExecuteReaderAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+
+        // Reader optimization: hoist plan building outside the loop
+        // Build plan once based on first row's schema, then reuse for all rows
+        // This avoids hash calculation and GetName/GetFieldType calls on every row
+        ColumnPlan[]? plan = null;
+
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            // Build plan on first row
+            if (plan == null)
+            {
+                plan = GetOrBuildRecordsetPlan(reader);
+            }
+
+            var obj = MapReaderToObjectWithPlan(reader, plan);
+            if (obj != null)
+            {
+                yield return obj;
+            }
+        }
     }
 
     // moved to EntityHelper.Retrieve.cs

@@ -95,17 +95,42 @@ public class CompleteExceptionTests
     }
 
     [Fact]
+    public void TransactionModeNotSupportedException_WithMessage_CreatesExceptionWithMessage()
+    {
+        const string message = "Transaction mode not supported";
+
+        var exception = new TransactionModeNotSupportedException(message);
+
+        Assert.Equal(message, exception.Message);
+        Assert.IsType<TransactionModeNotSupportedException>(exception);
+        Assert.IsAssignableFrom<NotSupportedException>(exception);
+    }
+
+    [Fact]
+    public void TransactionModeNotSupportedException_CanBeThrown()
+    {
+        const string message = "Test transaction mode not supported";
+
+        var exception = Assert.Throws<TransactionModeNotSupportedException>(
+            new Action(() => throw new TransactionModeNotSupportedException(message)));
+
+        Assert.Equal(message, exception.Message);
+    }
+
+    [Fact]
     public void AllExceptions_InheritFromException()
     {
         var invalidValueException = new InvalidValueException("test");
         var noColumnsException = new NoColumnsFoundException("test");
         var tooManyColumnsException = new TooManyColumns("test");
         var connectionFailedException = new ConnectionFailedException("test");
+        var transactionModeNotSupportedException = new TransactionModeNotSupportedException("test");
 
         Assert.IsAssignableFrom<Exception>(invalidValueException);
         Assert.IsAssignableFrom<Exception>(noColumnsException);
         Assert.IsAssignableFrom<Exception>(tooManyColumnsException);
         Assert.IsAssignableFrom<Exception>(connectionFailedException);
+        Assert.IsAssignableFrom<Exception>(transactionModeNotSupportedException);
     }
 
     [Fact]
@@ -115,10 +140,12 @@ public class CompleteExceptionTests
         var noColumnsException = new NoColumnsFoundException("");
         var tooManyColumnsException = new TooManyColumns("");
         var connectionFailedException = new ConnectionFailedException("");
+        var transactionModeNotSupportedException = new TransactionModeNotSupportedException("");
 
         Assert.Equal("", invalidValueException.Message);
         Assert.Equal("", noColumnsException.Message);
         Assert.Equal("", tooManyColumnsException.Message);
         Assert.Equal("", connectionFailedException.Message);
+        Assert.Equal("", transactionModeNotSupportedException.Message);
     }
 }

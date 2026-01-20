@@ -63,6 +63,11 @@ public class SqlServerDialect : SqlDialect
     // Version-specific overrides
     public override bool SupportsMerge => IsVersionAtLeast(10);
     public override bool SupportsJsonTypes => IsVersionAtLeast(13);
+    public override bool SupportsSavepoints => true;
+
+    // SQL Server uses SAVE TRANSACTION / ROLLBACK TRANSACTION instead of SAVEPOINT
+    public override string GetSavepointSql(string name) => $"SAVE TRANSACTION {name}";
+    public override string GetRollbackToSavepointSql(string name) => $"ROLLBACK TRANSACTION {name}";
 
     public override bool SupportsInsertReturning => true;
     public override bool SupportsIdentityColumns => true;

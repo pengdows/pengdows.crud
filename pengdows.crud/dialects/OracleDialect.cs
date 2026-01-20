@@ -40,6 +40,7 @@ public class OracleDialect : SqlDialect
     public override bool SupportsMerge => true;
     public override bool SupportsJsonTypes => IsInitialized && ProductInfo.ParsedVersion?.Major >= 12;
     public override bool SupportsIdentityColumns => true;
+    public override bool SupportsSavepoints => true;
     public override bool SupportsInsertReturning => true;
 
     public override string GetInsertReturningClause(string idColumnName)
