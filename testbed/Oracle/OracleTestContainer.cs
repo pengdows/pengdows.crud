@@ -7,7 +7,7 @@ using IContainer = DotNet.Testcontainers.Containers.IContainer;
 
 #endregion
 
-namespace testbed;
+namespace testbed.Oracle;
 
 public class OracleTestContainer : TestContainer
 {

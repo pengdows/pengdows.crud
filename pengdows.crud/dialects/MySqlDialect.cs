@@ -13,6 +13,7 @@ public class MySqlDialect : SqlDialect
 {
     private const string DefaultSqlMode = "SET SESSION sql_mode = 'STRICT_ALL_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,ANSI_QUOTES,NO_BACKSLASH_ESCAPES';";
     private const string ExpectedSqlMode = "STRICT_ALL_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,ANSI_QUOTES,NO_BACKSLASH_ESCAPES";
+    private static readonly Version UpsertAliasVersionThreshold = new(8, 0, 20);
 
     private string? _sessionSettings;
     private readonly bool _isMySqlConnector;
@@ -154,8 +155,21 @@ public class MySqlDialect : SqlDialect
 
     public override string UpsertIncomingColumn(string columnName)
     {
+        var alias = UpsertIncomingAlias;
+        if (!string.IsNullOrEmpty(alias))
+        {
+            return $"{WrapObjectName(alias)}.{WrapObjectName(columnName)}";
+        }
+
         return $"VALUES({WrapObjectName(columnName)})";
     }
+
+    public override string? UpsertIncomingAlias => UseUpsertAlias ? "incoming" : null;
+
+    private bool UseUpsertAlias =>
+        IsInitialized &&
+        ProductInfo.ParsedVersion is { } version &&
+        version >= UpsertAliasVersionThreshold;
 
     public override void TryEnterReadOnlyTransaction(ITransactionContext transaction)
     {
@@ -175,4 +189,5 @@ public class MySqlDialect : SqlDialect
     public override string? PoolingSettingName => "Pooling";
     public override string? MinPoolSizeSettingName => _isMySqlConnector ? "MinimumPoolSize" : "Min Pool Size";
     public override string? MaxPoolSizeSettingName => _isMySqlConnector ? "MaximumPoolSize" : "Max Pool Size";
+    internal override int DefaultMaxPoolSize => 100;
 }

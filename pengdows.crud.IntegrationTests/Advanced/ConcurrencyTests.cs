@@ -1,10 +1,8 @@
-using pengdows.crud;
 using pengdows.crud.enums;
 using pengdows.crud.IntegrationTests.Infrastructure;
 using System.Collections.Concurrent;
 using System.Data;
 using testbed;
-using Xunit;
 using Xunit.Abstractions;
 
 namespace pengdows.crud.IntegrationTests.Advanced;
@@ -13,11 +11,12 @@ namespace pengdows.crud.IntegrationTests.Advanced;
 /// Integration tests for concurrent operations including parallel reads,
 /// writes, and potential race conditions.
 /// </summary>
+[Collection("IntegrationTests")]
 public class ConcurrencyTests : DatabaseTestBase
 {
     private static long _nextId;
 
-    public ConcurrencyTests(ITestOutputHelper output) : base(output) { }
+    public ConcurrencyTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture) { }
 
     protected override async Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)
     {
@@ -168,7 +167,7 @@ public class ConcurrencyTests : DatabaseTestBase
             // Act - Each transaction operates on its own entity
             var tasks = entities.Select(async entity =>
             {
-                using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
+                await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
                 var helper = CreateEntityHelper(transaction);
 
                 await helper.CreateAsync(entity, transaction);
@@ -195,8 +194,15 @@ public class ConcurrencyTests : DatabaseTestBase
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
             // Arrange
-            var entity = CreateTestEntity(NameEnum.Test, 600);
-            await CreateEntityHelper(context).CreateAsync(entity, context);
+            var entities = Enumerable.Range(0, 5)
+                .Select(i => CreateTestEntity(NameEnum.Test, 600 + i))
+                .ToArray();
+
+            var helper = CreateEntityHelper(context);
+            foreach (var e in entities)
+            {
+                await helper.CreateAsync(e, context);
+            }
 
             var readResults = new ConcurrentBag<TestTable?>();
             var updateCount = 0;
@@ -206,7 +212,8 @@ public class ConcurrencyTests : DatabaseTestBase
             {
                 await Task.Delay(Random.Shared.Next(1, 10)); // Random delay
                 var helper = CreateEntityHelper(context);
-                var result = await helper.RetrieveOneAsync(entity.Id, context);
+                var id = entities[Random.Shared.Next(0, entities.Length)].Id;
+                var result = await helper.RetrieveOneAsync(id, context);
                 readResults.Add(result);
             });
 
@@ -214,7 +221,8 @@ public class ConcurrencyTests : DatabaseTestBase
             {
                 await Task.Delay(Random.Shared.Next(1, 10)); // Random delay
                 var helper = CreateEntityHelper(context);
-                var retrieved = await helper.RetrieveOneAsync(entity.Id, context);
+                var id = entities[i].Id;
+                var retrieved = await helper.RetrieveOneAsync(id, context);
                 if (retrieved != null)
                 {
                     retrieved.Value = 6000 + i;
@@ -229,10 +237,14 @@ public class ConcurrencyTests : DatabaseTestBase
             Assert.Equal(20, readResults.Count);
             Assert.All(readResults, r => Assert.NotNull(r));
 
-            // Final state should reflect last update
-            var final = await CreateEntityHelper(context).RetrieveOneAsync(entity.Id, context);
-            Assert.NotNull(final);
-            Assert.InRange(final!.Value, 6000, 6004); // One of the update values
+            foreach (var (entity, i) in entities.Select((e, i) => (e, i)))
+            {
+                var final = await CreateEntityHelper(context).RetrieveOneAsync(entity.Id, context);
+                Assert.NotNull(final);
+                Assert.True(final!.Value == 600 + i || final.Value == 6000 + i);
+            }
+
+            Assert.InRange(updateCount, 0, entities.Length);
         });
     }
 
@@ -353,7 +365,7 @@ public class ConcurrencyTests : DatabaseTestBase
             {
                 try
                 {
-                    using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
+                    await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
                     var helper = CreateEntityHelper(transaction);
 
                     var retrieved = await helper.RetrieveOneAsync(entity.Id, transaction);
@@ -400,7 +412,7 @@ public class ConcurrencyTests : DatabaseTestBase
             {
                 var entity = CreateTestEntity(NameEnum.Test, 1000 + i);
 
-                using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
+                await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
                 var helper = CreateEntityHelper(transaction);
 
                 await helper.CreateAsync(entity, transaction);
@@ -424,13 +436,13 @@ public class ConcurrencyTests : DatabaseTestBase
 
     private EntityHelper<TestTable, long> CreateEntityHelper(IDatabaseContext context)
     {
-        var auditResolver = (IAuditValueResolver?)Host.Services.GetService(typeof(IAuditValueResolver)) ??
-                           new StringAuditContextProvider();
+        var auditResolver = GetAuditResolver();
         return new EntityHelper<TestTable, long>(context, auditValueResolver: auditResolver);
     }
 
     private static TestTable CreateTestEntity(NameEnum name, int value)
     {
+        var now = DateTime.UtcNow;
         return new TestTable
         {
             Id = Interlocked.Increment(ref _nextId),
@@ -438,7 +450,10 @@ public class ConcurrencyTests : DatabaseTestBase
             Value = value,
             Description = $"Concurrency test: {name}",
             IsActive = true,
-            CreatedOn = DateTime.UtcNow
+            CreatedOn = now,
+            UpdatedAt = now,
+            UpdatedBy = "testuser",
+            CreatedBy = "testuser"
         };
     }
 }

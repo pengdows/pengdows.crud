@@ -35,7 +35,7 @@ public class DialectCoverageTests
             "\"",
             true,
             "$",
-            true // DuckDB supports savepoints since v0.2.0
+            false // DuckDB savepoints are currently disabled until driver support stabilizes
         };
 
         yield return new object[]

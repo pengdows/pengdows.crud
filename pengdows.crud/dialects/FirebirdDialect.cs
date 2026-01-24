@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Text.RegularExpressions;
@@ -28,8 +30,8 @@ public class FirebirdDialect : SqlDialect
     // IMMUTABLE: Firebird identifier length limit - do not change without extensive testing
     public override int ParameterNameMaxLength => 63;
     
-    // Firebird benefits from prepared statements
-    public override bool PrepareStatements => true;
+    // Firebird provider can be overly strict during explicit prepare; defer to execution-time preparation
+    public override bool PrepareStatements => false;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.ExecuteProcedure;
 
     public override bool SupportsMerge => IsInitialized && ProductInfo.ParsedVersion?.Major >= 2;
@@ -38,6 +40,16 @@ public class FirebirdDialect : SqlDialect
     public override bool SupportsJsonTypes => false;
     public override bool SupportsArrayTypes => true;
     public override bool SupportsInsertReturning => true;
+
+    public override string? UpsertIncomingAlias => "src";
+
+    public override string UpsertIncomingColumn(string columnName)
+    {
+        var alias = UpsertIncomingAlias ?? "src";
+        var wrappedAlias = WrapObjectName(alias);
+        var prefix = string.IsNullOrWhiteSpace(wrappedAlias) ? string.Empty : $"{wrappedAlias}.";
+        return $"{prefix}{WrapObjectName(columnName)}";
+    }
 
     public override string GetInsertReturningClause(string idColumnName)
     {
@@ -50,6 +62,13 @@ public class FirebirdDialect : SqlDialect
     }
 
     public override string GetVersionQuery() => "SELECT rdb$get_context('SYSTEM', 'ENGINE_VERSION') FROM rdb$database";
+
+    public override string GetNaturalKeyLookupQuery(string tableName, string idColumnName,
+        IReadOnlyList<string> columnNames, IReadOnlyList<string> parameterNames)
+    {
+        var query = base.GetNaturalKeyLookupQuery(tableName, idColumnName, columnNames, parameterNames);
+        return query.Replace(" LIMIT 1", " ROWS 1", StringComparison.Ordinal);
+    }
 
     public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
     {
@@ -227,4 +246,5 @@ public class FirebirdDialect : SqlDialect
     public override string? PoolingSettingName => "Pooling";
     public override string? MinPoolSizeSettingName => "MinPoolSize";
     public override string? MaxPoolSizeSettingName => "MaxPoolSize";
+    internal override int DefaultMaxPoolSize => 100;
 }

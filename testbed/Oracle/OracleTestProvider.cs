@@ -4,7 +4,7 @@ using pengdows.crud;
 
 #endregion
 
-namespace testbed;
+namespace testbed.Oracle;
 
 public class OracleTestProvider
     : TestProvider

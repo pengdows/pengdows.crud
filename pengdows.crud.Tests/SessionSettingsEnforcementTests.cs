@@ -341,7 +341,7 @@ public class SessionSettingsEnforcementTests
     }
 
     [Fact]
-    public void TrackedReader_Dispose_DoesNotCloseConnection()
+    public void TrackedReader_Dispose_ClosesConnection_WhenRequested()
     {
         // Arrange
         var fakeConnection = new fakeDbConnection();
@@ -355,13 +355,13 @@ public class SessionSettingsEnforcementTests
         // Act
         tracked.Dispose();
 
-        // Assert - Reader disposes but does NOT close connection
-        Assert.Equal(ConnectionState.Open, trackedConnection.State);
-        Assert.Equal(0, fakeConnection.CloseCount);
+        // Assert - Reader disposes and closes connection
+        Assert.Equal(ConnectionState.Closed, trackedConnection.State);
+        Assert.True(fakeConnection.CloseCount >= 1);
     }
 
     [Fact]
-    public async Task TrackedReader_DisposeAsync_DoesNotCloseConnection()
+    public async Task TrackedReader_DisposeAsync_ClosesConnection_WhenRequested()
     {
         // Arrange
         var fakeConnection = new fakeDbConnection();
@@ -375,13 +375,13 @@ public class SessionSettingsEnforcementTests
         // Act
         await tracked.DisposeAsync();
 
-        // Assert - Reader disposes but does NOT close connection
-        Assert.Equal(ConnectionState.Open, trackedConnection.State);
-        Assert.Equal(0, fakeConnection.CloseCount);
+        // Assert - Reader disposes and closes connection
+        Assert.Equal(ConnectionState.Closed, trackedConnection.State);
+        Assert.True(fakeConnection.CloseCount >= 1);
     }
 
     [Fact]
-    public void TrackedReader_ReadToEOF_DoesNotCloseConnection()
+    public void TrackedReader_ReadToEOF_ClosesConnection_WhenRequested()
     {
         // Arrange
         var fakeConnection = new fakeDbConnection();
@@ -395,14 +395,14 @@ public class SessionSettingsEnforcementTests
         // Act
         var result = tracked.Read(); // Returns false and auto-disposes
 
-        // Assert - Auto-disposal at EOF does NOT close connection
+        // Assert - Auto-disposal at EOF closes connection
         Assert.False(result);
-        Assert.Equal(ConnectionState.Open, trackedConnection.State);
-        Assert.Equal(0, fakeConnection.CloseCount);
+        Assert.Equal(ConnectionState.Closed, trackedConnection.State);
+        Assert.True(fakeConnection.CloseCount >= 1);
     }
 
     [Fact]
-    public async Task TrackedReader_ReadAsyncToEOF_DoesNotCloseConnection()
+    public async Task TrackedReader_ReadAsyncToEOF_ClosesConnection_WhenRequested()
     {
         // Arrange
         var fakeConnection = new fakeDbConnection();
@@ -416,17 +416,16 @@ public class SessionSettingsEnforcementTests
         // Act
         var result = await tracked.ReadAsync(); // Returns false and auto-disposes
 
-        // Assert - Auto-disposal at EOF does NOT close connection
+        // Assert - Auto-disposal at EOF closes connection
         Assert.False(result);
-        Assert.Equal(ConnectionState.Open, trackedConnection.State);
-        Assert.Equal(0, fakeConnection.CloseCount);
+        Assert.Equal(ConnectionState.Closed, trackedConnection.State);
+        Assert.True(fakeConnection.CloseCount >= 1);
     }
 
     [Fact]
-    public void TrackedReader_ShouldCloseConnectionParameter_IsIgnored()
+    public void TrackedReader_ShouldCloseConnectionParameter_IsRespected()
     {
-        // The shouldCloseConnection parameter exists for backwards compatibility
-        // but is now ignored - connection lifecycle is managed by strategies, not readers
+        // The shouldCloseConnection parameter is respected for ephemeral read connections.
 
         var fakeConnection = new fakeDbConnection();
         var trackedConnection = new TrackedConnection(fakeConnection);
@@ -439,8 +438,8 @@ public class SessionSettingsEnforcementTests
         var tracked = new TrackedReader(fakeReader, trackedConnection, locker, shouldCloseConnection: true);
         tracked.Dispose();
 
-        // Assert - Connection is NOT closed despite parameter being true
-        Assert.Equal(ConnectionState.Open, trackedConnection.State);
-        Assert.Equal(0, fakeConnection.CloseCount);
+        // Assert - Connection is closed since parameter is true
+        Assert.Equal(ConnectionState.Closed, trackedConnection.State);
+        Assert.True(fakeConnection.CloseCount >= 1);
     }
 }

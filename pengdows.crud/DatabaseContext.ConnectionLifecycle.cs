@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.@internal;
+using pengdows.crud.infrastructure;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
 
@@ -58,8 +59,22 @@ public partial class DatabaseContext
     /// </summary>
     internal ITrackedConnection GetStandardConnection(bool isShared = false, bool readOnly = false)
     {
-        var conn = FactoryCreateConnection(null, isShared, readOnly);
-        return conn;
+        return GetStandardConnectionWithExecutionType(ExecutionType.Read, isShared, readOnly);
+    }
+
+    internal ITrackedConnection GetStandardConnectionWithExecutionType(ExecutionType executionType, bool isShared = false, bool readOnly = false)
+    {
+        var permit = AcquirePermit(executionType);
+        try
+        {
+            var conn = FactoryCreateConnection(null, isShared, readOnly, null, permit);
+            return conn;
+        }
+        catch
+        {
+            permit.Dispose();
+            throw;
+        }
     }
 
     /// <summary>
@@ -87,11 +102,11 @@ public partial class DatabaseContext
                     return GetSingleConnection();
                 }
                 // Shared memory: ephemeral read-only connections using the same CS
-                return isShared ? GetSingleConnection() : GetStandardConnection(isShared, true);
+                return isShared ? GetSingleConnection() : GetStandardConnectionWithExecutionType(ExecutionType.Read, isShared, true);
             }
 
             // Non-embedded: ephemeral read connection (unless shared within a transaction)
-            return isShared ? GetSingleConnection() : GetStandardConnection(isShared, true);
+            return isShared ? GetSingleConnection() : GetStandardConnectionWithExecutionType(ExecutionType.Read, isShared, true);
         }
 
         return GetSingleConnection();
@@ -179,7 +194,8 @@ public partial class DatabaseContext
         string? connectionString = null,
         bool isSharedConnection = false,
         bool readOnly = false,
-        Action<DbConnection>? onFirstOpen = null)
+        Action<DbConnection>? onFirstOpen = null,
+        PoolPermit? permit = null)
     {
         SanitizeConnectionString(connectionString);
 
@@ -338,7 +354,11 @@ public partial class DatabaseContext
             onDispose: conn => { _logger.LogDebug("Connection disposed."); },
             null,
             isSharedConnection,
-            _metricsCollector
+            _metricsCollector,
+            _modeContentionStats,
+            ConnectionMode,
+            _modeLockTimeout,
+            permit
         );
         return tracked;
     }
@@ -349,6 +369,31 @@ public partial class DatabaseContext
     internal ITrackedConnection FactoryCreateConnection(string? connectionString = null, bool isSharedConnection = false, bool readOnly = false)
     {
         return FactoryCreateConnection(connectionString, isSharedConnection, readOnly, null);
+    }
+
+    private PoolPermit AcquirePermit(ExecutionType executionType)
+    {
+        if (!_enablePoolGovernor)
+        {
+            return default;
+        }
+
+        if (executionType == ExecutionType.Read)
+        {
+            _attributionStats.RecordReadRequest();
+        }
+        else
+        {
+            _attributionStats.RecordWriteRequest();
+        }
+
+        var governor = executionType == ExecutionType.Read ? _readerGovernor : _writerGovernor;
+        if (governor == null)
+        {
+            return default;
+        }
+
+        return governor.Acquire();
     }
 
     /// <summary>

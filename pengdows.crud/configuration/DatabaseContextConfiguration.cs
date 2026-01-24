@@ -62,4 +62,10 @@ public class DatabaseContextConfiguration : IDatabaseContextConfiguration
     public bool? DisablePrepare { get; set; }
     public bool EnableMetrics { get; set; } = false;
     public MetricsOptions MetricsOptions { get; set; } = MetricsOptions.Default;
+
+    public int? WritePoolSize { get; set; }
+    public int? ReadPoolSize { get; set; }
+    public TimeSpan PoolAcquireTimeout { get; set; } = TimeSpan.FromSeconds(5);
+    public TimeSpan? ModeLockTimeout { get; set; } = TimeSpan.FromSeconds(30);
+    public bool EnablePoolGovernor { get; set; } = true;
 }

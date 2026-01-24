@@ -126,6 +126,15 @@ public partial class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     private readonly MetricsCollector? _metricsCollector;
     private EventHandler<DatabaseMetrics>? _metricsUpdated;
     private int _metricsHasActivity;
+    private PoolGovernor? _readerGovernor;
+    private PoolGovernor? _writerGovernor;
+    private readonly ModeContentionStats _modeContentionStats = new();
+    private readonly AttributionStats _attributionStats = new();
+    private TimeSpan _poolAcquireTimeout = TimeSpan.FromSeconds(5);
+    private TimeSpan? _modeLockTimeout = TimeSpan.FromSeconds(30);
+    private bool _enablePoolGovernor = true;
+    private int? _configuredReadPoolSize;
+    private int? _configuredWritePoolSize;
 
     public Guid RootId { get; } = Guid.NewGuid();
 
@@ -135,6 +144,7 @@ public partial class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     private ReadWriteMode _readWriteMode = ReadWriteMode.ReadWrite;
     public ReadWriteMode ReadWriteMode
     {
+#pragma warning disable CS0618
         get => _readWriteMode;
         set
         {
@@ -147,6 +157,7 @@ public partial class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
                 _isWriteConnection = true;
             }
         }
+#pragma warning restore CS0618
     }
 
     public string Name { get; set; }

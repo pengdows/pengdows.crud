@@ -8,7 +8,7 @@ using pengdows.crud;
 
 #endregion
 
-namespace testbed;
+namespace testbed.Firebird;
 
 public class FirebirdSqlTestContainer : TestContainer
 {

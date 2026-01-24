@@ -321,6 +321,11 @@ public interface ISqlDialect
     string UpsertIncomingColumn(string columnName);
 
     /// <summary>
+    /// Optional alias that points to the incoming row during upsert operations.
+    /// </summary>
+    string? UpsertIncomingAlias { get; }
+
+    /// <summary>
     /// Creates a parameter with the specified name, type, and value.
     /// </summary>
     /// <typeparam name="T">Parameter value type.</typeparam>
@@ -477,6 +482,11 @@ public interface ISqlDialect
     /// <param name="idColumnWrapped">Quoted identity column name</param>
     /// <returns>SQL clause like " RETURNING id" or " OUTPUT INSERTED.id"</returns>
     string RenderInsertReturningClause(string idColumnWrapped);
+
+    /// <summary>
+    /// Indicates whether the RETURNING/OUTPUT clause must appear before the VALUES keyword.
+    /// </summary>
+    bool InsertReturningClauseBeforeValues { get; }
 
     // Connection pooling properties
     /// <summary>

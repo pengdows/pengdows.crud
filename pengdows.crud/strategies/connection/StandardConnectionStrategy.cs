@@ -40,7 +40,7 @@ public class StandardConnectionStrategy : SafeAsyncDisposableBase, IConnectionSt
 
     public virtual ITrackedConnection GetConnection(ExecutionType executionType, bool isShared)
     {
-        return _context.FactoryCreateConnection(null, isShared, _context.IsReadOnlyConnection);
+        return _context.GetStandardConnectionWithExecutionType(executionType, isShared, _context.IsReadOnlyConnection);
     }
 
     public virtual void PostInitialize(ITrackedConnection? connection)

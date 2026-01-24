@@ -351,7 +351,7 @@ public class CoverageImprovementTests
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var config = new DatabaseContextConfiguration
         {
-            ConnectionString = "Data Source=:memory:",
+            ConnectionString = "Data Source=file.db",
             ReadWriteMode = ReadWriteMode.ReadOnly
         };
 

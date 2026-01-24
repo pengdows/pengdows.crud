@@ -20,10 +20,10 @@ public static class SqlDialectFactory
         loggerFactory ??= NullLoggerFactory.Instance;
         var logger = loggerFactory.CreateLogger<SqlDialect>();
 
-        var inferredType = InferDatabaseTypeFromProvider(factory);
+        var inferredType = await InferDatabaseTypeFromConnectionAsync(connection, logger).ConfigureAwait(false);
         if (inferredType == SupportedDatabase.Unknown)
         {
-            inferredType = await InferDatabaseTypeFromConnectionAsync(connection, logger).ConfigureAwait(false);
+            inferredType = InferDatabaseTypeFromProvider(factory);
         }
 
         var dialect = CreateDialectForType(inferredType, factory, logger);
@@ -75,6 +75,7 @@ public static class SqlDialectFactory
         {
             var name when name.Contains("sqlserver") || name.Contains("system.data.sqlclient") => SupportedDatabase.SqlServer,
             var name when name.Contains("npgsql") => SupportedDatabase.PostgreSql,
+            var name when name.Contains("mariadb") => SupportedDatabase.MariaDb,
             var name when name.Contains("mysql") => SupportedDatabase.MySql,
             var name when name.Contains("sqlite") => SupportedDatabase.Sqlite,
             var name when name.Contains("oracle") => SupportedDatabase.Oracle,
@@ -94,7 +95,21 @@ public static class SqlDialectFactory
             if (schema.Rows.Count > 0)
             {
                 var name = schema.Rows[0].Field<string>("DataSourceProductName") ?? string.Empty;
-                return Task.FromResult(InferDatabaseTypeFromName(name));
+                var version = schema.Rows[0].Field<string>("DataSourceProductVersion") ?? string.Empty;
+                var inferred = InferDatabaseTypeFromName(name);
+                if (inferred == SupportedDatabase.MySql && ContainsMariaDb(version, connection.ServerVersion))
+                {
+                    return Task.FromResult(SupportedDatabase.MariaDb);
+                }
+                if (inferred != SupportedDatabase.Unknown)
+                {
+                    return Task.FromResult(inferred);
+                }
+            }
+
+            if (ContainsMariaDb(connection.ServerVersion))
+            {
+                return Task.FromResult(SupportedDatabase.MariaDb);
             }
         }
         catch (Exception ex)
@@ -103,6 +118,20 @@ public static class SqlDialectFactory
         }
 
         return Task.FromResult(SupportedDatabase.Unknown);
+    }
+
+    private static bool ContainsMariaDb(params string?[] values)
+    {
+        foreach (var value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value) &&
+                value.Contains("mariadb", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static SupportedDatabase InferDatabaseTypeFromName(string name)

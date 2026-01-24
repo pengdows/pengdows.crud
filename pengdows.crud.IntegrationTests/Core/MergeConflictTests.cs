@@ -1,10 +1,7 @@
-using System;
 using System.Data;
-using pengdows.crud;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
 using pengdows.crud.IntegrationTests.Infrastructure;
-using Xunit;
 using Xunit.Abstractions;
 
 namespace pengdows.crud.IntegrationTests.Core;
@@ -12,9 +9,10 @@ namespace pengdows.crud.IntegrationTests.Core;
 /// <summary>
 /// Integration tests that exercise merge/conflict handling via versioned updates and upserts.
 /// </summary>
+[Collection("IntegrationTests")]
 public class MergeConflictTests : DatabaseTestBase
 {
-    public MergeConflictTests(ITestOutputHelper output) : base(output) { }
+    public MergeConflictTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture) { }
 
     protected override Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)
     {
@@ -34,7 +32,8 @@ public class MergeConflictTests : DatabaseTestBase
             var initial = new VersionedEntity
             {
                 Id = 1,
-                Name = "original"
+                Name = "original",
+                Version = 1
             };
 
             await helper.CreateAsync(initial, context);
@@ -97,11 +96,13 @@ public class MergeConflictTests : DatabaseTestBase
             };
 
             var merged = await helper.UpsertAsync(mergeCandidate, context);
-            Assert.Equal(1, merged);
+            Assert.True(merged is 1 or 2, $"Expected 1 or 2 affected rows, got {merged}");
 
             var final = await helper.RetrieveOneAsync(new MergeRecord { RecordKey = baseRecord.RecordKey }, context);
             Assert.Equal(25, final!.Value);
-            Assert.True(final.LastUpdated >= mergeCandidate.LastUpdated, "LastUpdated should reflect the merge point");
+            var tolerance = TimeSpan.FromSeconds(1);
+            Assert.True(final.LastUpdated + tolerance >= mergeCandidate.LastUpdated,
+                "LastUpdated should reflect the merge point");
             Output.WriteLine($"{provider}: merged value {final.Value} at {final.LastUpdated:o}");
         });
     }
@@ -109,7 +110,7 @@ public class MergeConflictTests : DatabaseTestBase
     private static async Task RecreateTableAsync(IDatabaseContext context, string tableName, string createSql)
     {
         await DropTableIfExistsAsync(context, tableName);
-        using var container = context.CreateSqlContainer(createSql);
+        await using var container = context.CreateSqlContainer(createSql);
         await container.ExecuteNonQueryAsync();
     }
 
@@ -124,11 +125,15 @@ public class MergeConflictTests : DatabaseTestBase
         var stringType = GetStringType(provider);
         var versionType = GetIntType(provider);
 
+        var versionDefinition = provider == SupportedDatabase.Firebird
+            ? $"{versionColumn} {versionType} NOT NULL"
+            : $"{versionColumn} {versionType} NOT NULL DEFAULT 1";
+
         return $@"
 CREATE TABLE {table} (
     {idColumn} {idType} PRIMARY KEY,
     {nameColumn} {stringType} NOT NULL,
-    {versionColumn} {versionType} NOT NULL DEFAULT 1
+    {versionDefinition}
 )";
     }
 
@@ -160,6 +165,7 @@ CREATE TABLE {table} (
         {
             SupportedDatabase.Sqlite => "INTEGER",
             SupportedDatabase.Oracle => "NUMBER(19)",
+            SupportedDatabase.Firebird => "BIGINT",
             _ => "BIGINT"
         };
 

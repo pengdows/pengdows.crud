@@ -45,8 +45,10 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
         // Do NOT call _command?.Dispose() directly here - it would double-dispose
         DisposeCommand();
         _reader.Dispose();
-        // Connection lifecycle is managed by connection strategies, not by the reader
-        // The _shouldCloseConnection parameter is retained for backwards compatibility but ignored
+        if (_shouldCloseConnection)
+        {
+            _connection.Dispose();
+        }
 
         DisposeLockerSynchronously();
     }
@@ -203,8 +205,17 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
         RecordMetricsOnce();
         await _reader.DisposeAsync();
         DisposeCommand();
-        // Connection lifecycle is managed by connection strategies, not by the reader
-        // The _shouldCloseConnection parameter is retained for backwards compatibility but ignored
+        if (_shouldCloseConnection)
+        {
+            if (_connection is IAsyncDisposable asyncDisposable)
+            {
+                await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+            }
+            else
+            {
+                _connection.Dispose();
+            }
+        }
 
         await _connectionLocker.DisposeAsync().ConfigureAwait(false);
     }

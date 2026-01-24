@@ -72,6 +72,8 @@ public class SqlServerDialect : SqlDialect
     public override bool SupportsInsertReturning => true;
     public override bool SupportsIdentityColumns => true;
 
+    public override bool InsertReturningClauseBeforeValues => true;
+
     public override string GetInsertReturningClause(string idColumnName)
     {
         return $"OUTPUT INSERTED.{WrapObjectName(idColumnName)}";
@@ -239,4 +241,5 @@ public class SqlServerDialect : SqlDialect
     public override string? PoolingSettingName => "Pooling";
     public override string? MinPoolSizeSettingName => "Min Pool Size";
     public override string? MaxPoolSizeSettingName => "Max Pool Size";
+    internal override int DefaultMaxPoolSize => 100;
 }

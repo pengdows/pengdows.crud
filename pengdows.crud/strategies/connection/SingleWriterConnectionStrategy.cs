@@ -55,7 +55,7 @@ internal class SingleWriterConnectionStrategy : SafeAsyncDisposableBase, IConnec
 
         // Reads create a new read-only connection. The underlying dialect will
         // apply read-only connection-string/session semantics as appropriate.
-        return _context.GetStandardConnection(isShared: false, readOnly: true);
+        return _context.GetStandardConnectionWithExecutionType(ExecutionType.Read, isShared: false, readOnly: true);
     }
 
     public void PostInitialize(ITrackedConnection? connection)

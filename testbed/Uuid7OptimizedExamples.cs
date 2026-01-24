@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using pengdows.crud;
 
+namespace testbed;
+
 /// <summary>
 /// Usage examples and performance testing
 /// </summary>

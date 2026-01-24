@@ -3,6 +3,7 @@ using System.Data.Common;
 using BenchmarkDotNet.Attributes;
 using pengdows.crud;
 using pengdows.crud.attributes;
+using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 
@@ -27,7 +28,13 @@ public class SqlGenerationBenchmark
         
         // Use FakeDb to avoid database connection issues in benchmarks
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
-        _ctx = new DatabaseContext("fake", factory, _map, DbMode.Standard);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "fake",
+            ProviderName = SupportedDatabase.PostgreSql.ToString(),
+            DbMode = DbMode.Standard
+        };
+        _ctx = new DatabaseContext(config, factory, null, _map);
         _filmHelper = new EntityHelper<Film, int>(_ctx);
         
         // EntityHelper will handle internal caching automatically

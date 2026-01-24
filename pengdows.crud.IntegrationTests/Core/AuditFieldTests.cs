@@ -1,10 +1,8 @@
 using System.Data;
-using System.Threading;
-using pengdows.crud;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
 using pengdows.crud.IntegrationTests.Infrastructure;
-using Xunit;
+using System.Linq;
 using Xunit.Abstractions;
 
 namespace pengdows.crud.IntegrationTests.Core;
@@ -12,20 +10,33 @@ namespace pengdows.crud.IntegrationTests.Core;
 /// <summary>
 /// Integration tests for audit field auto-population across supported database providers.
 /// </summary>
+[Collection("IntegrationTests")]
 public class AuditFieldTests : DatabaseTestBase
 {
     private static long _nextId;
 
-    public AuditFieldTests(ITestOutputHelper output) : base(output) { }
+    public AuditFieldTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture) { }
+
+    protected override IEnumerable<SupportedDatabase> GetSupportedProviders()
+    {
+        return base.GetSupportedProviders()
+            .ToArray();
+    }
 
     protected override async Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)
     {
         context.TypeMapRegistry.Register<AuditedEntity>();
 
+        if (provider == SupportedDatabase.Firebird)
+        {
+            await EnsureFirebirdAuditTableAsync(context);
+            return;
+        }
+
         await DropTableIfExistsAsync(context, "audited_entity");
 
         var createSql = BuildAuditTableSql(provider, context);
-        using var container = context.CreateSqlContainer(createSql);
+        await using var container = context.CreateSqlContainer(createSql);
         await container.ExecuteNonQueryAsync();
     }
 
@@ -281,12 +292,41 @@ CREATE TABLE {table} (
     private static string GetDateTimeType(SupportedDatabase provider) =>
         provider switch
         {
-            SupportedDatabase.Sqlite => "TEXT",
+            SupportedDatabase.Sqlite => "DATETIME",
             SupportedDatabase.SqlServer => "DATETIME2",
             SupportedDatabase.MySql => "DATETIME",
             SupportedDatabase.MariaDb => "DATETIME",
             _ => "TIMESTAMP"
         };
+
+    private static async Task EnsureFirebirdAuditTableAsync(IDatabaseContext context)
+    {
+        var tableName = "audited_entity";
+        var wrappedTable = context.WrapObjectName(tableName);
+        if (!await FirebirdAuditTableExistsAsync(context))
+        {
+            var createSql = BuildAuditTableSql(SupportedDatabase.Firebird, context);
+            await using var createContainer = context.CreateSqlContainer(createSql);
+            await createContainer.ExecuteNonQueryAsync();
+        }
+
+        await using var deleteContainer = context.CreateSqlContainer($"DELETE FROM {wrappedTable}");
+        await deleteContainer.ExecuteNonQueryAsync();
+    }
+
+    private static async Task<bool> FirebirdAuditTableExistsAsync(IDatabaseContext context)
+    {
+        const string query = @"
+SELECT 1
+FROM rdb$relations
+WHERE lower(trim(rdb$relation_name)) = @name
+  AND coalesce(rdb$system_flag, 0) = 0";
+
+        await using var container = context.CreateSqlContainer(query);
+        container.AddParameterWithValue("name", DbType.String, "audited_entity");
+        var value = await container.ExecuteScalarAsync<object>();
+        return value != null && !(value is DBNull);
+    }
 }
 
 /// <summary>

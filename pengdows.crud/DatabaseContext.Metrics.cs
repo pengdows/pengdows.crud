@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.@internal;
+using pengdows.crud.infrastructure;
 using pengdows.crud.metrics;
 
 namespace pengdows.crud;
@@ -103,6 +104,27 @@ public partial class DatabaseContext
     /// Exposes the internal MetricsCollector for infrastructure use.
     /// </summary>
     MetricsCollector? IMetricsCollectorAccessor.MetricsCollector => _metricsCollector;
+
+    internal PoolStatisticsSnapshot GetPoolStatisticsSnapshot(PoolLabel label)
+    {
+        var governor = label == PoolLabel.Reader ? _readerGovernor : _writerGovernor;
+        if (governor == null)
+        {
+            return new PoolStatisticsSnapshot(
+                label,
+                string.Empty,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                true);
+        }
+
+        return governor.GetSnapshot();
+    }
 
     /// <summary>
     /// Tracks a connection failure for monitoring purposes.

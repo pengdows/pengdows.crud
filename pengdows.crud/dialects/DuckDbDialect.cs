@@ -49,7 +49,7 @@ public class DuckDbDialect : SqlDialect
     public override bool SupportsRowPatternMatching => false; // Not yet supported
     public override bool SupportsMultidimensionalArrays => true; // Nested structures
     public override bool SupportsInsertReturning => true; // DuckDB supports RETURNING clause
-    public override bool SupportsSavepoints => true; // DuckDB supports savepoints since v0.2.0
+    public override bool SupportsSavepoints => false; // Skip savepoint support until DuckDB driver reliably allows it
 
     // Database encryption support (DuckDB 1.4.0+)
     public virtual bool SupportsEncryption => IsVersionAtLeast(1, 4); // AES-256-GCM encryption with ATTACH
@@ -67,6 +67,11 @@ public class DuckDbDialect : SqlDialect
         return "SELECT lastval()"; // DuckDB supports lastval() like PostgreSQL
     }
 
+    public override string UpsertIncomingColumn(string columnName)
+    {
+        return $"EXCLUDED.{WrapObjectName(columnName)}";
+    }
+
     public override string GetVersionQuery() => "SELECT version()";
 
     public override void ApplyConnectionSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)
@@ -82,6 +87,18 @@ public class DuckDbDialect : SqlDialect
         // The connection string itself does not need modification for encryption
 
         connection.ConnectionString = cs;
+    }
+
+    internal override string GetReadOnlyConnectionString(string connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            return connectionString;
+        }
+
+        return IsMemoryConnection(connectionString)
+            ? connectionString
+            : $"{connectionString};access_mode=READ_ONLY";
     }
 
     public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
@@ -282,4 +299,5 @@ public class DuckDbDialect : SqlDialect
     public override string? PoolingSettingName => null;
     public override string? MinPoolSizeSettingName => null;
     public override string? MaxPoolSizeSettingName => null;
+    internal override int DefaultMaxPoolSize => int.MaxValue;
 }

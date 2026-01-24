@@ -1,6 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# 
+#
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "pengdows.crud", "pengdows.crud\pengdows.crud.csproj", "{85659FF1-ADA5-4C41-9863-D6797A02AB51}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "testbed", "testbed\testbed.csproj", "{E16BBAE3-7346-4966-BC7D-C3A5A748B756}"
@@ -12,6 +12,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "pengdows.crud.abstractions", "pengdows.crud.abstractions\pengdows.crud.abstractions.csproj", "{6789A923-BDFC-4811-8BD9-0E091B21D435}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CrudBenchmarks", "benchmarks\CrudBenchmarks\CrudBenchmarks.csproj", "{B3E9C6A4-9C4F-4D53-9F8F-1B7D1B8C5D3A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "pengdows.crud.IntegrationTests", "pengdows.crud.IntegrationTests\pengdows.crud.IntegrationTests.csproj", "{C82829A5-4F23-4BEA-893B-DCFE192BFC24}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -47,5 +49,9 @@ Global
 		{B3E9C6A4-9C4F-4D53-9F8F-1B7D1B8C5D3A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B3E9C6A4-9C4F-4D53-9F8F-1B7D1B8C5D3A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B3E9C6A4-9C4F-4D53-9F8F-1B7D1B8C5D3A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C82829A5-4F23-4BEA-893B-DCFE192BFC24}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C82829A5-4F23-4BEA-893B-DCFE192BFC24}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C82829A5-4F23-4BEA-893B-DCFE192BFC24}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C82829A5-4F23-4BEA-893B-DCFE192BFC24}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

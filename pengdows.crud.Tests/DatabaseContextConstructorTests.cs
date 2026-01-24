@@ -68,11 +68,11 @@ public class DatabaseContextConstructorTests
     public void Constructor_With_ConnectionString_And_ProviderName_With_All_Parameters_Should_Create_Context()
     {
         // Arrange
-        var connectionString = "Data Source=:memory:;";
+        var connectionString = "Data Source=file.db;";
         var providerName = "Microsoft.Data.Sqlite";
         var typeMap = new TypeMapRegistry();
         var mode = DbMode.SingleConnection;
-        var readWriteMode = ReadWriteMode.ReadOnly;
+        var readWriteMode = ReadWriteMode.ReadWrite;
         var loggerFactory = NullLoggerFactory.Instance;
         
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);

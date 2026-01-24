@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
@@ -55,6 +57,20 @@ public class OracleDialect : SqlDialect
     }
 
     public override string GetVersionQuery() => "SELECT * FROM v$version WHERE banner LIKE 'Oracle%'";
+
+    public override string GetNaturalKeyLookupQuery(string tableName, string idColumnName,
+        IReadOnlyList<string> columnNames, IReadOnlyList<string> parameterNames)
+    {
+        const string rownumClause = " AND ROWNUM = 1";
+        var query = base.GetNaturalKeyLookupQuery(tableName, idColumnName, columnNames, parameterNames);
+
+        if (query.EndsWith(rownumClause, StringComparison.Ordinal))
+        {
+            query = query[..^rownumClause.Length];
+        }
+
+        return $"{query.TrimEnd()} FETCH FIRST 1 ROWS ONLY";
+    }
 
     public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
     {
@@ -138,4 +154,5 @@ public class OracleDialect : SqlDialect
     public override string? PoolingSettingName => "Pooling";
     public override string? MinPoolSizeSettingName => "Min Pool Size";
     public override string? MaxPoolSizeSettingName => "Max Pool Size";
+    internal override int DefaultMaxPoolSize => 100;
 }

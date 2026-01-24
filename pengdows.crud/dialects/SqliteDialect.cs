@@ -1,5 +1,6 @@
 using System.Data;
 using System.Data.Common;
+using System.Globalization;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.wrappers;
@@ -88,6 +89,13 @@ public class SqliteDialect : SqlDialect
         }
     }
 
+    internal override string GetReadOnlyConnectionString(string connectionString)
+    {
+        return IsMemoryDatabase(connectionString)
+            ? connectionString
+            : base.GetReadOnlyConnectionString(connectionString);
+    }
+
     protected override bool IsMemoryDatabase(string connectionString)
     {
         if (string.IsNullOrWhiteSpace(connectionString))
@@ -161,9 +169,41 @@ public class SqliteDialect : SqlDialect
         return ex is DbException dbEx && dbEx.ErrorCode == 19;
     }
 
+    public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
+    {
+        if (value is DateTime dt)
+        {
+            var utc = NormalizeUtc(dt);
+            return base.CreateDbParameter(name, DbType.String, utc.ToString("o", CultureInfo.InvariantCulture));
+        }
+
+        if (value is DateTimeOffset dto)
+        {
+            return base.CreateDbParameter(name, DbType.String, dto.UtcDateTime.ToString("o", CultureInfo.InvariantCulture));
+        }
+
+        return base.CreateDbParameter(name, type, value);
+    }
+
     // Connection pooling properties for SQLite (provider-aware)
     public override bool SupportsExternalPooling => _systemDataSqlite; // Microsoft.Data.Sqlite: true pooling, but no min/max keywords
     public override string? PoolingSettingName => "Pooling"; // set only if absent; harmless for M.D.Sqlite
     public override string? MinPoolSizeSettingName => null; // no min keyword for either
     public override string? MaxPoolSizeSettingName => _systemDataSqlite ? "Max Pool Size" : null;
+    internal override int DefaultMaxPoolSize => int.MaxValue;
+
+    public override string UpsertIncomingColumn(string columnName)
+    {
+        return $"EXCLUDED.{WrapObjectName(columnName)}";
+    }
+
+    private static DateTime NormalizeUtc(DateTime value)
+    {
+        return value.Kind switch
+        {
+            DateTimeKind.Utc => value,
+            DateTimeKind.Local => value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+        };
+    }
 }

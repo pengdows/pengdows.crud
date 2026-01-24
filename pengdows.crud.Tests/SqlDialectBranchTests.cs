@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
@@ -71,7 +72,8 @@ public class SqlDialectBranchTests
 
         var oracle = CreateDialect(SupportedDatabase.Oracle);
         var oracleQuery = oracle.GetNaturalKeyLookupQuery("people", "id", columns, parameters);
-        Assert.Contains("AND ROWNUM = 1", oracleQuery);
+        Assert.Contains("FETCH FIRST 1 ROWS ONLY", oracleQuery);
+        Assert.DoesNotContain("ROWNUM", oracleQuery, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

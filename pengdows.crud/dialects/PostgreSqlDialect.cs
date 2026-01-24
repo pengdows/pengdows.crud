@@ -321,6 +321,11 @@ SET client_min_messages = warning;";
         return SqlStandardLevel.Sql2008;
     }
 
+    public override string UpsertIncomingColumn(string columnName)
+    {
+        return $"EXCLUDED.{WrapObjectName(columnName)}";
+    }
+
     // Tests access a protected member via reflection; provide a protected facade that
     // delegates to the public base implementation without changing API surface.
     protected new SqlStandardLevel DetermineStandardCompliance(Version? version)
@@ -333,4 +338,5 @@ SET client_min_messages = warning;";
     public override string? PoolingSettingName => "Pooling";
     public override string? MinPoolSizeSettingName => "Minimum Pool Size";
     public override string? MaxPoolSizeSettingName => "Maximum Pool Size";
+    internal override int DefaultMaxPoolSize => 100;
 }

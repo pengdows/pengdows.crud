@@ -1,5 +1,6 @@
 #region
 
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
@@ -183,27 +184,20 @@ public class ConnectionStrategyTests
         Assert.True(ctx.NumberOfOpenConnections >= 1);
     }
 
-    [Fact]
-    public void SingleConnection_ReadOnlyMode_ReturnsPersistentForReads()
+    [Theory]
+    [InlineData(SupportedDatabase.Sqlite)]
+    [InlineData(SupportedDatabase.DuckDB)]
+    public void SingleConnection_ReadOnlyMode_IsDisallowed(SupportedDatabase database)
     {
         var cfg = new DatabaseContextConfiguration
         {
-            ConnectionString = "Data Source=:memory:;EmulatedProduct=Sqlite",
+            ConnectionString = $"Data Source=:memory:;EmulatedProduct={database}",
             DbMode = DbMode.SingleConnection,
             ReadWriteMode = ReadWriteMode.ReadOnly
         };
-        using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Sqlite));
-        Assert.Equal(DbMode.SingleConnection, ctx.ConnectionMode);
-        Assert.NotNull(ctx.PersistentConnection);
 
-        var read1 = ctx.GetConnection(ExecutionType.Read);
-        var read2 = ctx.GetConnection(ExecutionType.Read, isShared: true);
-
-        Assert.Same(ctx.PersistentConnection, read1);
-        Assert.Same(read1, read2);
-
-        ctx.CloseAndDisposeConnection(read1);
-        Assert.True(ctx.NumberOfOpenConnections >= 1);
+        Assert.Throws<InvalidOperationException>(() =>
+            new DatabaseContext(cfg, new fakeDbFactory(database)));
     }
 
     [Fact]

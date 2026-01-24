@@ -171,7 +171,7 @@ public class DialectPropertyTests
                 true,
                 true,
                 true,
-                true) // SupportsSavepoints - DuckDB v0.2.0+
+                false) // Savepoints currently disabled for DuckDB
         };
     }
 

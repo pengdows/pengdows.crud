@@ -1,6 +1,8 @@
+using System;
 using System.Data;
 using System.Data.Common;
 using pengdows.crud.@internal;
+using pengdows.crud.enums;
 
 namespace pengdows.crud;
 
@@ -210,6 +212,43 @@ public partial class EntityHelper<TEntity, TRowID>
         return sc;
     }
 
+    private static string FormatFirebirdValueExpression(string placeholder, IColumnInfo column)
+    {
+        var typeName = GetFirebirdDataType(column);
+        if (string.Equals(placeholder, "NULL", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"CAST(NULL AS {typeName})";
+        }
+
+        return $"CAST({placeholder} AS {typeName})";
+    }
+
+    private static string GetFirebirdDataType(IColumnInfo column) =>
+        column.DbType switch
+        {
+            DbType.Boolean => "SMALLINT",
+            DbType.Byte => "SMALLINT",
+            DbType.SByte => "SMALLINT",
+            DbType.Int16 => "SMALLINT",
+            DbType.UInt16 => "SMALLINT",
+            DbType.Int32 => "INTEGER",
+            DbType.UInt32 => "BIGINT",
+            DbType.Int64 => "BIGINT",
+            DbType.UInt64 => "BIGINT",
+            DbType.Decimal => "DECIMAL(18,2)",
+            DbType.Double => "DOUBLE PRECISION",
+            DbType.Single => "DOUBLE PRECISION",
+            DbType.Date => "DATE",
+            DbType.DateTime => "TIMESTAMP",
+            DbType.AnsiStringFixedLength => "VARCHAR(255)",
+            DbType.AnsiString => "VARCHAR(255)",
+            DbType.String => "VARCHAR(255)",
+            DbType.StringFixedLength => "VARCHAR(255)",
+            DbType.Guid => "CHAR(36)",
+            DbType.Binary => "BLOB",
+            _ => "VARCHAR(255)"
+        };
+
     private ISqlContainer BuildUpsertOnDuplicate(TEntity entity, IDatabaseContext context)
     {
         var ctx = context ?? _context;
@@ -228,7 +267,7 @@ public partial class EntityHelper<TEntity, TRowID>
             string placeholder;
             if (Utils.IsNullOrDbNull(value))
             {
-                placeholder = "NULL";
+                placeholder = FormatFirebirdValueExpression("NULL", column);
             }
             else
             {
@@ -302,7 +341,13 @@ public partial class EntityHelper<TEntity, TRowID>
 
             sc.Query.Append(values[i]);
         }
-        sc.Query.Append(") ON DUPLICATE KEY UPDATE ")
+        sc.Query.Append(")");
+        var incomingAlias = dialect.UpsertIncomingAlias;
+        if (!string.IsNullOrEmpty(incomingAlias))
+        {
+            sc.Query.Append(" AS ").Append(dialect.WrapObjectName(incomingAlias));
+        }
+        sc.Query.Append(" ON DUPLICATE KEY UPDATE ")
             .Append(updateSet.ToString());
 
         sc.AddParameters(parameters);
@@ -312,6 +357,11 @@ public partial class EntityHelper<TEntity, TRowID>
     private ISqlContainer BuildUpsertMerge(TEntity entity, IDatabaseContext context)
     {
         var ctx = context ?? _context;
+        if (ctx.DataSourceInfo.Product == SupportedDatabase.Firebird)
+        {
+            return BuildFirebirdMergeUpsert(entity, ctx);
+        }
+
         var dialect = GetDialect(ctx);
 
         PrepareForInsertOrUpsert(entity);
@@ -453,6 +503,95 @@ public partial class EntityHelper<TEntity, TRowID>
 
             sc.Query.Append("s.");
             sc.Query.Append(insertColumns[i]);
+        }
+        sc.Query.Append(");");
+
+        sc.AddParameters(parameters);
+        return sc;
+    }
+
+    private ISqlContainer BuildFirebirdMergeUpsert(TEntity entity, IDatabaseContext context)
+    {
+        var ctx = context ?? _context;
+        var dialect = GetDialect(ctx);
+
+        PrepareForInsertOrUpsert(entity);
+
+        var values = new List<string>();
+        var parameters = new List<DbParameter>();
+        var counters = new ClauseCounters();
+
+        var insertColumns = new List<string>();
+        foreach (var column in GetCachedInsertableColumns())
+        {
+            var value = column.MakeParameterValueFromField(entity);
+            string placeholder;
+            if (Utils.IsNullOrDbNull(value))
+            {
+                placeholder = "NULL";
+            }
+            else
+            {
+                var name = counters.NextIns();
+                var p = dialect.CreateDbParameter(name, column.DbType, value);
+                if (column.IsJsonType)
+                {
+                    dialect.TryMarkJsonParameter(p, column);
+                }
+                parameters.Add(p);
+                var marker = dialect.MakeParameterName(p);
+                if (column.IsJsonType)
+                {
+                    marker = dialect.RenderJsonArgument(marker, column);
+                }
+
+                placeholder = marker;
+            }
+
+            insertColumns.Add(dialect.WrapObjectName(column.Name));
+            values.Add(placeholder);
+        }
+
+        var keys = _tableInfo.PrimaryKeys;
+        if (_idColumn == null && keys.Count == 0)
+        {
+            throw new NotSupportedException("Upsert requires an Id or a composite primary key.");
+        }
+
+        var joinCols = keys.Count > 0 ? keys : new List<IColumnInfo> { _idColumn! };
+
+        var sc = ctx.CreateSqlContainer();
+        sc.Query.Append("UPDATE OR INSERT INTO ")
+            .Append(BuildWrappedTableName(dialect))
+            .Append(" (");
+        for (var i = 0; i < insertColumns.Count; i++)
+        {
+            if (i > 0)
+            {
+                sc.Query.Append(", ");
+            }
+
+            sc.Query.Append(insertColumns[i]);
+        }
+        sc.Query.Append(") VALUES (");
+        for (var i = 0; i < values.Count; i++)
+        {
+            if (i > 0)
+            {
+                sc.Query.Append(", ");
+            }
+
+            sc.Query.Append(values[i]);
+        }
+        sc.Query.Append(") MATCHING (");
+        for (var i = 0; i < joinCols.Count; i++)
+        {
+            if (i > 0)
+            {
+                sc.Query.Append(", ");
+            }
+
+            sc.Query.Append(dialect.WrapObjectName(joinCols[i].Name));
         }
         sc.Query.Append(");");
 

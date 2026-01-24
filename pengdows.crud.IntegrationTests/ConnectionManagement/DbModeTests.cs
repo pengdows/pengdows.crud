@@ -1,10 +1,8 @@
-using pengdows.crud;
 using pengdows.crud.enums;
 using pengdows.crud.IntegrationTests.Infrastructure;
 using pengdows.crud.wrappers;
 using System.Data;
 using testbed;
-using Xunit;
 using Xunit.Abstractions;
 
 namespace pengdows.crud.IntegrationTests.ConnectionManagement;
@@ -13,11 +11,12 @@ namespace pengdows.crud.IntegrationTests.ConnectionManagement;
 /// Integration tests for DbMode connection management strategies including
 /// Standard, KeepAlive, SingleWriter, and SingleConnection modes.
 /// </summary>
+[Collection("IntegrationTests")]
 public class DbModeTests : DatabaseTestBase
 {
     private static long _nextId;
 
-    public DbModeTests(ITestOutputHelper output) : base(output) { }
+    public DbModeTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture) { }
 
     protected override async Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)
     {
@@ -30,8 +29,10 @@ public class DbModeTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            // Arrange - SQLite :memory: uses SingleConnection mode, others use Standard
-            var expectedMode = provider == SupportedDatabase.Sqlite ? DbMode.SingleConnection : DbMode.Standard;
+            // Arrange - SQLite/DuckDB containers use SingleWriter mode, others use Standard
+            var expectedMode = provider is SupportedDatabase.Sqlite or SupportedDatabase.DuckDB
+                ? DbMode.SingleWriter
+                : DbMode.Standard;
             Assert.Equal(expectedMode, context.ConnectionMode);
 
             var helper = CreateEntityHelper(context);
@@ -43,9 +44,9 @@ public class DbModeTests : DatabaseTestBase
             await helper.CreateAsync(entity, context);
 
             // Assert - Connection behavior depends on mode
-            if (provider == SupportedDatabase.Sqlite)
+            if (provider is SupportedDatabase.Sqlite or SupportedDatabase.DuckDB)
             {
-                // SingleConnection mode keeps one connection open
+                // SingleWriter mode keeps one connection open
                 Assert.Equal(1, context.NumberOfOpenConnections);
             }
             else
@@ -96,7 +97,7 @@ public class DbModeTests : DatabaseTestBase
             var entity2 = CreateTestEntity(NameEnum.Test2, 301);
 
             // Act - Within transaction, connection should stay open
-            using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
+            await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
             var helper = CreateEntityHelper(transaction);
 
             var connCountInTransaction = transaction.NumberOfOpenConnections;
@@ -159,12 +160,22 @@ public class DbModeTests : DatabaseTestBase
             await CreateEntityHelper(context).CreateAsync(entity, context);
 
             // Act - Use ExecuteReaderAsync which uses ExecutionType.Read
-            using var container = context.CreateSqlContainer();
-            container.Query.Append("SELECT id, name, value FROM test_table WHERE id = ");
-            container.Query.Append(container.MakeParameterName("id"));
+            var tableName = context.WrapObjectName("test_table");
+            var idColumn = context.WrapObjectName("id");
+            var nameColumn = context.WrapObjectName("name");
+            var valueColumn = context.WrapObjectName("value");
+
+            await using var container = context.CreateSqlContainer();
+            container.Query.Append("SELECT ")
+                .Append(idColumn).Append(", ")
+                .Append(nameColumn).Append(", ")
+                .Append(valueColumn)
+                .Append(" FROM ").Append(tableName)
+                .Append(" WHERE ").Append(idColumn).Append(" = ")
+                .Append(container.MakeParameterName("id"));
             container.AddParameterWithValue("id", DbType.Int64, entity.Id);
 
-            using var reader = await container.ExecuteReaderAsync();
+            await using var reader = await container.ExecuteReaderAsync();
 
             // Assert - Verify data was read correctly
             Assert.True(await reader.ReadAsync());
@@ -179,13 +190,28 @@ public class DbModeTests : DatabaseTestBase
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
             // Arrange & Act - Get write connection explicitly
-            using var writeConnection = context.GetConnection(ExecutionType.Write);
-            await writeConnection.OpenAsync();
+            await using var writeConnection = context.GetConnection(ExecutionType.Write);
+            if (writeConnection.State != ConnectionState.Open)
+            {
+                await writeConnection.OpenAsync();
+            }
 
             var entity = CreateTestEntity(NameEnum.Test, 600);
 
-            using var container = context.CreateSqlContainer();
-            container.Query.Append("INSERT INTO test_table (id, name, value, is_active, created_at) VALUES (");
+            var tableName = context.WrapObjectName("test_table");
+            var idColumn = context.WrapObjectName("id");
+            var nameColumn = context.WrapObjectName("name");
+            var valueColumn = context.WrapObjectName("value");
+            var activeColumn = context.WrapObjectName("is_active");
+            var createdColumn = context.WrapObjectName("created_at");
+
+            await using var container = context.CreateSqlContainer();
+            container.Query.Append("INSERT INTO ").Append(tableName).Append(" (");
+            container.Query.Append(idColumn).Append(", ");
+            container.Query.Append(nameColumn).Append(", ");
+            container.Query.Append(valueColumn).Append(", ");
+            container.Query.Append(activeColumn).Append(", ");
+            container.Query.Append(createdColumn).Append(") VALUES (");
             container.Query.Append(container.MakeParameterName("id")).Append(", ");
             container.Query.Append(container.MakeParameterName("name")).Append(", ");
             container.Query.Append(container.MakeParameterName("value")).Append(", ");
@@ -198,7 +224,7 @@ public class DbModeTests : DatabaseTestBase
             container.AddParameterWithValue("active", GetBooleanDbType(provider), entity.IsActive);
             container.AddParameterWithValue("created", DbType.DateTime, entity.CreatedOn);
 
-            using var command = container.CreateCommand(writeConnection);
+            await using var command = container.CreateCommand(writeConnection);
             var rowsAffected = await command.ExecuteNonQueryAsync();
 
             // Assert
@@ -228,7 +254,7 @@ public class DbModeTests : DatabaseTestBase
             await CreateEntityHelper(context).CreateAsync(entity, context);
 
             // Act - Begin read-only transaction
-            using var readTransaction = context.BeginTransaction(
+            await using var readTransaction = context.BeginTransaction(
                 IsolationLevel.ReadCommitted,
                 ExecutionType.Read,
                 readOnly: true);
@@ -254,7 +280,7 @@ public class DbModeTests : DatabaseTestBase
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
             // Arrange & Act
-            using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
+            await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
 
             var conn1 = transaction.GetConnection(ExecutionType.Write);
             var conn2 = transaction.GetConnection(ExecutionType.Write);
@@ -316,7 +342,7 @@ public class DbModeTests : DatabaseTestBase
             // Act - Sequential transactions
             foreach (var entity in entities)
             {
-                using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
+                await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
                 var helper = CreateEntityHelper(transaction);
 
                 await helper.CreateAsync(entity, transaction);
@@ -372,6 +398,11 @@ public class DbModeTests : DatabaseTestBase
                 Output.WriteLine("Skipping isolation test for SQLite");
                 return;
             }
+            if (provider == SupportedDatabase.DuckDB)
+            {
+                Output.WriteLine("Skipping isolation test for DuckDB");
+                return;
+            }
             if (provider == SupportedDatabase.SqlServer && !context.RCSIEnabled)
             {
                 Output.WriteLine("Skipping isolation test for SQL Server without RCSI");
@@ -383,14 +414,14 @@ public class DbModeTests : DatabaseTestBase
             await CreateEntityHelper(context).CreateAsync(entity, context);
 
             // Act - Transaction 1: Read the entity
-            using var tx1 = context.BeginTransaction(IsolationLevel.ReadCommitted);
+            await using var tx1 = context.BeginTransaction(IsolationLevel.ReadCommitted);
             var helper1 = CreateEntityHelper(tx1);
             var read1 = await helper1.RetrieveOneAsync(entity.Id, tx1);
             Assert.NotNull(read1);
             Assert.Equal(entity.Value, read1!.Value);
 
             // Transaction 2: Update but don't commit
-            using var tx2 = context.BeginTransaction(IsolationLevel.ReadCommitted);
+            await using var tx2 = context.BeginTransaction(IsolationLevel.ReadCommitted);
             var helper2 = CreateEntityHelper(tx2);
             var read2 = await helper2.RetrieveOneAsync(entity.Id, tx2);
             read2!.Value = 2000;
@@ -413,8 +444,7 @@ public class DbModeTests : DatabaseTestBase
 
     private EntityHelper<TestTable, long> CreateEntityHelper(IDatabaseContext context)
     {
-        var auditResolver = (IAuditValueResolver?)Host.Services.GetService(typeof(IAuditValueResolver)) ??
-                           new StringAuditContextProvider();
+        var auditResolver = GetAuditResolver();
         return new EntityHelper<TestTable, long>(context, auditValueResolver: auditResolver);
     }
 

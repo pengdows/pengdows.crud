@@ -1,6 +1,7 @@
 using System;
 using System.Data.Common;
 using System.Text.Json;
+using System.Diagnostics.CodeAnalysis;
 using BenchmarkDotNet.Attributes;
 using pengdows.crud.enums;
 using pengdows.crud.types.coercion;
@@ -22,14 +23,14 @@ public class WeirdTypeCoercionBenchmarks
 
     // Test data
     private Guid _guid;
-    private byte[] _rowVersionBytes;
+    private byte[]? _rowVersionBytes;
     private JsonValue _jsonValue;
     private HStore _hstoreValue;
     private Range<int> _intRange;
     private TimeSpan _timeSpan;
     private DateTimeOffset _dateTimeOffset;
-    private int[] _intArray;
-    private string[] _stringArray;
+    private int[]? _intArray;
+    private string[]? _stringArray;
 
     [GlobalSetup]
     public void Setup()
@@ -73,13 +74,13 @@ public class WeirdTypeCoercionBenchmarks
     [Benchmark]
     public bool RowVersionCoercion_Write()
     {
-        return _registry!.TryWrite(_rowVersionBytes, _parameter!, SupportedDatabase.SqlServer);
+        return _registry!.TryWrite(_rowVersionBytes!, _parameter!, SupportedDatabase.SqlServer);
     }
 
     [Benchmark]
     public bool RowVersionCoercion_Read()
     {
-        var dbValue = new DbValue(_rowVersionBytes);
+        var dbValue = new DbValue(_rowVersionBytes!);
         return _registry!.TryRead(dbValue, typeof(byte[]), out var _);
     }
 
@@ -154,26 +155,26 @@ public class WeirdTypeCoercionBenchmarks
     [Benchmark]
     public bool IntArrayCoercion_Write()
     {
-        return _registry!.TryWrite(_intArray, _parameter!, SupportedDatabase.PostgreSql);
+        return _registry!.TryWrite(_intArray!, _parameter!, SupportedDatabase.PostgreSql);
     }
 
     [Benchmark]
     public bool IntArrayCoercion_Read()
     {
-        var dbValue = new DbValue(_intArray);
+        var dbValue = new DbValue(_intArray!);
         return _registry!.TryRead(dbValue, typeof(int[]), out var _);
     }
 
     [Benchmark]
     public bool StringArrayCoercion_Write()
     {
-        return _registry!.TryWrite(_stringArray, _parameter!, SupportedDatabase.PostgreSql);
+        return _registry!.TryWrite(_stringArray!, _parameter!, SupportedDatabase.PostgreSql);
     }
 
     [Benchmark]
     public bool StringArrayCoercion_Read()
     {
-        var dbValue = new DbValue(_stringArray);
+        var dbValue = new DbValue(_stringArray!);
         return _registry!.TryRead(dbValue, typeof(string[]), out var _);
     }
 
@@ -259,8 +260,10 @@ public class WeirdTypeCoercionBenchmarks
         public override System.Data.DbType DbType { get; set; }
         public override System.Data.ParameterDirection Direction { get; set; }
         public override bool IsNullable { get; set; }
+        [AllowNull]
         public override string ParameterName { get; set; } = string.Empty;
         public override int Size { get; set; }
+        [AllowNull]
         public override string SourceColumn { get; set; } = string.Empty;
         public override bool SourceColumnNullMapping { get; set; }
         public override object? Value { get; set; }

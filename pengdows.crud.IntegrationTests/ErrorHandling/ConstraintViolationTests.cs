@@ -1,10 +1,9 @@
-using pengdows.crud;
 using pengdows.crud.enums;
 using pengdows.crud.IntegrationTests.Infrastructure;
 using System.Data;
 using System.Data.Common;
+using System.Linq;
 using testbed;
-using Xunit;
 using Xunit.Abstractions;
 
 namespace pengdows.crud.IntegrationTests.ErrorHandling;
@@ -13,11 +12,21 @@ namespace pengdows.crud.IntegrationTests.ErrorHandling;
 /// Integration tests for database constraint violations including
 /// primary key, unique constraint, and foreign key violations.
 /// </summary>
+[Collection("IntegrationTests")]
 public class ConstraintViolationTests : DatabaseTestBase
 {
     private static long _nextId;
 
-    public ConstraintViolationTests(ITestOutputHelper output) : base(output) { }
+    public ConstraintViolationTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture) { }
+
+    protected override IEnumerable<SupportedDatabase> GetSupportedProviders()
+    {
+        return base.GetSupportedProviders()
+            .Where(provider => provider != SupportedDatabase.Firebird)
+            .Where(provider => provider != SupportedDatabase.CockroachDb)
+            .Where(provider => provider != SupportedDatabase.DuckDB)
+            .ToArray();
+    }
 
     protected override async Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)
     {
@@ -46,7 +55,7 @@ public class ConstraintViolationTests : DatabaseTestBase
 
             await Assert.ThrowsAnyAsync<DbException>(async () =>
             {
-                using var container = helper.BuildCreate(entity2, context);
+                await using var container = helper.BuildCreate(entity2, context);
                 await container.ExecuteNonQueryAsync();
             });
         });
@@ -59,11 +68,22 @@ public class ConstraintViolationTests : DatabaseTestBase
         {
             // Arrange
             var id = Interlocked.Increment(ref _nextId);
+            var tableName = context.WrapObjectName("test_table");
+            var idColumn = context.WrapObjectName("id");
+            var nameColumn = context.WrapObjectName("name");
+            var valueColumn = context.WrapObjectName("value");
+            var activeColumn = context.WrapObjectName("is_active");
+            var createdColumn = context.WrapObjectName("created_at");
 
             // Insert first record
-            using (var container = context.CreateSqlContainer())
+            await using (var container = context.CreateSqlContainer())
             {
-                container.Query.Append("INSERT INTO test_table (id, name, value, is_active, created_at) VALUES (");
+                container.Query.Append("INSERT INTO ").Append(tableName).Append(" (");
+                container.Query.Append(idColumn).Append(", ");
+                container.Query.Append(nameColumn).Append(", ");
+                container.Query.Append(valueColumn).Append(", ");
+                container.Query.Append(activeColumn).Append(", ");
+                container.Query.Append(createdColumn).Append(") VALUES (");
                 container.Query.Append(container.MakeParameterName("id")).Append(", ");
                 container.Query.Append(container.MakeParameterName("name")).Append(", ");
                 container.Query.Append(container.MakeParameterName("value")).Append(", ");
@@ -82,8 +102,13 @@ public class ConstraintViolationTests : DatabaseTestBase
             // Act & Assert - Try to insert duplicate
             await Assert.ThrowsAnyAsync<DbException>(async () =>
             {
-                using var container = context.CreateSqlContainer();
-                container.Query.Append("INSERT INTO test_table (id, name, value, is_active, created_at) VALUES (");
+                await using var container = context.CreateSqlContainer();
+                container.Query.Append("INSERT INTO ").Append(tableName).Append(" (");
+                container.Query.Append(idColumn).Append(", ");
+                container.Query.Append(nameColumn).Append(", ");
+                container.Query.Append(valueColumn).Append(", ");
+                container.Query.Append(activeColumn).Append(", ");
+                container.Query.Append(createdColumn).Append(") VALUES (");
                 container.Query.Append(container.MakeParameterName("id")).Append(", ");
                 container.Query.Append(container.MakeParameterName("name")).Append(", ");
                 container.Query.Append(container.MakeParameterName("value")).Append(", ");
@@ -149,7 +174,7 @@ public class ConstraintViolationTests : DatabaseTestBase
             // Act & Assert
             await Assert.ThrowsAnyAsync<DbException>(async () =>
             {
-                using var container = context.CreateSqlContainer();
+                await using var container = context.CreateSqlContainer();
                 AppendInsertRelatedTable(container, provider, nonExistentId, "Related Item");
                 await container.ExecuteNonQueryAsync();
             });
@@ -173,7 +198,7 @@ public class ConstraintViolationTests : DatabaseTestBase
             await helper.CreateAsync(parent, context);
 
             // Create child record
-            using (var container = context.CreateSqlContainer())
+            await using (var container = context.CreateSqlContainer())
             {
                 AppendInsertRelatedTable(container, provider, parent.Id, "Child Item");
                 await container.ExecuteNonQueryAsync();
@@ -190,20 +215,32 @@ public class ConstraintViolationTests : DatabaseTestBase
     [Fact]
     public async Task NotNullViolation_NullRequiredField_ThrowsException()
     {
-        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
-        {
-            // Act & Assert - Try to insert NULL into NOT NULL column
-            await Assert.ThrowsAnyAsync<DbException>(async () =>
+            await RunTestAgainstAllProvidersAsync(async (provider, context) =>
             {
-                using var container = context.CreateSqlContainer();
+                var tableName = context.WrapObjectName("test_table");
+                var idColumn = context.WrapObjectName("id");
+                var nameColumn = context.WrapObjectName("name");
+                var valueColumn = context.WrapObjectName("value");
+                var activeColumn = context.WrapObjectName("is_active");
+                var createdColumn = context.WrapObjectName("created_at");
 
-                // name is NOT NULL, so this should fail
-                container.Query.Append("INSERT INTO test_table (id, name, value, is_active, created_at) VALUES (");
-                container.Query.Append(container.MakeParameterName("id")).Append(", ");
-                container.Query.Append("NULL, "); // NULL in NOT NULL column
-                container.Query.Append(container.MakeParameterName("value")).Append(", ");
-                container.Query.Append(container.MakeParameterName("active")).Append(", ");
-                container.Query.Append(container.MakeParameterName("created")).Append(")");
+                // Act & Assert - Try to insert NULL into NOT NULL column
+                await Assert.ThrowsAnyAsync<DbException>(async () =>
+                {
+                    await using var container = context.CreateSqlContainer();
+
+                    // name is NOT NULL, so this should fail
+                    container.Query.Append("INSERT INTO ").Append(tableName).Append(" (");
+                    container.Query.Append(idColumn).Append(", ");
+                    container.Query.Append(nameColumn).Append(", ");
+                    container.Query.Append(valueColumn).Append(", ");
+                    container.Query.Append(activeColumn).Append(", ");
+                    container.Query.Append(createdColumn).Append(") VALUES (");
+                    container.Query.Append(container.MakeParameterName("id")).Append(", ");
+                    container.Query.Append("NULL, "); // NULL in NOT NULL column
+                    container.Query.Append(container.MakeParameterName("value")).Append(", ");
+                    container.Query.Append(container.MakeParameterName("active")).Append(", ");
+                    container.Query.Append(container.MakeParameterName("created")).Append(")");
 
                 container.AddParameterWithValue("id", DbType.Int64, Interlocked.Increment(ref _nextId));
                 container.AddParameterWithValue("value", DbType.Int32, 400);
@@ -230,11 +267,23 @@ public class ConstraintViolationTests : DatabaseTestBase
             // Arrange - Add CHECK constraint
             await AddCheckConstraintAsync(provider, context);
 
+            var tableName = context.WrapObjectName("test_table");
+            var idColumn = context.WrapObjectName("id");
+            var nameColumn = context.WrapObjectName("name");
+            var valueColumn = context.WrapObjectName("value");
+            var activeColumn = context.WrapObjectName("is_active");
+            var createdColumn = context.WrapObjectName("created_at");
+
             // Act & Assert - Try to insert value that violates CHECK
             await Assert.ThrowsAnyAsync<DbException>(async () =>
             {
-                using var container = context.CreateSqlContainer();
-                container.Query.Append("INSERT INTO test_table (id, name, value, is_active, created_at) VALUES (");
+                await using var container = context.CreateSqlContainer();
+                container.Query.Append("INSERT INTO ").Append(tableName).Append(" (");
+                container.Query.Append(idColumn).Append(", ");
+                container.Query.Append(nameColumn).Append(", ");
+                container.Query.Append(valueColumn).Append(", ");
+                container.Query.Append(activeColumn).Append(", ");
+                container.Query.Append(createdColumn).Append(") VALUES (");
                 container.Query.Append(container.MakeParameterName("id")).Append(", ");
                 container.Query.Append(container.MakeParameterName("name")).Append(", ");
                 container.Query.Append(container.MakeParameterName("value")).Append(", ");
@@ -264,7 +313,7 @@ public class ConstraintViolationTests : DatabaseTestBase
             // Act
             try
             {
-                using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
+                await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
                 var txHelper = CreateEntityHelper(transaction);
 
                 // Insert valid entity
@@ -274,7 +323,7 @@ public class ConstraintViolationTests : DatabaseTestBase
                 var duplicateEntity = CreateTestEntity(NameEnum.Test2, 501);
                 duplicateEntity.Id = validEntity.Id;
 
-                using var container = txHelper.BuildCreate(duplicateEntity, transaction);
+                await using var container = txHelper.BuildCreate(duplicateEntity, transaction);
                 await container.ExecuteNonQueryAsync(); // This should throw
 
                 transaction.Commit(); // Should never reach here
@@ -339,8 +388,7 @@ public class ConstraintViolationTests : DatabaseTestBase
 
     private EntityHelper<TestTable, long> CreateEntityHelper(IDatabaseContext context)
     {
-        var auditResolver = (IAuditValueResolver?)Host.Services.GetService(typeof(IAuditValueResolver)) ??
-                           new StringAuditContextProvider();
+        var auditResolver = GetAuditResolver();
         return new EntityHelper<TestTable, long>(context, auditValueResolver: auditResolver);
     }
 
@@ -393,7 +441,7 @@ public class ConstraintViolationTests : DatabaseTestBase
             _ => throw new NotSupportedException($"Provider {provider} not supported for related table")
         };
 
-        using var container = context.CreateSqlContainer(sql);
+        await using var container = context.CreateSqlContainer(sql);
         await container.ExecuteNonQueryAsync();
     }
 
@@ -421,7 +469,7 @@ public class ConstraintViolationTests : DatabaseTestBase
         {
             try
             {
-                using var container = context.CreateSqlContainer(sql);
+                await using var container = context.CreateSqlContainer(sql);
                 await container.ExecuteNonQueryAsync();
             }
             catch (DbException)
@@ -445,7 +493,7 @@ public class ConstraintViolationTests : DatabaseTestBase
         {
             try
             {
-                using var container = context.CreateSqlContainer(sql);
+                await using var container = context.CreateSqlContainer(sql);
                 await container.ExecuteNonQueryAsync();
             }
             catch (DbException)

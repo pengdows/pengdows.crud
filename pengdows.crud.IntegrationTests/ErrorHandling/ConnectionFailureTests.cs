@@ -1,9 +1,7 @@
-using pengdows.crud;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 using System.Data;
 using testbed;
-using Xunit;
 using Xunit.Abstractions;
 
 namespace pengdows.crud.IntegrationTests.ErrorHandling;
@@ -125,12 +123,12 @@ public class ConnectionFailureTests
             ConnectionFailureMode.FailAfterCount,
             failAfterCount: 3);
 
-        using var context = new DatabaseContext("Host=localhost;Database=test", factory);
+        await using var context = new DatabaseContext("Host=localhost;Database=test", factory);
 
         // Act - First 2 GetConnection calls should work (initialization used the 1st)
         for (int i = 0; i < 2; i++)
         {
-            using var conn = context.GetConnection(ExecutionType.Read);
+            await using var conn = context.GetConnection(ExecutionType.Read);
             await conn.OpenAsync();
             Assert.Equal(ConnectionState.Open, conn.State);
             context.CloseAndDisposeConnection(conn);
@@ -141,7 +139,7 @@ public class ConnectionFailureTests
         // 3rd GetConnection (4th overall including init) should fail
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
-            using var conn = context.GetConnection(ExecutionType.Read);
+            await using var conn = context.GetConnection(ExecutionType.Read);
             await conn.OpenAsync();
         });
     }
@@ -213,10 +211,10 @@ public class ConnectionFailureTests
             ConnectionFailureMode.FailAfterCount,
             failAfterCount: 2);
 
-        using var context = new DatabaseContext("Host=localhost;Database=test", factory);
+        await using var context = new DatabaseContext("Host=localhost;Database=test", factory);
 
         // Act - First GetConnection should work (initialization was #1, this is #2)
-        using (var conn1 = context.GetConnection(ExecutionType.Write))
+        await using (var conn1 = context.GetConnection(ExecutionType.Write))
         {
             await conn1.OpenAsync();
             context.CloseAndDisposeConnection(conn1);
@@ -226,7 +224,7 @@ public class ConnectionFailureTests
         // Second GetConnection should fail (this would be #3, exceeds limit of 2)
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
-            using var conn2 = context.GetConnection(ExecutionType.Write);
+            await using var conn2 = context.GetConnection(ExecutionType.Write);
             await conn2.OpenAsync();
         });
     }
@@ -239,7 +237,7 @@ public class ConnectionFailureTests
             SupportedDatabase.Sqlite,
             ConnectionFailureMode.FailOnTransaction);
 
-        using var context = new DatabaseContext("Data Source=:memory:", factory);
+        await using var context = new DatabaseContext("Data Source=:memory:", factory);
 
         // Act & Assert - Transaction begin should fail
         Assert.Throws<InvalidOperationException>(() =>

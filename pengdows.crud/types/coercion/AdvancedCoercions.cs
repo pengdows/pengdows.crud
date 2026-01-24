@@ -5,6 +5,7 @@ using System.IO;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Text;
+using System.Diagnostics.CodeAnalysis;
 using pengdows.crud.enums;
 using pengdows.crud.types.valueobjects;
 
@@ -58,8 +59,20 @@ public class PostgreSqlIntervalCoercion : DbCoercion<PostgreSqlInterval>
             value = default;
             return false;
         }
+        if (src.RawValue is null)
+        {
+            value = default;
+            return false;
+        }
 
-        switch (src.RawValue)
+        var raw = src.RawValue;
+        if (raw is null)
+        {
+            value = default;
+            return false;
+        }
+
+        switch (raw)
         {
             case PostgreSqlInterval interval:
                 value = interval;
@@ -73,7 +86,7 @@ public class PostgreSqlIntervalCoercion : DbCoercion<PostgreSqlInterval>
         }
     }
 
-    public override bool TryWrite(PostgreSqlInterval value, DbParameter parameter)
+    public override bool TryWrite([AllowNull] PostgreSqlInterval value, DbParameter parameter)
     {
         parameter.Value = value.ToTimeSpan();
         parameter.DbType = DbType.Object;
@@ -93,8 +106,20 @@ public class IntervalYearMonthCoercion : DbCoercion<IntervalYearMonth>
             value = default;
             return false;
         }
+        if (src.RawValue is null)
+        {
+            value = default;
+            return false;
+        }
 
-        switch (src.RawValue)
+        var raw = src.RawValue;
+        if (raw is null)
+        {
+            value = default;
+            return false;
+        }
+
+        switch (raw)
         {
             case IntervalYearMonth interval:
                 value = interval;
@@ -116,7 +141,7 @@ public class IntervalYearMonthCoercion : DbCoercion<IntervalYearMonth>
         }
     }
 
-    public override bool TryWrite(IntervalYearMonth value, DbParameter parameter)
+    public override bool TryWrite([AllowNull] IntervalYearMonth value, DbParameter parameter)
     {
         // Format as ISO 8601 duration: P{years}Y{months}M
         var formatted = $"P{value.Years}Y{value.Months}M";
@@ -138,8 +163,20 @@ public class IntervalDaySecondCoercion : DbCoercion<IntervalDaySecond>
             value = default;
             return false;
         }
+        if (src.RawValue is null)
+        {
+            value = default;
+            return false;
+        }
 
-        switch (src.RawValue)
+        var raw = src.RawValue;
+        if (raw is null)
+        {
+            value = default;
+            return false;
+        }
+
+        switch (raw)
         {
             case IntervalDaySecond interval:
                 value = interval;
@@ -164,7 +201,7 @@ public class IntervalDaySecondCoercion : DbCoercion<IntervalDaySecond>
         }
     }
 
-    public override bool TryWrite(IntervalDaySecond value, DbParameter parameter)
+    public override bool TryWrite([AllowNull] IntervalDaySecond value, DbParameter parameter)
     {
         // For most databases, write as TimeSpan-compatible
         parameter.Value = value.TotalTime;
@@ -186,7 +223,14 @@ public class InetCoercion : DbCoercion<Inet>
             return false;
         }
 
-        switch (src.RawValue)
+        var raw = src.RawValue;
+        if (raw is null)
+        {
+            value = default;
+            return false;
+        }
+
+        switch (raw)
         {
             case Inet inet:
                 value = inet;
@@ -207,15 +251,15 @@ public class InetCoercion : DbCoercion<Inet>
                 return true;
             default:
                 // Handle provider-specific types (e.g., NpgsqlInet)
-                var type = src.RawValue.GetType();
+                var type = raw.GetType();
                 if (type.FullName?.Contains("Inet", StringComparison.OrdinalIgnoreCase) == true)
                 {
                     var addressProp = type.GetProperty("Address");
                     var netmaskProp = type.GetProperty("Netmask");
-                    if (addressProp?.GetValue(src.RawValue) is IPAddress addr)
+                    if (addressProp?.GetValue(raw) is IPAddress addr)
                     {
                         byte? prefix = null;
-                        if (netmaskProp?.GetValue(src.RawValue) is byte netmask)
+                        if (netmaskProp?.GetValue(raw) is byte netmask)
                         {
                             prefix = netmask;
                         }
@@ -228,7 +272,7 @@ public class InetCoercion : DbCoercion<Inet>
         }
     }
 
-    public override bool TryWrite(Inet value, DbParameter parameter)
+    public override bool TryWrite([AllowNull] Inet value, DbParameter parameter)
     {
         parameter.Value = value.ToString();
         parameter.DbType = DbType.String;
@@ -249,7 +293,14 @@ public class CidrCoercion : DbCoercion<Cidr>
             return false;
         }
 
-        switch (src.RawValue)
+        var raw = src.RawValue;
+        if (raw is null)
+        {
+            value = default;
+            return false;
+        }
+
+        switch (raw)
         {
             case Cidr cidr:
                 value = cidr;
@@ -267,13 +318,13 @@ public class CidrCoercion : DbCoercion<Cidr>
                 }
             default:
                 // Handle provider-specific types
-                var type = src.RawValue.GetType();
+                var type = raw.GetType();
                 if (type.FullName?.Contains("Cidr", StringComparison.OrdinalIgnoreCase) == true)
                 {
                     var addressProp = type.GetProperty("Address");
                     var netmaskProp = type.GetProperty("Netmask");
-                    if (addressProp?.GetValue(src.RawValue) is IPAddress addr &&
-                        netmaskProp?.GetValue(src.RawValue) is byte prefix)
+                    if (addressProp?.GetValue(raw) is IPAddress addr &&
+                        netmaskProp?.GetValue(raw) is byte prefix)
                     {
                         value = new Cidr(addr, prefix);
                         return true;
@@ -284,7 +335,7 @@ public class CidrCoercion : DbCoercion<Cidr>
         }
     }
 
-    public override bool TryWrite(Cidr value, DbParameter parameter)
+    public override bool TryWrite([AllowNull] Cidr value, DbParameter parameter)
     {
         parameter.Value = value.ToString();
         parameter.DbType = DbType.String;
@@ -305,7 +356,14 @@ public class MacAddressCoercion : DbCoercion<MacAddress>
             return false;
         }
 
-        switch (src.RawValue)
+        var raw = src.RawValue;
+        if (raw is null)
+        {
+            value = default;
+            return false;
+        }
+
+        switch (raw)
         {
             case MacAddress mac:
                 value = mac;
@@ -326,11 +384,11 @@ public class MacAddressCoercion : DbCoercion<MacAddress>
                 return true;
             default:
                 // Handle provider-specific types
-                var type = src.RawValue.GetType();
+                var type = raw.GetType();
                 if (type.FullName?.Contains("MacAddress", StringComparison.OrdinalIgnoreCase) == true)
                 {
                     var addressProp = type.GetProperty("Address");
-                    if (addressProp?.GetValue(src.RawValue) is PhysicalAddress addr)
+                    if (addressProp?.GetValue(raw) is PhysicalAddress addr)
                     {
                         value = new MacAddress(addr);
                         return true;
@@ -341,7 +399,7 @@ public class MacAddressCoercion : DbCoercion<MacAddress>
         }
     }
 
-    public override bool TryWrite(MacAddress value, DbParameter parameter)
+    public override bool TryWrite([AllowNull] MacAddress value, DbParameter parameter)
     {
         parameter.Value = value.ToString();
         parameter.DbType = DbType.String;
@@ -390,8 +448,15 @@ public class GeometryCoercion : DbCoercion<Geometry>
         }
     }
 
-    public override bool TryWrite(Geometry value, DbParameter parameter)
+    public override bool TryWrite([AllowNull] Geometry value, DbParameter parameter)
     {
+        if (value is null)
+        {
+            parameter.Value = DBNull.Value;
+            parameter.DbType = DbType.Binary;
+            return true;
+        }
+
         if (!value.WellKnownBinary.IsEmpty)
         {
             parameter.Value = value.WellKnownBinary.ToArray();
@@ -447,8 +512,15 @@ public class GeographyCoercion : DbCoercion<Geography>
         }
     }
 
-    public override bool TryWrite(Geography value, DbParameter parameter)
+    public override bool TryWrite([AllowNull] Geography value, DbParameter parameter)
     {
+        if (value is null)
+        {
+            parameter.Value = DBNull.Value;
+            parameter.DbType = DbType.Binary;
+            return true;
+        }
+
         if (!value.WellKnownBinary.IsEmpty)
         {
             parameter.Value = value.WellKnownBinary.ToArray();
@@ -498,7 +570,7 @@ public class PostgreSqlRangeIntCoercion : DbCoercion<Range<int>>
         }
     }
 
-    public override bool TryWrite(Range<int> value, DbParameter parameter)
+    public override bool TryWrite([AllowNull] Range<int> value, DbParameter parameter)
     {
         parameter.Value = value.ToString();
         parameter.DbType = DbType.String;
@@ -541,7 +613,7 @@ public class PostgreSqlRangeDateTimeCoercion : DbCoercion<Range<DateTime>>
         }
     }
 
-    public override bool TryWrite(Range<DateTime> value, DbParameter parameter)
+    public override bool TryWrite([AllowNull] Range<DateTime> value, DbParameter parameter)
     {
         parameter.Value = value.ToString();
         parameter.DbType = DbType.String;
@@ -584,7 +656,7 @@ public class PostgreSqlRangeLongCoercion : DbCoercion<Range<long>>
         }
     }
 
-    public override bool TryWrite(Range<long> value, DbParameter parameter)
+    public override bool TryWrite([AllowNull] Range<long> value, DbParameter parameter)
     {
         parameter.Value = value.ToString();
         parameter.DbType = DbType.String;
@@ -625,7 +697,7 @@ public class RowVersionValueCoercion : DbCoercion<RowVersion>
         }
     }
 
-    public override bool TryWrite(RowVersion value, DbParameter parameter)
+    public override bool TryWrite([AllowNull] RowVersion value, DbParameter parameter)
     {
         parameter.Value = value.ToArray();
         parameter.DbType = DbType.Binary;
@@ -666,8 +738,15 @@ public class BlobStreamCoercion : DbCoercion<Stream>
         }
     }
 
-    public override bool TryWrite(Stream value, DbParameter parameter)
+    public override bool TryWrite([AllowNull] Stream value, DbParameter parameter)
     {
+        if (value is null)
+        {
+            parameter.Value = DBNull.Value;
+            parameter.DbType = DbType.Binary;
+            return true;
+        }
+
         if (value.CanSeek)
             value.Seek(0, SeekOrigin.Begin);
 
@@ -715,7 +794,7 @@ public class ClobStreamCoercion : DbCoercion<TextReader>
         }
     }
 
-    public override bool TryWrite(TextReader value, DbParameter parameter)
+    public override bool TryWrite([AllowNull] TextReader value, DbParameter parameter)
     {
         parameter.Value = value;
         parameter.DbType = DbType.String;

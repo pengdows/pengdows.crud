@@ -36,6 +36,9 @@ public class MariaDbDialect : MySqlDialect
     public override bool SupportsWindowFunctions => IsInitialized && IsAtLeast(10, 2);
     public override bool SupportsCommonTableExpressions => IsInitialized && IsAtLeast(10, 2);
 
+    // MariaDB does not support INSERT ... AS alias for ON DUPLICATE KEY UPDATE.
+    public override string? UpsertIncomingAlias => null;
+
     public override async Task<string?> GetProductNameAsync(ITrackedConnection connection)
     {
         var name = await base.GetProductNameAsync(connection).ConfigureAwait(false);

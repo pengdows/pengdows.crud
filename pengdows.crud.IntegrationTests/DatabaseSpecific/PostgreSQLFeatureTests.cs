@@ -1,9 +1,7 @@
 using System.Data;
 using System.Text.Json;
-using pengdows.crud;
 using pengdows.crud.enums;
 using pengdows.crud.IntegrationTests.Infrastructure;
-using Xunit;
 using Xunit.Abstractions;
 
 namespace pengdows.crud.IntegrationTests.DatabaseSpecific;
@@ -12,9 +10,10 @@ namespace pengdows.crud.IntegrationTests.DatabaseSpecific;
 /// Integration tests for PostgreSQL-specific features that showcase pengdows.crud's
 /// database-aware advantages over generic ORMs like Entity Framework.
 /// </summary>
+[Collection("IntegrationTests")]
 public class PostgreSQLFeatureTests : DatabaseTestBase
 {
-    public PostgreSQLFeatureTests(ITestOutputHelper output) : base(output) { }
+    public PostgreSQLFeatureTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture) { }
 
     protected override IEnumerable<SupportedDatabase> GetSupportedProviders()
     {
@@ -39,7 +38,7 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
             await InsertProductsWithJsonbAsync(context);
 
             // Act - Use native JSONB operators (-> and ->>)
-            using var container = context.CreateSqlContainer(@"
+            await using var container = context.CreateSqlContainer(@"
                 SELECT id, name, specifications->>'brand' as brand, specifications->>'model' as model
                 FROM products
                 WHERE specifications->>'brand' = ");
@@ -47,7 +46,7 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
             container.AddParameterWithValue("brand", DbType.String, "Apple");
 
             var results = new List<dynamic>();
-            using var reader = await container.ExecuteReaderAsync();
+            await using var reader = await container.ExecuteReaderAsync();
 
             while (await reader.ReadAsync())
             {
@@ -76,7 +75,7 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
             await InsertProductsWithComplexJsonbAsync(context);
 
             // Act - Query nested JSONB paths
-            using var container = context.CreateSqlContainer(@"
+            await using var container = context.CreateSqlContainer(@"
                 SELECT name, specifications->'technical'->>'processor' as processor
                 FROM products
                 WHERE specifications->'technical'->>'ram' = ");
@@ -84,7 +83,7 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
             container.AddParameterWithValue("ram", DbType.String, "16GB");
 
             var results = new List<(string Name, string Processor)>();
-            using var reader = await container.ExecuteReaderAsync();
+            await using var reader = await container.ExecuteReaderAsync();
 
             while (await reader.ReadAsync())
             {
@@ -109,7 +108,7 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
             await InsertTaggedItemsAsync(context);
 
             // Act - Use PostgreSQL ANY operator with arrays
-            using var container = context.CreateSqlContainer(@"
+            await using var container = context.CreateSqlContainer(@"
                 SELECT id, name, tags
                 FROM tagged_items
                 WHERE ");
@@ -118,7 +117,7 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
             container.AddParameterWithValue("tag", DbType.String, "featured");
 
             var results = new List<(long Id, string Name)>();
-            using var reader = await container.ExecuteReaderAsync();
+            await using var reader = await container.ExecuteReaderAsync();
 
             while (await reader.ReadAsync())
             {
@@ -140,7 +139,7 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
             await InsertTaggedItemsAsync(context);
 
             // Act - Use PostgreSQL @> (contains) operator
-            using var container = context.CreateSqlContainer(@"
+            await using var container = context.CreateSqlContainer(@"
                 SELECT id, name, tags
                 FROM tagged_items
                 WHERE tags @> ");
@@ -148,7 +147,7 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
             container.AddParameterWithValue("searchTags", DbType.Object, new[] { "premium", "featured" });
 
             var results = new List<(long Id, string Name)>();
-            using var reader = await container.ExecuteReaderAsync();
+            await using var reader = await container.ExecuteReaderAsync();
 
             while (await reader.ReadAsync())
             {
@@ -170,7 +169,7 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
             await InsertArticlesWithFullTextAsync(context);
 
             // Act - Use PostgreSQL full-text search with tsvector
-            using var container = context.CreateSqlContainer(@"
+            await using var container = context.CreateSqlContainer(@"
                 SELECT id, title, content
                 FROM articles
                 WHERE search_vector @@ plainto_tsquery(");
@@ -179,7 +178,7 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
             container.AddParameterWithValue("searchTerm", DbType.String, "database performance");
 
             var results = new List<(long Id, string Title)>();
-            using var reader = await container.ExecuteReaderAsync();
+            await using var reader = await container.ExecuteReaderAsync();
 
             while (await reader.ReadAsync())
             {
@@ -201,7 +200,7 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
             await InsertArticlesWithFullTextAsync(context);
 
             // Act - Get ranked search results with highlighting
-            using var container = context.CreateSqlContainer(@"
+            await using var container = context.CreateSqlContainer(@"
                 SELECT id, title,
                        ts_rank(search_vector, query) as rank,
                        ts_headline('english', content, query) as snippet
@@ -215,7 +214,7 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
             container.AddParameterWithValue("searchTerm", DbType.String, "optimization techniques");
 
             var results = new List<(string Title, float Rank, string Snippet)>();
-            using var reader = await container.ExecuteReaderAsync();
+            await using var reader = await container.ExecuteReaderAsync();
 
             while (await reader.ReadAsync())
             {
@@ -239,7 +238,7 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
         await RunTestAgainstProviderAsync(SupportedDatabase.PostgreSql, async context =>
         {
             // Arrange - Create a product
-            using var insertContainer = context.CreateSqlContainer(@"
+            await using var insertContainer = context.CreateSqlContainer(@"
                 INSERT INTO products (name, specifications)
                 VALUES (");
             insertContainer.Query.Append(insertContainer.MakeParameterName("name"));
@@ -253,7 +252,7 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
             await insertContainer.ExecuteNonQueryAsync();
 
             // Act - Upsert with conflict resolution
-            using var upsertContainer = context.CreateSqlContainer(@"
+            await using var upsertContainer = context.CreateSqlContainer(@"
                 INSERT INTO products (name, specifications)
                 VALUES (");
             upsertContainer.Query.Append(upsertContainer.MakeParameterName("name"));
@@ -275,7 +274,7 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
             Assert.Equal(1, affectedRows);
 
             // Verify the merge worked
-            using var verifyContainer = context.CreateSqlContainer(@"
+            await using var verifyContainer = context.CreateSqlContainer(@"
                 SELECT specifications FROM products WHERE name = ");
             verifyContainer.Query.Append(verifyContainer.MakeParameterName("name"));
             verifyContainer.AddParameterWithValue("name", DbType.String, "Conflict Test Product");
@@ -291,7 +290,7 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
 
     private async Task CreateProductTableWithJsonbAsync(IDatabaseContext context)
     {
-        using var container = context.CreateSqlContainer(@"
+        await using var container = context.CreateSqlContainer(@"
             CREATE TABLE IF NOT EXISTS products (
                 id BIGSERIAL PRIMARY KEY,
                 name VARCHAR(255) UNIQUE NOT NULL,
@@ -303,7 +302,7 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
 
     private async Task CreateArticleTableWithFullTextSearchAsync(IDatabaseContext context)
     {
-        using var container = context.CreateSqlContainer(@"
+        await using var container = context.CreateSqlContainer(@"
             CREATE TABLE IF NOT EXISTS articles (
                 id BIGSERIAL PRIMARY KEY,
                 title VARCHAR(255) NOT NULL,
@@ -317,7 +316,7 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
 
     private async Task CreateTaggedItemTableWithArraysAsync(IDatabaseContext context)
     {
-        using var container = context.CreateSqlContainer(@"
+        await using var container = context.CreateSqlContainer(@"
             CREATE TABLE IF NOT EXISTS tagged_items (
                 id BIGSERIAL PRIMARY KEY,
                 name VARCHAR(255) NOT NULL,
@@ -339,7 +338,7 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
 
         foreach (var (name, specsJson) in products)
         {
-            using var container = context.CreateSqlContainer(@"
+            await using var container = context.CreateSqlContainer(@"
                 INSERT INTO products (name, specifications) VALUES (");
             container.Query.Append(container.MakeParameterName("name"));
             container.Query.Append(", ");
@@ -365,7 +364,7 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
             ""features"": [""TouchID"", ""FaceTime"", ""Retina""]
         }";
 
-        using var container = context.CreateSqlContainer(@"
+        await using var container = context.CreateSqlContainer(@"
             INSERT INTO products (name, specifications) VALUES (");
         container.Query.Append(container.MakeParameterName("name"));
         container.Query.Append(", ");
@@ -390,7 +389,7 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
 
         foreach (var (name, tags) in items)
         {
-            using var container = context.CreateSqlContainer(@"
+            await using var container = context.CreateSqlContainer(@"
                 INSERT INTO tagged_items (name, tags) VALUES (");
             container.Query.Append(container.MakeParameterName("name"));
             container.Query.Append(", ");
@@ -415,7 +414,7 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
 
         foreach (var (title, content) in articles)
         {
-            using var container = context.CreateSqlContainer(@"
+            await using var container = context.CreateSqlContainer(@"
                 INSERT INTO articles (title, content, search_vector) VALUES (");
             container.Query.Append(container.MakeParameterName("title"));
             container.Query.Append(", ");

@@ -309,7 +309,7 @@ public class FirebirdDialectAdvancedTests
         Assert.True(_dialect.SupportsSavepoints);
         Assert.False(_dialect.SupportsJsonTypes);
         Assert.True(_dialect.SupportsArrayTypes);
-        Assert.True(_dialect.PrepareStatements);
+        Assert.False(_dialect.PrepareStatements);
         Assert.Equal(ProcWrappingStyle.ExecuteProcedure, _dialect.ProcWrappingStyle);
         Assert.Equal(65535, _dialect.MaxParameterLimit);
         Assert.Equal(1499, _dialect.MaxOutputParameters);

@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Concurrent;
+using System.Text;
 using System.Data;
 using System.Data.Common;
 using System.Globalization;
@@ -525,6 +526,20 @@ public partial class EntityHelper<TEntity, TRowID> :
         return sc;
     }
 
+    private static void InsertReturningClauseBeforeValues(StringBuilder builder, string clause)
+    {
+        const string marker = " VALUES (";
+        var text = builder.ToString();
+        var index = text.IndexOf(marker, StringComparison.Ordinal);
+        if (index < 0)
+        {
+            builder.Append(clause);
+            return;
+        }
+
+        builder.Insert(index, clause);
+    }
+
     private void EnsureWritableIdHasValue(TEntity entity)
     {
         if (_idColumn == null || !_idColumn.IsIdIsWritable)
@@ -579,7 +594,14 @@ public partial class EntityHelper<TEntity, TRowID> :
         {
             var idWrapped = dialect.WrapObjectName(_idColumn.Name);
             var returningClause = dialect.RenderInsertReturningClause(idWrapped);
-            sc.Query.Append(returningClause);
+            if (dialect.InsertReturningClauseBeforeValues)
+            {
+                InsertReturningClauseBeforeValues(sc.Query, returningClause);
+            }
+            else
+            {
+                sc.Query.Append(returningClause);
+            }
         }
         
         return sc;

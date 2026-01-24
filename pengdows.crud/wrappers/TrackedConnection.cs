@@ -8,8 +8,10 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.connection;
+using pengdows.crud.enums;
 using pengdows.crud.@internal;
 using pengdows.crud.infrastructure;
+using pengdows.crud.metrics;
 using pengdows.crud.threading;
 
 #endregion
@@ -80,6 +82,12 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
     private readonly MetricsCollector? _metricsCollector;
     private readonly StateChangeEventHandler? _metricsHandler;
     private long _openTimestamp;
+    private readonly ModeContentionStats? _modeContentionStats;
+    private readonly DbMode _mode;
+    private readonly TimeSpan? _modeLockTimeout;
+    private PoolPermit _permit;
+    private int _permitAttached;
+    private int _permitReleased;
     
     /// <summary>
     /// Per-connection state for prepare behavior tracking
@@ -94,7 +102,11 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
         Action<DbConnection>? onDispose = null,
         ILogger<TrackedConnection>? logger = null,
         bool isSharedConnection = false,
-        MetricsCollector? metricsCollector = null
+        MetricsCollector? metricsCollector = null,
+        ModeContentionStats? modeContentionStats = null,
+        DbMode mode = DbMode.Standard,
+        TimeSpan? modeLockTimeout = null,
+        PoolPermit? permit = null
     )
     {
         _connection = conn ?? throw new ArgumentNullException(nameof(conn));
@@ -104,11 +116,14 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
         _logger = logger ?? NullLogger<TrackedConnection>.Instance;
         _name = Guid.NewGuid().ToString();
         _metricsCollector = metricsCollector;
+        _modeContentionStats = modeContentionStats;
+        _mode = mode;
+        _modeLockTimeout = modeLockTimeout;
         if (isSharedConnection)
         {
             _isSharedConnection = true;
             _semaphoreSlim = new SemaphoreSlim(1, 1);
-            _lockFactory = () => new RealAsyncLocker(_semaphoreSlim);
+            _lockFactory = () => new RealAsyncLocker(_semaphoreSlim, _modeContentionStats, _mode, _modeLockTimeout);
         }
         else
         {
@@ -124,6 +139,11 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
         {
             _metricsHandler = HandleMetricsStateChange;
             _connection.StateChange += _metricsHandler;
+        }
+
+        if (permit.HasValue)
+        {
+            AttachPermit(permit.Value);
         }
     }
 
@@ -342,6 +362,7 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
         _onDispose?.Invoke(_connection);
         _connection.Dispose();
         DetachMetricsHandler();
+        ReleasePermit();
     }
 
     private async ValueTask DisposeConnectionAsyncCore()
@@ -383,6 +404,7 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
             }
         }
         DetachMetricsHandler();
+        ReleasePermit();
     }
 
     private void DetachMetricsHandler()
@@ -390,6 +412,21 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
         if (_metricsHandler != null)
         {
             _connection.StateChange -= _metricsHandler;
+        }
+    }
+
+    internal void AttachPermit(PoolPermit permit)
+    {
+        _permit = permit;
+        Interlocked.Exchange(ref _permitAttached, 1);
+    }
+
+    private void ReleasePermit()
+    {
+        if (Interlocked.Exchange(ref _permitReleased, 1) == 0 &&
+            Interlocked.CompareExchange(ref _permitAttached, 0, 0) == 1)
+        {
+            _permit.Dispose();
         }
     }
 

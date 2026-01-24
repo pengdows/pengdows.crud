@@ -7,7 +7,7 @@ using pengdows.crud;
 
 #endregion
 
-namespace testbed;
+namespace testbed.PostgreSQL;
 
 public class PostgreSqlTestContainer : TestContainer
 {
@@ -34,7 +34,7 @@ public class PostgreSqlTestContainer : TestContainer
         await _container.StartAsync();
         var hostPort = _container.GetMappedPublicPort(_port);
         _connectionString =
-            $@"Host=localhost;Port={hostPort};Username={_username};Password={_password};Database={_database};Pooling=true;Minimum Pool Size=1;Maximum Pool Size=20;Timeout=15;CommandTimeout=30;";
+            $@"Host=localhost;Port={hostPort};Username={_username};Password={_password};Database={_database};Pooling=true;Minimum Pool Size=1;Maximum Pool Size=100;Timeout=15;CommandTimeout=30;";
         await WaitForDbToStart(NpgsqlFactory.Instance, _connectionString, _container);
     }
 

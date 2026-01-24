@@ -1,8 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using pengdows.crud;
 using testbed;
-using Xunit;
 using Xunit.Abstractions;
 
 namespace pengdows.crud.IntegrationTests;
@@ -41,7 +39,7 @@ public sealed class IntegrationMatrixTests : IAsyncLifetime
                 _output.WriteLine($"Provider {failure.DatabaseProvider} ({failure.ContainerName}) failed: {failure.Error}");
             }
 
-            Assert.True(false, "One or more integration providers failed. See test output for details.");
+            Assert.Fail("One or more integration providers failed. See test output for details.");
         }
     }
 

@@ -68,40 +68,11 @@ public class ReadOnlySingleWriterConnectionTests
         return new DatabaseContext(config, factory);
     }
 
-    private static DatabaseContext CreateReadOnlySingleConnectionContext(RecordingFactory factory)
-    {
-        var config = new DatabaseContextConfiguration
-        {
-            ConnectionString = "Data Source=:memory:;EmulatedProduct=Sqlite",
-            DbMode = DbMode.SingleConnection,
-            ReadWriteMode = ReadWriteMode.ReadOnly
-        };
-        return new DatabaseContext(config, factory);
-    }
-
     [Fact]
     public async Task ReadOnlySingleWriter_PersistentConnection_ShouldHaveReadOnlySettings()
     {
         var factory = new RecordingFactory();
         await using var ctx = CreateReadOnlySingleWriterContext(factory);
-
-        // Get any connection to trigger persistent connection creation
-        var conn = ctx.GetConnection(ExecutionType.Write);
-        await conn.OpenAsync();
-        
-        Assert.Single(factory.Connections);
-        var persistentConnection = factory.Connections[0];
-        
-        // The persistent connection MUST have read-only settings applied even for ExecutionType.Write
-        // because the context itself is ReadOnly
-        Assert.Contains(persistentConnection.Commands, c => c.Contains("query_only"));
-    }
-
-    [Fact]
-    public async Task ReadOnlySingleConnection_PersistentConnection_ShouldHaveReadOnlySettings()
-    {
-        var factory = new RecordingFactory();
-        await using var ctx = CreateReadOnlySingleConnectionContext(factory);
 
         // Get any connection to trigger persistent connection creation
         var conn = ctx.GetConnection(ExecutionType.Write);
@@ -169,20 +140,19 @@ public class ReadOnlySingleWriterConnectionTests
         await Assert.ThrowsAsync<NotSupportedException>(() => container.ExecuteNonQueryAsync());
     }
 
-    [Fact]
-    public async Task ReadOnlySingleConnection_WriteOperations_ShouldFail()
+    [Theory]
+    [InlineData(SupportedDatabase.Sqlite)]
+    [InlineData(SupportedDatabase.DuckDB)]
+    public void ReadOnlySingleConnection_IsNotSupported(SupportedDatabase database)
     {
-        var factory = new RecordingFactory();
-        await using var ctx = CreateReadOnlySingleConnectionContext(factory);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = $"Data Source=:memory:;EmulatedProduct={database}",
+            DbMode = DbMode.SingleConnection,
+            ReadWriteMode = ReadWriteMode.ReadOnly
+        };
 
-        // Get connection and try to perform write operation
-        var conn = ctx.GetConnection(ExecutionType.Write);
-        await conn.OpenAsync();
-        
-        await using var container = ctx.CreateSqlContainer("INSERT INTO t VALUES (1)");
-        
-        // Should fail because context is read-only
-        await Assert.ThrowsAsync<NotSupportedException>(() => container.ExecuteNonQueryAsync());
+        Assert.Throws<InvalidOperationException>(() => new DatabaseContext(config, new fakeDbFactory(database)));
     }
 
     [Theory]
@@ -197,7 +167,12 @@ public class ReadOnlySingleWriterConnectionTests
             DbMode = mode,
             ReadWriteMode = ReadWriteMode.ReadOnly
         };
-        
+        if (mode == DbMode.SingleConnection)
+        {
+            Assert.Throws<InvalidOperationException>(() => new DatabaseContext(config, factory));
+            return;
+        }
+
         await using var ctx = new DatabaseContext(config, factory);
 
         // Should fail because the context is read-only

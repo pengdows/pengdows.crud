@@ -1,6 +1,9 @@
 using System;
 using System.Data;
 using System.Data.Common;
+using System.Security.Cryptography;
+using System.Text;
+using System.Linq;
 using System.Threading;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -129,6 +132,11 @@ public partial class DatabaseContext
             _dataSource = TryCreateDataSource(_factory, configuration.ConnectionString);
             _forceManualPrepare = configuration.ForceManualPrepare;
             _disablePrepare = configuration.DisablePrepare;
+            _poolAcquireTimeout = configuration.PoolAcquireTimeout;
+            _modeLockTimeout = configuration.ModeLockTimeout;
+            _enablePoolGovernor = configuration.EnablePoolGovernor;
+            _configuredReadPoolSize = configuration.ReadPoolSize;
+            _configuredWritePoolSize = configuration.WritePoolSize;
             if (configuration.EnableMetrics)
             {
                 _metricsCollector = new MetricsCollector(configuration.MetricsOptions ?? MetricsOptions.Default);
@@ -170,11 +178,12 @@ public partial class DatabaseContext
                 _dialect?.PoolingSettingName,
                 _dialect?.MinPoolSizeSettingName,
                 builder);
+            InitializePoolGovernors();
 
             if (initialConnection != null)
             {
-                RCSIEnabled = _rcsiPrefetch ?? _dialect.IsReadCommittedSnapshotOn(initialConnection);
-                SnapshotIsolationEnabled = _snapshotIsolationPrefetch ?? _dialect.IsSnapshotIsolationOn(initialConnection);
+                RCSIEnabled = _rcsiPrefetch ?? _dialect!.IsReadCommittedSnapshotOn(initialConnection);
+                SnapshotIsolationEnabled = _snapshotIsolationPrefetch ?? _dialect!.IsSnapshotIsolationOn(initialConnection);
             }
             else
             {
@@ -276,6 +285,11 @@ public partial class DatabaseContext
             _factory = factory ?? throw new ArgumentNullException(nameof(factory));
             _forceManualPrepare = configuration.ForceManualPrepare;
             _disablePrepare = configuration.DisablePrepare;
+            _poolAcquireTimeout = configuration.PoolAcquireTimeout;
+            _modeLockTimeout = configuration.ModeLockTimeout;
+            _enablePoolGovernor = configuration.EnablePoolGovernor;
+            _configuredReadPoolSize = configuration.ReadPoolSize;
+            _configuredWritePoolSize = configuration.WritePoolSize;
             if (configuration.EnableMetrics)
             {
                 _metricsCollector = new MetricsCollector(configuration.MetricsOptions ?? MetricsOptions.Default);
@@ -317,11 +331,12 @@ public partial class DatabaseContext
                 _dialect?.PoolingSettingName,
                 _dialect?.MinPoolSizeSettingName,
                 builder);
+            InitializePoolGovernors();
 
             if (initialConnection != null)
             {
-                RCSIEnabled = _rcsiPrefetch ?? _dialect.IsReadCommittedSnapshotOn(initialConnection);
-                SnapshotIsolationEnabled = _snapshotIsolationPrefetch ?? _dialect.IsSnapshotIsolationOn(initialConnection);
+                RCSIEnabled = _rcsiPrefetch ?? _dialect!.IsReadCommittedSnapshotOn(initialConnection);
+                SnapshotIsolationEnabled = _snapshotIsolationPrefetch ?? _dialect!.IsSnapshotIsolationOn(initialConnection);
             }
             else
             {
@@ -455,7 +470,7 @@ public partial class DatabaseContext
             if (initConn != null && config.DbMode == DbMode.Standard)
             {
                 // Only do inline detection for Standard mode; SingleWriter mode will detect via main constructor
-                _dataSourceInfo = DataSourceInformation.Create(initConn, _factory, _loggerFactory);
+                _dataSourceInfo = DataSourceInformation.Create(initConn, _factory!, _loggerFactory);
                 _procWrappingStyle = _dataSourceInfo.ProcWrappingStyle;
                 Name = _dataSourceInfo.DatabaseProductName;
             }
@@ -463,6 +478,15 @@ public partial class DatabaseContext
             // 4) Coerce ConnectionMode based on product/topology
             var requestedMode = ConnectionMode;
             ConnectionMode = CoerceMode(requestedMode, product, isLocalDb, isFirebirdEmbedded);
+            var inMemoryKind = DetectInMemoryKind(product, _connectionString);
+
+            if (ConnectionMode == DbMode.SingleConnection
+                && inMemoryKind != InMemoryKind.None
+                && IsReadOnlyConnection)
+            {
+                throw new InvalidOperationException(
+                    "In-memory databases that use SingleConnection mode require a read-write context.");
+            }
 
             // Warn on mode/database mismatches (performance, not correctness)
             WarnOnModeMismatch(ConnectionMode, product, wasCoerced: requestedMode != ConnectionMode);
@@ -515,6 +539,178 @@ public partial class DatabaseContext
             if (RepresentsRawConnectionString(builder, connectionString))
             {
                 return connectionString;
+            }
+
+            return builder.ConnectionString;
+        }
+        catch
+        {
+            return connectionString;
+        }
+    }
+
+    private void InitializePoolGovernors()
+    {
+        if (!_enablePoolGovernor || _dialect == null)
+        {
+            _readerGovernor = null;
+            _writerGovernor = null;
+            return;
+        }
+
+        var writerConnectionString = _connectionString;
+        var readerConnectionString = UsesReadOnlyConnectionStringForReads()
+            ? _dialect.GetReadOnlyConnectionString(writerConnectionString)
+            : writerConnectionString;
+
+        var writerConfig = PoolingConfigReader.GetEffectivePoolConfig(_dialect, writerConnectionString);
+        var readerConfig = PoolingConfigReader.GetEffectivePoolConfig(_dialect, readerConnectionString);
+
+        var rawWriterMax = _configuredWritePoolSize ?? writerConfig.MaxPoolSize;
+        var rawReaderMax = _configuredReadPoolSize ?? readerConfig.MaxPoolSize;
+
+        var writerKey = ComputePoolKeyHash(writerConnectionString);
+        var readerKey = ComputePoolKeyHash(readerConnectionString);
+        var sharedPool = string.Equals(writerKey, readerKey, StringComparison.Ordinal);
+
+        int? sharedMax = null;
+        if (sharedPool)
+        {
+            sharedMax = ResolveSharedMax(rawWriterMax, rawReaderMax);
+        }
+
+        var writerLabelMax = rawWriterMax;
+        var readerLabelMax = rawReaderMax;
+        var readerDisabled = false;
+
+        switch (ConnectionMode)
+        {
+            case DbMode.SingleConnection:
+                writerLabelMax = 1;
+                readerLabelMax = null;
+                readerDisabled = true;
+                break;
+            case DbMode.SingleWriter:
+                writerLabelMax = 1;
+                if (sharedPool && readerLabelMax.HasValue)
+                {
+                    readerLabelMax = Math.Max(1, readerLabelMax.Value - 1);
+                }
+                break;
+        }
+
+        SemaphoreSlim? sharedSemaphore = null;
+        if (sharedPool && sharedMax.HasValue && sharedMax.Value > 0)
+        {
+            sharedSemaphore = new SemaphoreSlim(sharedMax.Value, sharedMax.Value);
+        }
+
+        _writerGovernor = CreateGovernor(PoolLabel.Writer, writerKey, sharedMax ?? writerLabelMax, sharedSemaphore);
+        _readerGovernor = readerDisabled
+            ? CreateGovernor(PoolLabel.Reader, readerKey, null, null, disabled: true)
+            : CreateGovernor(PoolLabel.Reader, readerKey, sharedMax ?? readerLabelMax, sharedSemaphore);
+
+        if (ConnectionMode is DbMode.SingleConnection or DbMode.SingleWriter or DbMode.KeepAlive)
+        {
+            AttachPinnedPermitIfNeeded();
+        }
+    }
+
+    private bool UsesReadOnlyConnectionStringForReads()
+    {
+        if (IsReadOnlyConnection)
+        {
+            return true;
+        }
+
+        return ConnectionMode == DbMode.SingleWriter;
+    }
+
+    private void AttachPinnedPermitIfNeeded()
+    {
+        if (!_enablePoolGovernor || _writerGovernor == null)
+        {
+            return;
+        }
+
+        if (PersistentConnection is TrackedConnection tracked)
+        {
+            var permit = _writerGovernor.Acquire();
+            tracked.AttachPermit(permit);
+        }
+    }
+
+    private PoolGovernor CreateGovernor(
+        PoolLabel label,
+        string poolKey,
+        int? maxPermits,
+        SemaphoreSlim? sharedSemaphore,
+        bool disabled = false)
+    {
+        if (disabled || !maxPermits.HasValue || maxPermits.Value <= 0)
+        {
+            return new PoolGovernor(label, poolKey, maxPermits ?? 0, _poolAcquireTimeout, disabled: true);
+        }
+
+        return new PoolGovernor(
+            label,
+            poolKey,
+            maxPermits.Value,
+            _poolAcquireTimeout,
+            disabled: false,
+            sharedSemaphore: sharedSemaphore);
+    }
+
+    private static int? ResolveSharedMax(int? writerMax, int? readerMax)
+    {
+        if (!writerMax.HasValue && !readerMax.HasValue)
+        {
+            return null;
+        }
+
+        if (!writerMax.HasValue)
+        {
+            return readerMax;
+        }
+
+        if (!readerMax.HasValue)
+        {
+            return writerMax;
+        }
+
+        return Math.Max(writerMax.Value, readerMax.Value);
+    }
+
+    private string ComputePoolKeyHash(string connectionString)
+    {
+        var provider = _factory?.GetType().FullName ?? "unknown";
+        var redacted = RedactConnectionString(connectionString);
+        var input = $"{provider}|{redacted}";
+
+        using var sha = SHA256.Create();
+        var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(input));
+        return Convert.ToHexString(bytes).ToLowerInvariant();
+    }
+
+    private static string RedactConnectionString(string connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            var builder = new DbConnectionStringBuilder { ConnectionString = connectionString };
+            var keys = builder.Keys.Cast<object>().Select(k => k.ToString() ?? string.Empty).ToArray();
+            foreach (var key in keys)
+            {
+                var lower = key.ToLowerInvariant();
+                if (lower.Contains("password") || lower == "pwd" || lower.Contains("user id") || lower == "uid" ||
+                    lower.Contains("token") || lower.Contains("secret") || lower.Contains("access"))
+                {
+                    builder[key] = "REDACTED";
+                }
             }
 
             return builder.ConnectionString;
@@ -803,7 +999,7 @@ public partial class DatabaseContext
     private DbConnectionStringBuilder GetFactoryConnectionStringBuilder(string connectionString)
     {
         var input = string.IsNullOrEmpty(connectionString) ? _connectionString : connectionString;
-        return ConnectionStringHelper.Create(_factory, input);
+        return ConnectionStringHelper.Create(_factory!, input);
     }
 
     private DbDataSource? TryCreateDataSource(DbProviderFactory factory, string connectionString)

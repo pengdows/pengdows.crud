@@ -2,6 +2,7 @@ using System;
 using System.Data;
 using System.Data.Common;
 using System.Net;
+using System.Diagnostics.CodeAnalysis;
 using BenchmarkDotNet.Attributes;
 using pengdows.crud.enums;
 using pengdows.crud.types;
@@ -22,8 +23,8 @@ public class AdvancedTypeBenchmarks
     private TestDbParameter? _parameter;
     private Inet _inetValue;
     private Range<int> _rangeValue;
-    private Geometry _geometryValue;
-    private byte[] _rowVersionBytes;
+    private Geometry? _geometryValue;
+    private byte[]? _rowVersionBytes;
     private SupportedDatabase _geometryProvider;
 
     [GlobalSetup]
@@ -64,13 +65,13 @@ public class AdvancedTypeBenchmarks
     [Benchmark]
     public bool ConfigureGeometryParameter()
     {
-        return _registry!.TryConfigureParameter(_parameter!, typeof(Geometry), _geometryValue, _geometryProvider);
+        return _registry!.TryConfigureParameter(_parameter!, typeof(Geometry), _geometryValue!, _geometryProvider);
     }
 
     [Benchmark]
     public bool ConfigureRowVersionParameter()
     {
-        var rowVersion = RowVersion.FromBytes(_rowVersionBytes);
+        var rowVersion = RowVersion.FromBytes(_rowVersionBytes!);
         return _registry!.TryConfigureParameter(_parameter!, typeof(RowVersion), rowVersion, SupportedDatabase.SqlServer);
     }
 
@@ -154,8 +155,10 @@ public class AdvancedTypeBenchmarks
         public override DbType DbType { get; set; }
         public override ParameterDirection Direction { get; set; }
         public override bool IsNullable { get; set; }
+        [AllowNull]
         public override string ParameterName { get; set; } = string.Empty;
         public override int Size { get; set; }
+        [AllowNull]
         public override string SourceColumn { get; set; } = string.Empty;
         public override bool SourceColumnNullMapping { get; set; }
         public override object? Value { get; set; }

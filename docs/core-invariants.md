@@ -50,6 +50,10 @@ This is a compact, high-signal guide for maintainers and AI assistants. It captu
 - **TransactionContext pins a single connection for its lifetime.** Its user lock serializes operations; the connection lock is still acquired per operation/reader.
 - **SqlContainer owns SQL + parameters; it does not track entity state.**
 - **Dialect selection is immutable post-initialization.**
+- **MySQL/MariaDB upserts depend on the `incoming` alias when the server supports it.**
+  - `ISqlDialect.UpsertIncomingAlias` defaults to `null` but dialects can override it (MySQL/MariaDB do for modern versions).
+  - `EntityHelper` only injects `AS incoming` when the alias is provided so keep the property around even if you don’t use it.
+  - Tests should cover both alias-enabled and legacy (fallback to `VALUES(...)`) behaviors.
 
 ## Safe Change Checklist
 

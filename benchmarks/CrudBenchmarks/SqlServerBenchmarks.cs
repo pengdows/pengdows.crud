@@ -37,9 +37,7 @@ public class SqlServerBenchmarks : IAsyncDisposable
 
     private int _filmId;
     private List<int> _filmIds10 = new();
-    private bool _flip;
     private (int actorId, int filmId) _compositeKey;
-    private long _runCounter;
 
     // Cached containers for cloning tests
     private ISqlContainer _cachedFilmRetrieveContainer = null!;
@@ -232,7 +230,8 @@ public class SqlServerBenchmarks : IAsyncDisposable
         await conn.OpenAsync();
 
         var checkDbCommand = new SqlCommand("SELECT COUNT(*) FROM sys.databases WHERE name = 'testdb'", conn);
-        var dbExists = (int)await checkDbCommand.ExecuteScalarAsync() > 0;
+        var result = await checkDbCommand.ExecuteScalarAsync();
+        var dbExists = Convert.ToInt32(result ?? 0) > 0;
 
         if (!dbExists)
         {

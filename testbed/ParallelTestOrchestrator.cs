@@ -3,6 +3,13 @@ using Microsoft.Extensions.DependencyInjection;
 using pengdows.crud;
 using pengdows.crud.enums;
 using testbed.Cockroach;
+using testbed.DuckDb;
+using testbed.Firebird;
+using testbed.mariaDb;
+using testbed.MySQL;
+using testbed.Oracle;
+using testbed.PostgreSQL;
+using testbed.SqlServer;
 
 namespace testbed;
 

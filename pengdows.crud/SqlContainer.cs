@@ -982,12 +982,14 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             _logger.LogDebug("Parameters: {Parameters}", paramDump.ToString());
         }
         cmd.CommandText = cmdText;
+        var cloneParameters = _dialect.DatabaseType == SupportedDatabase.Firebird
+                              || _dialect.DatabaseType == SupportedDatabase.SqlServer;
         if (_context.SupportsNamedParameters)
         {
             foreach (var param in _parameters.Values)
             {
                 // Preserve normalized names expected by tests (no marker in ParameterName)
-                cmd.Parameters.Add(param);
+                cmd.Parameters.Add(cloneParameters ? CloneParameter(param) : param);
             }
         }
         else
@@ -996,7 +998,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             {
                 if (_parameters.TryGetValue(name, out var param))
                 {
-                    cmd.Parameters.Add(param);
+                    cmd.Parameters.Add(cloneParameters ? CloneParameter(param) : param);
                 }
             }
         }
@@ -1035,6 +1037,16 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }
 
         return cmd;
+    }
+
+    private DbParameter CloneParameter(DbParameter param)
+    {
+        var cloned = _dialect.CreateDbParameter(param.ParameterName, param.DbType, param.Value);
+        cloned.Direction = param.Direction;
+        cloned.Size = param.Size;
+        cloned.Scale = param.Scale;
+        cloned.Precision = param.Precision;
+        return cloned;
     }
 
     /// <summary>

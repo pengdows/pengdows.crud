@@ -153,7 +153,7 @@ public class TrackedReaderTests
 
         Assert.False(result);
         Assert.True(locker.WasDisposed);
-        Assert.False(connection.WasClosed); // Connection lifecycle managed by strategies, not reader
+        Assert.True(connection.WasClosed);
     }
 
     [Fact]
@@ -170,7 +170,7 @@ public class TrackedReaderTests
         var result = tracked.Read();
 
         Assert.False(result);
-        Assert.False(connection.WasClosed); // Connection lifecycle managed by strategies, not reader
+        Assert.True(connection.WasClosed);
         Assert.True(locker.WasDisposed);
     }
 
@@ -188,9 +188,8 @@ public class TrackedReaderTests
         await tracked.DisposeAsync();
 
         // Should only dispose locker once despite being called twice
-        // Connection is NOT closed by reader
         Assert.Equal(1, locker.DisposeCallCount);
-        Assert.Equal(0, connection.CloseCallCount); // Connection lifecycle managed by strategies, not reader
+        Assert.Equal(1, connection.CloseCallCount);
     }
 
     [Fact]
@@ -207,9 +206,8 @@ public class TrackedReaderTests
         tracked.Dispose();
 
         // Should only dispose locker once despite being called twice
-        // Connection is NOT closed by reader
         Assert.Equal(1, locker.DisposeCallCount);
-        Assert.Equal(0, connection.CloseCallCount); // Connection lifecycle managed by strategies, not reader
+        Assert.Equal(1, connection.CloseCallCount);
     }
 
     [Fact]
@@ -273,7 +271,7 @@ public class TrackedReaderTests
 
         var second = await tracked.ReadAsync();
         Assert.False(second);
-        Assert.False(connection.WasClosed); // Connection lifecycle managed by strategies, not reader
+        Assert.True(connection.WasClosed);
         Assert.True(locker.WasDisposed);
     }
 
@@ -298,7 +296,7 @@ public class TrackedReaderTests
 
         await tracked.DisposeAsync();
 
-        Assert.False(connection.WasClosed); // Connection lifecycle managed by strategies, not reader
+        Assert.True(connection.WasClosed);
         Assert.True(locker.WasDisposed);
     }
 

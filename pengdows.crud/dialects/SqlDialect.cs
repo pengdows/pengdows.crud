@@ -483,8 +483,14 @@ public abstract class SqlDialect:ISqlDialect
 
     public virtual string UpsertIncomingColumn(string columnName)
     {
-        return $"EXCLUDED.{WrapObjectName(columnName)}";
+        throw new NotSupportedException(
+            $"UpsertIncomingColumn is dialect-specific. Override required for {DatabaseType}.");
     }
+
+    /// <summary>
+    /// Optional alias used to reference the incoming row during upsert operations.
+    /// </summary>
+    public virtual string? UpsertIncomingAlias => null;
 
     /// <summary>
     /// Get a parameter from the pool or create a new one. For internal use by hot paths.
@@ -719,6 +725,22 @@ public abstract class SqlDialect:ISqlDialect
 
         // Hook for database-specific connection configuration
         ConfigureProviderSpecificSettings(connection, context, readOnly);
+    }
+
+    internal virtual string GetReadOnlyConnectionString(string connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            return connectionString;
+        }
+
+        var readOnlyParam = GetReadOnlyConnectionParameter();
+        if (string.IsNullOrEmpty(readOnlyParam))
+        {
+            return connectionString;
+        }
+
+        return BuildReadOnlyConnectionString(connectionString, readOnlyParam);
     }
 
     /// <summary>
@@ -1403,6 +1425,11 @@ public abstract class SqlDialect:ISqlDialect
         };
     }
 
+    /// <summary>
+    /// Indicates whether the RETURNING/OUTPUT clause must appear before the VALUES keyword.
+    /// </summary>
+    public virtual bool InsertReturningClauseBeforeValues => false;
+
     // Connection pooling properties - safe defaults for SQL-92 compatibility
     /// <summary>
     /// True when the database provider supports external connection pooling.
@@ -1427,6 +1454,11 @@ public abstract class SqlDialect:ISqlDialect
     /// Default: null (no standard), may be overridden in provider-specific dialects.
     /// </summary>
     public virtual string? MaxPoolSizeSettingName => null;
+
+    // Dialect defaults used when pool settings are not discoverable from the connection string.
+    // These are intentionally internal (not part of the public API surface).
+    internal virtual int DefaultMinPoolSize => @internal.ConnectionPoolingConfiguration.DefaultMinPoolSize;
+    internal virtual int DefaultMaxPoolSize => 100;
 
     // ---- Legacy utility helpers (kept for test compatibility) ----
     public virtual bool SupportsIdentityColumns => false;

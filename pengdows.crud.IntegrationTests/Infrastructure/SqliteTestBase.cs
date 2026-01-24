@@ -1,10 +1,7 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using pengdows.crud;
-using pengdows.crud.enums;
 using testbed;
-using Xunit;
 using Xunit.Abstractions;
 
 namespace pengdows.crud.IntegrationTests.Infrastructure;
@@ -76,7 +73,7 @@ public abstract class SqliteTestBase : IAsyncLifetime
     /// </summary>
     protected async Task ExecuteSqlAsync(string sql)
     {
-        using var container = Context.CreateSqlContainer(sql);
+        await using var container = Context.CreateSqlContainer(sql);
         await container.ExecuteNonQueryAsync();
     }
 }

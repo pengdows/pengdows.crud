@@ -117,7 +117,7 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
         var values = BuildInsertValues(dialect);
         var updateSet = BuildConflictUpdateSet(context, dialect);
         var expected = $"INSERT INTO {context.WrapObjectName("UpsertLite")} ({columns}) VALUES ({values}) " +
-                       $"ON DUPLICATE KEY UPDATE {updateSet}";
+                       $"AS {context.WrapObjectName("incoming")} ON DUPLICATE KEY UPDATE {updateSet}";
         Assert.Equal(expected, sql);
     }
 

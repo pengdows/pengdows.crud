@@ -1,9 +1,7 @@
 using System.Data;
-using pengdows.crud;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
 using pengdows.crud.IntegrationTests.Infrastructure;
-using Xunit;
 using Xunit.Abstractions;
 
 namespace pengdows.crud.IntegrationTests.Core;
@@ -11,9 +9,13 @@ namespace pengdows.crud.IntegrationTests.Core;
 /// <summary>
 /// Integration tests for entities with composite (multi-column) primary keys.
 /// </summary>
+[Collection("IntegrationTests")]
 public class CompositeKeyTests : DatabaseTestBase
 {
-    public CompositeKeyTests(ITestOutputHelper output) : base(output) { }
+    public CompositeKeyTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture) { }
+
+    private static long _nextOrderItemId;
+    private static long _nextUserRoleId;
 
     protected override async Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)
     {
@@ -32,13 +34,7 @@ public class CompositeKeyTests : DatabaseTestBase
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
             var helper = new EntityHelper<OrderItem, long>(context);
-            var item = new OrderItem
-            {
-                OrderId = 100,
-                ProductId = 200,
-                Quantity = 5,
-                UnitPrice = 19.99m
-            };
+            var item = CreateOrderItem(100, 200, 5, 19.99m);
 
             var result = await helper.CreateAsync(item, context);
 
@@ -53,13 +49,7 @@ public class CompositeKeyTests : DatabaseTestBase
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
             var helper = new EntityHelper<OrderItem, long>(context);
-            var item = new OrderItem
-            {
-                OrderId = 101,
-                ProductId = 201,
-                Quantity = 3,
-                UnitPrice = 29.99m
-            };
+            var item = CreateOrderItem(101, 201, 3, 29.99m);
             await helper.CreateAsync(item, context);
 
             var keyObject = new OrderItem { OrderId = 101, ProductId = 201 };
@@ -94,13 +84,7 @@ public class CompositeKeyTests : DatabaseTestBase
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
             var helper = new EntityHelper<OrderItem, long>(context);
-            var item = new OrderItem
-            {
-                OrderId = 102,
-                ProductId = 202,
-                Quantity = 10,
-                UnitPrice = 5.99m
-            };
+            var item = CreateOrderItem(102, 202, 10, 5.99m);
             await helper.CreateAsync(item, context);
 
             item.Quantity = 15;
@@ -125,9 +109,9 @@ public class CompositeKeyTests : DatabaseTestBase
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
             var helper = new EntityHelper<OrderItem, long>(context);
-            var item1 = new OrderItem { OrderId = 103, ProductId = 301, Quantity = 1, UnitPrice = 10m };
-            var item2 = new OrderItem { OrderId = 103, ProductId = 302, Quantity = 2, UnitPrice = 20m };
-            var item3 = new OrderItem { OrderId = 103, ProductId = 303, Quantity = 3, UnitPrice = 30m };
+            var item1 = CreateOrderItem(103, 301, 1, 10m);
+            var item2 = CreateOrderItem(103, 302, 2, 20m);
+            var item3 = CreateOrderItem(103, 303, 3, 30m);
 
             await helper.CreateAsync(item1, context);
             await helper.CreateAsync(item2, context);
@@ -155,22 +139,10 @@ public class CompositeKeyTests : DatabaseTestBase
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
             var helper = new EntityHelper<OrderItem, long>(context);
-            var item = new OrderItem
-            {
-                OrderId = 104,
-                ProductId = 204,
-                Quantity = 1,
-                UnitPrice = 9.99m
-            };
+            var item = CreateOrderItem(104, 204, 1, 9.99m);
             await helper.CreateAsync(item, context);
 
-            var duplicate = new OrderItem
-            {
-                OrderId = 104,
-                ProductId = 204,
-                Quantity = 5,
-                UnitPrice = 19.99m
-            };
+            var duplicate = CreateOrderItem(104, 204, 5, 19.99m);
 
             await Assert.ThrowsAnyAsync<Exception>(async () =>
             {
@@ -191,14 +163,7 @@ public class CompositeKeyTests : DatabaseTestBase
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
             var helper = new EntityHelper<UserRole, long>(context);
-            var role = new UserRole
-            {
-                TenantId = 1,
-                UserId = 100,
-                RoleId = 10,
-                GrantedAt = DateTime.UtcNow,
-                GrantedBy = "admin"
-            };
+            var role = CreateUserRole(1, 100, 10, "admin");
 
             var result = await helper.CreateAsync(role, context);
 
@@ -214,14 +179,7 @@ public class CompositeKeyTests : DatabaseTestBase
         {
             var helper = new EntityHelper<UserRole, long>(context);
             var grantedTime = DateTime.UtcNow;
-            var role = new UserRole
-            {
-                TenantId = 2,
-                UserId = 200,
-                RoleId = 20,
-                GrantedAt = grantedTime,
-                GrantedBy = "superadmin"
-            };
+            var role = CreateUserRole(2, 200, 20, "superadmin", grantedTime);
             await helper.CreateAsync(role, context);
 
             var keyObject = new UserRole { TenantId = 2, UserId = 200, RoleId = 20 };
@@ -243,14 +201,7 @@ public class CompositeKeyTests : DatabaseTestBase
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
             var helper = new EntityHelper<UserRole, long>(context);
-            var role = new UserRole
-            {
-                TenantId = 3,
-                UserId = 300,
-                RoleId = 30,
-                GrantedAt = DateTime.UtcNow,
-                GrantedBy = "old_admin"
-            };
+            var role = CreateUserRole(3, 300, 30, "old_admin");
             await helper.CreateAsync(role, context);
 
             role.GrantedBy = "new_admin";
@@ -273,9 +224,9 @@ public class CompositeKeyTests : DatabaseTestBase
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
             var helper = new EntityHelper<UserRole, long>(context);
-            var role1 = new UserRole { TenantId = 4, UserId = 400, RoleId = 1, GrantedAt = DateTime.UtcNow, GrantedBy = "admin" };
-            var role2 = new UserRole { TenantId = 4, UserId = 400, RoleId = 2, GrantedAt = DateTime.UtcNow, GrantedBy = "admin" };
-            var role3 = new UserRole { TenantId = 4, UserId = 400, RoleId = 3, GrantedAt = DateTime.UtcNow, GrantedBy = "admin" };
+            var role1 = CreateUserRole(4, 400, 1, "admin");
+            var role2 = CreateUserRole(4, 400, 2, "admin");
+            var role3 = CreateUserRole(4, 400, 3, "admin");
 
             await helper.CreateAsync(role1, context);
             await helper.CreateAsync(role2, context);
@@ -309,9 +260,9 @@ public class CompositeKeyTests : DatabaseTestBase
             var helper = new EntityHelper<OrderItem, long>(context);
             var items = new[]
             {
-                new OrderItem { OrderId = 500, ProductId = 1, Quantity = 1, UnitPrice = 1m },
-                new OrderItem { OrderId = 500, ProductId = 2, Quantity = 2, UnitPrice = 2m },
-                new OrderItem { OrderId = 500, ProductId = 3, Quantity = 3, UnitPrice = 3m }
+                CreateOrderItem(500, 1, 1, 1m),
+                CreateOrderItem(500, 2, 2, 2m),
+                CreateOrderItem(500, 3, 3, 3m)
             };
 
             foreach (var item in items)
@@ -339,13 +290,7 @@ public class CompositeKeyTests : DatabaseTestBase
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
             var helper = new EntityHelper<OrderItem, long>(context);
-            var item = new OrderItem
-            {
-                OrderId = 600,
-                ProductId = 601,
-                Quantity = 10,
-                UnitPrice = 100m
-            };
+            var item = CreateOrderItem(600, 601, 10, 100m);
             await helper.CreateAsync(item, context);
 
             item.Quantity = 20;
@@ -367,10 +312,35 @@ public class CompositeKeyTests : DatabaseTestBase
 
     #endregion
 
+    private static OrderItem CreateOrderItem(int orderId, int productId, int quantity, decimal unitPrice)
+    {
+        return new OrderItem
+        {
+            Id = Interlocked.Increment(ref _nextOrderItemId),
+            OrderId = orderId,
+            ProductId = productId,
+            Quantity = quantity,
+            UnitPrice = unitPrice
+        };
+    }
+
+    private static UserRole CreateUserRole(int tenantId, int userId, int roleId, string grantedBy, DateTime? grantedAt = null)
+    {
+        return new UserRole
+        {
+            Id = Interlocked.Increment(ref _nextUserRoleId),
+            TenantId = tenantId,
+            UserId = userId,
+            RoleId = roleId,
+            GrantedAt = grantedAt ?? DateTime.UtcNow,
+            GrantedBy = grantedBy
+        };
+    }
+
     private static async Task RecreateTableAsync(IDatabaseContext context, string tableName, string createSql)
     {
         await DropTableIfExistsAsync(context, tableName);
-        using var container = context.CreateSqlContainer(createSql);
+        await using var container = context.CreateSqlContainer(createSql);
         await container.ExecuteNonQueryAsync();
     }
 
@@ -425,14 +395,6 @@ CREATE TABLE {table} (
 )";
     }
 
-    private static string GetBigIntType(SupportedDatabase provider) =>
-        provider switch
-        {
-            SupportedDatabase.Sqlite => "INTEGER",
-            SupportedDatabase.Oracle => "NUMBER(19)",
-            _ => "BIGINT"
-        };
-
     private static string GetIntType(SupportedDatabase provider) =>
         provider switch
         {
@@ -446,6 +408,14 @@ CREATE TABLE {table} (
         {
             SupportedDatabase.Sqlite => "NUMERIC(18,2)",
             _ => "DECIMAL(18,2)"
+        };
+
+    private static string GetBigIntType(SupportedDatabase provider) =>
+        provider switch
+        {
+            SupportedDatabase.Sqlite => "INTEGER",
+            SupportedDatabase.Oracle => "NUMBER(19)",
+            _ => "BIGINT"
         };
 
     private static string GetStringType(SupportedDatabase provider) =>
@@ -470,7 +440,7 @@ CREATE TABLE {table} (
 
     private static async Task<int> DeleteOrderItemAsync(IDatabaseContext context, int orderId, int productId)
     {
-        using var container = context.CreateSqlContainer();
+        await using var container = context.CreateSqlContainer();
         var table = context.WrapObjectName("order_items");
         container.Query.Append($"DELETE FROM {table} WHERE ");
         container.Query.Append($"{context.WrapObjectName("order_id")} = ");
@@ -485,7 +455,7 @@ CREATE TABLE {table} (
 
     private static async Task<int> DeleteUserRoleAsync(IDatabaseContext context, int tenantId, int userId, int roleId)
     {
-        using var container = context.CreateSqlContainer();
+        await using var container = context.CreateSqlContainer();
         var table = context.WrapObjectName("user_roles");
         container.Query.Append($"DELETE FROM {table} WHERE ");
         container.Query.Append($"{context.WrapObjectName("tenant_id")} = ");
@@ -509,7 +479,7 @@ CREATE TABLE {table} (
 [Table("order_items")]
 public class OrderItem
 {
-    [Id(false)]
+    [Id]
     [Column("id", DbType.Int64)]
     public long Id { get; set; }
 
@@ -534,7 +504,7 @@ public class OrderItem
 [Table("user_roles")]
 public class UserRole
 {
-    [Id(false)]
+    [Id]
     [Column("id", DbType.Int64)]
     public long Id { get; set; }
 

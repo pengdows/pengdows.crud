@@ -54,5 +54,29 @@ public interface IDatabaseContextConfiguration
     /// Metrics collection options for the associated <see cref="IDatabaseContext"/>.
     /// </summary>
     MetricsOptions MetricsOptions { get; set; }
-}
 
+    /// <summary>
+    /// Explicit maximum pool size for write connections. Overrides connection string/dialect defaults.
+    /// </summary>
+    int? WritePoolSize { get; set; }
+
+    /// <summary>
+    /// Explicit maximum pool size for read connections. Overrides connection string/dialect defaults.
+    /// </summary>
+    int? ReadPoolSize { get; set; }
+
+    /// <summary>
+    /// Timeout for internal pool permit acquisition. Should be lower than provider connection timeout.
+    /// </summary>
+    TimeSpan PoolAcquireTimeout { get; set; }
+
+    /// <summary>
+    /// Optional timeout for shared-connection mode locks. Null disables timeouts (wait forever).
+    /// </summary>
+    TimeSpan? ModeLockTimeout { get; set; }
+
+    /// <summary>
+    /// Enables or disables internal pool governor behavior.
+    /// </summary>
+    bool EnablePoolGovernor { get; set; }
+}

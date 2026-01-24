@@ -1,10 +1,8 @@
-using pengdows.crud;
 using pengdows.crud.enums;
 using pengdows.crud.IntegrationTests.Infrastructure;
 using System.Data;
 using System.Diagnostics;
 using testbed;
-using Xunit;
 using Xunit.Abstractions;
 
 namespace pengdows.crud.IntegrationTests.Advanced;
@@ -13,11 +11,12 @@ namespace pengdows.crud.IntegrationTests.Advanced;
 /// Integration tests for bulk operations including large inserts, updates,
 /// deletes, and batch processing scenarios.
 /// </summary>
+[Collection("IntegrationTests")]
 public class BulkOperationTests : DatabaseTestBase
 {
     private static long _nextId;
 
-    public BulkOperationTests(ITestOutputHelper output) : base(output) { }
+    public BulkOperationTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture) { }
 
     protected override async Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)
     {
@@ -38,7 +37,7 @@ public class BulkOperationTests : DatabaseTestBase
             var sw = Stopwatch.StartNew();
 
             // Act - Insert in transaction for better performance
-            using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
+            await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
             var helper = CreateEntityHelper(transaction);
 
             foreach (var entity in entities)
@@ -86,7 +85,7 @@ public class BulkOperationTests : DatabaseTestBase
             var sw = Stopwatch.StartNew();
 
             // Act - Bulk update in transaction
-            using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
+            await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
             var txHelper = CreateEntityHelper(transaction);
 
             int totalUpdated = 0;
@@ -219,7 +218,7 @@ public class BulkOperationTests : DatabaseTestBase
                     entity.Value += 1000;
                 }
 
-                using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
+                await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
                 var txHelper = CreateEntityHelper(transaction);
 
                 foreach (var entity in retrieved)
@@ -264,7 +263,7 @@ public class BulkOperationTests : DatabaseTestBase
             var sw = Stopwatch.StartNew();
 
             // Act - Single large transaction with 5000 inserts
-            using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
+            await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
             var helper = CreateEntityHelper(transaction);
 
             var insertedIds = new List<long>();
@@ -330,7 +329,7 @@ public class BulkOperationTests : DatabaseTestBase
             var sw = Stopwatch.StartNew();
 
             // Act - Upsert all (mix of updates and inserts)
-            using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
+            await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
             var txHelper = CreateEntityHelper(transaction);
 
             int totalUpserted = 0;
@@ -369,7 +368,7 @@ public class BulkOperationTests : DatabaseTestBase
                     .Select(i => CreateTestEntity(NameEnum.Test, 8000 + (batch * 1000) + i))
                     .ToList();
 
-                using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
+                await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
                 var helper = CreateEntityHelper(transaction);
 
                 foreach (var entity in entities)
@@ -413,8 +412,12 @@ public class BulkOperationTests : DatabaseTestBase
             // Act - Retrieve all and process in memory
             var sw = Stopwatch.StartNew();
 
-            using var container = helper.BuildBaseRetrieve("t");
-            container.Query.Append(" WHERE t.value >= ");
+            await using var container = helper.BuildBaseRetrieve("t");
+            container.Query.Append(" WHERE ")
+                .Append(container.WrapObjectName("t"))
+                .Append('.')
+                .Append(container.WrapObjectName("value"))
+                .Append(" >= ");
             container.Query.Append(container.MakeParameterName("minValue"));
             container.AddParameterWithValue("minValue", DbType.Int32, 9000);
 
@@ -441,7 +444,7 @@ public class BulkOperationTests : DatabaseTestBase
 
             // Act - Insert in transaction but rollback
             {
-                using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
+                await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
                 var helper = CreateEntityHelper(transaction);
 
                 foreach (var entity in entities)
@@ -464,8 +467,7 @@ public class BulkOperationTests : DatabaseTestBase
 
     private EntityHelper<TestTable, long> CreateEntityHelper(IDatabaseContext context)
     {
-        var auditResolver = (IAuditValueResolver?)Host.Services.GetService(typeof(IAuditValueResolver)) ??
-                           new StringAuditContextProvider();
+        var auditResolver = GetAuditResolver();
         return new EntityHelper<TestTable, long>(context, auditValueResolver: auditResolver);
     }
 

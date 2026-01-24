@@ -7,7 +7,7 @@ using pengdows.crud;
 
 #endregion
 
-namespace testbed;
+namespace testbed.mariaDb;
 
 public class MariaDbContainer : TestContainer
 {

@@ -62,7 +62,7 @@ public class RealAsyncLockerTests
         await semaphore.WaitAsync(ctsWait.Token);
         var locker = new RealAsyncLocker(semaphore);
         using var cts = new CancellationTokenSource(50);
-        await Assert.ThrowsAsync<OperationCanceledException>(() => locker.LockAsync(cts.Token));
+        await Assert.ThrowsAsync<TaskCanceledException>(() => locker.LockAsync(cts.Token));
         semaphore.Release();
     }
 
@@ -125,7 +125,7 @@ public class RealAsyncLockerTests
         await semaphore.WaitAsync(ctsWait.Token);
         var locker = new RealAsyncLocker(semaphore);
         using var cts = new CancellationTokenSource(50);
-        await Assert.ThrowsAsync<OperationCanceledException>(() => locker.TryLockAsync(TimeSpan.FromSeconds(1), cts.Token));
+        await Assert.ThrowsAsync<TaskCanceledException>(() => locker.TryLockAsync(TimeSpan.FromSeconds(1), cts.Token));
         semaphore.Release();
     }
 
@@ -210,7 +210,7 @@ public class RealAsyncLockerTests
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
 
         // This demonstrates the deadlock - it will timeout
-        await Assert.ThrowsAsync<OperationCanceledException>(async () =>
+        await Assert.ThrowsAsync<TaskCanceledException>(async () =>
         {
             await locker.LockAsync(cts.Token);
         });

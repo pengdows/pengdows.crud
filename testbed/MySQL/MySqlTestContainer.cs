@@ -7,7 +7,7 @@ using pengdows.crud;
 
 #endregion
 
-namespace testbed;
+namespace testbed.MySQL;
 
 public class MySqlTestContainer : TestContainer
 {

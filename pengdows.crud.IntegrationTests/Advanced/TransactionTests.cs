@@ -1,10 +1,8 @@
-using pengdows.crud;
 using pengdows.crud.enums;
 using pengdows.crud.IntegrationTests.Infrastructure;
 using pengdows.crud.exceptions;
 using System.Data;
 using testbed;
-using Xunit;
 using Xunit.Abstractions;
 
 namespace pengdows.crud.IntegrationTests.Advanced;
@@ -13,11 +11,12 @@ namespace pengdows.crud.IntegrationTests.Advanced;
 /// Integration tests for transaction management including isolation levels,
 /// commit/rollback behavior, savepoints, and readonly transactions.
 /// </summary>
+[Collection("IntegrationTests")]
 public class TransactionTests : DatabaseTestBase
 {
     private static long _nextId;
 
-    public TransactionTests(ITestOutputHelper output) : base(output) { }
+    public TransactionTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture) { }
 
     protected override async Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)
     {
@@ -34,7 +33,7 @@ public class TransactionTests : DatabaseTestBase
             var entity = CreateTestEntity(NameEnum.Test, 100);
 
             // Act
-            using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
+            await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
             var helper = CreateEntityHelper(transaction);
 
             await helper.CreateAsync(entity, transaction);
@@ -61,7 +60,7 @@ public class TransactionTests : DatabaseTestBase
             var entity = CreateTestEntity(NameEnum.Test, 200);
 
             // Act
-            using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
+            await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
             var helper = CreateEntityHelper(transaction);
 
             await helper.CreateAsync(entity, transaction);
@@ -88,7 +87,7 @@ public class TransactionTests : DatabaseTestBase
             await CreateEntityHelper(context).CreateAsync(entity, context);
 
             // Act - Read within transaction
-            using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
+            await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
             var helper = CreateEntityHelper(transaction);
             var retrieved = await helper.RetrieveOneAsync(entity.Id, transaction);
 
@@ -116,7 +115,7 @@ public class TransactionTests : DatabaseTestBase
             await CreateEntityHelper(context).CreateAsync(existingEntity, context);
 
             // Act - Read-only transaction
-            using var readOnlyTransaction = context.BeginTransaction(
+            await using var readOnlyTransaction = context.BeginTransaction(
                 IsolationLevel.ReadCommitted,
                 ExecutionType.Read,
                 readOnly: true);
@@ -153,7 +152,7 @@ public class TransactionTests : DatabaseTestBase
             await CreateEntityHelper(context).CreateAsync(entity, context);
 
             // Act
-            using var transaction = context.BeginTransaction(IsolationLevel.Serializable);
+            await using var transaction = context.BeginTransaction(IsolationLevel.Serializable);
             var helper = CreateEntityHelper(transaction);
 
             var retrieved = await helper.RetrieveOneAsync(entity.Id, transaction);
@@ -186,7 +185,7 @@ public class TransactionTests : DatabaseTestBase
             var entity2 = CreateTestEntity(NameEnum.Test2, 601);
 
             // Act
-            using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
+            await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
             var helper = CreateEntityHelper(transaction);
 
             // Create first entity
@@ -229,7 +228,7 @@ public class TransactionTests : DatabaseTestBase
             var entity3 = CreateTestEntity(NameEnum.Test, 702);
 
             // Act
-            using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
+            await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
             var helper = CreateEntityHelper(transaction);
 
             await helper.CreateAsync(entity1, transaction);
@@ -266,7 +265,7 @@ public class TransactionTests : DatabaseTestBase
 
             // Act
             {
-                using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
+                await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
                 var helper = CreateEntityHelper(transaction);
                 await helper.CreateAsync(entity, transaction);
                 // Dispose without commit
@@ -292,7 +291,7 @@ public class TransactionTests : DatabaseTestBase
             };
 
             // Act
-            using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
+            await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
             var helper = CreateEntityHelper(transaction);
 
             foreach (var entity in entities)
@@ -323,7 +322,7 @@ public class TransactionTests : DatabaseTestBase
             await CreateEntityHelper(context).CreateAsync(entity, context);
 
             // Act
-            using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
+            await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
             var helper = CreateEntityHelper(transaction);
 
             var retrieved = await helper.RetrieveOneAsync(entity.Id, transaction);
@@ -353,7 +352,7 @@ public class TransactionTests : DatabaseTestBase
             await CreateEntityHelper(context).CreateAsync(entity, context);
 
             // Act
-            using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
+            await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
             var helper = CreateEntityHelper(transaction);
 
             await helper.DeleteAsync(entity.Id, transaction);
@@ -374,7 +373,7 @@ public class TransactionTests : DatabaseTestBase
             {
                 await Assert.ThrowsAsync<TransactionModeNotSupportedException>(async () =>
                 {
-                    using var _ = context.BeginTransaction(
+                    await using var _ = context.BeginTransaction(
                         IsolationProfile.SafeNonBlockingReads,
                         ExecutionType.Write);
                     await Task.CompletedTask;
@@ -386,7 +385,7 @@ public class TransactionTests : DatabaseTestBase
             var entity = CreateTestEntity(NameEnum.Test, 1200);
 
             // Act - Use IsolationProfile instead of IsolationLevel
-            using var transaction = context.BeginTransaction(
+            await using var transaction = context.BeginTransaction(
                 IsolationProfile.SafeNonBlockingReads,
                 ExecutionType.Write);
 
@@ -402,8 +401,7 @@ public class TransactionTests : DatabaseTestBase
 
     private EntityHelper<TestTable, long> CreateEntityHelper(IDatabaseContext context)
     {
-        var auditResolver = (IAuditValueResolver?)Host.Services.GetService(typeof(IAuditValueResolver)) ??
-                           new StringAuditContextProvider();
+        var auditResolver = GetAuditResolver();
         return new EntityHelper<TestTable, long>(context, auditValueResolver: auditResolver);
     }
 
@@ -444,7 +442,6 @@ public class TransactionTests : DatabaseTestBase
                           SupportedDatabase.MySql or
                           SupportedDatabase.MariaDb or
                           SupportedDatabase.Sqlite or
-                          SupportedDatabase.DuckDB or
                           SupportedDatabase.Firebird;
     }
 }
