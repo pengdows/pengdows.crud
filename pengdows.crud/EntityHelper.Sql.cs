@@ -175,7 +175,9 @@ public partial class EntityHelper<TEntity, TRowID>
         templates.InsertTemplate = BuildCreate(sampleEntity, context);
         
         // Update - entity fields as parameters
-        templates.UpdateTemplate = BuildUpdateAsync(sampleEntity, context).Result;
+        // Note: loadOriginal=false since we're building a template with a sample entity,
+        // not performing an actual update. This makes the call synchronous (no I/O).
+        templates.UpdateTemplate = BuildUpdateAsync(sampleEntity, loadOriginal: false, context).GetAwaiter().GetResult();
         
         // Delete by ID
         templates.DeleteByIdTemplate = BuildDelete(CreateTemplateRowId(), context);

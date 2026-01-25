@@ -10,7 +10,7 @@ namespace pengdows.crud.dialects;
 /// <summary>
 /// SQLite dialect with good standard compliance despite being embedded
 /// </summary>
-public class SqliteDialect : SqlDialect
+internal class SqliteDialect : SqlDialect
 {
     private readonly bool _systemDataSqlite;
 

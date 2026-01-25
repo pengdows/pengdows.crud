@@ -1,0 +1,10 @@
+# Transaction Management
+
+## Starting a transaction
+`TransactionContext` drives every explicit `BeginTransaction` call. The internal factory invokes `context.GetConnection` with the resolved `ExecutionType` so the configured connection strategy (Standard/SingleWriter/SingleConnection) can pick the right physical connection, and the connection is opened before the transaction starts. CockroachDB always moves to `IsolationLevel.Serializable`, `DuckDB` prefers the provider default, and read-only contexts are prohibited from opening write transactions (`NotSupportedException` if the caller requests `ExecutionType.Write` while the context is read-only). A dedicated `SemaphoreSlim` (`RealAsyncLocker`) guards the logical user lock so the caller can still buffer async work inside the transaction without racing commit/rollback, and `GetLock()` simply exposes that locker to helpers when needed.【F:pengdows.crud/TransactionContext.cs†L41-L195】
+
+## Committing, rolling back, and savepoints
+`CommitAsync`/`RollbackAsync` route through `CompleteTransactionWithWaitAsync`, which serializes completion behind another semaphore so commits/rollbacks never overlap. Savepoints and rollbacks-to-savepoint run as long as the dialect advertises support, and the dialect’s SQL is executed on the same transaction so you can roll back a subset of work without leaving the context. Every completion closes the tracked connection and notifies the metrics collector (`TransactionCompleted`) so telemetry stays accurate.【F:pengdows.crud/TransactionContext.cs†L246-L444】
+
+## Disposal and cleanup
+`TransactionContext` guards against forgotten commits. Dispose attempts to grab the completion lock, roll back the transaction if it is still open, and log errors if it cannot acquire the lock within a brief window. Async disposal behaves similarly without additional waits, and every path calls `CompleteTransactionMetrics` to ensure the metrics delta is recorded even when the transaction rolls back automatically. The transaction object and both semaphores are disposed once the work finishes.【F:pengdows.crud/TransactionContext.cs†L464-L545】

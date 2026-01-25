@@ -16,7 +16,7 @@ public static class HierarchicalIdRetrievalDemo
         var factory = SqliteFactory.Instance;
 
         // Test all database types and their strategy selection
-        var dialects = new Dictionary<string, SqlDialect>
+        var dialects = new Dictionary<string, ISqlDialect>
         {
             {"PostgreSQL", SqlDialectFactory.CreateDialectForType(SupportedDatabase.PostgreSql, factory, logger)},
             {"SQL Server", SqlDialectFactory.CreateDialectForType(SupportedDatabase.SqlServer, factory, logger)},
@@ -53,11 +53,11 @@ public static class HierarchicalIdRetrievalDemo
 
         // Demonstrate RETURNING clause
         var postgres = SqlDialectFactory.CreateDialectForType(SupportedDatabase.PostgreSql, factory, logger);
-        Console.WriteLine($"PostgreSQL RETURNING: {postgres.GetInsertReturningClause("user_id")}");
+        Console.WriteLine($"PostgreSQL RETURNING: {postgres.RenderInsertReturningClause("user_id")}");
 
         // Demonstrate OUTPUT clause
         var sqlServer = SqlDialectFactory.CreateDialectForType(SupportedDatabase.SqlServer, factory, logger);
-        Console.WriteLine($"SQL Server OUTPUT:   {sqlServer.GetInsertReturningClause("user_id")}");
+        Console.WriteLine($"SQL Server OUTPUT:   {sqlServer.RenderInsertReturningClause("user_id")}");
 
         // Demonstrate session function
         var mysql = SqlDialectFactory.CreateDialectForType(SupportedDatabase.MySql, factory, logger);

@@ -228,7 +228,7 @@ public partial class DatabaseContext
             try
             {
                 guard = GetLock();
-                guard.LockAsync().GetAwaiter().GetResult();
+                guard.Lock();
                 // Apply session settings for all connection modes.
                 // Prefer dialect-provided settings when available; fall back to precomputed string.
                 string settings;

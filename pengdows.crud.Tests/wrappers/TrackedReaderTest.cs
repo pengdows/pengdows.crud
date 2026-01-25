@@ -70,16 +70,26 @@ public class TrackedReaderTests
         public int DisposeCallCount { get; private set; }
         public bool WasDisposed => DisposeCallCount > 0;
 
+        public void Lock()
+        {
+            // No-op for test
+        }
+
         public Task LockAsync(CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;
         }
-        
+
         public Task<bool> TryLockAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
         {
             return Task.FromResult(true);
         }
-        
+
+        public void Dispose()
+        {
+            DisposeCallCount++;
+        }
+
         public ValueTask DisposeAsync()
         {
             DisposeCallCount++;
@@ -103,6 +113,11 @@ public class TrackedReaderTests
 
         public bool ObservedForbiddenContext => _observedForbidden.Task.IsCompleted && _observedForbidden.Task.Result;
 
+        public void Lock()
+        {
+            // No-op for test
+        }
+
         public Task LockAsync(CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;
@@ -111,6 +126,11 @@ public class TrackedReaderTests
         public Task<bool> TryLockAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
         {
             return Task.FromResult(true);
+        }
+
+        public void Dispose()
+        {
+            // Sync dispose for test
         }
 
         public async ValueTask DisposeAsync()

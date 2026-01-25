@@ -10,7 +10,7 @@ namespace pengdows.crud.dialects;
 /// <summary>
 /// DuckDB dialect with modern analytical SQL features and excellent standard compliance
 /// </summary>
-public class DuckDbDialect : SqlDialect
+internal class DuckDbDialect : SqlDialect
 {
     internal DuckDbDialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger)

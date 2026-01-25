@@ -488,6 +488,36 @@ public interface ISqlDialect
     /// </summary>
     bool InsertReturningClauseBeforeValues { get; }
 
+    /// <summary>
+    /// Dialect-specific limit on output/import parameters.
+    /// </summary>
+    int MaxOutputParameters { get; }
+
+    /// <summary>
+    /// Returns the preferred strategy for retrieving generated keys.
+    /// </summary>
+    GeneratedKeyPlan GetGeneratedKeyPlan();
+
+    /// <summary>
+    /// Indicates whether the dialect has a safe session-scoped last-id function.
+    /// </summary>
+    bool HasSessionScopedLastIdFunction();
+
+    /// <summary>
+    /// Gets the SQL syntax for RETURNING/OUTPUT clause to retrieve the inserted ID.
+    /// </summary>
+    string GetInsertReturningClause(string idColumnName);
+
+    /// <summary>
+    /// Generates a correlation token lookup query for the specified table.
+    /// </summary>
+    string GetCorrelationTokenLookupQuery(string tableName, string idColumnName, string correlationTokenColumn, string tokenParameterName);
+
+    /// <summary>
+    /// Generates a natural key lookup query for the specified table.
+    /// </summary>
+    string GetNaturalKeyLookupQuery(string tableName, string idColumnName, IReadOnlyList<string> columnNames, IReadOnlyList<string> parameterNames);
+
     // Connection pooling properties
     /// <summary>
     /// True when the database provider supports external connection pooling.

@@ -1,6 +1,5 @@
 #region
 
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
@@ -20,9 +19,15 @@ public sealed class DataReaderMapper : IDataReaderMapper
 {
     public static readonly IDataReaderMapper Instance = new DataReaderMapper();
 
-    private static readonly ConcurrentDictionary<SetterCacheKey, Delegate> _setterCache = new();
-    private static readonly ConcurrentDictionary<PlanCacheKey, object> _planCache = new();
-    private static readonly ConcurrentDictionary<PropertyLookupCacheKey, IReadOnlyDictionary<string, PropertyInfo>> _propertyLookupCache = new();
+    // Cache capacity limits to prevent unbounded memory growth with varied query shapes.
+    // These are LRU-ish bounded caches that evict oldest entries when capacity is exceeded.
+    private const int MaxPlanCacheSize = 128;
+    private const int MaxSetterCacheSize = 512;
+    private const int MaxPropertyLookupCacheSize = 64;
+
+    private static readonly BoundedCache<SetterCacheKey, Delegate> _setterCache = new(MaxSetterCacheSize);
+    private static readonly BoundedCache<PlanCacheKey, object> _planCache = new(MaxPlanCacheSize);
+    private static readonly BoundedCache<PropertyLookupCacheKey, IReadOnlyDictionary<string, PropertyInfo>> _propertyLookupCache = new(MaxPropertyLookupCacheSize);
     private static readonly MethodInfo _getFieldValueGenericMethod = ResolveGetFieldValueMethod();
 
     internal DataReaderMapper()

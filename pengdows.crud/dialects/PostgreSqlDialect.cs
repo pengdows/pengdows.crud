@@ -13,7 +13,7 @@ namespace pengdows.crud.dialects;
 /// <summary>
 /// PostgreSQL dialect with comprehensive standard support
 /// </summary>
-public class PostgreSqlDialect : SqlDialect
+internal class PostgreSqlDialect : SqlDialect
 {
     private const string DefaultSessionSettings = "SET standard_conforming_strings = on;\nSET client_min_messages = warning;";
     private static readonly IReadOnlyDictionary<string, string> ExpectedSessionSettings =

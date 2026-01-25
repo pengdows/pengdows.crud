@@ -58,6 +58,14 @@ se (see Connection Pooling).
 * KeepAlive, SingleWriter, and SingleConnection are best suited for embedded/local DBs or dev/test.
 * Each DatabaseContext can be safely used as a singleton (via DI or subclassing).
 
+## Shared connection locking & timeouts
+
+Persistent connections (KeepAlive's sentinel, the SingleWriter writer connection, and the SingleConnection pin) rely on `RealAsyncLocker` instances that serialize operations through a shared `SemaphoreSlim`. The lock includes a default `ModeLockTimeout` of 30 seconds (`DatabaseContextConfiguration.ModeLockTimeout` / `IDatabaseContextConfiguration.ModeLockTimeout`); exhausting that window throws `ModeContentionException`, which embeds a `ModeContentionSnapshot` describing the number of waiters and timeouts. Tune the timeout (or set it to `null`) to trade between waiting for transient contention and failing fast when the pool is saturated, and monitor `ModeContentionStats` through logs/metrics if you need to understand which operations are queuing.
+
+## Pool governors & acquisition windows
+
+The context also installs read and write `PoolGovernor` instances (enabled by `EnablePoolGovernor`/`DatabaseContextConfiguration.EnablePoolGovernor`) that gate access to each database provider’s connection pool. Each governor issues `PoolPermit` tokens with a default `PoolAcquireTimeout` of 5 seconds (`DatabaseContextConfiguration.PoolAcquireTimeout`) before opening a connection; shared connections grab their permit during initialization so the pool account for the pinned connection, and `SingleWriter`/`SingleConnection` adjust the permit counts to prevent writer-starvation (`AttachPinnedPermitIfNeeded`). If a governor cannot deliver a permit within the timeout, a `PoolSaturatedException` is raised along with statistics for the queue depth and permit usage so you can scale the pool or reduce concurrency. Override `ReadPoolSize`/`WritePoolSize` to clamp the governors to your desired limits or disable the governor entirely for experiments.
+
 ## Benefits
 
 * Avoids connection starvation and excessive licensing costs (per active connection).

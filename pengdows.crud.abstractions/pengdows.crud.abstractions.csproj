@@ -6,9 +6,6 @@
         <Nullable>enable</Nullable>
         <RootNamespace>pengdows.crud</RootNamespace>
         <PackageId>pengdows.crud.abstractions</PackageId>
-        <Version>1.1.0</Version>
-        <AssemblyVersion>1.1.0.0</AssemblyVersion>
-        <FileVersion>1.1.0.0</FileVersion>
         <Description>Interfaces and abstractions for the pengdows.crud library.</Description> 
         <Authors>Pengdows</Authors>
         <PackageTags>crud,nuget</PackageTags>

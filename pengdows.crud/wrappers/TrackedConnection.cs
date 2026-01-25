@@ -176,7 +176,7 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
     }
 
     // Test convenience constructor: allow specifying a name and logger directly
-    public TrackedConnection(DbConnection conn, string name, ILogger logger)
+    internal TrackedConnection(DbConnection conn, string name, ILogger logger)
         : this(conn, null, null, null, logger as ILogger<TrackedConnection> ?? NullLogger<TrackedConnection>.Instance)
     {
         _name = name ?? _name;

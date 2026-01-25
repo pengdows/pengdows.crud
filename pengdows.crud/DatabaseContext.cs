@@ -83,12 +83,6 @@ namespace pengdows.crud;
 /// Do not call back into the same <c>DatabaseContext</c> instance from metrics/event handlers. Treat callbacks as observers.
 /// </para>
 ///
-/// <para><strong>Version 2.0 Breaking Change:</strong></para>
-/// <para>
-/// <c>DatabaseContext</c> will be renamed to <c>DatabaseCoordinator</c> in version 2.0 to eliminate
-/// confusion with Entity Framework's <c>DbContext</c>. A compatibility shim will be provided during
-/// the transition period. See VERSION_2.0_PLANNING.md for migration details.
-/// </para>
 /// </remarks>
 public partial class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IContextIdentity, ISqlDialectProvider, IMetricsCollectorAccessor
 {

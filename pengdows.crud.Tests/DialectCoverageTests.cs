@@ -86,7 +86,7 @@ public class DialectCoverageTests
 
     [Theory]
     [MemberData(nameof(DialectData))]
-    public void WrapObjectName_WrapsIdentifier(SqlDialect dialect, string quote, bool supportsNamed, string marker, bool supportsSavepoints)
+    public void WrapObjectName_WrapsIdentifier(ISqlDialect dialect, string quote, bool supportsNamed, string marker, bool supportsSavepoints)
     {
         _ = supportsNamed;
         _ = marker;
@@ -98,7 +98,7 @@ public class DialectCoverageTests
 
     [Theory]
     [MemberData(nameof(DialectData))]
-    public void WrapObjectName_Null_ReturnsEmpty(SqlDialect dialect, string quote, bool supportsNamed, string marker, bool supportsSavepoints)
+    public void WrapObjectName_Null_ReturnsEmpty(ISqlDialect dialect, string quote, bool supportsNamed, string marker, bool supportsSavepoints)
     {
         _ = quote;
         _ = supportsNamed;
@@ -111,7 +111,7 @@ public class DialectCoverageTests
 
     [Theory]
     [MemberData(nameof(DialectData))]
-    public void MakeParameterName_UsesMarker(SqlDialect dialect, string quote, bool supportsNamed, string marker, bool supportsSavepoints)
+    public void MakeParameterName_UsesMarker(ISqlDialect dialect, string quote, bool supportsNamed, string marker, bool supportsSavepoints)
     {
         _ = quote;
         _ = supportsSavepoints;
@@ -137,7 +137,7 @@ public class DialectCoverageTests
 
     [Theory]
     [MemberData(nameof(DialectData))]
-    public void SupportsSavepoints_ReportsCapability(SqlDialect dialect, string quote, bool supportsNamed, string marker, bool supportsSavepoints)
+    public void SupportsSavepoints_ReportsCapability(ISqlDialect dialect, string quote, bool supportsNamed, string marker, bool supportsSavepoints)
     {
         _ = quote;
         _ = supportsNamed;

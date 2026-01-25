@@ -36,6 +36,58 @@ internal sealed class RealAsyncLocker : SafeAsyncDisposableBase, ILockerAsync
         _lockTimeout = lockTimeout;
     }
 
+    /// <inheritdoc />
+    public void Lock()
+    {
+        ThrowIfDisposed();
+        _logger.LogTrace("Waiting for lock (sync)");
+
+        // Try immediate acquisition first
+        if (_semaphore.Wait(0))
+        {
+            AcquireLockState();
+            _logger.LogTrace("Lock acquired (sync)");
+            return;
+        }
+
+        _stats?.RecordWaitStart();
+        var start = Stopwatch.GetTimestamp();
+        var acquired = false;
+        try
+        {
+            if (_lockTimeout.HasValue)
+            {
+                acquired = _semaphore.Wait(_lockTimeout.Value);
+                if (!acquired)
+                {
+                    var waited = Stopwatch.GetTimestamp() - start;
+                    _stats?.RecordTimeout(waited);
+                    throw new ModeContentionException(_mode, _stats?.GetSnapshot() ?? default, _lockTimeout.Value);
+                }
+            }
+            else
+            {
+                _semaphore.Wait();
+                acquired = true;
+            }
+
+            var waitTicks = Stopwatch.GetTimestamp() - start;
+            _stats?.RecordWaitEnd(waitTicks);
+        }
+        catch
+        {
+            if (acquired)
+            {
+                _semaphore.Release();
+            }
+
+            throw;
+        }
+
+        AcquireLockState();
+        _logger.LogTrace("Lock acquired (sync)");
+    }
+
     public async Task LockAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();

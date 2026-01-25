@@ -1,5 +1,6 @@
 #region
 
+using System;
 using System.Data;
 
 #endregion
@@ -12,6 +13,11 @@ namespace pengdows.crud;
 /// </summary>
 public interface ITransactionContext : IDatabaseContext
 {
+    /// <summary>
+    /// Identifier for the current transaction.
+    /// </summary>
+    Guid TransactionId { get; }
+
     /// <summary>
     /// Indicates whether the transaction has been committed.
     /// </summary>

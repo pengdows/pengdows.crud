@@ -32,7 +32,7 @@ namespace pengdows.crud.strategies.connection;
 ///
 /// DO NOT MODIFY: This strategy is specifically tuned for embedded database engine behavior
 /// </summary>
-public class KeepAliveConnectionStrategy : StandardConnectionStrategy
+internal class KeepAliveConnectionStrategy : StandardConnectionStrategy
 {
     internal KeepAliveConnectionStrategy(DatabaseContext context) : base(context)
     {
@@ -150,10 +150,10 @@ public class KeepAliveConnectionStrategy : StandardConnectionStrategy
 
 }
 
-public static class KeepAliveConnectionStrategyTestExtensions
+internal static class KeepAliveConnectionStrategyTestExtensions
 {
     // Convenience async helpers expected by tests
-    public static Task<ITrackedConnection> GetConnectionAsync(this KeepAliveConnectionStrategy _, DatabaseContext context, ExecutionType executionType, bool isShared)
+    internal static Task<ITrackedConnection> GetConnectionAsync(this KeepAliveConnectionStrategy _, DatabaseContext context, ExecutionType executionType, bool isShared)
     {
         var strat = new KeepAliveConnectionStrategy(context);
         var conn = strat.GetConnection(executionType, isShared);
@@ -161,7 +161,7 @@ public static class KeepAliveConnectionStrategyTestExtensions
         return Task.FromResult(conn);
     }
 
-    public static Task CloseConnectionAsync(this KeepAliveConnectionStrategy _, ITrackedConnection? connection, DatabaseContext context)
+    internal static Task CloseConnectionAsync(this KeepAliveConnectionStrategy _, ITrackedConnection? connection, DatabaseContext context)
     {
         var strat = new KeepAliveConnectionStrategy(context);
         return strat.ReleaseConnectionAsync(connection).AsTask();

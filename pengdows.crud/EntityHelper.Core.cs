@@ -34,8 +34,11 @@ namespace pengdows.crud;
 /// provided during the transition period. See VERSION_2.0_PLANNING.md for migration details.
 /// </para>
 /// </remarks>
+#pragma warning disable CS0618
 public partial class EntityHelper<TEntity, TRowID> :
+    ITableGateway<TEntity, TRowID>,
     IEntityHelper<TEntity, TRowID> where TEntity : class, new()
+#pragma warning restore CS0618
 {
     // Cache for compiled property setters
     private static readonly ConcurrentDictionary<PropertyInfo, Action<object, object?>> _propertySetters = new();

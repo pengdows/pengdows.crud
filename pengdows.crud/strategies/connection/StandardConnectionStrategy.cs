@@ -29,7 +29,7 @@ namespace pengdows.crud.strategies.connection;
 ///
 /// DO NOT MODIFY: This is the baseline strategy - changes here affect all production deployments
 /// </summary>
-public class StandardConnectionStrategy : SafeAsyncDisposableBase, IConnectionStrategy
+internal class StandardConnectionStrategy : SafeAsyncDisposableBase, IConnectionStrategy
 {
     protected readonly DatabaseContext _context;
 

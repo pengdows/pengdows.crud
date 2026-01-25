@@ -27,6 +27,16 @@
 - Organize by domain folders: `attributes/`, `dialects/`, `connection/`, `threading/`, `exceptions/`.
 - Refer to the project as `fakeDb` (lowercase f, uppercase D) in paths/docs.
 
+## API Visibility Principles
+- Program to interfaces whenever possible; concrete types should primarily exist to satisfy the interface contracts, and consumers should depend on the abstractions located under `pengdows.crud.abstractions`.
+- Expose `ITableGateway`, `IDatabaseContext`, `ISqlContainer`, etc., as the official surface area for `pengdows.crud` and keep implementation types internal unless there is a compelling reason to document them directly.
+- Hide implementation details as `internal` by default. Nothing outside of `DatabaseContext` should expose a public constructor—objects should either be resolved through factory helpers, DI, or internal constructors (exceptions require documented rationale). This keeps the SDK surface stable and highlights the interface-first programming model.
+
+## Interface-first Mandate
+- Always code against the interface contract; implementation classes exist only to fulfill the abstractions defined in `pengdows.crud.abstractions`.
+- Treat interfaces such as `ITableGateway`, `IDatabaseContext`, `ISqlContainer`, `ISqlDialect`, etc. as the primary SDK surface—new code should depend on those APIs rather than concrete helpers.
+- Keep concrete types internal unless a public contract is required, and do not introduce public constructors except for `DatabaseContext` (all other instantiations should happen through factory helpers, DI, or internal factory methods).
+
 ## Interfaces & Extension Points
 - `IDatabaseContext`: entry point. Create via DI or `new DatabaseContext(connStr, DbProviderFactory)`. Builds `ISqlContainer`, formats names/params, and controls connections/transactions.
 - `ISqlContainer`: compose SQL safely and execute.

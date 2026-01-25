@@ -12,7 +12,7 @@ namespace pengdows.crud.dialects;
 /// </summary>
 public static class SqlDialectFactory
 {
-    public static async Task<SqlDialect> CreateDialectAsync(
+public static async Task<ISqlDialect> CreateDialectAsync(
         ITrackedConnection connection,
         DbProviderFactory factory,
         ILoggerFactory loggerFactory)
@@ -30,7 +30,7 @@ public static class SqlDialectFactory
         await dialect.DetectDatabaseInfoAsync(connection).ConfigureAwait(false);
         return dialect;
     }
-    public static SqlDialect CreateDialect(
+    public static ISqlDialect CreateDialect(
         ITrackedConnection connection,
         DbProviderFactory factory)
     {
@@ -38,7 +38,7 @@ public static class SqlDialectFactory
     }
 
 
-    public static SqlDialect CreateDialect(
+    public static ISqlDialect CreateDialect(
         ITrackedConnection connection,
         DbProviderFactory factory,
            ILoggerFactory loggerFactory)
@@ -47,7 +47,7 @@ public static class SqlDialectFactory
         return CreateDialectAsync(connection, factory, loggerFactory).GetAwaiter().GetResult();
     }
 
-    public static SqlDialect CreateDialectForType(
+    public static ISqlDialect CreateDialectForType(
         SupportedDatabase databaseType,
         DbProviderFactory factory,
         ILogger logger)

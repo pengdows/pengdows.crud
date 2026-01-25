@@ -18,14 +18,6 @@ namespace pengdows.crud;
 /// Handles parameter creation, connection lifetime, quoting logic,
 /// transaction configuration, and dialect-specific behavior.
 /// </summary>
-/// <remarks>
-/// <para><strong>Version 2.0 Breaking Change:</strong></para>
-/// <para>
-/// <c>IDatabaseContext</c> will be renamed to <c>IDatabaseCoordinator</c> in version 2.0.
-/// A compatibility shim will be provided during the transition period.
-/// See VERSION_2.0_PLANNING.md for migration details.
-/// </para>
-/// </remarks>
 public interface IDatabaseContext : ISafeAsyncDisposableBase
 {
     /// <summary>
@@ -34,9 +26,24 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     DbMode ConnectionMode { get; }
 
     /// <summary>
+    /// Global identifier used for tracing or tying back to instrumentation.
+    /// </summary>
+    Guid RootId { get; }
+
+    /// <summary>
+    /// Intended read/write posture of this context.
+    /// </summary>
+    ReadWriteMode ReadWriteMode { get; }
+
+    /// <summary>
     /// Gets the base connection string for this context.
     /// </summary>
     string ConnectionString { get; }
+
+    /// <summary>
+    /// Human-readable name assigned to the context for diagnostics/scoping.
+    /// </summary>
+    string Name { get; set; }
 
     /// <summary>
     /// Gets the DbDataSource if one was provided (e.g., NpgsqlDataSource).
@@ -69,6 +76,11 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// The hard limit of parameters this provider supports per statement.
     /// </summary>
     int MaxParameterLimit { get; }
+
+    /// <summary>
+    /// The hard limit of output parameters this provider supports per statement.
+    /// </summary>
+    int MaxOutputParameters { get; }
 
     /// <summary>
     /// The hard limit of output parameters this provider supports per statement.

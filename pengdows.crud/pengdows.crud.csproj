@@ -4,9 +4,6 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <PackageId>pengdows.crud</PackageId>
-        <Version>1.1.0</Version>
-        <AssemblyVersion>1.1.0.0</AssemblyVersion>
-        <FileVersion>1.1.0.0</FileVersion>
         <Description>High Speed Lightweight DB Access</Description>
         <Authors>Pengdows</Authors>
         <PackageTags>crud,nuget</PackageTags>

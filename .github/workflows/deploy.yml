@@ -146,9 +146,13 @@ jobs:
       - name: Generate version number
         id: version
         run: |
-          epoch=$(date +%s)
-          echo "version=1.0.${epoch}.0" >> "$GITHUB_OUTPUT"
-          echo "version_short=1.0.${epoch}" >> "$GITHUB_OUTPUT"
+          version=$(grep -m1 -oP '(?<=<Version>)[^<]+' Directory.Build.props)
+          if [[ -z "$version" ]]; then
+            echo "Version not found in Directory.Build.props"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "version_short=$version" >> "$GITHUB_OUTPUT"
 
       - name: Build
         run: dotnet build pengdows.crud.sln -c Release
@@ -198,7 +202,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add pengdows.crud/pengdows.crud.csproj pengdows.crud.abstractions/pengdows.crud.abstractions.csproj pengdows.crud.fakeDb/pengdows.crud.fakeDb.csproj
+          git add Directory.Build.props
           git commit -m "Bump version to v${{ steps.version.outputs.version_short }}" || echo "No changes to commit"
 
       - name: Push version bump commit

@@ -56,6 +56,12 @@ The library follows a layered architecture with these key components:
 - SQL dialect abstraction supports multiple databases (SQL Server, PostgreSQL, Oracle, MySQL, SQLite, etc.)
 - Connection strategies: Standard, KeepAlive, SingleWriter, SingleConnection
 - Multi-tenancy support via tenant resolution
+- **API visibility**: Prefer programming against the interfaces defined in `pengdows.crud.abstractions`. Expose only abstractions such as `ITableGateway`, `IDatabaseContext`, `ISqlContainer`, and `ISqlDialect`; keep concrete types internal whenever feasible. SDK consumers should never instantiate implementation classes directly unless there is no interface-based alternative. DatabaseContext is the only type that may offer a public constructor; every other type should be created through factory helpers, DI, or `internal` factories unless there is a documented exception.
+
+### Interface-first Mandate
+- Always depend on the interfaces in `pengdows.crud.abstractions`; implementation classes exist solely to fulfill those contracts.
+- Make the interface surface (e.g., `ITableGateway`, `IDatabaseContext`, `ISqlContainer`, `ISqlDialect`) the primary way to program against `pengdows.crud` rather than concrete helpers.
+- Keep concrete implementations internal when there is no compelling reason to expose them, and avoid public constructors except for `DatabaseContext`—all other instances should be created via factory helpers, DI, or internal factory methods.
 
 ### Supported Database Dialects
 

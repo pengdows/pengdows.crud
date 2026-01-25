@@ -11,7 +11,7 @@ namespace pengdows.crud.dialects;
 /// <summary>
 /// SQL Server dialect with version-specific feature support
 /// </summary>
-public class SqlServerDialect : SqlDialect
+internal class SqlServerDialect : SqlDialect
 {
     private const string DefaultSessionSettings =
         // Minimal, individual SET statements; no NOCOUNT wrappers; semicolons used only as delimiters.

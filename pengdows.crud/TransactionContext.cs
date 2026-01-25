@@ -110,6 +110,14 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
     public bool RCSIEnabled => _context.RCSIEnabled;
     public bool SnapshotIsolationEnabled => _context.SnapshotIsolationEnabled;
     public string ConnectionString => _context.ConnectionString;
+
+    public string Name
+    {
+        get => _context.Name;
+        set => _context.Name = value;
+    }
+
+    public ReadWriteMode ReadWriteMode => _context.ReadWriteMode;
     public DbDataSource? DataSource => _context.DataSource;
     public int MaxParameterLimit => _context.MaxParameterLimit;
     public int MaxOutputParameters => (_dialect as SqlDialect)?.MaxOutputParameters ?? 0;

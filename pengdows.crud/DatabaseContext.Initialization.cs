@@ -108,7 +108,7 @@ public partial class DatabaseContext
         try
         {
             initLocker = GetLock();
-            initLocker.LockAsync().GetAwaiter().GetResult();
+            initLocker.Lock();
             Interlocked.Exchange(ref _initializing, 1);
             if (configuration is null)
             {
@@ -261,7 +261,7 @@ public partial class DatabaseContext
         try
         {
             initLocker = GetLock();
-            initLocker.LockAsync().GetAwaiter().GetResult();
+            initLocker.Lock();
             Interlocked.Exchange(ref _initializing, 1);
             if (configuration is null)
             {

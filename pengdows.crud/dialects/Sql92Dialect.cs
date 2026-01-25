@@ -7,7 +7,7 @@ namespace pengdows.crud.dialects;
 /// <summary>
 /// Fallback SQL-92 dialect for unsupported databases.
 /// </summary>
-public class Sql92Dialect : SqlDialect
+internal class Sql92Dialect : SqlDialect
 {
     internal Sql92Dialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger)
@@ -17,4 +17,3 @@ public class Sql92Dialect : SqlDialect
     public override SupportedDatabase DatabaseType => SupportedDatabase.Unknown;
     public override string ParameterMarker => "@";
 }
-

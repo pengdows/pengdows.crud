@@ -88,7 +88,7 @@ public class SqlDialectBranchTests
             dialect.GetNaturalKeyLookupQuery("people", "id", new List<string>(), new List<string>()));
     }
 
-    private static SqlDialect CreateDialect(SupportedDatabase db)
+    private static ISqlDialect CreateDialect(SupportedDatabase db)
     {
         var factory = new fakeDbFactory(db);
         var logger = NullLoggerFactory.Instance.CreateLogger("SqlDialect");

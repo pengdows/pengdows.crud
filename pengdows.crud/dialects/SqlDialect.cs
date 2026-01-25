@@ -16,7 +16,7 @@ namespace pengdows.crud.dialects;
 /// <summary>
 /// Base SQL dialect implementing standard SQL behaviors with feature detection
 /// </summary>
-public abstract class SqlDialect:ISqlDialect
+internal abstract class SqlDialect:ISqlDialect
 {
     protected readonly DbProviderFactory Factory;
     protected readonly ILogger Logger;

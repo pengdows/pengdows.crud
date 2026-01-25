@@ -11,10 +11,10 @@ namespace pengdows.crud;
 
 public class DataSourceInformation : IDataSourceInformation
 {
-    private readonly SqlDialect _dialect;
+    private readonly ISqlDialect _dialect;
     private int? _maxOutputParameters;
 
-    internal DataSourceInformation(SqlDialect dialect)
+    internal DataSourceInformation(ISqlDialect dialect)
     {
         _dialect = dialect ?? throw new ArgumentNullException(nameof(dialect));
         var info = dialect.IsInitialized

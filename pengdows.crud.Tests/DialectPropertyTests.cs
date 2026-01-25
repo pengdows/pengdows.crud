@@ -177,7 +177,7 @@ public class DialectPropertyTests
 
     [Theory]
     [MemberData(nameof(DialectData))]
-    public void Dialect_properties_match_expected(SqlDialect dialect, DialectProps expected)
+    public void Dialect_properties_match_expected(ISqlDialect dialect, DialectProps expected)
     {
         Assert.Equal(expected.DatabaseType, dialect.DatabaseType);
         Assert.NotEqual(SupportedDatabase.Unknown, dialect.DatabaseType);

@@ -9,7 +9,7 @@ namespace pengdows.crud.dialects;
 /// MariaDB dialect. Inherits MySQL compatibility with MariaDB-specific feature differences
 /// (e.g., CTEs, window functions available in 10.2+, no native JSON type).
 /// </summary>
-public class MariaDbDialect : MySqlDialect
+internal class MariaDbDialect : MySqlDialect
 {
     internal MariaDbDialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger)

@@ -206,6 +206,12 @@ var ctx = new DatabaseContext("Data Source=:memory:", SqliteFactory.Instance);
 - LocalDB unload prevention
 - Optimal connection pooling per database type
 
+#### Shared connection locking & timeouts
+`SingleWriter` and `SingleConnection` (and the sentinel connection kept open in `KeepAlive`) rely on `RealAsyncLocker` to serialize access to the pinned connection. The lock has a default `ModeLockTimeout` of 30 seconds (`DatabaseContextConfiguration.ModeLockTimeout` / `IDatabaseContextConfiguration.ModeLockTimeout`), and if an operation cannot grab the shared lock within that window a `ModeContentionException` is thrown with a contention snapshot. You can tune or disable the timeout to match your workload; the lock statistics remain available for logging/metrics so you can detect backpressure before it impacts throughput.
+
+#### Connection pool governance
+`DatabaseContext` also installs lightweight `PoolGovernor` instances for the read and write pools (enabled by `EnablePoolGovernor`/`DatabaseContextConfiguration.EnablePoolGovernor`, default `true`) and enforces a `PoolAcquireTimeout` of 5 seconds (`DatabaseContextConfiguration.PoolAcquireTimeout`). Each governor tracks active requests and hands out `PoolPermit` tokens before opening provider connections; shared connections in `SingleWriter`/`SingleConnection` modes automatically retain permits while pinned. If the governor cannot deliver a permit within the timeout, a `PoolSaturatedException` is raised along with a snapshot of the queue and permit counts, so you fail fast instead of exhausting the provider pool. Override `ReadPoolSize`/`WritePoolSize` to tune effective limits, or disable the governor entirely for tuning experiments.
+
 **Neither EF Core nor Dapper has connection strategy abstraction.**
 
 ### Database-Specific Optimizations (Automatic)
