@@ -27,7 +27,9 @@ public class fakeDbDataReader : DbDataReader
         _index >= 0 && _index < _rows.Count ? _rows[_index] : null;
 
     private static string[] GetKeys(Dictionary<string, object> row)
-        => row.Keys.ToArray();
+    {
+        return row.Keys.ToArray();
+    }
 
     public override int FieldCount
         => CurrentRow?.Count
@@ -37,12 +39,13 @@ public class fakeDbDataReader : DbDataReader
         => _rows.Count > 0;
 
     private bool _isClosed;
-    
+
     // Stubs for unused members
     public override int Depth => 0;
     public override int RecordsAffected => 0;
 
     public override object this[int i] => GetValue(i);
+
     public override object this[string name]
     {
         get
@@ -52,6 +55,7 @@ public class fakeDbDataReader : DbDataReader
             {
                 throw new IndexOutOfRangeException("No current row.");
             }
+
             return row[name];
         }
     }
@@ -77,7 +81,7 @@ public class fakeDbDataReader : DbDataReader
     public override object GetValue(int i)
     {
         var row = CurrentRow ?? (_rows.Count > 0 ? _rows[0] : null)
-                  ?? throw new IndexOutOfRangeException("No data rows.");
+            ?? throw new IndexOutOfRangeException("No data rows.");
         var keys = GetKeys(row);
         return row[keys[i]];
     }
@@ -85,17 +89,18 @@ public class fakeDbDataReader : DbDataReader
     public override int GetValues(object[] values)
     {
         var count = Math.Min(values.Length, FieldCount);
-        for (int i = 0; i < count; i++)
+        for (var i = 0; i < count; i++)
         {
             values[i] = GetValue(i);
         }
+
         return count;
     }
 
     public override string GetName(int i)
     {
         var row = CurrentRow ?? (_rows.Count > 0 ? _rows[0] : null)
-                  ?? throw new IndexOutOfRangeException("No data rows.");
+            ?? throw new IndexOutOfRangeException("No data rows.");
         var keys = GetKeys(row);
         return keys[i];
     }
@@ -103,7 +108,7 @@ public class fakeDbDataReader : DbDataReader
     public override int GetOrdinal(string name)
     {
         var row = CurrentRow ?? (_rows.Count > 0 ? _rows[0] : null)
-                  ?? throw new IndexOutOfRangeException("No data rows.");
+            ?? throw new IndexOutOfRangeException("No data rows.");
         var keys = GetKeys(row);
         return Array.IndexOf(keys, name);
     }
@@ -149,6 +154,7 @@ public class fakeDbDataReader : DbDataReader
         {
             Array.Copy(bytes, (int)dataOffset, buffer, bufferOffset, toCopy);
         }
+
         return toCopy;
     }
 
@@ -165,6 +171,7 @@ public class fakeDbDataReader : DbDataReader
         {
             data.CopyTo((int)dataOffset, buffer, bufferOffset, (int)copyLength);
         }
+
         return copyLength;
     }
 
@@ -243,7 +250,7 @@ public class fakeDbDataReader : DbDataReader
     {
         // Return a new reader with the nested data - this is rarely used in practice
         // Most databases don't support hierarchical data in GetData()
-        
+
         // Check if we have a valid row position before trying to access data
         if (_index >= 0 && _index < _rows.Count)
         {
@@ -253,7 +260,7 @@ public class fakeDbDataReader : DbDataReader
                 return new fakeDbDataReader(nestedRows);
             }
         }
-        
+
         // For non-nested data or invalid position, return an empty reader
         return new fakeDbDataReader(new List<Dictionary<string, object>>());
     }

@@ -46,7 +46,8 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
             SupportedDatabase.SqlServer => CreateSqlServerSpatial(value),
             SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb => CreatePostgresSpatial(value),
             SupportedDatabase.MySql or SupportedDatabase.MariaDb => CreateMySqlSpatial(value),
-            SupportedDatabase.Oracle => value.ProviderValue ?? throw new InvalidOperationException("Oracle spatial parameters require provider-specific objects. Use WithProviderValue to supply SDO_GEOMETRY."),
+            SupportedDatabase.Oracle => value.ProviderValue ?? throw new InvalidOperationException(
+                "Oracle spatial parameters require provider-specific objects. Use WithProviderValue to supply SDO_GEOMETRY."),
             _ => ExtractDefaultSpatial(value)
         };
     }
@@ -76,6 +77,7 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
                         result = specific;
                         return true;
                     }
+
                     result = default!;
                     return false;
             }
@@ -100,7 +102,8 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
         var targetType = typeof(Geometry).IsAssignableFrom(value.GetType()) ? sqlGeometryType : sqlGeographyType;
         if (targetType == null)
         {
-            throw new InvalidOperationException("Microsoft.SqlServer.Types is required for SQL Server spatial parameters. Reference the package or provide a provider-specific instance.");
+            throw new InvalidOperationException(
+                "Microsoft.SqlServer.Types is required for SQL Server spatial parameters. Reference the package or provide a provider-specific instance.");
         }
 
         var methodName = !value.WellKnownBinary.IsEmpty ? "STGeomFromWKB" : "STGeomFromText";
@@ -116,7 +119,8 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
 
         if (sqlBytesType == null || sqlCharsType == null || sqlStringType == null || sqlIntType == null)
         {
-            throw new InvalidOperationException("SQL Server spatial conversion requires System.Data.SqlTypes and Microsoft.SqlServer.Types assemblies.");
+            throw new InvalidOperationException(
+                "SQL Server spatial conversion requires System.Data.SqlTypes and Microsoft.SqlServer.Types assemblies.");
         }
 
         if (!value.WellKnownBinary.IsEmpty)
@@ -124,7 +128,8 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
             var ctor = sqlBytesType.GetConstructor(new[] { typeof(byte[]) });
             var sqlBytes = ctor?.Invoke(new object[] { value.WellKnownBinary.ToArray() });
             var srid = Activator.CreateInstance(sqlIntType, value.Srid);
-            return targetType.GetMethod(methodName, new[] { sqlBytesType, sqlIntType })?.Invoke(null, new[] { sqlBytes!, srid! });
+            return targetType.GetMethod(methodName, new[] { sqlBytesType, sqlIntType })
+                ?.Invoke(null, new[] { sqlBytes!, srid! });
         }
 
         var text = value.WellKnownText ?? value.GeoJson;
@@ -137,7 +142,8 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
         var sqlChars = sqlCharsCtor?.Invoke(new object[] { text.ToCharArray() });
         var sridValue = Activator.CreateInstance(sqlIntType, value.Srid);
 
-        return targetType.GetMethod(methodName, new[] { sqlCharsType, sqlIntType })?.Invoke(null, new[] { sqlChars!, sridValue! });
+        return targetType.GetMethod(methodName, new[] { sqlCharsType, sqlIntType })
+            ?.Invoke(null, new[] { sqlChars!, sridValue! });
     }
 
     private object? CreatePostgresSpatial(SpatialValue value)
@@ -220,7 +226,9 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
                 {
                     var sridProp = type.GetProperty("STSrid");
                     var sridValue = sridProp?.GetValue(value);
-                    var srid = sridValue != null ? Convert.ToInt32(sridValue, System.Globalization.CultureInfo.InvariantCulture) : 4326;
+                    var srid = sridValue != null
+                        ? Convert.ToInt32(sridValue, System.Globalization.CultureInfo.InvariantCulture)
+                        : 4326;
                     var spatial = FromBinary(bytes, provider);
                     return WrapWithProvider(spatial, value);
                 }

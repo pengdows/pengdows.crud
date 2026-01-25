@@ -117,7 +117,8 @@ public class DialectAsyncErrorPathTests
     [InlineData(3, 0, 0, SqlStandardLevel.Sql2008)]
     [InlineData(2, 0, 0, SqlStandardLevel.Sql2003)]
     [InlineData(1, 0, 0, SqlStandardLevel.Sql92)]
-    public void FirebirdDialect_DetermineStandardCompliance_VariousVersions_ReturnsCorrectLevel(int major, int minor, int build, SqlStandardLevel expected)
+    public void FirebirdDialect_DetermineStandardCompliance_VariousVersions_ReturnsCorrectLevel(int major, int minor,
+        int build, SqlStandardLevel expected)
     {
         var factory = new fakeDbFactory(SupportedDatabase.Firebird.ToString());
         var dialect = new FirebirdDialect(factory, NullLogger.Instance);
@@ -148,7 +149,7 @@ public class DialectAsyncErrorPathTests
         var dialect = new DuckDbDialect(factory, NullLogger.Instance);
 
         using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=DuckDB", factory);
-        var settings = dialect.GetConnectionSessionSettings(ctx, readOnly: false);
+        var settings = dialect.GetConnectionSessionSettings(ctx, false);
 
         Assert.NotNull(settings);
     }

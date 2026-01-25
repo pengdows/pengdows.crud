@@ -118,18 +118,35 @@ public class DatabaseDetectionServiceBranchTests
             _productName = productName;
         }
 
-        [AllowNull]
-        public override string ConnectionString { get; set; } = string.Empty;
+        [AllowNull] public override string ConnectionString { get; set; } = string.Empty;
         public override string Database => "TestDb";
         public override string DataSource => "TestSource";
         public override string ServerVersion => "1.0";
         public override ConnectionState State => _state;
 
-        public override void Open() => _state = ConnectionState.Open;
-        public override void Close() => _state = ConnectionState.Closed;
-        public override void ChangeDatabase(string databaseName) { }
-        protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel) => throw new NotSupportedException();
-        protected override DbCommand CreateDbCommand() => throw new NotSupportedException();
+        public override void Open()
+        {
+            _state = ConnectionState.Open;
+        }
+
+        public override void Close()
+        {
+            _state = ConnectionState.Closed;
+        }
+
+        public override void ChangeDatabase(string databaseName)
+        {
+        }
+
+        protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel)
+        {
+            throw new NotSupportedException();
+        }
+
+        protected override DbCommand CreateDbCommand()
+        {
+            throw new NotSupportedException();
+        }
 
         public override DataTable GetSchema(string collectionName)
         {
@@ -152,11 +169,31 @@ public class DatabaseDetectionServiceBranchTests
     }
 
     // Minimal factory stubs for type name detection testing
-    private sealed class NpgsqlFactory : DbProviderFactory { }
-    private sealed class MySqlFactory : DbProviderFactory { }
-    private sealed class MariaDbFactory : DbProviderFactory { }
-    private sealed class SqlServerFactory : DbProviderFactory { }
-    private sealed class OracleFactory : DbProviderFactory { }
-    private sealed class FirebirdFactory : DbProviderFactory { }
-    private sealed class DuckDbFactory : DbProviderFactory { }
+    private sealed class NpgsqlFactory : DbProviderFactory
+    {
+    }
+
+    private sealed class MySqlFactory : DbProviderFactory
+    {
+    }
+
+    private sealed class MariaDbFactory : DbProviderFactory
+    {
+    }
+
+    private sealed class SqlServerFactory : DbProviderFactory
+    {
+    }
+
+    private sealed class OracleFactory : DbProviderFactory
+    {
+    }
+
+    private sealed class FirebirdFactory : DbProviderFactory
+    {
+    }
+
+    private sealed class DuckDbFactory : DbProviderFactory
+    {
+    }
 }

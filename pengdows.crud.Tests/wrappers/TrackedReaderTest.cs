@@ -24,12 +24,14 @@ public class TrackedReaderTests
         public bool WasClosed => CloseCallCount > 0;
 
         private string _connectionString = "test";
+
         [AllowNull]
         public string ConnectionString
         {
             get => _connectionString;
             set => _connectionString = value ?? string.Empty;
         }
+
         public int ConnectionTimeout => 30;
         public string Database => "testdb";
         public string DataSource => "localhost";
@@ -37,27 +39,82 @@ public class TrackedReaderTests
         public ConnectionState State => ConnectionState.Open;
         public ConnectionLocalState LocalState { get; } = new();
 
-        public void Close() => CloseCallCount++;
-        public void Dispose() => Close();
-        public ValueTask DisposeAsync() { Close(); return ValueTask.CompletedTask; }
-        public void Open() { }
-        public Task OpenAsync() => Task.CompletedTask;
-        public Task OpenAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-        public IDbTransaction BeginTransaction() => throw new NotImplementedException();
-        public IDbTransaction BeginTransaction(IsolationLevel il) => throw new NotImplementedException();
-        public void ChangeDatabase(string databaseName) => throw new NotImplementedException();
-        public IDbCommand CreateCommand() => throw new NotImplementedException();
-        public DataTable GetSchema() => new DataTable();
-        public DataTable GetSchema(string dataSourceInformation) => new DataTable();
-        public DataTable GetSchema(string collectionName, string?[]? restrictionValues) => new DataTable();
-        public ILockerAsync GetLock() => new TestLockerAsync();
+        public void Close()
+        {
+            CloseCallCount++;
+        }
+
+        public void Dispose()
+        {
+            Close();
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            Close();
+            return ValueTask.CompletedTask;
+        }
+
+        public void Open()
+        {
+        }
+
+        public Task OpenAsync()
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task OpenAsync(CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
+
+        public IDbTransaction BeginTransaction()
+        {
+            throw new NotImplementedException();
+        }
+
+        public IDbTransaction BeginTransaction(IsolationLevel il)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void ChangeDatabase(string databaseName)
+        {
+            throw new NotImplementedException();
+        }
+
+        public IDbCommand CreateCommand()
+        {
+            throw new NotImplementedException();
+        }
+
+        public DataTable GetSchema()
+        {
+            return new DataTable();
+        }
+
+        public DataTable GetSchema(string dataSourceInformation)
+        {
+            return new DataTable();
+        }
+
+        public DataTable GetSchema(string collectionName, string?[]? restrictionValues)
+        {
+            return new DataTable();
+        }
+
+        public ILockerAsync GetLock()
+        {
+            return new TestLockerAsync();
+        }
     }
-    
+
     private class TestAsyncDisposable : IAsyncDisposable
     {
         public int DisposeCallCount { get; private set; }
         public bool WasDisposed => DisposeCallCount > 0;
-        
+
         public ValueTask DisposeAsync()
         {
             DisposeCallCount++;
@@ -104,7 +161,9 @@ public class TrackedReaderTests
     private sealed class ContextSensitiveLocker : ILockerAsync
     {
         private readonly SynchronizationContext _forbidden;
-        private readonly TaskCompletionSource<bool> _observedForbidden = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        private readonly TaskCompletionSource<bool> _observedForbidden =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public ContextSensitiveLocker(SynchronizationContext forbidden)
         {
@@ -238,18 +297,18 @@ public class TrackedReaderTests
             ["col"] = "value2",
             ["field0"] = "value"
         };
-        
+
         using var reader = new fakeDbDataReader(new[] { row });
         reader.Read(); // Position at first row
-        
+
         var connection = new TestTrackedConnection();
         var locker = new TestLockerAsync();
 
         var tracked = new TrackedReader(reader, connection, locker, false);
 
         Assert.Equal(2, tracked.FieldCount);
-        Assert.Equal("value2", tracked[0]);  // First column "col" has "value2"
-        Assert.Equal("value", tracked[1]);   // Second column "field0" has "value"  
+        Assert.Equal("value2", tracked[0]); // First column "col" has "value2"
+        Assert.Equal("value", tracked[1]); // Second column "field0" has "value"  
         Assert.Equal("value2", tracked["col"]);
         Assert.Equal("value", tracked["field0"]);
     }
@@ -261,7 +320,7 @@ public class TrackedReaderTests
         var connection = new TestTrackedConnection();
         var locker = new TestLockerAsync();
 
-        var tracked = new TrackedReader(reader, connection, locker, shouldCloseConnection: false);
+        var tracked = new TrackedReader(reader, connection, locker, false);
 
         var result = tracked.Read();
 
@@ -282,7 +341,7 @@ public class TrackedReaderTests
         var connection = new TestTrackedConnection();
         var locker = new TestLockerAsync();
 
-        var tracked = new TrackedReader(reader, connection, locker, shouldCloseConnection: true);
+        var tracked = new TrackedReader(reader, connection, locker, true);
 
         var first = await tracked.ReadAsync();
         Assert.True(first);
@@ -312,7 +371,7 @@ public class TrackedReaderTests
         var connection = new TestTrackedConnection();
         var locker = new TestLockerAsync();
 
-        var tracked = new TrackedReader(reader, connection, locker, shouldCloseConnection: true);
+        var tracked = new TrackedReader(reader, connection, locker, true);
 
         await tracked.DisposeAsync();
 
@@ -327,7 +386,7 @@ public class TrackedReaderTests
         var connection = new TestTrackedConnection();
         var locker = new TestLockerAsync();
 
-        var tracked = new TrackedReader(reader, connection, locker, shouldCloseConnection: false);
+        var tracked = new TrackedReader(reader, connection, locker, false);
 
         await tracked.DisposeAsync();
 
@@ -342,7 +401,7 @@ public class TrackedReaderTests
         var connection = new TestTrackedConnection();
         var locker = new TestLockerAsync();
 
-        var tracked = new TrackedReader(reader, connection, locker, shouldCloseConnection: false);
+        var tracked = new TrackedReader(reader, connection, locker, false);
 
         tracked.Dispose();
 
@@ -409,7 +468,7 @@ public class TrackedReaderTests
         SynchronizationContext.SetSynchronizationContext(blockingContext);
         try
         {
-            var tracked = new TrackedReader(reader, connection, locker, shouldCloseConnection: false);
+            var tracked = new TrackedReader(reader, connection, locker, false);
 
             tracked.Dispose();
 

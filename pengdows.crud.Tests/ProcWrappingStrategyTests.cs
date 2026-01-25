@@ -14,7 +14,8 @@ public class ProcWrappingStrategyTests
 {
     private DatabaseContext CreateContextWithStyle(ProcWrappingStyle style)
     {
-        var ctx = new DatabaseContext("Data Source=:memory:;EmulatedProduct=SqlServer", new fakeDbFactory(SupportedDatabase.SqlServer));
+        var ctx = new DatabaseContext("Data Source=:memory:;EmulatedProduct=SqlServer",
+            new fakeDbFactory(SupportedDatabase.SqlServer));
         ctx.ProcWrappingStyle = style;
         return ctx;
     }
@@ -33,12 +34,12 @@ public class ProcWrappingStrategyTests
         using var ctx = CreateContextWithStyle(ProcWrappingStyle.Exec);
         using var sc = CreateContainer(ctx);
 
-        var read = sc.WrapForStoredProc(ExecutionType.Read, includeParameters: true);
-        var write = sc.WrapForStoredProc(ExecutionType.Write, includeParameters: true);
+        var read = sc.WrapForStoredProc(ExecutionType.Read, true);
+        var write = sc.WrapForStoredProc(ExecutionType.Write, true);
         Assert.Equal("EXEC \"dbo\".\"Sqltest\" @p0, @p1", read);
         Assert.Equal("EXEC \"dbo\".\"Sqltest\" @p0, @p1", write);
 
-        var noArgs = sc.WrapForStoredProc(ExecutionType.Read, includeParameters: false);
+        var noArgs = sc.WrapForStoredProc(ExecutionType.Read, false);
         Assert.Equal("EXEC \"dbo\".\"Sqltest\"", noArgs);
     }
 
@@ -48,10 +49,10 @@ public class ProcWrappingStrategyTests
         using var ctx = CreateContextWithStyle(ProcWrappingStyle.Call);
         using var sc = CreateContainer(ctx);
 
-        var s = sc.WrapForStoredProc(ExecutionType.Read, includeParameters: true);
+        var s = sc.WrapForStoredProc(ExecutionType.Read, true);
         Assert.Equal("CALL \"dbo\".\"Sqltest\"(@p0, @p1)", s);
 
-        var noArgs = sc.WrapForStoredProc(ExecutionType.Read, includeParameters: false);
+        var noArgs = sc.WrapForStoredProc(ExecutionType.Read, false);
         Assert.Equal("CALL \"dbo\".\"Sqltest\"()", noArgs);
     }
 
@@ -61,12 +62,12 @@ public class ProcWrappingStrategyTests
         using var ctx = CreateContextWithStyle(ProcWrappingStyle.PostgreSQL);
         using var sc = CreateContainer(ctx);
 
-        var read = sc.WrapForStoredProc(ExecutionType.Read, includeParameters: true);
-        var write = sc.WrapForStoredProc(ExecutionType.Write, includeParameters: true);
+        var read = sc.WrapForStoredProc(ExecutionType.Read, true);
+        var write = sc.WrapForStoredProc(ExecutionType.Write, true);
         Assert.Equal("SELECT * FROM \"dbo\".\"Sqltest\"(@p0, @p1)", read);
         Assert.Equal("CALL \"dbo\".\"Sqltest\"(@p0, @p1)", write);
 
-        var noArgs = sc.WrapForStoredProc(ExecutionType.Read, includeParameters: false);
+        var noArgs = sc.WrapForStoredProc(ExecutionType.Read, false);
         Assert.Equal("SELECT * FROM \"dbo\".\"Sqltest\"()", noArgs);
     }
 
@@ -76,10 +77,10 @@ public class ProcWrappingStrategyTests
         using var ctx = CreateContextWithStyle(ProcWrappingStyle.Oracle);
         using var sc = CreateContainer(ctx);
 
-        var s = sc.WrapForStoredProc(ExecutionType.Read, includeParameters: true);
+        var s = sc.WrapForStoredProc(ExecutionType.Read, true);
         Assert.Equal("BEGIN\n\t\"dbo\".\"Sqltest\"(@p0, @p1);\nEND;", s);
 
-        var noArgs = sc.WrapForStoredProc(ExecutionType.Write, includeParameters: false);
+        var noArgs = sc.WrapForStoredProc(ExecutionType.Write, false);
         Assert.Equal("BEGIN\n\t\"dbo\".\"Sqltest\";\nEND;", noArgs);
     }
 
@@ -89,8 +90,8 @@ public class ProcWrappingStrategyTests
         using var ctx = CreateContextWithStyle(ProcWrappingStyle.ExecuteProcedure);
         using var sc = CreateContainer(ctx);
 
-        var read = sc.WrapForStoredProc(ExecutionType.Read, includeParameters: true);
-        var write = sc.WrapForStoredProc(ExecutionType.Write, includeParameters: true);
+        var read = sc.WrapForStoredProc(ExecutionType.Read, true);
+        var write = sc.WrapForStoredProc(ExecutionType.Write, true);
         Assert.Equal("SELECT * FROM \"dbo\".\"Sqltest\"(@p0, @p1)", read);
         Assert.Equal("EXECUTE PROCEDURE \"dbo\".\"Sqltest\"(@p0, @p1)", write);
     }
@@ -100,7 +101,7 @@ public class ProcWrappingStrategyTests
     {
         using var ctx = CreateContextWithStyle(ProcWrappingStyle.None);
         using var sc = CreateContainer(ctx);
-        Assert.Throws<NotSupportedException>(() => sc.WrapForStoredProc(ExecutionType.Read, includeParameters: true));
+        Assert.Throws<NotSupportedException>(() => sc.WrapForStoredProc(ExecutionType.Read, true));
     }
 
     [Fact]
@@ -108,7 +109,6 @@ public class ProcWrappingStrategyTests
     {
         using var ctx = CreateContextWithStyle(ProcWrappingStyle.Exec);
         using var sc = ctx.CreateSqlContainer("   ") as SqlContainer;
-        Assert.Throws<InvalidOperationException>(() => sc!.WrapForStoredProc(ExecutionType.Read, includeParameters: true));
+        Assert.Throws<InvalidOperationException>(() => sc!.WrapForStoredProc(ExecutionType.Read, true));
     }
 }
-

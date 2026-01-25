@@ -36,7 +36,8 @@ public sealed class IntegrationMatrixTests : IAsyncLifetime
         {
             foreach (var failure in failures)
             {
-                _output.WriteLine($"Provider {failure.DatabaseProvider} ({failure.ContainerName}) failed: {failure.Error}");
+                _output.WriteLine(
+                    $"Provider {failure.DatabaseProvider} ({failure.ContainerName}) failed: {failure.Error}");
             }
 
             Assert.Fail("One or more integration providers failed. See test output for details.");
@@ -55,10 +56,13 @@ public sealed class IntegrationMatrixTests : IAsyncLifetime
         _host.Dispose();
     }
 
-    private static bool ShouldIncludeOracle() => string.Equals(
-        Environment.GetEnvironmentVariable("INCLUDE_ORACLE"),
-        "true",
-        StringComparison.OrdinalIgnoreCase);
+    private static bool ShouldIncludeOracle()
+    {
+        return string.Equals(
+            Environment.GetEnvironmentVariable("INCLUDE_ORACLE"),
+            "true",
+            StringComparison.OrdinalIgnoreCase);
+    }
 
     private static ISet<string> ParseList(string? csv)
     {

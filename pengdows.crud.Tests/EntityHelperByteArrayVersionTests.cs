@@ -12,17 +12,25 @@ namespace pengdows.crud.Tests;
 
 public class EntityHelperByteArrayVersionTests : SqlLiteContextTestBase
 {
-    [Table("RowVer")] private sealed class ByteVerEntity
+    [Table("RowVer")]
+    private sealed class ByteVerEntity
     {
-        [Id(false)] [Column("Id", DbType.Int32)] public int Id { get; set; }
+        [Id(false)]
+        [Column("Id", DbType.Int32)]
+        public int Id { get; set; }
+
         [Column("Name", DbType.String)] public string Name { get; set; } = string.Empty;
-        [Version] [Column("Version", DbType.Binary)] public byte[] Version { get; set; } = Array.Empty<byte>();
+
+        [Version]
+        [Column("Version", DbType.Binary)]
+        public byte[] Version { get; set; } = Array.Empty<byte>();
     }
 
     public EntityHelperByteArrayVersionTests()
     {
         TypeMap.Register<ByteVerEntity>();
-        var qp = Context.QuotePrefix; var qs = Context.QuoteSuffix;
+        var qp = Context.QuotePrefix;
+        var qs = Context.QuoteSuffix;
         var sql = $@"CREATE TABLE IF NOT EXISTS {qp}RowVer{qs}(
             {qp}Id{qs} INTEGER PRIMARY KEY AUTOINCREMENT,
             {qp}Name{qs} TEXT NOT NULL,
@@ -38,9 +46,8 @@ public class EntityHelperByteArrayVersionTests : SqlLiteContextTestBase
         var e = new ByteVerEntity { Name = "x", Version = new byte[] { 1, 2, 3 } };
         await helper.CreateAsync(e, Context);
         e.Name = "y";
-        var sc = await helper.BuildUpdateAsync(e, loadOriginal: false);
+        var sc = await helper.BuildUpdateAsync(e, false);
         var sql = sc.Query.ToString();
         Assert.DoesNotContain("Version = Version + 1", sql);
     }
 }
-

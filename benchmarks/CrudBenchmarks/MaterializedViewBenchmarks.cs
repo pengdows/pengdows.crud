@@ -54,7 +54,8 @@ public class MaterializedViewBenchmarks : IAsyncDisposable
         await _container.StartAsync();
 
         var mappedPort = _container.GetMappedPublicPort(5432);
-        _connStr = $"Host=localhost;Port={mappedPort};Database=materializedview_test;Username=postgres;Password=postgres;Maximum Pool Size=100";
+        _connStr =
+            $"Host=localhost;Port={mappedPort};Database=materializedview_test;Username=postgres;Password=postgres;Maximum Pool Size=100";
 
         await WaitForReady();
         await CreateSchemaAndSeedAsync();
@@ -84,7 +85,8 @@ public class MaterializedViewBenchmarks : IAsyncDisposable
         // Pick test customer ID
         _testCustomerId = _customerIds[0];
 
-        Console.WriteLine($"[BENCHMARK] Testing with {CustomerCount} customers, {OrdersPerCustomer} orders/customer avg");
+        Console.WriteLine(
+            $"[BENCHMARK] Testing with {CustomerCount} customers, {OrdersPerCustomer} orders/customer avg");
         Console.WriteLine($"[BENCHMARK] pengdows.crud ConnectionMode: {_pengdowsContext.ConnectionMode}");
 
         // Verify materialized view is created and has data
@@ -93,7 +95,7 @@ public class MaterializedViewBenchmarks : IAsyncDisposable
 
     private async Task WaitForReady()
     {
-        for (int i = 0; i < 60; i++)
+        for (var i = 0; i < 60; i++)
         {
             try
             {
@@ -107,6 +109,7 @@ public class MaterializedViewBenchmarks : IAsyncDisposable
                 await Task.Delay(500);
             }
         }
+
         throw new TimeoutException("PostgreSQL container did not become ready in time.");
     }
 
@@ -143,7 +146,7 @@ public class MaterializedViewBenchmarks : IAsyncDisposable
             ", transaction: tx);
 
         // Insert customers
-        for (int i = 1; i <= CustomerCount; i++)
+        for (var i = 1; i <= CustomerCount; i++)
         {
             var customerId = await conn.ExecuteScalarAsync<int>(
                 "INSERT INTO customers (company_name) VALUES (@name) RETURNING customer_id",
@@ -156,13 +159,14 @@ public class MaterializedViewBenchmarks : IAsyncDisposable
         foreach (var customerId in _customerIds)
         {
             var orderCount = Math.Max(1, random.Next(OrdersPerCustomer / 2, OrdersPerCustomer * 2));
-            for (int i = 0; i < orderCount; i++)
+            for (var i = 0; i < orderCount; i++)
             {
                 var amount = 100 + random.Next(1, 1000);
                 await conn.ExecuteAsync(@"
                     INSERT INTO orders (customer_id, total_amount, order_date)
                     VALUES (@customerId, @amount, NOW() - (@daysAgo * INTERVAL '1 day'))",
-                    new {
+                    new
+                    {
                         customerId,
                         amount,
                         daysAgo = random.Next(1, 365)
@@ -210,20 +214,27 @@ public class MaterializedViewBenchmarks : IAsyncDisposable
         // Verify we can query it
         var sample = await conn.QuerySingleOrDefaultAsync<CustomerOrderSummary>(
             "SELECT customer_id as CustomerId, order_count as OrderCount, total_amount as TotalAmount, avg_order_amount as AvgOrderAmount, last_order_date as LastOrderDate FROM customer_order_summary LIMIT 1");
-        Console.WriteLine($"[VERIFICATION] ✅ Materialized view working - sample customer {sample?.CustomerId} has {sample?.OrderCount} orders");
+        Console.WriteLine(
+            $"[VERIFICATION] ✅ Materialized view working - sample customer {sample?.CustomerId} has {sample?.OrderCount} orders");
     }
 
     [GlobalCleanup]
     public async Task GlobalCleanup()
     {
         if (_pengdowsContext is IAsyncDisposable pad)
+        {
             await pad.DisposeAsync();
+        }
 
         if (_efContext != null)
+        {
             await _efContext.DisposeAsync();
+        }
 
         if (_dapperDataSource != null)
+        {
             await _dapperDataSource.DisposeAsync();
+        }
 
         if (_container != null)
         {
@@ -306,30 +317,31 @@ public class MaterializedViewBenchmarks : IAsyncDisposable
     }
 
     // pengdows.crud entity for materialized view
-    [pengdows.crud.attributes.Table("customer_order_summary")]
+    [Table("customer_order_summary")]
     public class CustomerOrderSummary
     {
         [Id(false)] // Not generated, comes from view
-        [pengdows.crud.attributes.Column("customer_id", DbType.Int32)]
+        [Column("customer_id", DbType.Int32)]
         public int CustomerId { get; set; }
 
-        [pengdows.crud.attributes.Column("order_count", DbType.Int64)]
-        public long OrderCount { get; set; }
+        [Column("order_count", DbType.Int64)] public long OrderCount { get; set; }
 
-        [pengdows.crud.attributes.Column("total_amount", DbType.Decimal)]
+        [Column("total_amount", DbType.Decimal)]
         public decimal TotalAmount { get; set; }
 
-        [pengdows.crud.attributes.Column("avg_order_amount", DbType.Decimal)]
+        [Column("avg_order_amount", DbType.Decimal)]
         public decimal AvgOrderAmount { get; set; }
 
-        [pengdows.crud.attributes.Column("last_order_date", DbType.DateTime)]
+        [Column("last_order_date", DbType.DateTime)]
         public DateTime LastOrderDate { get; set; }
     }
 
     // Entity Framework entities
     public class EfTestDbContext : DbContext
     {
-        public EfTestDbContext(DbContextOptions<EfTestDbContext> options) : base(options) { }
+        public EfTestDbContext(DbContextOptions<EfTestDbContext> options) : base(options)
+        {
+        }
 
         public DbSet<EfCustomer> Customers { get; set; }
         public DbSet<EfOrder> Orders { get; set; }

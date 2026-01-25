@@ -20,8 +20,11 @@ public class SingleWriterReadOnlyEnhancedTests
     {
         public List<string> Commands { get; } = new();
         public List<string> ConnectionStrings { get; } = new();
-        
-        protected override DbCommand CreateDbCommand() => new RecordingCommand(this, Commands);
+
+        protected override DbCommand CreateDbCommand()
+        {
+            return new RecordingCommand(this, Commands);
+        }
 
         [AllowNull]
         public override string ConnectionString
@@ -39,7 +42,12 @@ public class SingleWriterReadOnlyEnhancedTests
     private sealed class RecordingCommand : fakeDbCommand
     {
         private readonly List<string> _commands;
-        public RecordingCommand(fakeDbConnection connection, List<string> commands) : base(connection) => _commands = commands;
+
+        public RecordingCommand(fakeDbConnection connection, List<string> commands) : base(connection)
+        {
+            _commands = commands;
+        }
+
         public override int ExecuteNonQuery()
         {
             _commands.Add(CommandText);
@@ -50,6 +58,7 @@ public class SingleWriterReadOnlyEnhancedTests
     private sealed class RecordingFactory : DbProviderFactory
     {
         public List<RecordingConnection> Connections { get; } = new();
+
         public override DbConnection CreateConnection()
         {
             var conn = new RecordingConnection();
@@ -57,11 +66,19 @@ public class SingleWriterReadOnlyEnhancedTests
             return conn;
         }
 
-        public override DbCommand CreateCommand() => new fakeDbCommand();
-        public override DbParameter CreateParameter() => new fakeDbParameter();
+        public override DbCommand CreateCommand()
+        {
+            return new fakeDbCommand();
+        }
+
+        public override DbParameter CreateParameter()
+        {
+            return new fakeDbParameter();
+        }
     }
 
-    private static DatabaseContext CreateContext(RecordingFactory factory, SupportedDatabase database = SupportedDatabase.Sqlite, string? connectionString = null)
+    private static DatabaseContext CreateContext(RecordingFactory factory,
+        SupportedDatabase database = SupportedDatabase.Sqlite, string? connectionString = null)
     {
         var config = new DatabaseContextConfiguration
         {
@@ -85,16 +102,16 @@ public class SingleWriterReadOnlyEnhancedTests
         var factory = new RecordingFactory();
         await using var ctx = CreateContext(factory, database);
 
-        try 
+        try
         {
             await using var tx = ctx.BeginTransaction(readOnly: true);
-            
+
             Assert.Equal(2, factory.Connections.Count);
-            
+
             // Verify that session settings were applied to the read-only connection
             var readOnlyConnection = factory.Connections[1];
             Assert.NotEmpty(readOnlyConnection.Commands);
-            
+
             // Database-specific session setting verification
             switch (database)
             {
@@ -131,14 +148,14 @@ public class SingleWriterReadOnlyEnhancedTests
         await using var ctx = CreateContext(factory);
 
         await using var tx = ctx.BeginTransaction(readOnly: true);
-        
+
         // Verify that a separate read-only connection was created
         Assert.Equal(2, factory.Connections.Count);
-        
+
         // Verify that connection strings were set (even if specific read-only hints aren't applied)
         var readOnlyConnection = factory.Connections[1];
         Assert.NotEmpty(readOnlyConnection.ConnectionStrings);
-        
+
         // Just verify that a connection string was applied - the specific content
         // may vary based on dialect implementation
         var readOnlyConnectionString = readOnlyConnection.ConnectionStrings[0];
@@ -153,12 +170,12 @@ public class SingleWriterReadOnlyEnhancedTests
         await using var ctx = CreateContext(factory, SupportedDatabase.Sqlite, connectionString);
 
         await using var tx = ctx.BeginTransaction(readOnly: true);
-        
+
         // For shared memory cache, we should still get separate connections
         Assert.Equal(2, factory.Connections.Count);
-        
+
         var readOnlyConnection = factory.Connections[1];
-        
+
         // For in-memory databases, connection-level read-only flags should be skipped
         // but session-level settings should still be applied for logical read-only behavior
         if (connectionString.Contains("Sqlite"))
@@ -172,12 +189,13 @@ public class SingleWriterReadOnlyEnhancedTests
     public async Task ReadOnlyTransaction_InMemoryEphemeral_BehaviorCheck()
     {
         var factory = new RecordingFactory();
-        await using var ctx = CreateContext(factory, SupportedDatabase.Sqlite, "Data Source=:memory:;EmulatedProduct=Sqlite");
+        await using var ctx = CreateContext(factory, SupportedDatabase.Sqlite,
+            "Data Source=:memory:;EmulatedProduct=Sqlite");
 
         // For true ephemeral in-memory databases, the behavior might be different
         // This test documents the actual behavior
         await using var tx = ctx.BeginTransaction(readOnly: true);
-        
+
         // The actual behavior may vary - this test documents what actually happens
         if (factory.Connections.Count == 2)
         {
@@ -200,7 +218,7 @@ public class SingleWriterReadOnlyEnhancedTests
 
         await using var tx = ctx.BeginTransaction(readOnly: true);
         await using var container = tx.CreateSqlContainer("INSERT INTO t VALUES (1)");
-        
+
         await Assert.ThrowsAsync<InvalidOperationException>(() => container.ExecuteNonQueryAsync());
     }
 
@@ -212,7 +230,7 @@ public class SingleWriterReadOnlyEnhancedTests
 
         await using var tx = ctx.BeginTransaction(readOnly: true);
         await using var container = tx.CreateSqlContainer("SELECT 1");
-        
+
         // Should not throw - the operation should succeed even though FakeDb may not return results
         try
         {
@@ -233,10 +251,10 @@ public class SingleWriterReadOnlyEnhancedTests
         await using var ctx = CreateContext(factory);
 
         await using var tx = ctx.BeginTransaction(readOnly: false);
-        
+
         // Should only use the persistent writer connection, no additional connections
         Assert.Single(factory.Connections);
-        
+
         var writerConnection = factory.Connections[0];
         Assert.DoesNotContain(writerConnection.Commands, c => c.Contains("query_only"));
     }
@@ -249,10 +267,10 @@ public class SingleWriterReadOnlyEnhancedTests
 
         var conn = ctx.GetConnection(ExecutionType.Read);
         await conn.OpenAsync();
-        
+
         // Should create a separate read-only connection
         Assert.Equal(2, factory.Connections.Count);
-        
+
         var readOnlyConnection = factory.Connections[1];
         Assert.Contains(readOnlyConnection.Commands, c => c.Contains("query_only"));
     }
@@ -265,10 +283,10 @@ public class SingleWriterReadOnlyEnhancedTests
 
         var conn = ctx.GetConnection(ExecutionType.Write);
         await conn.OpenAsync();
-        
+
         // Should only use the persistent writer connection
         Assert.Single(factory.Connections);
-        
+
         var writerConnection = factory.Connections[0];
         Assert.DoesNotContain(writerConnection.Commands, c => c.Contains("query_only"));
     }
@@ -282,11 +300,11 @@ public class SingleWriterReadOnlyEnhancedTests
         // Get a read connection first to establish the pattern
         var readConn = ctx.GetConnection(ExecutionType.Read);
         await readConn.OpenAsync();
-        
+
         // Create a read-only transaction to ensure we're in the right context
         await using var tx = ctx.BeginTransaction(readOnly: true);
         await using var container = tx.CreateSqlContainer("CREATE TABLE t(id INTEGER)");
-        
+
         // This should fail because the transaction is read-only
         await Assert.ThrowsAsync<InvalidOperationException>(() => container.ExecuteNonQueryAsync());
     }

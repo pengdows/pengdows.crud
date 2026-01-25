@@ -43,7 +43,8 @@ public class SqlContainerPrepareCommandTests : SqlLiteContextTestBase
         {
             command.CommandType = CommandType.StoredProcedure;
         }
-        catch (ArgumentException ex) when (ex.Message.Contains("StoredProcedure") && ex.Message.Contains("not supported"))
+        catch (ArgumentException ex) when (ex.Message.Contains("StoredProcedure") &&
+                                           ex.Message.Contains("not supported"))
         {
             // SQLite doesn't support stored procedures, skip this test
             return;

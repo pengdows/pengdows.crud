@@ -81,10 +81,10 @@ public class SqlDialectBranchTests
     {
         var dialect = CreateDialect(SupportedDatabase.PostgreSql);
 
-        Assert.Throws<System.ArgumentException>(() =>
+        Assert.Throws<ArgumentException>(() =>
             dialect.GetNaturalKeyLookupQuery("people", "id", new List<string> { "a" }, new List<string>()));
 
-        Assert.Throws<System.InvalidOperationException>(() =>
+        Assert.Throws<InvalidOperationException>(() =>
             dialect.GetNaturalKeyLookupQuery("people", "id", new List<string>(), new List<string>()));
     }
 

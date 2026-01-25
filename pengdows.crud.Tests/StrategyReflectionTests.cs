@@ -26,7 +26,8 @@ public class StrategyReflectionTests
 
     private static object? GetPersistent(DatabaseContext ctx)
     {
-        var p = typeof(DatabaseContext).GetProperty("PersistentConnection", BindingFlags.NonPublic | BindingFlags.Instance);
+        var p = typeof(DatabaseContext).GetProperty("PersistentConnection",
+            BindingFlags.NonPublic | BindingFlags.Instance);
         return p!.GetValue(ctx);
     }
 
@@ -45,7 +46,8 @@ public class StrategyReflectionTests
         }
     }
 
-    private static DatabaseContext Create(DbMode mode, SupportedDatabase product = SupportedDatabase.SqlServer, string dataSource = "test")
+    private static DatabaseContext Create(DbMode mode, SupportedDatabase product = SupportedDatabase.SqlServer,
+        string dataSource = "test")
     {
         var cfg = new DatabaseContextConfiguration
         {
@@ -87,7 +89,7 @@ public class StrategyReflectionTests
         using var ctx = Create(DbMode.KeepAlive, SupportedDatabase.Sqlite, ":memory:");
         var strat = GetStrategy(ctx);
         var persistent = GetPersistent(ctx);
-        var before = ctx. NumberOfOpenConnections;
+        var before = ctx.NumberOfOpenConnections;
         InvokeRelease(strat, nameof(IConnectionStrategy.ReleaseConnectionAsync), persistent);
         Assert.Equal(before, ctx.NumberOfOpenConnections);
     }

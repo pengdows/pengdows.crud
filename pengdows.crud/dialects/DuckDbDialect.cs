@@ -19,12 +19,15 @@ internal class DuckDbDialect : SqlDialect
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.DuckDB;
     public override string ParameterMarker => "$";
+
     public override bool SupportsNamedParameters => true;
+
     // IMMUTABLE: DuckDB practical parameter limit - do not change without extensive testing
     public override int MaxParameterLimit => 65535;
+
     // IMMUTABLE: DuckDB identifier length limit - do not change without extensive testing
     public override int ParameterNameMaxLength => 255;
-    
+
     // DuckDB supports prepare for modest performance gains
     public override bool PrepareStatements => true;
 
@@ -55,7 +58,8 @@ internal class DuckDbDialect : SqlDialect
     public virtual bool SupportsEncryption => IsVersionAtLeast(1, 4); // AES-256-GCM encryption with ATTACH
 
     // FILL window function support (DuckDB 1.4.0+)
-    public virtual bool SupportsFillWindowFunction => IsVersionAtLeast(1, 4); // FILL() window function for interpolation
+    public virtual bool SupportsFillWindowFunction =>
+        IsVersionAtLeast(1, 4); // FILL() window function for interpolation
 
     public override string GetInsertReturningClause(string idColumnName)
     {
@@ -72,7 +76,10 @@ internal class DuckDbDialect : SqlDialect
         return $"EXCLUDED.{WrapObjectName(columnName)}";
     }
 
-    public override string GetVersionQuery() => "SELECT version()";
+    public override string GetVersionQuery()
+    {
+        return "SELECT version()";
+    }
 
     public override void ApplyConnectionSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)
     {
@@ -121,6 +128,7 @@ internal class DuckDbDialect : SqlDialect
 
         return connectionString.Contains(":memory:", StringComparison.OrdinalIgnoreCase);
     }
+
     public override async Task<string?> GetProductNameAsync(ITrackedConnection connection)
     {
         // Try SELECT version() first
@@ -202,10 +210,10 @@ internal class DuckDbDialect : SqlDialect
 
         // DuckDB specific parsing for format like "v1.0.0" or "DuckDB v0.9.2"
         var duckDbMatch = Regex.Match(
-            versionString, 
-            @"(?:DuckDB\s+)?v?(\d+)\.(\d+)\.(\d+)(?:-\w+)?", 
+            versionString,
+            @"(?:DuckDB\s+)?v?(\d+)\.(\d+)\.(\d+)(?:-\w+)?",
             RegexOptions.IgnoreCase);
-            
+
         if (duckDbMatch.Success)
         {
             if (int.TryParse(duckDbMatch.Groups[1].Value, out var major) &&
@@ -221,8 +229,8 @@ internal class DuckDbDialect : SqlDialect
 
     public override async Task<string> GetDatabaseVersionAsync(ITrackedConnection connection)
     {
-        bool selectFailed = false;
-        bool pragmaFailed = false;
+        var selectFailed = false;
+        var pragmaFailed = false;
 
         try
         {
@@ -233,6 +241,7 @@ internal class DuckDbDialect : SqlDialect
             {
                 return s;
             }
+
             // If SELECT returned null/empty, tests expect an empty string, not a pragma fallback
             return string.Empty;
         }
@@ -271,7 +280,7 @@ internal class DuckDbDialect : SqlDialect
     public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
         var parameter = base.CreateDbParameter(name, type, value);
-        
+
         // DuckDB specific parameter handling
         if (type == DbType.Guid && value is Guid guidValue)
         {

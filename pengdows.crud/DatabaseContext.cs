@@ -84,7 +84,8 @@ namespace pengdows.crud;
 /// </para>
 ///
 /// </remarks>
-public partial class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IContextIdentity, ISqlDialectProvider, IMetricsCollectorAccessor
+public partial class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IContextIdentity, ISqlDialectProvider,
+    IMetricsCollectorAccessor
 {
     private readonly DbProviderFactory? _factory;
     private readonly DbDataSource? _dataSource;
@@ -104,7 +105,7 @@ public partial class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     private bool _isReadConnection = true;
     private bool _isWriteConnection = true;
     private long _maxNumberOfOpenConnections;
-    
+
     // Additional performance counters for granular connection pool monitoring
     private long _totalConnectionsCreated;
     private long _totalConnectionsReused;
@@ -136,6 +137,7 @@ public partial class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 
     [Obsolete("Use the constructor that takes DatabaseContextConfiguration instead.")]
     private ReadWriteMode _readWriteMode = ReadWriteMode.ReadWrite;
+
     public ReadWriteMode ReadWriteMode
     {
 #pragma warning disable CS0618
@@ -143,7 +145,7 @@ public partial class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
         set
         {
             _readWriteMode = value == ReadWriteMode.WriteOnly ? ReadWriteMode.ReadWrite : value;
-            _isReadConnection = (_readWriteMode & ReadWriteMode.ReadOnly) == ReadWriteMode.ReadOnly ;
+            _isReadConnection = (_readWriteMode & ReadWriteMode.ReadOnly) == ReadWriteMode.ReadOnly;
             _isWriteConnection = (_readWriteMode & ReadWriteMode.WriteOnly) == ReadWriteMode.WriteOnly;
             if (_isWriteConnection)
             {
@@ -195,7 +197,9 @@ public partial class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     public string SessionSettingsPreamble => _dialect.GetConnectionSessionSettings(this, IsReadOnlyConnection);
 
     public string CompositeIdentifierSeparator => _dataSourceInfo.CompositeIdentifierSeparator;
+
     public SupportedDatabase Product => _dataSourceInfo?.Product ?? SupportedDatabase.Unknown;
+
     // ProcWrappingStyle is defined below with a setter to update strategy
     public int MaxParameterLimit => _dataSourceInfo.MaxParameterLimit;
     public int MaxOutputParameters => _dataSourceInfo.MaxOutputParameters;
@@ -302,6 +306,7 @@ public partial class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
         {
             _metricsCollector.MetricsChanged -= OnMetricsCollectorUpdated;
         }
+
         try
         {
             _connection?.Dispose();
@@ -314,6 +319,7 @@ public partial class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
         {
             _connection = null;
         }
+
         base.DisposeManaged();
     }
 
@@ -323,6 +329,7 @@ public partial class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
         {
             _metricsCollector.MetricsChanged -= OnMetricsCollectorUpdated;
         }
+
         try
         {
             if (_connection is IAsyncDisposable ad)
@@ -338,6 +345,7 @@ public partial class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
         {
             _connection = null;
         }
+
         await base.DisposeManagedAsync().ConfigureAwait(false);
     }
 

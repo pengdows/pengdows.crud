@@ -27,5 +27,4 @@ internal sealed class NoOpAsyncLocker : SafeAsyncDisposableBase, ILockerAsync
     {
         return Task.FromResult(true);
     }
-
 }

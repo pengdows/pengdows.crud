@@ -15,13 +15,10 @@ public class fakeDbParameter : DbParameter, IDbDataParameter
     public override ParameterDirection Direction { get; set; }
     public override bool IsNullable { get; set; }
 
-    [AllowNull]
-    public override string ParameterName { get; set; } = string.Empty;
+    [AllowNull] public override string ParameterName { get; set; } = string.Empty;
 
-    [AllowNull]
-    public override string SourceColumn { get; set; } = string.Empty;
-    [AllowNull]
-    public override object Value { get; set; } = DBNull.Value;
+    [AllowNull] public override string SourceColumn { get; set; } = string.Empty;
+    [AllowNull] public override object Value { get; set; } = DBNull.Value;
 
     public override int Size { get; set; }
     public override byte Precision { get; set; }

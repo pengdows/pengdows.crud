@@ -32,8 +32,10 @@ public class DatabaseContextInitializationAdditionalTests
     public void SetConnectionString_FirstAssignment_Succeeds()
     {
         var context = (DatabaseContext)RuntimeHelpers.GetUninitializedObject(typeof(DatabaseContext));
-        var setMethod = typeof(DatabaseContext).GetMethod("SetConnectionString", BindingFlags.NonPublic | BindingFlags.Instance);
-        var field = typeof(DatabaseContext).GetField("_connectionString", BindingFlags.NonPublic | BindingFlags.Instance);
+        var setMethod =
+            typeof(DatabaseContext).GetMethod("SetConnectionString", BindingFlags.NonPublic | BindingFlags.Instance);
+        var field = typeof(DatabaseContext).GetField("_connectionString",
+            BindingFlags.NonPublic | BindingFlags.Instance);
 
         setMethod!.Invoke(context, new object?[] { "Data Source=test" });
 
@@ -44,8 +46,10 @@ public class DatabaseContextInitializationAdditionalTests
     public void SetConnectionString_WhenAlreadySet_Throws()
     {
         var context = (DatabaseContext)RuntimeHelpers.GetUninitializedObject(typeof(DatabaseContext));
-        var field = typeof(DatabaseContext).GetField("_connectionString", BindingFlags.NonPublic | BindingFlags.Instance);
-        var setMethod = typeof(DatabaseContext).GetMethod("SetConnectionString", BindingFlags.NonPublic | BindingFlags.Instance);
+        var field = typeof(DatabaseContext).GetField("_connectionString",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        var setMethod =
+            typeof(DatabaseContext).GetMethod("SetConnectionString", BindingFlags.NonPublic | BindingFlags.Instance);
         field!.SetValue(context, "Data Source=existing");
 
         var ex = Assert.Throws<TargetInvocationException>(() =>
@@ -60,8 +64,10 @@ public class DatabaseContextInitializationAdditionalTests
     public void IsMemoryDataSource_DetectsMemoryConnectionStrings(string connectionString, bool expected)
     {
         var context = (DatabaseContext)RuntimeHelpers.GetUninitializedObject(typeof(DatabaseContext));
-        var field = typeof(DatabaseContext).GetField("_connectionString", BindingFlags.NonPublic | BindingFlags.Instance);
-        var method = typeof(DatabaseContext).GetMethod("IsMemoryDataSource", BindingFlags.NonPublic | BindingFlags.Instance);
+        var field = typeof(DatabaseContext).GetField("_connectionString",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        var method =
+            typeof(DatabaseContext).GetMethod("IsMemoryDataSource", BindingFlags.NonPublic | BindingFlags.Instance);
         field!.SetValue(context, connectionString);
 
         var result = (bool)method!.Invoke(context, Array.Empty<object>())!;

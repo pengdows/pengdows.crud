@@ -37,7 +37,8 @@ public class TestTableCreator
 
         await using var container = _context.CreateSqlContainer(sql);
         var result = await container.ExecuteNonQueryAsync();
-        Console.WriteLine($"[TestTableCreator] Created {_context.Product} table, result={result}, DbMode={((DatabaseContext)_context).ConnectionMode}");
+        Console.WriteLine(
+            $"[TestTableCreator] Created {_context.Product} table, result={result}, DbMode={((DatabaseContext)_context).ConnectionMode}");
     }
 
     private async Task CreateFirebirdTestTableAsync()
@@ -46,7 +47,8 @@ public class TestTableCreator
         try
         {
             var result = await create.ExecuteNonQueryAsync();
-            Console.WriteLine($"[TestTableCreator] Created {_context.Product} table, result={result}, DbMode={((DatabaseContext)_context).ConnectionMode}");
+            Console.WriteLine(
+                $"[TestTableCreator] Created {_context.Product} table, result={result}, DbMode={((DatabaseContext)_context).ConnectionMode}");
         }
         catch (Exception ex) when (ex.Message.Contains("already exists", StringComparison.OrdinalIgnoreCase))
         {
@@ -106,7 +108,9 @@ public class TestTableCreator
         await container.ExecuteNonQueryAsync();
     }
 
-    private string CreateSqliteTableSql() => @"
+    private string CreateSqliteTableSql()
+    {
+        return @"
         CREATE TABLE IF NOT EXISTS test_table (
             id BIGINT PRIMARY KEY,
             name TEXT NOT NULL,
@@ -118,8 +122,11 @@ public class TestTableCreator
             updated_at DATETIME,
             updated_by TEXT
         )";
+    }
 
-    private string CreatePostgreSqlTableSql() => @"
+    private string CreatePostgreSqlTableSql()
+    {
+        return @"
         CREATE TABLE IF NOT EXISTS test_table (
             id BIGINT PRIMARY KEY,
             name VARCHAR(255) NOT NULL,
@@ -131,8 +138,11 @@ public class TestTableCreator
             updated_at TIMESTAMP,
             updated_by VARCHAR(100)
         )";
+    }
 
-    private string CreateSqlServerTableSql() => @"
+    private string CreateSqlServerTableSql()
+    {
+        return @"
         IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[test_table]') AND type in (N'U'))
         CREATE TABLE [dbo].[test_table] (
             [id] BIGINT PRIMARY KEY,
@@ -145,8 +155,11 @@ public class TestTableCreator
             [updated_at] DATETIME2,
             [updated_by] NVARCHAR(100)
         )";
+    }
 
-    private string CreateMySqlTableSql() => @"
+    private string CreateMySqlTableSql()
+    {
+        return @"
         CREATE TABLE IF NOT EXISTS test_table (
             id BIGINT PRIMARY KEY,
             name VARCHAR(255) NOT NULL,
@@ -158,8 +171,13 @@ public class TestTableCreator
             updated_at TIMESTAMP NULL,
             updated_by VARCHAR(100)
         )";
+    }
 
-    private string CreateMariaDbTableSql() => CreateMySqlTableSql(); // Same as MySQL
+    private string CreateMariaDbTableSql()
+    {
+        return CreateMySqlTableSql();
+        // Same as MySQL
+    }
 
     private string CreateFirebirdTableSql()
     {

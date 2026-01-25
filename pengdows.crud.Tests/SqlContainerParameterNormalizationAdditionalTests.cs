@@ -52,7 +52,8 @@ public class SqlContainerParameterNormalizationAdditionalTests
     {
         using var ctx = CreateContextWithDialect(new PositionalDialect(new fakeDbFactory(SupportedDatabase.Sqlite)));
         var container = SqlContainer.CreateForDialect(ctx, GetDialect(ctx));
-        var method = typeof(SqlContainer).GetMethod("NormalizeParameterName", BindingFlags.Instance | BindingFlags.NonPublic);
+        var method =
+            typeof(SqlContainer).GetMethod("NormalizeParameterName", BindingFlags.Instance | BindingFlags.NonPublic);
 
         var normalized = (string)method!.Invoke(container, new object?[] { "@p0" })!;
 
@@ -91,7 +92,8 @@ public class SqlContainerParameterNormalizationAdditionalTests
         var context = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Sqlite), NullLoggerFactory.Instance);
 
         var dialectField = typeof(DatabaseContext).GetField("_dialect", BindingFlags.Instance | BindingFlags.NonPublic);
-        var dataSourceInfoField = typeof(DatabaseContext).GetField("_dataSourceInfo", BindingFlags.Instance | BindingFlags.NonPublic);
+        var dataSourceInfoField =
+            typeof(DatabaseContext).GetField("_dataSourceInfo", BindingFlags.Instance | BindingFlags.NonPublic);
         dialectField!.SetValue(context, dialect);
         dataSourceInfoField!.SetValue(context, new DataSourceInformation(dialect));
 

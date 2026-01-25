@@ -32,7 +32,8 @@ public class NetworkConverterCoverageTests
         Assert.Equal(new MacAddress(physical), parsed);
 
         var providerShim = new NpgsqlMacAddressShim(physical);
-        Assert.True(converter.TryConvertFromProvider(providerShim, SupportedDatabase.PostgreSql, out var providerParsed));
+        Assert.True(
+            converter.TryConvertFromProvider(providerShim, SupportedDatabase.PostgreSql, out var providerParsed));
         Assert.Equal(parsed, providerParsed);
     }
 

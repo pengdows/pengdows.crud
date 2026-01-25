@@ -10,9 +10,9 @@ public class CompleteExceptionTests
     public void InvalidValueException_WithMessage_CreatesExceptionWithMessage()
     {
         const string message = "Invalid value provided";
-        
+
         var exception = new InvalidValueException(message);
-        
+
         Assert.Equal(message, exception.Message);
         Assert.IsType<InvalidValueException>(exception);
         Assert.IsAssignableFrom<Exception>(exception);
@@ -22,9 +22,10 @@ public class CompleteExceptionTests
     public void InvalidValueException_CanBeThrown()
     {
         const string message = "Test invalid value";
-        
-        var exception = Assert.Throws<InvalidValueException>(new Action(() => throw new InvalidValueException(message)));
-        
+
+        var exception =
+            Assert.Throws<InvalidValueException>(new Action(() => throw new InvalidValueException(message)));
+
         Assert.Equal(message, exception.Message);
     }
 
@@ -32,9 +33,9 @@ public class CompleteExceptionTests
     public void NoColumnsFoundException_WithMessage_CreatesExceptionWithMessage()
     {
         const string message = "No columns found in entity";
-        
+
         var exception = new NoColumnsFoundException(message);
-        
+
         Assert.Equal(message, exception.Message);
         Assert.IsType<NoColumnsFoundException>(exception);
         Assert.IsAssignableFrom<Exception>(exception);
@@ -44,9 +45,10 @@ public class CompleteExceptionTests
     public void NoColumnsFoundException_CanBeThrown()
     {
         const string message = "Test no columns";
-        
-        var exception = Assert.Throws<NoColumnsFoundException>(new Action(() => throw new NoColumnsFoundException(message)));
-        
+
+        var exception =
+            Assert.Throws<NoColumnsFoundException>(new Action(() => throw new NoColumnsFoundException(message)));
+
         Assert.Equal(message, exception.Message);
     }
 
@@ -54,9 +56,9 @@ public class CompleteExceptionTests
     public void TooManyColumns_WithMessage_CreatesExceptionWithMessage()
     {
         const string message = "Too many columns in result set";
-        
+
         var exception = new TooManyColumns(message);
-        
+
         Assert.Equal(message, exception.Message);
         Assert.IsType<TooManyColumns>(exception);
         Assert.IsAssignableFrom<Exception>(exception);
@@ -66,9 +68,9 @@ public class CompleteExceptionTests
     public void TooManyColumns_CanBeThrown()
     {
         const string message = "Test too many columns";
-        
+
         var exception = Assert.Throws<TooManyColumns>(new Action(() => throw new TooManyColumns(message)));
-        
+
         Assert.Equal(message, exception.Message);
     }
 
@@ -76,9 +78,9 @@ public class CompleteExceptionTests
     public void ConnectionFailedException_WithMessage_CreatesExceptionWithMessage()
     {
         const string message = "Connection to database failed";
-        
+
         var exception = new ConnectionFailedException(message);
-        
+
         Assert.Equal(message, exception.Message);
         Assert.IsType<ConnectionFailedException>(exception);
         Assert.IsAssignableFrom<Exception>(exception);
@@ -88,9 +90,10 @@ public class CompleteExceptionTests
     public void ConnectionFailedException_CanBeThrown()
     {
         const string message = "Test connection failed";
-        
-        var exception = Assert.Throws<ConnectionFailedException>(new Action(() => throw new ConnectionFailedException(message)));
-        
+
+        var exception =
+            Assert.Throws<ConnectionFailedException>(new Action(() => throw new ConnectionFailedException(message)));
+
         Assert.Equal(message, exception.Message);
     }
 

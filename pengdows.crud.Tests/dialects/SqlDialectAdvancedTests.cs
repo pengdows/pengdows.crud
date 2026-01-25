@@ -21,7 +21,10 @@ public class SqlDialectAdvancedTests
 
         public override SupportedDatabase DatabaseType => SupportedDatabase.Unknown;
 
-        public override string GetReadOnlyConnectionParameter() => "ApplicationIntent=ReadOnly";
+        public override string GetReadOnlyConnectionParameter()
+        {
+            return "ApplicationIntent=ReadOnly";
+        }
     }
 
     private static TestDialect CreateDialect(int maxNameLength = 18)
@@ -77,7 +80,7 @@ public class SqlDialectAdvancedTests
     public void GetReadOnlyConnectionString_AppendsParameter()
     {
         var dialect = new TestDialect(new fakeDbFactory(SupportedDatabase.Sqlite), NullLogger.Instance);
-        string connectionString = "Data Source=test";
+        var connectionString = "Data Source=test";
         var readOnly = dialect.GetReadOnlyConnectionString(connectionString);
         Assert.Contains("ApplicationIntent=ReadOnly", readOnly);
     }

@@ -86,6 +86,7 @@ internal sealed class GeographyConverter : SpatialConverter<Geography>
         {
             srid = 4326;
         }
+
         return Geography.FromWellKnownBinary(normalizedBytes, srid);
     }
 
@@ -96,6 +97,7 @@ internal sealed class GeographyConverter : SpatialConverter<Geography>
         {
             srid = 4326;
         }
+
         return Geography.FromWellKnownText(pure, srid);
     }
 
@@ -106,6 +108,7 @@ internal sealed class GeographyConverter : SpatialConverter<Geography>
         {
             srid = 4326;
         }
+
         return Geography.FromGeoJson(json, srid);
     }
 

@@ -21,7 +21,10 @@ public readonly struct DbValue
 
     public bool IsNull => RawValue == null || RawValue == DBNull.Value;
 
-    public T? As<T>() => RawValue is T value ? value : default;
+    public T? As<T>()
+    {
+        return RawValue is T value ? value : default;
+    }
 }
 
 /// <summary>

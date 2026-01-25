@@ -67,7 +67,9 @@ public class SqlDialectTests
 
     private sealed class NoNamedParameterDialect : SqlDialect
     {
-        public NoNamedParameterDialect(DbProviderFactory factory, ILogger logger) : base(factory, logger) { }
+        public NoNamedParameterDialect(DbProviderFactory factory, ILogger logger) : base(factory, logger)
+        {
+        }
 
         public override SupportedDatabase DatabaseType => SupportedDatabase.Sqlite;
         public override string ParameterMarker => "@";
@@ -76,7 +78,9 @@ public class SqlDialectTests
         public override int ParameterNameMaxLength => 64;
         public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.None;
 
-        public override string GetVersionQuery() => string.Empty;
+        public override string GetVersionQuery()
+        {
+            return string.Empty;
+        }
     }
-
 }

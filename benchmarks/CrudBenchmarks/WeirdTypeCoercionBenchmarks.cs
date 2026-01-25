@@ -68,7 +68,7 @@ public class WeirdTypeCoercionBenchmarks
     public bool GuidCoercion_Read()
     {
         var dbValue = new DbValue(_guid);
-        return _registry!.TryRead(dbValue, typeof(Guid), out var _);
+        return _registry!.TryRead(dbValue, typeof(Guid), out _);
     }
 
     [Benchmark]
@@ -81,7 +81,7 @@ public class WeirdTypeCoercionBenchmarks
     public bool RowVersionCoercion_Read()
     {
         var dbValue = new DbValue(_rowVersionBytes!);
-        return _registry!.TryRead(dbValue, typeof(byte[]), out var _);
+        return _registry!.TryRead(dbValue, typeof(byte[]), out _);
     }
 
     [Benchmark]
@@ -95,7 +95,7 @@ public class WeirdTypeCoercionBenchmarks
     {
         var jsonText = _jsonValue.AsString();
         var dbValue = new DbValue(jsonText);
-        return _registry!.TryRead(dbValue, typeof(JsonValue), out var _);
+        return _registry!.TryRead(dbValue, typeof(JsonValue), out _);
     }
 
     [Benchmark]
@@ -109,7 +109,7 @@ public class WeirdTypeCoercionBenchmarks
     {
         var hstoreText = _hstoreValue.ToString();
         var dbValue = new DbValue(hstoreText);
-        return _registry!.TryRead(dbValue, typeof(HStore), out var _);
+        return _registry!.TryRead(dbValue, typeof(HStore), out _);
     }
 
     [Benchmark]
@@ -123,7 +123,7 @@ public class WeirdTypeCoercionBenchmarks
     {
         var rangeText = _intRange.ToString();
         var dbValue = new DbValue(rangeText);
-        return _registry!.TryRead(dbValue, typeof(Range<int>), out var _);
+        return _registry!.TryRead(dbValue, typeof(Range<int>), out _);
     }
 
     [Benchmark]
@@ -136,7 +136,7 @@ public class WeirdTypeCoercionBenchmarks
     public bool TimeSpanCoercion_Read()
     {
         var dbValue = new DbValue(_timeSpan);
-        return _registry!.TryRead(dbValue, typeof(TimeSpan), out var _);
+        return _registry!.TryRead(dbValue, typeof(TimeSpan), out _);
     }
 
     [Benchmark]
@@ -149,7 +149,7 @@ public class WeirdTypeCoercionBenchmarks
     public bool DateTimeOffsetCoercion_Read()
     {
         var dbValue = new DbValue(_dateTimeOffset);
-        return _registry!.TryRead(dbValue, typeof(DateTimeOffset), out var _);
+        return _registry!.TryRead(dbValue, typeof(DateTimeOffset), out _);
     }
 
     [Benchmark]
@@ -162,7 +162,7 @@ public class WeirdTypeCoercionBenchmarks
     public bool IntArrayCoercion_Read()
     {
         var dbValue = new DbValue(_intArray!);
-        return _registry!.TryRead(dbValue, typeof(int[]), out var _);
+        return _registry!.TryRead(dbValue, typeof(int[]), out _);
     }
 
     [Benchmark]
@@ -175,7 +175,7 @@ public class WeirdTypeCoercionBenchmarks
     public bool StringArrayCoercion_Read()
     {
         var dbValue = new DbValue(_stringArray!);
-        return _registry!.TryRead(dbValue, typeof(string[]), out var _);
+        return _registry!.TryRead(dbValue, typeof(string[]), out _);
     }
 
     // Complex scenarios
@@ -184,15 +184,16 @@ public class WeirdTypeCoercionBenchmarks
     {
         var jsonText = "{\"name\":\"test\",\"value\":123,\"nested\":{\"array\":[1,2,3]}}";
         var dbValue = new DbValue(jsonText);
-        return _registry!.TryRead(dbValue, typeof(JsonValue), out var _);
+        return _registry!.TryRead(dbValue, typeof(JsonValue), out _);
     }
 
     [Benchmark]
     public bool HStoreParsingFromComplexString()
     {
-        var hstoreText = "\"key1\"=>\"simple\", \"key2\"=>\"value with, comma\", \"key3\"=>\"value with \\\"quotes\\\"\", \"key4\"=>NULL";
+        var hstoreText =
+            "\"key1\"=>\"simple\", \"key2\"=>\"value with, comma\", \"key3\"=>\"value with \\\"quotes\\\"\", \"key4\"=>NULL";
         var dbValue = new DbValue(hstoreText);
-        return _registry!.TryRead(dbValue, typeof(HStore), out var _);
+        return _registry!.TryRead(dbValue, typeof(HStore), out _);
     }
 
     [Benchmark]
@@ -200,7 +201,7 @@ public class WeirdTypeCoercionBenchmarks
     {
         var rangeText = "[2023-01-01 10:30:00,2023-12-31 23:59:59)";
         var dbValue = new DbValue(rangeText);
-        return _registry!.TryRead(dbValue, typeof(Range<DateTime>), out var _);
+        return _registry!.TryRead(dbValue, typeof(Range<DateTime>), out _);
     }
 
     // Provider-specific optimizations
@@ -209,7 +210,7 @@ public class WeirdTypeCoercionBenchmarks
     {
         var guidBytes = _guid.ToByteArray();
         var dbValue = new DbValue(guidBytes);
-        return _registry!.TryRead(dbValue, typeof(Guid), out var _, SupportedDatabase.PostgreSql);
+        return _registry!.TryRead(dbValue, typeof(Guid), out _, SupportedDatabase.PostgreSql);
     }
 
     [Benchmark]
@@ -222,7 +223,7 @@ public class WeirdTypeCoercionBenchmarks
     public bool MySqlBooleanHandling()
     {
         var dbValue = new DbValue((byte)1); // MySQL BIT(1)
-        return _registry!.TryRead(dbValue, typeof(bool), out var _, SupportedDatabase.MySql);
+        return _registry!.TryRead(dbValue, typeof(bool), out _, SupportedDatabase.MySql);
     }
 
     // Hot path simulation
@@ -247,9 +248,9 @@ public class WeirdTypeCoercionBenchmarks
         var success = true;
         var dbValue = new DbValue(_guid);
 
-        for (int i = 0; i < 10; i++)
+        for (var i = 0; i < 10; i++)
         {
-            success &= _registry!.TryRead(dbValue, typeof(Guid), out var _);
+            success &= _registry!.TryRead(dbValue, typeof(Guid), out _);
         }
 
         return success;
@@ -260,11 +261,9 @@ public class WeirdTypeCoercionBenchmarks
         public override System.Data.DbType DbType { get; set; }
         public override System.Data.ParameterDirection Direction { get; set; }
         public override bool IsNullable { get; set; }
-        [AllowNull]
-        public override string ParameterName { get; set; } = string.Empty;
+        [AllowNull] public override string ParameterName { get; set; } = string.Empty;
         public override int Size { get; set; }
-        [AllowNull]
-        public override string SourceColumn { get; set; } = string.Empty;
+        [AllowNull] public override string SourceColumn { get; set; } = string.Empty;
         public override bool SourceColumnNullMapping { get; set; }
         public override object? Value { get; set; }
 

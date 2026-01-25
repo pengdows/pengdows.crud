@@ -52,6 +52,7 @@ public class DatabaseContextConfiguration : IDatabaseContextConfiguration
     public DbMode DbMode { get; set; } = DbMode.Best;
 
     private ReadWriteMode _readWriteMode = ReadWriteMode.ReadWrite;
+
     public ReadWriteMode ReadWriteMode
     {
         get => _readWriteMode;

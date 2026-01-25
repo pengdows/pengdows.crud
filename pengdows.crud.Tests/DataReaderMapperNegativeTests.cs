@@ -44,7 +44,7 @@ public class DataReaderMapperNegativeTests
         };
 
         var reader = new fakeDbDataReader(rows);
-        var options = new MapperOptions(Strict: true);
+        var options = new MapperOptions(true);
         IDataReaderMapper mapper = new DataReaderMapper();
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
@@ -65,7 +65,7 @@ public class DataReaderMapperNegativeTests
         };
 
         var reader = new fakeDbDataReader(rows);
-        var options = new MapperOptions(Strict: true);
+        var options = new MapperOptions(true);
         var stream = DataReaderMapper.StreamAsync<SampleEntity>(reader, options);
 
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
@@ -114,34 +114,138 @@ public class DataReaderMapperNegativeTests
         public int RecordsAffected => 0;
         public int Depth => 0;
 
-        public void Close() { }
-        public DataTable GetSchemaTable() => throw new NotImplementedException();
-        public bool NextResult() => false;
-        public bool Read() => false;
+        public void Close()
+        {
+        }
 
-        public void Dispose() { }
-        public string GetName(int i) => string.Empty;
-        public string GetDataTypeName(int i) => string.Empty;
-        public Type GetFieldType(int i) => typeof(object);
-        public object GetValue(int i) => DBNull.Value;
-        public int GetValues(object[] values) => 0;
-        public int GetOrdinal(string name) => -1;
-        public bool GetBoolean(int i) => false;
-        public byte GetByte(int i) => 0;
-        public long GetBytes(int i, long fieldOffset, byte[]? buffer, int bufferOffset, int length) => 0;
-        public char GetChar(int i) => '\0';
-        public long GetChars(int i, long fieldOffset, char[]? buffer, int bufferOffset, int length) => 0;
-        public Guid GetGuid(int i) => Guid.Empty;
-        public short GetInt16(int i) => 0;
-        public int GetInt32(int i) => 0;
-        public long GetInt64(int i) => 0;
-        public float GetFloat(int i) => 0;
-        public double GetDouble(int i) => 0;
-        public string GetString(int i) => string.Empty;
-        public decimal GetDecimal(int i) => 0;
-        public DateTime GetDateTime(int i) => DateTime.MinValue;
-        public IDataReader GetData(int i) => this;
-        public bool IsDBNull(int i) => true;
+        public DataTable GetSchemaTable()
+        {
+            throw new NotImplementedException();
+        }
+
+        public bool NextResult()
+        {
+            return false;
+        }
+
+        public bool Read()
+        {
+            return false;
+        }
+
+        public void Dispose()
+        {
+        }
+
+        public string GetName(int i)
+        {
+            return string.Empty;
+        }
+
+        public string GetDataTypeName(int i)
+        {
+            return string.Empty;
+        }
+
+        public Type GetFieldType(int i)
+        {
+            return typeof(object);
+        }
+
+        public object GetValue(int i)
+        {
+            return DBNull.Value;
+        }
+
+        public int GetValues(object[] values)
+        {
+            return 0;
+        }
+
+        public int GetOrdinal(string name)
+        {
+            return -1;
+        }
+
+        public bool GetBoolean(int i)
+        {
+            return false;
+        }
+
+        public byte GetByte(int i)
+        {
+            return 0;
+        }
+
+        public long GetBytes(int i, long fieldOffset, byte[]? buffer, int bufferOffset, int length)
+        {
+            return 0;
+        }
+
+        public char GetChar(int i)
+        {
+            return '\0';
+        }
+
+        public long GetChars(int i, long fieldOffset, char[]? buffer, int bufferOffset, int length)
+        {
+            return 0;
+        }
+
+        public Guid GetGuid(int i)
+        {
+            return Guid.Empty;
+        }
+
+        public short GetInt16(int i)
+        {
+            return 0;
+        }
+
+        public int GetInt32(int i)
+        {
+            return 0;
+        }
+
+        public long GetInt64(int i)
+        {
+            return 0;
+        }
+
+        public float GetFloat(int i)
+        {
+            return 0;
+        }
+
+        public double GetDouble(int i)
+        {
+            return 0;
+        }
+
+        public string GetString(int i)
+        {
+            return string.Empty;
+        }
+
+        public decimal GetDecimal(int i)
+        {
+            return 0;
+        }
+
+        public DateTime GetDateTime(int i)
+        {
+            return DateTime.MinValue;
+        }
+
+        public IDataReader GetData(int i)
+        {
+            return this;
+        }
+
+        public bool IsDBNull(int i)
+        {
+            return true;
+        }
 
         public object this[int i] => DBNull.Value;
         public object this[string name] => DBNull.Value;

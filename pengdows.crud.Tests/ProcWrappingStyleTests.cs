@@ -71,7 +71,9 @@ public class ProcWrappingStyleTests
     {
         var sc = SetupParameterWrapTest(SupportedDatabase.SqlServer);
         var s = sc.WrapForStoredProc(ExecutionType.Read, captureReturn: true);
-        Assert.Equal("DECLARE @__ret INT;\nEXEC @__ret = \"dbo\".\"Sqltest\" @p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9;\nSELECT @__ret;", s);
+        Assert.Equal(
+            "DECLARE @__ret INT;\nEXEC @__ret = \"dbo\".\"Sqltest\" @p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9;\nSELECT @__ret;",
+            s);
     }
 
     [Fact]

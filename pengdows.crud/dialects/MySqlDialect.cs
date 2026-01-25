@@ -11,8 +11,12 @@ namespace pengdows.crud.dialects;
 /// </summary>
 internal class MySqlDialect : SqlDialect
 {
-    private const string DefaultSqlMode = "SET SESSION sql_mode = 'STRICT_ALL_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,ANSI_QUOTES,NO_BACKSLASH_ESCAPES';";
-    private const string ExpectedSqlMode = "STRICT_ALL_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,ANSI_QUOTES,NO_BACKSLASH_ESCAPES";
+    private const string DefaultSqlMode =
+        "SET SESSION sql_mode = 'STRICT_ALL_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,ANSI_QUOTES,NO_BACKSLASH_ESCAPES';";
+
+    private const string ExpectedSqlMode =
+        "STRICT_ALL_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,ANSI_QUOTES,NO_BACKSLASH_ESCAPES";
+
     private static readonly Version UpsertAliasVersionThreshold = new(8, 0, 20);
 
     private string? _sessionSettings;
@@ -29,15 +33,19 @@ internal class MySqlDialect : SqlDialect
     public override string QuotePrefix => "\"";
     public override string QuoteSuffix => "\"";
     public override string ParameterMarker => "@";
+
     public override bool SupportsNamedParameters => true;
+
     // IMMUTABLE: MySQL theoretical maximum parameter limit - do not change without extensive testing
     public override int MaxParameterLimit => 65535;
+
     // IMMUTABLE: MySQL output parameter limit - do not change without extensive testing
     public override int MaxOutputParameters => 65535;
+
     // IMMUTABLE: MySQL identifier length limit - do not change without extensive testing
     public override int ParameterNameMaxLength => 64;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.Call;
-    
+
     // MySQL benefits from server-side prepared statements
     public override bool PrepareStatements => true;
 
@@ -55,12 +63,15 @@ internal class MySqlDialect : SqlDialect
         return "SELECT LAST_INSERT_ID()";
     }
 
-    public override string GetVersionQuery() => "SELECT VERSION()";
+    public override string GetVersionQuery()
+    {
+        return "SELECT VERSION()";
+    }
 
     public override async Task<IDatabaseProductInfo> DetectDatabaseInfoAsync(ITrackedConnection connection)
     {
         var productInfo = await base.DetectDatabaseInfoAsync(connection);
-        
+
         // Check and cache MySQL session settings during initialization
         if (_sessionSettings == null)
         {
@@ -69,14 +80,15 @@ internal class MySqlDialect : SqlDialect
 
             if (!string.IsNullOrWhiteSpace(_sessionSettings))
             {
-                Logger.LogInformation("Applying MySQL session settings on first connect:\n{Settings}", _sessionSettings);
+                Logger.LogInformation("Applying MySQL session settings on first connect:\n{Settings}",
+                    _sessionSettings);
             }
             else
             {
                 Logger.LogInformation("MySQL session settings: no changes required (already compliant)");
             }
         }
-        
+
         return productInfo;
     }
 
@@ -115,14 +127,14 @@ internal class MySqlDialect : SqlDialect
     {
         var currentModes = currentMode.Split(',').Select(m => m.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var expectedModes = expectedMode.Split(',').Select(m => m.Trim());
-        
+
         return expectedModes.All(expectedModes => currentModes.Contains(expectedModes));
     }
 
     public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
     {
         var baseSettings = string.IsNullOrWhiteSpace(_sessionSettings) ? DefaultSqlMode : _sessionSettings;
-        
+
         if (readOnly)
         {
             return $"{baseSettings}\nSET SESSION TRANSACTION READ ONLY;";

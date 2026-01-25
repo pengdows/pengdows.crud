@@ -14,7 +14,7 @@ public class ThreadingTests
     {
         var instance1 = NoOpAsyncLocker.Instance;
         var instance2 = NoOpAsyncLocker.Instance;
-        
+
         Assert.Same(instance1, instance2);
     }
 
@@ -22,9 +22,9 @@ public class ThreadingTests
     public async Task NoOpAsyncLocker_LockAsync_CompletesImmediately()
     {
         var locker = NoOpAsyncLocker.Instance;
-        
+
         var task = locker.LockAsync();
-        
+
         Assert.True(task.IsCompleted);
         await task;
     }
@@ -34,9 +34,9 @@ public class ThreadingTests
     {
         var locker = NoOpAsyncLocker.Instance;
         using var cts = new CancellationTokenSource();
-        
+
         var task = locker.LockAsync(cts.Token);
-        
+
         Assert.True(task.IsCompleted);
         await task;
     }
@@ -45,9 +45,9 @@ public class ThreadingTests
     public async Task NoOpAsyncLocker_TryLockAsync_ReturnsTrue()
     {
         var locker = NoOpAsyncLocker.Instance;
-        
+
         var result = await locker.TryLockAsync(TimeSpan.FromSeconds(1));
-        
+
         Assert.True(result);
     }
 
@@ -56,9 +56,9 @@ public class ThreadingTests
     {
         var locker = NoOpAsyncLocker.Instance;
         using var cts = new CancellationTokenSource();
-        
+
         var result = await locker.TryLockAsync(TimeSpan.FromSeconds(1), cts.Token);
-        
+
         Assert.True(result);
     }
 
@@ -66,9 +66,9 @@ public class ThreadingTests
     public async Task NoOpAsyncLocker_DisposeAsync_CompletesImmediately()
     {
         var locker = NoOpAsyncLocker.Instance;
-        
+
         var task = locker.DisposeAsync();
-        
+
         Assert.True(task.IsCompleted);
         await task;
     }
@@ -83,9 +83,9 @@ public class ThreadingTests
     public void RealAsyncLocker_Constructor_WithSemaphore_Creates()
     {
         using var semaphore = new SemaphoreSlim(1, 1);
-        
+
         using var locker = new RealAsyncLocker(semaphore);
-        
+
         Assert.NotNull(locker);
     }
 
@@ -94,9 +94,9 @@ public class ThreadingTests
     {
         using var semaphore = new SemaphoreSlim(1, 1);
         var logger = new TestLogger();
-        
+
         using var locker = new RealAsyncLocker(semaphore, logger);
-        
+
         Assert.NotNull(locker);
     }
 
@@ -105,9 +105,9 @@ public class ThreadingTests
     {
         using var semaphore = new SemaphoreSlim(1, 1);
         using var locker = new RealAsyncLocker(semaphore);
-        
+
         await locker.LockAsync();
-        
+
         Assert.Equal(0, semaphore.CurrentCount);
     }
 
@@ -116,9 +116,9 @@ public class ThreadingTests
     {
         using var semaphore = new SemaphoreSlim(1, 1);
         using var locker = new RealAsyncLocker(semaphore);
-        
+
         var result = await locker.TryLockAsync(TimeSpan.FromSeconds(1));
-        
+
         Assert.True(result);
         Assert.Equal(0, semaphore.CurrentCount);
     }
@@ -129,7 +129,7 @@ public class ThreadingTests
         using var semaphore = new SemaphoreSlim(1, 1);
         var locker = new RealAsyncLocker(semaphore);
         await locker.DisposeAsync();
-        
+
         await Assert.ThrowsAsync<ObjectDisposedException>(() => locker.LockAsync());
     }
 
@@ -139,7 +139,7 @@ public class ThreadingTests
         using var semaphore = new SemaphoreSlim(1, 1);
         var locker = new RealAsyncLocker(semaphore);
         await locker.DisposeAsync();
-        
+
         await Assert.ThrowsAsync<ObjectDisposedException>(() => locker.TryLockAsync(TimeSpan.FromSeconds(1)));
     }
 
@@ -148,18 +148,29 @@ public class ThreadingTests
     {
         using var semaphore = new SemaphoreSlim(1, 1);
         var locker = new RealAsyncLocker(semaphore);
-        
+
         await locker.LockAsync();
         Assert.Equal(0, semaphore.CurrentCount);
-        
+
         await locker.DisposeAsync();
         Assert.Equal(1, semaphore.CurrentCount);
     }
 
     private class TestLogger : ILogger<RealAsyncLocker>
     {
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-        public bool IsEnabled(LogLevel logLevel) => true;
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) { }
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull
+        {
+            return null;
+        }
+
+        public bool IsEnabled(LogLevel logLevel)
+        {
+            return true;
+        }
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+        }
     }
 }

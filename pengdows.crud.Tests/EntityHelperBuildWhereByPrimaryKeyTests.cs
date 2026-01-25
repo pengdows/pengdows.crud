@@ -51,4 +51,3 @@ public class EntityHelperBuildWhereByPrimaryKeyTests : SqlLiteContextTestBase
         Assert.DoesNotContain("@", sql);
     }
 }
-

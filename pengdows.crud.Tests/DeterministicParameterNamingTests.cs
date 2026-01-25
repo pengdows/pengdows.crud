@@ -20,11 +20,15 @@ public class DeterministicParameterNamingTests : IAsyncLifetime
     {
         _typeMap = new TypeMapRegistry();
         _typeMap.Register<IdentityTestEntity>();
-        _context = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", new fakeDbFactory(SupportedDatabase.SqlServer), _typeMap);
+        _context = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer",
+            new fakeDbFactory(SupportedDatabase.SqlServer), _typeMap);
         _helper = new EntityHelper<IdentityTestEntity, int>(_context);
     }
 
-    public Task InitializeAsync() => Task.CompletedTask;
+    public Task InitializeAsync()
+    {
+        return Task.CompletedTask;
+    }
 
     public async Task DisposeAsync()
     {

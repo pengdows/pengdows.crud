@@ -67,12 +67,14 @@ public class FactoryCreateConnectionTests
     {
         private ConnectionState _state = ConnectionState.Closed;
         private string _connectionString = string.Empty;
+
         [AllowNull]
         public override string ConnectionString
         {
             get => _connectionString;
             set => _connectionString = value ?? string.Empty;
         }
+
         public override string Database => "Breakable";
         public override string DataSource => "Breakable";
         public override string ServerVersion => "1.0";

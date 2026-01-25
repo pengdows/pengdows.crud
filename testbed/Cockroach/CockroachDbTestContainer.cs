@@ -12,6 +12,7 @@ namespace testbed.Cockroach;
 public class CockroachDbTestContainer : TestContainer
 {
     private IContainer? _container;
+    private int _sqlPort = 26257;
 
     public override async Task StartAsync()
     {
@@ -27,7 +28,7 @@ public class CockroachDbTestContainer : TestContainer
             .WithImage("cockroachdb/cockroach:v25.1.0")
             .WithName($"test-cockroach-{uniqueSuffix}")
             .WithHostname("cockroach")
-            .WithPortBinding(26257, 26257)
+            .WithPortBinding(26257, true)
             .WithPortBinding(8080, true)
             .WithCommand("start-single-node", "--insecure")
             .WithWaitStrategy(Wait.ForUnixContainer().UntilPortIsAvailable(26257))
@@ -35,8 +36,10 @@ public class CockroachDbTestContainer : TestContainer
 
         await _container.StartAsync();
 
+        _sqlPort = _container.GetMappedPublicPort(26257);
+
         // Create the test database
-        var connectionString = "Host=localhost;Port=26257;Username=root;SSL Mode=disable;";
+        var connectionString = $"Host=localhost;Port={_sqlPort};Username=root;SSL Mode=disable;";
         await using var conn = new NpgsqlConnection(connectionString);
         await conn.OpenAsync();
         await using var cmd = conn.CreateCommand();
@@ -46,7 +49,7 @@ public class CockroachDbTestContainer : TestContainer
 
     public override Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)
     {
-        var cs = "Host=localhost;Port=26257;Username=root;Database=testdb;SSL Mode=disable;";
+        var cs = $"Host=localhost;Port={_sqlPort};Username=root;Database=testdb;SSL Mode=disable;";
         var ctx = new DatabaseContext(cs, NpgsqlFactory.Instance, null!);
         return Task.FromResult<IDatabaseContext>(ctx);
     }

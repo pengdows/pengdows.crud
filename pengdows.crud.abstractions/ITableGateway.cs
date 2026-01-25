@@ -179,7 +179,8 @@ public interface ITableGateway<TEntity, TRowID>
     /// <summary>
     /// Builds an UPDATE statement asynchronously with cancellation support.
     /// </summary>
-    Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, IDatabaseContext? context, CancellationToken cancellationToken);
+    Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, IDatabaseContext? context,
+        CancellationToken cancellationToken);
 
     /// <summary>
     /// Builds an UPDATE statement, optionally reloading the original.
@@ -203,7 +204,8 @@ public interface ITableGateway<TEntity, TRowID>
     /// <summary>
     /// Builds an UPDATE statement, optionally reloading the original, with cancellation support.
     /// </summary>
-    Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context, CancellationToken cancellationToken);
+    Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context,
+        CancellationToken cancellationToken);
 
     /// <summary>
     /// Builds a DELETE by row identifier (pseudo key).
@@ -259,7 +261,8 @@ public interface ITableGateway<TEntity, TRowID>
     /// <summary>
     /// Loads all entities matching the provided row IDs with cancellation support.
     /// </summary>
-    Task<List<TEntity>> RetrieveAsync(IEnumerable<TRowID> ids, IDatabaseContext? context, CancellationToken cancellationToken);
+    Task<List<TEntity>> RetrieveAsync(IEnumerable<TRowID> ids, IDatabaseContext? context,
+        CancellationToken cancellationToken);
 
     /// <summary>
     /// Streams entities matching the provided row IDs, yielding results as they are read from the database.
@@ -319,7 +322,8 @@ public interface ITableGateway<TEntity, TRowID>
     /// }
     /// </code>
     /// </example>
-    IAsyncEnumerable<TEntity> RetrieveStreamAsync(IEnumerable<TRowID> ids, IDatabaseContext? context, CancellationToken cancellationToken);
+    IAsyncEnumerable<TEntity> RetrieveStreamAsync(IEnumerable<TRowID> ids, IDatabaseContext? context,
+        CancellationToken cancellationToken);
 
     /// <summary>
     /// Executes a DELETE for all provided row IDs (pseudo keys) and returns the number of affected rows.
@@ -377,7 +381,8 @@ public interface ITableGateway<TEntity, TRowID>
     /// <summary>
     /// Executes an UPDATE for the given object, optionally reloading the original, with cancellation support.
     /// </summary>
-    Task<int> UpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context, CancellationToken cancellationToken);
+    Task<int> UpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context,
+        CancellationToken cancellationToken);
 
     /// <summary>
     /// Builds a provider-specific UPSERT statement.
@@ -426,7 +431,8 @@ public interface ITableGateway<TEntity, TRowID>
     /// <summary>
     /// Loads a single object from the database using primary key values with cancellation support.
     /// </summary>
-    Task<TEntity?> RetrieveOneAsync(TEntity objectToRetrieve, IDatabaseContext? context, CancellationToken cancellationToken);
+    Task<TEntity?> RetrieveOneAsync(TEntity objectToRetrieve, IDatabaseContext? context,
+        CancellationToken cancellationToken);
 
     /// <summary>
     /// Loads a single object from the database using the row ID.

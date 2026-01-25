@@ -75,7 +75,7 @@ internal sealed class ClobStreamConverter : AdvancedTypeConverter<TextReader>
             case Stream stream:
                 try
                 {
-                    result = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+                    result = new StreamReader(stream, Encoding.UTF8, true, leaveOpen: true);
                     return true;
                 }
                 catch

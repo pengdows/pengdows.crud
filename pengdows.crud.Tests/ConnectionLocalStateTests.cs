@@ -36,4 +36,3 @@ public class ConnectionLocalStateTests
         Assert.Equal(0, evictedSecond);
     }
 }
-

@@ -30,4 +30,3 @@ public class SqlContainerParameterNormalizationTests : SqlLiteContextTestBase
         Assert.Equal(456, sc.GetParameterValue("$p0"));
     }
 }
-

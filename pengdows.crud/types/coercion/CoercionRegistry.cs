@@ -47,7 +47,9 @@ public class CoercionRegistry
         {
             var key = (type, provider.Value);
             if (_providerSpecificCoercions.TryGetValue(key, out var providerCoercion))
+            {
                 return providerCoercion;
+            }
         }
 
         // Fall back to general coercion
@@ -118,7 +120,7 @@ public abstract class DbCoercion<T> : IDbCoercion<T>
     {
         if (targetType == typeof(T) || targetType == typeof(T?))
         {
-            if (TryRead(src, out T? typedValue))
+            if (TryRead(src, out var typedValue))
             {
                 value = typedValue;
                 return true;
@@ -135,6 +137,7 @@ public abstract class DbCoercion<T> : IDbCoercion<T>
         {
             return TryWrite(typedValue, parameter);
         }
+
         if (value == null)
         {
             return TryWrite(default, parameter);

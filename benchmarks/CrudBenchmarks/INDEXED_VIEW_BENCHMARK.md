@@ -4,11 +4,14 @@ This benchmark demonstrates pengdows.crud's advantage over Entity Framework when
 
 ## The Problem
 
-Entity Framework automatically sets `ARITHABORT OFF` in its session settings, which **prevents the SQL Server query optimizer from using indexed views**. This can cause massive performance degradation (10x-100x slower) for aggregation queries that could benefit from pre-computed indexed views.
+Entity Framework automatically sets `ARITHABORT OFF` in its session settings, which **prevents the SQL Server query
+optimizer from using indexed views**. This can cause massive performance degradation (10x-100x slower) for aggregation
+queries that could benefit from pre-computed indexed views.
 
 ## The Test
 
 The benchmark creates:
+
 - A `Customers` table with 1,000-5,000 customers
 - An `Orders` table with ~10 orders per customer
 - An **indexed view** `vw_CustomerOrderSummary` that pre-computes order totals per customer
@@ -18,22 +21,24 @@ Then it compares performance across different approaches for getting customer or
 ## Running the Benchmark
 
 ### Prerequisites
+
 - SQL Server LocalDB (comes with Visual Studio or SQL Server Express)
 - Windows (for LocalDB) or SQL Server instance
 
 ### Run the Indexed View Benchmark Only
+
 ```bash
 dotnet run -c Release -- --filter "*IndexedView*"
 ```
 
 ### Expected Results
 
-| Method | Mean Time | Performance vs pengdows |
-|--------|-----------|------------------------|
-| **pengdows.crud (indexed view)** | ~0.8ms | Baseline (fastest) |
-| **Direct SQL (indexed view)** | ~0.9ms | +12% slower |
-| **Entity Framework (workaround)** | ~1.2ms | +50% slower |
-| **Entity Framework (normal)** | ~45ms | **56x slower** |
+| Method                            | Mean Time | Performance vs pengdows |
+|-----------------------------------|-----------|-------------------------|
+| **pengdows.crud (indexed view)**  | ~0.8ms    | Baseline (fastest)      |
+| **Direct SQL (indexed view)**     | ~0.9ms    | +12% slower             |
+| **Entity Framework (workaround)** | ~1.2ms    | +50% slower             |
+| **Entity Framework (normal)**     | ~45ms     | **56x slower**          |
 
 ## What This Proves
 
@@ -45,6 +50,7 @@ dotnet run -c Release -- --filter "*IndexedView*"
 ## Technical Details
 
 ### The Indexed View
+
 ```sql
 CREATE VIEW dbo.vw_CustomerOrderSummary WITH SCHEMABINDING AS
 SELECT
@@ -63,6 +69,7 @@ ON dbo.vw_CustomerOrderSummary(customer_id);
 ```
 
 ### pengdows.crud Entity
+
 ```csharp
 [Table("vw_CustomerOrderSummary", schema: "dbo")]
 public class CustomerOrderSummary
@@ -83,6 +90,7 @@ var summary = await helper.RetrieveOneAsync(customerId);
 ```
 
 ### Entity Framework Problem
+
 ```csharp
 // EF automatically sets ARITHABORT OFF, preventing indexed view usage
 var summary = await context.Orders
@@ -95,6 +103,9 @@ var summary = await context.Orders
 
 ## Why This Matters
 
-The 170μs "penalty" in the basic CRUD benchmarks becomes completely irrelevant when pengdows.crud enables 56x faster performance through proper indexed view support. This is exactly the kind of database-specific optimization that differentiates a SQL-first approach from a generic ORM.
+The 170μs "penalty" in the basic CRUD benchmarks becomes completely irrelevant when pengdows.crud enables 56x faster
+performance through proper indexed view support. This is exactly the kind of database-specific optimization that
+differentiates a SQL-first approach from a generic ORM.
 
-**Bottom line**: pengdows.crud's architecture preserves the database engine's ability to optimize your queries, while EF's consistency-first approach can accidentally disable critical performance features.
+**Bottom line**: pengdows.crud's architecture preserves the database engine's ability to optimize your queries, while
+EF's consistency-first approach can accidentally disable critical performance features.

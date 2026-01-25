@@ -29,11 +29,9 @@ public class SqlServerBenchmarks : IAsyncDisposable
     private SqlServerDbContext _efDbContext = null!;
     private SqlConnection _dapperConnection = null!;
 
-    [Params(1000)]
-    public int FilmCount;
+    [Params(1000)] public int FilmCount;
 
-    [Params(200)]
-    public int ActorCount;
+    [Params(200)] public int ActorCount;
 
     private int _filmId;
     private List<int> _filmIds10 = new();
@@ -56,12 +54,14 @@ public class SqlServerBenchmarks : IAsyncDisposable
         await _container.StartAsync();
 
         var mappedPort = _container.GetMappedPublicPort(1433);
-        var masterConnStr = $"Server=localhost,{mappedPort};Database=master;User Id=sa;Password=YourPassword123!;TrustServerCertificate=true;Connection Timeout=60;";
+        var masterConnStr =
+            $"Server=localhost,{mappedPort};Database=master;User Id=sa;Password=YourPassword123!;TrustServerCertificate=true;Connection Timeout=60;";
 
         await WaitForReady(masterConnStr);
         await CreateDatabaseAsync(masterConnStr);
 
-        _connStr = $"Server=localhost,{mappedPort};Database=testdb;User Id=sa;Password=YourPassword123!;TrustServerCertificate=true;Connection Timeout=30;Min Pool Size=10;Max Pool Size=100;Pooling=true;Connection Lifetime=0;";
+        _connStr =
+            $"Server=localhost,{mappedPort};Database=testdb;User Id=sa;Password=YourPassword123!;TrustServerCertificate=true;Connection Timeout=30;Min Pool Size=10;Max Pool Size=100;Pooling=true;Connection Lifetime=0;";
         await CreateSchemaAndSeedAsync();
 
         _map = new TypeMapRegistry();
@@ -94,9 +94,11 @@ public class SqlServerBenchmarks : IAsyncDisposable
 
         // Pick keys to use in benchmarks
         _filmId = await _dapperConnection.ExecuteScalarAsync<int>("SELECT TOP 1 film_id FROM film ORDER BY film_id");
-        var row = await _dapperConnection.QuerySingleAsync<(int actor_id, int film_id)>("SELECT TOP 1 actor_id, film_id FROM film_actor");
+        var row = await _dapperConnection.QuerySingleAsync<(int actor_id, int film_id)>(
+            "SELECT TOP 1 actor_id, film_id FROM film_actor");
         _compositeKey = (row.actor_id, row.film_id);
-        _filmIds10 = (await _dapperConnection.QueryAsync<int>("SELECT TOP 10 film_id FROM film ORDER BY film_id")).ToList();
+        _filmIds10 = (await _dapperConnection.QueryAsync<int>("SELECT TOP 10 film_id FROM film ORDER BY film_id"))
+            .ToList();
 
         // Warmup systems
         Console.WriteLine("[WARMUP] Warming up pengdows.crud...");
@@ -190,6 +192,7 @@ public class SqlServerBenchmarks : IAsyncDisposable
                 Console.WriteLine($"SQL: {row.statement_text}");
                 Console.WriteLine("---");
             }
+
             Console.WriteLine("============================================");
         }
         catch (Exception ex)
@@ -205,7 +208,7 @@ public class SqlServerBenchmarks : IAsyncDisposable
 
     private async Task WaitForReady(string connectionString)
     {
-        for (int i = 0; i < 120; i++) // Extended timeout for SQL Server
+        for (var i = 0; i < 120; i++) // Extended timeout for SQL Server
         {
             try
             {
@@ -217,10 +220,14 @@ public class SqlServerBenchmarks : IAsyncDisposable
             catch (Exception ex)
             {
                 if (i % 10 == 0) // Log every 10 attempts
+                {
                     Console.WriteLine($"[SQL Server] Connection attempt {i + 1}/120 failed: {ex.Message}");
+                }
+
                 await Task.Delay(2000); // Longer delay for SQL Server startup
             }
         }
+
         throw new TimeoutException("SQL Server container did not become ready after 240 seconds");
     }
 
@@ -271,25 +278,26 @@ CREATE TABLE [dbo].[film_actor] (
         await conn.ExecuteAsync(createTablesSql, commandTimeout: commandTimeoutSeconds);
 
         // Clear existing data and reset identity values so film IDs remain predictable
-        await conn.ExecuteAsync("TRUNCATE TABLE [film_actor]; TRUNCATE TABLE [film];", commandTimeout: commandTimeoutSeconds);
+        await conn.ExecuteAsync("TRUNCATE TABLE [film_actor]; TRUNCATE TABLE [film];",
+            commandTimeout: commandTimeoutSeconds);
 
         // Use bulk copy to seed films quickly
         var filmTable = new DataTable();
         filmTable.Columns.Add("title", typeof(string));
         filmTable.Columns.Add("length", typeof(int));
-        for (int i = 0; i < FilmCount; i++)
+        for (var i = 0; i < FilmCount; i++)
         {
-            filmTable.Rows.Add($"Film {i}", 60 + (i % 120));
+            filmTable.Rows.Add($"Film {i}", 60 + i % 120);
         }
 
         await using var transaction = await conn.BeginTransactionAsync();
 
         using (var filmBulkCopy = new SqlBulkCopy(conn, SqlBulkCopyOptions.TableLock, (SqlTransaction)transaction)
-        {
-            DestinationTableName = "[dbo].[film]",
-            BatchSize = 500,
-            BulkCopyTimeout = commandTimeoutSeconds
-        })
+               {
+                   DestinationTableName = "[dbo].[film]",
+                   BatchSize = 500,
+                   BulkCopyTimeout = commandTimeoutSeconds
+               })
         {
             filmBulkCopy.ColumnMappings.Add("title", "title");
             filmBulkCopy.ColumnMappings.Add("length", "length");
@@ -301,20 +309,20 @@ CREATE TABLE [dbo].[film_actor] (
         filmActorTable.Columns.Add("actor_id", typeof(int));
         filmActorTable.Columns.Add("film_id", typeof(int));
         var filmStep = Math.Max(1, FilmCount / 50);
-        for (int actorId = 1; actorId <= ActorCount; actorId++)
+        for (var actorId = 1; actorId <= ActorCount; actorId++)
         {
-            for (int filmId = actorId; filmId <= FilmCount; filmId += filmStep)
+            for (var filmId = actorId; filmId <= FilmCount; filmId += filmStep)
             {
                 filmActorTable.Rows.Add(actorId, filmId);
             }
         }
 
         using (var filmActorBulkCopy = new SqlBulkCopy(conn, SqlBulkCopyOptions.TableLock, (SqlTransaction)transaction)
-        {
-            DestinationTableName = "[dbo].[film_actor]",
-            BatchSize = 1000,
-            BulkCopyTimeout = commandTimeoutSeconds
-        })
+               {
+                   DestinationTableName = "[dbo].[film_actor]",
+                   BatchSize = 1000,
+                   BulkCopyTimeout = commandTimeoutSeconds
+               })
         {
             filmActorBulkCopy.ColumnMappings.Add("actor_id", "actor_id");
             filmActorBulkCopy.ColumnMappings.Add("film_id", "film_id");
@@ -323,7 +331,8 @@ CREATE TABLE [dbo].[film_actor] (
 
         await transaction.CommitAsync();
 
-        Console.WriteLine($"[SQL Server] Seeded {FilmCount} films and {filmActorTable.Rows.Count} film_actor associations");
+        Console.WriteLine(
+            $"[SQL Server] Seeded {FilmCount} films and {filmActorTable.Rows.Count} film_actor associations");
     }
 
     [Benchmark]
@@ -382,11 +391,9 @@ CREATE TABLE [dbo].[film_actor] (
         [Column("film_id", DbType.Int32)]
         public int Id { get; set; }
 
-        [Column("title", DbType.String)]
-        public string Title { get; set; } = string.Empty;
+        [Column("title", DbType.String)] public string Title { get; set; } = string.Empty;
 
-        [Column("length", DbType.Int32)]
-        public int Length { get; set; }
+        [Column("length", DbType.Int32)] public int Length { get; set; }
     }
 
     [Table("film_actor")]
@@ -403,7 +410,9 @@ CREATE TABLE [dbo].[film_actor] (
 
     public class SqlServerDbContext : DbContext
     {
-        public SqlServerDbContext(DbContextOptions<SqlServerDbContext> options) : base(options) { }
+        public SqlServerDbContext(DbContextOptions<SqlServerDbContext> options) : base(options)
+        {
+        }
 
         public DbSet<Film> Films { get; set; } = null!;
         public DbSet<FilmActor> FilmActors { get; set; } = null!;

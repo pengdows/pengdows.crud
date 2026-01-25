@@ -157,7 +157,7 @@ public class OracleDialectAdvancedTests
     {
         // Act
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=Oracle", _factory);
-        var settings = _dialect.GetConnectionSessionSettings(context, readOnly: false);
+        var settings = _dialect.GetConnectionSessionSettings(context, false);
 
         // Assert
         Assert.NotNull(settings); // Should return settings or empty string
@@ -415,7 +415,7 @@ public class OracleDialectAdvancedTests
     {
         var context = new DatabaseContext("test", _factory);
 
-        var settings = _dialect.GetConnectionSessionSettings(context, readOnly: false);
+        var settings = _dialect.GetConnectionSessionSettings(context, false);
 
         Assert.Contains("ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD'", settings);
         Assert.DoesNotContain("ALTER SESSION SET READ ONLY", settings);
@@ -426,7 +426,7 @@ public class OracleDialectAdvancedTests
     {
         var context = new DatabaseContext("test", _factory);
 
-        var settings = _dialect.GetConnectionSessionSettings(context, readOnly: true);
+        var settings = _dialect.GetConnectionSessionSettings(context, true);
 
         Assert.Contains("ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD'", settings);
         Assert.Contains("ALTER SESSION SET READ ONLY", settings);
@@ -450,7 +450,7 @@ public class OracleDialectAdvancedTests
         var context = new DatabaseContext("test", _factory);
 
         // Should not throw for non-Oracle connections
-        _dialect.ApplyConnectionSettings(connection, context, readOnly: false);
+        _dialect.ApplyConnectionSettings(connection, context, false);
 
         Assert.True(true); // Verify no exceptions thrown
     }

@@ -1,16 +1,20 @@
 # Database-Specific Feature Advantages
 
-This document outlines unique database features that pengdows.crud can leverage but Entity Framework and Dapper struggle with or cannot use effectively.
+This document outlines unique database features that pengdows.crud can leverage but Entity Framework and Dapper struggle
+with or cannot use effectively.
 
 ## The Problem with Generic ORMs
 
-Entity Framework prioritizes cross-database compatibility, which means it can only use features common to all databases. Dapper, while more flexible, requires manual SQL knowledge and doesn't provide database-aware abstractions.
+Entity Framework prioritizes cross-database compatibility, which means it can only use features common to all databases.
+Dapper, while more flexible, requires manual SQL knowledge and doesn't provide database-aware abstractions.
 
-pengdows.crud's **dialect system** allows it to exploit each database's unique strengths while maintaining a consistent API.
+pengdows.crud's **dialect system** allows it to exploit each database's unique strengths while maintaining a consistent
+API.
 
 ## PostgreSQL Unique Advantages
 
 ### 1. **JSONB Native Querying**
+
 ```csharp
 // pengdows.crud: Native JSONB operators
 using var container = context.CreateSqlContainer(@"
@@ -34,6 +38,7 @@ var products = conn.Query<Product>(@"
 **Performance Impact**: 10x faster with native JSONB operators vs client evaluation
 
 ### 2. **Array Operations**
+
 ```csharp
 // pengdows.crud: Native array operators
 WHERE @tag = ANY(tags)
@@ -47,6 +52,7 @@ WHERE 'featured' = ANY(tags)
 ```
 
 ### 3. **Full-Text Search**
+
 ```csharp
 // pengdows.crud: Native tsvector/tsquery
 WHERE search_vector @@ plainto_tsquery('english', @term)
@@ -58,6 +64,7 @@ WHERE EF.Functions.Like(p.ProductName, "%term%")
 ```
 
 ### 4. **Geospatial Queries**
+
 ```csharp
 // pengdows.crud: Native PostGIS operators
 WHERE location <-> point(50, 50) < @distance
@@ -70,6 +77,7 @@ ORDER BY location <-> point(50, 50)
 ## SQL Server Unique Advantages
 
 ### 1. **Indexed Views (Materialized Views)**
+
 ```csharp
 // pengdows.crud: Treats indexed views as first-class entities
 [Table("vw_CustomerOrderSummary")]
@@ -80,6 +88,7 @@ public class CustomerSummary { ... }
 ```
 
 ### 2. **MERGE Statements**
+
 ```csharp
 // pengdows.crud: Native MERGE support
 await helper.UpsertAsync(entity);
@@ -90,6 +99,7 @@ await helper.UpsertAsync(entity);
 ```
 
 ### 3. **JSON Support (SQL Server 2016+)**
+
 ```csharp
 // pengdows.crud: Native JSON functions
 WHERE JSON_VALUE(metadata, '$.status') = @status
@@ -98,6 +108,7 @@ WHERE JSON_VALUE(metadata, '$.status') = @status
 ```
 
 ### 4. **Temporal Tables**
+
 ```csharp
 // pengdows.crud: Can query temporal history
 SELECT * FROM employees FOR SYSTEM_TIME AS OF @pointInTime
@@ -108,6 +119,7 @@ SELECT * FROM employees FOR SYSTEM_TIME AS OF @pointInTime
 ## Oracle Unique Advantages
 
 ### 1. **CONNECT BY Hierarchical Queries**
+
 ```csharp
 // pengdows.crud: Native hierarchical queries
 SELECT * FROM employees
@@ -118,6 +130,7 @@ CONNECT BY PRIOR employee_id = manager_id
 ```
 
 ### 2. **Advanced Analytics**
+
 ```csharp
 // pengdows.crud: Native analytic functions
 SELECT employee_id, salary,
@@ -128,6 +141,7 @@ SELECT employee_id, salary,
 ```
 
 ### 3. **ROWNUM and Pseudocolumns**
+
 ```csharp
 // pengdows.crud: Native Oracle pagination
 WHERE ROWNUM <= @limit
@@ -138,6 +152,7 @@ WHERE ROWNUM <= @limit
 ## MySQL Unique Advantages
 
 ### 1. **JSON Path Expressions**
+
 ```csharp
 // pengdows.crud: Native JSON path syntax
 WHERE JSON_EXTRACT(metadata, '$.status') = @status
@@ -147,6 +162,7 @@ WHERE JSON_CONTAINS(tags, @tag)
 ```
 
 ### 2. **Full-Text Search with Boolean Mode**
+
 ```csharp
 // pengdows.crud: Native MySQL FTS
 WHERE MATCH(title, description) AGAINST(@term IN BOOLEAN MODE)
@@ -155,6 +171,7 @@ WHERE MATCH(title, description) AGAINST(@term IN BOOLEAN MODE)
 ```
 
 ### 3. **Spatial Indexes and Functions**
+
 ```csharp
 // pengdows.crud: Native spatial functions
 WHERE ST_Distance(location, POINT(@lat, @lng)) < @radius
@@ -165,6 +182,7 @@ WHERE ST_Distance(location, POINT(@lat, @lng)) < @radius
 ## SQLite Unique Advantages
 
 ### 1. **JSON1 Extension**
+
 ```csharp
 // pengdows.crud: SQLite JSON functions
 WHERE json_extract(data, '$.status') = @status
@@ -173,6 +191,7 @@ WHERE json_extract(data, '$.status') = @status
 ```
 
 ### 2. **FTS5 Full-Text Search**
+
 ```csharp
 // pengdows.crud: Native SQLite FTS
 SELECT * FROM documents_fts WHERE documents_fts MATCH @term
@@ -181,6 +200,7 @@ SELECT * FROM documents_fts WHERE documents_fts MATCH @term
 ```
 
 ### 3. **Connection Mode Optimization**
+
 ```csharp
 // pengdows.crud: Automatic connection strategy
 // File-based: Uses SingleWriter mode automatically
@@ -192,6 +212,7 @@ SELECT * FROM documents_fts WHERE documents_fts MATCH @term
 ## Firebird Unique Advantages
 
 ### 1. **EXECUTE PROCEDURE**
+
 ```csharp
 // pengdows.crud: Native procedure execution with output parameters
 await helper.ExecuteProcedureAsync("SP_CALCULATE_TOTALS", parameters);
@@ -200,6 +221,7 @@ await helper.ExecuteProcedureAsync("SP_CALCULATE_TOTALS", parameters);
 ```
 
 ### 2. **Multi-Database Transactions**
+
 ```csharp
 // pengdows.crud: Can participate in distributed transactions
 // EF: Limited cross-database transaction support
@@ -207,14 +229,14 @@ await helper.ExecuteProcedureAsync("SP_CALCULATE_TOTALS", parameters);
 
 ## Performance Impact Summary
 
-| Feature | pengdows.crud | Entity Framework | Dapper | Performance Gain |
-|---------|--------------|------------------|--------|------------------|
-| PostgreSQL JSONB | Native operators | Client evaluation | Manual SQL | 10x faster |
-| SQL Server Indexed Views | Index seeks | Table scans | Manual optimization | 50x faster |
-| PostgreSQL Arrays | Native ANY() | Limited support | Manual syntax | 5x faster |
-| Full-Text Search | Native FTS | LIKE fallback | Manual implementation | 100x faster |
-| Oracle Hierarchical | CONNECT BY | Recursive processing | Manual SQL | 20x faster |
-| Geospatial Queries | Native operators | Complex setup | Manual functions | 15x faster |
+| Feature                  | pengdows.crud    | Entity Framework     | Dapper                | Performance Gain |
+|--------------------------|------------------|----------------------|-----------------------|------------------|
+| PostgreSQL JSONB         | Native operators | Client evaluation    | Manual SQL            | 10x faster       |
+| SQL Server Indexed Views | Index seeks      | Table scans          | Manual optimization   | 50x faster       |
+| PostgreSQL Arrays        | Native ANY()     | Limited support      | Manual syntax         | 5x faster        |
+| Full-Text Search         | Native FTS       | LIKE fallback        | Manual implementation | 100x faster      |
+| Oracle Hierarchical      | CONNECT BY       | Recursive processing | Manual SQL            | 20x faster       |
+| Geospatial Queries       | Native operators | Complex setup        | Manual functions      | 15x faster       |
 
 ## Running the Benchmarks
 
@@ -230,6 +252,8 @@ dotnet run -c Release -- --filter "*FullText*"
 
 ## Key Takeaway
 
-While Entity Framework and Dapper might be "faster" in trivial microbenchmarks, pengdows.crud's database-aware architecture enables **massive performance gains** (10x-100x) by leveraging each database engine's unique optimizations.
+While Entity Framework and Dapper might be "faster" in trivial microbenchmarks, pengdows.crud's database-aware
+architecture enables **massive performance gains** (10x-100x) by leveraging each database engine's unique optimizations.
 
-The SQL-first approach combined with dialect-specific intelligence makes pengdows.crud the clear choice for performance-critical applications that need to squeeze every bit of performance from their database.
+The SQL-first approach combined with dialect-specific intelligence makes pengdows.crud the clear choice for
+performance-critical applications that need to squeeze every bit of performance from their database.

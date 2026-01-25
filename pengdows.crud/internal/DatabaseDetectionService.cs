@@ -54,7 +54,8 @@ internal static class DatabaseDetectionService
             if (connection.GetType().Name.Contains("fake", StringComparison.OrdinalIgnoreCase))
             {
                 var emulatedProductProperty = connection.GetType().GetProperty("EmulatedProduct");
-                if (emulatedProductProperty != null && emulatedProductProperty.PropertyType == typeof(SupportedDatabase))
+                if (emulatedProductProperty != null &&
+                    emulatedProductProperty.PropertyType == typeof(SupportedDatabase))
                 {
                     var value = emulatedProductProperty.GetValue(connection);
                     if (value is SupportedDatabase product && product != SupportedDatabase.Unknown)
@@ -158,8 +159,8 @@ internal static class DatabaseDetectionService
     /// </summary>
     public static DatabaseTopology DetectTopology(SupportedDatabase product, string? connectionString)
     {
-        bool isLocalDb = false;
-        bool isEmbedded = false;
+        var isLocalDb = false;
+        var isEmbedded = false;
 
         if (string.IsNullOrWhiteSpace(connectionString))
         {
@@ -181,7 +182,10 @@ internal static class DatabaseDetectionService
             {
                 var csb = new DbConnectionStringBuilder { ConnectionString = connectionString };
 
-                string GetVal(string key) => csb.ContainsKey(key) ? csb[key]?.ToString() ?? string.Empty : string.Empty;
+                string GetVal(string key)
+                {
+                    return csb.ContainsKey(key) ? csb[key]?.ToString() ?? string.Empty : string.Empty;
+                }
 
                 var serverType = GetVal("ServerType").ToLowerInvariant();
                 var clientLib = GetVal("ClientLibrary").ToLowerInvariant();
@@ -192,8 +196,8 @@ internal static class DatabaseDetectionService
                     serverType.Contains("embedded") ||
                     clientLib.Contains("embed") ||
                     (string.IsNullOrWhiteSpace(dataSource) &&
-                     (!string.IsNullOrWhiteSpace(database) &&
-                      (database.Contains('/') || database.Contains('\\') || database.EndsWith(".fdb"))));
+                     !string.IsNullOrWhiteSpace(database) &&
+                     (database.Contains('/') || database.Contains('\\') || database.EndsWith(".fdb")));
             }
             catch
             {

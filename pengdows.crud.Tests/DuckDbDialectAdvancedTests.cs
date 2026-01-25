@@ -30,7 +30,6 @@ public class DuckDbDialectAdvancedTests
     [Fact]
     public async Task GetProductNameAsync_Should_Return_DuckDB_From_Version_Query()
     {
-
         var connection = (fakeDbConnection)_factory.CreateConnection();
         connection.SetScalarResultForCommand(_dialect.GetVersionQuery(), "DuckDB v1.0.0");
         var trackedConnection = new TrackedConnection(connection);
@@ -179,7 +178,8 @@ public class DuckDbDialectAdvancedTests
     [InlineData("DuckDB v0.9.2", 0, 9, 2)]
     [InlineData("v0.7.1-dev", 0, 7, 1)]
     [InlineData("1.2.3", 1, 2, 3)]
-    public void ParseVersion_Should_Parse_DuckDB_Version_Formats(string versionString, int expectedMajor, int expectedMinor, int expectedPatch)
+    public void ParseVersion_Should_Parse_DuckDB_Version_Formats(string versionString, int expectedMajor,
+        int expectedMinor, int expectedPatch)
     {
         var version = _dialect.ParseVersion(versionString);
 
@@ -206,7 +206,8 @@ public class DuckDbDialectAdvancedTests
     [InlineData(0, 8, 0, SqlStandardLevel.Sql2011)]
     [InlineData(0, 6, 0, SqlStandardLevel.Sql2008)]
     [InlineData(0, 4, 0, SqlStandardLevel.Sql2003)]
-    public void DetermineStandardCompliance_Should_Return_Correct_Level_For_Version(int major, int minor, int patch, SqlStandardLevel expected)
+    public void DetermineStandardCompliance_Should_Return_Correct_Level_For_Version(int major, int minor, int patch,
+        SqlStandardLevel expected)
     {
         var version = new Version(major, minor, patch);
 
@@ -265,7 +266,7 @@ public class DuckDbDialectAdvancedTests
     {
         var context = new DatabaseContext("test", _factory);
 
-        var settings = _dialect.GetConnectionSessionSettings(context, readOnly: true);
+        var settings = _dialect.GetConnectionSessionSettings(context, true);
 
         Assert.Equal("PRAGMA read_only = 1;", settings);
     }
@@ -275,7 +276,7 @@ public class DuckDbDialectAdvancedTests
     {
         var context = new DatabaseContext("test", _factory);
 
-        var settings = _dialect.GetConnectionSessionSettings(context, readOnly: false);
+        var settings = _dialect.GetConnectionSessionSettings(context, false);
 
         Assert.Equal(string.Empty, settings);
     }
@@ -286,7 +287,7 @@ public class DuckDbDialectAdvancedTests
         var context = new DatabaseContext("Data Source=/path/to/file.duckdb", _factory);
         var connection = _factory.CreateConnection();
 
-        _dialect.ApplyConnectionSettings(connection, context, readOnly: true);
+        _dialect.ApplyConnectionSettings(connection, context, true);
 
         Assert.Contains("access_mode=READ_ONLY", connection.ConnectionString);
     }
@@ -297,7 +298,7 @@ public class DuckDbDialectAdvancedTests
         var context = new DatabaseContext("Data Source=:memory:", _factory);
         var connection = _factory.CreateConnection();
 
-        _dialect.ApplyConnectionSettings(connection, context, readOnly: true);
+        _dialect.ApplyConnectionSettings(connection, context, true);
 
         Assert.DoesNotContain("access_mode=READ_ONLY", connection.ConnectionString);
     }
@@ -308,7 +309,7 @@ public class DuckDbDialectAdvancedTests
         var context = new DatabaseContext("Data Source=/path/to/file.duckdb", _factory);
         var connection = _factory.CreateConnection();
 
-        _dialect.ApplyConnectionSettings(connection, context, readOnly: false);
+        _dialect.ApplyConnectionSettings(connection, context, false);
 
         Assert.DoesNotContain("access_mode=READ_ONLY", connection.ConnectionString);
     }

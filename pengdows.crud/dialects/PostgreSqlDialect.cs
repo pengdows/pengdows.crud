@@ -15,7 +15,9 @@ namespace pengdows.crud.dialects;
 /// </summary>
 internal class PostgreSqlDialect : SqlDialect
 {
-    private const string DefaultSessionSettings = "SET standard_conforming_strings = on;\nSET client_min_messages = warning;";
+    private const string DefaultSessionSettings =
+        "SET standard_conforming_strings = on;\nSET client_min_messages = warning;";
+
     private static readonly IReadOnlyDictionary<string, string> ExpectedSessionSettings =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -31,14 +33,19 @@ internal class PostgreSqlDialect : SqlDialect
     }
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.PostgreSql;
+
     // Use ':' parameter marker; Npgsql supports ':' and existing integrations rely on it
     public override string ParameterMarker => ":";
     public override bool SupportsNamedParameters => true;
+
     public override bool SupportsSetValuedParameters => true;
+
     // IMMUTABLE: PostgreSQL practical parameter limit - do not change without extensive testing
     public override int MaxParameterLimit => 32767;
+
     // IMMUTABLE: PostgreSQL conservative output parameter limit for stored functions - do not change without extensive testing
     public override int MaxOutputParameters => 100;
+
     // IMMUTABLE: PostgreSQL NAMEDATALEN-1 identifier limit - do not change without extensive testing
     public override int ParameterNameMaxLength => 63;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.PostgreSQL;
@@ -46,6 +53,7 @@ internal class PostgreSqlDialect : SqlDialect
 
     // PostgreSQL benefits from prepared statements
     public override bool PrepareStatements => true;
+
     public override SqlStandardLevel MaxSupportedStandard =>
         IsInitialized ? base.MaxSupportedStandard : DetermineStandardCompliance(null);
 
@@ -96,7 +104,7 @@ internal class PostgreSqlDialect : SqlDialect
             var npgsqlDbTypeProperty = type.GetProperty("NpgsqlDbType");
             if (npgsqlDbTypeProperty != null && npgsqlDbTypeProperty.PropertyType.IsEnum)
             {
-                if (Enum.TryParse(npgsqlDbTypeProperty.PropertyType, "Jsonb", ignoreCase: true, out var enumValue))
+                if (Enum.TryParse(npgsqlDbTypeProperty.PropertyType, "Jsonb", true, out var enumValue))
                 {
                     npgsqlDbTypeProperty.SetValue(parameter, enumValue);
                 }
@@ -104,11 +112,15 @@ internal class PostgreSqlDialect : SqlDialect
         }
         catch (Exception ex)
         {
-            Logger.LogDebug(ex, "Failed to stamp NpgsqlDbType metadata for JSON parameter {Parameter}.", parameter.ParameterName);
+            Logger.LogDebug(ex, "Failed to stamp NpgsqlDbType metadata for JSON parameter {Parameter}.",
+                parameter.ParameterName);
         }
     }
 
-    public override string GetVersionQuery() => "SELECT version()";
+    public override string GetVersionQuery()
+    {
+        return "SELECT version()";
+    }
 
     public override async Task<string?> GetProductNameAsync(ITrackedConnection connection)
     {
@@ -117,6 +129,7 @@ internal class PostgreSqlDialect : SqlDialect
         {
             return "PostgreSQL";
         }
+
         return name;
     }
 
@@ -133,11 +146,15 @@ internal class PostgreSqlDialect : SqlDialect
             var snapshot = string.Join(", ", result.Snapshot.Select(kv => $"{kv.Key}={kv.Value}"));
             if (!string.IsNullOrWhiteSpace(_sessionSettings))
             {
-                Logger.LogInformation("PostgreSQL session settings detected: {CurrentSettings}. Applying changes:\n{Settings}", snapshot, _sessionSettings);
+                Logger.LogInformation(
+                    "PostgreSQL session settings detected: {CurrentSettings}. Applying changes:\n{Settings}", snapshot,
+                    _sessionSettings);
             }
             else
             {
-                Logger.LogInformation("PostgreSQL session settings detected: {CurrentSettings}. No changes required (already compliant)", snapshot);
+                Logger.LogInformation(
+                    "PostgreSQL session settings detected: {CurrentSettings}. No changes required (already compliant)",
+                    snapshot);
             }
         }
 
@@ -151,7 +168,8 @@ internal class PostgreSqlDialect : SqlDialect
             conn =>
             {
                 using var cmd = conn.CreateCommand();
-                cmd.CommandText = "SELECT name, setting FROM pg_settings WHERE name IN ('standard_conforming_strings', 'client_min_messages')";
+                cmd.CommandText =
+                    "SELECT name, setting FROM pg_settings WHERE name IN ('standard_conforming_strings', 'client_min_messages')";
 
                 using var reader = cmd.ExecuteReader();
                 var currentSettings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -181,7 +199,8 @@ internal class PostgreSqlDialect : SqlDialect
             "Failed to check PostgreSQL session settings, applying default settings");
     }
 
-    private (string settingsToApply, Dictionary<string, string> currentSettings) CheckPostgreSqlSettingsWithDetails(IDbConnection connection)
+    private (string settingsToApply, Dictionary<string, string> currentSettings) CheckPostgreSqlSettingsWithDetails(
+        IDbConnection connection)
     {
         var result = GetPostgreSqlSessionSettings(connection);
         var snapshot = new Dictionary<string, string>(result.Snapshot, StringComparer.OrdinalIgnoreCase);
@@ -247,7 +266,8 @@ internal class PostgreSqlDialect : SqlDialect
 SET client_min_messages = warning;";
     }
 
-    public override void ConfigureProviderSpecificSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)
+    public override void ConfigureProviderSpecificSettings(IDbConnection connection, IDatabaseContext context,
+        bool readOnly)
     {
         // Apply Npgsql-specific prepare settings if this is an Npgsql connection
         if (connection.GetType().FullName?.StartsWith("Npgsql.") == true)
@@ -284,7 +304,8 @@ SET client_min_messages = warning;";
             }
             catch (Exception ex)
             {
-                Logger.LogDebug(ex, "Failed to configure Npgsql connection string settings, using original connection string");
+                Logger.LogDebug(ex,
+                    "Failed to configure Npgsql connection string settings, using original connection string");
             }
         }
         else
@@ -300,7 +321,9 @@ SET client_min_messages = warning;";
                     connection.ConnectionString = connection.ConnectionString.ToLowerInvariant();
                 }
             }
-            catch { /* ignore */ }
+            catch
+            { /* ignore */
+            }
         }
     }
 

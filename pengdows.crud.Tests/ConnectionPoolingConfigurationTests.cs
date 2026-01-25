@@ -159,7 +159,7 @@ public class ConnectionPoolingConfigurationTests
         var mode = DbMode.Standard;
 
         var result = ConnectionPoolingConfiguration.ApplyPoolingDefaults(
-            connectionString, product, mode, supportsExternalPooling: true);
+            connectionString, product, mode, true);
 
         Assert.NotEqual(connectionString, result);
         var builder = new DbConnectionStringBuilder { ConnectionString = result };
@@ -175,7 +175,7 @@ public class ConnectionPoolingConfigurationTests
         var mode = DbMode.KeepAlive;
 
         var result = ConnectionPoolingConfiguration.ApplyPoolingDefaults(
-            connectionString, product, mode, supportsExternalPooling: true);
+            connectionString, product, mode, true);
 
         Assert.NotEqual(connectionString, result);
     }
@@ -188,7 +188,7 @@ public class ConnectionPoolingConfigurationTests
         var mode = DbMode.SingleConnection;
 
         var result = ConnectionPoolingConfiguration.ApplyPoolingDefaults(
-            connectionString, product, mode, supportsExternalPooling: true);
+            connectionString, product, mode, true);
 
         Assert.Equal(connectionString, result);
     }
@@ -201,7 +201,7 @@ public class ConnectionPoolingConfigurationTests
         var mode = DbMode.SingleWriter;
 
         var result = ConnectionPoolingConfiguration.ApplyPoolingDefaults(
-            connectionString, product, mode, supportsExternalPooling: true);
+            connectionString, product, mode, true);
 
         Assert.Equal(connectionString, result);
     }
@@ -214,7 +214,7 @@ public class ConnectionPoolingConfigurationTests
         var mode = DbMode.Standard;
 
         var result = ConnectionPoolingConfiguration.ApplyPoolingDefaults(
-            connectionString, product, mode, supportsExternalPooling: false);
+            connectionString, product, mode, false);
 
         Assert.Equal(connectionString, result);
     }
@@ -227,7 +227,7 @@ public class ConnectionPoolingConfigurationTests
         var mode = DbMode.Standard;
 
         var result = ConnectionPoolingConfiguration.ApplyPoolingDefaults(
-            connectionString, product, mode, supportsExternalPooling: true);
+            connectionString, product, mode, true);
 
         var builder = new DbConnectionStringBuilder { ConnectionString = result };
         Assert.Equal("10", builder["Min Pool Size"].ToString());
@@ -241,7 +241,7 @@ public class ConnectionPoolingConfigurationTests
         var mode = DbMode.Standard;
 
         var result = ConnectionPoolingConfiguration.ApplyPoolingDefaults(
-            connectionString, product, mode, supportsExternalPooling: true);
+            connectionString, product, mode, true);
 
         var builder = new DbConnectionStringBuilder { ConnectionString = result };
         Assert.False(ConnectionPoolingConfiguration.HasMinPoolSize(builder));
@@ -256,7 +256,7 @@ public class ConnectionPoolingConfigurationTests
         var mode = DbMode.Standard;
 
         var result = ConnectionPoolingConfiguration.ApplyPoolingDefaults(
-            connectionString, product, mode, supportsExternalPooling: true);
+            connectionString, product, mode, true);
 
         Assert.Equal(connectionString, result);
     }

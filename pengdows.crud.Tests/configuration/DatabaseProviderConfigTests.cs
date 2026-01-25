@@ -9,7 +9,7 @@ public class DatabaseProviderConfigTests
     public void Constructor_InitializesWithEmptyStrings()
     {
         var config = new DatabaseProviderConfig();
-        
+
         Assert.Equal("", config.ProviderName);
         Assert.Equal("", config.FactoryType);
         Assert.Equal("", config.AssemblyPath);
@@ -21,9 +21,9 @@ public class DatabaseProviderConfigTests
     {
         var config = new DatabaseProviderConfig();
         const string providerName = "System.Data.SqlClient";
-        
+
         config.ProviderName = providerName;
-        
+
         Assert.Equal(providerName, config.ProviderName);
     }
 
@@ -32,9 +32,9 @@ public class DatabaseProviderConfigTests
     {
         var config = new DatabaseProviderConfig();
         const string factoryType = "System.Data.SqlClient.SqlClientFactory";
-        
+
         config.FactoryType = factoryType;
-        
+
         Assert.Equal(factoryType, config.FactoryType);
     }
 
@@ -43,9 +43,9 @@ public class DatabaseProviderConfigTests
     {
         var config = new DatabaseProviderConfig();
         const string assemblyPath = "/path/to/assembly.dll";
-        
+
         config.AssemblyPath = assemblyPath;
-        
+
         Assert.Equal(assemblyPath, config.AssemblyPath);
     }
 
@@ -54,9 +54,9 @@ public class DatabaseProviderConfigTests
     {
         var config = new DatabaseProviderConfig();
         const string assemblyName = "System.Data.SqlClient";
-        
+
         config.AssemblyName = assemblyName;
-        
+
         Assert.Equal(assemblyName, config.AssemblyName);
     }
 
@@ -68,12 +68,12 @@ public class DatabaseProviderConfigTests
         const string factoryType = "System.Data.SqlClient.SqlClientFactory";
         const string assemblyPath = "/path/to/assembly.dll";
         const string assemblyName = "System.Data.SqlClient";
-        
+
         config.ProviderName = providerName;
         config.FactoryType = factoryType;
         config.AssemblyPath = assemblyPath;
         config.AssemblyName = assemblyName;
-        
+
         Assert.Equal(providerName, config.ProviderName);
         Assert.Equal(factoryType, config.FactoryType);
         Assert.Equal(assemblyPath, config.AssemblyPath);
@@ -84,12 +84,12 @@ public class DatabaseProviderConfigTests
     public void Properties_HandleNullValues()
     {
         var config = new DatabaseProviderConfig();
-        
+
         config.ProviderName = null!;
         config.FactoryType = null!;
         config.AssemblyPath = null!;
         config.AssemblyName = null!;
-        
+
         Assert.Null(config.ProviderName);
         Assert.Null(config.FactoryType);
         Assert.Null(config.AssemblyPath);
@@ -100,12 +100,12 @@ public class DatabaseProviderConfigTests
     public void Properties_HandleWhitespaceValues()
     {
         var config = new DatabaseProviderConfig();
-        
+
         config.ProviderName = "   ";
         config.FactoryType = "\t";
         config.AssemblyPath = "\n";
         config.AssemblyName = "\r\n";
-        
+
         Assert.Equal("   ", config.ProviderName);
         Assert.Equal("\t", config.FactoryType);
         Assert.Equal("\n", config.AssemblyPath);

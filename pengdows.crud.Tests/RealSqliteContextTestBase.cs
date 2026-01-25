@@ -23,7 +23,10 @@ public class RealSqliteContextTestBase : IAsyncLifetime
     public IDatabaseContext Context { get; }
     public IAuditValueResolver AuditValueResolver { get; }
 
-    public Task InitializeAsync() => Task.CompletedTask;
+    public Task InitializeAsync()
+    {
+        return Task.CompletedTask;
+    }
 
     public async Task DisposeAsync()
     {

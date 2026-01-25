@@ -8,7 +8,6 @@ using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Threading.Tasks;
 using Moq;
-
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
 using pengdows.crud.dialects;
@@ -19,7 +18,7 @@ using Xunit;
 
 #endregion
 
-namespace pengdows.crud.Tests ;
+namespace pengdows.crud.Tests;
 
 public class PostgreSqlDialectTests
 {
@@ -148,7 +147,7 @@ public class PostgreSqlDialectTests
     {
         // Act
         var context = new DatabaseContext("Host=localhost;Database=test;EmulatedProduct=PostgreSql", _factory);
-        var settings = _dialect.GetConnectionSessionSettings(context, readOnly: false);
+        var settings = _dialect.GetConnectionSessionSettings(context, false);
 
         // Assert
         Assert.NotNull(settings); // Should return some settings or empty string
@@ -559,7 +558,7 @@ public class PostgreSqlDialectTests
         var context = new DatabaseContext("test", _factory);
 
         // Should not throw for non-Npgsql connections
-        _dialect.ConfigureProviderSpecificSettings(connection, context, readOnly: false);
+        _dialect.ConfigureProviderSpecificSettings(connection, context, false);
 
         Assert.True(true); // Verify no exceptions thrown
     }
@@ -755,7 +754,7 @@ public class PostgreSqlDialectTests
 
         var context = new Mock<IDatabaseContext>(MockBehavior.Strict).Object;
 
-        dialect.ConfigureProviderSpecificSettings(connection, context, readOnly: false);
+        dialect.ConfigureProviderSpecificSettings(connection, context, false);
 
         // fakeDbConnection is not recognized as an Npgsql connection, so settings won't be modified
         // The connection string should remain unchanged for non-Npgsql connections
@@ -776,7 +775,7 @@ public class PostgreSqlDialectTests
 
         var context = new Mock<IDatabaseContext>(MockBehavior.Strict).Object;
 
-        dialect.ConfigureProviderSpecificSettings(connection, context, readOnly: false);
+        dialect.ConfigureProviderSpecificSettings(connection, context, false);
 
         Assert.Equal(original.ToLowerInvariant(), connection.ConnectionString);
     }
@@ -813,12 +812,14 @@ public class PostgreSqlDialectTests
     private class TestConnection : DbConnection
     {
         private string _connectionString = string.Empty;
+
         [AllowNull]
         public override string ConnectionString
         {
             get => _connectionString;
             set => _connectionString = value ?? string.Empty;
         }
+
         public override string Database => "test";
         public override string DataSource => "localhost";
         public override string ServerVersion => "1.0";

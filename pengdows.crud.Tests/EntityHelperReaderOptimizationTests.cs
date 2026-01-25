@@ -128,17 +128,19 @@ public class EntityHelperReaderOptimizationTests : SqlLiteContextTestBase
             var entity = helper.MapReaderToObject(reader);
             results.Add(entity);
         }
+
         sw.Stop();
 
         Assert.Equal(rowCount, results.Count);
 
         // Record baseline for comparison after optimization
         // Current implementation should show significant overhead from repeated plan building
-        var nanosPerRow = (sw.Elapsed.TotalMilliseconds * 1_000_000) / rowCount;
+        var nanosPerRow = sw.Elapsed.TotalMilliseconds * 1_000_000 / rowCount;
 
         // Before optimization: expect > 3000ns per row due to hash recalculation overhead
         // After optimization: should be < 1500ns per row
-        Console.WriteLine($"MapReaderToObject baseline: {nanosPerRow:F0}ns per row ({sw.ElapsedMilliseconds}ms total for {rowCount} rows)");
+        Console.WriteLine(
+            $"MapReaderToObject baseline: {nanosPerRow:F0}ns per row ({sw.ElapsedMilliseconds}ms total for {rowCount} rows)");
     }
 
     [Table("TestEntity")]
@@ -148,11 +150,9 @@ public class EntityHelperReaderOptimizationTests : SqlLiteContextTestBase
         [Column("Id", DbType.Int32)]
         public int Id { get; set; }
 
-        [Column("Name", DbType.String)]
-        public string? Name { get; set; }
+        [Column("Name", DbType.String)] public string? Name { get; set; }
 
-        [Column("Value", DbType.Int32)]
-        public int Value { get; set; }
+        [Column("Value", DbType.Int32)] public int Value { get; set; }
     }
 
     /// <summary>

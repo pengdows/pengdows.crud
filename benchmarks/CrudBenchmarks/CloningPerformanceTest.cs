@@ -15,7 +15,7 @@ public class CloningPerformanceTest
     private IDatabaseContext _ctx = null!;
     private TypeMapRegistry _map = null!;
     private EntityHelper<Film, int> _filmHelper = null!;
-    
+
     private int _filmId = 1;
     private ISqlContainer _cachedContainer = null!;
 
@@ -24,7 +24,7 @@ public class CloningPerformanceTest
     {
         _map = new TypeMapRegistry();
         _map.Register<Film>();
-        
+
         // Use FakeDb
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         var cfg = new DatabaseContextConfiguration
@@ -35,7 +35,7 @@ public class CloningPerformanceTest
         };
         _ctx = new DatabaseContext(cfg, factory, null, _map);
         _filmHelper = new EntityHelper<Film, int>(_ctx);
-        
+
         // Pre-build container for cloning tests
         _cachedContainer = _filmHelper.BuildRetrieve(new[] { _filmId });
     }
@@ -46,7 +46,7 @@ public class CloningPerformanceTest
         // Traditional approach: Build container from scratch each time
         return _filmHelper.BuildRetrieve(new[] { _filmId });
     }
-    
+
     [Benchmark]
     public ISqlContainer BuildRetrieve_WithCloning()
     {
@@ -70,17 +70,15 @@ public class CloningPerformanceTest
         _ctx?.Dispose();
     }
 
-    [Table("film", schema: "public")]
+    [Table("film", "public")]
     public class Film
     {
         [Id(false)]
         [Column("film_id", DbType.Int32)]
         public int Id { get; set; }
 
-        [Column("title", DbType.String)]
-        public string Title { get; set; } = string.Empty;
+        [Column("title", DbType.String)] public string Title { get; set; } = string.Empty;
 
-        [Column("length", DbType.Int32)]
-        public int Length { get; set; }
+        [Column("length", DbType.Int32)] public int Length { get; set; }
     }
 }

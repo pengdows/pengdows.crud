@@ -44,11 +44,9 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
     private readonly List<int> _customerIds = new();
     private readonly Dictionary<string, BenchmarkResult> _results = new();
 
-    [Params(10000)]
-    public int OrderCount;
+    [Params(10000)] public int OrderCount;
 
-    [Params(50000)]
-    public int OrderDetailCount;
+    [Params(50000)] public int OrderDetailCount;
 
     [GlobalSetup]
     public async Task GlobalSetup()
@@ -67,7 +65,8 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
         await _sqlServerContainer.StartAsync();
 
         var hostPort = _sqlServerContainer.GetMappedPublicPort(1433);
-        _connStr = $"Server=localhost,{hostPort};Database={Database};User Id=sa;Password={Password};TrustServerCertificate=true;Connection Timeout=30;";
+        _connStr =
+            $"Server=localhost,{hostPort};Database={Database};User Id=sa;Password={Password};TrustServerCertificate=true;Connection Timeout=30;";
 
         Console.WriteLine($"[BENCHMARK] SQL Server container started on port {hostPort}");
 
@@ -118,7 +117,7 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
         var masterConnStr = _connStr.Replace($"Database={Database}", "Database=master");
         Console.WriteLine("[BENCHMARK] Waiting for SQL Server to be ready...");
 
-        for (int i = 0; i < 120; i++) // 2 minutes max
+        for (var i = 0; i < 120; i++) // 2 minutes max
         {
             try
             {
@@ -137,6 +136,7 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
                 {
                     Console.WriteLine($"[BENCHMARK] Waiting for SQL Server... attempt {i + 1}/120: {ex.Message}");
                 }
+
                 await Task.Delay(1000);
             }
         }
@@ -278,11 +278,12 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
         await using var tx = await conn.BeginTransactionAsync();
 
         // Insert customers
-        for (int i = 1; i <= 500; i++)
+        for (var i = 1; i <= 500; i++)
         {
             var customerId = await conn.ExecuteScalarAsync<int>(
                 "INSERT INTO dbo.Customers (company_name, city, country) OUTPUT INSERTED.customer_id VALUES (@name, @city, @country)",
-                new {
+                new
+                {
                     name = $"Company {i:D3}",
                     city = $"City{i % 50}",
                     country = $"Country{i % 20}"
@@ -293,13 +294,14 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
         // Insert products
         var productIds = new List<int>();
         var categories = new[] { "Electronics", "Clothing", "Books", "Food", "Sports" };
-        for (int i = 1; i <= 200; i++)
+        for (var i = 1; i <= 200; i++)
         {
             var productId = await conn.ExecuteScalarAsync<int>(
                 "INSERT INTO dbo.Products (product_name, unit_price, category_name) OUTPUT INSERTED.product_id VALUES (@name, @price, @category)",
-                new {
+                new
+                {
                     name = $"Product {i:D3}",
-                    price = 10 + (i % 100),
+                    price = 10 + i % 100,
                     category = categories[i % categories.Length]
                 }, tx);
             productIds.Add(productId);
@@ -309,14 +311,15 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
         var random = new Random(42);
         var orderIds = new List<int>();
 
-        for (int i = 1; i <= OrderCount; i++)
+        for (var i = 1; i <= OrderCount; i++)
         {
             var customerId = _customerIds[random.Next(_customerIds.Count)];
             var orderDate = DateTime.Now.AddDays(-random.Next(365 * 2)); // 2 years of data
 
             var orderId = await conn.ExecuteScalarAsync<int>(
                 "INSERT INTO dbo.Orders (customer_id, order_date, ship_country) OUTPUT INSERTED.order_id VALUES (@customerId, @orderDate, @country)",
-                new {
+                new
+                {
                     customerId,
                     orderDate,
                     country = $"Country{random.Next(20)}"
@@ -325,7 +328,7 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
         }
 
         // Insert order details
-        for (int i = 1; i <= OrderDetailCount; i++)
+        for (var i = 1; i <= OrderDetailCount; i++)
         {
             var orderId = orderIds[random.Next(orderIds.Count)];
             var productId = productIds[random.Next(productIds.Count)];
@@ -490,7 +493,8 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
             if (_results.ContainsKey(pengdowsKey))
             {
                 var pengdows = _results[pengdowsKey];
-                Console.WriteLine($"{"pengdows.crud",-20} {"SUCCESS",-10} {pengdows.AvgTimeMs,-10:F1}ms {"Uses automatic view matching",-30}");
+                Console.WriteLine(
+                    $"{"pengdows.crud",-20} {"SUCCESS",-10} {pengdows.AvgTimeMs,-10:F1}ms {"Uses automatic view matching",-30}");
             }
 
             if (_results.ContainsKey(efKey))
@@ -524,13 +528,19 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
         _monthlyRevenueTemplate?.Dispose();
 
         if (_pengdowsContext is IAsyncDisposable pad)
+        {
             await pad.DisposeAsync();
+        }
 
         if (_efContext != null)
+        {
             await _efContext.DisposeAsync();
+        }
 
         if (_dapperConnection != null)
+        {
             await _dapperConnection.DisposeAsync();
+        }
     }
 
     /// <summary>
@@ -560,6 +570,7 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
                     TotalRevenue = Convert.ToDecimal(reader["total_revenue"])
                 });
             }
+
             return results;
         });
     }
@@ -638,6 +649,7 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
                     TotalRevenue = Convert.ToDecimal(reader["total_revenue"])
                 });
             }
+
             return results;
         });
     }
@@ -690,6 +702,7 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
                     MonthlyRevenue = Convert.ToDecimal(reader["monthly_revenue"])
                 });
             }
+
             return results;
         });
     }
@@ -733,7 +746,7 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
             stopwatch.Stop();
             UpdateBenchmarkResult(benchmarkName, stopwatch.ElapsedMilliseconds, false, ex);
             Console.WriteLine($"[FAILURE] {benchmarkName}: {ex.Message}");
-            return default(T)!;
+            return default!;
         }
     }
 
@@ -771,33 +784,30 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
     }
 
     // Entity classes
-    [pengdows.crud.attributes.Table("OrderDetails", schema: "dbo")]
+    [Table("OrderDetails", "dbo")]
     public class OrderDetail
     {
         [Id(true)]
-        [pengdows.crud.attributes.Column("order_detail_id", DbType.Int32)]
+        [Column("order_detail_id", DbType.Int32)]
         public int OrderDetailId { get; set; }
 
-        [pengdows.crud.attributes.Column("order_id", DbType.Int32)]
-        public int OrderId { get; set; }
+        [Column("order_id", DbType.Int32)] public int OrderId { get; set; }
 
-        [pengdows.crud.attributes.Column("product_id", DbType.Int32)]
-        public int ProductId { get; set; }
+        [Column("product_id", DbType.Int32)] public int ProductId { get; set; }
 
-        [pengdows.crud.attributes.Column("unit_price", DbType.Decimal)]
-        public decimal UnitPrice { get; set; }
+        [Column("unit_price", DbType.Decimal)] public decimal UnitPrice { get; set; }
 
-        [pengdows.crud.attributes.Column("quantity", DbType.Int32)]
-        public int Quantity { get; set; }
+        [Column("quantity", DbType.Int32)] public int Quantity { get; set; }
 
-        [pengdows.crud.attributes.Column("discount", DbType.Decimal)]
-        public decimal Discount { get; set; }
+        [Column("discount", DbType.Decimal)] public decimal Discount { get; set; }
     }
 
     // EF entities
     public class EfTestDbContext : DbContext
     {
-        public EfTestDbContext(DbContextOptions<EfTestDbContext> options) : base(options) { }
+        public EfTestDbContext(DbContextOptions<EfTestDbContext> options) : base(options)
+        {
+        }
 
         public DbSet<EfCustomer> Customers { get; set; }
         public DbSet<EfProduct> Products { get; set; }

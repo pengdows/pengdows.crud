@@ -16,7 +16,7 @@ public class SingleWriterConnectionStrategyTests
         {
             ConnectionString = "Data Source=test;EmulatedProduct=Sqlite",
             ProviderName = SupportedDatabase.Sqlite.ToString(),
-            DbMode = DbMode.SingleWriter,
+            DbMode = DbMode.SingleWriter
         };
         return new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Sqlite), NullLoggerFactory.Instance);
     }
@@ -36,10 +36,10 @@ public class SingleWriterConnectionStrategyTests
         var strategy = new SingleWriterConnectionStrategy(context);
 
         // Request a write connection with isShared = true
-        var writeConnSharedTrue = strategy.GetConnection(ExecutionType.Write, isShared: true);
+        var writeConnSharedTrue = strategy.GetConnection(ExecutionType.Write, true);
 
         // Request a write connection with isShared = false
-        var writeConnSharedFalse = strategy.GetConnection(ExecutionType.Write, isShared: false);
+        var writeConnSharedFalse = strategy.GetConnection(ExecutionType.Write, false);
 
         // Both requests return the same persistent connection (parameter ignored)
         Assert.Same(persistentConn, writeConnSharedTrue);
@@ -71,10 +71,10 @@ public class SingleWriterConnectionStrategyTests
         strategy.PostInitialize(context.GetSingleConnection());
 
         // Request a read connection with isShared = true
-        var readConnSharedTrue = strategy.GetConnection(ExecutionType.Read, isShared: true);
+        var readConnSharedTrue = strategy.GetConnection(ExecutionType.Read, true);
 
         // Request a read connection with isShared = false
-        var readConnSharedFalse = strategy.GetConnection(ExecutionType.Read, isShared: false);
+        var readConnSharedFalse = strategy.GetConnection(ExecutionType.Read, false);
 
         // PROOF OF ISSUE: Both connections use NoOpAsyncLocker (no serialization)
         // because GetConnection() calls GetStandardConnection(isShared: false, readOnly: true)
@@ -104,7 +104,7 @@ public class SingleWriterConnectionStrategyTests
         strategy.PostInitialize(context.GetSingleConnection());
 
         // Caller explicitly requests shared connection expecting serialization
-        var readConn = strategy.GetConnection(ExecutionType.Read, isShared: true);
+        var readConn = strategy.GetConnection(ExecutionType.Read, true);
 
         // EXPECTATION: If isShared = true, caller expects RealAsyncLocker with semaphore
         // REALITY: Gets NoOpAsyncLocker.Instance (no serialization)
@@ -135,8 +135,8 @@ public class SingleWriterConnectionStrategyTests
         Assert.NotNull(persistentConn);
 
         // WRITE OPERATIONS: Should return shared persistent connection
-        var writeConn1 = strategy.GetConnection(ExecutionType.Write, isShared: true);
-        var writeConn2 = strategy.GetConnection(ExecutionType.Write, isShared: false);
+        var writeConn1 = strategy.GetConnection(ExecutionType.Write, true);
+        var writeConn2 = strategy.GetConnection(ExecutionType.Write, false);
 
         Assert.Same(persistentConn, writeConn1);
         Assert.Same(persistentConn, writeConn2);
@@ -146,8 +146,8 @@ public class SingleWriterConnectionStrategyTests
         Assert.NotSame(NoOpAsyncLocker.Instance, writeLocker);
 
         // READ OPERATIONS: Should return ephemeral non-shared connections
-        var readConn1 = strategy.GetConnection(ExecutionType.Read, isShared: true);
-        var readConn2 = strategy.GetConnection(ExecutionType.Read, isShared: false);
+        var readConn1 = strategy.GetConnection(ExecutionType.Read, true);
+        var readConn2 = strategy.GetConnection(ExecutionType.Read, false);
 
         // Reads are different instances (ephemeral)
         Assert.NotSame(readConn1, readConn2);

@@ -64,15 +64,16 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         : this(
             context,
             (context as ISqlDialectProvider)?.Dialect
-                ?? throw new InvalidOperationException(
-                    "IDatabaseContext must implement ISqlDialectProvider and expose a non-null Dialect."),
+            ?? throw new InvalidOperationException(
+                "IDatabaseContext must implement ISqlDialectProvider and expose a non-null Dialect."),
             query,
             logger)
     {
     }
 
     // Internal factory used by DatabaseContext/TransactionContext
-    internal static SqlContainer Create(IDatabaseContext context, string? query = "", ILogger<ISqlContainer>? logger = null)
+    internal static SqlContainer Create(IDatabaseContext context, string? query = "",
+        ILogger<ISqlContainer>? logger = null)
     {
         var dialect = (context as ISqlDialectProvider)?.Dialect
                       ?? throw new InvalidOperationException(
@@ -81,7 +82,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     }
 
     // Test support: allow explicit dialect for specialized scenarios
-    internal static SqlContainer CreateForDialect(IDatabaseContext context, ISqlDialect dialect, string? query = "", ILogger<ISqlContainer>? logger = null)
+    internal static SqlContainer CreateForDialect(IDatabaseContext context, ISqlDialect dialect, string? query = "",
+        ILogger<ISqlContainer>? logger = null)
     {
         return new SqlContainer(context, dialect, query, logger);
     }
@@ -125,7 +127,6 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 : _dialect.ParameterMarker;
         });
     }
-
 
 
     public DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
@@ -320,7 +321,6 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     }
 
 
-
     public DbCommand CreateCommand(ITrackedConnection conn)
     {
         var dbCommand = CreateRawCommand(conn);
@@ -355,6 +355,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 {
                     continue;
                 }
+
                 dbCommand.Parameters.Add(param);
             }
         }
@@ -377,11 +378,11 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         var cmd = conn.CreateCommand();
         if (_context is TransactionContext transactionContext)
         {
-            cmd.Transaction = (transactionContext.Transaction as DbTransaction)
+            cmd.Transaction = transactionContext.Transaction as DbTransaction
                               ?? throw new InvalidOperationException("Transaction is not a transaction");
         }
 
-        return (cmd as DbCommand)
+        return cmd as DbCommand
                ?? throw new InvalidOperationException("Command is not a DbCommand");
     }
 
@@ -396,7 +397,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         _commandTextDirty = true;
     }
 
-    public string WrapForStoredProc(ExecutionType executionType, bool includeParameters = true, bool captureReturn = false)
+    public string WrapForStoredProc(ExecutionType executionType, bool includeParameters = true,
+        bool captureReturn = false)
     {
         var procName = Query.ToString().Trim();
 
@@ -482,22 +484,22 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     // Overload without defaults to avoid ambiguity with the 3-arg version
     public string WrapForStoredProc(ExecutionType executionType, bool includeParameters)
     {
-        return WrapForStoredProc(executionType, includeParameters, captureReturn: false);
+        return WrapForStoredProc(executionType, includeParameters, false);
     }
 
     public string WrapForCreateWithReturn(bool includeParameters = true)
     {
-        return WrapForStoredProc(ExecutionType.Write, includeParameters, captureReturn: true);
+        return WrapForStoredProc(ExecutionType.Write, includeParameters, true);
     }
 
     public string WrapForUpdateWithReturn(bool includeParameters = true)
     {
-        return WrapForStoredProc(ExecutionType.Write, includeParameters, captureReturn: true);
+        return WrapForStoredProc(ExecutionType.Write, includeParameters, true);
     }
 
     public string WrapForDeleteWithReturn(bool includeParameters = true)
     {
-        return WrapForStoredProc(ExecutionType.Write, includeParameters, captureReturn: true);
+        return WrapForStoredProc(ExecutionType.Write, includeParameters, true);
     }
 
     private string GenerateParameterName()
@@ -557,14 +559,17 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             {
                 if (!ReferenceEquals(conn, dc.PersistentConnection))
                 {
-                    throw new InvalidOperationException("Write operations must use the writer connection in SingleWriter mode.");
+                    throw new InvalidOperationException(
+                        "Write operations must use the writer connection in SingleWriter mode.");
                 }
             }
+
             // In SingleWriter mode, providers may still allow ephemeral write connections depending on implementation.
             // Do not enforce strict persistent-connection usage here; let strategy/context manage it.
             await using var connectionLocker = conn.GetLock();
             await connectionLocker.LockAsync(cancellationToken).ConfigureAwait(false);
-            cmd = await PrepareAndCreateCommandAsync(conn, commandType, ExecutionType.Write, cancellationToken).ConfigureAwait(false);
+            cmd = await PrepareAndCreateCommandAsync(conn, commandType, ExecutionType.Write, cancellationToken)
+                .ConfigureAwait(false);
             var result = await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             metrics?.CommandSucceeded(startTimestamp, result);
             metrics?.RecordRowsAffected(result);
@@ -608,6 +613,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             {
                 return (T?)value;
             }
+
             var targetType = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
             return (T?)TypeCoercionHelper.Coerce(value, reader.GetFieldType(0), targetType, DefaultCoercionOptions);
         }
@@ -616,7 +622,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         var isNullable = !typeof(T).IsValueType || Nullable.GetUnderlyingType(typeof(T)) != null;
         if (isNullable)
         {
-            return default(T);
+            return default;
         }
 
         throw new InvalidOperationException("ExecuteScalarAsync expected at least one row but found none.");
@@ -651,13 +657,16 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             {
                 if (!ReferenceEquals(conn, dc.PersistentConnection))
                 {
-                    throw new InvalidOperationException("Write operations must use the writer connection in SingleWriter mode.");
+                    throw new InvalidOperationException(
+                        "Write operations must use the writer connection in SingleWriter mode.");
                 }
             }
+
             // Do not enforce persistent connection for SingleWriter here; strategy/context will manage it.
             await using var connectionLocker = conn.GetLock();
             await connectionLocker.LockAsync(cancellationToken).ConfigureAwait(false);
-            cmd = await PrepareAndCreateCommandAsync(conn, commandType, ExecutionType.Write, cancellationToken).ConfigureAwait(false);
+            cmd = await PrepareAndCreateCommandAsync(conn, commandType, ExecutionType.Write, cancellationToken)
+                .ConfigureAwait(false);
 
             var result = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
             if (result is null || result is DBNull)
@@ -730,7 +739,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             conn = _context.GetConnection(ExecutionType.Read, isTransaction);
             connectionLocker = conn.GetLock();
             await connectionLocker.LockAsync(cancellationToken).ConfigureAwait(false);
-            cmd = await PrepareAndCreateCommandAsync(conn, commandType, ExecutionType.Read, cancellationToken).ConfigureAwait(false);
+            cmd = await PrepareAndCreateCommandAsync(conn, commandType, ExecutionType.Read, cancellationToken)
+                .ConfigureAwait(false);
 
             // unless the databaseContext is in a transaction or SingleConnection mode,
             // a new connection is returned for every READ operation, therefore, we
@@ -738,7 +748,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             // closed. This prevents leaking
             var isSingleConnection = _context.ConnectionMode == DbMode.SingleConnection;
             var isReadOnlyConnection = _context.IsReadOnlyConnection;
-            var behavior = (isTransaction || isSingleConnection)
+            var behavior = isTransaction || isSingleConnection
                 ? CommandBehavior.Default
                 : CommandBehavior.CloseConnection;
             //behavior |= CommandBehavior.SingleResult;
@@ -789,6 +799,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                     // Ignore disposal errors in finally block
                 }
             }
+
             //no matter what we do NOT close the underlying connection
             //or dispose it here—the reader manages command disposal.
             Cleanup(null, null, ExecutionType.Read);
@@ -814,12 +825,13 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             conn = _context.GetConnection(ExecutionType.Read, isTransaction);
             connectionLocker = conn.GetLock();
             await connectionLocker.LockAsync(cancellationToken).ConfigureAwait(false);
-            cmd = await PrepareAndCreateCommandAsync(conn, CommandType.Text, ExecutionType.Read, cancellationToken).ConfigureAwait(false);
+            cmd = await PrepareAndCreateCommandAsync(conn, CommandType.Text, ExecutionType.Read, cancellationToken)
+                .ConfigureAwait(false);
 
             var isSingleConnection = _context.ConnectionMode == DbMode.SingleConnection;
-            var behavior = (isTransaction || isSingleConnection)
+            var behavior = isTransaction || isSingleConnection
                 ? CommandBehavior.SingleRow
-                : (CommandBehavior.CloseConnection | CommandBehavior.SingleRow);
+                : CommandBehavior.CloseConnection | CommandBehavior.SingleRow;
 
             var dr = await cmd.ExecuteReaderAsync(behavior, cancellationToken).ConfigureAwait(false);
             metrics?.CommandSucceeded(startTimestamp, 0);
@@ -863,6 +875,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                     // Ignore disposal errors in finally block
                 }
             }
+
             // Command lifetime is managed by the returned reader for read operations.
             Cleanup(null, null, ExecutionType.Read);
         }
@@ -917,7 +930,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         string cmdText;
         if (commandType == CommandType.StoredProcedure)
         {
-            cmdText = WrapForStoredProc(executionType, includeParameters: true);
+            cmdText = WrapForStoredProc(executionType, true);
         }
         else if (_cachedCommandText != null && !_commandTextDirty)
         {
@@ -952,12 +965,14 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         {
             tCmdCreated = Stopwatch.GetTimestamp();
         }
+
         cmd.CommandType = CommandType.Text;
 
         if (_logger.IsEnabled(LogLevel.Information))
         {
             _logger.LogInformation("Executing SQL: {Sql}", cmdText);
         }
+
         if (_parameters.Count > 0 && _logger.IsEnabled(LogLevel.Debug))
         {
             // SECURITY: Never log parameter values - they may contain credentials, tokens, PII
@@ -979,8 +994,10 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 paramDump.Append(sizeInfo);
                 paramDump.Append(dirInfo);
             }
+
             _logger.LogDebug("Parameters: {Parameters}", paramDump.ToString());
         }
+
         cmd.CommandText = cmdText;
         var cloneParameters = _dialect.DatabaseType == SupportedDatabase.Firebird
                               || _dialect.DatabaseType == SupportedDatabase.SqlServer;
@@ -1159,8 +1176,14 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             try
             {
                 cmd.Parameters?.Clear();
-               try{ cmd.Connection = null;}
-               catch { /* ignore */ }
+                try
+                {
+                    cmd.Connection = null;
+                }
+                catch
+                { /* ignore */
+                }
+
                 cmd.Dispose();
             }
             catch (Exception ex)
@@ -1245,6 +1268,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         {
             clone.ParamSequence.AddRange(ParamSequence);
         }
+
         clone._outputParameterCount = _outputParameterCount;
 
         return clone;
@@ -1271,7 +1295,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         ReturnParametersToPool();
         _outputParameterCount = 0;
         ParamSequence.Clear();
-        _cachedCommandText = null;  // Clear cache on disposal
+        _cachedCommandText = null; // Clear cache on disposal
         _commandTextDirty = true;
         StringBuilderPool.Return(Query);
     }

@@ -101,7 +101,8 @@ public class TransactionContextTests
     [MemberData(nameof(AllSupportedProviders))]
     public void Commit_MarksAsCommitted(SupportedDatabase product)
     {
-        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", new fakeDbFactory(product.ToString()));
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}",
+            new fakeDbFactory(product.ToString()));
         var tx = context.BeginTransaction();
         tx.Commit();
 
@@ -113,7 +114,8 @@ public class TransactionContextTests
     [MemberData(nameof(AllSupportedProviders))]
     public void Rollback_MarksAsRolledBack(SupportedDatabase product)
     {
-        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", new fakeDbFactory(product.ToString()));
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}",
+            new fakeDbFactory(product.ToString()));
         using var tx = context.BeginTransaction();
 
         tx.Rollback();
@@ -126,7 +128,8 @@ public class TransactionContextTests
     [MemberData(nameof(AllSupportedProviders))]
     public async Task DisposeAsync_RollsBackUncommittedTransaction(SupportedDatabase product)
     {
-        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", new fakeDbFactory(product.ToString()));
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}",
+            new fakeDbFactory(product.ToString()));
         await using var tx = context.BeginTransaction();
 
         await tx.DisposeAsync();
@@ -138,7 +141,8 @@ public class TransactionContextTests
     [MemberData(nameof(AllSupportedProviders))]
     public void CreateSqlContainer_AfterCompletion_Throws(SupportedDatabase product)
     {
-        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", new fakeDbFactory(product.ToString()));
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}",
+            new fakeDbFactory(product.ToString()));
         using var tx = context.BeginTransaction();
 
         tx.Rollback();
@@ -150,7 +154,8 @@ public class TransactionContextTests
     [MemberData(nameof(AllSupportedProviders))]
     public void GenerateRandomName_StartsWithLetter(SupportedDatabase product)
     {
-        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", new fakeDbFactory(product.ToString()));
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}",
+            new fakeDbFactory(product.ToString()));
         using var tx = context.BeginTransaction();
         var name = tx.GenerateRandomName(10);
 
@@ -246,7 +251,8 @@ public class TransactionContextTests
     [MemberData(nameof(AllSupportedProviders))]
     public void NestedTransactionsFail(SupportedDatabase product)
     {
-        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", new fakeDbFactory(product.ToString()));
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}",
+            new fakeDbFactory(product.ToString()));
         using var tx = context.BeginTransaction();
         var name = tx.GenerateRandomName(10);
 
@@ -435,7 +441,7 @@ public class TransactionContextTests
 
         await Task.WhenAll(t1, t2);
 
-        Assert.True((e1 is null) ^ (e2 is null));
+        Assert.True(e1 is null ^ e2 is null);
         Assert.IsType<InvalidOperationException>(e1 ?? e2!);
         Assert.Equal(1, strategy.ReleaseCount);
     }
@@ -479,7 +485,7 @@ public class TransactionContextTests
 
         await Task.WhenAll(t1, t2);
 
-        Assert.True((e1 is null) ^ (e2 is null));
+        Assert.True(e1 is null ^ e2 is null);
         Assert.IsType<InvalidOperationException>(e1 ?? e2!);
         Assert.Equal(1, strategy.ReleaseCount);
     }
@@ -489,7 +495,8 @@ public class TransactionContextTests
     {
         var context = CreateContext(SupportedDatabase.Sqlite);
         var tx = context.BeginTransaction();
-        var method = typeof(TransactionContext).GetMethod("RollbackAsync", BindingFlags.Instance | BindingFlags.NonPublic);
+        var method =
+            typeof(TransactionContext).GetMethod("RollbackAsync", BindingFlags.Instance | BindingFlags.NonPublic);
 
         await (Task)method!.Invoke(tx, null)!;
 
@@ -502,7 +509,8 @@ public class TransactionContextTests
     {
         var context = CreateContext(SupportedDatabase.Sqlite);
         var tx = context.BeginTransaction();
-        var method = typeof(TransactionContext).GetMethod("RollbackAsync", BindingFlags.Instance | BindingFlags.NonPublic);
+        var method =
+            typeof(TransactionContext).GetMethod("RollbackAsync", BindingFlags.Instance | BindingFlags.NonPublic);
 
         await (Task)method!.Invoke(tx, null)!;
 
@@ -541,7 +549,8 @@ public class TransactionContextTests
 
     private static void ReplaceStrategy(DatabaseContext context, IConnectionStrategy strategy)
     {
-        var field = typeof(DatabaseContext).GetField("_connectionStrategy", BindingFlags.Instance | BindingFlags.NonPublic);
+        var field = typeof(DatabaseContext).GetField("_connectionStrategy",
+            BindingFlags.Instance | BindingFlags.NonPublic);
         field!.SetValue(context, strategy);
     }
 

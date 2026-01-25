@@ -42,11 +42,9 @@ public class DatabaseSpecificFeatureBenchmarks : IAsyncDisposable
     private readonly List<int> _productIds = new();
     private readonly List<int> _categoryIds = new();
 
-    [Params(1000)]
-    public int ProductCount;
+    [Params(1000)] public int ProductCount;
 
-    [Params(50)]
-    public int CategoryCount;
+    [Params(50)] public int CategoryCount;
 
     [GlobalSetup]
     public async Task GlobalSetup()
@@ -63,7 +61,8 @@ public class DatabaseSpecificFeatureBenchmarks : IAsyncDisposable
         await _container.StartAsync();
 
         var mappedPort = _container.GetMappedPublicPort(5432);
-        _connStr = $"Host=localhost;Port={mappedPort};Database=dbfeatures_test;Username=postgres;Password=postgres;Maximum Pool Size=100";
+        _connStr =
+            $"Host=localhost;Port={mappedPort};Database=dbfeatures_test;Username=postgres;Password=postgres;Maximum Pool Size=100";
 
         await WaitForReady();
         await CreateSchemaAndSeedAsync();
@@ -98,7 +97,7 @@ public class DatabaseSpecificFeatureBenchmarks : IAsyncDisposable
 
     private async Task WaitForReady()
     {
-        for (int i = 0; i < 60; i++)
+        for (var i = 0; i < 60; i++)
         {
             try
             {
@@ -112,6 +111,7 @@ public class DatabaseSpecificFeatureBenchmarks : IAsyncDisposable
                 await Task.Delay(500);
             }
         }
+
         throw new TimeoutException("PostgreSQL container did not become ready in time.");
     }
 
@@ -202,7 +202,7 @@ public class DatabaseSpecificFeatureBenchmarks : IAsyncDisposable
         var random = new Random(42);
         var priceRanges = new[] { "budget", "mid_range", "premium", "luxury" };
 
-        for (int i = 1; i <= ProductCount; i++)
+        for (var i = 1; i <= ProductCount; i++)
         {
             var categoryId = _categoryIds[random.Next(_categoryIds.Count)];
             var priceRange = priceRanges[random.Next(priceRanges.Length)];
@@ -221,17 +221,17 @@ public class DatabaseSpecificFeatureBenchmarks : IAsyncDisposable
                 .ToArray();
 
             var specs = $$"""
-            {
-                "weight": {{random.Next(1, 100)}},
-                "dimensions": {
-                    "length": {{random.Next(10, 100)}},
-                    "width": {{random.Next(10, 100)}},
-                    "height": {{random.Next(5, 50)}}
-                },
-                "color": "{{new[] { "red", "blue", "green", "black", "white" }[random.Next(5)]}}",
-                "brand": "Brand{{random.Next(1, 20)}}"
-            }
-            """;
+                          {
+                              "weight": {{random.Next(1, 100)}},
+                              "dimensions": {
+                                  "length": {{random.Next(10, 100)}},
+                                  "width": {{random.Next(10, 100)}},
+                                  "height": {{random.Next(5, 50)}}
+                              },
+                              "color": "{{new[] { "red", "blue", "green", "black", "white" }[random.Next(5)]}}",
+                              "brand": "Brand{{random.Next(1, 20)}}"
+                          }
+                          """;
 
             var productId = await conn.ExecuteScalarAsync<int>(@"
                 INSERT INTO products (
@@ -273,13 +273,19 @@ public class DatabaseSpecificFeatureBenchmarks : IAsyncDisposable
     public async Task GlobalCleanup()
     {
         if (_pengdowsContext is IAsyncDisposable pad)
+        {
             await pad.DisposeAsync();
+        }
 
         if (_efContext != null)
+        {
             await _efContext.DisposeAsync();
+        }
 
         if (_dapperDataSource != null)
+        {
             await _dapperDataSource.DisposeAsync();
+        }
 
         if (_container != null)
         {
@@ -316,7 +322,7 @@ public class DatabaseSpecificFeatureBenchmarks : IAsyncDisposable
         return await _efContext.Products
             .AsNoTracking()
             .Where(p => p.Specifications != null
-                && EF.Functions.JsonContains(p.Specifications, "{\"brand\":\"Brand5\"}"))
+                        && EF.Functions.JsonContains(p.Specifications, "{\"brand\":\"Brand5\"}"))
             .ToListAsync();
     }
 
@@ -447,39 +453,36 @@ public class DatabaseSpecificFeatureBenchmarks : IAsyncDisposable
     }
 
     // pengdows.crud entities with PostgreSQL-specific features
-    [pengdows.crud.attributes.Table("products")]
+    [Table("products")]
     public class Product
     {
         [Id(true)]
-        [pengdows.crud.attributes.Column("product_id", DbType.Int32)]
+        [Column("product_id", DbType.Int32)]
         public int ProductId { get; set; }
 
-        [pengdows.crud.attributes.Column("category_id", DbType.Int32)]
-        public int CategoryId { get; set; }
+        [Column("category_id", DbType.Int32)] public int CategoryId { get; set; }
 
-        [pengdows.crud.attributes.Column("product_name", DbType.String)]
+        [Column("product_name", DbType.String)]
         public string ProductName { get; set; } = string.Empty;
 
-        [pengdows.crud.attributes.Column("price_category", DbType.String)]
+        [Column("price_category", DbType.String)]
         public string PriceCategory { get; set; } = string.Empty;
 
-        [pengdows.crud.attributes.Column("price", DbType.Decimal)]
-        public decimal Price { get; set; }
+        [Column("price", DbType.Decimal)] public decimal Price { get; set; }
 
         // PostgreSQL array support
-        [pengdows.crud.attributes.Column("tags", DbType.Object)]
-        public string[]? Tags { get; set; }
+        [Column("tags", DbType.Object)] public string[]? Tags { get; set; }
 
         // PostgreSQL JSONB support
-        [pengdows.crud.attributes.Column("specifications", DbType.Object)]
-        [pengdows.crud.attributes.Json]
+        [Column("specifications", DbType.Object)]
+        [Json]
         public ProductSpecifications Specifications { get; set; } = new();
 
         // PostgreSQL point support
-        [pengdows.crud.attributes.Column("warehouse_location", DbType.Object)]
+        [Column("warehouse_location", DbType.Object)]
         public NpgsqlPoint? WarehouseLocation { get; set; }
 
-        [pengdows.crud.attributes.Column("created_at", DbType.DateTime)]
+        [Column("created_at", DbType.DateTime)]
         public DateTime CreatedAt { get; set; }
     }
 
@@ -498,31 +501,32 @@ public class DatabaseSpecificFeatureBenchmarks : IAsyncDisposable
         public int Height { get; set; }
     }
 
-    [pengdows.crud.attributes.Table("product_categories")]
+    [Table("product_categories")]
     public class ProductCategory
     {
         [Id(true)]
-        [pengdows.crud.attributes.Column("category_id", DbType.Int32)]
+        [Column("category_id", DbType.Int32)]
         public int CategoryId { get; set; }
 
-        [pengdows.crud.attributes.Column("category_name", DbType.String)]
+        [Column("category_name", DbType.String)]
         public string CategoryName { get; set; } = string.Empty;
 
-        [pengdows.crud.attributes.Column("external_uuid", DbType.Guid)]
-        public Guid ExternalUuid { get; set; }
+        [Column("external_uuid", DbType.Guid)] public Guid ExternalUuid { get; set; }
 
-        [pengdows.crud.attributes.Column("metadata", DbType.Object)]
-        [pengdows.crud.attributes.Json]
+        [Column("metadata", DbType.Object)]
+        [Json]
         public string? Metadata { get; set; }
 
-        [pengdows.crud.attributes.Column("created_at", DbType.DateTime)]
+        [Column("created_at", DbType.DateTime)]
         public DateTime CreatedAt { get; set; }
     }
 
     // Entity Framework entities (limited PostgreSQL feature support)
     public class EfTestDbContext : DbContext
     {
-        public EfTestDbContext(DbContextOptions<EfTestDbContext> options) : base(options) { }
+        public EfTestDbContext(DbContextOptions<EfTestDbContext> options) : base(options)
+        {
+        }
 
         public DbSet<EfProduct> Products { get; set; }
         public DbSet<EfProductCategory> ProductCategories { get; set; }

@@ -20,11 +20,14 @@ internal ref struct StringBuilderLite
 
     public int Length => _pos;
 
-    public void Clear() => _pos = 0;
+    public void Clear()
+    {
+        _pos = 0;
+    }
 
     public void Append(char c)
     {
-        int p = _pos;
+        var p = _pos;
         if ((uint)p < (uint)_buf.Length)
         {
             _buf[p] = c;
@@ -39,22 +42,29 @@ internal ref struct StringBuilderLite
     public void Append(string? s)
     {
         if (string.IsNullOrEmpty(s))
+        {
             return;
+        }
 
         Append(s.AsSpan());
     }
 
     public void Append(scoped ReadOnlySpan<char> s)
     {
-        int newLen = _pos + s.Length;
+        var newLen = _pos + s.Length;
         if (newLen > _buf.Length)
+        {
             Grow(newLen);
+        }
 
         s.CopyTo(_buf.Slice(_pos));
         _pos = newLen;
     }
 
-    public void AppendLine() => Append('\n');
+    public void AppendLine()
+    {
+        Append('\n');
+    }
 
     public void AppendLine(string? s)
     {
@@ -65,11 +75,15 @@ internal ref struct StringBuilderLite
     public Span<char> AppendSpan(int length)
     {
         if (length < 0)
+        {
             throw new ArgumentOutOfRangeException(nameof(length));
+        }
 
-        int newLen = _pos + length;
+        var newLen = _pos + length;
         if (newLen > _buf.Length)
+        {
             Grow(newLen);
+        }
 
         var span = _buf.Slice(_pos, length);
         _pos = newLen;
@@ -79,7 +93,7 @@ internal ref struct StringBuilderLite
     public void Append(int value)
     {
         Span<char> tmp = stackalloc char[11];
-        if (!value.TryFormat(tmp, out int written, provider: CultureInfo.InvariantCulture))
+        if (!value.TryFormat(tmp, out var written, provider: CultureInfo.InvariantCulture))
         {
             Append(value.ToString(CultureInfo.InvariantCulture));
             return;
@@ -91,7 +105,7 @@ internal ref struct StringBuilderLite
     public void Append(long value)
     {
         Span<char> tmp = stackalloc char[20];
-        if (!value.TryFormat(tmp, out int written, provider: CultureInfo.InvariantCulture))
+        if (!value.TryFormat(tmp, out var written, provider: CultureInfo.InvariantCulture))
         {
             Append(value.ToString(CultureInfo.InvariantCulture));
             return;
@@ -101,15 +115,19 @@ internal ref struct StringBuilderLite
     }
 
     public override string ToString()
-        => _buf.Slice(0, _pos).ToString();
+    {
+        return _buf.Slice(0, _pos).ToString();
+    }
 
     private void Grow(int minCapacity)
     {
         Debug.Assert(minCapacity > _buf.Length);
 
-        int newCap = _buf.Length == 0 ? 256 : _buf.Length * 2;
+        var newCap = _buf.Length == 0 ? 256 : _buf.Length * 2;
         if (newCap < minCapacity)
+        {
             newCap = minCapacity;
+        }
 
         var arr = new char[newCap];
         _buf.Slice(0, _pos).CopyTo(arr);

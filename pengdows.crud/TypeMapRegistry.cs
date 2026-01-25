@@ -35,15 +35,18 @@ public sealed class TypeMapRegistry : ITypeMapRegistry
         return _typeMap.GetOrAdd(type, BuildTableInfo);
     }
 
-    public void Register<T>() => GetTableInfo<T>();
+    public void Register<T>()
+    {
+        GetTableInfo<T>();
+    }
 
     // ------------------ build pipeline ------------------
 
     private TableInfo BuildTableInfo(Type entityType)
     {
         var tattr = entityType.GetCustomAttribute<TableAttribute>()
-                   ?? throw new InvalidOperationException(
-                       $"Type {entityType.Name} does not have a TableAttribute.");
+                    ?? throw new InvalidOperationException(
+                        $"Type {entityType.Name} does not have a TableAttribute.");
 
         var tableName = (tattr.Name ?? string.Empty).Trim();
         if (string.IsNullOrWhiteSpace(tableName))
@@ -72,7 +75,8 @@ public sealed class TypeMapRegistry : ITypeMapRegistry
 
         if (tableInfo.Columns.Count == 0)
         {
-            throw new NoColumnsFoundException($"This POCO entity {entityType.Name} has no properties, marked as columns.");
+            throw new NoColumnsFoundException(
+                $"This POCO entity {entityType.Name} has no properties, marked as columns.");
         }
 
         ValidatePrimaryKeys(entityType, tableInfo);
@@ -87,10 +91,12 @@ public sealed class TypeMapRegistry : ITypeMapRegistry
 
     private static ColumnInfo? ProcessProperty(Type entityType, PropertyInfo prop, TableInfo tableInfo)
     {
-        var attrs = prop.GetCustomAttributes(inherit: true);
+        var attrs = prop.GetCustomAttributes(true);
 
-        static TAttr? A<TAttr>(object[] atts) where TAttr : Attribute =>
-            (TAttr?)atts.FirstOrDefault(a => a is TAttr);
+        static TAttr? A<TAttr>(object[] atts) where TAttr : Attribute
+        {
+            return (TAttr?)atts.FirstOrDefault(a => a is TAttr);
+        }
 
         var colAttr = A<ColumnAttribute>(attrs);
         if (colAttr == null)
@@ -105,17 +111,17 @@ public sealed class TypeMapRegistry : ITypeMapRegistry
                 $"ColumnAttribute.Name cannot be null/empty on {entityType.FullName}.{prop.Name}");
         }
 
-        var idAttr   = A<IdAttribute>(attrs);
-        var pkAttr   = A<PrimaryKeyAttribute>(attrs);
+        var idAttr = A<IdAttribute>(attrs);
+        var pkAttr = A<PrimaryKeyAttribute>(attrs);
         var enumAttr = A<EnumColumnAttribute>(attrs);
         var jsonAttr = A<JsonAttribute>(attrs);
-        var nonIns   = A<NonInsertableAttribute>(attrs);
-        var nonUpd   = A<NonUpdateableAttribute>(attrs);
-        var verAttr  = A<VersionAttribute>(attrs);
-        var cby      = A<CreatedByAttribute>(attrs);
-        var con      = A<CreatedOnAttribute>(attrs);
-        var lby      = A<LastUpdatedByAttribute>(attrs);
-        var lon      = A<LastUpdatedOnAttribute>(attrs);
+        var nonIns = A<NonInsertableAttribute>(attrs);
+        var nonUpd = A<NonUpdateableAttribute>(attrs);
+        var verAttr = A<VersionAttribute>(attrs);
+        var cby = A<CreatedByAttribute>(attrs);
+        var con = A<CreatedOnAttribute>(attrs);
+        var lby = A<LastUpdatedByAttribute>(attrs);
+        var lon = A<LastUpdatedOnAttribute>(attrs);
 
         var isId = idAttr != null;
         var isIdWritable = idAttr?.Writable ?? true;
@@ -125,21 +131,21 @@ public sealed class TypeMapRegistry : ITypeMapRegistry
 
         var ci = new ColumnInfo
         {
-            Name               = columnName,
-            PropertyInfo       = prop,
-            DbType             = colAttr.Type,
-            Ordinal            = colAttr.Ordinal,
-            IsId               = isId,
-            IsIdIsWritable     = isId && isIdWritable && nonIns == null,
-            IsNonInsertable    = nonIns != null || (isId && !isIdWritable),
-            IsNonUpdateable    = nonUpd != null || isId,
-            IsPrimaryKey       = pkAttr != null,
-            PkOrder            = pkAttr?.Order ?? 0,
-            IsVersion          = verAttr != null,
-            IsCreatedBy        = cby != null,
-            IsCreatedOn        = con != null,
-            IsLastUpdatedBy    = lby != null,
-            IsLastUpdatedOn    = lon != null,
+            Name = columnName,
+            PropertyInfo = prop,
+            DbType = colAttr.Type,
+            Ordinal = colAttr.Ordinal,
+            IsId = isId,
+            IsIdIsWritable = isId && isIdWritable && nonIns == null,
+            IsNonInsertable = nonIns != null || (isId && !isIdWritable),
+            IsNonUpdateable = nonUpd != null || isId,
+            IsPrimaryKey = pkAttr != null,
+            PkOrder = pkAttr?.Order ?? 0,
+            IsVersion = verAttr != null,
+            IsCreatedBy = cby != null,
+            IsCreatedOn = con != null,
+            IsLastUpdatedBy = lby != null,
+            IsLastUpdatedOn = lon != null,
             JsonSerializerOptions = BuildJsonOptions(jsonAttr)
         };
 
@@ -243,12 +249,12 @@ public sealed class TypeMapRegistry : ITypeMapRegistry
 
         if (ci.IsCreatedBy)
         {
-            tableInfo.CreatedBy     = ci;
+            tableInfo.CreatedBy = ci;
         }
 
         if (ci.IsCreatedOn)
         {
-            tableInfo.CreatedOn     = ci;
+            tableInfo.CreatedOn = ci;
         }
     }
 
@@ -344,8 +350,10 @@ public sealed class TypeMapRegistry : ITypeMapRegistry
         }
     }
 
-    private static bool HasAuditColumns(TableInfo t) =>
-        t.CreatedBy != null || t.CreatedOn != null || t.LastUpdatedBy != null || t.LastUpdatedOn != null;
+    private static bool HasAuditColumns(TableInfo t)
+    {
+        return t.CreatedBy != null || t.CreatedOn != null || t.LastUpdatedBy != null || t.LastUpdatedOn != null;
+    }
 
     private static void ValidateVersionColumn(PropertyInfo property)
     {
@@ -449,7 +457,8 @@ public sealed class TypeMapRegistry : ITypeMapRegistry
             return;
         }
 
-        var propertyType = Nullable.GetUnderlyingType(column.PropertyInfo.PropertyType) ?? column.PropertyInfo.PropertyType;
+        var propertyType = Nullable.GetUnderlyingType(column.PropertyInfo.PropertyType) ??
+                           column.PropertyInfo.PropertyType;
         if (propertyType != typeof(string) && propertyType != typeof(Guid))
         {
             throw new InvalidOperationException(
@@ -464,7 +473,8 @@ public sealed class TypeMapRegistry : ITypeMapRegistry
             return;
         }
 
-        var propertyType = Nullable.GetUnderlyingType(column.PropertyInfo.PropertyType) ?? column.PropertyInfo.PropertyType;
+        var propertyType = Nullable.GetUnderlyingType(column.PropertyInfo.PropertyType) ??
+                           column.PropertyInfo.PropertyType;
         if (propertyType != typeof(DateTime) && propertyType != typeof(DateTimeOffset))
         {
             throw new InvalidOperationException(
@@ -479,7 +489,8 @@ public sealed class TypeMapRegistry : ITypeMapRegistry
             return;
         }
 
-        var propertyType = Nullable.GetUnderlyingType(column.PropertyInfo.PropertyType) ?? column.PropertyInfo.PropertyType;
+        var propertyType = Nullable.GetUnderlyingType(column.PropertyInfo.PropertyType) ??
+                           column.PropertyInfo.PropertyType;
         if (propertyType == typeof(byte[]))
         {
             return;
@@ -518,13 +529,17 @@ public sealed class TypeMapRegistry : ITypeMapRegistry
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool IsStringDbType(DbType dbType) =>
-        dbType is DbType.String or DbType.AnsiString or DbType.StringFixedLength or DbType.AnsiStringFixedLength;
+    private static bool IsStringDbType(DbType dbType)
+    {
+        return dbType is DbType.String or DbType.AnsiString or DbType.StringFixedLength or DbType.AnsiStringFixedLength;
+    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool IsNumericDbType(DbType dbType) =>
-        dbType is DbType.Byte or DbType.SByte
+    private static bool IsNumericDbType(DbType dbType)
+    {
+        return dbType is DbType.Byte or DbType.SByte
             or DbType.Int16 or DbType.Int32 or DbType.Int64
             or DbType.UInt16 or DbType.UInt32 or DbType.UInt64
             or DbType.Decimal or DbType.VarNumeric;
+    }
 }

@@ -18,14 +18,14 @@ public static class HierarchicalIdRetrievalDemo
         // Test all database types and their strategy selection
         var dialects = new Dictionary<string, ISqlDialect>
         {
-            {"PostgreSQL", SqlDialectFactory.CreateDialectForType(SupportedDatabase.PostgreSql, factory, logger)},
-            {"SQL Server", SqlDialectFactory.CreateDialectForType(SupportedDatabase.SqlServer, factory, logger)},
-            {"MySQL", SqlDialectFactory.CreateDialectForType(SupportedDatabase.MySql, factory, logger)},
-            {"MariaDB", SqlDialectFactory.CreateDialectForType(SupportedDatabase.MariaDb, factory, logger)},
-            {"SQLite", SqlDialectFactory.CreateDialectForType(SupportedDatabase.Sqlite, factory, logger)},
-            {"Oracle", SqlDialectFactory.CreateDialectForType(SupportedDatabase.Oracle, factory, logger)},
-            {"Firebird", SqlDialectFactory.CreateDialectForType(SupportedDatabase.Firebird, factory, logger)},
-            {"DuckDB", SqlDialectFactory.CreateDialectForType(SupportedDatabase.DuckDB, factory, logger)}
+            { "PostgreSQL", SqlDialectFactory.CreateDialectForType(SupportedDatabase.PostgreSql, factory, logger) },
+            { "SQL Server", SqlDialectFactory.CreateDialectForType(SupportedDatabase.SqlServer, factory, logger) },
+            { "MySQL", SqlDialectFactory.CreateDialectForType(SupportedDatabase.MySql, factory, logger) },
+            { "MariaDB", SqlDialectFactory.CreateDialectForType(SupportedDatabase.MariaDb, factory, logger) },
+            { "SQLite", SqlDialectFactory.CreateDialectForType(SupportedDatabase.Sqlite, factory, logger) },
+            { "Oracle", SqlDialectFactory.CreateDialectForType(SupportedDatabase.Oracle, factory, logger) },
+            { "Firebird", SqlDialectFactory.CreateDialectForType(SupportedDatabase.Firebird, factory, logger) },
+            { "DuckDB", SqlDialectFactory.CreateDialectForType(SupportedDatabase.DuckDB, factory, logger) }
         };
 
         Console.WriteLine("📊 Strategy Selection by Database:");
@@ -64,7 +64,8 @@ public static class HierarchicalIdRetrievalDemo
         Console.WriteLine($"MySQL Session Func:  {mysql.GetLastInsertedIdQuery()}");
 
         // Demonstrate correlation token
-        Console.WriteLine($"Correlation Token:   {postgres.GetCorrelationTokenLookupQuery("users", "id", "insert_token", ":token")}");
+        Console.WriteLine(
+            $"Correlation Token:   {postgres.GetCorrelationTokenLookupQuery("users", "id", "insert_token", ":token")}");
 
         // Demonstrate Oracle sequence handling
         var oracle = SqlDialectFactory.CreateDialectForType(SupportedDatabase.Oracle, factory, logger);

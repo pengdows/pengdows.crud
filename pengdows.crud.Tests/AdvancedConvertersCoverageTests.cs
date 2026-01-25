@@ -16,8 +16,8 @@ public class AdvancedConvertersCoverageTests
     public void AdvancedTypeConverter_ThrowsOnWrongType()
     {
         var converter = new InetConverter();
-        var ex = Assert.Throws<ArgumentException>(
-            () => converter.ToProviderValue("not-inet", SupportedDatabase.PostgreSql));
+        var ex = Assert.Throws<ArgumentException>(() =>
+            converter.ToProviderValue("not-inet", SupportedDatabase.PostgreSql));
 
         Assert.Contains(typeof(Inet).FullName ?? "Inet", ex.Message);
     }
@@ -103,7 +103,7 @@ public class AdvancedConvertersCoverageTests
     public void PostgreSqlIntervalConverter_FormatsIso_ForPostgres()
     {
         var converter = new PostgreSqlIntervalConverter();
-        var interval = new PostgreSqlInterval(months: 0, days: 1, microseconds: 0);
+        var interval = new PostgreSqlInterval(0, 1, 0);
 
         var providerValue = converter.ToProviderValue(interval, SupportedDatabase.PostgreSql);
         Assert.Equal("P1D", providerValue);
@@ -128,7 +128,8 @@ public class AdvancedConvertersCoverageTests
         Assert.Equal(2, parsed.Value.Lower);
         Assert.Equal(5, parsed.Value.Upper);
 
-        var fromTuple = (Range<int>?)converter.FromProviderValue(Tuple.Create<int?, int?>(3, 9), SupportedDatabase.PostgreSql);
+        var fromTuple =
+            (Range<int>?)converter.FromProviderValue(Tuple.Create<int?, int?>(3, 9), SupportedDatabase.PostgreSql);
         Assert.Equal(3, fromTuple!.Value.Lower);
         Assert.Equal(9, fromTuple.Value.Upper);
     }

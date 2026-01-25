@@ -32,7 +32,7 @@ public class ConnectionStringHelperTests
         Assert.Equal("just-a-string", result["Data Source"]);
     }
 
-    #nullable disable
+#nullable disable
     private sealed class ThrowingConnectionStringBuilder : DbConnectionStringBuilder
     {
         public override object this[string keyword]
@@ -41,5 +41,5 @@ public class ConnectionStringHelperTests
             set => throw new InvalidOperationException("boom");
         }
     }
-    #nullable restore
+#nullable restore
 }

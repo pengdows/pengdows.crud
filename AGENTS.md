@@ -228,3 +228,5 @@ This is intentional design - it allows "last modified" queries without checking 
 - Use `pengdows.crud.IntegrationTests` for database-specific behaviors; `testbed` for multi-provider verification.
 - If `fakeDb` lacks needed mocking capabilities, ADD them to `fakeDb` - don't invent new mocking layers.
 - When functionality is unclear, consult the wiki (`pengdows.crud.wiki/`) or ASK before proceeding.
+- We are targeting **95% test coverage** across the repository. Every contribution should move us closer to that goal.
+- The build pipeline enforces that coverage never drops; each run must leave the coverage percentage at least equal to the previous baseline (never lower).

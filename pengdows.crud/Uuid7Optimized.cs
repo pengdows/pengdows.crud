@@ -112,7 +112,7 @@ public static partial class Uuid7Optimized
 
         // Detect if user provided explicit non-default values
         // Record defaults: MaxNegativeSkewMs=5, MaxSpinCount=128, SleepMs=1, FailFastOnBurst=false
-        bool usedRecordDefaults =
+        var usedRecordDefaults =
             options.MaxNegativeSkewMs == 5 &&
             options.MaxSpinCount == 128 &&
             options.SleepMs == 1 &&
@@ -128,48 +128,51 @@ public static partial class Uuid7Optimized
 
         // User specified custom values - apply mode-specific clamping
         _opts = new Uuid7Options(
-            Mode: options.Mode,
-            MaxNegativeSkewMs: options.Mode switch
+            options.Mode,
+            options.Mode switch
             {
                 Uuid7ClockMode.PtpSynced => Math.Min(options.MaxNegativeSkewMs, 1),
                 Uuid7ClockMode.SingleInstance => options.MaxNegativeSkewMs,
                 _ => Math.Max(options.MaxNegativeSkewMs, 5)
             },
-            MaxSpinCount: options.Mode switch
+            options.Mode switch
             {
                 Uuid7ClockMode.PtpSynced => Math.Min(options.MaxSpinCount, 64),
                 Uuid7ClockMode.SingleInstance => options.MaxSpinCount,
                 _ => Math.Max(options.MaxSpinCount, 128)
             },
-            SleepMs: options.SleepMs,
-            FailFastOnBurst: options.FailFastOnBurst
+            options.SleepMs,
+            options.FailFastOnBurst
         );
     }
 
     /// <summary>
     /// Get default options for a given clock mode
     /// </summary>
-    private static Uuid7Options DefaultsFor(Uuid7ClockMode mode) => mode switch
+    private static Uuid7Options DefaultsFor(Uuid7ClockMode mode)
     {
-        Uuid7ClockMode.PtpSynced => new(
-            mode,
-            MaxNegativeSkewMs: 1,
-            MaxSpinCount: 64,
-            SleepMs: 1,
-            FailFastOnBurst: true),
-        Uuid7ClockMode.SingleInstance => new(
-            mode,
-            MaxNegativeSkewMs: 32,
-            MaxSpinCount: 128,
-            SleepMs: 1,
-            FailFastOnBurst: false),
-        _ => new(
-            mode,
-            MaxNegativeSkewMs: 5,
-            MaxSpinCount: 128,
-            SleepMs: 1,
-            FailFastOnBurst: false),
-    };
+        return mode switch
+        {
+            Uuid7ClockMode.PtpSynced => new Uuid7Options(
+                mode,
+                1,
+                64,
+                1,
+                true),
+            Uuid7ClockMode.SingleInstance => new Uuid7Options(
+                mode,
+                32,
+                128,
+                1,
+                false),
+            _ => new Uuid7Options(
+                mode,
+                5,
+                128,
+                1,
+                false)
+        };
+    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static long UnixTimeMs()
@@ -347,6 +350,7 @@ public static partial class Uuid7Optimized
                 {
                     Thread.SpinWait(10);
                 }
+
                 spinCount++;
             }
             else
@@ -469,5 +473,8 @@ public static partial class Uuid7Optimized
     /// <summary>
     /// Get global epoch for diagnostics
     /// </summary>
-    public static long GetGlobalEpoch() => Volatile.Read(ref _globalEpochMs);
+    public static long GetGlobalEpoch()
+    {
+        return Volatile.Read(ref _globalEpochMs);
+    }
 }

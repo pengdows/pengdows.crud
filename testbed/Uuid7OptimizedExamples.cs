@@ -13,7 +13,7 @@ public static class Uuid7OptimizedExamples
         Console.WriteLine("=== Optimized UUIDv7 Generator Demo ===\n");
 
         // Generate some UUIDs
-        for (int i = 0; i < 10; i++)
+        for (var i = 0; i < 10; i++)
         {
             var uuid = Uuid7Optimized.NewUuid7();
             Console.WriteLine($"{i + 1:D2}: {uuid}");
@@ -34,16 +34,16 @@ public static class Uuid7OptimizedExamples
     private static void TestOrdering()
     {
         Console.WriteLine("\n=== Ordering Test ===");
-        
+
         var uuids = new Guid[100];
-        for (int i = 0; i < uuids.Length; i++)
+        for (var i = 0; i < uuids.Length; i++)
         {
             uuids[i] = Uuid7Optimized.NewUuid7();
         }
 
         // Verify ordering
-        bool isOrdered = true;
-        for (int i = 1; i < uuids.Length; i++)
+        var isOrdered = true;
+        for (var i = 1; i < uuids.Length; i++)
         {
             if (uuids[i].CompareTo(uuids[i - 1]) <= 0)
             {
@@ -62,18 +62,18 @@ public static class Uuid7OptimizedExamples
         Console.WriteLine($"\n=== Performance Benchmark ({iterations:N0} iterations) ===");
 
         // Warmup
-        for (int i = 0; i < 10_000; i++)
+        for (var i = 0; i < 10_000; i++)
         {
             Uuid7Optimized.NewUuid7();
         }
 
         var sw = Stopwatch.StartNew();
-        
-        for (int i = 0; i < iterations; i++)
+
+        for (var i = 0; i < iterations; i++)
         {
             Uuid7Optimized.NewUuid7();
         }
-        
+
         sw.Stop();
 
         var totalMs = sw.ElapsedMilliseconds;
@@ -83,7 +83,7 @@ public static class Uuid7OptimizedExamples
         Console.WriteLine($"Time: {totalMs:N0} ms");
         Console.WriteLine($"Rate: {uuidsPerSecond:N0} UUIDs/second");
         Console.WriteLine($"Cost: {nsPerUuid:F0} ns/UUID");
-        
+
         // Thread state after benchmark
         var (lastMs, counter, bufferIndex) = Uuid7Optimized.GetThreadState();
         Console.WriteLine($"Final counter value: {counter}");
@@ -96,16 +96,16 @@ public static class Uuid7OptimizedExamples
 
         var allUuids = new Guid[threadCount * uuidsPerThread];
         var tasks = new Task[threadCount];
-        
+
         var sw = Stopwatch.StartNew();
 
-        for (int t = 0; t < threadCount; t++)
+        for (var t = 0; t < threadCount; t++)
         {
-            int threadIndex = t;
+            var threadIndex = t;
             tasks[t] = Task.Run(() =>
             {
                 var startIndex = threadIndex * uuidsPerThread;
-                for (int i = 0; i < uuidsPerThread; i++)
+                for (var i = 0; i < uuidsPerThread; i++)
                 {
                     allUuids[startIndex + i] = Uuid7Optimized.NewUuid7();
                 }
@@ -122,8 +122,9 @@ public static class Uuid7OptimizedExamples
         {
             uniqueSet.Add(guid);
         }
+
         var uniqueCount = uniqueSet.Count;
-        
+
         Console.WriteLine($"Time: {sw.ElapsedMilliseconds:N0} ms");
         Console.WriteLine($"Total UUIDs: {totalGenerated:N0}");
         Console.WriteLine($"Unique UUIDs: {uniqueCount:N0}");
@@ -136,12 +137,12 @@ public static class Uuid7OptimizedExamples
     {
         Console.WriteLine("\n=== TryNewUuid7 No-Wait Test ===");
 
-        int successCount = 0;
-        int failCount = 0;
+        var successCount = 0;
+        var failCount = 0;
         var results = new List<Guid>(10_000);
 
         // Generate many UUIDs quickly to potentially hit counter limit
-        for (int i = 0; i < 10000; i++)
+        for (var i = 0; i < 10000; i++)
         {
             if (Uuid7Optimized.TryNewUuid7(out var result))
             {
@@ -153,7 +154,7 @@ public static class Uuid7OptimizedExamples
                 failCount++;
                 // In real code, you might back off here
                 Thread.Yield();
-                
+
                 // Retry after yield
                 if (Uuid7Optimized.TryNewUuid7(out result))
                 {
@@ -174,24 +175,24 @@ public static class Uuid7OptimizedExamples
         Console.WriteLine("\n=== Byte Generation Test ===");
 
         Span<byte> buffer = stackalloc byte[16];
-        
+
         // Test direct byte generation
         Uuid7Optimized.NewUuid7Bytes(buffer);
-        
+
         // Convert to Guid for display
         var guid = new Guid(buffer);
         Console.WriteLine($"Generated via bytes: {guid}");
-        
+
         // Compare with regular generation
         var directGuid = Uuid7Optimized.NewUuid7();
         Console.WriteLine($"Generated directly: {directGuid}");
-        
+
         // Test RFC byte generation
         Span<byte> rfcBuffer = stackalloc byte[16];
         Uuid7Optimized.NewUuid7RfcBytes(rfcBuffer);
         var rfcGuid = new Guid(rfcBuffer);
         Console.WriteLine($"Generated RFC bytes: {rfcGuid}");
-        
+
         Console.WriteLine("All should be valid UUIDv7 format");
     }
 
@@ -203,11 +204,11 @@ public static class Uuid7OptimizedExamples
         var versionFailures = 0;
         var variantFailures = 0;
 
-        for (int i = 0; i < testCount; i++)
+        for (var i = 0; i < testCount; i++)
         {
             var guid = Uuid7Optimized.NewUuid7();
             var bytes = guid.ToByteArray();
-            
+
             // Check version: upper nibble of byte 7 should be 0x70 (version 7)
             var versionBits = bytes[7] & 0xF0;
             if (versionBits != 0x70)
@@ -215,10 +216,11 @@ public static class Uuid7OptimizedExamples
                 versionFailures++;
                 if (versionFailures <= 3) // Only report first few failures
                 {
-                    Console.WriteLine($"Version failure #{versionFailures}: expected 0x70, got 0x{versionBits:X2} in {guid}");
+                    Console.WriteLine(
+                        $"Version failure #{versionFailures}: expected 0x70, got 0x{versionBits:X2} in {guid}");
                 }
             }
-            
+
             // Check variant: upper 2 bits of byte 8 should be 0x80 (10xxxxxx)
             var variantBits = bytes[8] & 0xC0;
             if (variantBits != 0x80)
@@ -226,14 +228,17 @@ public static class Uuid7OptimizedExamples
                 variantFailures++;
                 if (variantFailures <= 3) // Only report first few failures
                 {
-                    Console.WriteLine($"Variant failure #{variantFailures}: expected 0x80, got 0x{variantBits:X2} in {guid}");
+                    Console.WriteLine(
+                        $"Variant failure #{variantFailures}: expected 0x80, got 0x{variantBits:X2} in {guid}");
                 }
             }
         }
 
         Console.WriteLine($"Tested {testCount} UUIDs");
-        Console.WriteLine($"Version compliance: {testCount - versionFailures}/{testCount} ({(double)(testCount - versionFailures)/testCount*100:F1}%)");
-        Console.WriteLine($"Variant compliance: {testCount - variantFailures}/{testCount} ({(double)(testCount - variantFailures)/testCount*100:F1}%)");
+        Console.WriteLine(
+            $"Version compliance: {testCount - versionFailures}/{testCount} ({(double)(testCount - versionFailures) / testCount * 100:F1}%)");
+        Console.WriteLine(
+            $"Variant compliance: {testCount - variantFailures}/{testCount} ({(double)(testCount - variantFailures) / testCount * 100:F1}%)");
         Console.WriteLine($"Overall: {(versionFailures == 0 && variantFailures == 0 ? "✓ PASS" : "✗ FAIL")}");
     }
 
@@ -244,19 +249,19 @@ public static class Uuid7OptimizedExamples
         const int threadCount = 8;
         const int uuidsPerThread = 50_000;
         var totalUuids = threadCount * uuidsPerThread;
-        
+
         var allUuids = new Guid[totalUuids];
         var tasks = new Task[threadCount];
         var sw = Stopwatch.StartNew();
 
         // Generate UUIDs under high concurrency
-        for (int t = 0; t < threadCount; t++)
+        for (var t = 0; t < threadCount; t++)
         {
-            int threadIndex = t;
+            var threadIndex = t;
             tasks[t] = Task.Run(() =>
             {
                 var startIndex = threadIndex * uuidsPerThread;
-                for (int i = 0; i < uuidsPerThread; i++)
+                for (var i = 0; i < uuidsPerThread; i++)
                 {
                     allUuids[startIndex + i] = Uuid7Optimized.NewUuid7();
                 }
@@ -268,9 +273,9 @@ public static class Uuid7OptimizedExamples
 
         // Sort and check monotonicity
         var sortedUuids = allUuids.OrderBy(g => g).ToArray();
-        
+
         var violations = 0;
-        for (int i = 1; i < sortedUuids.Length; i++)
+        for (var i = 1; i < sortedUuids.Length; i++)
         {
             if (sortedUuids[i].CompareTo(sortedUuids[i - 1]) <= 0)
             {

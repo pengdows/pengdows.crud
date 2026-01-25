@@ -16,7 +16,7 @@ public class SqlGenerationBenchmark
     private IDatabaseContext _ctx = null!;
     private TypeMapRegistry _map = null!;
     private EntityHelper<Film, int> _filmHelper = null!;
-    
+
     private int _filmId = 1;
     private string _staticSql = null!;
 
@@ -25,7 +25,7 @@ public class SqlGenerationBenchmark
     {
         _map = new TypeMapRegistry();
         _map.Register<Film>();
-        
+
         // Use FakeDb to avoid database connection issues in benchmarks
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         var config = new DatabaseContextConfiguration
@@ -36,22 +36,22 @@ public class SqlGenerationBenchmark
         };
         _ctx = new DatabaseContext(config, factory, null, _map);
         _filmHelper = new EntityHelper<Film, int>(_ctx);
-        
+
         // EntityHelper will handle internal caching automatically
-        
+
         // Static SQL for comparison (what Dapper essentially uses)
         _staticSql = "SELECT \"film_id\", \"title\", \"length\" FROM \"public\".\"film\" WHERE \"film_id\" = ANY($1)";
     }
 
     // ============= SQL GENERATION BENCHMARKS =============
-    
+
     [Benchmark(Baseline = true)]
     public ISqlContainer SqlGeneration_Mine_BuildContainer()
     {
         // This tests pure SQL generation overhead
         return _filmHelper.BuildRetrieve(new[] { _filmId });
     }
-    
+
     [Benchmark]
     public string SqlGeneration_Mine_GetSql()
     {
@@ -59,7 +59,7 @@ public class SqlGenerationBenchmark
         var container = _filmHelper.BuildRetrieve(new[] { _filmId });
         return container.Query.ToString();
     }
-    
+
     [Benchmark]
     public string SqlGeneration_Static()
     {
@@ -91,13 +91,13 @@ public class SqlGenerationBenchmark
     }
 
     // ============= PARAMETER CREATION BENCHMARKS =============
-    
+
     [Benchmark]
     public DbParameter ParameterCreation_Mine()
     {
         return _ctx.CreateDbParameter("p0", DbType.Object, new[] { _filmId });
     }
-    
+
     [Benchmark]
     public object ParameterCreation_Dapper()
     {
@@ -134,17 +134,15 @@ public class SqlGenerationBenchmark
         container.Query.Append(param);
     }
 
-    [Table("film", schema: "public")]
+    [Table("film", "public")]
     public class Film
     {
         [Id(false)]
         [Column("film_id", DbType.Int32)]
         public int Id { get; set; }
 
-        [Column("title", DbType.String)]
-        public string Title { get; set; } = string.Empty;
+        [Column("title", DbType.String)] public string Title { get; set; } = string.Empty;
 
-        [Column("length", DbType.Int32)]
-        public int Length { get; set; }
+        [Column("length", DbType.Int32)] public int Length { get; set; }
     }
 }

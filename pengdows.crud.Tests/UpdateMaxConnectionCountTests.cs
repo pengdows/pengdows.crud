@@ -9,10 +9,16 @@ namespace pengdows.crud.Tests;
 public class UpdateMaxConnectionCountTests
 {
     private static MethodInfo GetMethod()
-        => typeof(DatabaseContext).GetMethod("UpdateMaxConnectionCount", BindingFlags.Instance | BindingFlags.NonPublic)!;
+    {
+        return typeof(DatabaseContext).GetMethod("UpdateMaxConnectionCount",
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+    }
 
     private static FieldInfo GetField()
-        => typeof(DatabaseContext).GetField("_maxNumberOfOpenConnections", BindingFlags.Instance | BindingFlags.NonPublic)!;
+    {
+        return typeof(DatabaseContext).GetField("_maxNumberOfOpenConnections",
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+    }
 
     private static DatabaseContext CreateContext()
     {

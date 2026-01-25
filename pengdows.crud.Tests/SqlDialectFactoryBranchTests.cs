@@ -78,12 +78,35 @@ public class SqlDialectFactoryBranchTests
         Assert.IsType(expectedDialect, dialect);
     }
 
-    private sealed class SqlServerFactory : DbProviderFactory { }
-    private sealed class NpgsqlFactory : DbProviderFactory { }
-    private sealed class MySqlFactory : DbProviderFactory { }
-    private sealed class SqliteFactory : DbProviderFactory { }
-    private sealed class OracleFactory : DbProviderFactory { }
-    private sealed class FirebirdFactory : DbProviderFactory { }
-    private sealed class DuckDbFactory : DbProviderFactory { }
-    private sealed class UnknownFactory : DbProviderFactory { }
+    private sealed class SqlServerFactory : DbProviderFactory
+    {
+    }
+
+    private sealed class NpgsqlFactory : DbProviderFactory
+    {
+    }
+
+    private sealed class MySqlFactory : DbProviderFactory
+    {
+    }
+
+    private sealed class SqliteFactory : DbProviderFactory
+    {
+    }
+
+    private sealed class OracleFactory : DbProviderFactory
+    {
+    }
+
+    private sealed class FirebirdFactory : DbProviderFactory
+    {
+    }
+
+    private sealed class DuckDbFactory : DbProviderFactory
+    {
+    }
+
+    private sealed class UnknownFactory : DbProviderFactory
+    {
+    }
 }

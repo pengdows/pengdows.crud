@@ -20,15 +20,11 @@ public class RetrieveStreamAsyncTests
     [Table("test")]
     private class TestEntity
     {
-        [Id]
-        [Column("id", DbType.Int32)]
-        public int Id { get; set; }
+        [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
 
-        [Column("name", DbType.String)]
-        public string? Name { get; set; }
+        [Column("name", DbType.String)] public string? Name { get; set; }
 
-        [Column("value", DbType.Int32)]
-        public int Value { get; set; }
+        [Column("value", DbType.Int32)] public int Value { get; set; }
     }
 
     [Fact]
@@ -150,7 +146,9 @@ public class RetrieveStreamAsyncTests
         {
             processedCount++;
             if (processedCount >= 5)
+            {
                 break;
+            }
         }
 
         // Assert - Should stop early
@@ -281,7 +279,9 @@ public class RetrieveStreamAsyncTests
         {
             results.Add(entity);
             if (results.Count >= 10)
+            {
                 break;
+            }
         }
 
         // Assert

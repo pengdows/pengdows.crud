@@ -65,7 +65,7 @@ public class CriticalPathCoverageTests
     /// <summary>
     /// Test DatabaseContext connection string reset protection
     /// </summary>
-        [Fact]
+    [Fact]
     public void DatabaseContext_ConnectionStringReset_ThrowsInvalidOperation()
     {
         // Test connection string validation (lines 284-289)
@@ -81,10 +81,11 @@ public class CriticalPathCoverageTests
         // Use reflection to call SetConnectionString method which should throw when attempting to reset
         var exception = Assert.Throws<TargetInvocationException>(() =>
         {
-            var setConnectionStringMethod = typeof(DatabaseContext).GetMethod("SetConnectionString", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var setConnectionStringMethod = typeof(DatabaseContext).GetMethod("SetConnectionString",
+                BindingFlags.NonPublic | BindingFlags.Instance);
             setConnectionStringMethod?.Invoke(context, new object[] { "Data Source=different" });
         });
-        
+
         // The inner exception should be ArgumentException with the correct message
         Assert.IsType<ArgumentException>(exception.InnerException);
         Assert.Contains("Connection string reset attempted", exception.InnerException?.Message);
@@ -267,7 +268,7 @@ public class CriticalPathCoverageTests
 
         // Create multiple contexts concurrently
         var tasks = new Task[10];
-        for (int i = 0; i < 10; i++)
+        for (var i = 0; i < 10; i++)
         {
             tasks[i] = Task.Run(() =>
             {

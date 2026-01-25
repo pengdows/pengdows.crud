@@ -33,14 +33,14 @@ public class IsolationLevelSupportTests
     {
         var sqlResolver = new IsolationResolver(
             SupportedDatabase.SqlServer,
-            readCommittedSnapshotEnabled: true,
-            allowSnapshotIsolation: true);
+            true,
+            true);
         Assert.Throws<InvalidOperationException>(() => sqlResolver.Validate(IsolationLevel.Chaos));
 
         var pgResolver = new IsolationResolver(
             SupportedDatabase.PostgreSql,
-            readCommittedSnapshotEnabled: false,
-            allowSnapshotIsolation: false);
+            false,
+            false);
         Assert.Throws<InvalidOperationException>(() => pgResolver.Validate(IsolationLevel.ReadUncommitted));
     }
 

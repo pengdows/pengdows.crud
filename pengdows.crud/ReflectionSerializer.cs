@@ -44,6 +44,7 @@ public static class ReflectionSerializer
 
             return result;
         }
+
         if (obj is IEnumerable enumerable)
         {
             var list = new List<object?>();
@@ -66,6 +67,7 @@ public static class ReflectionSerializer
 
             objDict[prop.Name] = Serialize(prop.GetValue(obj));
         }
+
         return objDict;
     }
 
@@ -87,10 +89,12 @@ public static class ReflectionSerializer
             // handle Nullable<T> by delegating to the underlying type
             return Deserialize(underlying, data);
         }
+
         if (IsSimpleType(targetType))
         {
             return Convert.ChangeType(data, Nullable.GetUnderlyingType(targetType) ?? targetType);
         }
+
         if (typeof(string) == targetType)
         {
             return data.ToString();
@@ -106,6 +110,7 @@ public static class ReflectionSerializer
 
             return dict;
         }
+
         if (typeof(IEnumerable).IsAssignableFrom(targetType) && data is IEnumerable enumerableData)
         {
             var elementType = targetType.IsArray
@@ -124,6 +129,7 @@ public static class ReflectionSerializer
                 list.CopyTo(array, 0);
                 return array;
             }
+
             return list;
         }
 
@@ -146,6 +152,7 @@ public static class ReflectionSerializer
                 prop.SetValue(result, deserialized);
             }
         }
+
         return result;
     }
 }

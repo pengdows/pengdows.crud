@@ -28,21 +28,41 @@ public class ConnectionStrategyTests
             Connection = new RecordingConnection { EmulatedProduct = product };
         }
 
-        public override DbConnection CreateConnection() => Connection;
-        public override DbCommand CreateCommand() => new fakeDbCommand();
-        public override DbParameter CreateParameter() => new fakeDbParameter();
+        public override DbConnection CreateConnection()
+        {
+            return Connection;
+        }
+
+        public override DbCommand CreateCommand()
+        {
+            return new fakeDbCommand();
+        }
+
+        public override DbParameter CreateParameter()
+        {
+            return new fakeDbParameter();
+        }
     }
 
     private sealed class RecordingConnection : fakeDbConnection
     {
         public List<string> ExecutedCommands { get; } = new();
-        protected override DbCommand CreateDbCommand() => new RecordingCommand(this, ExecutedCommands);
+
+        protected override DbCommand CreateDbCommand()
+        {
+            return new RecordingCommand(this, ExecutedCommands);
+        }
     }
 
     private sealed class RecordingCommand : fakeDbCommand
     {
         private readonly List<string> _record;
-        public RecordingCommand(fakeDbConnection connection, List<string> record) : base(connection) => _record = record;
+
+        public RecordingCommand(fakeDbConnection connection, List<string> record) : base(connection)
+        {
+            _record = record;
+        }
+
         public override int ExecuteNonQuery()
         {
             _record.Add(CommandText);
@@ -50,7 +70,8 @@ public class ConnectionStrategyTests
         }
     }
 
-    private static DatabaseContext CreateContext(DbMode mode, SupportedDatabase product = SupportedDatabase.SqlServer, string dataSource = "test")
+    private static DatabaseContext CreateContext(DbMode mode, SupportedDatabase product = SupportedDatabase.SqlServer,
+        string dataSource = "test")
     {
         var cfg = new DatabaseContextConfiguration
         {
@@ -215,7 +236,7 @@ public class ConnectionStrategyTests
         Assert.NotNull(ctx.PersistentConnection);
 
         var read = ctx.GetConnection(ExecutionType.Read);
-        var readShared = ctx.GetConnection(ExecutionType.Read, isShared: true);
+        var readShared = ctx.GetConnection(ExecutionType.Read, true);
         var write = ctx.GetConnection(ExecutionType.Write);
 
         Assert.Same(ctx.PersistentConnection, read);
@@ -310,7 +331,7 @@ public class ConnectionStrategyTests
         await using var ctx = CreateContext(DbMode.KeepAlive, SupportedDatabase.SqlServer);
 
         // Create a separate connection that's not the persistent one
-        var separateConnection = ctx.GetConnection(ExecutionType.Read, isShared: false);
+        var separateConnection = ctx.GetConnection(ExecutionType.Read, false);
         await separateConnection.OpenAsync();
         var beforeCount = ctx.NumberOfOpenConnections;
 
@@ -346,7 +367,7 @@ public class ConnectionStrategyTests
         var tasks = new List<Task>();
 
         // Create connections from multiple tasks
-        for (int i = 0; i < 5; i++)
+        for (var i = 0; i < 5; i++)
         {
             tasks.Add(Task.Run(async () =>
             {

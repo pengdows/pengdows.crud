@@ -87,15 +87,15 @@ public class DataReaderMapperFakeDbTests : IAsyncLifetime
 
         var options = new MapperOptions { Strict = true };
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => DataReaderMapper.LoadAsync<CountDto>(reader, options));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            DataReaderMapper.LoadAsync<CountDto>(reader, options));
     }
 
     [Fact]
     public async Task LoadObjectsFromDataReaderAsync_WithNonDbReader_ThrowsArgumentException()
     {
-        await Assert.ThrowsAsync<ArgumentException>(
-            () => DataReaderMapper.LoadObjectsFromDataReaderAsync<EntityDto>(new NonDbReader()));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            DataReaderMapper.LoadObjectsFromDataReaderAsync<EntityDto>(new NonDbReader()));
     }
 
     private sealed class EntityDto
@@ -122,32 +122,139 @@ public class DataReaderMapperFakeDbTests : IAsyncLifetime
         public bool IsClosed => true;
         public int RecordsAffected => throw new NotSupportedException();
         public int FieldCount => throw new NotSupportedException();
-        public void Close() => throw new NotSupportedException();
-        public void Dispose() { }
-        public bool GetBoolean(int i) => throw new NotSupportedException();
-        public byte GetByte(int i) => throw new NotSupportedException();
-        public long GetBytes(int i, long fieldOffset, byte[]? buffer, int bufferoffset, int length) => throw new NotSupportedException();
-        public char GetChar(int i) => throw new NotSupportedException();
-        public long GetChars(int i, long fieldoffset, char[]? buffer, int bufferoffset, int length) => throw new NotSupportedException();
-        public IDataReader GetData(int i) => throw new NotSupportedException();
-        public string GetDataTypeName(int i) => throw new NotSupportedException();
-        public DateTime GetDateTime(int i) => throw new NotSupportedException();
-        public decimal GetDecimal(int i) => throw new NotSupportedException();
-        public double GetDouble(int i) => throw new NotSupportedException();
-        public Type GetFieldType(int i) => throw new NotSupportedException();
-        public float GetFloat(int i) => throw new NotSupportedException();
-        public Guid GetGuid(int i) => throw new NotSupportedException();
-        public short GetInt16(int i) => throw new NotSupportedException();
-        public int GetInt32(int i) => throw new NotSupportedException();
-        public long GetInt64(int i) => throw new NotSupportedException();
-        public string GetName(int i) => throw new NotSupportedException();
-        public int GetOrdinal(string name) => throw new NotSupportedException();
-        public DataTable GetSchemaTable() => throw new NotSupportedException();
-        public string GetString(int i) => throw new NotSupportedException();
-        public object GetValue(int i) => throw new NotSupportedException();
-        public int GetValues(object[] values) => throw new NotSupportedException();
-        public bool IsDBNull(int i) => throw new NotSupportedException();
-        public bool NextResult() => throw new NotSupportedException();
-        public bool Read() => throw new NotSupportedException();
+
+        public void Close()
+        {
+            throw new NotSupportedException();
+        }
+
+        public void Dispose()
+        {
+        }
+
+        public bool GetBoolean(int i)
+        {
+            throw new NotSupportedException();
+        }
+
+        public byte GetByte(int i)
+        {
+            throw new NotSupportedException();
+        }
+
+        public long GetBytes(int i, long fieldOffset, byte[]? buffer, int bufferoffset, int length)
+        {
+            throw new NotSupportedException();
+        }
+
+        public char GetChar(int i)
+        {
+            throw new NotSupportedException();
+        }
+
+        public long GetChars(int i, long fieldoffset, char[]? buffer, int bufferoffset, int length)
+        {
+            throw new NotSupportedException();
+        }
+
+        public IDataReader GetData(int i)
+        {
+            throw new NotSupportedException();
+        }
+
+        public string GetDataTypeName(int i)
+        {
+            throw new NotSupportedException();
+        }
+
+        public DateTime GetDateTime(int i)
+        {
+            throw new NotSupportedException();
+        }
+
+        public decimal GetDecimal(int i)
+        {
+            throw new NotSupportedException();
+        }
+
+        public double GetDouble(int i)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Type GetFieldType(int i)
+        {
+            throw new NotSupportedException();
+        }
+
+        public float GetFloat(int i)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Guid GetGuid(int i)
+        {
+            throw new NotSupportedException();
+        }
+
+        public short GetInt16(int i)
+        {
+            throw new NotSupportedException();
+        }
+
+        public int GetInt32(int i)
+        {
+            throw new NotSupportedException();
+        }
+
+        public long GetInt64(int i)
+        {
+            throw new NotSupportedException();
+        }
+
+        public string GetName(int i)
+        {
+            throw new NotSupportedException();
+        }
+
+        public int GetOrdinal(string name)
+        {
+            throw new NotSupportedException();
+        }
+
+        public DataTable GetSchemaTable()
+        {
+            throw new NotSupportedException();
+        }
+
+        public string GetString(int i)
+        {
+            throw new NotSupportedException();
+        }
+
+        public object GetValue(int i)
+        {
+            throw new NotSupportedException();
+        }
+
+        public int GetValues(object[] values)
+        {
+            throw new NotSupportedException();
+        }
+
+        public bool IsDBNull(int i)
+        {
+            throw new NotSupportedException();
+        }
+
+        public bool NextResult()
+        {
+            throw new NotSupportedException();
+        }
+
+        public bool Read()
+        {
+            throw new NotSupportedException();
+        }
     }
 }

@@ -26,8 +26,7 @@ public class SqlServerDialectSettingsTests
             _reader = reader;
         }
 
-        [AllowNull]
-        public override string CommandText { get; set; } = string.Empty;
+        [AllowNull] public override string CommandText { get; set; } = string.Empty;
         public override int CommandTimeout { get; set; }
         public override CommandType CommandType { get; set; }
         public override bool DesignTimeVisible { get; set; }
@@ -44,14 +43,33 @@ public class SqlServerDialectSettingsTests
 
         protected override DbTransaction? DbTransaction { get; set; }
 
-        public override void Cancel() { }
-        public override int ExecuteNonQuery() => 0;
-        public override object ExecuteScalar() => DBNull.Value;
-        public override void Prepare() { }
+        public override void Cancel()
+        {
+        }
 
-        protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) => _reader;
+        public override int ExecuteNonQuery()
+        {
+            return 0;
+        }
 
-        protected override DbParameter CreateDbParameter() => new fakeDbParameter();
+        public override object ExecuteScalar()
+        {
+            return DBNull.Value;
+        }
+
+        public override void Prepare()
+        {
+        }
+
+        protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior)
+        {
+            return _reader;
+        }
+
+        protected override DbParameter CreateDbParameter()
+        {
+            return new fakeDbParameter();
+        }
     }
 
     private sealed class UserOptionsConnection : fakeDbConnection
@@ -64,7 +82,10 @@ public class SqlServerDialectSettingsTests
             _reader = new fakeDbDataReader(rows);
         }
 
-        protected override DbCommand CreateDbCommand() => new UserOptionsCommand(this, _reader);
+        protected override DbCommand CreateDbCommand()
+        {
+            return new UserOptionsCommand(this, _reader);
+        }
     }
 
     private static ITrackedConnection BuildConnection(IEnumerable<Dictionary<string, object>> rows)

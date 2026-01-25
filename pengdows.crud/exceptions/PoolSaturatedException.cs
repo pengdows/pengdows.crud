@@ -6,8 +6,10 @@ namespace pengdows.crud.exceptions;
 
 public sealed class PoolSaturatedException : TimeoutException
 {
-    public PoolSaturatedException(PoolLabel label, string poolKeyHash, PoolStatisticsSnapshot snapshot, TimeSpan timeout)
-        : base($"{label} pool saturated: {snapshot.InUse}/{snapshot.MaxPermits} in use, {snapshot.Queued} queued, timed out after {timeout} (key {poolKeyHash}).")
+    public PoolSaturatedException(PoolLabel label, string poolKeyHash, PoolStatisticsSnapshot snapshot,
+        TimeSpan timeout)
+        : base(
+            $"{label} pool saturated: {snapshot.InUse}/{snapshot.MaxPermits} in use, {snapshot.Queued} queued, timed out after {timeout} (key {poolKeyHash}).")
     {
         PoolLabel = label;
         PoolKeyHash = poolKeyHash;

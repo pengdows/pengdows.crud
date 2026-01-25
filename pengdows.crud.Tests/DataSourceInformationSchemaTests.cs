@@ -25,13 +25,13 @@ public class DataSourceInformationSchemaTests
             SupportedDatabase.Unknown,
             "MysteryDB",
             "1.0",
-            parameterPattern: "?",
-            parameterFormat: "?{0}",
-            maxLength: 18,
-            namePattern: "?",
-            namePatternRegex: "?",
-            supportsNamed: false,
-            additionalScalars: scalars);
+            "?",
+            "?{0}",
+            18,
+            "?",
+            "?",
+            false,
+            scalars);
 
         var dialect = new Sql92Dialect(factory, NullLoggerFactory.Instance.CreateLogger<SqlDialect>());
         dialect.DetectDatabaseInfo(tracked);
@@ -71,13 +71,13 @@ public class DataSourceInformationSchemaTests
             SupportedDatabase.Unknown,
             "MysteryDB",
             "1.0",
-            parameterPattern: "?",
-            parameterFormat: "?{0}",
-            maxLength: 18,
-            namePattern: "?",
-            namePatternRegex: "?",
-            supportsNamed: false,
-            additionalScalars: scalars);
+            "?",
+            "?{0}",
+            18,
+            "?",
+            "?",
+            false,
+            scalars);
 
         var dialect = new Sql92Dialect(factory, NullLoggerFactory.Instance.CreateLogger<SqlDialect>());
         dialect.DetectDatabaseInfo(tracked);

@@ -193,19 +193,22 @@ public class ConnectionBreakingExamples
             SupportedDatabase.DuckDB,
             ConnectionFailureMode.FailAfterCount,
             ConnectionFailureHelper.CommonExceptions.NetworkError,
-            failAfterCount: 4);
+            4);
 
         using var context = new DatabaseContext("Data Source=test;EmulatedProduct=DuckDB", factory);
 
         // Connection will work for first 3 operations, then fail with NetworkError
         var conn1 = context.GetConnection(ExecutionType.Read);
-        conn1.Open(); conn1.Close(); // 1st
+        conn1.Open();
+        conn1.Close(); // 1st
 
         var conn2 = context.GetConnection(ExecutionType.Read);
-        conn2.Open(); conn2.Close(); // 2nd
+        conn2.Open();
+        conn2.Close(); // 2nd
 
         var conn3 = context.GetConnection(ExecutionType.Read);
-        conn3.Open(); conn3.Close(); // 3rd
+        conn3.Open();
+        conn3.Close(); // 3rd
 
         // 4th connection should fail with NetworkError
         var networkException = Assert.Throws<InvalidOperationException>(() =>
@@ -221,10 +224,7 @@ public class ConnectionBreakingExamples
 [Table("test_entities")]
 internal class TestEntity
 {
-    [Id]
-    [Column("id", DbType.Int64)]
-    public long Id { get; set; }
+    [Id] [Column("id", DbType.Int64)] public long Id { get; set; }
 
-    [Column("name", DbType.String)]
-    public string Name { get; set; } = "";
+    [Column("name", DbType.String)] public string Name { get; set; } = "";
 }

@@ -75,12 +75,18 @@ public static class ProviderParameterFactory
     private static void ApplyPostgreSqlOptimizations(DbParameter parameter, Type valueType)
     {
         var paramTypeName = parameter.GetType().Name;
-        if (!paramTypeName.StartsWith("Npgsql")) return;
+        if (!paramTypeName.StartsWith("Npgsql"))
+        {
+            return;
+        }
 
         try
         {
             var npgsqlDbTypeProperty = parameter.GetType().GetProperty("NpgsqlDbType");
-            if (npgsqlDbTypeProperty == null) return;
+            if (npgsqlDbTypeProperty == null)
+            {
+                return;
+            }
 
             // Optimize common types for PostgreSQL
             if (valueType == typeof(Guid) || valueType == typeof(Guid?))
@@ -271,8 +277,8 @@ public static class ParameterBindingRules
 
         // Rule 3: Enum handling per provider preferences
         if (valueType.IsEnum || (valueType.IsGenericType &&
-            valueType.GetGenericTypeDefinition() == typeof(Nullable<>) &&
-            Nullable.GetUnderlyingType(valueType)!.IsEnum))
+                                 valueType.GetGenericTypeDefinition() == typeof(Nullable<>) &&
+                                 Nullable.GetUnderlyingType(valueType)!.IsEnum))
         {
             ApplyEnumBinding(parameter, value, provider);
             return true;
@@ -466,7 +472,7 @@ public static class ParameterBindingRules
         if (valueType == typeof(byte[]) && value is byte[] bytes && bytes.Length > 85000)
         {
             // Use streaming for large binary data
-            parameter.Value = new System.IO.MemoryStream(bytes);
+            parameter.Value = new MemoryStream(bytes);
             parameter.DbType = DbType.Binary;
         }
         else if (valueType == typeof(string) && value is string text && text.Length > 8000)

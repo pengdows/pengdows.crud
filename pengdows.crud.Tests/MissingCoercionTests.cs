@@ -155,7 +155,7 @@ public class MissingCoercionTests
         var coercion = new BooleanCoercion();
         var dbValue = new DbValue('x');
 
-        Assert.Throws<InvalidCastException>(() => coercion.TryRead(dbValue, out var _));
+        Assert.Throws<InvalidCastException>(() => coercion.TryRead(dbValue, out _));
     }
 
     [Fact]
@@ -510,7 +510,7 @@ public class MissingCoercionTests
         var success = coercion.TryRead(dbValue, out var result);
 
         Assert.True(success);
-        Assert.NotEqual(default(JsonElement), result);
+        Assert.NotEqual(default, result);
     }
 
     [Fact]
@@ -523,7 +523,7 @@ public class MissingCoercionTests
         var success = coercion.TryRead(dbValue, out var result);
 
         Assert.True(success);
-        Assert.NotEqual(default(JsonElement), result);
+        Assert.NotEqual(default, result);
     }
 
     [Fact]
@@ -535,7 +535,7 @@ public class MissingCoercionTests
         var success = coercion.TryRead(dbValue, out var result);
 
         Assert.True(success);
-        Assert.NotEqual(default(JsonElement), result);
+        Assert.NotEqual(default, result);
     }
 
     [Fact]
@@ -548,7 +548,7 @@ public class MissingCoercionTests
         var success = coercion.TryRead(dbValue, out var result);
 
         Assert.True(success);
-        Assert.NotEqual(default(JsonElement), result);
+        Assert.NotEqual(default, result);
     }
 
     [Fact]
@@ -560,7 +560,7 @@ public class MissingCoercionTests
         var success = coercion.TryRead(dbValue, out var result);
 
         Assert.False(success);
-        Assert.Equal(default(JsonElement), result);
+        Assert.Equal(default, result);
     }
 
     [Fact]
@@ -572,7 +572,7 @@ public class MissingCoercionTests
         var success = coercion.TryRead(dbValue, out var result);
 
         Assert.False(success);
-        Assert.Equal(default(JsonElement), result);
+        Assert.Equal(default, result);
     }
 
     [Fact]
@@ -584,7 +584,7 @@ public class MissingCoercionTests
         var success = coercion.TryRead(dbValue, out var result);
 
         Assert.False(success);
-        Assert.Equal(default(JsonElement), result);
+        Assert.Equal(default, result);
     }
 
     [Fact]
@@ -630,7 +630,7 @@ public class MissingCoercionTests
         var success = coercion.TryRead(dbValue, out var result);
 
         Assert.True(success);
-        Assert.NotEqual(default(PostgreSqlInterval), result);
+        Assert.NotEqual(default, result);
     }
 
     [Fact]
@@ -642,7 +642,7 @@ public class MissingCoercionTests
         var success = coercion.TryRead(dbValue, out var result);
 
         Assert.False(success);
-        Assert.Equal(default(PostgreSqlInterval), result);
+        Assert.Equal(default, result);
     }
 
     [Fact]
@@ -654,7 +654,7 @@ public class MissingCoercionTests
         var success = coercion.TryRead(dbValue, out var result);
 
         Assert.False(success);
-        Assert.Equal(default(PostgreSqlInterval), result);
+        Assert.Equal(default, result);
     }
 
     [Fact]
@@ -699,7 +699,7 @@ public class MissingCoercionTests
         var success = coercion.TryRead(dbValue, out var result);
 
         Assert.True(success);
-        Assert.NotEqual(default(RowVersion), result);
+        Assert.NotEqual(default, result);
     }
 
     [Fact]
@@ -712,7 +712,7 @@ public class MissingCoercionTests
         var success = coercion.TryRead(dbValue, out var result);
 
         Assert.True(success);
-        Assert.NotEqual(default(RowVersion), result);
+        Assert.NotEqual(default, result);
     }
 
     [Fact]
@@ -725,7 +725,7 @@ public class MissingCoercionTests
         var success = coercion.TryRead(dbValue, out var result);
 
         Assert.False(success);
-        Assert.Equal(default(RowVersion), result);
+        Assert.Equal(default, result);
     }
 
     [Fact]
@@ -737,7 +737,7 @@ public class MissingCoercionTests
         var success = coercion.TryRead(dbValue, out var result);
 
         Assert.False(success);
-        Assert.Equal(default(RowVersion), result);
+        Assert.Equal(default, result);
     }
 
     [Fact]
@@ -766,22 +766,25 @@ public class MissingCoercionTests
         public override DbType DbType { get; set; }
         public override ParameterDirection Direction { get; set; }
         public override bool IsNullable { get; set; }
+
         [AllowNull]
         public override string ParameterName
         {
             get => _parameterName;
             set => _parameterName = value ?? string.Empty;
         }
+
         public override int Size { get; set; }
+
         [AllowNull]
         public override string SourceColumn
         {
             get => _sourceColumn;
             set => _sourceColumn = value ?? string.Empty;
         }
+
         public override bool SourceColumnNullMapping { get; set; }
-        [AllowNull]
-        public override object Value { get; set; } = DBNull.Value;
+        [AllowNull] public override object Value { get; set; } = DBNull.Value;
 
         public override void ResetDbType()
         {

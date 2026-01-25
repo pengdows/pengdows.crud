@@ -18,15 +18,11 @@ public class AdditionalCoverageTests : SqlLiteContextTestBase
     [Table("test_coverage")]
     private class SimpleCoverageEntity
     {
-        [Id]
-        [Column("id", DbType.Int64)]
-        public long Id { get; set; }
+        [Id] [Column("id", DbType.Int64)] public long Id { get; set; }
 
-        [Column("name", DbType.String)]
-        public string Name { get; set; } = "";
+        [Column("name", DbType.String)] public string Name { get; set; } = "";
 
-        [Column("value", DbType.Int32)]
-        public int Value { get; set; }
+        [Column("value", DbType.Int32)] public int Value { get; set; }
     }
 
     [Fact]

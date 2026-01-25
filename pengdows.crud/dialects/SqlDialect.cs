@@ -16,7 +16,7 @@ namespace pengdows.crud.dialects;
 /// <summary>
 /// Base SQL dialect implementing standard SQL behaviors with feature detection
 /// </summary>
-internal abstract class SqlDialect:ISqlDialect
+internal abstract class SqlDialect : ISqlDialect
 {
     protected readonly DbProviderFactory Factory;
     protected readonly ILogger Logger;
@@ -25,12 +25,16 @@ internal abstract class SqlDialect:ISqlDialect
 
     // Performance optimization: Cache frequently used parameter names to avoid repeated string operations
     private readonly ConcurrentDictionary<string, string> _trimmedNameCache = new();
+
     private readonly ConcurrentDictionary<string, string> _wrappedNameCache = new(StringComparer.Ordinal);
+
     // Pre-compiled parameter marker trimming for faster string operations
     private static readonly char[] _parameterMarkers = { '@', ':', '?', '$' };
 
     // Performance: Static parameter name pool to avoid allocations
-    private static readonly char[] ValidNameChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_".ToCharArray();
+    private static readonly char[] ValidNameChars =
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_".ToCharArray();
+
     private static readonly string[] ParameterNamePool = GenerateParameterNamePool();
     private static int _parameterNamePoolIndex;
 
@@ -83,7 +87,9 @@ internal abstract class SqlDialect:ISqlDialect
     /// <summary>
     /// Gets the detected database product information. Call DetectDatabaseInfo first.
     /// </summary>
-    public IDatabaseProductInfo ProductInfo => _productInfo ?? throw new InvalidOperationException("Database info not detected. Call DetectDatabaseInfo first.");
+    public IDatabaseProductInfo ProductInfo => _productInfo ??
+                                               throw new InvalidOperationException(
+                                                   "Database info not detected. Call DetectDatabaseInfo first.");
 
     /// <summary>
     /// Whether database info has been detected
@@ -93,7 +99,12 @@ internal abstract class SqlDialect:ISqlDialect
     // Core properties with SQL-92 defaults; override for database-specific behavior
     public abstract SupportedDatabase DatabaseType { get; }
     public virtual string ParameterMarker => "?";
-    public virtual string ParameterMarkerAt(int ordinal) => ParameterMarker;
+
+    public virtual string ParameterMarkerAt(int ordinal)
+    {
+        return ParameterMarker;
+    }
+
     public virtual bool SupportsNamedParameters => true;
 
     public virtual string RenderJsonArgument(string parameterMarker, IColumnInfo column)
@@ -122,8 +133,8 @@ internal abstract class SqlDialect:ISqlDialect
         IsInitialized ? ProductInfo.StandardCompliance : SqlStandardLevel.Sql92;
 
     // SQL standard defaults - can be overridden for database-specific behavior
-    public virtual string QuotePrefix => "\"";  // SQL-92 standard
-    public virtual string QuoteSuffix => "\"";   // SQL-92 standard
+    public virtual string QuotePrefix => "\""; // SQL-92 standard
+    public virtual string QuoteSuffix => "\""; // SQL-92 standard
     public virtual string CompositeIdentifierSeparator => "."; // SQL-92 standard
     public virtual bool PrepareStatements => false;
 
@@ -180,13 +191,19 @@ internal abstract class SqlDialect:ISqlDialect
     /// Gets the SQL statement to create a savepoint with the given name.
     /// Override for databases with non-standard syntax (e.g., SQL Server uses SAVE TRANSACTION).
     /// </summary>
-    public virtual string GetSavepointSql(string name) => $"SAVEPOINT {name}";
+    public virtual string GetSavepointSql(string name)
+    {
+        return $"SAVEPOINT {name}";
+    }
 
     /// <summary>
     /// Gets the SQL statement to rollback to a savepoint with the given name.
     /// Override for databases with non-standard syntax (e.g., SQL Server uses ROLLBACK TRANSACTION).
     /// </summary>
-    public virtual string GetRollbackToSavepointSql(string name) => $"ROLLBACK TO SAVEPOINT {name}";
+    public virtual string GetRollbackToSavepointSql(string name)
+    {
+        return $"ROLLBACK TO SAVEPOINT {name}";
+    }
 
     public virtual bool RequiresStoredProcParameterNameMatch => false;
     public virtual bool SupportsNamespaces => false; // SQL-92 does not require schema support
@@ -402,7 +419,8 @@ internal abstract class SqlDialect:ISqlDialect
         return start > end ? ReadOnlySpan<char>.Empty : span.Slice(start, end - start + 1);
     }
 
-    private static void AppendWithoutQuotes(ref StringBuilderLite builder, ReadOnlySpan<char> value, ReadOnlySpan<char> prefix, ReadOnlySpan<char> suffix)
+    private static void AppendWithoutQuotes(ref StringBuilderLite builder, ReadOnlySpan<char> value,
+        ReadOnlySpan<char> prefix, ReadOnlySpan<char> suffix)
     {
         var index = 0;
         while (index < value.Length)
@@ -470,8 +488,8 @@ internal abstract class SqlDialect:ISqlDialect
         }
 
         parameterName = parameterName.Replace("@", string.Empty)
-                                     .Replace(":", string.Empty)
-                                     .Replace("?", string.Empty);
+            .Replace(":", string.Empty)
+            .Replace("?", string.Empty);
 
         return string.Concat(ParameterMarker, parameterName);
     }
@@ -584,7 +602,8 @@ internal abstract class SqlDialect:ISqlDialect
         if (!handled && !valueIsNull)
         {
             if (value is string s && (parameter.DbType == DbType.String || parameter.DbType == DbType.AnsiString ||
-                                      parameter.DbType == DbType.StringFixedLength || parameter.DbType == DbType.AnsiStringFixedLength))
+                                      parameter.DbType == DbType.StringFixedLength ||
+                                      parameter.DbType == DbType.AnsiStringFixedLength))
             {
                 parameter.Size = Math.Max(s.Length, 1);
             }
@@ -649,7 +668,10 @@ internal abstract class SqlDialect:ISqlDialect
     }
 
     // Methods for database-specific operations
-    public virtual string GetVersionQuery() => string.Empty;
+    public virtual string GetVersionQuery()
+    {
+        return string.Empty;
+    }
 
     public virtual string GetDatabaseVersion(ITrackedConnection connection)
     {
@@ -802,7 +824,8 @@ internal abstract class SqlDialect:ISqlDialect
                 StandardCompliance = standardCompliance
             };
 
-            Logger.LogInformation("Detected database: {ProductName} {Version} (SQL Standard: {Standard})", productName, versionString, standardCompliance);
+            Logger.LogInformation("Detected database: {ProductName} {Version} (SQL Standard: {Standard})", productName,
+                versionString, standardCompliance);
             return _productInfo;
         }
         catch (Exception ex)
@@ -865,6 +888,7 @@ internal abstract class SqlDialect:ISqlDialect
                 ? readOnlySettings
                 : $"{baseSettings}\n{readOnlySettings}";
         }
+
         return baseSettings;
     }
 
@@ -936,7 +960,8 @@ internal abstract class SqlDialect:ISqlDialect
     /// <param name="connection">Database connection to configure</param>
     /// <param name="context">Database context</param>
     /// <param name="readOnly">Whether this is a read-only connection</param>
-    public virtual void ConfigureProviderSpecificSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)
+    public virtual void ConfigureProviderSpecificSettings(IDbConnection connection, IDatabaseContext context,
+        bool readOnly)
     {
         // Default implementation does nothing - override in derived classes
     }
@@ -1159,7 +1184,9 @@ internal abstract class SqlDialect:ISqlDialect
 
         if (!string.IsNullOrWhiteSpace(versionString))
         {
-            Logger.LogWarning("Unable to parse database version '{Version}' for {DatabaseType}; falling back to default SQL compliance.", versionString, DatabaseType);
+            Logger.LogWarning(
+                "Unable to parse database version '{Version}' for {DatabaseType}; falling back to default SQL compliance.",
+                versionString, DatabaseType);
         }
 
         return null;
@@ -1178,13 +1205,14 @@ internal abstract class SqlDialect:ISqlDialect
         var anyOtherMax = ValidNameChars.Length;
 
         Span<char> buffer = stackalloc char[nameLength];
-        for (int p = 0; p < poolSize; p++)
+        for (var p = 0; p < poolSize; p++)
         {
             buffer[0] = ValidNameChars[Random.Shared.Next(firstCharMax)];
             for (var i = 1; i < nameLength; i++)
             {
                 buffer[i] = ValidNameChars[Random.Shared.Next(anyOtherMax)];
             }
+
             pool[p] = new string(buffer);
         }
 
@@ -1198,12 +1226,14 @@ internal abstract class SqlDialect:ISqlDialect
     private static bool IsValidParameterName(string name)
     {
         if (string.IsNullOrEmpty(name))
+        {
             return false;
+        }
 
         // Fast path: check each character is alphanumeric or underscore
-        for (int i = 0; i < name.Length; i++)
+        for (var i = 0; i < name.Length; i++)
         {
-            char c = name[i];
+            var c = name[i];
             if (!((c >= 'a' && c <= 'z') ||
                   (c >= 'A' && c <= 'Z') ||
                   (c >= '0' && c <= '9') ||
@@ -1253,7 +1283,7 @@ internal abstract class SqlDialect:ISqlDialect
     public virtual string GetLastInsertedIdQuery()
     {
         throw new NotSupportedException($"GetLastInsertedIdQuery not implemented for {DatabaseType}. " +
-            $"Prefer using RETURNING/OUTPUT clauses, or implement parameter-based row lookup.");
+                                        $"Prefer using RETURNING/OUTPUT clauses, or implement parameter-based row lookup.");
     }
 
     /// <summary>
@@ -1317,12 +1347,12 @@ internal abstract class SqlDialect:ISqlDialect
     {
         return DatabaseType switch
         {
-            SupportedDatabase.MySql => true,       // LAST_INSERT_ID() is per-connection safe
-            SupportedDatabase.MariaDb => true,     // LAST_INSERT_ID() is per-connection safe
-            SupportedDatabase.Sqlite => true,      // last_insert_rowid() is per-connection safe
-            SupportedDatabase.SqlServer => true,   // SCOPE_IDENTITY() is per-batch/scope safe
+            SupportedDatabase.MySql => true, // LAST_INSERT_ID() is per-connection safe
+            SupportedDatabase.MariaDb => true, // LAST_INSERT_ID() is per-connection safe
+            SupportedDatabase.Sqlite => true, // last_insert_rowid() is per-connection safe
+            SupportedDatabase.SqlServer => true, // SCOPE_IDENTITY() is per-batch/scope safe
             SupportedDatabase.PostgreSql => false, // lastval() can point at wrong sequence
-            SupportedDatabase.DuckDB => false,     // prefer RETURNING over lastval()
+            SupportedDatabase.DuckDB => false, // prefer RETURNING over lastval()
             _ => false
         };
     }
@@ -1385,7 +1415,7 @@ internal abstract class SqlDialect:ISqlDialect
         };
 
         var query = $"{selectClause} FROM {WrapObjectName(tableName)} WHERE " +
-                   string.Join(" AND ", whereConditions);
+                    string.Join(" AND ", whereConditions);
 
         // For databases that support ORDER BY with identity columns, get the most recent
         if (SupportsIdentityColumns && DatabaseType != SupportedDatabase.Oracle)
@@ -1457,7 +1487,7 @@ internal abstract class SqlDialect:ISqlDialect
 
     // Dialect defaults used when pool settings are not discoverable from the connection string.
     // These are intentionally internal (not part of the public API surface).
-    internal virtual int DefaultMinPoolSize => @internal.ConnectionPoolingConfiguration.DefaultMinPoolSize;
+    internal virtual int DefaultMinPoolSize => ConnectionPoolingConfiguration.DefaultMinPoolSize;
     internal virtual int DefaultMaxPoolSize => 100;
 
     // ---- Legacy utility helpers (kept for test compatibility) ----
@@ -1471,6 +1501,7 @@ internal abstract class SqlDialect:ISqlDialect
         {
             return IsUniqueViolation(dbEx);
         }
+
         return false;
     }
 
@@ -1488,6 +1519,7 @@ internal abstract class SqlDialect:ISqlDialect
         {
             return false;
         }
+
         return int.TryParse(match.Groups[1].Value, out major);
     }
 
@@ -1511,6 +1543,7 @@ internal abstract class SqlDialect:ISqlDialect
                 return false;
             }
         }
+
         return true;
     }
 
@@ -1521,11 +1554,12 @@ internal abstract class SqlDialect:ISqlDialect
             return 2;
         }
 
-        var candidate = (min % 2 == 0) ? min + 1 : min;
+        var candidate = min % 2 == 0 ? min + 1 : min;
         while (!IsPrime(candidate))
         {
             candidate += 2;
         }
+
         return candidate;
     }
 }

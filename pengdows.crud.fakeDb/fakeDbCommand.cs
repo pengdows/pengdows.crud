@@ -25,16 +25,14 @@ public class fakeDbCommand : DbCommand
     {
     }
 
-    [AllowNull]
-    public override string CommandText { get; set; } = string.Empty;
+    [AllowNull] public override string CommandText { get; set; } = string.Empty;
     public override int CommandTimeout { get; set; }
     public override CommandType CommandType { get; set; }
     public override bool DesignTimeVisible { get; set; }
     public override UpdateRowSource UpdatedRowSource { get; set; }
 
     protected override DbConnection? DbConnection { get; set; }
-    [AllowNull]
-    public new DbTransaction Transaction { get; set; }
+    [AllowNull] public new DbTransaction Transaction { get; set; }
 
     private readonly FakeParameterCollection _parameterCollection = new();
 
@@ -86,19 +84,24 @@ public class fakeDbCommand : DbCommand
                 {
                     conn.ExecutedNonQueryTexts.Add(CommandText);
                 }
+
                 return 0;
             }
         }
+
         if (conn != null && conn.NonQueryExecuteException != null)
         {
             var ex = conn.NonQueryExecuteException;
             conn.SetNonQueryExecuteException(null);
             throw ex;
         }
-        if (conn != null && !string.IsNullOrEmpty(CommandText) && conn.CommandFailuresByText.TryGetValue(CommandText, out var exNonQuery))
+
+        if (conn != null && !string.IsNullOrEmpty(CommandText) &&
+            conn.CommandFailuresByText.TryGetValue(CommandText, out var exNonQuery))
         {
             throw exNonQuery;
         }
+
         if (conn != null && !string.IsNullOrWhiteSpace(CommandText))
         {
             conn.ExecutedNonQueryTexts.Add(CommandText);
@@ -139,12 +142,16 @@ public class fakeDbCommand : DbCommand
                 conn.SetScalarExecuteException(null);
                 throw ex;
             }
-            if (!string.IsNullOrEmpty(CommandText) && conn.CommandFailuresByText.TryGetValue(CommandText, out var exScalar))
+
+            if (!string.IsNullOrEmpty(CommandText) &&
+                conn.CommandFailuresByText.TryGetValue(CommandText, out var exScalar))
             {
                 throw exScalar;
             }
+
             // Command-text-based result
-            if (!string.IsNullOrEmpty(CommandText) && conn.ScalarResultsByCommand.TryGetValue(CommandText, out var commandResult))
+            if (!string.IsNullOrEmpty(CommandText) &&
+                conn.ScalarResultsByCommand.TryGetValue(CommandText, out var commandResult))
             {
                 return commandResult;
             }
@@ -153,7 +160,8 @@ public class fakeDbCommand : DbCommand
             if (!string.IsNullOrEmpty(CommandText))
             {
                 var upper = CommandText.TrimStart().ToUpperInvariant();
-                var isGenericVersion = upper == "SELECT VERSION()" || upper == "PRAGMA VERSION" || upper == "SELECT CURRENT_VERSION";
+                var isGenericVersion = upper == "SELECT VERSION()" || upper == "PRAGMA VERSION" ||
+                                       upper == "SELECT CURRENT_VERSION";
                 var isFirebirdEngine = upper.Contains("RDB$GET_CONTEXT('SYSTEM', 'ENGINE_VERSION')");
                 var isFirebirdMonitor = upper.Contains("MON$SERVER_VERSION");
                 if ((isGenericVersion || isFirebirdEngine || isFirebirdMonitor) && conn.ScalarResults.Count > 0)
@@ -161,6 +169,7 @@ public class fakeDbCommand : DbCommand
                     return conn.ScalarResults.Dequeue();
                 }
             }
+
             // Apply default scalar only to identity-returning paths and explicit version overrides
             if (conn.DefaultScalarResultOnce != null && !string.IsNullOrWhiteSpace(CommandText))
             {
@@ -173,17 +182,21 @@ public class fakeDbCommand : DbCommand
                 {
                     return conn.ConsumeDefaultScalarOnce();
                 }
+
                 // INSERT ... RETURNING should return generated IDs
                 if (upper.StartsWith("INSERT") && (upper.Contains("RETURNING") || upper.Contains("OUTPUT INSERTED")))
                 {
                     return conn.ConsumeDefaultScalarOnce();
                 }
+
                 // Identity retrieval SELECTs
-                if (upper.Contains("SCOPE_IDENTITY") || upper.Contains("LASTVAL") || upper.Contains("LAST_INSERT_ROWID") || upper.Contains("LAST_INSERT_ID"))
+                if (upper.Contains("SCOPE_IDENTITY") || upper.Contains("LASTVAL") ||
+                    upper.Contains("LAST_INSERT_ROWID") || upper.Contains("LAST_INSERT_ID"))
                 {
                     return conn.ConsumeDefaultScalarOnce();
                 }
             }
+
             // Handle version queries automatically based on emulated product (do not consume the generic queue)
             if (!string.IsNullOrEmpty(CommandText))
             {
@@ -193,6 +206,7 @@ public class fakeDbCommand : DbCommand
                     return versionResult;
                 }
             }
+
             // Prefer queued results when present (test control) for non-version commands
             if (conn.ScalarResults.Count > 0)
             {
@@ -264,7 +278,8 @@ public class fakeDbCommand : DbCommand
     {
         ThrowIfShouldFail(nameof(ExecuteDbDataReader));
         var conn = FakeConnection;
-        if (conn != null && !string.IsNullOrEmpty(CommandText) && conn.CommandFailuresByText.TryGetValue(CommandText, out var exReader))
+        if (conn != null && !string.IsNullOrEmpty(CommandText) &&
+            conn.CommandFailuresByText.TryGetValue(CommandText, out var exReader))
         {
             throw exReader;
         }
@@ -330,6 +345,7 @@ public class fakeDbCommand : DbCommand
             {
                 map[kvp.Key] = kvp.Value!;
             }
+
             converted.Add(map);
         }
 

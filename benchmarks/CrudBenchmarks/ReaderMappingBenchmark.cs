@@ -28,8 +28,7 @@ public class ReaderMappingBenchmark
     private DatabaseContext _context = null!;
     private PropertyInfo[] _properties = null!;
 
-    [Params(100, 1000)]
-    public int RowCount;
+    [Params(100, 1000)] public int RowCount;
 
     [GlobalSetup]
     public void Setup()
@@ -52,8 +51,8 @@ public class ReaderMappingBenchmark
             ["id"] = i,
             ["name"] = $"Entity{i}",
             ["email"] = $"user{i}@example.com",
-            ["age"] = 20 + (i % 50),
-            ["salary"] = 50000.0m + (i * 100),
+            ["age"] = 20 + i % 50,
+            ["salary"] = 50000.0m + i * 100,
             ["is_active"] = i % 2 == 0,
             ["created_at"] = DateTime.Now.AddDays(-i),
             ["score"] = i * 1.5
@@ -101,7 +100,10 @@ public class ReaderMappingBenchmark
             foreach (var prop in _properties)
             {
                 var columnAttr = prop.GetCustomAttribute<ColumnAttribute>();
-                if (columnAttr == null) continue;
+                if (columnAttr == null)
+                {
+                    continue;
+                }
 
                 try
                 {
@@ -137,30 +139,22 @@ public class ReaderMappingBenchmark
     [Table("test_entities")]
     public class TestEntity
     {
-        [Id]
-        [Column("id", DbType.Int32)]
-        public int Id { get; set; }
+        [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
 
-        [Column("name", DbType.String)]
-        public string? Name { get; set; }
+        [Column("name", DbType.String)] public string? Name { get; set; }
 
-        [Column("email", DbType.String)]
-        public string? Email { get; set; }
+        [Column("email", DbType.String)] public string? Email { get; set; }
 
-        [Column("age", DbType.Int32)]
-        public int Age { get; set; }
+        [Column("age", DbType.Int32)] public int Age { get; set; }
 
-        [Column("salary", DbType.Decimal)]
-        public decimal Salary { get; set; }
+        [Column("salary", DbType.Decimal)] public decimal Salary { get; set; }
 
-        [Column("is_active", DbType.Boolean)]
-        public bool IsActive { get; set; }
+        [Column("is_active", DbType.Boolean)] public bool IsActive { get; set; }
 
         [Column("created_at", DbType.DateTime)]
         public DateTime CreatedAt { get; set; }
 
-        [Column("score", DbType.Double)]
-        public double Score { get; set; }
+        [Column("score", DbType.Double)] public double Score { get; set; }
     }
 
     /// <summary>

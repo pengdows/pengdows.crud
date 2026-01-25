@@ -59,7 +59,10 @@ public class ParameterCreationTests
 
     private sealed class PositionalDialect : Sql92Dialect
     {
-        public PositionalDialect(DbProviderFactory factory) : base(factory, NullLogger.Instance) { }
+        public PositionalDialect(DbProviderFactory factory) : base(factory, NullLogger.Instance)
+        {
+        }
+
         public override bool SupportsNamedParameters => false;
         public override string ParameterMarker => "?";
     }

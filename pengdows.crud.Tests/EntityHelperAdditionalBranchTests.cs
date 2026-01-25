@@ -13,17 +13,25 @@ namespace pengdows.crud.Tests;
 
 public class EntityHelperAdditionalBranchTests : SqlLiteContextTestBase
 {
-    [Table("BranchTest")] private sealed class BranchEntity
+    [Table("BranchTest")]
+    private sealed class BranchEntity
     {
-        [Id(writable: false)] [Column("Id", DbType.Int32)] public int Id { get; set; }
+        [Id(false)]
+        [Column("Id", DbType.Int32)]
+        public int Id { get; set; }
+
         [Column("Name", DbType.String)] public string Name { get; set; } = string.Empty;
-        [Version] [Column("Version", DbType.Int32)] public int Version { get; set; }
+
+        [Version]
+        [Column("Version", DbType.Int32)]
+        public int Version { get; set; }
     }
 
     public EntityHelperAdditionalBranchTests()
     {
         TypeMap.Register<BranchEntity>();
-        var qp = Context.QuotePrefix; var qs = Context.QuoteSuffix;
+        var qp = Context.QuotePrefix;
+        var qs = Context.QuoteSuffix;
         var create = $@"CREATE TABLE IF NOT EXISTS {qp}BranchTest{qs}(
             {qp}Id{qs} INTEGER PRIMARY KEY AUTOINCREMENT,
             {qp}Name{qs} TEXT NOT NULL,
@@ -44,13 +52,14 @@ public class EntityHelperAdditionalBranchTests : SqlLiteContextTestBase
         Assert.NotNull(loaded);
 
         // No changes to Name/Version
-        await Assert.ThrowsAsync<InvalidOperationException>(() => helper.BuildUpdateAsync(loaded!, loadOriginal: true));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => helper.BuildUpdateAsync(loaded!, true));
     }
 
     [Fact]
     public void BuildUpdateAsync_LoadOriginal_IdConversionFail_Throws()
     {
-        var ex = Assert.Throws<TypeInitializationException>(() => new EntityHelper<BranchEntity, DateTime>(Context, AuditValueResolver));
+        var ex = Assert.Throws<TypeInitializationException>(() =>
+            new EntityHelper<BranchEntity, DateTime>(Context, AuditValueResolver));
         Assert.NotNull(ex.InnerException);
         Assert.IsType<NotSupportedException>(ex.InnerException);
         Assert.Contains("TRowID type 'System.DateTime' is not supported", ex.InnerException.Message);
@@ -64,7 +73,7 @@ public class EntityHelperAdditionalBranchTests : SqlLiteContextTestBase
         await using var failing = ConnectionFailureHelper.CreateFailOnCommandContext(customException: dbException);
         var helper = new EntityHelper<BranchEntity, int>((IDatabaseContext)failing, AuditValueResolver);
         var e = new BranchEntity { Id = 1, Name = "x" };
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => helper.BuildUpdateAsync(e, loadOriginal: true));
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => helper.BuildUpdateAsync(e, true));
         Assert.Contains("Original record not found", ex.Message);
     }
 }

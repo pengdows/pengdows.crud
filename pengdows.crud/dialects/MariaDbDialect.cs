@@ -26,7 +26,7 @@ internal class MariaDbDialect : MySqlDialect
     {
         return "SELECT LAST_INSERT_ID()";
     }
-    
+
     public override bool SupportsIdentityColumns => true; // AUTO_INCREMENT
 
     // MariaDB does not provide a native JSON type; JSON is mapped to LONGTEXT
@@ -46,6 +46,7 @@ internal class MariaDbDialect : MySqlDialect
         {
             return "MariaDB";
         }
+
         return name;
     }
 

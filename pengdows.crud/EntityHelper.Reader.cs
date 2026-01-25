@@ -70,7 +70,8 @@ public partial class EntityHelper<TEntity, TRowID>
             {
                 var ordinal = i;
                 var fieldType = reader.GetFieldType(ordinal);
-                var targetType = Nullable.GetUnderlyingType(column.PropertyInfo.PropertyType) ?? column.PropertyInfo.PropertyType;
+                var targetType = Nullable.GetUnderlyingType(column.PropertyInfo.PropertyType) ??
+                                 column.PropertyInfo.PropertyType;
 
                 // Build optimized delegates
                 var valueExtractor = BuildValueExtractor(fieldType);

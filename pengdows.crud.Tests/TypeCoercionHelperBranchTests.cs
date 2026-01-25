@@ -50,7 +50,11 @@ public class TypeCoercionHelperBranchTests
         public bool IsLastUpdatedBy { get; set; }
         public bool IsLastUpdatedOn { get; set; }
         public int Ordinal { get; set; }
-        public object? MakeParameterValueFromField<T>(T objectToCreate) => null;
+
+        public object? MakeParameterValueFromField<T>(T objectToCreate)
+        {
+            return null;
+        }
     }
 
     private sealed class TestPayload
@@ -98,15 +102,30 @@ public class TypeCoercionHelperBranchTests
             set => throw new NotSupportedException();
         }
 
-        public override void Flush() => _inner.Flush();
+        public override void Flush()
+        {
+            _inner.Flush();
+        }
 
-        public override int Read(byte[] buffer, int offset, int count) => _inner.Read(buffer, offset, count);
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            return _inner.Read(buffer, offset, count);
+        }
 
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin)
+        {
+            throw new NotSupportedException();
+        }
 
-        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void SetLength(long value)
+        {
+            throw new NotSupportedException();
+        }
 
-        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            throw new NotSupportedException();
+        }
 
         protected override void Dispose(bool disposing)
         {
@@ -272,7 +291,8 @@ public class TypeCoercionHelperBranchTests
     public void CoerceDateTimeOffset_PrivateHandlesInputs()
     {
         var options = TypeCoercionOptions.Default;
-        var forceOptions = new TypeCoercionOptions(TimeMappingPolicy.ForceUtcDateTime, JsonPassThrough.PreferDocument, SupportedDatabase.Unknown);
+        var forceOptions = new TypeCoercionOptions(TimeMappingPolicy.ForceUtcDateTime, JsonPassThrough.PreferDocument,
+            SupportedDatabase.Unknown);
         var dto = new DateTimeOffset(2024, 1, 1, 12, 0, 0, TimeSpan.Zero);
 
         Assert.Equal(dto, InvokePrivate<DateTimeOffset>("CoerceDateTimeOffset", dto, options));
@@ -367,7 +387,8 @@ public class TypeCoercionHelperBranchTests
         using var emptyBytesDoc = InvokePrivate<JsonDocument>("ToJsonDocument", Array.Empty<byte>(), options);
         Assert.Equal(JsonValueKind.Null, emptyBytesDoc.RootElement.ValueKind);
 
-        using var bytesDoc = InvokePrivate<JsonDocument>("ToJsonDocument", Encoding.UTF8.GetBytes("{\"b\":2}"), options);
+        using var bytesDoc =
+            InvokePrivate<JsonDocument>("ToJsonDocument", Encoding.UTF8.GetBytes("{\"b\":2}"), options);
         Assert.Equal("2", bytesDoc.RootElement.GetProperty("b").GetRawText());
 
         var segment = new ArraySegment<byte>(Encoding.UTF8.GetBytes("{\"c\":3}"));

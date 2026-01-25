@@ -1,4 +1,5 @@
 using pengdows.crud.enums;
+
 namespace pengdows.crud.IntegrationTests.Infrastructure;
 
 [Collection("IntegrationTests")]

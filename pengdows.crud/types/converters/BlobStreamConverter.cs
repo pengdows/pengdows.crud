@@ -77,6 +77,7 @@ internal sealed class BlobStreamConverter : AdvancedTypeConverter<Stream>
                     {
                         stream.Seek(0, SeekOrigin.Begin);
                     }
+
                     result = stream;
                     return true;
                 }
@@ -86,17 +87,18 @@ internal sealed class BlobStreamConverter : AdvancedTypeConverter<Stream>
                     return false;
                 }
             case byte[] bytes:
-                result = new MemoryStream(bytes, writable: false);
+                result = new MemoryStream(bytes, false);
                 return true;
             case ReadOnlyMemory<byte> memory:
-                result = new MemoryStream(memory.ToArray(), writable: false);
+                result = new MemoryStream(memory.ToArray(), false);
                 return true;
             case ArraySegment<byte> segment:
                 if (segment.Array != null)
                 {
-                    result = new MemoryStream(segment.Array, segment.Offset, segment.Count, writable: false);
+                    result = new MemoryStream(segment.Array, segment.Offset, segment.Count, false);
                     return true;
                 }
+
                 result = default!;
                 return false;
             default:

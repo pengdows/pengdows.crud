@@ -45,7 +45,7 @@ public partial class DatabaseContext
                 DbMode = mode
             },
             DbProviderFactories.GetFactory(providerFactory ?? throw new ArgumentNullException(nameof(providerFactory))),
-            (loggerFactory ?? NullLoggerFactory.Instance),
+            loggerFactory ?? NullLoggerFactory.Instance,
             typeMapRegistry)
     {
     }
@@ -66,7 +66,7 @@ public partial class DatabaseContext
                 DbMode = mode
             },
             factory,
-            (loggerFactory ?? NullLoggerFactory.Instance),
+            loggerFactory ?? NullLoggerFactory.Instance,
             typeMapRegistry)
     {
     }
@@ -114,10 +114,12 @@ public partial class DatabaseContext
             {
                 throw new ArgumentNullException(nameof(configuration));
             }
+
             if (string.IsNullOrWhiteSpace(configuration.ConnectionString))
             {
                 throw new ArgumentException("ConnectionString is required.", nameof(configuration.ConnectionString));
             }
+
             _loggerFactory = loggerFactory ?? NullLoggerFactory.Instance;
             _logger = _loggerFactory.CreateLogger<IDatabaseContext>();
             if (TypeCoercionHelper.Logger is NullLogger)
@@ -125,6 +127,7 @@ public partial class DatabaseContext
                 TypeCoercionHelper.Logger =
                     _loggerFactory.CreateLogger(nameof(TypeCoercionHelper));
             }
+
             ReadWriteMode = configuration.ReadWriteMode;
             TypeMapRegistry = typeMapRegistry ?? global::pengdows.crud.TypeMapRegistry.Instance;
             ConnectionMode = configuration.DbMode;
@@ -150,7 +153,8 @@ public partial class DatabaseContext
             _procWrappingStrategy = ProcWrappingStrategyFactory.Create(_procWrappingStyle);
 
             // Delegate dialect detection to the strategy
-            var (dialect, dataSourceInfo) = _connectionStrategy.HandleDialectDetection(initialConnection, _factory, _loggerFactory);
+            var (dialect, dataSourceInfo) =
+                _connectionStrategy.HandleDialectDetection(initialConnection, _factory, _loggerFactory);
 
             if (dialect != null && dataSourceInfo != null)
             {
@@ -165,6 +169,7 @@ public partial class DatabaseContext
                 _dialect.InitializeUnknownProductInfo();
                 _dataSourceInfo = new DataSourceInformation(_dialect);
             }
+
             Name = _dataSourceInfo.DatabaseProductName;
             _procWrappingStyle = _dataSourceInfo.ProcWrappingStyle;
 
@@ -183,7 +188,8 @@ public partial class DatabaseContext
             if (initialConnection != null)
             {
                 RCSIEnabled = _rcsiPrefetch ?? _dialect!.IsReadCommittedSnapshotOn(initialConnection);
-                SnapshotIsolationEnabled = _snapshotIsolationPrefetch ?? _dialect!.IsSnapshotIsolationOn(initialConnection);
+                SnapshotIsolationEnabled =
+                    _snapshotIsolationPrefetch ?? _dialect!.IsSnapshotIsolationOn(initialConnection);
             }
             else
             {
@@ -267,10 +273,12 @@ public partial class DatabaseContext
             {
                 throw new ArgumentNullException(nameof(configuration));
             }
+
             if (string.IsNullOrWhiteSpace(configuration.ConnectionString))
             {
                 throw new ArgumentException("ConnectionString is required.", nameof(configuration.ConnectionString));
             }
+
             _loggerFactory = loggerFactory ?? NullLoggerFactory.Instance;
             _logger = _loggerFactory.CreateLogger<IDatabaseContext>();
             if (TypeCoercionHelper.Logger is NullLogger)
@@ -278,6 +286,7 @@ public partial class DatabaseContext
                 TypeCoercionHelper.Logger =
                     _loggerFactory.CreateLogger(nameof(TypeCoercionHelper));
             }
+
             ReadWriteMode = configuration.ReadWriteMode;
             TypeMapRegistry = typeMapRegistry ?? global::pengdows.crud.TypeMapRegistry.Instance;
             ConnectionMode = configuration.DbMode;
@@ -303,7 +312,8 @@ public partial class DatabaseContext
             _procWrappingStrategy = ProcWrappingStrategyFactory.Create(_procWrappingStyle);
 
             // Delegate dialect detection to the strategy
-            var (dialect, dataSourceInfo) = _connectionStrategy.HandleDialectDetection(initialConnection, _factory, _loggerFactory);
+            var (dialect, dataSourceInfo) =
+                _connectionStrategy.HandleDialectDetection(initialConnection, _factory, _loggerFactory);
 
             if (dialect != null && dataSourceInfo != null)
             {
@@ -318,6 +328,7 @@ public partial class DatabaseContext
                 _dialect.InitializeUnknownProductInfo();
                 _dataSourceInfo = new DataSourceInformation(_dialect);
             }
+
             Name = _dataSourceInfo.DatabaseProductName;
             _procWrappingStyle = _dataSourceInfo.ProcWrappingStyle;
 
@@ -336,7 +347,8 @@ public partial class DatabaseContext
             if (initialConnection != null)
             {
                 RCSIEnabled = _rcsiPrefetch ?? _dialect!.IsReadCommittedSnapshotOn(initialConnection);
-                SnapshotIsolationEnabled = _snapshotIsolationPrefetch ?? _dialect!.IsSnapshotIsolationOn(initialConnection);
+                SnapshotIsolationEnabled =
+                    _snapshotIsolationPrefetch ?? _dialect!.IsSnapshotIsolationOn(initialConnection);
             }
             else
             {
@@ -406,7 +418,8 @@ public partial class DatabaseContext
     private ITrackedConnection? InitializeInternals(IDatabaseContextConfiguration config)
     {
         // 1) Persist config first
-        var rawConnectionString = config.ConnectionString ?? throw new ArgumentNullException(nameof(config.ConnectionString));
+        var rawConnectionString =
+            config.ConnectionString ?? throw new ArgumentNullException(nameof(config.ConnectionString));
         _connectionString = NormalizeConnectionString(rawConnectionString);
         ReadWriteMode = config.ReadWriteMode;
 
@@ -423,9 +436,17 @@ public partial class DatabaseContext
             {
                 // For Standard/Best with Unknown providers, allow constructor to proceed without an open
                 // connection so dialect falls back to SQL-92 and operations surface errors later.
-                if ((ConnectionMode == DbMode.Standard || ConnectionMode == DbMode.Best) && IsEmulatedUnknown(_connectionString))
+                if ((ConnectionMode == DbMode.Standard || ConnectionMode == DbMode.Best) &&
+                    IsEmulatedUnknown(_connectionString))
                 {
-                    try { initConn.Dispose(); } catch { /* ignore */ }
+                    try
+                    {
+                        initConn.Dispose();
+                    }
+                    catch
+                    { /* ignore */
+                    }
+
                     initConn = null;
                 }
                 else
@@ -441,29 +462,43 @@ public partial class DatabaseContext
             var isFirebirdEmbedded = topology.IsEmbedded;
 
             // Optional: RCSI prefetch (SQL Server only)
-            bool rcsi = false;
-            bool snapshotIsolation = false;
+            var rcsi = false;
+            var snapshotIsolation = false;
             if (initConn != null && product == SupportedDatabase.SqlServer)
             {
                 try
                 {
                     using var cmd = initConn.CreateCommand();
-                    cmd.CommandText = "SELECT CAST(is_read_committed_snapshot_on AS int) FROM sys.databases WHERE name = DB_NAME()";
+                    cmd.CommandText =
+                        "SELECT CAST(is_read_committed_snapshot_on AS int) FROM sys.databases WHERE name = DB_NAME()";
                     var v = cmd.ExecuteScalar();
-                    rcsi = v switch { bool b => b, byte by => by != 0, short s => s != 0, int i => i != 0, _ => Convert.ToInt32(v ?? 0) != 0 };
+                    rcsi = v switch
+                    {
+                        bool b => b, byte by => by != 0, short s => s != 0, int i => i != 0,
+                        _ => Convert.ToInt32(v ?? 0) != 0
+                    };
                 }
-                catch { /* ignore prefetch failures */ }
+                catch
+                { /* ignore prefetch failures */
+                }
 
                 try
                 {
                     using var cmd = initConn.CreateCommand();
                     cmd.CommandText = "SELECT snapshot_isolation_state FROM sys.databases WHERE name = DB_NAME()";
                     var value = cmd.ExecuteScalar();
-                    var state = value switch { bool b => b ? 1 : 0, byte by => by, short s => s, int i => i, _ => Convert.ToInt32(value ?? 0) };
+                    var state = value switch
+                    {
+                        bool b => b ? 1 : 0, byte by => by, short s => s, int i => i,
+                        _ => Convert.ToInt32(value ?? 0)
+                    };
                     snapshotIsolation = state == 1;
                 }
-                catch { /* ignore prefetch failures */ }
+                catch
+                { /* ignore prefetch failures */
+                }
             }
+
             _rcsiPrefetch = rcsi;
             _snapshotIsolationPrefetch = snapshotIsolation;
 
@@ -489,7 +524,7 @@ public partial class DatabaseContext
             }
 
             // Warn on mode/database mismatches (performance, not correctness)
-            WarnOnModeMismatch(ConnectionMode, product, wasCoerced: requestedMode != ConnectionMode);
+            WarnOnModeMismatch(ConnectionMode, product, requestedMode != ConnectionMode);
 
             // Pooling defaults will be applied after dialect detection
 
@@ -505,8 +540,10 @@ public partial class DatabaseContext
                 else
                 {
                     // Standard: apply per-connection session hints that must be present during dialect init
-                    _connectionSessionSettings = SessionSettingsConfigurator.GetSessionSettings(Product, ConnectionMode);
-                    _applyConnectionSessionSettings = SessionSettingsConfigurator.ShouldApplySettings(_connectionSessionSettings, ConnectionMode);
+                    _connectionSessionSettings =
+                        SessionSettingsConfigurator.GetSessionSettings(Product, ConnectionMode);
+                    _applyConnectionSessionSettings =
+                        SessionSettingsConfigurator.ShouldApplySettings(_connectionSessionSettings, ConnectionMode);
                     // Do NOT SetPersistentConnection
                 }
             }
@@ -521,7 +558,14 @@ public partial class DatabaseContext
         {
             _logger.LogError(ex, "Failed to initialize DatabaseContext: {Message}", ex.Message);
             // Ensure no leaked connection if we're bailing
-            try { initConn?.Dispose(); } catch { /* ignore */ }
+            try
+            {
+                initConn?.Dispose();
+            }
+            catch
+            { /* ignore */
+            }
+
             throw;
         }
     }
@@ -596,6 +640,7 @@ public partial class DatabaseContext
                 {
                     readerLabelMax = Math.Max(1, readerLabelMax.Value - 1);
                 }
+
                 break;
         }
 
@@ -607,7 +652,7 @@ public partial class DatabaseContext
 
         _writerGovernor = CreateGovernor(PoolLabel.Writer, writerKey, sharedMax ?? writerLabelMax, sharedSemaphore);
         _readerGovernor = readerDisabled
-            ? CreateGovernor(PoolLabel.Reader, readerKey, null, null, disabled: true)
+            ? CreateGovernor(PoolLabel.Reader, readerKey, null, null, true)
             : CreateGovernor(PoolLabel.Reader, readerKey, sharedMax ?? readerLabelMax, sharedSemaphore);
 
         if (ConnectionMode is DbMode.SingleConnection or DbMode.SingleWriter or DbMode.KeepAlive)
@@ -649,7 +694,7 @@ public partial class DatabaseContext
     {
         if (disabled || !maxPermits.HasValue || maxPermits.Value <= 0)
         {
-            return new PoolGovernor(label, poolKey, maxPermits ?? 0, _poolAcquireTimeout, disabled: true);
+            return new PoolGovernor(label, poolKey, maxPermits ?? 0, _poolAcquireTimeout, true);
         }
 
         return new PoolGovernor(
@@ -657,8 +702,8 @@ public partial class DatabaseContext
             poolKey,
             maxPermits.Value,
             _poolAcquireTimeout,
-            disabled: false,
-            sharedSemaphore: sharedSemaphore);
+            false,
+            sharedSemaphore);
     }
 
     private static int? ResolveSharedMax(int? writerMax, int? readerMax)
@@ -751,7 +796,10 @@ public partial class DatabaseContext
                 return csb["Data Source"]?.ToString();
             }
         }
-        catch { }
+        catch
+        {
+        }
+
         return connectionString;
     }
 
@@ -773,8 +821,10 @@ public partial class DatabaseContext
                 {
                     if (requested != DbMode.SingleConnection)
                     {
-                        LogModeOverride(requested, DbMode.SingleConnection, "Isolated in-memory requires SingleConnection");
+                        LogModeOverride(requested, DbMode.SingleConnection,
+                            "Isolated in-memory requires SingleConnection");
                     }
+
                     return DbMode.SingleConnection;
                 }
 
@@ -793,7 +843,8 @@ public partial class DatabaseContext
                 // Coerce UNSAFE modes (Standard, KeepAlive) to SingleWriter
                 if (requested == DbMode.Standard || requested == DbMode.KeepAlive)
                 {
-                    LogModeOverride(requested, DbMode.SingleWriter, "SQLite/DuckDB: Standard/KeepAlive unsafe, using SingleWriter");
+                    LogModeOverride(requested, DbMode.SingleWriter,
+                        "SQLite/DuckDB: Standard/KeepAlive unsafe, using SingleWriter");
                     return DbMode.SingleWriter;
                 }
 
@@ -808,6 +859,7 @@ public partial class DatabaseContext
                 {
                     LogModeOverride(requested, DbMode.SingleConnection, "Firebird embedded requires SingleConnection");
                 }
+
                 return DbMode.SingleConnection;
             }
 
@@ -818,6 +870,7 @@ public partial class DatabaseContext
                 {
                     LogModeOverride(requested, DbMode.KeepAlive, "LocalDB requires KeepAlive");
                 }
+
                 return DbMode.KeepAlive;
             }
 
@@ -852,6 +905,7 @@ public partial class DatabaseContext
                     LogModeOverride(requested, DbMode.Standard, "Unknown provider: Best defaults to Standard");
                     return DbMode.Standard;
                 }
+
                 return requested;
             }
         }
@@ -866,18 +920,24 @@ public partial class DatabaseContext
 
         if (requested == DbMode.Best)
         {
-            _logger.LogInformation("DbMode auto-selection: requested {requested}, resolved to {resolved} — reason: {reason}", requested, resolved, reason);
+            _logger.LogInformation(
+                "DbMode auto-selection: requested {requested}, resolved to {resolved} — reason: {reason}", requested,
+                resolved, reason);
             return;
         }
 
-        _logger.LogWarning(diagnostics.EventIds.ModeCoerced, "DbMode override: requested {requested}, coerced to {resolved} — reason: {reason}", requested, resolved, reason);
+        _logger.LogWarning(diagnostics.EventIds.ModeCoerced,
+            "DbMode override: requested {requested}, coerced to {resolved} — reason: {reason}", requested, resolved,
+            reason);
     }
 
     private void WarnOnModeMismatch(DbMode resolved, SupportedDatabase product, bool wasCoerced)
     {
         // Don't warn if we auto-coerced (already logged that with EventIds.ModeCoerced)
         if (wasCoerced)
+        {
             return;
+        }
 
         // Pattern 1: Client-server database with overly restrictive mode
         if (IsClientServerDatabase(product))
@@ -936,7 +996,12 @@ public partial class DatabaseContext
         };
     }
 
-    private enum InMemoryKind { None, Isolated, Shared }
+    private enum InMemoryKind
+    {
+        None,
+        Isolated,
+        Shared
+    }
 
     private static InMemoryKind DetectInMemoryKind(SupportedDatabase product, string? connectionString)
     {
@@ -948,19 +1013,19 @@ public partial class DatabaseContext
             var dataSource = TryGetDataSourcePath(connectionString ?? string.Empty) ?? string.Empty;
             var dataSourceLower = dataSource.ToLowerInvariant();
             var dataSourceIsMemory = dataSourceLower.Contains(":memory:");
-            bool modeMem = normalized.Contains("mode=memory") ||
-                           normalized.Contains("filename=:memory:") ||
-                           normalized.Contains("datasource=:memory:") ||
-                           dataSourceIsMemory;
+            var modeMem = normalized.Contains("mode=memory") ||
+                          normalized.Contains("filename=:memory:") ||
+                          normalized.Contains("datasource=:memory:") ||
+                          dataSourceIsMemory;
             if (!modeMem)
             {
                 return InMemoryKind.None;
             }
 
-            bool cacheShared = normalized.Contains("cache=shared");
-            bool dsIsLiteralMem = dataSourceIsMemory ||
-                                  normalized.Contains("datasource=:memory:") ||
-                                  normalized.Contains("filename=:memory:");
+            var cacheShared = normalized.Contains("cache=shared");
+            var dsIsLiteralMem = dataSourceIsMemory ||
+                                 normalized.Contains("datasource=:memory:") ||
+                                 normalized.Contains("filename=:memory:");
             if (cacheShared && !dsIsLiteralMem)
             {
                 return InMemoryKind.Shared; // e.g., file:name?mode=memory&cache=shared
@@ -968,6 +1033,7 @@ public partial class DatabaseContext
 
             return InMemoryKind.Isolated;
         }
+
         if (product == SupportedDatabase.DuckDB)
         {
             if (!s.Contains("data source=:memory:"))
@@ -977,6 +1043,7 @@ public partial class DatabaseContext
 
             return s.Contains("cache=shared") ? InMemoryKind.Shared : InMemoryKind.Isolated;
         }
+
         return InMemoryKind.None;
     }
 
@@ -1007,7 +1074,8 @@ public partial class DatabaseContext
         try
         {
             var factoryType = factory.GetType();
-            var dataSourceMethod = factoryType.GetMethod("CreateDataSource", new[] { typeof(DbConnectionStringBuilder) });
+            var dataSourceMethod =
+                factoryType.GetMethod("CreateDataSource", new[] { typeof(DbConnectionStringBuilder) });
             if (dataSourceMethod != null)
             {
                 var builder = factory.CreateConnectionStringBuilder() ?? new DbConnectionStringBuilder();
@@ -1015,7 +1083,8 @@ public partial class DatabaseContext
                 var dataSource = dataSourceMethod.Invoke(factory, new object?[] { builder }) as DbDataSource;
                 if (dataSource != null)
                 {
-                    _logger.LogInformation("Using DbDataSource from provider factory: {FactoryType}", factoryType.FullName);
+                    _logger.LogInformation("Using DbDataSource from provider factory: {FactoryType}",
+                        factoryType.FullName);
                     return dataSource;
                 }
             }
@@ -1026,7 +1095,8 @@ public partial class DatabaseContext
                 var dataSource = dataSourceMethod.Invoke(factory, new object?[] { connectionString }) as DbDataSource;
                 if (dataSource != null)
                 {
-                    _logger.LogInformation("Using DbDataSource from provider factory: {FactoryType}", factoryType.FullName);
+                    _logger.LogInformation("Using DbDataSource from provider factory: {FactoryType}",
+                        factoryType.FullName);
                     return dataSource;
                 }
             }
@@ -1035,7 +1105,8 @@ public partial class DatabaseContext
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "Failed to create DbDataSource for provider factory {FactoryType}.", factory.GetType().FullName);
+            _logger.LogDebug(ex, "Failed to create DbDataSource for provider factory {FactoryType}.",
+                factory.GetType().FullName);
             return null;
         }
     }

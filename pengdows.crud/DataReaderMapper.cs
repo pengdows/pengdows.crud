@@ -27,14 +27,21 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
     private static readonly BoundedCache<SetterCacheKey, Delegate> _setterCache = new(MaxSetterCacheSize);
     private static readonly BoundedCache<PlanCacheKey, object> _planCache = new(MaxPlanCacheSize);
-    private static readonly BoundedCache<PropertyLookupCacheKey, IReadOnlyDictionary<string, PropertyInfo>> _propertyLookupCache = new(MaxPropertyLookupCacheSize);
+
+    private static readonly BoundedCache<PropertyLookupCacheKey, IReadOnlyDictionary<string, PropertyInfo>>
+        _propertyLookupCache = new(MaxPropertyLookupCacheSize);
+
     private static readonly MethodInfo _getFieldValueGenericMethod = ResolveGetFieldValueMethod();
 
     internal DataReaderMapper()
     {
     }
 
-    private readonly record struct PlanCacheKey(Type Type, string SchemaHash, bool ColumnsOnly, EnumParseFailureMode EnumMode);
+    private readonly record struct PlanCacheKey(
+        Type Type,
+        string SchemaHash,
+        bool ColumnsOnly,
+        EnumParseFailureMode EnumMode);
 
     public static Task<List<T>> LoadObjectsFromDataReaderAsync<T>(
         IDataReader reader,
@@ -418,7 +425,8 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
     private static IReadOnlyDictionary<string, PropertyInfo> BuildPropertyLookup(PropertyLookupCacheKey cacheKey)
     {
-        var properties = cacheKey.Type.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.SetProperty);
+        var properties =
+            cacheKey.Type.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.SetProperty);
         var comparer = StringComparer.OrdinalIgnoreCase;
         var lookup = new Dictionary<string, PropertyInfo>(properties.Length, comparer);
 

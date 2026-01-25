@@ -49,7 +49,8 @@ public class BuildWhereBucketingTests : SqlLiteContextTestBase
     {
         var typeMap = new TypeMapRegistry();
         typeMap.Register<TestEntity>();
-        using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=PostgreSql", new fakeDbFactory(SupportedDatabase.PostgreSql), typeMap);
+        using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=PostgreSql",
+            new fakeDbFactory(SupportedDatabase.PostgreSql), typeMap);
         var helper = new EntityHelper<TestEntity, int>(ctx);
 
         var sc = ctx.CreateSqlContainer("SELECT 1");

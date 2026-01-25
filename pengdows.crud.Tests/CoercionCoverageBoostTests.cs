@@ -30,7 +30,7 @@ public class CoercionCoverageBoostTests
         // Assert
         Assert.True(result);
         // Verify range parsing worked (exact properties depend on Range<T> implementation)
-        Assert.NotEqual(default(Range<DateTime>), range);
+        Assert.NotEqual(default, range);
     }
 
     [Fact]
@@ -45,7 +45,7 @@ public class CoercionCoverageBoostTests
 
         // Assert
         Assert.False(result);
-        Assert.Equal(default(Range<DateTime>), range);
+        Assert.Equal(default, range);
     }
 
     [Fact]
@@ -60,7 +60,7 @@ public class CoercionCoverageBoostTests
 
         // Assert
         Assert.False(result);
-        Assert.Equal(default(Range<DateTime>), range);
+        Assert.Equal(default, range);
     }
 
     [Fact]
@@ -92,7 +92,7 @@ public class CoercionCoverageBoostTests
 
         // Assert
         Assert.True(result);
-        Assert.NotEqual(default(Range<int>), range);
+        Assert.NotEqual(default, range);
     }
 
     [Fact]
@@ -107,7 +107,7 @@ public class CoercionCoverageBoostTests
 
         // Assert
         Assert.False(result);
-        Assert.Equal(default(Range<int>), range);
+        Assert.Equal(default, range);
     }
 
     [Fact]
@@ -230,7 +230,7 @@ public class CoercionCoverageBoostTests
 
         // Assert
         Assert.False(result);
-        Assert.Equal(default(HStore), hstore);
+        Assert.Equal(default, hstore);
     }
 
     [Fact]
@@ -245,7 +245,7 @@ public class CoercionCoverageBoostTests
 
         // Assert
         Assert.False(result);
-        Assert.Equal(default(HStore), hstore);
+        Assert.Equal(default, hstore);
     }
 
     [Fact]
@@ -455,7 +455,7 @@ public class CoercionCoverageBoostTests
 
         // Assert
         Assert.False(result);
-        Assert.Equal(default(TimeSpan), timespan);
+        Assert.Equal(default, timespan);
     }
 
     [Fact]
@@ -470,7 +470,7 @@ public class CoercionCoverageBoostTests
 
         // Assert
         Assert.False(result);
-        Assert.Equal(default(TimeSpan), timespan);
+        Assert.Equal(default, timespan);
     }
 
     [Fact]
@@ -499,11 +499,11 @@ public class CoercionCoverageBoostTests
                 value = null;
                 return true;
             }
-            
+
             value = new TestType { Value = src.RawValue?.ToString() ?? "" };
             return true;
         }
-        
+
         public override bool TryWrite(TestType? value, DbParameter parameter)
         {
             parameter.Value = value?.Value ?? (object)DBNull.Value;

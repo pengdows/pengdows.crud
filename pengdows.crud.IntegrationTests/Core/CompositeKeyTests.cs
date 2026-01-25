@@ -12,7 +12,9 @@ namespace pengdows.crud.IntegrationTests.Core;
 [Collection("IntegrationTests")]
 public class CompositeKeyTests : DatabaseTestBase
 {
-    public CompositeKeyTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture) { }
+    public CompositeKeyTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture)
+    {
+    }
 
     private static long _nextOrderItemId;
     private static long _nextUserRoleId;
@@ -144,10 +146,7 @@ public class CompositeKeyTests : DatabaseTestBase
 
             var duplicate = CreateOrderItem(104, 204, 5, 19.99m);
 
-            await Assert.ThrowsAnyAsync<Exception>(async () =>
-            {
-                await helper.CreateAsync(duplicate, context);
-            });
+            await Assert.ThrowsAnyAsync<Exception>(async () => { await helper.CreateAsync(duplicate, context); });
 
             Output.WriteLine($"{provider}: Duplicate composite key correctly rejected");
         });
@@ -168,7 +167,8 @@ public class CompositeKeyTests : DatabaseTestBase
             var result = await helper.CreateAsync(role, context);
 
             Assert.True(result);
-            Output.WriteLine($"{provider}: Created UserRole Tenant={role.TenantId}, User={role.UserId}, Role={role.RoleId}");
+            Output.WriteLine(
+                $"{provider}: Created UserRole Tenant={role.TenantId}, User={role.UserId}, Role={role.RoleId}");
         });
     }
 
@@ -191,7 +191,8 @@ public class CompositeKeyTests : DatabaseTestBase
             Assert.Equal(20, retrieved.RoleId);
             Assert.Equal("superadmin", retrieved.GrantedBy);
 
-            Output.WriteLine($"{provider}: Retrieved UserRole Tenant={retrieved.TenantId}, User={retrieved.UserId}, Role={retrieved.RoleId}");
+            Output.WriteLine(
+                $"{provider}: Retrieved UserRole Tenant={retrieved.TenantId}, User={retrieved.UserId}, Role={retrieved.RoleId}");
         });
     }
 
@@ -236,9 +237,12 @@ public class CompositeKeyTests : DatabaseTestBase
 
             Assert.Equal(1, deleteCount);
 
-            var remaining1 = await helper.RetrieveOneAsync(new UserRole { TenantId = 4, UserId = 400, RoleId = 1 }, context);
-            var remaining2 = await helper.RetrieveOneAsync(new UserRole { TenantId = 4, UserId = 400, RoleId = 2 }, context);
-            var remaining3 = await helper.RetrieveOneAsync(new UserRole { TenantId = 4, UserId = 400, RoleId = 3 }, context);
+            var remaining1 =
+                await helper.RetrieveOneAsync(new UserRole { TenantId = 4, UserId = 400, RoleId = 1 }, context);
+            var remaining2 =
+                await helper.RetrieveOneAsync(new UserRole { TenantId = 4, UserId = 400, RoleId = 2 }, context);
+            var remaining3 =
+                await helper.RetrieveOneAsync(new UserRole { TenantId = 4, UserId = 400, RoleId = 3 }, context);
 
             Assert.NotNull(remaining1);
             Assert.Null(remaining2);
@@ -324,7 +328,8 @@ public class CompositeKeyTests : DatabaseTestBase
         };
     }
 
-    private static UserRole CreateUserRole(int tenantId, int userId, int roleId, string grantedBy, DateTime? grantedAt = null)
+    private static UserRole CreateUserRole(int tenantId, int userId, int roleId, string grantedBy,
+        DateTime? grantedAt = null)
     {
         return new UserRole
         {
@@ -395,31 +400,38 @@ CREATE TABLE {table} (
 )";
     }
 
-    private static string GetIntType(SupportedDatabase provider) =>
-        provider switch
+    private static string GetIntType(SupportedDatabase provider)
+    {
+        return provider switch
         {
             SupportedDatabase.Sqlite => "INTEGER",
             SupportedDatabase.Firebird => "INTEGER",
             _ => "INT"
         };
+    }
 
-    private static string GetDecimalType(SupportedDatabase provider) =>
-        provider switch
+    private static string GetDecimalType(SupportedDatabase provider)
+    {
+        return provider switch
         {
             SupportedDatabase.Sqlite => "NUMERIC(18,2)",
             _ => "DECIMAL(18,2)"
         };
+    }
 
-    private static string GetBigIntType(SupportedDatabase provider) =>
-        provider switch
+    private static string GetBigIntType(SupportedDatabase provider)
+    {
+        return provider switch
         {
             SupportedDatabase.Sqlite => "INTEGER",
             SupportedDatabase.Oracle => "NUMBER(19)",
             _ => "BIGINT"
         };
+    }
 
-    private static string GetStringType(SupportedDatabase provider) =>
-        provider switch
+    private static string GetStringType(SupportedDatabase provider)
+    {
+        return provider switch
         {
             SupportedDatabase.Sqlite => "TEXT",
             SupportedDatabase.SqlServer => "NVARCHAR(255)",
@@ -427,9 +439,11 @@ CREATE TABLE {table} (
             SupportedDatabase.Firebird => "VARCHAR(255)",
             _ => "VARCHAR(255)"
         };
+    }
 
-    private static string GetDateTimeType(SupportedDatabase provider) =>
-        provider switch
+    private static string GetDateTimeType(SupportedDatabase provider)
+    {
+        return provider switch
         {
             SupportedDatabase.Sqlite => "TEXT",
             SupportedDatabase.SqlServer => "DATETIME2",
@@ -437,6 +451,7 @@ CREATE TABLE {table} (
             SupportedDatabase.MariaDb => "DATETIME",
             _ => "TIMESTAMP"
         };
+    }
 
     private static async Task<int> DeleteOrderItemAsync(IDatabaseContext context, int orderId, int productId)
     {
@@ -479,9 +494,7 @@ CREATE TABLE {table} (
 [Table("order_items")]
 public class OrderItem
 {
-    [Id]
-    [Column("id", DbType.Int64)]
-    public long Id { get; set; }
+    [Id] [Column("id", DbType.Int64)] public long Id { get; set; }
 
     [PrimaryKey(1)]
     [Column("order_id", DbType.Int32)]
@@ -491,11 +504,9 @@ public class OrderItem
     [Column("product_id", DbType.Int32)]
     public int ProductId { get; set; }
 
-    [Column("quantity", DbType.Int32)]
-    public int Quantity { get; set; }
+    [Column("quantity", DbType.Int32)] public int Quantity { get; set; }
 
-    [Column("unit_price", DbType.Decimal)]
-    public decimal UnitPrice { get; set; }
+    [Column("unit_price", DbType.Decimal)] public decimal UnitPrice { get; set; }
 }
 
 /// <summary>
@@ -504,9 +515,7 @@ public class OrderItem
 [Table("user_roles")]
 public class UserRole
 {
-    [Id]
-    [Column("id", DbType.Int64)]
-    public long Id { get; set; }
+    [Id] [Column("id", DbType.Int64)] public long Id { get; set; }
 
     [PrimaryKey(1)]
     [Column("tenant_id", DbType.Int32)]
@@ -523,6 +532,5 @@ public class UserRole
     [Column("granted_at", DbType.DateTime)]
     public DateTime GrantedAt { get; set; }
 
-    [Column("granted_by", DbType.String)]
-    public string? GrantedBy { get; set; }
+    [Column("granted_by", DbType.String)] public string? GrantedBy { get; set; }
 }

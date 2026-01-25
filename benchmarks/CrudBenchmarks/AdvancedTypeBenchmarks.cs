@@ -59,7 +59,8 @@ public class AdvancedTypeBenchmarks
     [Benchmark]
     public bool ConfigureRangeParameter()
     {
-        return _registry!.TryConfigureParameter(_parameter!, typeof(Range<int>), _rangeValue, SupportedDatabase.PostgreSql);
+        return _registry!.TryConfigureParameter(_parameter!, typeof(Range<int>), _rangeValue,
+            SupportedDatabase.PostgreSql);
     }
 
     [Benchmark]
@@ -72,7 +73,8 @@ public class AdvancedTypeBenchmarks
     public bool ConfigureRowVersionParameter()
     {
         var rowVersion = RowVersion.FromBytes(_rowVersionBytes!);
-        return _registry!.TryConfigureParameter(_parameter!, typeof(RowVersion), rowVersion, SupportedDatabase.SqlServer);
+        return _registry!.TryConfigureParameter(_parameter!, typeof(RowVersion), rowVersion,
+            SupportedDatabase.SqlServer);
     }
 
     [Benchmark]
@@ -85,15 +87,18 @@ public class AdvancedTypeBenchmarks
     public bool ConfigureUnregisteredType()
     {
         // This should fail fast and not cause performance issues
-        return _registry!.TryConfigureParameter(_parameter!, typeof(Uri), new Uri("https://example.com"), SupportedDatabase.SqlServer);
+        return _registry!.TryConfigureParameter(_parameter!, typeof(Uri), new Uri("https://example.com"),
+            SupportedDatabase.SqlServer);
     }
 
     [Benchmark]
     public bool ConfigureCachedParameter()
     {
         // Second call should be faster due to caching
-        var success1 = _registry!.TryConfigureParameter(_parameter!, typeof(Inet), _inetValue, SupportedDatabase.PostgreSql);
-        var success2 = _registry!.TryConfigureParameter(_parameter!, typeof(Inet), _inetValue, SupportedDatabase.PostgreSql);
+        var success1 =
+            _registry!.TryConfigureParameter(_parameter!, typeof(Inet), _inetValue, SupportedDatabase.PostgreSql);
+        var success2 =
+            _registry!.TryConfigureParameter(_parameter!, typeof(Inet), _inetValue, SupportedDatabase.PostgreSql);
         return success1 && success2;
     }
 
@@ -155,11 +160,9 @@ public class AdvancedTypeBenchmarks
         public override DbType DbType { get; set; }
         public override ParameterDirection Direction { get; set; }
         public override bool IsNullable { get; set; }
-        [AllowNull]
-        public override string ParameterName { get; set; } = string.Empty;
+        [AllowNull] public override string ParameterName { get; set; } = string.Empty;
         public override int Size { get; set; }
-        [AllowNull]
-        public override string SourceColumn { get; set; } = string.Empty;
+        [AllowNull] public override string SourceColumn { get; set; } = string.Empty;
         public override bool SourceColumnNullMapping { get; set; }
         public override object? Value { get; set; }
 

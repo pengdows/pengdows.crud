@@ -24,13 +24,13 @@ public class SqlDialectCapabilityTests
             SupportedDatabase.Unknown,
             "MysteryDB",
             "1.0",
-            parameterPattern: "?",
-            parameterFormat: "?{0}",
-            maxLength: 18,
-            namePattern: "?",
-            namePatternRegex: "?",
-            supportsNamed: false,
-            additionalScalars: scalars);
+            "?",
+            "?{0}",
+            18,
+            "?",
+            "?",
+            false,
+            scalars);
         var dialect = new Sql92Dialect(factory, NullLoggerFactory.Instance.CreateLogger<SqlDialect>());
         dialect.DetectDatabaseInfo(tracked);
         Assert.True(dialect.IsFallbackDialect);
@@ -114,8 +114,14 @@ public class SqlDialectCapabilityTests
 
     private sealed class Sql89Dialect : Sql92Dialect
     {
-        public Sql89Dialect(DbProviderFactory factory, ILogger logger) : base(factory, logger) { }
-        public override SqlStandardLevel DetermineStandardCompliance(Version? version) => SqlStandardLevel.Sql89;
+        public Sql89Dialect(DbProviderFactory factory, ILogger logger) : base(factory, logger)
+        {
+        }
+
+        public override SqlStandardLevel DetermineStandardCompliance(Version? version)
+        {
+            return SqlStandardLevel.Sql89;
+        }
     }
 
     [Fact]

@@ -143,7 +143,7 @@ public class TenantConnectionResolverTests
         {
             Tenants = new List<TenantConfiguration>
             {
-                new TenantConfiguration
+                new()
                 {
                     Name = "opts-a",
                     DatabaseContextConfiguration = new DatabaseContextConfiguration
@@ -154,7 +154,7 @@ public class TenantConnectionResolverTests
                         ReadWriteMode = ReadWriteMode.ReadWrite
                     }
                 },
-                new TenantConfiguration
+                new()
                 {
                     Name = "opts-b",
                     DatabaseContextConfiguration = new DatabaseContextConfiguration

@@ -37,11 +37,9 @@ public class PagilaBenchmarks : IAsyncDisposable
     private NpgsqlDataSource _dapperDataSource = null!;
     // Remove manual template caching - use EntityHelper's built-in caching
 
-    [Params(1000)]
-    public int FilmCount;
+    [Params(1000)] public int FilmCount;
 
-    [Params(200)]
-    public int ActorCount;
+    [Params(200)] public int ActorCount;
 
     private int _filmId;
     private List<int> _filmIds10 = new();
@@ -84,7 +82,8 @@ public class PagilaBenchmarks : IAsyncDisposable
         await _container.StartAsync();
 
         var mappedPort = _container.GetMappedPublicPort(5432);
-        _connStr = $"Host=localhost;Port={mappedPort};Database=pagila;Username=postgres;Password=postgres;Maximum Pool Size=100";
+        _connStr =
+            $"Host=localhost;Port={mappedPort};Database=pagila;Username=postgres;Password=postgres;Maximum Pool Size=100";
 
         await WaitForReady();
         await CreateSchemaAndSeedAsync();
@@ -115,6 +114,7 @@ public class PagilaBenchmarks : IAsyncDisposable
                 new SimpleConsoleLoggerProvider(LogLevel.Debug)
             });
         }
+
         _ctx = new DatabaseContext(cfg, NpgsqlFactory.Instance, _loggerFactory, _map);
 
         // Verify the actual mode being used
@@ -139,7 +139,8 @@ public class PagilaBenchmarks : IAsyncDisposable
         await using var conn = new NpgsqlConnection(_connStr);
         await conn.OpenAsync();
         _filmId = await conn.ExecuteScalarAsync<int>("select film_id from film order by film_id limit 1");
-        var row = await conn.QuerySingleAsync<(int actor_id, int film_id)>("select actor_id, film_id from film_actor limit 1");
+        var row = await conn.QuerySingleAsync<(int actor_id, int film_id)>(
+            "select actor_id, film_id from film_actor limit 1");
         _compositeKey = (row.actor_id, row.film_id);
         _filmIds10 = (await conn.QueryAsync<int>("select film_id from film order by film_id limit 10")).ToList();
 
@@ -177,6 +178,7 @@ public class PagilaBenchmarks : IAsyncDisposable
         {
             await _dapperDataSource.DisposeAsync();
         }
+
         _loggerFactory?.Dispose();
 
         // Dump Postgres statistics for analysis
@@ -188,6 +190,7 @@ public class PagilaBenchmarks : IAsyncDisposable
         {
             Console.WriteLine($"[PgStats] Failed to dump summary: {ex.Message}");
         }
+
         if (_container is not null)
         {
             await _container.StopAsync();
@@ -228,16 +231,19 @@ public class PagilaBenchmarks : IAsyncDisposable
             {
                 DumpPengdowsMetrics(label);
             }
+
             if (label == nameof(GetFilmById_Mine_Breakdown))
             {
                 DumpBreakdownMetrics(label, _breakdownBuildTicks, _breakdownExecuteTicks, _breakdownMapTicks,
                     _breakdownOps);
             }
+
             if (label == nameof(GetFilmById_Dapper_Breakdown))
             {
                 DumpBreakdownMetrics(label, _dapperBreakdownBuildTicks, _dapperBreakdownExecuteTicks,
                     _dapperBreakdownMapTicks, _dapperBreakdownOps);
             }
+
             if (label == nameof(GetFilmById_EntityFramework_NoTracking_Breakdown))
             {
                 DumpBreakdownMetrics(label, _efBreakdownBuildTicks, _efBreakdownExecuteTicks,
@@ -249,7 +255,7 @@ public class PagilaBenchmarks : IAsyncDisposable
     private async Task WaitForReady()
     {
         // Simple retry loop until the DB accepts connections
-        for (int i = 0; i < 60; i++)
+        for (var i = 0; i < 60; i++)
         {
             try
             {
@@ -263,6 +269,7 @@ public class PagilaBenchmarks : IAsyncDisposable
                 await Task.Delay(500);
             }
         }
+
         throw new TimeoutException("Postgres container did not become ready in time.");
     }
 
@@ -301,7 +308,7 @@ CREATE TABLE film_actor (
         // Seed actors
         {
             const string ins = "insert into actor(first_name, last_name) values (@f, @l)";
-            for (int i = 0; i < ActorCount; i++)
+            for (var i = 0; i < ActorCount; i++)
             {
                 await conn.ExecuteAsync(ins, new { f = $"A{i}", l = $"L{i}" }, tx);
             }
@@ -310,18 +317,18 @@ CREATE TABLE film_actor (
         // Seed films
         {
             const string ins = "insert into film(title, length) values (@t, @len)";
-            for (int i = 0; i < FilmCount; i++)
+            for (var i = 0; i < FilmCount; i++)
             {
-                await conn.ExecuteAsync(ins, new { t = $"Film {i}", len = 60 + (i % 120) }, tx);
+                await conn.ExecuteAsync(ins, new { t = $"Film {i}", len = 60 + i % 120 }, tx);
             }
         }
 
         // Seed film_actor associations (simple round-robin)
         {
             const string ins = "insert into film_actor(actor_id, film_id) values (@a, @f)";
-            for (int i = 1; i <= ActorCount; i++)
+            for (var i = 1; i <= ActorCount; i++)
             {
-                for (int f = i; f <= FilmCount; f += Math.Max(1, FilmCount / 50)) // ~50 films per actor
+                for (var f = i; f <= FilmCount; f += Math.Max(1, FilmCount / 50)) // ~50 films per actor
                 {
                     await conn.ExecuteAsync(ins, new { a = i, f }, tx);
                 }
@@ -378,9 +385,15 @@ CREATE TABLE film_actor (
             _minLevel = minLevel;
         }
 
-        public IDisposable BeginScope<TState>(TState state) where TState : notnull => NoopScope.Instance;
+        public IDisposable BeginScope<TState>(TState state) where TState : notnull
+        {
+            return NoopScope.Instance;
+        }
 
-        public bool IsEnabled(LogLevel logLevel) => logLevel >= _minLevel;
+        public bool IsEnabled(LogLevel logLevel)
+        {
+            return logLevel >= _minLevel;
+        }
 
         public void Log<TState>(
             LogLevel logLevel,
@@ -425,9 +438,9 @@ CREATE TABLE film_actor (
         }
 
         var scale = 1000d / Stopwatch.Frequency;
-        var buildUs = (buildTicks / (double)ops) * scale;
-        var execUs = (executeTicks / (double)ops) * scale;
-        var mapUs = (mapTicks / (double)ops) * scale;
+        var buildUs = buildTicks / (double)ops * scale;
+        var execUs = executeTicks / (double)ops * scale;
+        var mapUs = mapTicks / (double)ops * scale;
 
         Console.WriteLine(
             $"[BREAKDOWN] {label} build={buildUs:0.000}us execute={execUs:0.000}us map={mapUs:0.000}us");
@@ -474,7 +487,8 @@ CREATE TABLE film_actor (
         await using var conn = await _dapperDataSource.OpenConnectionAsync();
         var t0 = Stopwatch.GetTimestamp();
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "select film_id as \"Id\", title as \"Title\", length as \"Length\" from film where film_id=@id";
+        cmd.CommandText =
+            "select film_id as \"Id\", title as \"Title\", length as \"Length\" from film where film_id=@id";
         var param = cmd.CreateParameter();
         param.ParameterName = "id";
         param.Value = _filmId;
@@ -490,6 +504,7 @@ CREATE TABLE film_actor (
             var parser = SqlMapper.GetRowParser<Film>(reader);
             result = parser(reader);
         }
+
         var t3 = Stopwatch.GetTimestamp();
 
         _dapperBreakdownBuildTicks += t1 - t0;
@@ -556,7 +571,10 @@ CREATE TABLE film_actor (
 
         // Retrieve film
         var film = await _filmHelper.RetrieveOneAsync(_filmId);
-        if (film == null) return 0;
+        if (film == null)
+        {
+            return 0;
+        }
 
         // Toggle length to avoid no-op updates
         film.Length = _flip ? film.Length + 1 : film.Length - 1;
@@ -588,7 +606,11 @@ CREATE TABLE film_actor (
 
         var film = new Film { Title = title, Length = 123 };
         var created = await _filmHelper.CreateAsync(film, _ctx);
-        if (!created) return 0;
+        if (!created)
+        {
+            return 0;
+        }
+
         return await _filmHelper.DeleteAsync(film.Id, _ctx);
     }
 
@@ -615,7 +637,8 @@ CREATE TABLE film_actor (
     public async Task<List<Film>> GetTenFilms_Dapper()
     {
         await using var conn = await _dapperDataSource.OpenConnectionAsync();
-        var sql = "select film_id as \"Id\", title as \"Title\", length as \"Length\" from film where film_id = any(@ids)";
+        var sql =
+            "select film_id as \"Id\", title as \"Title\", length as \"Length\" from film where film_id = any(@ids)";
         return (await conn.QueryAsync<Film>(sql, new { ids = _filmIds10.ToArray() })).ToList();
     }
 
@@ -709,21 +732,19 @@ CREATE TABLE film_actor (
     }
 
     // Entities
-    [Table("film", schema: "public")]
+    [Table("film", "public")]
     public class Film
     {
         [Id(false)]
         [Column("film_id", DbType.Int32)]
         public int Id { get; set; }
 
-        [Column("title", DbType.String)]
-        public string Title { get; set; } = string.Empty;
+        [Column("title", DbType.String)] public string Title { get; set; } = string.Empty;
 
-        [Column("length", DbType.Int32)]
-        public int Length { get; set; }
+        [Column("length", DbType.Int32)] public int Length { get; set; }
     }
 
-    [Table("film_actor" , "public")]
+    [Table("film_actor", "public")]
     public class FilmActor
     {
         [pengdows.crud.attributes.PrimaryKey(1)]
@@ -738,7 +759,9 @@ CREATE TABLE film_actor (
     // Entity Framework DbContext and entities
     public class PagilaDbContext : DbContext
     {
-        public PagilaDbContext(DbContextOptions<PagilaDbContext> options) : base(options) { }
+        public PagilaDbContext(DbContextOptions<PagilaDbContext> options) : base(options)
+        {
+        }
 
         public DbSet<EfFilm> Films { get; set; }
         public DbSet<EfActor> Actors { get; set; }

@@ -67,7 +67,7 @@ public class MinPoolSizeBehaviorTests
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = "Data Source=test",
-            DbMode = DbMode.KeepAlive  // Explicit force
+            DbMode = DbMode.KeepAlive // Explicit force
         };
 
         // Act
@@ -213,7 +213,8 @@ public class MinPoolSizeBehaviorTests
     [Theory]
     [InlineData(SupportedDatabase.SqlServer, "Min Pool Size=5", "5")]
     [InlineData(SupportedDatabase.PostgreSql, "Minimum Pool Size=10", "10")]
-    public void ExplicitMinPoolSize_IsPreserved(SupportedDatabase database, string explicitSetting, string expectedValue)
+    public void ExplicitMinPoolSize_IsPreserved(SupportedDatabase database, string explicitSetting,
+        string expectedValue)
     {
         // Arrange
         var factory = new fakeDbFactory(database);
@@ -269,7 +270,7 @@ public class MinPoolSizeBehaviorTests
         if (!string.IsNullOrEmpty(dialect.PoolingSettingName))
         {
             Assert.True(builder.ContainsKey(dialect.PoolingSettingName));
-            Assert.Equal("false", builder[dialect.PoolingSettingName]?.ToString(), ignoreCase: true);
+            Assert.Equal("false", builder[dialect.PoolingSettingName]?.ToString(), true);
         }
 
         // MinPoolSize should not be set when pooling is disabled

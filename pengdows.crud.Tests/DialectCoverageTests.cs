@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
@@ -9,117 +10,105 @@ namespace pengdows.crud.Tests;
 
 public class DialectCoverageTests
 {
-    public static IEnumerable<object[]> DialectData()
+    public static IEnumerable<object[]> SupportedDialects()
     {
-        yield return new object[]
-        {
-            new MySqlDialect(new fakeDbFactory(SupportedDatabase.MySql), NullLogger<MySqlDialect>.Instance),
-            "\"",
-            true,
-            "@",
-            true // MySQL supports savepoints since 5.0.3
-        };
+        yield return new object[] { SupportedDatabase.MySql };
+        yield return new object[] { SupportedDatabase.Oracle };
+        yield return new object[] { SupportedDatabase.DuckDB };
+        yield return new object[] { SupportedDatabase.Unknown };
+        yield return new object[] { SupportedDatabase.PostgreSql };
+        yield return new object[] { SupportedDatabase.SqlServer };
+        yield return new object[] { SupportedDatabase.Sqlite };
+        yield return new object[] { SupportedDatabase.Firebird };
+    }
 
-        yield return new object[]
+    private static DialectTestConfig BuildConfig(SupportedDatabase db)
+    {
+        var factory = new fakeDbFactory(db.ToString());
+        return db switch
         {
-            new OracleDialect(new fakeDbFactory(SupportedDatabase.Oracle), NullLogger<OracleDialect>.Instance),
-            "\"",
-            true,
-            ":",
-            true // Oracle supports savepoints
-        };
-
-        yield return new object[]
-        {
-            new DuckDbDialect(new fakeDbFactory(SupportedDatabase.DuckDB), NullLogger<DuckDbDialect>.Instance),
-            "\"",
-            true,
-            "$",
-            false // DuckDB savepoints are currently disabled until driver support stabilizes
-        };
-
-        yield return new object[]
-        {
-            new Sql92Dialect(new fakeDbFactory(SupportedDatabase.Unknown), NullLogger<Sql92Dialect>.Instance),
-            "\"",
-            true,
-            "@",
-            false // SQL-92 base dialect does not assume savepoint support
-        };
-
-        yield return new object[]
-        {
-            new PostgreSqlDialect(new fakeDbFactory(SupportedDatabase.PostgreSql), NullLogger<PostgreSqlDialect>.Instance),
-            "\"",
-            true,
-            ":",
-            true // PostgreSQL supports savepoints
-        };
-
-        yield return new object[]
-        {
-            new SqlServerDialect(new fakeDbFactory(SupportedDatabase.SqlServer), NullLogger<SqlServerDialect>.Instance),
-            "\"",
-            true,
-            "@",
-            true // SQL Server supports savepoints (SAVE TRANSACTION)
-        };
-
-        yield return new object[]
-        {
-            new SqliteDialect(new fakeDbFactory(SupportedDatabase.Sqlite), NullLogger<SqliteDialect>.Instance),
-            "\"",
-            true,
-            "@",
-            true
-        };
-
-        yield return new object[]
-        {
-            new FirebirdDialect(new fakeDbFactory(SupportedDatabase.Firebird), NullLogger<FirebirdDialect>.Instance),
-            "\"",
-            true,
-            "@",
-            true
+            SupportedDatabase.MySql => new DialectTestConfig(
+                new MySqlDialect(factory, NullLogger<MySqlDialect>.Instance),
+                "\"",
+                true,
+                "@",
+                true),
+            SupportedDatabase.Oracle => new DialectTestConfig(
+                new OracleDialect(factory, NullLogger<OracleDialect>.Instance),
+                "\"",
+                true,
+                ":",
+                true),
+            SupportedDatabase.DuckDB => new DialectTestConfig(
+                new DuckDbDialect(factory, NullLogger<DuckDbDialect>.Instance),
+                "\"",
+                true,
+                "$",
+                false),
+            SupportedDatabase.Unknown => new DialectTestConfig(
+                new Sql92Dialect(factory, NullLogger<Sql92Dialect>.Instance),
+                "\"",
+                true,
+                "@",
+                false),
+            SupportedDatabase.PostgreSql => new DialectTestConfig(
+                new PostgreSqlDialect(factory, NullLogger<PostgreSqlDialect>.Instance),
+                "\"",
+                true,
+                ":",
+                true),
+            SupportedDatabase.SqlServer => new DialectTestConfig(
+                new SqlServerDialect(factory, NullLogger<SqlServerDialect>.Instance),
+                "\"",
+                true,
+                "@",
+                true),
+            SupportedDatabase.Sqlite => new DialectTestConfig(
+                new SqliteDialect(factory, NullLogger<SqliteDialect>.Instance),
+                "\"",
+                true,
+                "@",
+                true),
+            SupportedDatabase.Firebird => new DialectTestConfig(
+                new FirebirdDialect(factory, NullLogger<FirebirdDialect>.Instance),
+                "\"",
+                true,
+                "@",
+                true),
+            _ => throw new ArgumentOutOfRangeException(nameof(db), db, null)
         };
     }
 
     [Theory]
-    [MemberData(nameof(DialectData))]
-    public void WrapObjectName_WrapsIdentifier(ISqlDialect dialect, string quote, bool supportsNamed, string marker, bool supportsSavepoints)
+    [MemberData(nameof(SupportedDialects))]
+    public void WrapObjectName_WrapsIdentifier(SupportedDatabase db)
     {
-        _ = supportsNamed;
-        _ = marker;
-        _ = supportsSavepoints;
-        var wrapped = dialect.WrapObjectName("schema.table");
-        Assert.Equal($"{quote}schema{quote}.{quote}table{quote}", wrapped);
+        var config = BuildConfig(db);
+        var wrapped = config.Dialect.WrapObjectName("schema.table");
+        Assert.Equal($"{config.Quote}schema{config.Quote}.{config.Quote}table{config.Quote}", wrapped);
         Assert.NotEqual("schema.table", wrapped);
     }
 
     [Theory]
-    [MemberData(nameof(DialectData))]
-    public void WrapObjectName_Null_ReturnsEmpty(ISqlDialect dialect, string quote, bool supportsNamed, string marker, bool supportsSavepoints)
+    [MemberData(nameof(SupportedDialects))]
+    public void WrapObjectName_Null_ReturnsEmpty(SupportedDatabase db)
     {
-        _ = quote;
-        _ = supportsNamed;
-        _ = marker;
-        _ = supportsSavepoints;
-        var wrapped = dialect.WrapObjectName(null!);
+        var config = BuildConfig(db);
+        var wrapped = config.Dialect.WrapObjectName(null!);
         Assert.Equal(string.Empty, wrapped);
         Assert.NotNull(wrapped);
     }
 
     [Theory]
-    [MemberData(nameof(DialectData))]
-    public void MakeParameterName_UsesMarker(ISqlDialect dialect, string quote, bool supportsNamed, string marker, bool supportsSavepoints)
+    [MemberData(nameof(SupportedDialects))]
+    public void MakeParameterName_UsesMarker(SupportedDatabase db)
     {
-        _ = quote;
-        _ = supportsSavepoints;
-        var name = dialect.MakeParameterName("p");
-        if (supportsNamed)
+        var config = BuildConfig(db);
+        var name = config.Dialect.MakeParameterName("p");
+        if (config.SupportsNamed)
         {
-            Assert.Equal($"{marker}p", name);
-            var unexpectedMarker = marker switch
+            Assert.Equal($"{config.Marker}p", name);
+            var unexpectedMarker = config.Marker switch
             {
                 "@" => ":",
                 ":" => "@",
@@ -136,27 +125,26 @@ public class DialectCoverageTests
     }
 
     [Theory]
-    [MemberData(nameof(DialectData))]
-    public void SupportsSavepoints_ReportsCapability(ISqlDialect dialect, string quote, bool supportsNamed, string marker, bool supportsSavepoints)
+    [MemberData(nameof(SupportedDialects))]
+    public void SupportsSavepoints_ReportsCapability(SupportedDatabase db)
     {
-        _ = quote;
-        _ = supportsNamed;
-        _ = marker;
-        Assert.Equal(supportsSavepoints, dialect.SupportsSavepoints);
-        if (supportsSavepoints)
+        var config = BuildConfig(db);
+        Assert.Equal(config.SupportsSavepoints, config.Dialect.SupportsSavepoints);
+        if (config.SupportsSavepoints)
         {
-            Assert.True(dialect.SupportsSavepoints);
+            Assert.True(config.Dialect.SupportsSavepoints);
         }
         else
         {
-            Assert.False(dialect.SupportsSavepoints);
+            Assert.False(config.Dialect.SupportsSavepoints);
         }
     }
 
     [Fact]
     public void SqlServerDialect_GetSavepointSql_UsesSaveTransactionSyntax()
     {
-        var dialect = new SqlServerDialect(new fakeDbFactory(SupportedDatabase.SqlServer), NullLogger<SqlServerDialect>.Instance);
+        var dialect = new SqlServerDialect(new fakeDbFactory(SupportedDatabase.SqlServer),
+            NullLogger<SqlServerDialect>.Instance);
         var sql = dialect.GetSavepointSql("test_sp");
         Assert.Equal("SAVE TRANSACTION test_sp", sql);
     }
@@ -164,7 +152,8 @@ public class DialectCoverageTests
     [Fact]
     public void SqlServerDialect_GetRollbackToSavepointSql_UsesRollbackTransactionSyntax()
     {
-        var dialect = new SqlServerDialect(new fakeDbFactory(SupportedDatabase.SqlServer), NullLogger<SqlServerDialect>.Instance);
+        var dialect = new SqlServerDialect(new fakeDbFactory(SupportedDatabase.SqlServer),
+            NullLogger<SqlServerDialect>.Instance);
         var sql = dialect.GetRollbackToSavepointSql("test_sp");
         Assert.Equal("ROLLBACK TRANSACTION test_sp", sql);
     }
@@ -172,7 +161,8 @@ public class DialectCoverageTests
     [Fact]
     public void PostgreSqlDialect_GetSavepointSql_UsesStandardSyntax()
     {
-        var dialect = new PostgreSqlDialect(new fakeDbFactory(SupportedDatabase.PostgreSql), NullLogger<PostgreSqlDialect>.Instance);
+        var dialect = new PostgreSqlDialect(new fakeDbFactory(SupportedDatabase.PostgreSql),
+            NullLogger<PostgreSqlDialect>.Instance);
         var sql = dialect.GetSavepointSql("test_sp");
         Assert.Equal("SAVEPOINT test_sp", sql);
     }
@@ -180,7 +170,8 @@ public class DialectCoverageTests
     [Fact]
     public void PostgreSqlDialect_GetRollbackToSavepointSql_UsesStandardSyntax()
     {
-        var dialect = new PostgreSqlDialect(new fakeDbFactory(SupportedDatabase.PostgreSql), NullLogger<PostgreSqlDialect>.Instance);
+        var dialect = new PostgreSqlDialect(new fakeDbFactory(SupportedDatabase.PostgreSql),
+            NullLogger<PostgreSqlDialect>.Instance);
         var sql = dialect.GetRollbackToSavepointSql("test_sp");
         Assert.Equal("ROLLBACK TO SAVEPOINT test_sp", sql);
     }
@@ -196,8 +187,16 @@ public class DialectCoverageTests
     [Fact]
     public void SqliteDialect_GetSavepointSql_UsesStandardSyntax()
     {
-        var dialect = new SqliteDialect(new fakeDbFactory(SupportedDatabase.Sqlite), NullLogger<SqliteDialect>.Instance);
+        var dialect =
+            new SqliteDialect(new fakeDbFactory(SupportedDatabase.Sqlite), NullLogger<SqliteDialect>.Instance);
         var sql = dialect.GetSavepointSql("my_savepoint");
         Assert.Equal("SAVEPOINT my_savepoint", sql);
     }
+
+    private sealed record DialectTestConfig(
+        ISqlDialect Dialect,
+        string Quote,
+        bool SupportsNamed,
+        string Marker,
+        bool SupportsSavepoints);
 }

@@ -19,7 +19,7 @@ foreach (var (assembly, type, factory) in DbProviderFactoryFinder.FindAllFactori
 
 var builder = Host.CreateApplicationBuilder(args);
 builder.Services.AddScoped<IAuditValueResolver, StringAuditContextProvider>();
- 
+
 var host = builder.Build();
 
 Console.WriteLine($"Starting parallel database testing at {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
@@ -35,7 +35,7 @@ static ISet<string> ParseList(string? csv)
     return string.IsNullOrWhiteSpace(csv)
         ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         : csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 }
 
 string? GetArg(string name)
@@ -56,6 +56,7 @@ string? GetArg(string name)
             return args[i + 1];
         }
     }
+
     return null;
 }
 
@@ -66,6 +67,7 @@ if (only.Count > 0)
 {
     Console.WriteLine($"Filter: only => {string.Join(",", only)}");
 }
+
 if (exclude.Count > 0)
 {
     Console.WriteLine($"Filter: exclude => {string.Join(",", exclude)}");

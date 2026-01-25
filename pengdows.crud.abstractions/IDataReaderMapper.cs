@@ -40,7 +40,7 @@ public interface IDataReaderMapper
     /// <param name="options">Mapping options controlling hydration behavior.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Async sequence of hydrated objects.</returns>
-    IAsyncEnumerable<T> StreamAsync<T>(IDataReader reader, MapperOptions options, CancellationToken cancellationToken = default)
+    IAsyncEnumerable<T> StreamAsync<T>(IDataReader reader, MapperOptions options,
+        CancellationToken cancellationToken = default)
         where T : class, new();
 }
-

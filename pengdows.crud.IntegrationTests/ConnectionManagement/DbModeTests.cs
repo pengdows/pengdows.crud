@@ -16,7 +16,9 @@ public class DbModeTests : DatabaseTestBase
 {
     private static long _nextId;
 
-    public DbModeTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture) { }
+    public DbModeTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture)
+    {
+    }
 
     protected override async Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)
     {
@@ -257,7 +259,7 @@ public class DbModeTests : DatabaseTestBase
             await using var readTransaction = context.BeginTransaction(
                 IsolationLevel.ReadCommitted,
                 ExecutionType.Read,
-                readOnly: true);
+                true);
 
             var helper = CreateEntityHelper(readTransaction);
 
@@ -398,11 +400,13 @@ public class DbModeTests : DatabaseTestBase
                 Output.WriteLine("Skipping isolation test for SQLite");
                 return;
             }
+
             if (provider == SupportedDatabase.DuckDB)
             {
                 Output.WriteLine("Skipping isolation test for DuckDB");
                 return;
             }
+
             if (provider == SupportedDatabase.SqlServer && !context.RCSIEnabled)
             {
                 Output.WriteLine("Skipping isolation test for SQL Server without RCSI");
@@ -445,7 +449,7 @@ public class DbModeTests : DatabaseTestBase
     private EntityHelper<TestTable, long> CreateEntityHelper(IDatabaseContext context)
     {
         var auditResolver = GetAuditResolver();
-        return new EntityHelper<TestTable, long>(context, auditValueResolver: auditResolver);
+        return new EntityHelper<TestTable, long>(context, auditResolver);
     }
 
     private static TestTable CreateTestEntity(NameEnum name, int value)
@@ -469,8 +473,8 @@ public class DbModeTests : DatabaseTestBase
     private static bool SupportsReadOnlyTransactions(SupportedDatabase provider)
     {
         return provider is SupportedDatabase.PostgreSql or
-                          SupportedDatabase.SqlServer or
-                          SupportedDatabase.Oracle or
-                          SupportedDatabase.MySql;
+            SupportedDatabase.SqlServer or
+            SupportedDatabase.Oracle or
+            SupportedDatabase.MySql;
     }
 }

@@ -35,7 +35,7 @@ public class SqlDialectDetectDatabaseInfoTests
 
         // First call should detect and cache
         var firstResult = await dialect.DetectDatabaseInfoAsync(trackedConnection);
-        
+
         // Second call should return cached result
         var secondResult = await dialect.DetectDatabaseInfoAsync(trackedConnection);
 
@@ -74,7 +74,8 @@ public class SqlDialectDetectDatabaseInfoTests
     }
 
     [Fact]
-    public async Task DetectDatabaseInfoAsync_Should_Fallback_To_ExtractProductNameFromVersion_When_GetProductName_Returns_Null()
+    public async Task
+        DetectDatabaseInfoAsync_Should_Fallback_To_ExtractProductNameFromVersion_When_GetProductName_Returns_Null()
     {
         _factory.SetScalarResult("MySQL Server 8.0.28");
         var dialect = new TestSqlDialect(_factory, _logger);
@@ -232,11 +233,13 @@ public class SqlDialectDetectDatabaseInfoTests
         public override Version? ParseVersion(string versionString)
         {
             if (string.IsNullOrWhiteSpace(versionString))
+            {
                 return null;
+            }
 
             // Simple parsing for test purposes
             var parts = versionString.Split('.');
-            if (parts.Length >= 3 && int.TryParse(parts[0], out var major) && 
+            if (parts.Length >= 3 && int.TryParse(parts[0], out var major) &&
                 int.TryParse(parts[1], out var minor) && int.TryParse(parts[2], out var build))
             {
                 return new Version(major, minor, build);
@@ -248,12 +251,20 @@ public class SqlDialectDetectDatabaseInfoTests
         protected override SupportedDatabase InferDatabaseTypeFromInfo(string? productName, string versionString)
         {
             if (productName?.Contains("PostgreSQL") == true)
+            {
                 return SupportedDatabase.PostgreSql;
+            }
+
             if (productName?.Contains("MySQL") == true)
+            {
                 return SupportedDatabase.MySql;
+            }
+
             if (productName?.Contains("Oracle") == true)
+            {
                 return SupportedDatabase.Oracle;
-            
+            }
+
             return SupportedDatabase.Sqlite; // Default for tests
         }
     }

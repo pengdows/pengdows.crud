@@ -84,5 +84,4 @@ internal class StandardConnectionStrategy : SafeAsyncDisposableBase, IConnection
 
         return (null, null);
     }
-
 }

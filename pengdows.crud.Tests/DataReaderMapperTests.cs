@@ -127,6 +127,7 @@ public class DataReaderMapperTests
         Assert.Equal("John", results[0].Name);
         Assert.Equal("Jane", results[1].Name);
     }
+
     [Fact]
     public async Task LoadAsync_WithNamePolicy_MapsSnakeCaseFields()
     {
@@ -293,8 +294,8 @@ public class DataReaderMapperTests
             }
         });
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => DataReaderMapper.LoadAsync<EnumEntity>(reader, new MapperOptions(Strict: true)));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            DataReaderMapper.LoadAsync<EnumEntity>(reader, new MapperOptions(true)));
     }
 
     [Fact]
@@ -435,7 +436,7 @@ public class DataReaderMapperTests
 
         Assert.Single(result);
         Assert.Null(result[0].NullableState);
-        Assert.Equal(default(SampleState), result[0].RequiredState);
+        Assert.Equal(default, result[0].RequiredState);
     }
 
     [Fact]
@@ -454,8 +455,8 @@ public class DataReaderMapperTests
         var result = await DataReaderMapper.LoadAsync<EnumModeEntity>(reader, options);
 
         Assert.Single(result);
-        Assert.Equal(default(SampleState?), result[0].NullableState);
-        Assert.Equal(default(SampleState), result[0].RequiredState);
+        Assert.Equal(default, result[0].NullableState);
+        Assert.Equal(default, result[0].RequiredState);
     }
 
     [Fact]
@@ -486,10 +487,9 @@ public class DataReaderMapperTests
             }
         });
 
-        await Assert.ThrowsAsync<ArgumentException>(
-            () => DataReaderMapper.LoadAsync<DuplicateColumnNamesEntity>(
-                reader,
-                new MapperOptions(ColumnsOnly: true)));
+        await Assert.ThrowsAsync<ArgumentException>(() => DataReaderMapper.LoadAsync<DuplicateColumnNamesEntity>(
+            reader,
+            new MapperOptions(ColumnsOnly: true)));
     }
 
     [Fact]
@@ -620,6 +620,7 @@ public class DataReaderMapperTests
         public int Age { get; set; }
         public bool IsActive { get; set; }
     }
+
     private class SnakeEntity
     {
         public string? FirstName { get; set; }
@@ -627,8 +628,7 @@ public class DataReaderMapperTests
 
     private class ColumnsOnlyEntity
     {
-        [Column("Name", DbType.String)]
-        public string? Name { get; set; }
+        [Column("Name", DbType.String)] public string? Name { get; set; }
 
         public int Age { get; set; }
     }
@@ -657,11 +657,9 @@ public class DataReaderMapperTests
 
     private class DuplicateColumnNamesEntity
     {
-        [Column("Alias", DbType.String)]
-        public string? First { get; set; }
+        [Column("Alias", DbType.String)] public string? First { get; set; }
 
-        [Column("Alias", DbType.String)]
-        public string? Second { get; set; }
+        [Column("Alias", DbType.String)] public string? Second { get; set; }
     }
 
     private class DirectEntity

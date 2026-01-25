@@ -33,12 +33,14 @@ public class ExternalOracleTestContainer : TestContainer
         {
             await using var conn = OracleClientFactory.Instance.CreateConnection();
             if (conn == null)
+            {
                 throw new InvalidOperationException("Cannot create Oracle connection");
-                
+            }
+
             conn.ConnectionString = _testConnectionString;
             await conn.OpenAsync();
             await conn.CloseAsync();
-            
+
             Console.WriteLine($"[Oracle] Successfully connected to external Oracle instance");
         }
         catch (Exception ex)

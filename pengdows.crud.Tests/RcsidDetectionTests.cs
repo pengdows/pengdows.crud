@@ -71,15 +71,23 @@ public class RcsidDetectionTests
             return conn;
         }
 
-        public override DbCommand CreateCommand() => new fakeDbCommand();
-        public override DbParameter CreateParameter() => new fakeDbParameter();
+        public override DbCommand CreateCommand()
+        {
+            return new fakeDbCommand();
+        }
+
+        public override DbParameter CreateParameter()
+        {
+            return new fakeDbParameter();
+        }
     }
 
     [Fact]
     public void DatabaseContext_RCSIEnabledTrueWhenDetected()
     {
         var factory = new RcsiDbFactory(1);
-        using var context = new DatabaseContext($"Data Source=:memory:;EmulatedProduct={SupportedDatabase.SqlServer}", factory);
+        using var context = new DatabaseContext($"Data Source=:memory:;EmulatedProduct={SupportedDatabase.SqlServer}",
+            factory);
         Assert.True(context.RCSIEnabled);
     }
 
@@ -87,7 +95,8 @@ public class RcsidDetectionTests
     public void DatabaseContext_RCSIEnabledFalseWhenDisabled()
     {
         var factory = new RcsiDbFactory(0);
-        using var context = new DatabaseContext($"Data Source=:memory:;EmulatedProduct={SupportedDatabase.SqlServer}", factory);
+        using var context = new DatabaseContext($"Data Source=:memory:;EmulatedProduct={SupportedDatabase.SqlServer}",
+            factory);
         Assert.False(context.RCSIEnabled);
     }
 }

@@ -20,15 +20,11 @@ public class LoadStreamAsyncTests
     [Table("test")]
     private class TestEntity
     {
-        [Id]
-        [Column("id", DbType.Int32)]
-        public int Id { get; set; }
+        [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
 
-        [Column("name", DbType.String)]
-        public string? Name { get; set; }
+        [Column("name", DbType.String)] public string? Name { get; set; }
 
-        [Column("value", DbType.Int32)]
-        public int Value { get; set; }
+        [Column("value", DbType.Int32)] public int Value { get; set; }
     }
 
     [Fact]
@@ -130,7 +126,9 @@ public class LoadStreamAsyncTests
         {
             processedCount++;
             if (processedCount >= 3)
+            {
                 break;
+            }
         }
 
         // Assert - fakeDb returns empty, but early break logic works
@@ -305,7 +303,9 @@ public class LoadStreamAsyncTests
         {
             results.Add(entity);
             if (results.Count >= 100)
+            {
                 break;
+            }
         }
 
         // Assert

@@ -36,6 +36,7 @@ public class CachedSqlTemplatesTests : IAsyncLifetime
             disp.Dispose();
         }
     }
+
     [Fact]
     public void BuildCreate_ReusesCachedTemplates()
     {
@@ -46,7 +47,8 @@ public class CachedSqlTemplatesTests : IAsyncLifetime
 
         // Build create twice with same helper to verify template reuse within instance
         var sc1 = helper1.BuildCreate(entity1);
-        var field = typeof(EntityHelper<TestEntity, int>).GetField("_templatesByDialect", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var field = typeof(EntityHelper<TestEntity, int>).GetField("_templatesByDialect",
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
         var dialectCache1 = field.GetValue(helper1) as IDictionary;
         var initialCacheCount = dialectCache1!.Count;
 
@@ -88,13 +90,14 @@ public class CachedSqlTemplatesTests : IAsyncLifetime
         var entity2 = new TestEntity { Id = 1, Name = "two" };
 
         // Build update twice with same helper to verify template reuse within instance
-        await helper1.BuildUpdateAsync(entity1, loadOriginal: false);
+        await helper1.BuildUpdateAsync(entity1, false);
 
-        var field = typeof(EntityHelper<TestEntity, int>).GetField("_templatesByDialect", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var field = typeof(EntityHelper<TestEntity, int>).GetField("_templatesByDialect",
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
         var dialectCache1 = field.GetValue(helper1) as IDictionary;
         var initialCacheCount = dialectCache1!.Count;
 
-        await helper1.BuildUpdateAsync(entity2, loadOriginal: false);
+        await helper1.BuildUpdateAsync(entity2, false);
         var dialectCache2 = field.GetValue(helper1) as IDictionary;
         var finalCacheCount = dialectCache2!.Count;
 
@@ -112,7 +115,6 @@ public class CachedSqlTemplatesTests : IAsyncLifetime
         var entity = new TestEntity { Id = 1, Name = "one" };
 
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await helper.BuildUpdateAsync(entity, loadOriginal: true));
+            await helper.BuildUpdateAsync(entity, true));
     }
-
 }

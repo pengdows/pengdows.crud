@@ -27,7 +27,8 @@ public class OracleTestContainer : TestContainer
             .WithExposedPort(_port)
             .WithPortBinding(_port, true) // dynamic host binding
             .WithWaitStrategy(Wait.ForUnixContainer().UntilPortIsAvailable(_port))
-            .WithStartupCallback((container, ct) => Task.Delay(TimeSpan.FromMinutes(2), ct)) // Wait for Oracle initialization
+            .WithStartupCallback((container, ct) =>
+                Task.Delay(TimeSpan.FromMinutes(2), ct)) // Wait for Oracle initialization
             .Build();
     }
 
@@ -38,7 +39,8 @@ public class OracleTestContainer : TestContainer
         var hostPort = _container.GetMappedPublicPort(_port);
 
         // Use TNS format for Oracle 18c XE with pluggable database
-        _connectionString = $@"User Id={_username};Password={_password};Data Source=(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=localhost)(PORT={hostPort}))(CONNECT_DATA=(SERVICE_NAME={_sid})));";
+        _connectionString =
+            $@"User Id={_username};Password={_password};Data Source=(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=localhost)(PORT={hostPort}))(CONNECT_DATA=(SERVICE_NAME={_sid})));";
         // // Optional: print logs to debug
         // Console.WriteLine(await _container.());
 

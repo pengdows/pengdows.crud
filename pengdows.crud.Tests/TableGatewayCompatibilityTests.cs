@@ -1,4 +1,3 @@
-
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 using Xunit;
@@ -10,15 +9,18 @@ public sealed class TableGatewayCompatibilityTests
     [Fact]
     public void EntityHelper_ImplementsITableGateway()
     {
-        Assert.True(typeof(ITableGateway<TestEntitySimple, int>).IsAssignableFrom(typeof(EntityHelper<TestEntitySimple, int>)));
+        Assert.True(
+            typeof(ITableGateway<TestEntitySimple, int>).IsAssignableFrom(typeof(EntityHelper<TestEntitySimple, int>)));
     }
 
     [Fact]
     public void IEntityHelper_IsAssignableToITableGateway()
     {
-        #pragma warning disable CS0618
-        Assert.True(typeof(ITableGateway<TestEntitySimple, int>).IsAssignableFrom(typeof(IEntityHelper<TestEntitySimple, int>)));
-        #pragma warning restore CS0618
+#pragma warning disable CS0618
+        Assert.True(
+            typeof(ITableGateway<TestEntitySimple, int>).IsAssignableFrom(
+                typeof(IEntityHelper<TestEntitySimple, int>)));
+#pragma warning restore CS0618
     }
 
     [Fact]
@@ -27,12 +29,13 @@ public sealed class TableGatewayCompatibilityTests
         var typeMap = new TypeMapRegistry();
         typeMap.Register<TestEntitySimple>();
 
-        using var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", new fakeDbFactory(SupportedDatabase.Sqlite), typeMap);
+        using var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite",
+            new fakeDbFactory(SupportedDatabase.Sqlite), typeMap);
         var helper = new EntityHelper<TestEntitySimple, int>(context, new StubAuditValueResolver("user"));
         var tableGateway = (ITableGateway<TestEntitySimple, int>)helper;
-        #pragma warning disable CS0618
+#pragma warning disable CS0618
         var legacyInterface = (IEntityHelper<TestEntitySimple, int>)tableGateway;
-        #pragma warning restore CS0618
+#pragma warning restore CS0618
 
         var entity = new TestEntitySimple { Id = 1, Name = "value" };
 

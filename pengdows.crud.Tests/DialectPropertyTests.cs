@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
@@ -11,174 +12,173 @@ public class DialectPropertyTests
 {
     public static IEnumerable<object[]> DialectData()
     {
-         var logger = NullLogger.Instance;
+        yield return new object[] { SupportedDatabase.Firebird };
+        yield return new object[] { SupportedDatabase.MySql };
+        yield return new object[] { SupportedDatabase.Oracle };
+        yield return new object[] { SupportedDatabase.PostgreSql };
+        yield return new object[] { SupportedDatabase.SqlServer };
+        yield return new object[] { SupportedDatabase.Sqlite };
+        yield return new object[] { SupportedDatabase.DuckDB };
+    }
 
-        yield return new object[]
+    private static DialectPropertyConfig BuildConfig(SupportedDatabase db)
+    {
+        var factory = new fakeDbFactory(db.ToString());
+        var logger = NullLogger.Instance;
+        return db switch
         {
-            new FirebirdDialect(new fakeDbFactory(SupportedDatabase.Firebird), logger),
-            new DialectProps(
-                SupportedDatabase.Firebird,
-                "@",
-                true,
-                65535,
-                63,
-                ProcWrappingStyle.ExecuteProcedure,
-                "\"",
-                "\"",
-                false,
-                false,
-                false,
-                false,
-                false,
-                false,
-                true,
-                false,
-                true) // SupportsSavepoints
-        };
-
-        yield return new object[]
-        {
-            new MySqlDialect(new fakeDbFactory(SupportedDatabase.MySql), logger),
-            new DialectProps(
-                SupportedDatabase.MySql,
-                "@",
-                true,
-                65535,
-                64,
-                ProcWrappingStyle.Call,
-                "\"",
-                "\"",
-                false,
-                true,
-                false,
-                false,
-                false,
-                false,
-                false,
-                true,
-                true) // SupportsSavepoints - MySQL 5.0.3+
-        };
-
-        yield return new object[]
-        {
-            new OracleDialect(new fakeDbFactory(SupportedDatabase.Oracle), logger),
-            new DialectProps(
-                SupportedDatabase.Oracle,
-                ":",
-                true,
-                64000,
-                30,
-                ProcWrappingStyle.Oracle,
-                "\"",
-                "\"",
-                false,
-                false,
-                true,
-                false,
-                true,
-                true,
-                true,
-                true,
-                true) // SupportsSavepoints
-        };
-
-        yield return new object[]
-        {
-            new PostgreSqlDialect(new fakeDbFactory(SupportedDatabase.PostgreSql), logger),
-            new DialectProps(
-                SupportedDatabase.PostgreSql,
-                ":",
-                true,
-                32767,
-                63,
-                ProcWrappingStyle.PostgreSQL,
-                "\"",
-                "\"",
-                true,
-                false,
-                false,
-                false,
-                true,
-                true,
-                true,
-                true,
-                true) // SupportsSavepoints
-        };
-
-        yield return new object[]
-        {
-            new SqlServerDialect(new fakeDbFactory(SupportedDatabase.SqlServer), logger),
-            new DialectProps(
-                SupportedDatabase.SqlServer,
-                "@",
-                true,
-                2100,
-                128,
-                ProcWrappingStyle.Exec,
-                "\"",
-                "\"",
-                false,
-                false,
-                false,
-                false,
-                true,
-                true,
-                true,
-                true,
-                true) // SupportsSavepoints (SAVE TRANSACTION)
-        };
-
-        yield return new object[]
-        {
-            new SqliteDialect(new fakeDbFactory(SupportedDatabase.Sqlite), logger),
-            new DialectProps(
-                SupportedDatabase.Sqlite,
-                "@",
-                true,
-                999,
-                255,
-                ProcWrappingStyle.None,
-                "\"",
-                "\"",
-                true,
-                false,
-                false,
-                false,
-                false,
-                false,
-                false,
-                false,
-                true) // SupportsSavepoints
-        };
-
-        yield return new object[]
-        {
-            new DuckDbDialect(new fakeDbFactory(SupportedDatabase.DuckDB), logger),
-            new DialectProps(
-                SupportedDatabase.DuckDB,
-                "$",
-                true,
-                65535,
-                255,
-                ProcWrappingStyle.None,
-                "\"",
-                "\"",
-                true,
-                false,
-                false,
-                true,
-                true,
-                true,
-                true,
-                true,
-                false) // Savepoints currently disabled for DuckDB
+            SupportedDatabase.Firebird => new DialectPropertyConfig(
+                new FirebirdDialect(factory, logger),
+                new DialectProps(
+                    SupportedDatabase.Firebird,
+                    "@",
+                    true,
+                    65535,
+                    63,
+                    ProcWrappingStyle.ExecuteProcedure,
+                    "\"",
+                    "\"",
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    true,
+                    false,
+                    true)),
+            SupportedDatabase.MySql => new DialectPropertyConfig(
+                new MySqlDialect(factory, logger),
+                new DialectProps(
+                    SupportedDatabase.MySql,
+                    "@",
+                    true,
+                    65535,
+                    64,
+                    ProcWrappingStyle.Call,
+                    "\"",
+                    "\"",
+                    false,
+                    true,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    true,
+                    true)),
+            SupportedDatabase.Oracle => new DialectPropertyConfig(
+                new OracleDialect(factory, logger),
+                new DialectProps(
+                    SupportedDatabase.Oracle,
+                    ":",
+                    true,
+                    64000,
+                    30,
+                    ProcWrappingStyle.Oracle,
+                    "\"",
+                    "\"",
+                    false,
+                    false,
+                    true,
+                    false,
+                    true,
+                    true,
+                    true,
+                    true,
+                    true)),
+            SupportedDatabase.PostgreSql => new DialectPropertyConfig(
+                new PostgreSqlDialect(factory, logger),
+                new DialectProps(
+                    SupportedDatabase.PostgreSql,
+                    ":",
+                    true,
+                    32767,
+                    63,
+                    ProcWrappingStyle.PostgreSQL,
+                    "\"",
+                    "\"",
+                    true,
+                    false,
+                    false,
+                    false,
+                    true,
+                    true,
+                    true,
+                    true,
+                    true)),
+            SupportedDatabase.SqlServer => new DialectPropertyConfig(
+                new SqlServerDialect(factory, logger),
+                new DialectProps(
+                    SupportedDatabase.SqlServer,
+                    "@",
+                    true,
+                    2100,
+                    128,
+                    ProcWrappingStyle.Exec,
+                    "\"",
+                    "\"",
+                    false,
+                    false,
+                    false,
+                    false,
+                    true,
+                    true,
+                    true,
+                    true,
+                    true)),
+            SupportedDatabase.Sqlite => new DialectPropertyConfig(
+                new SqliteDialect(factory, logger),
+                new DialectProps(
+                    SupportedDatabase.Sqlite,
+                    "@",
+                    true,
+                    999,
+                    255,
+                    ProcWrappingStyle.None,
+                    "\"",
+                    "\"",
+                    true,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    true)),
+            SupportedDatabase.DuckDB => new DialectPropertyConfig(
+                new DuckDbDialect(factory, logger),
+                new DialectProps(
+                    SupportedDatabase.DuckDB,
+                    "$",
+                    true,
+                    65535,
+                    255,
+                    ProcWrappingStyle.None,
+                    "\"",
+                    "\"",
+                    true,
+                    false,
+                    false,
+                    true,
+                    true,
+                    true,
+                    true,
+                    true,
+                    false)),
+            _ => throw new ArgumentOutOfRangeException(nameof(db), db, null)
         };
     }
 
     [Theory]
     [MemberData(nameof(DialectData))]
-    public void Dialect_properties_match_expected(ISqlDialect dialect, DialectProps expected)
+    public void Dialect_properties_match_expected(SupportedDatabase db)
     {
+        var config = BuildConfig(db);
+        var dialect = config.Dialect;
+        var expected = config.Expected;
+
         Assert.Equal(expected.DatabaseType, dialect.DatabaseType);
         Assert.NotEqual(SupportedDatabase.Unknown, dialect.DatabaseType);
 
@@ -268,4 +268,6 @@ public class DialectPropertyTests
         bool SupportsArrayTypes,
         bool SupportsNamespaces,
         bool SupportsSavepoints);
+
+    private sealed record DialectPropertyConfig(ISqlDialect Dialect, DialectProps Expected);
 }

@@ -47,7 +47,7 @@ public partial class EntityHelper<TEntity, TRowID>
 
         try
         {
-            return (TRowID)Activator.CreateInstance(typeof(TRowID), nonPublic: true)!;
+            return (TRowID)Activator.CreateInstance(typeof(TRowID), true)!;
         }
         catch
         {
@@ -92,11 +92,10 @@ public partial class EntityHelper<TEntity, TRowID>
     /// 3. Better cache locality per database type
     /// 4. Simpler code path without regex and string replacements
     /// </summary>
-
     private CachedSqlTemplates BuildCachedSqlTemplatesForDialect(ISqlDialect dialect)
     {
         var idCol = _tableInfo.Columns.Values.FirstOrDefault(c => c.IsId)
-                     ?? throw new InvalidOperationException($"No ID column defined for {typeof(TEntity).Name}");
+                    ?? throw new InvalidOperationException($"No ID column defined for {typeof(TEntity).Name}");
 
         var insertColumns = _tableInfo.Columns.Values
             .Where(c => !c.IsNonInsertable && (!c.IsId || c.IsIdIsWritable))
@@ -122,6 +121,7 @@ public partial class EntityHelper<TEntity, TRowID>
             {
                 placeholder = dialect.RenderJsonArgument(placeholder, insertColumns[i]);
             }
+
             valuePlaceholders.Add(placeholder);
         }
 
@@ -156,35 +156,36 @@ public partial class EntityHelper<TEntity, TRowID>
             .Value;
     }
 
-    private CachedContainerTemplates BuildCachedContainerTemplatesForDialect(ISqlDialect dialect, IDatabaseContext context)
+    private CachedContainerTemplates BuildCachedContainerTemplatesForDialect(ISqlDialect dialect,
+        IDatabaseContext context)
     {
         // Build pre-configured containers with parameters for common operations
         var templates = new CachedContainerTemplates();
-        
+
         // GetById - always use single-parameter equality for minimal per-call overhead
-        templates.GetByIdTemplate = BuildRetrieveInternal(CreateTemplateRowIds(1), "", context, deduplicate: false);
+        templates.GetByIdTemplate = BuildRetrieveInternal(CreateTemplateRowIds(1), "", context, false);
 
         // GetByIds - array parameter (will be updated with actual IDs)
-        templates.GetByIdsTemplate = BuildRetrieveInternal(CreateTemplateRowIds(2), "", context, deduplicate: false);
-        
+        templates.GetByIdsTemplate = BuildRetrieveInternal(CreateTemplateRowIds(2), "", context, false);
+
         // BaseRetrieve - no WHERE clause
         templates.BaseRetrieveTemplate = BuildBaseRetrieve("a", context);
-        
+
         // Insert - entity fields as parameters
         var sampleEntity = new TEntity();
         templates.InsertTemplate = BuildCreate(sampleEntity, context);
-        
+
         // Update - entity fields as parameters
         // Note: loadOriginal=false since we're building a template with a sample entity,
         // not performing an actual update. This makes the call synchronous (no I/O).
-        templates.UpdateTemplate = BuildUpdateAsync(sampleEntity, loadOriginal: false, context).GetAwaiter().GetResult();
-        
+        templates.UpdateTemplate = BuildUpdateAsync(sampleEntity, false, context).GetAwaiter().GetResult();
+
         // Delete by ID
         templates.DeleteByIdTemplate = BuildDelete(CreateTemplateRowId(), context);
-        
+
         // Upsert
         templates.UpsertTemplate = BuildUpsert(sampleEntity, context);
-        
+
         return templates;
     }
 
@@ -195,5 +196,4 @@ public partial class EntityHelper<TEntity, TRowID>
                 BuildCachedContainerTemplatesForDialect(dialect, context)))
             .Value;
     }
-
 }

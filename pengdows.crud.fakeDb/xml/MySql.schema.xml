@@ -47,7 +47,8 @@
         <DataSourceProductVersion>9.3.0</DataSourceProductVersion>
         <DataSourceProductVersionNormalized>9.3.0</DataSourceProductVersionNormalized>
         <GroupByBehavior>2</GroupByBehavior>
-        <IdentifierPattern>(^[\p{Lo}\p{Lu}\p{Ll}_@#][\p{Lo}\p{Lu}\p{Ll}\p{Nd}@$#_]*$)|(^\"[^\"\0]|\"\"+\"$)</IdentifierPattern>
+        <IdentifierPattern>(^[\p{Lo}\p{Lu}\p{Ll}_@#][\p{Lo}\p{Lu}\p{Ll}\p{Nd}@$#_]*$)|(^\"[^\"\0]|\"\"+\"$)
+        </IdentifierPattern>
         <IdentifierCase>1</IdentifierCase>
         <OrderByColumnsInSelect>false</OrderByColumnsInSelect>
         <ParameterMarkerFormat>{0}</ParameterMarkerFormat>
@@ -67,7 +68,8 @@
         <DataSourceProductVersion>9.3.0</DataSourceProductVersion>
         <DataSourceProductVersionNormalized>9.3.0</DataSourceProductVersionNormalized>
         <GroupByBehavior>2</GroupByBehavior>
-        <IdentifierPattern>(^[\p{Lo}\p{Lu}\p{Ll}_@#][\p{Lo}\p{Lu}\p{Ll}\p{Nd}@$#_]*$)|(^\"[^\"\0]|\"\"+\"$)</IdentifierPattern>
+        <IdentifierPattern>(^[\p{Lo}\p{Lu}\p{Ll}_@#][\p{Lo}\p{Lu}\p{Ll}\p{Nd}@$#_]*$)|(^\"[^\"\0]|\"\"+\"$)
+        </IdentifierPattern>
         <IdentifierCase>1</IdentifierCase>
         <OrderByColumnsInSelect>false</OrderByColumnsInSelect>
         <ParameterMarkerFormat>{0}</ParameterMarkerFormat>

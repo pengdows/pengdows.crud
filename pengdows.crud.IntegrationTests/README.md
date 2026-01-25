@@ -1,10 +1,12 @@
 # pengdows.crud Integration Tests
 
-This directory contains comprehensive integration tests for pengdows.crud that demonstrate real-world scenarios and verify functionality across multiple database providers.
+This directory contains comprehensive integration tests for pengdows.crud that demonstrate real-world scenarios and
+verify functionality across multiple database providers.
 
 ## Overview
 
-The integration tests are organized into focused categories, each testing specific aspects of pengdows.crud's functionality:
+The integration tests are organized into focused categories, each testing specific aspects of pengdows.crud's
+functionality:
 
 ```
 📁 pengdows.crud.IntegrationTests/
@@ -20,6 +22,7 @@ The integration tests are organized into focused categories, each testing specif
 ## Test Categories
 
 ### 🔧 Core Tests
+
 **Location**: `Core/`
 
 - **BasicCrudTests**: Comprehensive CRUD operations across all database providers
@@ -27,6 +30,7 @@ The integration tests are organized into focused categories, each testing specif
 - **AuditFieldTests**: CreatedBy/On, LastUpdatedBy/On functionality
 
 ### ⚡ Advanced Tests
+
 **Location**: `Advanced/`
 
 - **TransactionTests**: Transaction isolation, rollback, savepoints, concurrent access, readonly transactions
@@ -34,6 +38,7 @@ The integration tests are organized into focused categories, each testing specif
 - **BulkOperationTests**: Large dataset operations, batch processing
 
 ### 🎯 Database-Specific Tests
+
 **Location**: `DatabaseSpecific/`
 
 - **PostgreSQLFeatureTests**: JSONB operators, arrays, full-text search, native upserts
@@ -42,6 +47,7 @@ The integration tests are organized into focused categories, each testing specif
 - **OracleFeatureTests**: Oracle-specific features and procedures
 
 ### 🔗 Connection Management Tests
+
 **Location**: `ConnectionManagement/`
 
 - **DbModeTests**: Standard, KeepAlive, SingleWriter, SingleConnection modes
@@ -51,6 +57,7 @@ The integration tests are organized into focused categories, each testing specif
 - **IsolationTests**: Transaction isolation across different providers
 
 ### ❌ Error Handling Tests
+
 **Location**: `ErrorHandling/`
 
 - **ConnectionFailureTests**: Network failures, timeout scenarios using FakeDb
@@ -277,41 +284,46 @@ public async Task Connection_Failure_HandledGracefully()
 ## Benefits of This Architecture
 
 ### ✅ **Granular Test Failure Detection**
+
 - Individual test methods focus on specific functionality
 - Easy to identify exactly what broke when tests fail
 - Better debugging and troubleshooting experience
 
 ### ✅ **Comprehensive Coverage**
+
 - Tests real-world scenarios, not just happy paths
 - Covers database-specific optimizations and features
 - Validates error handling and edge cases
 
 ### ✅ **Cross-Database Validation**
+
 - Ensures consistent behavior across all supported databases
 - Catches provider-specific bugs early
 - Validates dialect implementations
 
 ### ✅ **Performance Validation**
+
 - Demonstrates database-specific optimizations
 - Validates that pengdows.crud leverages native features
 - Provides performance comparisons with EF/Dapper
 
 ### ✅ **Documentation Through Tests**
+
 - Tests serve as executable documentation
 - Show best practices for using pengdows.crud features
 - Demonstrate real-world usage patterns
 
 ## Comparison with Previous Integration Tests
 
-| Aspect | Old Monolithic Tests | New Granular Tests |
-|--------|---------------------|-------------------|
-| **Failure Detection** | Single mega-test failure | Specific test method failure |
-| **Coverage** | Basic CRUD only | Comprehensive scenarios |
-| **Debugging** | Hard to isolate issues | Easy to identify problems |
-| **Database Features** | Generic operations | Database-specific optimizations |
-| **Error Scenarios** | Limited | Comprehensive failure testing |
-| **Documentation Value** | Low | High - tests as examples |
-| **Maintenance** | Difficult | Easy to update/extend |
+| Aspect                  | Old Monolithic Tests     | New Granular Tests              |
+|-------------------------|--------------------------|---------------------------------|
+| **Failure Detection**   | Single mega-test failure | Specific test method failure    |
+| **Coverage**            | Basic CRUD only          | Comprehensive scenarios         |
+| **Debugging**           | Hard to isolate issues   | Easy to identify problems       |
+| **Database Features**   | Generic operations       | Database-specific optimizations |
+| **Error Scenarios**     | Limited                  | Comprehensive failure testing   |
+| **Documentation Value** | Low                      | High - tests as examples        |
+| **Maintenance**         | Difficult                | Easy to update/extend           |
 
 ## Future Enhancements
 
@@ -323,4 +335,5 @@ The integration test architecture is designed to be easily extensible:
 4. **Load Testing**: Add stress tests for high-concurrency scenarios
 5. **Migration Testing**: Add tests for database schema changes and migrations
 
-This comprehensive integration test suite ensures pengdows.crud maintains high quality and reliability across all supported database providers and real-world usage scenarios.
+This comprehensive integration test suite ensures pengdows.crud maintains high quality and reliability across all
+supported database providers and real-world usage scenarios.

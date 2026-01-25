@@ -10,13 +10,19 @@ public class SqlDialectLineCoverageTests
 {
     private sealed class TestDialect : SqlDialect
     {
-        public TestDialect() : base(new fakeDbFactory(SupportedDatabase.Sqlite), NullLogger.Instance) { }
+        public TestDialect() : base(new fakeDbFactory(SupportedDatabase.Sqlite), NullLogger.Instance)
+        {
+        }
+
         public override SupportedDatabase DatabaseType => SupportedDatabase.Sqlite;
     }
 
     private sealed class FallbackDialect : SqlDialect
     {
-        public FallbackDialect() : base(new fakeDbFactory(SupportedDatabase.Unknown), NullLogger.Instance) { }
+        public FallbackDialect() : base(new fakeDbFactory(SupportedDatabase.Unknown), NullLogger.Instance)
+        {
+        }
+
         public override SupportedDatabase DatabaseType => SupportedDatabase.Unknown;
     }
 

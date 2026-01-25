@@ -17,7 +17,9 @@ public class ConstraintViolationTests : DatabaseTestBase
 {
     private static long _nextId;
 
-    public ConstraintViolationTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture) { }
+    public ConstraintViolationTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture)
+    {
+    }
 
     protected override IEnumerable<SupportedDatabase> GetSupportedProviders()
     {
@@ -149,10 +151,7 @@ public class ConstraintViolationTests : DatabaseTestBase
             var entity2 = CreateTestEntity(NameEnum.Test2, 200);
             entity2.Name = entity1.Name; // Same as entity1
 
-            await Assert.ThrowsAnyAsync<DbException>(async () =>
-            {
-                await helper.CreateAsync(entity2, context);
-            });
+            await Assert.ThrowsAnyAsync<DbException>(async () => { await helper.CreateAsync(entity2, context); });
         });
     }
 
@@ -205,42 +204,39 @@ public class ConstraintViolationTests : DatabaseTestBase
             }
 
             // Act & Assert - Try to delete parent (should fail due to FK)
-            await Assert.ThrowsAnyAsync<DbException>(async () =>
-            {
-                await helper.DeleteAsync(parent.Id, context);
-            });
+            await Assert.ThrowsAnyAsync<DbException>(async () => { await helper.DeleteAsync(parent.Id, context); });
         });
     }
 
     [Fact]
     public async Task NotNullViolation_NullRequiredField_ThrowsException()
     {
-            await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            var tableName = context.WrapObjectName("test_table");
+            var idColumn = context.WrapObjectName("id");
+            var nameColumn = context.WrapObjectName("name");
+            var valueColumn = context.WrapObjectName("value");
+            var activeColumn = context.WrapObjectName("is_active");
+            var createdColumn = context.WrapObjectName("created_at");
+
+            // Act & Assert - Try to insert NULL into NOT NULL column
+            await Assert.ThrowsAnyAsync<DbException>(async () =>
             {
-                var tableName = context.WrapObjectName("test_table");
-                var idColumn = context.WrapObjectName("id");
-                var nameColumn = context.WrapObjectName("name");
-                var valueColumn = context.WrapObjectName("value");
-                var activeColumn = context.WrapObjectName("is_active");
-                var createdColumn = context.WrapObjectName("created_at");
+                await using var container = context.CreateSqlContainer();
 
-                // Act & Assert - Try to insert NULL into NOT NULL column
-                await Assert.ThrowsAnyAsync<DbException>(async () =>
-                {
-                    await using var container = context.CreateSqlContainer();
-
-                    // name is NOT NULL, so this should fail
-                    container.Query.Append("INSERT INTO ").Append(tableName).Append(" (");
-                    container.Query.Append(idColumn).Append(", ");
-                    container.Query.Append(nameColumn).Append(", ");
-                    container.Query.Append(valueColumn).Append(", ");
-                    container.Query.Append(activeColumn).Append(", ");
-                    container.Query.Append(createdColumn).Append(") VALUES (");
-                    container.Query.Append(container.MakeParameterName("id")).Append(", ");
-                    container.Query.Append("NULL, "); // NULL in NOT NULL column
-                    container.Query.Append(container.MakeParameterName("value")).Append(", ");
-                    container.Query.Append(container.MakeParameterName("active")).Append(", ");
-                    container.Query.Append(container.MakeParameterName("created")).Append(")");
+                // name is NOT NULL, so this should fail
+                container.Query.Append("INSERT INTO ").Append(tableName).Append(" (");
+                container.Query.Append(idColumn).Append(", ");
+                container.Query.Append(nameColumn).Append(", ");
+                container.Query.Append(valueColumn).Append(", ");
+                container.Query.Append(activeColumn).Append(", ");
+                container.Query.Append(createdColumn).Append(") VALUES (");
+                container.Query.Append(container.MakeParameterName("id")).Append(", ");
+                container.Query.Append("NULL, "); // NULL in NOT NULL column
+                container.Query.Append(container.MakeParameterName("value")).Append(", ");
+                container.Query.Append(container.MakeParameterName("active")).Append(", ");
+                container.Query.Append(container.MakeParameterName("created")).Append(")");
 
                 container.AddParameterWithValue("id", DbType.Int64, Interlocked.Increment(ref _nextId));
                 container.AddParameterWithValue("value", DbType.Int32, 400);
@@ -389,7 +385,7 @@ public class ConstraintViolationTests : DatabaseTestBase
     private EntityHelper<TestTable, long> CreateEntityHelper(IDatabaseContext context)
     {
         var auditResolver = GetAuditResolver();
-        return new EntityHelper<TestTable, long>(context, auditValueResolver: auditResolver);
+        return new EntityHelper<TestTable, long>(context, auditResolver);
     }
 
     private static TestTable CreateTestEntity(NameEnum name, int value)
@@ -445,7 +441,8 @@ public class ConstraintViolationTests : DatabaseTestBase
         await container.ExecuteNonQueryAsync();
     }
 
-    private void AppendInsertRelatedTable(ISqlContainer container, SupportedDatabase provider, long testTableId, string name)
+    private void AppendInsertRelatedTable(ISqlContainer container, SupportedDatabase provider, long testTableId,
+        string name)
     {
         container.Query.Append("INSERT INTO test_related (test_table_id, name) VALUES (");
         container.Query.Append(container.MakeParameterName("fk_id")).Append(", ");
@@ -461,7 +458,8 @@ public class ConstraintViolationTests : DatabaseTestBase
         {
             SupportedDatabase.PostgreSql => "ALTER TABLE test_table ADD CONSTRAINT uq_name UNIQUE (name)",
             SupportedDatabase.SqlServer => "ALTER TABLE test_table ADD CONSTRAINT uq_name UNIQUE ([name])",
-            SupportedDatabase.MySql or SupportedDatabase.MariaDb => "ALTER TABLE test_table ADD CONSTRAINT uq_name UNIQUE (name)",
+            SupportedDatabase.MySql or SupportedDatabase.MariaDb =>
+                "ALTER TABLE test_table ADD CONSTRAINT uq_name UNIQUE (name)",
             _ => null
         };
 
@@ -483,9 +481,12 @@ public class ConstraintViolationTests : DatabaseTestBase
     {
         var sql = provider switch
         {
-            SupportedDatabase.PostgreSql => "ALTER TABLE test_table ADD CONSTRAINT chk_value_positive CHECK (value >= 0)",
-            SupportedDatabase.SqlServer => "ALTER TABLE test_table ADD CONSTRAINT chk_value_positive CHECK (value >= 0)",
-            SupportedDatabase.MySql or SupportedDatabase.MariaDb => "ALTER TABLE test_table ADD CONSTRAINT chk_value_positive CHECK (value >= 0)",
+            SupportedDatabase.PostgreSql =>
+                "ALTER TABLE test_table ADD CONSTRAINT chk_value_positive CHECK (value >= 0)",
+            SupportedDatabase.SqlServer =>
+                "ALTER TABLE test_table ADD CONSTRAINT chk_value_positive CHECK (value >= 0)",
+            SupportedDatabase.MySql or SupportedDatabase.MariaDb =>
+                "ALTER TABLE test_table ADD CONSTRAINT chk_value_positive CHECK (value >= 0)",
             _ => null
         };
 
@@ -511,16 +512,16 @@ public class ConstraintViolationTests : DatabaseTestBase
     private static bool SupportsUniqueConstraints(SupportedDatabase provider)
     {
         return provider is SupportedDatabase.PostgreSql or
-                          SupportedDatabase.SqlServer or
-                          SupportedDatabase.MySql or
-                          SupportedDatabase.MariaDb;
+            SupportedDatabase.SqlServer or
+            SupportedDatabase.MySql or
+            SupportedDatabase.MariaDb;
     }
 
     private static bool SupportsCheckConstraints(SupportedDatabase provider)
     {
         return provider is SupportedDatabase.PostgreSql or
-                          SupportedDatabase.SqlServer or
-                          SupportedDatabase.MySql or
-                          SupportedDatabase.MariaDb;
+            SupportedDatabase.SqlServer or
+            SupportedDatabase.MySql or
+            SupportedDatabase.MariaDb;
     }
 }

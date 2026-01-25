@@ -94,4 +94,3 @@ public class MetricsCollectorTests
         return Stopwatch.GetTimestamp() - offset;
     }
 }
-

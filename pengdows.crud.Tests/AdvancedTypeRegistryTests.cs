@@ -121,7 +121,8 @@ public class AdvancedTypeRegistryTests
         var registry = new AdvancedTypeRegistry();
         var parameter = new TestDbParameter();
 
-        var success = registry.TryConfigureParameter(parameter, typeof(Guid), Guid.NewGuid(), SupportedDatabase.SqlServer);
+        var success =
+            registry.TryConfigureParameter(parameter, typeof(Guid), Guid.NewGuid(), SupportedDatabase.SqlServer);
 
         Assert.False(success);
     }
@@ -229,22 +230,25 @@ public class AdvancedTypeRegistryTests
         public override DbType DbType { get; set; }
         public override ParameterDirection Direction { get; set; }
         public override bool IsNullable { get; set; }
+
         [AllowNull]
         public override string ParameterName
         {
             get => _parameterName;
             set => _parameterName = value ?? string.Empty;
         }
+
         public override int Size { get; set; }
+
         [AllowNull]
         public override string SourceColumn
         {
             get => _sourceColumn;
             set => _sourceColumn = value ?? string.Empty;
         }
+
         public override bool SourceColumnNullMapping { get; set; }
-        [AllowNull]
-        public override object Value { get; set; } = DBNull.Value;
+        [AllowNull] public override object Value { get; set; } = DBNull.Value;
 
         public override void ResetDbType()
         {

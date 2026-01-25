@@ -60,7 +60,8 @@ public class IndexedViewBenchmarks : IAsyncDisposable
         await _sqlServerContainer.StartAsync();
 
         var hostPort = _sqlServerContainer.GetMappedPublicPort(1433);
-        _connStr = $"Server=localhost,{hostPort};Database={Database};User Id=sa;Password={Password};TrustServerCertificate=true;Connection Timeout=30;";
+        _connStr =
+            $"Server=localhost,{hostPort};Database={Database};User Id=sa;Password={Password};TrustServerCertificate=true;Connection Timeout=30;";
 
         Console.WriteLine($"[BENCHMARK] SQL Server container started on port {hostPort}");
 
@@ -96,7 +97,8 @@ public class IndexedViewBenchmarks : IAsyncDisposable
         // Pick test customer IDs
         _testCustomerId = _customerIds[0];
 
-        Console.WriteLine($"[BENCHMARK] Testing with {CustomerCount} customers, {OrdersPerCustomer} orders/customer avg");
+        Console.WriteLine(
+            $"[BENCHMARK] Testing with {CustomerCount} customers, {OrdersPerCustomer} orders/customer avg");
         Console.WriteLine($"[BENCHMARK] pengdows.crud ConnectionMode: {_pengdowsContext.ConnectionMode}");
 
         // Verify indexed view is created and working
@@ -108,7 +110,7 @@ public class IndexedViewBenchmarks : IAsyncDisposable
         var masterConnStr = _connStr.Replace($"Database={Database}", "Database=master");
         Console.WriteLine("[BENCHMARK] Waiting for SQL Server to be ready...");
 
-        for (int i = 0; i < 120; i++) // 2 minutes max
+        for (var i = 0; i < 120; i++) // 2 minutes max
         {
             try
             {
@@ -127,6 +129,7 @@ public class IndexedViewBenchmarks : IAsyncDisposable
                 {
                     Console.WriteLine($"[BENCHMARK] Waiting for SQL Server... attempt {i + 1}/120: {ex.Message}");
                 }
+
                 await Task.Delay(1000);
             }
         }
@@ -207,7 +210,7 @@ public class IndexedViewBenchmarks : IAsyncDisposable
         await using var tx = await conn.BeginTransactionAsync();
 
         // Insert customers
-        for (int i = 1; i <= CustomerCount; i++)
+        for (var i = 1; i <= CustomerCount; i++)
         {
             var customerId = await conn.ExecuteScalarAsync<int>(
                 "INSERT INTO dbo.Customers (company_name) OUTPUT INSERTED.customer_id VALUES (@name)",
@@ -220,13 +223,14 @@ public class IndexedViewBenchmarks : IAsyncDisposable
         foreach (var customerId in _customerIds)
         {
             var orderCount = Math.Max(1, random.Next(OrdersPerCustomer / 2, OrdersPerCustomer * 2));
-            for (int i = 0; i < orderCount; i++)
+            for (var i = 0; i < orderCount; i++)
             {
                 var amount = 100 + random.Next(1, 1000);
                 await conn.ExecuteAsync(@"
                     INSERT INTO dbo.Orders (customer_id, total_amount, order_date)
                     VALUES (@customerId, @amount, DATEADD(day, -@daysAgo, GETUTCDATE()))",
-                    new {
+                    new
+                    {
                         customerId,
                         amount,
                         daysAgo = random.Next(1, 365)
@@ -282,13 +286,19 @@ public class IndexedViewBenchmarks : IAsyncDisposable
     public async Task GlobalCleanup()
     {
         if (_pengdowsContext is IAsyncDisposable pad)
+        {
             await pad.DisposeAsync();
+        }
 
         if (_efContext != null)
+        {
             await _efContext.DisposeAsync();
+        }
 
         if (_directSqlConnection != null)
+        {
             await _directSqlConnection.DisposeAsync();
+        }
     }
 
     /// <summary>
@@ -371,7 +381,7 @@ public class IndexedViewBenchmarks : IAsyncDisposable
     }
 
     // pengdows.crud entity for indexed view
-    [pengdows.crud.attributes.Table("vw_CustomerOrderSummary", schema: "dbo")]
+    [pengdows.crud.attributes.Table("vw_CustomerOrderSummary", "dbo")]
     public class CustomerOrderSummary
     {
         [Id(false)] // Not generated, comes from view
@@ -397,7 +407,9 @@ public class IndexedViewBenchmarks : IAsyncDisposable
     // Entity Framework entities
     public class EfTestDbContext : DbContext
     {
-        public EfTestDbContext(DbContextOptions<EfTestDbContext> options) : base(options) { }
+        public EfTestDbContext(DbContextOptions<EfTestDbContext> options) : base(options)
+        {
+        }
 
         public DbSet<EfCustomer> Customers { get; set; }
         public DbSet<EfOrder> Orders { get; set; }

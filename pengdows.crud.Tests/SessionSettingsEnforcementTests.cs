@@ -142,11 +142,11 @@ public class SessionSettingsEnforcementTests
             onFirstOpen: conn => executionCounter++);
 
         // Act
-        trackedConnection.Open();  // First open
+        trackedConnection.Open(); // First open
         Assert.Equal(1, executionCounter);
 
         trackedConnection.Close();
-        trackedConnection.Open();  // Simulated pool reuse (same TrackedConnection instance)
+        trackedConnection.Open(); // Simulated pool reuse (same TrackedConnection instance)
 
         // Assert
         Assert.Equal(1, executionCounter); // onFirstOpen should NOT execute again
@@ -191,7 +191,8 @@ public class SessionSettingsEnforcementTests
 
         // Assert - At least one connection should have session settings applied
         Assert.NotEmpty(factory.CreatedConnections);
-        Assert.Contains(factory.CreatedConnections, conn => conn.ExecutedNonQueryTexts.Any(cmd => cmd.StartsWith("SET ")));
+        Assert.Contains(factory.CreatedConnections,
+            conn => conn.ExecutedNonQueryTexts.Any(cmd => cmd.StartsWith("SET ")));
     }
 
     [Fact]
@@ -331,7 +332,7 @@ public class SessionSettingsEnforcementTests
                 var initialCmdCount = factory.CreatedConnections.Sum(c => c.ExecutedNonQueryTexts.Count);
 
                 conn.Close();
-                conn.Open();  // Second open on same TrackedConnection
+                conn.Open(); // Second open on same TrackedConnection
 
                 // Assert - Session settings executed only once per connection
                 var finalCmdCount = factory.CreatedConnections.Sum(c => c.ExecutedNonQueryTexts.Count);
@@ -350,7 +351,7 @@ public class SessionSettingsEnforcementTests
 
         var fakeReader = new fakeDbDataReader();
         var locker = NoOpAsyncLocker.Instance;
-        var tracked = new TrackedReader(fakeReader, trackedConnection, locker, shouldCloseConnection: true);
+        var tracked = new TrackedReader(fakeReader, trackedConnection, locker, true);
 
         // Act
         tracked.Dispose();
@@ -370,7 +371,7 @@ public class SessionSettingsEnforcementTests
 
         var fakeReader = new fakeDbDataReader();
         var locker = NoOpAsyncLocker.Instance;
-        var tracked = new TrackedReader(fakeReader, trackedConnection, locker, shouldCloseConnection: true);
+        var tracked = new TrackedReader(fakeReader, trackedConnection, locker, true);
 
         // Act
         await tracked.DisposeAsync();
@@ -390,7 +391,7 @@ public class SessionSettingsEnforcementTests
 
         var fakeReader = new fakeDbDataReader(); // Empty reader - Read() returns false immediately
         var locker = NoOpAsyncLocker.Instance;
-        var tracked = new TrackedReader(fakeReader, trackedConnection, locker, shouldCloseConnection: true);
+        var tracked = new TrackedReader(fakeReader, trackedConnection, locker, true);
 
         // Act
         var result = tracked.Read(); // Returns false and auto-disposes
@@ -411,7 +412,7 @@ public class SessionSettingsEnforcementTests
 
         var fakeReader = new fakeDbDataReader(); // Empty reader - ReadAsync() returns false immediately
         var locker = NoOpAsyncLocker.Instance;
-        var tracked = new TrackedReader(fakeReader, trackedConnection, locker, shouldCloseConnection: true);
+        var tracked = new TrackedReader(fakeReader, trackedConnection, locker, true);
 
         // Act
         var result = await tracked.ReadAsync(); // Returns false and auto-disposes
@@ -435,7 +436,7 @@ public class SessionSettingsEnforcementTests
         var locker = NoOpAsyncLocker.Instance;
 
         // Act - Create reader with shouldCloseConnection=true
-        var tracked = new TrackedReader(fakeReader, trackedConnection, locker, shouldCloseConnection: true);
+        var tracked = new TrackedReader(fakeReader, trackedConnection, locker, true);
         tracked.Dispose();
 
         // Assert - Connection is closed since parameter is true

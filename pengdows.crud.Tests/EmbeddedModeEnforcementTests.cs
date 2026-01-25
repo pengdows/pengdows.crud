@@ -12,14 +12,14 @@ namespace pengdows.crud.Tests;
 public class EmbeddedModeEnforcementTests
 {
     [Theory]
-    [InlineData(SupportedDatabase.Sqlite,  ":memory:", DbMode.Standard,       DbMode.SingleConnection)]
-    [InlineData(SupportedDatabase.Sqlite,  ":memory:", DbMode.KeepAlive,       DbMode.SingleConnection)]
-    [InlineData(SupportedDatabase.Sqlite,  ":memory:", DbMode.SingleWriter,    DbMode.SingleConnection)]
-    [InlineData(SupportedDatabase.Sqlite,  "file.db",  DbMode.Standard,       DbMode.SingleWriter)]
-    [InlineData(SupportedDatabase.Sqlite,  "file.db",  DbMode.SingleConnection, DbMode.SingleConnection)]
-    [InlineData(SupportedDatabase.DuckDB,  ":memory:", DbMode.Standard,       DbMode.SingleConnection)]
-    [InlineData(SupportedDatabase.DuckDB,  ":memory:", DbMode.KeepAlive,       DbMode.SingleConnection)]
-    [InlineData(SupportedDatabase.DuckDB,  "file.db",  DbMode.SingleConnection, DbMode.SingleConnection)]
+    [InlineData(SupportedDatabase.Sqlite, ":memory:", DbMode.Standard, DbMode.SingleConnection)]
+    [InlineData(SupportedDatabase.Sqlite, ":memory:", DbMode.KeepAlive, DbMode.SingleConnection)]
+    [InlineData(SupportedDatabase.Sqlite, ":memory:", DbMode.SingleWriter, DbMode.SingleConnection)]
+    [InlineData(SupportedDatabase.Sqlite, "file.db", DbMode.Standard, DbMode.SingleWriter)]
+    [InlineData(SupportedDatabase.Sqlite, "file.db", DbMode.SingleConnection, DbMode.SingleConnection)]
+    [InlineData(SupportedDatabase.DuckDB, ":memory:", DbMode.Standard, DbMode.SingleConnection)]
+    [InlineData(SupportedDatabase.DuckDB, ":memory:", DbMode.KeepAlive, DbMode.SingleConnection)]
+    [InlineData(SupportedDatabase.DuckDB, "file.db", DbMode.SingleConnection, DbMode.SingleConnection)]
     public void EmbeddedProviders_ForceConnectionMode(
         SupportedDatabase product,
         string dataSource,

@@ -94,6 +94,4 @@ public class SqlContainerProxyTests : SqlLiteContextTestBase
         Assert.Equal(DbType.String, p.DbType);
         Assert.Equal(DBNull.Value, p.Value);
     }
-
-    
 }

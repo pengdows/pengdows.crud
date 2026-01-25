@@ -28,11 +28,11 @@ public class EntityHelperIdPopulationTests
     {
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
-        
+
         // Set up ID population BEFORE creating DatabaseContext so the initialization 
         // connection is properly configured for database detection queries
-        factory.SetIdPopulationResult(42, rowsAffected: 1);
-        
+        factory.SetIdPopulationResult(42, 1);
+
         var context = new DatabaseContext("test", factory, _typeMap);
         var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
         var entity = new TestEntityWithAutoId { Name = "Test Entity" };
@@ -52,9 +52,9 @@ public class EntityHelperIdPopulationTests
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var context = new DatabaseContext("test", factory, _typeMap);
         var helper = new EntityHelper<TestEntityWithWritableId, int>(context);
-        
+
         factory.SetNonQueryResult(1);
-        
+
         var entity = new TestEntityWithWritableId { Id = 100, Name = "Test Entity" };
 
         // Act
@@ -83,10 +83,10 @@ public class EntityHelperIdPopulationTests
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory, _typeMap);
         var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
-        
+
         factory.SetNonQueryResult(1);
         factory.SetScalarResult(42);
-        
+
         var entity = new TestEntityWithAutoId { Name = "Test Entity" };
 
         // Act
@@ -105,10 +105,10 @@ public class EntityHelperIdPopulationTests
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         var context = new DatabaseContext("test", factory, _typeMap);
         var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
-        
+
         factory.SetNonQueryResult(1);
         factory.SetScalarResult(null); // Simulate null result from LASTVAL()
-        
+
         var entity = new TestEntityWithAutoId { Name = "Test Entity" };
 
         // Act
@@ -125,12 +125,12 @@ public class EntityHelperIdPopulationTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         factory.SetException(new InvalidOperationException("Database connection lost"));
-        
+
         var context = new DatabaseContext("test", factory, _typeMap);
         var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
-        
+
         factory.SetNonQueryResult(1); // Insert succeeds
-        
+
         var entity = new TestEntityWithAutoId { Name = "Test Entity" };
 
         // Act & Assert
@@ -144,9 +144,9 @@ public class EntityHelperIdPopulationTests
         var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=Unknown", factory, _typeMap);
         var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
-        
+
         factory.SetNonQueryResult(0); // Insert fails - no rows affected
-        
+
         var entity = new TestEntityWithAutoId { Name = "Test Entity" };
 
         // Act
@@ -164,9 +164,9 @@ public class EntityHelperIdPopulationTests
         var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=Unknown", factory, _typeMap);
         var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
-        
+
         factory.SetNonQueryResult(2); // Multiple rows affected (unusual but possible)
-        
+
         var entity = new TestEntityWithAutoId { Name = "Test Entity" };
 
         // Act
@@ -181,29 +181,26 @@ public class EntityHelperIdPopulationTests
     [Table("test_auto_id")]
     public class TestEntityWithAutoId
     {
-        [Id(writable: false)]
+        [Id(false)]
         [Column("id", DbType.Int32)]
         public int Id { get; set; }
 
-        [Column("name", DbType.String)]
-        public string Name { get; set; } = string.Empty;
+        [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
     }
 
     [Table("test_writable_id")]
     public class TestEntityWithWritableId
     {
-        [Id(writable: true)]
+        [Id(true)]
         [Column("id", DbType.Int32)]
         public int Id { get; set; }
 
-        [Column("name", DbType.String)]
-        public string Name { get; set; } = string.Empty;
+        [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
     }
 
     [Table("test_no_id")]
     public class TestEntityWithoutId
     {
-        [Column("name", DbType.String)]
-        public string Name { get; set; } = string.Empty;
+        [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
     }
 }

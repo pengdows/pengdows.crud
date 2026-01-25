@@ -59,7 +59,8 @@ public static class DataSourceInformationTestHelper
         Dictionary<string, object>? additionalScalars = null)
     {
         var schema = DataSourceInformation.BuildEmptySchema(
-            productName, version, parameterPattern, parameterFormat, maxLength, namePattern, namePatternRegex, supportsNamed);
+            productName, version, parameterPattern, parameterFormat, maxLength, namePattern, namePatternRegex,
+            supportsNamed);
         var scalars = additionalScalars ?? new Dictionary<string, object>();
         var factory = new fakeDbFactory(database);
         var conn = factory.CreateConnection();

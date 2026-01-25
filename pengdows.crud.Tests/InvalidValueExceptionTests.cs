@@ -14,7 +14,8 @@ public class InvalidValueExceptionTests
     [Fact]
     public void MapReaderToObject_SetterThrows_ThrowsInvalidValueException()
     {
-        var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", new fakeDbFactory(SupportedDatabase.Sqlite));
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite",
+            new fakeDbFactory(SupportedDatabase.Sqlite));
         var helper = new EntityHelper<ThrowingEntity, int>(context);
 
         var reader = new Mock<DbDataReader>();
@@ -25,7 +26,8 @@ public class InvalidValueExceptionTests
         reader.Setup(r => r.IsDBNull(0)).Returns(false);
         reader.Setup(r => r.GetValue(0)).Returns("foo");
 
-        var tracked = new TrackedReader(reader.Object, new Mock<ITrackedConnection>().Object, Mock.Of<IAsyncDisposable>(), false);
+        var tracked = new TrackedReader(reader.Object, new Mock<ITrackedConnection>().Object,
+            Mock.Of<IAsyncDisposable>(), false);
 
         Assert.Throws<InvalidValueException>(() => helper.MapReaderToObject(tracked));
     }

@@ -58,7 +58,7 @@ public class ParallelTestOrchestrator
         ISet<string>? exclude = null)
     {
         var testConfigurations = GetTestConfigurations();
-        
+
         // Apply filtering if provided
         if (only is { Count: > 0 })
         {
@@ -77,16 +77,16 @@ public class ParallelTestOrchestrator
         }
 
         Console.WriteLine($"Starting {testConfigurations.Count} test containers in parallel...");
-        
+
         // Start all containers in parallel
         var testTasks = testConfigurations.Select(config => RunTestAsync(config)).ToArray();
-        
+
         // Wait for all tests to complete
         await Task.WhenAll(testTasks);
-        
+
         // Display summary
         DisplayResults();
-        
+
         return _results.ToArray();
     }
 
@@ -103,40 +103,43 @@ public class ParallelTestOrchestrator
         try
         {
             Console.WriteLine($"[{config.ContainerName}] Starting container...");
-            
+
             // Start container (this may take time for Docker containers)
             await config.Container.StartAsync();
-            
+
             var containerStarted = DateTime.UtcNow;
             result.ContainerStartTime = containerStarted - startTime;
-            
-            Console.WriteLine($"[{config.ContainerName}] Container ready in {result.ContainerStartTime.TotalSeconds:F2}s, starting tests...");
-            
+
+            Console.WriteLine(
+                $"[{config.ContainerName}] Container ready in {result.ContainerStartTime.TotalSeconds:F2}s, starting tests...");
+
             // Get database context and run tests
             var dbContext = await config.Container.GetDatabaseContextAsync(_services);
             var testProvider = config.TestProviderFactory(dbContext, _services);
-            
+
             await testProvider.RunTest();
-            
+
             result.Success = true;
             result.TotalTime = DateTime.UtcNow - startTime;
             result.TestTime = result.TotalTime - result.ContainerStartTime;
-            
-            Console.WriteLine($"[{config.ContainerName}] ✅ Tests completed in {result.TestTime?.TotalSeconds:F2}s (total: {result.TotalTime.TotalSeconds:F2}s)");
+
+            Console.WriteLine(
+                $"[{config.ContainerName}] ✅ Tests completed in {result.TestTime?.TotalSeconds:F2}s (total: {result.TotalTime.TotalSeconds:F2}s)");
         }
         catch (Exception ex)
         {
             result.Success = false;
             result.Error = ex.Message;
             result.TotalTime = DateTime.UtcNow - startTime;
-            
+
             Console.WriteLine($"[{config.ContainerName}] ❌ Failed: {ex.Message}");
         }
         finally
         {
             try
             {
-                var keep = string.Equals(Environment.GetEnvironmentVariable("TESTBED_KEEP_CONTAINERS"), "true", StringComparison.OrdinalIgnoreCase);
+                var keep = string.Equals(Environment.GetEnvironmentVariable("TESTBED_KEEP_CONTAINERS"), "true",
+                    StringComparison.OrdinalIgnoreCase);
                 if (!keep)
                 {
                     await config.Container.DisposeAsync();
@@ -144,7 +147,8 @@ public class ParallelTestOrchestrator
                 }
                 else
                 {
-                    Console.WriteLine($"[{config.ContainerName}] Keeping container running (TESTBED_KEEP_CONTAINERS=true)");
+                    Console.WriteLine(
+                        $"[{config.ContainerName}] Keeping container running (TESTBED_KEEP_CONTAINERS=true)");
                 }
             }
             catch (Exception ex)
@@ -169,7 +173,7 @@ public class ParallelTestOrchestrator
             },
             new()
             {
-                ContainerName = "DuckDB", 
+                ContainerName = "DuckDB",
                 DatabaseProvider = "DuckDB",
                 Container = new DuckDbTestContainer(),
                 TestProviderFactory = (db, sp) => new TestProvider(db, sp)
@@ -177,7 +181,7 @@ public class ParallelTestOrchestrator
             new()
             {
                 ContainerName = "PostgreSQL",
-                DatabaseProvider = "PostgreSQL", 
+                DatabaseProvider = "PostgreSQL",
                 Container = new PostgreSqlTestContainer(),
                 TestProviderFactory = (db, sp) => new PostgreSQLTestProvider(db, sp)
             },
@@ -185,7 +189,7 @@ public class ParallelTestOrchestrator
             {
                 ContainerName = "MySQL",
                 DatabaseProvider = "MySQL",
-                Container = new MySqlTestContainer(), 
+                Container = new MySqlTestContainer(),
                 TestProviderFactory = (db, sp) => new TestProvider(db, sp)
             },
             new()
@@ -198,7 +202,7 @@ public class ParallelTestOrchestrator
             new()
             {
                 ContainerName = "SQL Server",
-                DatabaseProvider = "SQL Server", 
+                DatabaseProvider = "SQL Server",
                 Container = new SqlServerTestContainer(),
                 TestProviderFactory = (db, sp) => new TestProvider(db, sp)
             },
@@ -211,21 +215,21 @@ public class ParallelTestOrchestrator
             },
             new()
             {
-                ContainerName = "Firebird", 
+                ContainerName = "Firebird",
                 DatabaseProvider = "Firebird",
                 Container = new FirebirdSqlTestContainer(),
                 TestProviderFactory = (db, sp) => new FirebirdTestProvider(db, sp)
-            },
+            }
             // Add Sybase as needed
         };
 
         // Oracle - check if external Oracle is available
         if (_includeOracle)
         {
-            configurations.Add(new()
+            configurations.Add(new TestConfiguration
             {
                 ContainerName = "Oracle",
-                DatabaseProvider = "Oracle", 
+                DatabaseProvider = "Oracle",
                 Container = new ExternalOracleTestContainer(), // Use external Oracle instead of managing container
                 TestProviderFactory = (db, sp) => new OracleTestProvider(db, sp)
             });
@@ -249,11 +253,12 @@ public class ParallelTestOrchestrator
         var successful = results.Count(r => r.Success);
         var failed = results.Length - successful;
 
-    Console.WriteLine($"Total: {results.Length} | Successful: {successful} | Failed: {failed}");
+        Console.WriteLine($"Total: {results.Length} | Successful: {successful} | Failed: {failed}");
         Console.WriteLine();
 
         // Results table
-        Console.WriteLine($"{"Container",-15} {"Provider",-12} {"Status",-8} {"Start",-8} {"Test",-8} {"Total",-8} {"Error",-30}");
+        Console.WriteLine(
+            $"{"Container",-15} {"Provider",-12} {"Status",-8} {"Start",-8} {"Test",-8} {"Total",-8} {"Error",-30}");
         Console.WriteLine(new string('-', 80));
 
         foreach (var result in results)
@@ -264,7 +269,8 @@ public class ParallelTestOrchestrator
             var totalTime = result.TotalTime.TotalSeconds.ToString("F2") + "s";
             var error = result.Error?.Substring(0, Math.Min(result.Error.Length, 30)) ?? "";
 
-            Console.WriteLine($"{result.ContainerName,-15} {result.DatabaseProvider,-12} {status,-8} {startTime,-8} {testTime,-8} {totalTime,-8} {error,-30}");
+            Console.WriteLine(
+                $"{result.ContainerName,-15} {result.DatabaseProvider,-12} {status,-8} {startTime,-8} {testTime,-8} {totalTime,-8} {error,-30}");
         }
 
         Console.WriteLine();

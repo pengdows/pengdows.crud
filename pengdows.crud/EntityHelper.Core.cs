@@ -88,14 +88,14 @@ public partial class EntityHelper<TEntity, TRowID> :
     private sealed class ColumnPlan
     {
         public int Ordinal { get; }
-        public Func<ITrackedReader, int, object?> ValueExtractor { get; }  // Fast typed value extraction
-        public Func<object?, object?>? Coercer { get; }                     // Pre-compiled type coercion (null if not needed)
-        public Action<object, object?> Setter { get; }                     // Pre-compiled property setter
+        public Func<ITrackedReader, int, object?> ValueExtractor { get; } // Fast typed value extraction
+        public Func<object?, object?>? Coercer { get; } // Pre-compiled type coercion (null if not needed)
+        public Action<object, object?> Setter { get; } // Pre-compiled property setter
         private Type PropertyType { get; }
 
         public ColumnPlan(int ordinal, Func<ITrackedReader, int, object?> valueExtractor,
-                         Func<object?, object?>? coercer, Action<object, object?> setter,
-                         Type propertyType)
+            Func<object?, object?>? coercer, Action<object, object?> setter,
+            Type propertyType)
         {
             Ordinal = ordinal;
             ValueExtractor = valueExtractor;
@@ -112,7 +112,7 @@ public partial class EntityHelper<TEntity, TRowID> :
                 try
                 {
                     var raw = ValueExtractor(reader, Ordinal);
-                    var value = Coercer != null ? Coercer(raw) : raw;  // Skip coercion if types match
+                    var value = Coercer != null ? Coercer(raw) : raw; // Skip coercion if types match
                     if (value == null && PropertyType.IsValueType && Nullable.GetUnderlyingType(PropertyType) == null)
                     {
                         return;
@@ -124,7 +124,9 @@ public partial class EntityHelper<TEntity, TRowID> :
                 {
                     // Let certain exceptions bubble up unchanged (e.g., ArgumentException for enum parsing in Throw mode)
                     if (ex is ArgumentException)
+                    {
                         throw;
+                    }
 
                     var columnName = reader.GetName(Ordinal);
                     throw new InvalidValueException(
@@ -136,10 +138,10 @@ public partial class EntityHelper<TEntity, TRowID> :
 
     // SQL templates cached per dialect to support context overrides
     private readonly ConcurrentDictionary<SupportedDatabase, Lazy<CachedSqlTemplates>> _templatesByDialect = new();
-    
-    // Pre-built SqlContainer cache for common operations (GetById, GetByIds, etc.)
-    private readonly ConcurrentDictionary<SupportedDatabase, Lazy<CachedContainerTemplates>> _containersByDialect = new();
 
+    // Pre-built SqlContainer cache for common operations (GetById, GetByIds, etc.)
+    private readonly ConcurrentDictionary<SupportedDatabase, Lazy<CachedContainerTemplates>> _containersByDialect =
+        new();
 
 
     // Unified constructor accepting optional audit resolver and optional logger (by name)
@@ -162,12 +164,13 @@ public partial class EntityHelper<TEntity, TRowID> :
     {
         _context = databaseContext;
         _dialect = (databaseContext as ISqlDialectProvider)?.Dialect
-            ?? throw new InvalidOperationException(
-                "IDatabaseContext must implement ISqlDialectProvider and expose a non-null Dialect.");
+                   ?? throw new InvalidOperationException(
+                       "IDatabaseContext must implement ISqlDialectProvider and expose a non-null Dialect.");
         _coercionOptions = _coercionOptions with { Provider = _dialect.DatabaseType };
         _tableInfo = _context.TypeMapRegistry.GetTableInfo<TEntity>() ??
                      throw new InvalidOperationException($"Type {typeof(TEntity).FullName} is not a table.");
-        _columnsByNameCI = _tableInfo.Columns.ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);
+        _columnsByNameCI =
+            _tableInfo.Columns.ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);
         _hasAuditColumns = _tableInfo.HasAuditColumns;
 
         if (_hasAuditColumns && _auditValueResolver is null)
@@ -267,7 +270,7 @@ public partial class EntityHelper<TEntity, TRowID> :
         return _queryCache.GetOrAdd(key, _ => factory());
     }
 
-    
+
     public Task<bool> CreateAsync(TEntity entity)
     {
         return CreateAsync(entity, _context);
@@ -287,13 +290,13 @@ public partial class EntityHelper<TEntity, TRowID> :
 
         var ctx = context ?? _context;
         var dialect = GetDialect(ctx);
-        
+
         // Use RETURNING clause if supported to avoid race condition
         if (_idColumn != null && !_idColumn.IsIdIsWritable && dialect.SupportsInsertReturning)
         {
             var sc = BuildCreateWithReturning(entity, true, ctx);
             var generatedId = await sc.ExecuteScalarWriteAsync<object>();
-            
+
             if (generatedId != null && generatedId != DBNull.Value)
             {
                 var targetType = _idColumn.PropertyInfo.PropertyType;
@@ -320,6 +323,7 @@ public partial class EntityHelper<TEntity, TRowID> :
                 // Attempt to populate via provider-specific last-insert-id query
                 await PopulateGeneratedIdAsync(entity, ctx).ConfigureAwait(false);
             }
+
             // Insert succeeded if we reached here; ID may be null, which is acceptable
             return true;
         }
@@ -357,13 +361,16 @@ public partial class EntityHelper<TEntity, TRowID> :
         if (_idColumn != null && !_idColumn.IsIdIsWritable && dialect.SupportsInsertReturning)
         {
             var sc = BuildCreateWithReturning(entity, true, ctx);
-            var generatedId = await sc.ExecuteScalarWriteAsync<object>(CommandType.Text, cancellationToken).ConfigureAwait(false);
+            var generatedId = await sc.ExecuteScalarWriteAsync<object>(CommandType.Text, cancellationToken)
+                .ConfigureAwait(false);
             if (generatedId != null && generatedId != DBNull.Value)
             {
-                var converted = Convert.ChangeType(generatedId, _idColumn.PropertyInfo.PropertyType, CultureInfo.InvariantCulture);
+                var converted = Convert.ChangeType(generatedId, _idColumn.PropertyInfo.PropertyType,
+                    CultureInfo.InvariantCulture);
                 _idColumn.PropertyInfo.SetValue(entity, converted);
                 return true;
             }
+
             // Fallback path: try last-insert-id
             await PopulateGeneratedIdAsync(entity, ctx).ConfigureAwait(false);
             return true;
@@ -376,6 +383,7 @@ public partial class EntityHelper<TEntity, TRowID> :
             {
                 await PopulateGeneratedIdAsync(entity, ctx).ConfigureAwait(false);
             }
+
             return rowsAffected == 1;
         }
     }
@@ -404,6 +412,7 @@ public partial class EntityHelper<TEntity, TRowID> :
             // This is expected behavior - just skip ID population
             return;
         }
+
         if (string.IsNullOrEmpty(lastIdQuery))
         {
             return;
@@ -412,38 +421,40 @@ public partial class EntityHelper<TEntity, TRowID> :
         var sc = ctx.CreateSqlContainer(lastIdQuery);
         var generatedId = await sc.ExecuteScalarAsync<object>();
 
-            if (generatedId != null && generatedId != DBNull.Value)
+        if (generatedId != null && generatedId != DBNull.Value)
+        {
+            try
             {
-                try
+                var targetType = _idColumn.PropertyInfo.PropertyType;
+                if (targetType == typeof(Guid))
                 {
-                    var targetType = _idColumn.PropertyInfo.PropertyType;
-                    if (targetType == typeof(Guid))
+                    if (generatedId is Guid g)
                     {
-                        if (generatedId is Guid g)
-                        {
-                            _idColumn.PropertyInfo.SetValue(entity, g);
-                        }
-                        else if (Guid.TryParse(generatedId.ToString(), out var parsed))
-                        {
-                            _idColumn.PropertyInfo.SetValue(entity, parsed);
-                        }
-                        else
-                        {
-                            throw new InvalidCastException("Unable to convert generated ID to Guid.");
-                        }
+                        _idColumn.PropertyInfo.SetValue(entity, g);
+                    }
+                    else if (Guid.TryParse(generatedId.ToString(), out var parsed))
+                    {
+                        _idColumn.PropertyInfo.SetValue(entity, parsed);
                     }
                     else
                     {
-                        // Convert the ID to the appropriate type and set it on the entity
-                        var convertedId = Convert.ChangeType(generatedId, targetType, CultureInfo.InvariantCulture);
-                        _idColumn.PropertyInfo.SetValue(entity, convertedId);
+                        throw new InvalidCastException("Unable to convert generated ID to Guid.");
                     }
                 }
-                catch (Exception ex)
+                else
                 {
-                    throw new InvalidOperationException($"Failed to convert generated ID '{generatedId}' to type {_idColumn.PropertyInfo.PropertyType.Name}: {ex.Message}", ex);
+                    // Convert the ID to the appropriate type and set it on the entity
+                    var convertedId = Convert.ChangeType(generatedId, targetType, CultureInfo.InvariantCulture);
+                    _idColumn.PropertyInfo.SetValue(entity, convertedId);
                 }
             }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    $"Failed to convert generated ID '{generatedId}' to type {_idColumn.PropertyInfo.PropertyType.Name}: {ex.Message}",
+                    ex);
+            }
+        }
     }
 
 
@@ -469,7 +480,8 @@ public partial class EntityHelper<TEntity, TRowID> :
             var current = _versionColumn.PropertyInfo.GetValue(entity);
             if (current == null || Utils.IsZeroNumeric(current))
             {
-                var target = Nullable.GetUnderlyingType(_versionColumn.PropertyInfo.PropertyType) ?? _versionColumn.PropertyInfo.PropertyType;
+                var target = Nullable.GetUnderlyingType(_versionColumn.PropertyInfo.PropertyType) ??
+                             _versionColumn.PropertyInfo.PropertyType;
                 if (Utils.IsZeroNumeric(Convert.ChangeType(0, target)))
                 {
                     var one = Convert.ChangeType(1, target);
@@ -495,6 +507,7 @@ public partial class EntityHelper<TEntity, TRowID> :
             {
                 dialect.TryMarkJsonParameter(param, column);
             }
+
             sc.AddParameter(param);
 
             if (i > 0)
@@ -591,7 +604,7 @@ public partial class EntityHelper<TEntity, TRowID> :
         var sc = BuildCreate(entity, context);
         var ctx = context ?? _context;
         var dialect = GetDialect(ctx);
-        
+
         // Add RETURNING clause if requested and supported
         if (withReturning && _idColumn != null && !_idColumn.IsIdIsWritable && dialect.SupportsInsertReturning)
         {
@@ -606,7 +619,7 @@ public partial class EntityHelper<TEntity, TRowID> :
                 sc.Query.Append(returningClause);
             }
         }
-        
+
         return sc;
     }
 
@@ -630,7 +643,8 @@ public partial class EntityHelper<TEntity, TRowID> :
 
         var baseKey = "DeleteById";
         var cacheKey = ctx.Product == _context.Product ? baseKey : $"{baseKey}:{ctx.Product}";
-        var sql = GetCachedQuery(cacheKey, () => string.Format(GetTemplatesForDialect(dialect).DeleteSql, dialect.MakeParameterName(param)));
+        var sql = GetCachedQuery(cacheKey,
+            () => string.Format(GetTemplatesForDialect(dialect).DeleteSql, dialect.MakeParameterName(param)));
         sc.Query.Append(sql);
         return sc;
     }
@@ -652,7 +666,8 @@ public partial class EntityHelper<TEntity, TRowID> :
         return RetrieveAsync(ids, context, CancellationToken.None);
     }
 
-    public async Task<List<TEntity>> RetrieveAsync(IEnumerable<TRowID> ids, IDatabaseContext? context, CancellationToken cancellationToken)
+    public async Task<List<TEntity>> RetrieveAsync(IEnumerable<TRowID> ids, IDatabaseContext? context,
+        CancellationToken cancellationToken)
     {
         if (ids == null)
         {
@@ -683,7 +698,7 @@ public partial class EntityHelper<TEntity, TRowID> :
 
             return results;
         }
-        
+
         // Try to use cached templates for better performance, but fall back to traditional method
         // to avoid circular dependency during template building
         try
@@ -695,7 +710,7 @@ public partial class EntityHelper<TEntity, TRowID> :
                 // Single ID - reuse GetByIdTemplate
                 var templates = GetContainerTemplatesForDialect(dialect, ctx);
                 using var container = templates.GetByIdTemplate.Clone(ctx);
-                
+
                 if (dialect.SupportsSetValuedParameters)
                 {
                     container.SetParameterValue("p0", list.ToArray());
@@ -746,7 +761,8 @@ public partial class EntityHelper<TEntity, TRowID> :
         return RetrieveStreamAsync(ids, context, CancellationToken.None);
     }
 
-    public async IAsyncEnumerable<TEntity> RetrieveStreamAsync(IEnumerable<TRowID> ids, IDatabaseContext? context, [EnumeratorCancellation] CancellationToken cancellationToken)
+    public async IAsyncEnumerable<TEntity> RetrieveStreamAsync(IEnumerable<TRowID> ids, IDatabaseContext? context,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         if (ids == null)
         {
@@ -827,7 +843,8 @@ public partial class EntityHelper<TEntity, TRowID> :
         return DeleteAsync(ids, context, CancellationToken.None);
     }
 
-    public async Task<int> DeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context, CancellationToken cancellationToken)
+    public async Task<int> DeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context,
+        CancellationToken cancellationToken)
     {
         if (ids == null)
         {
@@ -909,12 +926,14 @@ public partial class EntityHelper<TEntity, TRowID> :
         return RetrieveOneAsync(objectToRetrieve, context, CancellationToken.None);
     }
 
-    public Task<TEntity?> RetrieveOneAsync(TEntity objectToRetrieve, IDatabaseContext? context, CancellationToken cancellationToken)
+    public Task<TEntity?> RetrieveOneAsync(TEntity objectToRetrieve, IDatabaseContext? context,
+        CancellationToken cancellationToken)
     {
         if (objectToRetrieve == null)
         {
             throw new ArgumentNullException(nameof(objectToRetrieve));
         }
+
         var ctx = context ?? _context;
         var list = new List<TEntity> { objectToRetrieve };
         var sc = BuildRetrieve(list, string.Empty, ctx);
@@ -926,7 +945,8 @@ public partial class EntityHelper<TEntity, TRowID> :
         return RetrieveOneAsync(id, context, CancellationToken.None);
     }
 
-    public async Task<TEntity?> RetrieveOneAsync(TRowID id, IDatabaseContext? context, CancellationToken cancellationToken)
+    public async Task<TEntity?> RetrieveOneAsync(TRowID id, IDatabaseContext? context,
+        CancellationToken cancellationToken)
     {
         var ctx = context ?? _context;
         if (_idColumn == null)
@@ -964,6 +984,7 @@ public partial class EntityHelper<TEntity, TRowID> :
         {
             throw new ArgumentNullException(nameof(sc));
         }
+
         // Hint provider/ADO.NET to expect a single row for minimal overhead
         await using var reader = await sc.ExecuteReaderSingleRowAsync(cancellationToken).ConfigureAwait(false);
         if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -987,6 +1008,7 @@ public partial class EntityHelper<TEntity, TRowID> :
         {
             throw new ArgumentNullException(nameof(sc));
         }
+
         var list = new List<TEntity>();
 
         await using var reader = await sc.ExecuteReaderAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
@@ -1021,7 +1043,8 @@ public partial class EntityHelper<TEntity, TRowID> :
             throw new ArgumentNullException(nameof(sc));
         }
 
-        await using var reader = await sc.ExecuteReaderAsync(CommandType.Text, CancellationToken.None).ConfigureAwait(false);
+        await using var reader =
+            await sc.ExecuteReaderAsync(CommandType.Text, CancellationToken.None).ConfigureAwait(false);
 
         // Reader optimization: hoist plan building outside the loop
         // Build plan once based on first row's schema, then reuse for all rows
@@ -1044,7 +1067,8 @@ public partial class EntityHelper<TEntity, TRowID> :
         }
     }
 
-    public async IAsyncEnumerable<TEntity> LoadStreamAsync(ISqlContainer sc, [EnumeratorCancellation] CancellationToken cancellationToken)
+    public async IAsyncEnumerable<TEntity> LoadStreamAsync(ISqlContainer sc,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         if (sc == null)
         {
@@ -1156,7 +1180,8 @@ public partial class EntityHelper<TEntity, TRowID> :
         return UpdateAsync(objectToUpdate, loadOriginal, context, CancellationToken.None);
     }
 
-    public async Task<int> UpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context, CancellationToken cancellationToken)
+    public async Task<int> UpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context,
+        CancellationToken cancellationToken)
     {
         var ctx = context ?? _context;
         try
@@ -1179,7 +1204,7 @@ public partial class EntityHelper<TEntity, TRowID> :
     // moved to EntityHelper.Upsert.cs
 
 // moved to EntityHelper.Upsert.cs
-private IReadOnlyList<IColumnInfo> ResolveUpsertKey_MOVED()
+    private IReadOnlyList<IColumnInfo> ResolveUpsertKey_MOVED()
     {
         if (_idColumn != null && _idColumn.IsIdIsWritable)
         {
@@ -1203,6 +1228,7 @@ private IReadOnlyList<IColumnInfo> ResolveUpsertKey_MOVED()
         {
             SetAuditFields(updated, true);
         }
+
         var counters = new ClauseCounters();
         var (setClause, parameters) = BuildSetClause(updated, null, dialect, counters);
         if (setClause.Length == 0)
@@ -1245,8 +1271,6 @@ private IReadOnlyList<IColumnInfo> ResolveUpsertKey_MOVED()
     }
 
 
- 
-
     // moved to EntityHelper.Update.cs
 
     // moved to EntityHelper.Update.cs
@@ -1257,14 +1281,6 @@ private IReadOnlyList<IColumnInfo> ResolveUpsertKey_MOVED()
 
     // moved to EntityHelper.Upsert.cs
 
- 
-
- 
-
- 
-
-
-
 
     // moved to EntityHelper.Retrieve.cs
 
@@ -1274,7 +1290,6 @@ private IReadOnlyList<IColumnInfo> ResolveUpsertKey_MOVED()
     // moved to EntityHelper.Audit.cs
 
     // moved to EntityHelper.Audit.cs
-
     private string WrapObjectName(string objectName)
     {
         return _dialect.WrapObjectName(objectName);
@@ -1328,6 +1343,7 @@ private IReadOnlyList<IColumnInfo> ResolveUpsertKey_MOVED()
         {
             return false;
         }
+
         return int.TryParse(match.Groups[1].Value, out major);
     }
 
@@ -1358,7 +1374,7 @@ private IReadOnlyList<IColumnInfo> ResolveUpsertKey_MOVED()
         var type = typeof(TRowID);
         var underlying = Nullable.GetUnderlyingType(type) ?? type;
 
-        bool isValid = underlying == typeof(string) || underlying == typeof(Guid);
+        var isValid = underlying == typeof(string) || underlying == typeof(Guid);
         if (!isValid)
         {
             switch (Type.GetTypeCode(underlying))

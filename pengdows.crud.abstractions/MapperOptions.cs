@@ -14,4 +14,3 @@ public sealed record MapperOptions(
 {
     public static readonly MapperOptions Default = new();
 }
-

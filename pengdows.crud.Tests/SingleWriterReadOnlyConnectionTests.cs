@@ -17,13 +17,22 @@ public class SingleWriterReadOnlyConnectionTests
     private sealed class RecordingConnection : fakeDbConnection
     {
         public List<string> Commands { get; } = new();
-        protected override DbCommand CreateDbCommand() => new RecordingCommand(this, Commands);
+
+        protected override DbCommand CreateDbCommand()
+        {
+            return new RecordingCommand(this, Commands);
+        }
     }
 
     private sealed class RecordingCommand : fakeDbCommand
     {
         private readonly List<string> _commands;
-        public RecordingCommand(fakeDbConnection connection, List<string> commands) : base(connection) => _commands = commands;
+
+        public RecordingCommand(fakeDbConnection connection, List<string> commands) : base(connection)
+        {
+            _commands = commands;
+        }
+
         public override int ExecuteNonQuery()
         {
             _commands.Add(CommandText);
@@ -34,6 +43,7 @@ public class SingleWriterReadOnlyConnectionTests
     private sealed class RecordingFactory : DbProviderFactory
     {
         public List<RecordingConnection> Connections { get; } = new();
+
         public override DbConnection CreateConnection()
         {
             var conn = new RecordingConnection();
@@ -41,8 +51,15 @@ public class SingleWriterReadOnlyConnectionTests
             return conn;
         }
 
-        public override DbCommand CreateCommand() => new fakeDbCommand();
-        public override DbParameter CreateParameter() => new fakeDbParameter();
+        public override DbCommand CreateCommand()
+        {
+            return new fakeDbCommand();
+        }
+
+        public override DbParameter CreateParameter()
+        {
+            return new fakeDbParameter();
+        }
     }
 
     private static DatabaseContext CreateContext(RecordingFactory factory)

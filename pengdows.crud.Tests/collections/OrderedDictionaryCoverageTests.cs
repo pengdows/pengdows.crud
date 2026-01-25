@@ -24,7 +24,7 @@ public class OrderedDictionaryCoverageTests
         };
 
         // Act
-        IEnumerator enumerator = ((IEnumerable)dict).GetEnumerator();
+        var enumerator = ((IEnumerable)dict).GetEnumerator();
         enumerator.MoveNext();
 
         // Assert - Test the non-generic IEnumerator.Current property
@@ -48,7 +48,7 @@ public class OrderedDictionaryCoverageTests
         };
 
         // Act
-        IEnumerator enumerator = ((IEnumerable)dict).GetEnumerator();
+        var enumerator = ((IEnumerable)dict).GetEnumerator();
         var items = new List<object>();
 
         while (enumerator.MoveNext())
@@ -78,7 +78,7 @@ public class OrderedDictionaryCoverageTests
             ["y"] = 200
         };
 
-        IEnumerator enumerator = ((IEnumerable)dict).GetEnumerator();
+        var enumerator = ((IEnumerable)dict).GetEnumerator();
 
         // Act - Move to first element, then reset
         enumerator.MoveNext();
@@ -144,8 +144,8 @@ public class OrderedDictionaryCoverageTests
         };
 
         // Act - Create multiple enumerators
-        IEnumerator enum1 = ((IEnumerable)dict).GetEnumerator();
-        IEnumerator enum2 = ((IEnumerable)dict).GetEnumerator();
+        var enum1 = ((IEnumerable)dict).GetEnumerator();
+        var enum2 = ((IEnumerable)dict).GetEnumerator();
 
         // Move first enumerator to second position
         enum1.MoveNext(); // first
@@ -170,7 +170,7 @@ public class OrderedDictionaryCoverageTests
         var dict = new OrderedDictionary<string, int>();
 
         // Act
-        IEnumerator enumerator = ((IEnumerable)dict).GetEnumerator();
+        var enumerator = ((IEnumerable)dict).GetEnumerator();
 
         // Assert
         Assert.False(enumerator.MoveNext());
@@ -186,7 +186,7 @@ public class OrderedDictionaryCoverageTests
         };
 
         // Act & Assert - Should not throw when disposed
-        IEnumerator enumerator = ((IEnumerable)dict).GetEnumerator();
+        var enumerator = ((IEnumerable)dict).GetEnumerator();
         enumerator.MoveNext();
 
         if (enumerator is IDisposable disposable)
@@ -204,7 +204,7 @@ public class OrderedDictionaryCoverageTests
             ["original"] = 999
         };
 
-        IEnumerator enumerator = ((IEnumerable)dict).GetEnumerator();
+        var enumerator = ((IEnumerable)dict).GetEnumerator();
         enumerator.MoveNext();
 
         // Act - Modify dictionary after creating enumerator

@@ -29,7 +29,7 @@ public class ConnectionFailureTests
             ConnectionFailureMode.FailOnOpen);
 
         // Act & Assert - Exception occurs during DatabaseContext initialization
-        var exception = Assert.Throws<pengdows.crud.exceptions.ConnectionFailedException>(() =>
+        var exception = Assert.Throws<exceptions.ConnectionFailedException>(() =>
         {
             using var context = new DatabaseContext("Data Source=test.db", factory);
         });
@@ -46,7 +46,7 @@ public class ConnectionFailureTests
             ConnectionFailureMode.FailOnOpen);
 
         // Act & Assert - Exception occurs during DatabaseContext initialization
-        var exception = Assert.Throws<pengdows.crud.exceptions.ConnectionFailedException>(() =>
+        var exception = Assert.Throws<exceptions.ConnectionFailedException>(() =>
         {
             using var context = new DatabaseContext("Host=localhost;Database=test", factory);
         });
@@ -64,7 +64,7 @@ public class ConnectionFailureTests
             ConnectionFailureMode.FailOnOpen);
 
         // Act & Assert - Exception occurs during DatabaseContext initialization
-        var exception = Assert.Throws<pengdows.crud.exceptions.ConnectionFailedException>(() =>
+        var exception = Assert.Throws<exceptions.ConnectionFailedException>(() =>
         {
             using var context = new DatabaseContext("Data Source=:memory:", factory);
         });
@@ -126,7 +126,7 @@ public class ConnectionFailureTests
         await using var context = new DatabaseContext("Host=localhost;Database=test", factory);
 
         // Act - First 2 GetConnection calls should work (initialization used the 1st)
-        for (int i = 0; i < 2; i++)
+        for (var i = 0; i < 2; i++)
         {
             await using var conn = context.GetConnection(ExecutionType.Read);
             await conn.OpenAsync();
@@ -153,7 +153,7 @@ public class ConnectionFailureTests
             ConnectionFailureMode.Broken);
 
         // Act & Assert - Exception occurs during DatabaseContext initialization
-        var exception = Assert.Throws<pengdows.crud.exceptions.ConnectionFailedException>(() =>
+        var exception = Assert.Throws<exceptions.ConnectionFailedException>(() =>
         {
             using var context = new DatabaseContext("Data Source=:memory:", factory);
         });
@@ -170,11 +170,11 @@ public class ConnectionFailureTests
         var factory = fakeDbFactory.CreateFailingFactory(
             SupportedDatabase.PostgreSql,
             ConnectionFailureMode.FailOnOpen,
-            customException: customException);
+            customException);
 
         // Act & Assert - Exception occurs during DatabaseContext initialization
         // Note: The custom exception is not preserved; it's replaced with ConnectionFailedException
-        var thrown = Assert.Throws<pengdows.crud.exceptions.ConnectionFailedException>(() =>
+        var thrown = Assert.Throws<exceptions.ConnectionFailedException>(() =>
         {
             using var context = new DatabaseContext("Host=localhost;Database=test", factory);
         });
@@ -193,7 +193,7 @@ public class ConnectionFailureTests
             ConnectionFailureMode.FailOnOpen);
 
         // Act & Assert - Exception occurs during DatabaseContext initialization
-        var exception = Assert.Throws<pengdows.crud.exceptions.ConnectionFailedException>(() =>
+        var exception = Assert.Throws<exceptions.ConnectionFailedException>(() =>
         {
             using var context = new DatabaseContext("Data Source=:memory:", factory);
         });
@@ -240,10 +240,7 @@ public class ConnectionFailureTests
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
 
         // Act & Assert - Transaction begin should fail
-        Assert.Throws<InvalidOperationException>(() =>
-        {
-            context.BeginTransaction(IsolationLevel.ReadCommitted);
-        });
+        Assert.Throws<InvalidOperationException>(() => { context.BeginTransaction(IsolationLevel.ReadCommitted); });
 
         // Verify context is still usable (not in broken state)
         // We can't test further operations since connection will fail,
@@ -260,7 +257,7 @@ public class ConnectionFailureTests
             ConnectionFailureMode.FailOnOpen);
 
         // Act & Assert - Exception occurs during DatabaseContext initialization
-        var exception = Assert.Throws<pengdows.crud.exceptions.ConnectionFailedException>(() =>
+        var exception = Assert.Throws<exceptions.ConnectionFailedException>(() =>
         {
             using var context = new DatabaseContext("Data Source=:memory:", factory);
         });
@@ -280,7 +277,7 @@ public class ConnectionFailureTests
         var workingFactory = new fakeDbFactory(SupportedDatabase.Sqlite);
 
         // Act & Assert - Failing context throws during initialization
-        Assert.Throws<pengdows.crud.exceptions.ConnectionFailedException>(() =>
+        Assert.Throws<exceptions.ConnectionFailedException>(() =>
         {
             using var failingContext = new DatabaseContext("Data Source=test1.db", failingFactory);
         });
@@ -303,11 +300,11 @@ public class ConnectionFailureTests
         var factory = fakeDbFactory.CreateFailingFactory(
             SupportedDatabase.PostgreSql,
             ConnectionFailureMode.FailOnOpen,
-            customException: timeoutException);
+            timeoutException);
 
         // Act & Assert - Exception occurs during DatabaseContext initialization
         // Note: The custom exception is not preserved; it's replaced with ConnectionFailedException
-        var thrown = Assert.Throws<pengdows.crud.exceptions.ConnectionFailedException>(() =>
+        var thrown = Assert.Throws<exceptions.ConnectionFailedException>(() =>
         {
             using var context = new DatabaseContext("Host=remoteserver;Database=app;Timeout=30", factory);
         });

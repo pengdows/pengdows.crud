@@ -6,7 +6,11 @@ using pengdows.crud.enums;
 
 namespace pengdows.crud;
 
-public sealed record TypeCoercionOptions(TimeMappingPolicy TimePolicy, JsonPassThrough JsonPreference, SupportedDatabase Provider)
+public sealed record TypeCoercionOptions(
+    TimeMappingPolicy TimePolicy,
+    JsonPassThrough JsonPreference,
+    SupportedDatabase Provider)
 {
-    public static TypeCoercionOptions Default { get; } = new(TimeMappingPolicy.PreferDateTimeOffset, JsonPassThrough.PreferDocument, SupportedDatabase.Unknown);
+    public static TypeCoercionOptions Default { get; } = new(TimeMappingPolicy.PreferDateTimeOffset,
+        JsonPassThrough.PreferDocument, SupportedDatabase.Unknown);
 }

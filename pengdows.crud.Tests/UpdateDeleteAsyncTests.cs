@@ -135,7 +135,7 @@ public class UpdateDeleteAsyncTests : RealSqliteContextTestBase, IAsyncLifetime
         await helper.CreateAsync(e, Context);
         var loaded = await helper.RetrieveOneAsync(e);
         Assert.NotNull(loaded);
-        var sc = await helper.BuildUpdateAsync(loaded!, loadOriginal: false);
+        var sc = await helper.BuildUpdateAsync(loaded!, false);
         var sql = sc.Query.ToString();
         Assert.Contains(Context.WrapObjectName("LastUpdatedOn"), sql);
     }

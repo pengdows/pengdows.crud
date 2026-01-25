@@ -46,7 +46,8 @@ public class NonInsertableNonUpdateableColumnTests : SqlLiteContextTestBase
 
         var qp = Context.QuotePrefix;
         var qs = Context.QuoteSuffix;
-        var createTableSql = $"CREATE TABLE IF NOT EXISTS {qp}NonInsertableColumnEntity{qs} ({qp}Id{qs} INTEGER PRIMARY KEY AUTOINCREMENT, {qp}Name{qs} TEXT, {qp}Secret{qs} TEXT)";
+        var createTableSql =
+            $"CREATE TABLE IF NOT EXISTS {qp}NonInsertableColumnEntity{qs} ({qp}Id{qs} INTEGER PRIMARY KEY AUTOINCREMENT, {qp}Name{qs} TEXT, {qp}Secret{qs} TEXT)";
         var tableContainer = Context.CreateSqlContainer();
         tableContainer.Query.Append(createTableSql);
         await tableContainer.ExecuteNonQueryAsync();

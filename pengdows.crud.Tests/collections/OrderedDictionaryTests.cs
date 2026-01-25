@@ -251,7 +251,7 @@ public class OrderedDictionaryTests
         var keys = new[] { "third", "first", "second", "fourth" };
         var values = new[] { 3, 1, 2, 4 };
 
-        for (int i = 0; i < keys.Length; i++)
+        for (var i = 0; i < keys.Length; i++)
         {
             dict.Add(keys[i], values[i]);
         }
@@ -452,7 +452,7 @@ public class OrderedDictionaryTests
 
         dict.EnsureCapacity(1000);
 
-        for (int i = 0; i < 500; i++)
+        for (var i = 0; i < 500; i++)
         {
             dict.Add($"key{i}", i);
         }
@@ -511,7 +511,7 @@ public class OrderedDictionaryTests
         var keys = new[] { "zebra", "alpha", "beta" };
         var expectedValues = new[] { 5, 5, 4 };
 
-        for (int i = 0; i < keys.Length; i++)
+        for (var i = 0; i < keys.Length; i++)
         {
             dict.Add(keys[i], expectedValues[i]);
         }
@@ -561,14 +561,14 @@ public class OrderedDictionaryTests
         var dict = new OrderedDictionary<string, int>();
         const int itemCount = 10000;
 
-        for (int i = 0; i < itemCount; i++)
+        for (var i = 0; i < itemCount; i++)
         {
             dict.Add($"key{i}", i);
         }
 
         Assert.Equal(itemCount, dict.Count);
 
-        for (int i = 0; i < itemCount; i++)
+        for (var i = 0; i < itemCount; i++)
         {
             Assert.Equal(i, dict[$"key{i}"]);
         }
@@ -582,7 +582,7 @@ public class OrderedDictionaryTests
     public void LargeInserts_DoNotThrow_AndMaintainOrder()
     {
         var dict = new OrderedDictionary<string, int>();
-        for (int i = 0; i < 70_000; i++)
+        for (var i = 0; i < 70_000; i++)
         {
             dict.Add($"key{i}", i);
         }
@@ -696,12 +696,12 @@ public class OrderedDictionaryTests
         var dict = new OrderedDictionary<string, int>();
         const int iterations = 1000;
 
-        for (int i = 0; i < iterations; i++)
+        for (var i = 0; i < iterations; i++)
         {
             dict.Add($"key{i}", i);
         }
 
-        for (int i = 0; i < iterations; i += 2)
+        for (var i = 0; i < iterations; i += 2)
         {
             dict.Remove($"key{i}");
         }
@@ -722,7 +722,7 @@ public class OrderedDictionaryTests
         var dict = new OrderedDictionary<string, int>(4);
         var keys = new[] { "a", "b", "c", "d", "e", "f", "g", "h" };
 
-        for (int i = 0; i < keys.Length; i++)
+        for (var i = 0; i < keys.Length; i++)
         {
             dict.Add(keys[i], i);
         }
@@ -909,7 +909,7 @@ public class OrderedDictionaryTests
         var dict = new OrderedDictionary<string, int>(2);
         var expectedPairs = new List<KeyValuePair<string, int>>();
 
-        for (int i = 0; i < 100; i++)
+        for (var i = 0; i < 100; i++)
         {
             var key = $"key{i}";
             dict.Add(key, i);
@@ -1002,7 +1002,7 @@ public class OrderedDictionaryTests
         var dict = new OrderedDictionary<string, int>();
         const int testCount = 5000;
 
-        for (int i = 0; i < testCount; i++)
+        for (var i = 0; i < testCount; i++)
         {
             dict.Add($"key{i}", i);
         }

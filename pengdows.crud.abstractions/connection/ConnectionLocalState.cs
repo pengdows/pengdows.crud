@@ -12,7 +12,7 @@ public sealed class ConnectionLocalState
     /// Whether prepare has been disabled for this connection due to failures
     /// </summary>
     public bool PrepareDisabled { get; set; }
-    
+
     private readonly ConcurrentDictionary<string, byte> _prepared = new();
     private readonly ConcurrentQueue<string> _order = new();
     private const int _maxPrepared = 32;

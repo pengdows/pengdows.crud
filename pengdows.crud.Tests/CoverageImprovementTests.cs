@@ -714,10 +714,8 @@ public class CoverageImprovementTests
     [Table("test_entities")]
     private class TestEntity
     {
-        [Id]
-        public int Id { get; set; }
+        [Id] public int Id { get; set; }
 
-        [Column("name", DbType.String, 255)]
-        public string Name { get; set; } = string.Empty;
+        [Column("name", DbType.String, 255)] public string Name { get; set; } = string.Empty;
     }
 }

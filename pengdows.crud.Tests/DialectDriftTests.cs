@@ -23,15 +23,15 @@ public class DialectDriftTests
         var (sqliteCtx, _) = CreateHelper(SupportedDatabase.Sqlite);
 
         // Act
-        var scPg = helper.BuildRetrieve(new[] { 1 }, context: pgCtx);
+        var scPg = helper.BuildRetrieve(new[] { 1 }, pgCtx);
         var sqlPg = scPg.Query.ToString();
 
-        var scSqlite = helper.BuildRetrieve(new[] { 2 }, context: sqliteCtx);
+        var scSqlite = helper.BuildRetrieve(new[] { 2 }, sqliteCtx);
         var sqlSqlite = scSqlite.Query.ToString();
 
         // Assert
-        Assert.Contains(":p0", sqlPg);       // PostgreSQL uses ':' marker
-        Assert.Contains("@p0", sqlSqlite);    // SQLite uses '@' marker
+        Assert.Contains(":p0", sqlPg); // PostgreSQL uses ':' marker
+        Assert.Contains("@p0", sqlSqlite); // SQLite uses '@' marker
     }
 
     [Fact]
@@ -42,18 +42,18 @@ public class DialectDriftTests
         var (pgCtx, _) = CreateHelper(SupportedDatabase.PostgreSql);
 
         // Prime cache with SQLite
-        var sc1 = helper.BuildRetrieve(new[] { 42 }, context: sqliteCtx);
+        var sc1 = helper.BuildRetrieve(new[] { 42 }, sqliteCtx);
         var sql1 = sc1.Query.ToString();
         Assert.Contains("@p0", sql1);
 
         // Now render with PostgreSQL and ensure ':' is used (not '@')
-        var sc2 = helper.BuildRetrieve(new[] { 43 }, context: pgCtx);
+        var sc2 = helper.BuildRetrieve(new[] { 43 }, pgCtx);
         var sql2 = sc2.Query.ToString();
         Assert.Contains(":p0", sql2);
         Assert.DoesNotContain("@p0", sql2);
 
         // And back to SQLite to ensure no regression
-        var sc3 = helper.BuildRetrieve(new[] { 44 }, context: sqliteCtx);
+        var sc3 = helper.BuildRetrieve(new[] { 44 }, sqliteCtx);
         var sql3 = sc3.Query.ToString();
         Assert.Contains("@p0", sql3);
         Assert.DoesNotContain(":p0", sql3);

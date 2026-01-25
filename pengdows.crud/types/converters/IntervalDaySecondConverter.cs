@@ -131,7 +131,7 @@ internal sealed class IntervalDaySecondConverter : AdvancedTypeConverter<Interva
         }
 
         var timeIndex = trimmed.IndexOf('T');
-        string? datePart = trimmed;
+        var datePart = trimmed;
         string? timePart = null;
         if (timeIndex >= 0)
         {

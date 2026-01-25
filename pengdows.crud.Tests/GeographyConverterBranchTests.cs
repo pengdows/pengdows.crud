@@ -25,7 +25,7 @@ public class GeographyConverterBranchTests
     {
         var converter = new GeographyConverter();
         var srid = 3857;
-        var bytes = CreateEwkbBytes(littleEndian: true, srid);
+        var bytes = CreateEwkbBytes(true, srid);
 
         Assert.True(converter.TryConvertFromProvider(bytes, SupportedDatabase.PostgreSql, out var spatial));
         Assert.Equal(srid, spatial.Srid);
@@ -36,7 +36,7 @@ public class GeographyConverterBranchTests
     {
         var converter = new GeographyConverter();
         var srid = 4326;
-        var bytes = CreateEwkbBytes(littleEndian: false, srid);
+        var bytes = CreateEwkbBytes(false, srid);
 
         Assert.True(converter.TryConvertFromProvider(bytes, SupportedDatabase.PostgreSql, out var spatial));
         Assert.Equal(srid, spatial.Srid);
@@ -47,13 +47,15 @@ public class GeographyConverterBranchTests
     {
         var converter = new GeographyConverter();
 
-        Assert.True(converter.TryConvertFromProvider("SRID=3857;POINT(1 2)", SupportedDatabase.PostgreSql, out var spatial));
+        Assert.True(converter.TryConvertFromProvider("SRID=3857;POINT(1 2)", SupportedDatabase.PostgreSql,
+            out var spatial));
         Assert.Equal(3857, spatial.Srid);
 
         Assert.True(converter.TryConvertFromProvider("POINT(1 2)", SupportedDatabase.PostgreSql, out var defaultSrid));
         Assert.Equal(4326, defaultSrid.Srid);
 
-        Assert.True(converter.TryConvertFromProvider("SRID=bad;POINT(1 2)", SupportedDatabase.PostgreSql, out var invalidSrid));
+        Assert.True(converter.TryConvertFromProvider("SRID=bad;POINT(1 2)", SupportedDatabase.PostgreSql,
+            out var invalidSrid));
         Assert.Equal(4326, invalidSrid.Srid);
     }
 
@@ -97,6 +99,7 @@ public class GeographyConverterBranchTests
             BinaryPrimitives.WriteUInt32BigEndian(bytes.AsSpan(1, 4), type);
             BinaryPrimitives.WriteInt32BigEndian(bytes.AsSpan(5, 4), srid);
         }
+
         return bytes;
     }
 }

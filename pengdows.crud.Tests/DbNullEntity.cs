@@ -10,10 +10,7 @@ namespace pengdows.crud.Tests;
 [Table("DbNullEntity")]
 public class DbNullEntity
 {
-    [Id]
-    [Column("Id", DbType.Int32)]
-    public int Id { get; set; }
+    [Id] [Column("Id", DbType.Int32)] public int Id { get; set; }
 
-    [Column("Data", DbType.String)]
-    public object? Data { get; set; }
+    [Column("Data", DbType.String)] public object? Data { get; set; }
 }

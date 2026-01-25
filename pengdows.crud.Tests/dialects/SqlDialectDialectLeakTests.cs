@@ -24,7 +24,8 @@ public class SqlDialectDialectLeakTests
     [Fact]
     public void FirebirdNaturalKeyLookup_UsesRows1()
     {
-        var dialect = new FirebirdDialect(new fakeDbFactory(SupportedDatabase.Firebird), NullLogger<FirebirdDialect>.Instance);
+        var dialect = new FirebirdDialect(new fakeDbFactory(SupportedDatabase.Firebird),
+            NullLogger<FirebirdDialect>.Instance);
         var sql = dialect.GetNaturalKeyLookupQuery("t", "id", new[] { "a", "b" }, new[] { "@a", "@b" });
 
         Assert.Contains("ROWS 1", sql, StringComparison.OrdinalIgnoreCase);
@@ -34,7 +35,8 @@ public class SqlDialectDialectLeakTests
     [Fact]
     public void OracleNaturalKeyLookup_UsesFetchFirstRowsOnly()
     {
-        var dialect = new OracleDialect(new fakeDbFactory(SupportedDatabase.Oracle), NullLogger<OracleDialect>.Instance);
+        var dialect =
+            new OracleDialect(new fakeDbFactory(SupportedDatabase.Oracle), NullLogger<OracleDialect>.Instance);
         var sql = dialect.GetNaturalKeyLookupQuery("t", "id", new[] { "a", "b" }, new[] { ":a", ":b" });
 
         Assert.Contains("FETCH FIRST 1 ROWS ONLY", sql, StringComparison.OrdinalIgnoreCase);

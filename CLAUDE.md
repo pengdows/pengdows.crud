@@ -419,9 +419,12 @@ The TDD workflow is:
 **Test Coverage Requirements:**
 - CI enforces minimum **83% line coverage** (see .github/workflows/deploy.yml)
 - Target **90% test coverage** for new features and bug fixes
+# Target **95% overall coverage** for the library; aim your work at closing the remaining gaps.
 - Use meaningful test names that describe the behavior being tested
 - Test both success and failure scenarios
 - Include integration tests for database-specific functionality
+
+The build pipeline also verifies coverage never decreases; each run must leave the reported coverage at least equal to the existing baseline.
 
 **FakeDb Infrastructure:**
 The `fakeDb` package provides mock database providers for testing without real database connections. If fakeDb doesn't support something needed for testing, **expand it to support the required functionality** rather than working around limitations.

@@ -125,7 +125,7 @@ internal sealed class MetricsCollector
 
     internal void CommandSucceeded(long startTimestamp, long rowsAffected)
     {
-        RecordCommandDuration(startTimestamp, success: true);
+        RecordCommandDuration(startTimestamp, true);
         if (rowsAffected > 0)
         {
             Interlocked.Add(ref _rowsAffectedTotal, rowsAffected);
@@ -137,7 +137,7 @@ internal sealed class MetricsCollector
 
     internal void CommandCancelled(long startTimestamp)
     {
-        RecordCommandDuration(startTimestamp, success: false);
+        RecordCommandDuration(startTimestamp, false);
         Interlocked.Increment(ref _commandsCancelled);
         Interlocked.Increment(ref _commandsFailed);
         NotifyUpdated();
@@ -145,7 +145,7 @@ internal sealed class MetricsCollector
 
     internal void CommandTimedOut(long startTimestamp)
     {
-        RecordCommandDuration(startTimestamp, success: false);
+        RecordCommandDuration(startTimestamp, false);
         Interlocked.Increment(ref _commandsTimedOut);
         Interlocked.Increment(ref _commandsFailed);
         NotifyUpdated();
@@ -153,7 +153,7 @@ internal sealed class MetricsCollector
 
     internal void CommandFailed(long startTimestamp)
     {
-        RecordCommandDuration(startTimestamp, success: false);
+        RecordCommandDuration(startTimestamp, false);
         Interlocked.Increment(ref _commandsFailed);
         NotifyUpdated();
     }
@@ -264,8 +264,7 @@ internal sealed class MetricsCollector
         {
             current = Volatile.Read(ref field);
             updated = (Action?)Delegate.Combine(current, handler);
-        }
-        while (Interlocked.CompareExchange(ref field, updated, current) != current);
+        } while (Interlocked.CompareExchange(ref field, updated, current) != current);
     }
 
     private static void RemoveHandler(ref Action? field, Action handler)
@@ -281,8 +280,7 @@ internal sealed class MetricsCollector
         {
             current = Volatile.Read(ref field);
             updated = (Action?)Delegate.Remove(current, handler);
-        }
-        while (Interlocked.CompareExchange(ref field, updated, current) != current);
+        } while (Interlocked.CompareExchange(ref field, updated, current) != current);
     }
 
     private void NotifyUpdated()

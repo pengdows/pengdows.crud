@@ -27,19 +27,19 @@ internal static class PoolingConfigReader
             string.IsNullOrWhiteSpace(dialect.MaxPoolSizeSettingName))
         {
             return new PoolConfig(
-                PoolingEnabled: null,
-                MinPoolSize: defaultMin,
-                MaxPoolSize: defaultMax,
-                Source: PoolConfigSource.DialectDefault);
+                null,
+                defaultMin,
+                defaultMax,
+                PoolConfigSource.DialectDefault);
         }
 
         if (string.IsNullOrWhiteSpace(connectionString))
         {
             return new PoolConfig(
-                PoolingEnabled: null,
-                MinPoolSize: defaultMin,
-                MaxPoolSize: defaultMax,
-                Source: PoolConfigSource.DialectDefault);
+                null,
+                defaultMin,
+                defaultMax,
+                PoolConfigSource.DialectDefault);
         }
 
         DbConnectionStringBuilder b;
@@ -50,15 +50,15 @@ internal static class PoolingConfigReader
         catch
         {
             return new PoolConfig(
-                PoolingEnabled: null,
-                MinPoolSize: defaultMin,
-                MaxPoolSize: defaultMax,
-                Source: PoolConfigSource.DialectDefault);
+                null,
+                defaultMin,
+                defaultMax,
+                PoolConfigSource.DialectDefault);
         }
 
-        bool? poolingEnabled = TryGetBool(b, dialect.PoolingSettingName!);
-        int? maxPool = TryGetInt(b, dialect.MaxPoolSizeSettingName!);
-        int? minPool = dialect.MinPoolSizeSettingName is { Length: > 0 }
+        var poolingEnabled = TryGetBool(b, dialect.PoolingSettingName!);
+        var maxPool = TryGetInt(b, dialect.MaxPoolSizeSettingName!);
+        var minPool = dialect.MinPoolSizeSettingName is { Length: > 0 }
             ? TryGetInt(b, dialect.MinPoolSizeSettingName!)
             : null;
 
@@ -66,34 +66,38 @@ internal static class PoolingConfigReader
         if (poolingEnabled == false)
         {
             return new PoolConfig(
-                PoolingEnabled: false,
-                MinPoolSize: minPool ?? defaultMin,
-                MaxPoolSize: null,
-                Source: maxPool.HasValue ? PoolConfigSource.ConnectionString : PoolConfigSource.PoolingDisabled);
+                false,
+                minPool ?? defaultMin,
+                null,
+                maxPool.HasValue ? PoolConfigSource.ConnectionString : PoolConfigSource.PoolingDisabled);
         }
 
         // Prefer explicit connection string values.
         if (maxPool.HasValue || minPool.HasValue || poolingEnabled.HasValue)
         {
             return new PoolConfig(
-                PoolingEnabled: poolingEnabled,
-                MinPoolSize: minPool ?? defaultMin,
-                MaxPoolSize: maxPool ?? defaultMax,
-                Source: PoolConfigSource.ConnectionString);
+                poolingEnabled,
+                minPool ?? defaultMin,
+                maxPool ?? defaultMax,
+                PoolConfigSource.ConnectionString);
         }
 
         return new PoolConfig(
-            PoolingEnabled: null,
-            MinPoolSize: defaultMin,
-            MaxPoolSize: defaultMax,
-            Source: PoolConfigSource.DialectDefault);
+            null,
+            defaultMin,
+            defaultMax,
+            PoolConfigSource.DialectDefault);
     }
 
     private static bool? TryGetBool(DbConnectionStringBuilder b, string key)
-        => b.TryGetValue(key, out var v) ? ParseBool(v) : null;
+    {
+        return b.TryGetValue(key, out var v) ? ParseBool(v) : null;
+    }
 
     private static int? TryGetInt(DbConnectionStringBuilder b, string key)
-        => b.TryGetValue(key, out var v) ? ParseInt(v) : null;
+    {
+        return b.TryGetValue(key, out var v) ? ParseInt(v) : null;
+    }
 
     private static bool? ParseBool(object v)
     {

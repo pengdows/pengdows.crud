@@ -32,7 +32,7 @@ public class SqlDialectAdditionalCoverageTests
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var dialect = new TestableDialect(factory, NullLoggerFactory.Instance.CreateLogger<TestableDialect>());
         var context = new DatabaseContext("Data Source=:memory:", factory);
-        var settings = dialect.GetConnectionSessionSettings(context, readOnly: true);
+        var settings = dialect.GetConnectionSessionSettings(context, true);
         Assert.Equal("SET BASE SETTINGS\nSET READONLY MODE", settings);
     }
 
@@ -180,7 +180,8 @@ public class SqlDialectAdditionalCoverageTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var dialect = new ThrowingDialect(factory, NullLoggerFactory.Instance.CreateLogger<ThrowingDialect>());
-        using var tracked = CreateTrackedConnection(factory, DataSourceInformation.BuildEmptySchema("Test", "1.0", "?", "?", 64, "\\w+", "\\w+", true));
+        using var tracked = CreateTrackedConnection(factory,
+            DataSourceInformation.BuildEmptySchema("Test", "1.0", "?", "?", 64, "\\w+", "\\w+", true));
 
         var info = await dialect.CallDetectDatabaseInfoAsync(tracked);
 
@@ -251,17 +252,27 @@ public class SqlDialectAdditionalCoverageTests
         public string CallBuildWrappedObjectName(string identifier)
         {
             var method = typeof(SqlDialect).GetMethod(
-                "BuildWrappedObjectName",
-                BindingFlags.NonPublic | BindingFlags.Instance)
-                ?? throw new InvalidOperationException("Missing BuildWrappedObjectName method");
+                             "BuildWrappedObjectName",
+                             BindingFlags.NonPublic | BindingFlags.Instance)
+                         ?? throw new InvalidOperationException("Missing BuildWrappedObjectName method");
 
             return (string)method.Invoke(this, new object[] { identifier })!;
         }
-        public Task<IDatabaseProductInfo> CallDetectDatabaseInfoAsync(ITrackedConnection connection) => DetectDatabaseInfoAsync(connection);
 
-        public string CallGetReadOnlyConnectionString(string connectionString) => GetReadOnlyConnectionString(connectionString);
+        public Task<IDatabaseProductInfo> CallDetectDatabaseInfoAsync(ITrackedConnection connection)
+        {
+            return DetectDatabaseInfoAsync(connection);
+        }
 
-        public SupportedDatabase CallInferDatabaseType(string productName, string version) => InferDatabaseTypeFromInfo(productName, version);
+        public string CallGetReadOnlyConnectionString(string connectionString)
+        {
+            return GetReadOnlyConnectionString(connectionString);
+        }
+
+        public SupportedDatabase CallInferDatabaseType(string productName, string version)
+        {
+            return InferDatabaseTypeFromInfo(productName, version);
+        }
 
         public override SupportedDatabase DatabaseType => SupportedDatabase.Unknown;
 
@@ -273,19 +284,32 @@ public class SqlDialectAdditionalCoverageTests
 
         public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.None;
 
-        public override string GetReadOnlySessionSettings() => "SET READONLY MODE";
+        public override string GetReadOnlySessionSettings()
+        {
+            return "SET READONLY MODE";
+        }
 
-        public override string GetBaseSessionSettings() => "SET BASE SETTINGS";
+        public override string GetBaseSessionSettings()
+        {
+            return "SET BASE SETTINGS";
+        }
 
-        public override string GetReadOnlyConnectionParameter() => "Mode=ReadOnly";
+        public override string GetReadOnlyConnectionParameter()
+        {
+            return "Mode=ReadOnly";
+        }
 
-        public override string GetVersionQuery() => "SELECT version()";
-
+        public override string GetVersionQuery()
+        {
+            return "SELECT version()";
+        }
     }
 
     private sealed class ThrowingDialect : TestableDialect
     {
-        public ThrowingDialect(DbProviderFactory factory, ILogger logger) : base(factory, logger) { }
+        public ThrowingDialect(DbProviderFactory factory, ILogger logger) : base(factory, logger)
+        {
+        }
 
         public override Task<string> GetDatabaseVersionAsync(ITrackedConnection connection)
         {
@@ -303,6 +327,9 @@ public class SqlDialectAdditionalCoverageTests
             _mapping = mapping;
         }
 
-        public override Dictionary<int, SqlStandardLevel> GetMajorVersionToStandardMapping() => _mapping;
+        public override Dictionary<int, SqlStandardLevel> GetMajorVersionToStandardMapping()
+        {
+            return _mapping;
+        }
     }
 }

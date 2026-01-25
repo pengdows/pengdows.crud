@@ -20,7 +20,8 @@ public readonly struct Inet : IEquatable<Inet>
 
             if (prefixLength.Value > max)
             {
-                throw new ArgumentOutOfRangeException(nameof(prefixLength), prefixLength.Value, "Prefix length exceeds address family bounds.");
+                throw new ArgumentOutOfRangeException(nameof(prefixLength), prefixLength.Value,
+                    "Prefix length exceeds address family bounds.");
             }
         }
 
@@ -33,16 +34,23 @@ public readonly struct Inet : IEquatable<Inet>
     public override string ToString()
     {
         return PrefixLength.HasValue
-            ? string.Concat(Address, "/", PrefixLength.Value.ToString(System.Globalization.CultureInfo.InvariantCulture))
+            ? string.Concat(Address, "/",
+                PrefixLength.Value.ToString(System.Globalization.CultureInfo.InvariantCulture))
             : Address.ToString();
     }
 
     public bool Equals(Inet other)
     {
         if (Address is null && other.Address is null)
+        {
             return PrefixLength == other.PrefixLength;
+        }
+
         if (Address is null || other.Address is null)
+        {
             return false;
+        }
+
         return Address.Equals(other.Address) && PrefixLength == other.PrefixLength;
     }
 
@@ -59,7 +67,9 @@ public readonly struct Inet : IEquatable<Inet>
     public static Inet Parse(string text)
     {
         if (string.IsNullOrWhiteSpace(text))
+        {
             throw new FormatException("inet value cannot be empty.");
+        }
 
         var parts = text.Split('/', 2);
         var address = IPAddress.Parse(parts[0]);

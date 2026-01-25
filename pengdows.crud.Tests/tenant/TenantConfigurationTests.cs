@@ -11,7 +11,7 @@ public class TenantConfigurationTests
     public void Constructor_InitializesWithDefaults()
     {
         var config = new TenantConfiguration();
-        
+
         Assert.Equal(string.Empty, config.Name);
         Assert.NotNull(config.DatabaseContextConfiguration);
         Assert.IsType<DatabaseContextConfiguration>(config.DatabaseContextConfiguration);
@@ -22,9 +22,9 @@ public class TenantConfigurationTests
     {
         var config = new TenantConfiguration();
         const string name = "TestTenant";
-        
+
         config.Name = name;
-        
+
         Assert.Equal(name, config.Name);
     }
 
@@ -38,9 +38,9 @@ public class TenantConfigurationTests
             ProviderName = "System.Data.SqlClient",
             DbMode = DbMode.KeepAlive
         };
-        
+
         config.DatabaseContextConfiguration = dbConfig;
-        
+
         Assert.Same(dbConfig, config.DatabaseContextConfiguration);
         Assert.Equal("Server=localhost;Database=test;", config.DatabaseContextConfiguration.ConnectionString);
         Assert.Equal("System.Data.SqlClient", config.DatabaseContextConfiguration.ProviderName);
@@ -51,7 +51,7 @@ public class TenantConfigurationTests
     public void DatabaseContextConfiguration_DefaultIsNotNull()
     {
         var config = new TenantConfiguration();
-        
+
         Assert.NotNull(config.DatabaseContextConfiguration);
         Assert.Equal(string.Empty, config.DatabaseContextConfiguration.ConnectionString);
         Assert.Equal(string.Empty, config.DatabaseContextConfiguration.ProviderName);
@@ -70,10 +70,10 @@ public class TenantConfigurationTests
             DbMode = DbMode.KeepAlive,
             ReadWriteMode = ReadWriteMode.ReadOnly
         };
-        
+
         config.Name = name;
         config.DatabaseContextConfiguration = dbConfig;
-        
+
         Assert.Equal(name, config.Name);
         Assert.Same(dbConfig, config.DatabaseContextConfiguration);
         Assert.Equal("Server=remote;Database=multitenant;", config.DatabaseContextConfiguration.ConnectionString);
@@ -86,9 +86,9 @@ public class TenantConfigurationTests
     public void Name_HandlesNullValue()
     {
         var config = new TenantConfiguration();
-        
+
         config.Name = null!;
-        
+
         Assert.Null(config.Name);
     }
 
@@ -96,9 +96,9 @@ public class TenantConfigurationTests
     public void DatabaseContextConfiguration_CanBeSetToNull()
     {
         var config = new TenantConfiguration();
-        
+
         config.DatabaseContextConfiguration = null!;
-        
+
         Assert.Null(config.DatabaseContextConfiguration);
     }
 }

@@ -10,7 +10,7 @@ internal static class StringBuilderPool
 
     private const int DefaultInitialCapacity = 256;
     private const int MaxRetainedCapacity = 4 * 1024; // 4KB
-    private const int MaxPoolSize = 64;               // upper bound on pooled instances
+    private const int MaxPoolSize = 64; // upper bound on pooled instances
 
     private static readonly ConcurrentBag<StringBuilder> _pool = new();
     private static int _count;
@@ -35,6 +35,7 @@ internal static class StringBuilderPool
         {
             sb.Append(seed);
         }
+
         return sb;
     }
 
@@ -62,4 +63,3 @@ internal static class StringBuilderPool
         _pool.Add(sb);
     }
 }
-

@@ -17,36 +17,45 @@ public static class ConnectionFailureHelper
     /// <summary>
     /// Creates a DatabaseContext with a connection that fails on open
     /// </summary>
-    public static IDatabaseContext CreateFailOnOpenContext(SupportedDatabase database = SupportedDatabase.Sqlite, Exception? customException = null)
+    public static IDatabaseContext CreateFailOnOpenContext(SupportedDatabase database = SupportedDatabase.Sqlite,
+        Exception? customException = null)
     {
-        var factory = fakeDbFactory.CreateFailingFactoryWithSkip(database, ConnectionFailureMode.FailOnOpen, customException);
+        var factory =
+            fakeDbFactory.CreateFailingFactoryWithSkip(database, ConnectionFailureMode.FailOnOpen, customException);
         return new DatabaseContext($"Data Source=test;EmulatedProduct={database}", factory);
     }
 
     /// <summary>
     /// Creates a DatabaseContext with a connection that fails on command creation
     /// </summary>
-    public static IDatabaseContext CreateFailOnCommandContext(SupportedDatabase database = SupportedDatabase.Sqlite, Exception? customException = null)
+    public static IDatabaseContext CreateFailOnCommandContext(SupportedDatabase database = SupportedDatabase.Sqlite,
+        Exception? customException = null)
     {
-        var factory = fakeDbFactory.CreateFailingFactoryWithSkip(database, ConnectionFailureMode.FailOnCommand, customException);
+        var factory =
+            fakeDbFactory.CreateFailingFactoryWithSkip(database, ConnectionFailureMode.FailOnCommand, customException);
         return new DatabaseContext($"Data Source=test;EmulatedProduct={database}", factory);
     }
 
     /// <summary>
     /// Creates a DatabaseContext with a connection that fails on transaction begin
     /// </summary>
-    public static IDatabaseContext CreateFailOnTransactionContext(SupportedDatabase database = SupportedDatabase.Sqlite, Exception? customException = null)
+    public static IDatabaseContext CreateFailOnTransactionContext(SupportedDatabase database = SupportedDatabase.Sqlite,
+        Exception? customException = null)
     {
-        var factory = fakeDbFactory.CreateFailingFactoryWithSkip(database, ConnectionFailureMode.FailOnTransaction, customException);
+        var factory =
+            fakeDbFactory.CreateFailingFactoryWithSkip(database, ConnectionFailureMode.FailOnTransaction,
+                customException);
         return new DatabaseContext($"Data Source=test;EmulatedProduct={database}", factory);
     }
 
     /// <summary>
     /// Creates a DatabaseContext with a connection that fails after N open operations
     /// </summary>
-    public static IDatabaseContext CreateFailAfterCountContext(int failAfterCount, SupportedDatabase database = SupportedDatabase.Sqlite, Exception? customException = null)
+    public static IDatabaseContext CreateFailAfterCountContext(int failAfterCount,
+        SupportedDatabase database = SupportedDatabase.Sqlite, Exception? customException = null)
     {
-        var factory = fakeDbFactory.CreateFailingFactoryWithSkip(database, ConnectionFailureMode.FailAfterCount, customException, failAfterCount);
+        var factory = fakeDbFactory.CreateFailingFactoryWithSkip(database, ConnectionFailureMode.FailAfterCount,
+            customException, failAfterCount);
         return new DatabaseContext($"Data Source=test;EmulatedProduct={database}", factory);
     }
 
@@ -62,7 +71,8 @@ public static class ConnectionFailureHelper
     /// <summary>
     /// Configures an existing fakeDbConnection with failure modes
     /// </summary>
-    public static void ConfigureConnectionFailure(fakeDbConnection connection, ConnectionFailureMode mode, Exception? customException = null, int? failAfterCount = null)
+    public static void ConfigureConnectionFailure(fakeDbConnection connection, ConnectionFailureMode mode,
+        Exception? customException = null, int? failAfterCount = null)
     {
         if (customException != null)
         {
@@ -113,7 +123,9 @@ public static class ConnectionFailureHelper
     /// </summary>
     private class TestDbException : DbException
     {
-        public TestDbException(string message) : base(message) { }
+        public TestDbException(string message) : base(message)
+        {
+        }
 
         public override int ErrorCode => -1;
     }

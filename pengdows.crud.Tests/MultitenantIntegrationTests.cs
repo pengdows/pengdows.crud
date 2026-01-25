@@ -16,12 +16,9 @@ namespace pengdows.crud.Tests;
 [Table("Users")]
 public class User
 {
-    [Id]
-    [Column("Id", DbType.Int32)]
-    public int Id { get; set; }
+    [Id] [Column("Id", DbType.Int32)] public int Id { get; set; }
 
-    [Column("Name", DbType.String)]
-    public string Name { get; set; } = string.Empty;
+    [Column("Name", DbType.String)] public string Name { get; set; } = string.Empty;
 
     [Column("CreatedOn", DbType.DateTime)]
     [CreatedOn]
@@ -38,7 +35,10 @@ public class User
 
 public class AuditValueResolver : IAuditValueResolver
 {
-    public IAuditValues Resolve() => new AuditValues { UserId = "system", UtcNow = DateTime.UtcNow };
+    public IAuditValues Resolve()
+    {
+        return new AuditValues { UserId = "system", UtcNow = DateTime.UtcNow };
+    }
 }
 
 public class MultitenantIntegrationTests : IAsyncLifetime
@@ -54,20 +54,26 @@ public class MultitenantIntegrationTests : IAsyncLifetime
             {
                 ["MultiTenant:Tenants:0:Name"] = "TenantA",
                 ["MultiTenant:Tenants:0:DatabaseContextConfiguration:ConnectionString"] = "Data Source=:memory:",
-                ["MultiTenant:Tenants:0:DatabaseContextConfiguration:ProviderName"] = SupportedDatabase.Sqlite.ToString(),
+                ["MultiTenant:Tenants:0:DatabaseContextConfiguration:ProviderName"] =
+                    SupportedDatabase.Sqlite.ToString(),
                 ["MultiTenant:Tenants:0:DatabaseContextConfiguration:DbMode"] = DbMode.SingleConnection.ToString(),
-                ["MultiTenant:Tenants:0:DatabaseContextConfiguration:ReadWriteMode"] = ReadWriteMode.ReadWrite.ToString(),
+                ["MultiTenant:Tenants:0:DatabaseContextConfiguration:ReadWriteMode"] =
+                    ReadWriteMode.ReadWrite.ToString(),
                 ["MultiTenant:Tenants:1:Name"] = "TenantB",
                 // Use a shared in-memory SQLite database to allow concurrent connections
-                ["MultiTenant:Tenants:1:DatabaseContextConfiguration:ConnectionString"] = "Data Source=file:tenantb?mode=memory&cache=shared",
-                ["MultiTenant:Tenants:1:DatabaseContextConfiguration:ProviderName"] = SupportedDatabase.Sqlite.ToString(),
+                ["MultiTenant:Tenants:1:DatabaseContextConfiguration:ConnectionString"] =
+                    "Data Source=file:tenantb?mode=memory&cache=shared",
+                ["MultiTenant:Tenants:1:DatabaseContextConfiguration:ProviderName"] =
+                    SupportedDatabase.Sqlite.ToString(),
                 ["MultiTenant:Tenants:1:DatabaseContextConfiguration:DbMode"] = DbMode.SingleWriter.ToString(),
-                ["MultiTenant:Tenants:1:DatabaseContextConfiguration:ReadWriteMode"] = ReadWriteMode.ReadWrite.ToString()
+                ["MultiTenant:Tenants:1:DatabaseContextConfiguration:ReadWriteMode"] =
+                    ReadWriteMode.ReadWrite.ToString()
             })
             .Build();
 
         // Unit tests must use fakeDb; register a fakeDb factory keyed by provider name
-        services.AddKeyedSingleton<DbProviderFactory>(SupportedDatabase.Sqlite.ToString(), (_, _) => new fakeDbFactory(SupportedDatabase.Sqlite));
+        services.AddKeyedSingleton<DbProviderFactory>(SupportedDatabase.Sqlite.ToString(),
+            (_, _) => new fakeDbFactory(SupportedDatabase.Sqlite));
         // Use fakeDb for all tenants in unit tests to avoid external dependencies
         services.AddLogging();
         services.AddMultiTenancy(configuration);
@@ -75,7 +81,10 @@ public class MultitenantIntegrationTests : IAsyncLifetime
         _tenantRegistry = _provider.GetRequiredService<ITenantContextRegistry>();
     }
 
-    public Task InitializeAsync() => Task.CompletedTask;
+    public Task InitializeAsync()
+    {
+        return Task.CompletedTask;
+    }
 
     public async Task DisposeAsync()
     {

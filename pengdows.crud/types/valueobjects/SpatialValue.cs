@@ -88,8 +88,9 @@ public abstract class SpatialValue : IEquatable<SpatialValue>
         var hash = 17;
         for (var i = 0; i < span.Length; i++)
         {
-            hash = (hash * 31) + span[i];
+            hash = hash * 31 + span[i];
         }
+
         return hash;
     }
 }

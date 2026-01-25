@@ -23,7 +23,7 @@ internal static class PgStats
 
         // Top queries by total_exec_time (renamed from total_time in PostgreSQL 13+)
         var top = (await conn.QueryAsync(
-            @"SELECT query,
+                @"SELECT query,
                      calls,
                      rows,
                      total_exec_time as total_time,
@@ -55,7 +55,7 @@ internal static class PgStats
         // Connection activity and pool usage
         Console.WriteLine("-- Connection activity (pg_stat_activity) --");
         var act = (await conn.QueryAsync(
-            @"SELECT state,
+                @"SELECT state,
                      count(*) as cnt,
                      avg(EXTRACT(EPOCH FROM now() - backend_start))*1000 as avg_backend_ms,
                      max(EXTRACT(EPOCH FROM now() - backend_start))*1000 as max_backend_ms,
@@ -75,7 +75,7 @@ internal static class PgStats
         // Connection pool details
         Console.WriteLine("-- Connection pool details --");
         var poolDetails = (await conn.QueryAsync(
-            @"SELECT application_name,
+                @"SELECT application_name,
                      client_addr,
                      client_port,
                      state,
@@ -90,7 +90,7 @@ internal static class PgStats
                  AND pid != pg_backend_pid()
             ORDER BY backend_start"))
             .ToList();
-        
+
         foreach (var p in poolDetails)
         {
             Console.WriteLine(
@@ -99,7 +99,7 @@ internal static class PgStats
 
         // Database-level statistics
         Console.WriteLine("-- Database connection summary --");
-        var dbStats = (await conn.QuerySingleAsync(
+        var dbStats = await conn.QuerySingleAsync(
             @"SELECT d.datname,
                      d.numbackends as active_connections,
                      d.xact_commit,
@@ -111,8 +111,8 @@ internal static class PgStats
                           ELSE 0 
                      END as cache_hit_ratio
                 FROM pg_stat_database d
-               WHERE d.datname = current_database()"));
-        
+               WHERE d.datname = current_database()");
+
         Console.WriteLine(
             $"db={dbStats.datname} active_conn={dbStats.active_connections} commits={dbStats.xact_commit} rollbacks={dbStats.xact_rollback} cache_hit_ratio={dbStats.cache_hit_ratio}%");
 

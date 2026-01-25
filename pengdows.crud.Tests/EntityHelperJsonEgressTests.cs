@@ -19,7 +19,8 @@ public class EntityHelperJsonEgressTests
         var registry = new TypeMapRegistry();
         registry.Register<JsonEntity>();
 
-        using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=PostgreSql", new fakeDbFactory(SupportedDatabase.PostgreSql), registry);
+        using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=PostgreSql",
+            new fakeDbFactory(SupportedDatabase.PostgreSql), registry);
         var helper = new EntityHelper<JsonEntity, int>(ctx, new StubAuditValueResolver("tester"));
         var entity = new JsonEntity { Payload = new SamplePayload { Message = "hi" } };
 
@@ -39,7 +40,8 @@ public class EntityHelperJsonEgressTests
         var registry = new TypeMapRegistry();
         registry.Register<JsonEntity>();
 
-        using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", new fakeDbFactory(SupportedDatabase.SqlServer), registry);
+        using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer",
+            new fakeDbFactory(SupportedDatabase.SqlServer), registry);
         var helper = new EntityHelper<JsonEntity, int>(ctx, new StubAuditValueResolver("tester"));
         var entity = new JsonEntity { Payload = new SamplePayload { Message = "hi" } };
 
@@ -65,9 +67,7 @@ public class EntityHelperJsonEgressTests
     [Table("JsonEntities")]
     private class JsonEntity
     {
-        [Id]
-        [Column("Id", DbType.Int32)]
-        public int Id { get; set; }
+        [Id] [Column("Id", DbType.Int32)] public int Id { get; set; }
 
         [Json]
         [Column("Payload", DbType.String)]

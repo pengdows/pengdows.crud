@@ -73,11 +73,13 @@ public class BasicCoercionsBranchTests
         Assert.True(coercion.TryRead(new DbValue(local), out var fromLocal));
         Assert.Equal(DateTimeKind.Utc, fromLocal.Kind);
 
-        var dtoText = new DateTimeOffset(2024, 1, 2, 3, 4, 5, TimeSpan.Zero).ToString("O", CultureInfo.InvariantCulture);
+        var dtoText =
+            new DateTimeOffset(2024, 1, 2, 3, 4, 5, TimeSpan.Zero).ToString("O", CultureInfo.InvariantCulture);
         Assert.True(coercion.TryRead(new DbValue(dtoText), out var fromDtoString));
         Assert.Equal(DateTimeKind.Utc, fromDtoString.Kind);
 
-        var dtText = new DateTime(2024, 1, 3, 4, 5, 6, DateTimeKind.Unspecified).ToString("O", CultureInfo.InvariantCulture);
+        var dtText =
+            new DateTime(2024, 1, 3, 4, 5, 6, DateTimeKind.Unspecified).ToString("O", CultureInfo.InvariantCulture);
         Assert.True(coercion.TryRead(new DbValue(dtText), out var fromDtString));
         Assert.Equal(DateTimeKind.Utc, fromDtString.Kind);
     }

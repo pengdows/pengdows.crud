@@ -40,13 +40,19 @@ public readonly struct JsonValue : IEquatable<JsonValue>
     public string AsString()
     {
         if (_rawJson != null)
+        {
             return _rawJson;
+        }
 
         if (_document != null)
+        {
             return JsonSerializer.Serialize(_document.RootElement);
+        }
 
         if (_element.HasValue)
+        {
             return JsonSerializer.Serialize(_element.Value);
+        }
 
         return "null";
     }
@@ -57,9 +63,11 @@ public readonly struct JsonValue : IEquatable<JsonValue>
     public JsonDocument AsDocument()
     {
         if (_document != null)
+        {
             return _document;
+        }
 
-        var json = _rawJson ?? (_element?.GetRawText()) ?? "null";
+        var json = _rawJson ?? _element?.GetRawText() ?? "null";
         return JsonDocument.Parse(json);
     }
 
@@ -69,7 +77,9 @@ public readonly struct JsonValue : IEquatable<JsonValue>
     public JsonElement AsElement()
     {
         if (_element.HasValue)
+        {
             return _element.Value;
+        }
 
         using var doc = AsDocument();
         return doc.RootElement.Clone();
@@ -81,7 +91,9 @@ public readonly struct JsonValue : IEquatable<JsonValue>
     public static JsonValue Parse(string jsonText)
     {
         if (string.IsNullOrWhiteSpace(jsonText))
+        {
             return new JsonValue("null");
+        }
 
         // Validate by parsing
         using var doc = JsonDocument.Parse(jsonText);
@@ -106,13 +118,30 @@ public readonly struct JsonValue : IEquatable<JsonValue>
         return element.Deserialize<T>(options) ?? throw new InvalidOperationException("Deserialization returned null");
     }
 
-    public static implicit operator JsonValue(string jsonText) => new(jsonText);
-    public static implicit operator JsonValue(JsonDocument document) => new(document);
-    public static implicit operator JsonValue(JsonElement element) => new(element);
+    public static implicit operator JsonValue(string jsonText)
+    {
+        return new JsonValue(jsonText);
+    }
 
-    public static implicit operator string(JsonValue jsonValue) => jsonValue.AsString();
+    public static implicit operator JsonValue(JsonDocument document)
+    {
+        return new JsonValue(document);
+    }
 
-    public override string ToString() => AsString();
+    public static implicit operator JsonValue(JsonElement element)
+    {
+        return new JsonValue(element);
+    }
+
+    public static implicit operator string(JsonValue jsonValue)
+    {
+        return jsonValue.AsString();
+    }
+
+    public override string ToString()
+    {
+        return AsString();
+    }
 
     public bool Equals(JsonValue other)
     {
@@ -130,6 +159,13 @@ public readonly struct JsonValue : IEquatable<JsonValue>
         return AsString().GetHashCode(StringComparison.Ordinal);
     }
 
-    public static bool operator ==(JsonValue left, JsonValue right) => left.Equals(right);
-    public static bool operator !=(JsonValue left, JsonValue right) => !left.Equals(right);
+    public static bool operator ==(JsonValue left, JsonValue right)
+    {
+        return left.Equals(right);
+    }
+
+    public static bool operator !=(JsonValue left, JsonValue right)
+    {
+        return !left.Equals(right);
+    }
 }

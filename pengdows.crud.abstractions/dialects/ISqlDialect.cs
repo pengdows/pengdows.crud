@@ -511,12 +511,14 @@ public interface ISqlDialect
     /// <summary>
     /// Generates a correlation token lookup query for the specified table.
     /// </summary>
-    string GetCorrelationTokenLookupQuery(string tableName, string idColumnName, string correlationTokenColumn, string tokenParameterName);
+    string GetCorrelationTokenLookupQuery(string tableName, string idColumnName, string correlationTokenColumn,
+        string tokenParameterName);
 
     /// <summary>
     /// Generates a natural key lookup query for the specified table.
     /// </summary>
-    string GetNaturalKeyLookupQuery(string tableName, string idColumnName, IReadOnlyList<string> columnNames, IReadOnlyList<string> parameterNames);
+    string GetNaturalKeyLookupQuery(string tableName, string idColumnName, IReadOnlyList<string> columnNames,
+        IReadOnlyList<string> parameterNames);
 
     // Connection pooling properties
     /// <summary>

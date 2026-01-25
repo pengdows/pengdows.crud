@@ -10,12 +10,12 @@ namespace pengdows.crud.Tests;
 public sealed class TypeForwardingTests
 {
     [Theory]
-    [InlineData("pengdows.crud.TypeCoercionOptions, pengdows.crud", typeof(global::pengdows.crud.TypeCoercionOptions))]
-    [InlineData("pengdows.crud.JsonPassThrough, pengdows.crud", typeof(global::pengdows.crud.JsonPassThrough))]
-    [InlineData("pengdows.crud.TimeMappingPolicy, pengdows.crud", typeof(global::pengdows.crud.TimeMappingPolicy))]
+    [InlineData("pengdows.crud.TypeCoercionOptions, pengdows.crud", typeof(TypeCoercionOptions))]
+    [InlineData("pengdows.crud.JsonPassThrough, pengdows.crud", typeof(JsonPassThrough))]
+    [InlineData("pengdows.crud.TimeMappingPolicy, pengdows.crud", typeof(TimeMappingPolicy))]
     public void ForwardedTypes_AreResolved(string assemblyQualifiedName, Type expectedType)
     {
-        var resolved = Type.GetType(assemblyQualifiedName, throwOnError: false);
+        var resolved = Type.GetType(assemblyQualifiedName, false);
         Assert.NotNull(resolved);
         Assert.Equal(expectedType, resolved);
     }
@@ -25,7 +25,7 @@ public sealed class TypeForwardingTests
     [InlineData("pengdows.crud.TypeCoercionOptions, pengdows.crud.runtime")]
     public void ForwardedTypes_InvalidNames_ReturnNull(string assemblyQualifiedName)
     {
-        var resolved = Type.GetType(assemblyQualifiedName, throwOnError: false);
+        var resolved = Type.GetType(assemblyQualifiedName, false);
         Assert.Null(resolved);
     }
 }

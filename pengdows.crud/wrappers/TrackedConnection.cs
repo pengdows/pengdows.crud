@@ -88,7 +88,7 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
     private PoolPermit _permit;
     private int _permitAttached;
     private int _permitReleased;
-    
+
     /// <summary>
     /// Per-connection state for prepare behavior tracking
     /// </summary>
@@ -300,10 +300,7 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
 
     private void DisposeSharedConnectionSynchronously()
     {
-        Task.Run(async () =>
-        {
-            await DisposeSharedConnectionAsync().ConfigureAwait(false);
-        }).GetAwaiter().GetResult();
+        Task.Run(async () => { await DisposeSharedConnectionAsync().ConfigureAwait(false); }).GetAwaiter().GetResult();
     }
 
     private async Task DisposeSharedConnectionAsync()
@@ -327,7 +324,8 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
         }
         else
         {
-            _logger.LogWarning("Timed out waiting to dispose shared connection {Name}; retrying once lock is released.", _name);
+            _logger.LogWarning("Timed out waiting to dispose shared connection {Name}; retrying once lock is released.",
+                _name);
             await Task.Run(async () =>
             {
                 await _semaphoreSlim.WaitAsync().ConfigureAwait(false);
@@ -393,7 +391,8 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error while disposing connection asynchronously. Falling back to synchronous dispose.");
+            _logger.LogError(ex,
+                "Error while disposing connection asynchronously. Falling back to synchronous dispose.");
             try
             {
                 _connection?.Dispose();
@@ -403,6 +402,7 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
                 // Connection is already disposed or in invalid state, ignore
             }
         }
+
         DetachMetricsHandler();
         ReleasePermit();
     }

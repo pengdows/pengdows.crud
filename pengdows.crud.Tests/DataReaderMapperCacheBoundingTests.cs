@@ -24,7 +24,8 @@ public class DataReaderMapperCacheBoundingTests
     public async Task PlanCache_EvictsOldEntries_WhenCapacityExceeded()
     {
         // Get the plan cache via reflection to check its behavior
-        var planCacheField = typeof(DataReaderMapper).GetField("_planCache", BindingFlags.Static | BindingFlags.NonPublic);
+        var planCacheField =
+            typeof(DataReaderMapper).GetField("_planCache", BindingFlags.Static | BindingFlags.NonPublic);
         Assert.NotNull(planCacheField);
 
         var planCache = planCacheField!.GetValue(null);
@@ -32,7 +33,8 @@ public class DataReaderMapperCacheBoundingTests
 
         // The cache should have a Clear method if it's a BoundedCache
         var clearMethod = planCache!.GetType().GetMethod("Clear");
-        Assert.NotNull(clearMethod); // This will fail if using ConcurrentDictionary (no Clear method with this signature pattern)
+        Assert.NotNull(
+            clearMethod); // This will fail if using ConcurrentDictionary (no Clear method with this signature pattern)
 
         // Clear the cache to start fresh
         clearMethod!.Invoke(planCache, null);
@@ -110,7 +112,8 @@ public class DataReaderMapperCacheBoundingTests
     public void PlanCache_HasClearMethod()
     {
         // Verify the cache exposes a Clear method for controlled resets
-        var planCacheField = typeof(DataReaderMapper).GetField("_planCache", BindingFlags.Static | BindingFlags.NonPublic);
+        var planCacheField =
+            typeof(DataReaderMapper).GetField("_planCache", BindingFlags.Static | BindingFlags.NonPublic);
         Assert.NotNull(planCacheField);
 
         var planCache = planCacheField!.GetValue(null);
@@ -124,7 +127,8 @@ public class DataReaderMapperCacheBoundingTests
     public void SetterCache_IsBounded()
     {
         // Verify the setter cache is also bounded
-        var setterCacheField = typeof(DataReaderMapper).GetField("_setterCache", BindingFlags.Static | BindingFlags.NonPublic);
+        var setterCacheField =
+            typeof(DataReaderMapper).GetField("_setterCache", BindingFlags.Static | BindingFlags.NonPublic);
         Assert.NotNull(setterCacheField);
 
         var setterCache = setterCacheField!.GetValue(null);
@@ -146,7 +150,8 @@ public class DataReaderMapperCacheBoundingTests
 
     private static void ClearPlanCache()
     {
-        var planCacheField = typeof(DataReaderMapper).GetField("_planCache", BindingFlags.Static | BindingFlags.NonPublic);
+        var planCacheField =
+            typeof(DataReaderMapper).GetField("_planCache", BindingFlags.Static | BindingFlags.NonPublic);
         var planCache = planCacheField?.GetValue(null);
         var clearMethod = planCache?.GetType().GetMethod("Clear");
         clearMethod?.Invoke(planCache, null);
@@ -155,15 +160,15 @@ public class DataReaderMapperCacheBoundingTests
     private static object BuildPlanCacheKey<T>(DbDataReader templateReader, MapperOptions options)
     {
         var schemaHashMethod = typeof(DataReaderMapper).GetMethod(
-            "BuildSchemaHash",
-            BindingFlags.NonPublic | BindingFlags.Static)
-            ?? throw new InvalidOperationException("BuildSchemaHash not found");
+                                   "BuildSchemaHash",
+                                   BindingFlags.NonPublic | BindingFlags.Static)
+                               ?? throw new InvalidOperationException("BuildSchemaHash not found");
 
         var schemaHash = (string)schemaHashMethod.Invoke(null, new object[] { templateReader, options })!;
 
         var planKeyType = typeof(DataReaderMapper)
-            .GetNestedType("PlanCacheKey", BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException("PlanCacheKey type not found");
+                              .GetNestedType("PlanCacheKey", BindingFlags.NonPublic)
+                          ?? throw new InvalidOperationException("PlanCacheKey type not found");
 
         return Activator.CreateInstance(
             planKeyType,
@@ -172,8 +177,9 @@ public class DataReaderMapperCacheBoundingTests
 
     private static object? GetPlanEntry(object planCacheKey)
     {
-        var planCacheField = typeof(DataReaderMapper).GetField("_planCache", BindingFlags.Static | BindingFlags.NonPublic)
-                           ?? throw new InvalidOperationException("Plan cache field missing");
+        var planCacheField =
+            typeof(DataReaderMapper).GetField("_planCache", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("Plan cache field missing");
 
         var planCache = planCacheField.GetValue(null)!;
         var mapField = planCache.GetType().GetField("_map", BindingFlags.Instance | BindingFlags.NonPublic)
@@ -197,7 +203,9 @@ public class DataReaderMapperCacheBoundingTests
         public string? Column6 { get; set; }
         public string? Column7 { get; set; }
         public string? Column8 { get; set; }
+
         public string? Column9 { get; set; }
+
         // Add more to cover various column names
         public string? Column10 { get; set; }
         public string? Column11 { get; set; }

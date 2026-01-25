@@ -17,7 +17,11 @@ public class SqlDialectDefaultsTests
         }
 
         public override SupportedDatabase DatabaseType => SupportedDatabase.Unknown;
-        public override string GetVersionQuery() => string.Empty;
+
+        public override string GetVersionQuery()
+        {
+            return string.Empty;
+        }
     }
 
     private sealed class OverrideDialect : SqlDialect
@@ -33,7 +37,11 @@ public class SqlDialectDefaultsTests
         public override int ParameterNameMaxLength => 64;
         public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.Call;
         public override bool SupportsNamespaces => true;
-        public override string GetVersionQuery() => string.Empty;
+
+        public override string GetVersionQuery()
+        {
+            return string.Empty;
+        }
     }
 
     [Fact]

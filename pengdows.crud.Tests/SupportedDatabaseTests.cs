@@ -23,7 +23,7 @@ public class SupportedDatabaseTests
     [InlineData("Unknown", SupportedDatabase.Unknown)]
     public void EnumParse_ShouldReturnCorrectValue(string input, SupportedDatabase expected)
     {
-        var result = Enum.Parse<SupportedDatabase>(input, ignoreCase: true);
+        var result = Enum.Parse<SupportedDatabase>(input, true);
         Assert.Equal(expected, result);
     }
 

@@ -50,7 +50,8 @@ public class IntegrationTestFixture : IAsyncLifetime
     {
         await _host.StartAsync();
 
-        var orchestrator = new ParallelTestOrchestrator(_host.Services, IntegrationTestConfiguration.ShouldIncludeOracle);
+        var orchestrator =
+            new ParallelTestOrchestrator(_host.Services, IntegrationTestConfiguration.ShouldIncludeOracle);
 
         foreach (var provider in IntegrationTestConfiguration.EnabledProviders)
         {
@@ -121,7 +122,8 @@ public class IntegrationTestFixture : IAsyncLifetime
         return container.GetDatabaseContextAsync(_host.Services);
     }
 
-    private async Task<IDatabaseContext> CreateAndCacheContextAsync(SupportedDatabase provider, ITestContainer container)
+    private async Task<IDatabaseContext> CreateAndCacheContextAsync(SupportedDatabase provider,
+        ITestContainer container)
     {
         var context = await container.GetDatabaseContextAsync(_host.Services);
         lock (_contextLock)

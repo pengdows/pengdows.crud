@@ -56,8 +56,7 @@ public class EntityHelperRecordsetPlanTests : SqlLiteContextTestBase
         [Column("Id", DbType.Int32)]
         public int Id { get; set; }
 
-        [Column("Name", DbType.String)]
-        public string? Name { get; set; }
+        [Column("Name", DbType.String)] public string? Name { get; set; }
     }
 
     private sealed class FakeTrackedReader : fakeDbDataReader, ITrackedReader

@@ -45,11 +45,15 @@ public readonly struct IntervalYearMonth : IEquatable<IntervalYearMonth>
     public static IntervalYearMonth Parse(string text)
     {
         if (string.IsNullOrWhiteSpace(text))
+        {
             return new IntervalYearMonth(0, 0);
+        }
 
         var trimmed = text.Trim();
         if (trimmed.StartsWith("P", StringComparison.OrdinalIgnoreCase))
+        {
             trimmed = trimmed.Substring(1);
+        }
 
         var years = 0;
         var months = 0;
@@ -64,7 +68,9 @@ public readonly struct IntervalYearMonth : IEquatable<IntervalYearMonth>
             }
 
             if (buffer.Length == 0)
+            {
                 continue;
+            }
 
             switch (c)
             {

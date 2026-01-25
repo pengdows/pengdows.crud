@@ -128,10 +128,14 @@ internal sealed class PostgreSqlRangeConverter<T> : AdvancedTypeConverter<Range<
                 var lowerInfiniteProp = type.GetProperty("LowerBoundInfinite");
                 var upperInfiniteProp = type.GetProperty("UpperBoundInfinite");
 
-                var lower = lowerInfiniteProp != null && (bool)lowerInfiniteProp.GetValue(value)! ? default : (T?)lowerProp?.GetValue(value);
-                var upper = upperInfiniteProp != null && (bool)upperInfiniteProp.GetValue(value)! ? default : (T?)upperProp?.GetValue(value);
-                var lowerInclusive = (bool?)(lowerInclusiveProp?.GetValue(value)) ?? true;
-                var upperInclusive = (bool?)(upperInclusiveProp?.GetValue(value)) ?? false;
+                var lower = lowerInfiniteProp != null && (bool)lowerInfiniteProp.GetValue(value)!
+                    ? default
+                    : (T?)lowerProp?.GetValue(value);
+                var upper = upperInfiniteProp != null && (bool)upperInfiniteProp.GetValue(value)!
+                    ? default
+                    : (T?)upperProp?.GetValue(value);
+                var lowerInclusive = (bool?)lowerInclusiveProp?.GetValue(value) ?? true;
+                var upperInclusive = (bool?)upperInclusiveProp?.GetValue(value) ?? false;
                 result = new Range<T>(lower, upper, lowerInclusive, upperInclusive);
                 return true;
             }

@@ -81,7 +81,8 @@ public sealed class SqlDialectParameterPoolTests
                 throw new InvalidOperationException("Parameter pool field not found.");
             }
 
-            _queue = (ConcurrentQueue<DbParameter>?)field.GetValue(this) ?? throw new InvalidOperationException("Pool not initialized.");
+            _queue = (ConcurrentQueue<DbParameter>?)field.GetValue(this) ??
+                     throw new InvalidOperationException("Pool not initialized.");
         }
 
         public override SupportedDatabase DatabaseType => SupportedDatabase.SqlServer;

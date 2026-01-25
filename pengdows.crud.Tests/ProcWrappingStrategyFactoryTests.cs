@@ -13,10 +13,10 @@ public class ProcWrappingStrategyFactoryTests
         Assert.IsType<CallProcWrappingStrategy>(ProcWrappingStrategyFactory.Create(ProcWrappingStyle.Call));
         Assert.IsType<PostgresProcWrappingStrategy>(ProcWrappingStrategyFactory.Create(ProcWrappingStyle.PostgreSQL));
         Assert.IsType<OracleProcWrappingStrategy>(ProcWrappingStrategyFactory.Create(ProcWrappingStyle.Oracle));
-        Assert.IsType<ExecuteProcedureWrappingStrategy>(ProcWrappingStrategyFactory.Create(ProcWrappingStyle.ExecuteProcedure));
+        Assert.IsType<ExecuteProcedureWrappingStrategy>(
+            ProcWrappingStrategyFactory.Create(ProcWrappingStyle.ExecuteProcedure));
         Assert.IsType<UnsupportedProcWrappingStrategy>(ProcWrappingStrategyFactory.Create(ProcWrappingStyle.None));
         // Unknown values fallback to Unsupported
         Assert.IsType<UnsupportedProcWrappingStrategy>(ProcWrappingStrategyFactory.Create((ProcWrappingStyle)999));
     }
 }
-

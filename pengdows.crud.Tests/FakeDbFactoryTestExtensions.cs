@@ -12,7 +12,7 @@ internal static class fakeDbFactoryTestExtensions
     public static void SetNonQueryResult(this fakeDbFactory factory, int value)
     {
         // Seed multiple connections to cover init + ops under various strategies
-        for (int i = 0; i < 8; i++)
+        for (var i = 0; i < 8; i++)
         {
             var c = new fakeDbConnection();
             c.EnableDataPersistence = factory.EnableDataPersistence;
@@ -31,8 +31,9 @@ internal static class fakeDbFactoryTestExtensions
             c.EnqueueScalarResult(value);
             c.SetDefaultScalarOnce(value);
         }
+
         // Ensure additional fallbacks
-        for (int i = 0; i < 4; i++)
+        for (var i = 0; i < 4; i++)
         {
             var extra = new fakeDbConnection();
             extra.EnableDataPersistence = factory.EnableDataPersistence;
@@ -44,7 +45,7 @@ internal static class fakeDbFactoryTestExtensions
 
     public static void SetNonQueryException(this fakeDbFactory factory, Exception exception)
     {
-        for (int i = 0; i < 6; i++)
+        for (var i = 0; i < 6; i++)
         {
             var c = new fakeDbConnection();
             c.EnableDataPersistence = factory.EnableDataPersistence;
@@ -72,7 +73,7 @@ internal static class fakeDbFactoryTestExtensions
     public static void SetException(this fakeDbFactory factory, Exception exception)
     {
         // Seed several failing connections to catch any op connection
-        for (int i = 0; i < 6; i++)
+        for (var i = 0; i < 6; i++)
         {
             var op = new fakeDbConnection();
             op.EnableDataPersistence = factory.EnableDataPersistence;
@@ -93,7 +94,7 @@ internal static class fakeDbFactoryTestExtensions
     {
         // Clear existing connections to start fresh
         factory.Connections.Clear();
-        
+
         // Connection 1: Primary connection used for both initialization AND operations
         // This connection must handle:
         // - Database detection/version queries during DatabaseContext initialization
@@ -103,29 +104,31 @@ internal static class fakeDbFactoryTestExtensions
 
         // Set up database detection queries for initialization phase
         primaryConnection.ScalarResultsByCommand["SELECT VERSION()"] = "Test Database 1.0";
-        primaryConnection.ScalarResultsByCommand["SELECT @@VERSION"] = "Test Database 1.0"; 
+        primaryConnection.ScalarResultsByCommand["SELECT @@VERSION"] = "Test Database 1.0";
         primaryConnection.ScalarResultsByCommand["SELECT version()"] = "Test Database 1.0";
         primaryConnection.ScalarResultsByCommand["PRAGMA version"] = "Test Database 1.0";
         // SQL Server specific queries
-        primaryConnection.ScalarResultsByCommand["SELECT CAST(is_read_committed_snapshot_on AS int) FROM sys.databases WHERE name = DB_NAME()"] = 0;
-        primaryConnection.ScalarResultsByCommand["SELECT snapshot_isolation_state FROM sys.databases WHERE name = DB_NAME()"] = 0;
-        
+        primaryConnection.ScalarResultsByCommand[
+            "SELECT CAST(is_read_committed_snapshot_on AS int) FROM sys.databases WHERE name = DB_NAME()"] = 0;
+        primaryConnection.ScalarResultsByCommand[
+            "SELECT snapshot_isolation_state FROM sys.databases WHERE name = DB_NAME()"] = 0;
+
         // Set up operation results for CreateAsync phase
         primaryConnection.EnqueueNonQueryResult(rowsAffected); // For INSERT statement
         primaryConnection.SetDefaultScalarOnce(generatedId); // For INSERT...RETURNING or first scalar call
         primaryConnection.EnqueueScalarResult(generatedId); // For subsequent scalar calls
-        
+
         // Set up specific ID retrieval queries (for databases that don't support INSERT RETURNING)
         primaryConnection.ScalarResultsByCommand["SELECT SCOPE_IDENTITY()"] = generatedId;
-        primaryConnection.ScalarResultsByCommand["SELECT last_insert_rowid()"] = generatedId; 
+        primaryConnection.ScalarResultsByCommand["SELECT last_insert_rowid()"] = generatedId;
         primaryConnection.ScalarResultsByCommand["SELECT LAST_INSERT_ID()"] = generatedId;
         primaryConnection.ScalarResultsByCommand["SELECT lastval()"] = generatedId;
         primaryConnection.ScalarResultsByCommand["SELECT @@IDENTITY"] = generatedId;
-        
+
         factory.Connections.Add(primaryConnection);
 
         // Connection 2..N: Fallbacks for Standard mode and extra ops
-        for (int i = 0; i < 6; i++)
+        for (var i = 0; i < 6; i++)
         {
             var fx = new fakeDbConnection();
             fx.EnableDataPersistence = factory.EnableDataPersistence;
@@ -134,10 +137,11 @@ internal static class fakeDbFactoryTestExtensions
             fx.EnqueueScalarResult(generatedId);
             // Set up version queries for fallback connections too
             fx.ScalarResultsByCommand["SELECT VERSION()"] = "Test Database 1.0";
-            fx.ScalarResultsByCommand["SELECT @@VERSION"] = "Test Database 1.0"; 
+            fx.ScalarResultsByCommand["SELECT @@VERSION"] = "Test Database 1.0";
             fx.ScalarResultsByCommand["SELECT version()"] = "Test Database 1.0";
             fx.ScalarResultsByCommand["PRAGMA version"] = "Test Database 1.0";
-            fx.ScalarResultsByCommand["SELECT CAST(is_read_committed_snapshot_on AS int) FROM sys.databases WHERE name = DB_NAME()"] = 0;
+            fx.ScalarResultsByCommand[
+                "SELECT CAST(is_read_committed_snapshot_on AS int) FROM sys.databases WHERE name = DB_NAME()"] = 0;
             fx.ScalarResultsByCommand["SELECT snapshot_isolation_state FROM sys.databases WHERE name = DB_NAME()"] = 0;
             // Set up ID retrieval queries
             fx.ScalarResultsByCommand["SELECT SCOPE_IDENTITY()"] = generatedId;

@@ -34,14 +34,20 @@ public class SingleWriterWriteGuardTests
 
     private static void ReplaceStrategy(DatabaseContext context, IConnectionStrategy strategy)
     {
-        var field = typeof(DatabaseContext).GetField("_connectionStrategy", BindingFlags.Instance | BindingFlags.NonPublic);
+        var field = typeof(DatabaseContext).GetField("_connectionStrategy",
+            BindingFlags.Instance | BindingFlags.NonPublic);
         field!.SetValue(context, strategy);
     }
 
     private sealed class MisroutingStrategy : IConnectionStrategy
     {
         private readonly DatabaseContext _ctx;
-        public MisroutingStrategy(DatabaseContext ctx) => _ctx = ctx;
+
+        public MisroutingStrategy(DatabaseContext ctx)
+        {
+            _ctx = ctx;
+        }
+
         public ITrackedConnection GetConnection(ExecutionType executionType, bool isShared)
         {
             return _ctx.FactoryCreateConnection(null, isShared, true);
@@ -73,7 +79,14 @@ public class SingleWriterWriteGuardTests
         }
 
         public bool IsDisposed => false;
-        public void Dispose() { }
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+
+        public void Dispose()
+        {
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            return ValueTask.CompletedTask;
+        }
     }
 }

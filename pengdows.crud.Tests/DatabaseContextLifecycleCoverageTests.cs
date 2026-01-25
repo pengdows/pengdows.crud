@@ -30,7 +30,7 @@ public class DatabaseContextLifecycleCoverageTests
         Assert.NotNull(writer);
 
         // Read connection in shared mode should reuse the same connection
-        var sharedRead = context.GetSingleWriterConnection(ExecutionType.Read, isShared: true);
+        var sharedRead = context.GetSingleWriterConnection(ExecutionType.Read, true);
         Assert.Same(writer, sharedRead);
 
         // Read connection without shared should return the persistent connection for isolated memory
@@ -77,7 +77,7 @@ public class DatabaseContextLifecycleCoverageTests
         var sharedReadOnly = sharedContext.GetSingleWriterConnection(ExecutionType.Read);
         Assert.NotSame(sharedWriter, sharedReadOnly);
 
-        var sharedSharedRead = sharedContext.GetSingleWriterConnection(ExecutionType.Read, isShared: true);
+        var sharedSharedRead = sharedContext.GetSingleWriterConnection(ExecutionType.Read, true);
         Assert.Same(sharedWriter, sharedSharedRead);
 
         sharedContext.CloseAndDisposeConnection(sharedReadOnly);

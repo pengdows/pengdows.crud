@@ -12,7 +12,7 @@ public sealed class StrategyVisibilityTests
     public void ConnectionStrategies_AreNotPublic(string typeName)
     {
         var assembly = typeof(DatabaseContext).Assembly;
-        var type = assembly.GetType(typeName, throwOnError: false);
+        var type = assembly.GetType(typeName, false);
 
         Assert.NotNull(type);
         Assert.True(type!.IsNotPublic, $"{typeName} should not be public.");

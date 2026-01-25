@@ -39,4 +39,3 @@ public class DialectDetectionAsyncTests
         Assert.Equal(db, info.DatabaseType);
     }
 }
-

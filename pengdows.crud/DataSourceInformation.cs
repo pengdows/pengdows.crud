@@ -51,20 +51,24 @@ public class DataSourceInformation : IDataSourceInformation
     public bool PrepareStatements => _dialect.PrepareStatements;
     public ProcWrappingStyle ProcWrappingStyle => _dialect.ProcWrappingStyle;
     public int MaxParameterLimit => _dialect.MaxParameterLimit;
-    public int MaxOutputParameters 
-    { 
+
+    public int MaxOutputParameters
+    {
         get => _maxOutputParameters ?? _dialect.MaxOutputParameters;
         set => _maxOutputParameters = value;
     }
+
     public bool SupportsMerge => _dialect.SupportsMerge;
     public bool SupportsInsertOnConflict => _dialect.SupportsInsertOnConflict;
     public bool SupportsOnDuplicateKey => _dialect.SupportsOnDuplicateKey;
     public bool RequiresStoredProcParameterNameMatch => _dialect.RequiresStoredProcParameterNameMatch;
     public bool IsUsingFallbackDialect => _dialect.IsFallbackDialect;
+
     public string GetCompatibilityWarning()
     {
         return _dialect.GetCompatibilityWarning();
     }
+
     public bool CanUseModernFeatures => _dialect.CanUseModernFeatures;
     public bool HasBasicCompatibility => _dialect.HasBasicCompatibility;
 
@@ -73,12 +77,14 @@ public class DataSourceInformation : IDataSourceInformation
         return _dialect.GetDataSourceInformationSchema(connection);
     }
 
-    public static DataSourceInformation Create(ITrackedConnection connection, DbProviderFactory factory, ILoggerFactory? loggerFactory = null)
+    public static DataSourceInformation Create(ITrackedConnection connection, DbProviderFactory factory,
+        ILoggerFactory? loggerFactory = null)
     {
         return CreateAsync(connection, factory, loggerFactory).GetAwaiter().GetResult();
     }
 
-    public static async Task<DataSourceInformation> CreateAsync(ITrackedConnection connection, DbProviderFactory factory, ILoggerFactory? loggerFactory = null)
+    public static async Task<DataSourceInformation> CreateAsync(ITrackedConnection connection,
+        DbProviderFactory factory, ILoggerFactory? loggerFactory = null)
     {
         if (connection == null)
         {
@@ -97,7 +103,8 @@ public class DataSourceInformation : IDataSourceInformation
             await connection.OpenAsync().ConfigureAwait(false);
         }
 
-        var dialect = await SqlDialectFactory.CreateDialectAsync(connection, factory, loggerFactory).ConfigureAwait(false);
+        var dialect = await SqlDialectFactory.CreateDialectAsync(connection, factory, loggerFactory)
+            .ConfigureAwait(false);
         return new DataSourceInformation(dialect);
     }
 

@@ -27,13 +27,14 @@ public class HStoreBranchTests
         Assert.Empty(store.Values);
         Assert.Equal(string.Empty, store.ToString());
         Assert.Equal(0, store.GetHashCode());
-        Assert.True(store.Equals(default(HStore)));
+        Assert.True(store.Equals(default));
 
         var seen = 0;
         foreach (var _ in store)
         {
             seen++;
         }
+
         Assert.Equal(0, seen);
     }
 

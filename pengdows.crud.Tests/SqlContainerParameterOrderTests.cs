@@ -86,14 +86,18 @@ public class SqlContainerParameterOrderTests : SqlLiteContextTestBase
         public override string ParameterMarker => "?";
         public override bool SupportsNamedParameters => false;
         public override SupportedDatabase DatabaseType => SupportedDatabase.Unknown;
-        public PositionalDialect() : base(new fakeDbFactory(SupportedDatabase.Unknown), NullLogger<SqlDialect>.Instance) { }
+
+        public PositionalDialect() : base(new fakeDbFactory(SupportedDatabase.Unknown), NullLogger<SqlDialect>.Instance)
+        {
+        }
     }
 
     [Fact]
     public async Task PositionalDialect_BindsByParamSequence()
     {
         var dialect = new PositionalDialect();
-        var dummyConn = new FakeTrackedConnection(new fakeDbConnection(), new DataTable(), new Dictionary<string, object>());
+        var dummyConn =
+            new FakeTrackedConnection(new fakeDbConnection(), new DataTable(), new Dictionary<string, object>());
         dialect.DetectDatabaseInfo(dummyConn);
         var dsi = new DataSourceInformation(dialect);
         var ctx = new Mock<IDatabaseContext>();
@@ -115,7 +119,8 @@ public class SqlContainerParameterOrderTests : SqlLiteContextTestBase
         container.AddParameter(pA); // intentionally add out of encounter order
         container.AddParameter(pB);
 
-        using var tracked = new FakeTrackedConnection(new fakeDbConnection(), new DataTable(), new Dictionary<string, object>());
+        using var tracked =
+            new FakeTrackedConnection(new fakeDbConnection(), new DataTable(), new Dictionary<string, object>());
         var method = typeof(SqlContainer).GetMethod(
             "PrepareAndCreateCommandAsync",
             BindingFlags.Instance | BindingFlags.NonPublic);

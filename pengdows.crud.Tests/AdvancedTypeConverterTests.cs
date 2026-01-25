@@ -73,7 +73,8 @@ public class AdvancedTypeConverterTests
     public void MacAddressConverter_ShouldConvertFromString()
     {
         var converter = new MacAddressConverter();
-        var success = converter.TryConvertFromProvider("00:11:22:33:44:55", SupportedDatabase.PostgreSql, out var result);
+        var success =
+            converter.TryConvertFromProvider("00:11:22:33:44:55", SupportedDatabase.PostgreSql, out var result);
 
         Assert.True(success);
         Assert.NotNull(result.Address);
@@ -403,7 +404,7 @@ public class AdvancedTypeConverterTests
     public void PostgreSqlRangeConverter_ToProviderValue_FormatsRange()
     {
         var converter = new PostgreSqlRangeConverter<int>();
-        var range = new Range<int>(5, 10, isLowerInclusive: true, isUpperInclusive: false);
+        var range = new Range<int>(5, 10, true, false);
 
         var providerValue = converter.ToProviderValue(range, SupportedDatabase.PostgreSql);
 
@@ -764,7 +765,11 @@ public class AdvancedTypeConverterTests
 
     private sealed class FakeNpgsqlGeometry
     {
-        public FakeNpgsqlGeometry(byte[] bytes) => AsBinary = bytes;
+        public FakeNpgsqlGeometry(byte[] bytes)
+        {
+            AsBinary = bytes;
+        }
+
         public byte[] AsBinary { get; }
     }
 
@@ -777,18 +782,29 @@ public class AdvancedTypeConverterTests
         public override long Length => 0;
         public override long Position { get; set; }
 
-        public override void Flush() { }
+        public override void Flush()
+        {
+        }
 
-        public override int Read(byte[] buffer, int offset, int count) => 0;
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            return 0;
+        }
 
         public override long Seek(long offset, SeekOrigin origin)
-            => throw new InvalidOperationException("Seek failed");
+        {
+            throw new InvalidOperationException("Seek failed");
+        }
 
         public override void SetLength(long value)
-            => throw new NotSupportedException();
+        {
+            throw new NotSupportedException();
+        }
 
         public override void Write(byte[] buffer, int offset, int count)
-            => throw new NotSupportedException();
+        {
+            throw new NotSupportedException();
+        }
     }
 
     // Helper class to simulate a stream that reports as not readable
@@ -800,19 +816,29 @@ public class AdvancedTypeConverterTests
         public override long Length => 0;
         public override long Position { get; set; }
 
-        public override void Flush() { }
+        public override void Flush()
+        {
+        }
 
         public override int Read(byte[] buffer, int offset, int count)
-            => throw new NotSupportedException();
+        {
+            throw new NotSupportedException();
+        }
 
         public override long Seek(long offset, SeekOrigin origin)
-            => throw new NotSupportedException();
+        {
+            throw new NotSupportedException();
+        }
 
         public override void SetLength(long value)
-            => throw new NotSupportedException();
+        {
+            throw new NotSupportedException();
+        }
 
         public override void Write(byte[] buffer, int offset, int count)
-            => throw new NotSupportedException();
+        {
+            throw new NotSupportedException();
+        }
     }
 
     // Helper class to simulate a non-seekable stream
@@ -820,35 +846,54 @@ public class AdvancedTypeConverterTests
     {
         private readonly MemoryStream _inner;
 
-        public NonSeekableStream(byte[] data) => _inner = new MemoryStream(data);
+        public NonSeekableStream(byte[] data)
+        {
+            _inner = new MemoryStream(data);
+        }
 
         public override bool CanRead => true;
         public override bool CanSeek => false; // Not seekable
         public override bool CanWrite => false;
         public override long Length => _inner.Length;
+
         public override long Position
         {
             get => _inner.Position;
             set => throw new NotSupportedException();
         }
 
-        public override void Flush() => _inner.Flush();
+        public override void Flush()
+        {
+            _inner.Flush();
+        }
 
         public override int Read(byte[] buffer, int offset, int count)
-            => _inner.Read(buffer, offset, count);
+        {
+            return _inner.Read(buffer, offset, count);
+        }
 
         public override long Seek(long offset, SeekOrigin origin)
-            => throw new NotSupportedException();
+        {
+            throw new NotSupportedException();
+        }
 
         public override void SetLength(long value)
-            => throw new NotSupportedException();
+        {
+            throw new NotSupportedException();
+        }
 
         public override void Write(byte[] buffer, int offset, int count)
-            => throw new NotSupportedException();
+        {
+            throw new NotSupportedException();
+        }
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) _inner?.Dispose();
+            if (disposing)
+            {
+                _inner?.Dispose();
+            }
+
             base.Dispose(disposing);
         }
     }

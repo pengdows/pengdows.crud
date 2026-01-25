@@ -10,8 +10,9 @@ public class Uuid7OptimizedTests
     public Uuid7OptimizedTests()
     {
         // Reset to default NTP mode
-        Uuid7Optimized.Configure(new Uuid7Options(Mode: Uuid7ClockMode.NtpSynced));
+        Uuid7Optimized.Configure(new Uuid7Options(Uuid7ClockMode.NtpSynced));
     }
+
     [Fact]
     public void NewUuid7_GeneratesVersion7AndRfcVariant()
     {
@@ -41,7 +42,7 @@ public class Uuid7OptimizedTests
     [Fact]
     public void NewUuid7Bytes_ThrowsWhenSpanTooSmall()
     {
-        byte[] dest = new byte[15];
+        var dest = new byte[15];
         Assert.Throws<ArgumentException>(() => Uuid7Optimized.NewUuid7Bytes(dest));
     }
 
@@ -61,7 +62,7 @@ public class Uuid7OptimizedTests
     [Fact]
     public void NewUuid7RfcBytes_ThrowsWhenSpanTooSmall()
     {
-        byte[] dest = new byte[15];
+        var dest = new byte[15];
         Assert.Throws<ArgumentException>(() => Uuid7Optimized.NewUuid7RfcBytes(dest));
     }
 
@@ -127,7 +128,8 @@ public class Uuid7OptimizedTests
     [Fact]
     public void GetGlobalEpoch_UpdatesWithUuidGeneration()
     {
-        var epochField = typeof(Uuid7Optimized).GetField("_globalEpochMs", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var epochField =
+            typeof(Uuid7Optimized).GetField("_globalEpochMs", BindingFlags.NonPublic | BindingFlags.Static)!;
         epochField.SetValue(null, 0L);
         var tlsField = typeof(Uuid7Optimized).GetField("_threadState", BindingFlags.NonPublic | BindingFlags.Static)!;
         var threadLocal = tlsField.GetValue(null)!;
@@ -199,7 +201,7 @@ public class Uuid7OptimizedTests
 
         // To get PTP defaults, user should not construct Uuid7Options manually
         // They should use the pattern that Configure detects
-        Uuid7Optimized.Configure(new Uuid7Options(Mode: Uuid7ClockMode.PtpSynced));
+        Uuid7Optimized.Configure(new Uuid7Options(Uuid7ClockMode.PtpSynced));
 
         // Assert - When user only sets Mode (all other values are record defaults),
         // Configure() detects this and applies mode-specific defaults
@@ -217,7 +219,7 @@ public class Uuid7OptimizedTests
     public void Configure_NtpMode_UsesConservativeDefaults()
     {
         // Act
-        Uuid7Optimized.Configure(new Uuid7Options(Mode: Uuid7ClockMode.NtpSynced));
+        Uuid7Optimized.Configure(new Uuid7Options(Uuid7ClockMode.NtpSynced));
 
         // Assert
         var optsField = typeof(Uuid7Optimized).GetField("_opts", BindingFlags.NonPublic | BindingFlags.Static);
@@ -234,7 +236,7 @@ public class Uuid7OptimizedTests
     public void Configure_SingleInstanceMode_UsesGenerousDefaults()
     {
         // Act
-        Uuid7Optimized.Configure(new Uuid7Options(Mode: Uuid7ClockMode.SingleInstance));
+        Uuid7Optimized.Configure(new Uuid7Options(Uuid7ClockMode.SingleInstance));
 
         // Assert
         var optsField = typeof(Uuid7Optimized).GetField("_opts", BindingFlags.NonPublic | BindingFlags.Static);
@@ -252,8 +254,8 @@ public class Uuid7OptimizedTests
     {
         // Arrange - Try to set higher than PTP should allow
         var options = new Uuid7Options(
-            Mode: Uuid7ClockMode.PtpSynced,
-            MaxNegativeSkewMs: 10 // Too high for PTP
+            Uuid7ClockMode.PtpSynced,
+            10 // Too high for PTP
         );
 
         // Act
@@ -271,8 +273,8 @@ public class Uuid7OptimizedTests
     {
         // Arrange - Try to set lower than NTP should allow
         var options = new Uuid7Options(
-            Mode: Uuid7ClockMode.NtpSynced,
-            MaxNegativeSkewMs: 2 // Too low for NTP
+            Uuid7ClockMode.NtpSynced,
+            2 // Too low for NTP
         );
 
         // Act
@@ -290,7 +292,7 @@ public class Uuid7OptimizedTests
     {
         // Arrange
         var options = new Uuid7Options(
-            Mode: Uuid7ClockMode.PtpSynced,
+            Uuid7ClockMode.PtpSynced,
             MaxSpinCount: 256 // Too high for PTP
         );
 
@@ -309,7 +311,7 @@ public class Uuid7OptimizedTests
     {
         // Arrange
         var options = new Uuid7Options(
-            Mode: Uuid7ClockMode.NtpSynced,
+            Uuid7ClockMode.NtpSynced,
             MaxSpinCount: 32 // Too low for NTP
         );
 
@@ -328,9 +330,9 @@ public class Uuid7OptimizedTests
     {
         // Arrange
         var options = new Uuid7Options(
-            Mode: Uuid7ClockMode.SingleInstance,
-            MaxNegativeSkewMs: 100,
-            MaxSpinCount: 256
+            Uuid7ClockMode.SingleInstance,
+            100,
+            256
         );
 
         // Act
@@ -351,11 +353,11 @@ public class Uuid7OptimizedTests
         // we need to set at least one OTHER non-default value so Configure doesn't
         // think we want mode defaults. Set MaxNegativeSkewMs to something custom.
         var options = new Uuid7Options(
-            Mode: Uuid7ClockMode.PtpSynced,
-            MaxNegativeSkewMs: 1, // Set to PTP's expected value explicitly
-            MaxSpinCount: 64, // Set to PTP's expected value explicitly
-            SleepMs: 1, // Set to expected value
-            FailFastOnBurst: false // Override PTP default (which is true)
+            Uuid7ClockMode.PtpSynced,
+            1, // Set to PTP's expected value explicitly
+            64, // Set to PTP's expected value explicitly
+            1, // Set to expected value
+            false // Override PTP default (which is true)
         );
 
         // Act
@@ -400,7 +402,7 @@ public class Uuid7OptimizedTests
     public void Configure_AllModes_GeneratesValidUuid7(Uuid7ClockMode mode)
     {
         // Arrange
-        Uuid7Optimized.Configure(new Uuid7Options(Mode: mode));
+        Uuid7Optimized.Configure(new Uuid7Options(mode));
 
         // Act
         var guid = Uuid7Optimized.NewUuid7();

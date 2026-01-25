@@ -43,7 +43,7 @@ public class ConnectionPoolingConfigurationBranchTests
             ":memory:",
             SupportedDatabase.Sqlite,
             DbMode.Standard,
-            supportsExternalPooling: true,
+            true,
             builder: builder);
 
         Assert.Equal(":memory:", result);
@@ -61,7 +61,7 @@ public class ConnectionPoolingConfigurationBranchTests
             builder.ConnectionString,
             SupportedDatabase.SqlServer,
             DbMode.Standard,
-            supportsExternalPooling: true,
+            true,
             builder: builder);
 
         var parsed = new DbConnectionStringBuilder { ConnectionString = result };
@@ -81,7 +81,7 @@ public class ConnectionPoolingConfigurationBranchTests
             builder.ConnectionString,
             SupportedDatabase.SqlServer,
             DbMode.Standard,
-            supportsExternalPooling: true,
+            true,
             builder: builder);
 
         Assert.Equal(builder.ConnectionString, result);

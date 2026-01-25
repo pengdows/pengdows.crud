@@ -21,7 +21,8 @@ public readonly struct Cidr : IEquatable<Cidr>
 
         if (prefixLength > totalBits)
         {
-            throw new ArgumentOutOfRangeException(nameof(prefixLength), prefixLength, "Prefix length exceeds address family bounds.");
+            throw new ArgumentOutOfRangeException(nameof(prefixLength), prefixLength,
+                "Prefix length exceeds address family bounds.");
         }
 
         PrefixLength = prefixLength;
@@ -39,9 +40,15 @@ public readonly struct Cidr : IEquatable<Cidr>
     public bool Equals(Cidr other)
     {
         if (Network is null && other.Network is null)
+        {
             return PrefixLength == other.PrefixLength;
+        }
+
         if (Network is null || other.Network is null)
+        {
             return false;
+        }
+
         return Network.Equals(other.Network) && PrefixLength == other.PrefixLength;
     }
 
@@ -58,11 +65,15 @@ public readonly struct Cidr : IEquatable<Cidr>
     public static Cidr Parse(string text)
     {
         if (string.IsNullOrWhiteSpace(text))
+        {
             throw new FormatException("cidr value cannot be empty.");
+        }
 
         var parts = text.Split('/', 2);
         if (parts.Length != 2)
+        {
             throw new FormatException("cidr requires network/prefix format.");
+        }
 
         var address = IPAddress.Parse(parts[0]);
         var prefix = byte.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture);

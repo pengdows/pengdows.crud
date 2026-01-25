@@ -35,7 +35,8 @@ public class EntityHelperOrderingTests : SqlLiteContextTestBase
         var wrappedA = Context.WrapObjectName("A");
         var wrappedB = Context.WrapObjectName("B");
         var wrappedTable = Context.WrapObjectName("Ordered");
-        var expected = $"SELECT {wrappedAlias}.{wrappedA}, {wrappedAlias}.{wrappedB}\nFROM {wrappedTable} {wrappedAlias}";
+        var expected =
+            $"SELECT {wrappedAlias}.{wrappedA}, {wrappedAlias}.{wrappedB}\nFROM {wrappedTable} {wrappedAlias}";
         Assert.Equal(expected, sc.Query.ToString());
     }
 
@@ -141,21 +142,16 @@ public class EntityHelperOrderingTests : SqlLiteContextTestBase
     [Table("Default")]
     private class DefaultEntity
     {
-        [Id]
-        [Column("B", DbType.Int32)]
-        public int B { get; set; }
+        [Id] [Column("B", DbType.Int32)] public int B { get; set; }
 
-        [Column("A", DbType.Int32)]
-        public int A { get; set; }
+        [Column("A", DbType.Int32)] public int A { get; set; }
     }
 
     [Table("NoKey")]
     private class NoKeyEntity
     {
-        [Column("A", DbType.Int32)]
-        public int A { get; set; }
+        [Column("A", DbType.Int32)] public int A { get; set; }
 
-        [Column("B", DbType.Int32)]
-        public int B { get; set; }
+        [Column("B", DbType.Int32)] public int B { get; set; }
     }
 }

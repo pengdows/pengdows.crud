@@ -35,7 +35,7 @@ public static class DecimalHelpers
         var scale = (bits[3] >> 16) & 0x7F; // 0..28
 
         // Build exact integer mantissa so we can trim trailing fractional zeros
-        decimal mantissa = scale == 0 ? abs : abs * Pow10[scale];
+        var mantissa = scale == 0 ? abs : abs * Pow10[scale];
 
         // Trim trailing zeros from the fractional part (i.e., remove factors of 10)
         while (scale > 0 && mantissa % 10m == 0m)
@@ -45,15 +45,15 @@ public static class DecimalHelpers
         }
 
         // Count integer digits (digits to the left of the decimal point)
-        int integerDigits = 0;
-        decimal intPart = decimal.Truncate(abs);
+        var integerDigits = 0;
+        var intPart = decimal.Truncate(abs);
         while (intPart >= 1m)
         {
             intPart /= 10m;
             integerDigits++;
         }
 
-        int precision = integerDigits + scale;
+        var precision = integerDigits + scale;
         return (precision, scale);
     }
 }

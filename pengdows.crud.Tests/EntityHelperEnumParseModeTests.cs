@@ -16,11 +16,25 @@ public class EntityHelperEnumParseModeTests : SqlLiteContextTestBase
     [Table("EnumModes")]
     private class EnumModeEntity
     {
-        [Id(false)] [Column("Id", DbType.Int32)] public int Id { get; set; }
-        [EnumColumn(typeof(Color))] [Column("ColorText", DbType.String)] public Color? ColorText { get; set; }
-        [EnumColumn(typeof(Color))] [Column("ColorNum", DbType.Int32)] public Color ColorNum { get; set; }
+        [Id(false)]
+        [Column("Id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [EnumColumn(typeof(Color))]
+        [Column("ColorText", DbType.String)]
+        public Color? ColorText { get; set; }
+
+        [EnumColumn(typeof(Color))]
+        [Column("ColorNum", DbType.Int32)]
+        public Color ColorNum { get; set; }
     }
-    private enum Color { Red, Green, Blue }
+
+    private enum Color
+    {
+        Red,
+        Green,
+        Blue
+    }
 
     public EntityHelperEnumParseModeTests()
     {
@@ -30,7 +44,8 @@ public class EntityHelperEnumParseModeTests : SqlLiteContextTestBase
     [Fact]
     public void SetNullAndLog_InvalidString_SetsNull()
     {
-        var helper = new EntityHelper<EnumModeEntity, int>(Context, enumParseBehavior: EnumParseFailureMode.SetNullAndLog);
+        var helper =
+            new EntityHelper<EnumModeEntity, int>(Context, enumParseBehavior: EnumParseFailureMode.SetNullAndLog);
         var rows = new[]
         {
             new Dictionary<string, object>
@@ -49,7 +64,8 @@ public class EntityHelperEnumParseModeTests : SqlLiteContextTestBase
     [Fact]
     public void SetDefaultValue_InvalidNumeric_SetsDefault()
     {
-        var helper = new EntityHelper<EnumModeEntity, int>(Context, enumParseBehavior: EnumParseFailureMode.SetDefaultValue);
+        var helper =
+            new EntityHelper<EnumModeEntity, int>(Context, enumParseBehavior: EnumParseFailureMode.SetDefaultValue);
         var rows = new[]
         {
             new Dictionary<string, object>
@@ -61,7 +77,7 @@ public class EntityHelperEnumParseModeTests : SqlLiteContextTestBase
         using var reader = new EntityHelperConverterTests.FakeTrackedReader(rows);
         reader.Read();
         var e = helper.MapReaderToObject(reader);
-        Assert.Equal(default(Color), e.ColorNum);
+        Assert.Equal(default, e.ColorNum);
     }
 
     [Fact]
@@ -69,9 +85,9 @@ public class EntityHelperEnumParseModeTests : SqlLiteContextTestBase
     {
         var helper = new EntityHelper<EnumModeEntity, int>(Context);
         var sql = "@p SELECT \"Name\" FROM \"T\" WHERE \"Id\"=@id";
-        #pragma warning disable CS0618 // Type or member is obsolete
+#pragma warning disable CS0618 // Type or member is obsolete
         var replaced = helper.ReplaceDialectTokens(sql, "[", "]", ":");
-        #pragma warning restore CS0618 // Type or member is obsolete
+#pragma warning restore CS0618 // Type or member is obsolete
         Assert.Contains(":p", replaced);
         Assert.Contains("[Name]", replaced);
         Assert.Contains("[T]", replaced);

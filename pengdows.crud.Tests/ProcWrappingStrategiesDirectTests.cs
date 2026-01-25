@@ -11,7 +11,10 @@ namespace pengdows.crud.Tests;
 
 public class ProcWrappingStrategiesDirectTests
 {
-    private static string Wrapper(string name) => $"[{name}]";
+    private static string Wrapper(string name)
+    {
+        return $"[{name}]";
+    }
 
     [Fact]
     public void ExecProcWrappingStrategy_UsesWrapper_WithAndWithoutArgs()
@@ -70,4 +73,3 @@ public class ProcWrappingStrategiesDirectTests
         Assert.Throws<ArgumentException>(() => s.Wrap(null!, ExecutionType.Write, "@a"));
     }
 }
-

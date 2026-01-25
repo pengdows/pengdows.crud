@@ -12,18 +12,21 @@ namespace pengdows.crud.Tests;
 
 public class DialectTheoryTests
 {
-    public static IEnumerable<object[]> DialectMatrix() => new List<object[]>
+    public static IEnumerable<object[]> DialectMatrix()
     {
-        new object[] { SupportedDatabase.SqlServer,      ProcWrappingStyle.Exec,          "@",  true },
-        new object[] { SupportedDatabase.PostgreSql,     ProcWrappingStyle.PostgreSQL,    ":",  true },
-        new object[] { SupportedDatabase.CockroachDb,    ProcWrappingStyle.PostgreSQL,    ":",  true },
-        new object[] { SupportedDatabase.MySql,          ProcWrappingStyle.Call,          "@",  true },
-        new object[] { SupportedDatabase.MariaDb,        ProcWrappingStyle.Call,          "@",  true },
-        new object[] { SupportedDatabase.Firebird,       ProcWrappingStyle.ExecuteProcedure, "@", true },
-        new object[] { SupportedDatabase.Oracle,         ProcWrappingStyle.Oracle,        ":",  true },
-        new object[] { SupportedDatabase.Sqlite,         ProcWrappingStyle.None,          "@",  true },
-        new object[] { SupportedDatabase.DuckDB,         ProcWrappingStyle.None,          "$",  true },
-    };
+        return new List<object[]>
+        {
+            new object[] { SupportedDatabase.SqlServer, ProcWrappingStyle.Exec, "@", true },
+            new object[] { SupportedDatabase.PostgreSql, ProcWrappingStyle.PostgreSQL, ":", true },
+            new object[] { SupportedDatabase.CockroachDb, ProcWrappingStyle.PostgreSQL, ":", true },
+            new object[] { SupportedDatabase.MySql, ProcWrappingStyle.Call, "@", true },
+            new object[] { SupportedDatabase.MariaDb, ProcWrappingStyle.Call, "@", true },
+            new object[] { SupportedDatabase.Firebird, ProcWrappingStyle.ExecuteProcedure, "@", true },
+            new object[] { SupportedDatabase.Oracle, ProcWrappingStyle.Oracle, ":", true },
+            new object[] { SupportedDatabase.Sqlite, ProcWrappingStyle.None, "@", true },
+            new object[] { SupportedDatabase.DuckDB, ProcWrappingStyle.None, "$", true }
+        };
+    }
 
     [Theory]
     [MemberData(nameof(DialectMatrix))]

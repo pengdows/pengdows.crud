@@ -60,7 +60,7 @@ internal readonly struct CachedParameterConfig
 /// </summary>
 public class AdvancedTypeRegistry
 {
-    public static AdvancedTypeRegistry Shared { get; } = new(includeDefaults: true);
+    public static AdvancedTypeRegistry Shared { get; } = new(true);
 
     private readonly Dictionary<MappingKey, ProviderTypeMapping> _mappings = new();
     private readonly Dictionary<Type, IAdvancedTypeConverter> _converters = new();
@@ -104,8 +104,11 @@ public class AdvancedTypeRegistry
         foreach (var key in _parameterCache.Keys)
         {
             if (key.ClrType == type)
+            {
                 keysToRemove.Add(key);
+            }
         }
+
         foreach (var key in keysToRemove)
         {
             _parameterCache.Remove(key);
@@ -154,7 +157,9 @@ public class AdvancedTypeRegistry
         }
 
         if (cachedConfig == null)
+        {
             return false;
+        }
 
         var config = cachedConfig.Value;
         var converter = config.Converter;
@@ -177,7 +182,8 @@ public class AdvancedTypeRegistry
         if (converter != null && value != null)
         {
             value = converter.ToProviderValue(value, provider);
-            System.Diagnostics.Debug.WriteLine($"AdvancedTypeRegistry: converted {clrType.Name} for {provider} to {value?.GetType().FullName ?? "null"}");
+            System.Diagnostics.Debug.WriteLine(
+                $"AdvancedTypeRegistry: converted {clrType.Name} for {provider} to {value?.GetType().FullName ?? "null"}");
         }
 
         parameter.Value = value ?? DBNull.Value;
@@ -198,7 +204,8 @@ public class AdvancedTypeRegistry
     /// Enhanced parameter configuration using both legacy converters and new coercion system.
     /// Provides fallback mechanism and optimal performance.
     /// </summary>
-    public bool TryConfigureParameterEnhanced(DbParameter parameter, Type clrType, object? value, SupportedDatabase provider)
+    public bool TryConfigureParameterEnhanced(DbParameter parameter, Type clrType, object? value,
+        SupportedDatabase provider)
     {
         // First try the legacy advanced type system for backward compatibility
         if (TryConfigureParameter(parameter, clrType, value, provider))
@@ -294,10 +301,7 @@ public class AdvancedTypeRegistry
         RegisterMapping<JsonDocument>(SupportedDatabase.MySql, new ProviderTypeMapping
         {
             DbType = DbType.String,
-            ConfigureParameter = (param, value) =>
-            {
-                SetEnumProperty(param, "MySqlDbType", "JSON");
-            }
+            ConfigureParameter = (param, value) => { SetEnumProperty(param, "MySqlDbType", "JSON"); }
         });
 
         // SQL Server JSON (stored as NVARCHAR(MAX))
@@ -354,20 +358,14 @@ public class AdvancedTypeRegistry
         RegisterMapping<int[]>(SupportedDatabase.PostgreSql, new ProviderTypeMapping
         {
             DbType = DbType.Object,
-            ConfigureParameter = (param, value) =>
-            {
-                SetEnumProperty(param, "NpgsqlDbType", "Array", "Integer");
-            }
+            ConfigureParameter = (param, value) => { SetEnumProperty(param, "NpgsqlDbType", "Array", "Integer"); }
         });
 
         // PostgreSQL text[] arrays
         RegisterMapping<string[]>(SupportedDatabase.PostgreSql, new ProviderTypeMapping
         {
             DbType = DbType.Object,
-            ConfigureParameter = (param, value) =>
-            {
-                SetEnumProperty(param, "NpgsqlDbType", "Array", "Text");
-            }
+            ConfigureParameter = (param, value) => { SetEnumProperty(param, "NpgsqlDbType", "Array", "Text"); }
         });
     }
 
@@ -377,20 +375,14 @@ public class AdvancedTypeRegistry
         RegisterMapping<Range<int>>(SupportedDatabase.PostgreSql, new ProviderTypeMapping
         {
             DbType = DbType.String,
-            ConfigureParameter = (param, value) =>
-            {
-                SetEnumProperty(param, "NpgsqlDbType", "Int4Range");
-            }
+            ConfigureParameter = (param, value) => { SetEnumProperty(param, "NpgsqlDbType", "Int4Range"); }
         });
 
         // PostgreSQL tsrange
         RegisterMapping<Range<DateTime>>(SupportedDatabase.PostgreSql, new ProviderTypeMapping
         {
             DbType = DbType.String,
-            ConfigureParameter = (param, value) =>
-            {
-                SetEnumProperty(param, "NpgsqlDbType", "TsRange");
-            }
+            ConfigureParameter = (param, value) => { SetEnumProperty(param, "NpgsqlDbType", "TsRange"); }
         });
     }
 
@@ -400,30 +392,21 @@ public class AdvancedTypeRegistry
         RegisterMapping<Inet>(SupportedDatabase.PostgreSql, new ProviderTypeMapping
         {
             DbType = DbType.String,
-            ConfigureParameter = (param, value) =>
-            {
-                SetEnumProperty(param, "NpgsqlDbType", "Inet");
-            }
+            ConfigureParameter = (param, value) => { SetEnumProperty(param, "NpgsqlDbType", "Inet"); }
         });
 
         // PostgreSQL cidr
         RegisterMapping<Cidr>(SupportedDatabase.PostgreSql, new ProviderTypeMapping
         {
             DbType = DbType.String,
-            ConfigureParameter = (param, value) =>
-            {
-                SetEnumProperty(param, "NpgsqlDbType", "Cidr");
-            }
+            ConfigureParameter = (param, value) => { SetEnumProperty(param, "NpgsqlDbType", "Cidr"); }
         });
 
         // PostgreSQL macaddr
         RegisterMapping<MacAddress>(SupportedDatabase.PostgreSql, new ProviderTypeMapping
         {
             DbType = DbType.String,
-            ConfigureParameter = (param, value) =>
-            {
-                SetEnumProperty(param, "NpgsqlDbType", "MacAddr");
-            }
+            ConfigureParameter = (param, value) => { SetEnumProperty(param, "NpgsqlDbType", "MacAddr"); }
         });
     }
 
@@ -433,28 +416,19 @@ public class AdvancedTypeRegistry
         RegisterMapping<PostgreSqlInterval>(SupportedDatabase.PostgreSql, new ProviderTypeMapping
         {
             DbType = DbType.Object,
-            ConfigureParameter = (param, value) =>
-            {
-                SetEnumProperty(param, "NpgsqlDbType", "Interval");
-            }
+            ConfigureParameter = (param, value) => { SetEnumProperty(param, "NpgsqlDbType", "Interval"); }
         });
 
         RegisterMapping<IntervalYearMonth>(SupportedDatabase.Oracle, new ProviderTypeMapping
         {
             DbType = DbType.Object,
-            ConfigureParameter = (param, value) =>
-            {
-                SetEnumProperty(param, "OracleDbType", "IntervalYM");
-            }
+            ConfigureParameter = (param, value) => { SetEnumProperty(param, "OracleDbType", "IntervalYM"); }
         });
 
         RegisterMapping<IntervalDaySecond>(SupportedDatabase.Oracle, new ProviderTypeMapping
         {
             DbType = DbType.Object,
-            ConfigureParameter = (param, value) =>
-            {
-                SetEnumProperty(param, "OracleDbType", "IntervalDS");
-            }
+            ConfigureParameter = (param, value) => { SetEnumProperty(param, "OracleDbType", "IntervalDS"); }
         });
 
         // SQL Server DateTimeOffset (UTC policy)
@@ -466,7 +440,8 @@ public class AdvancedTypeRegistry
                 param.DbType = DbType.DateTimeOffset;
                 if (value is DateTime dt && dt.Kind == DateTimeKind.Unspecified)
                 {
-                    throw new InvalidOperationException("DateTime with Kind=Unspecified not allowed. Use DateTimeOffset or specify Kind.");
+                    throw new InvalidOperationException(
+                        "DateTime with Kind=Unspecified not allowed. Use DateTimeOffset or specify Kind.");
                 }
             }
         });
@@ -499,10 +474,7 @@ public class AdvancedTypeRegistry
         RegisterMapping<Stream>(SupportedDatabase.PostgreSql, new ProviderTypeMapping
         {
             DbType = DbType.Binary,
-            ConfigureParameter = (param, value) =>
-            {
-                param.DbType = DbType.Binary;
-            }
+            ConfigureParameter = (param, value) => { param.DbType = DbType.Binary; }
         });
 
         RegisterMapping<TextReader>(SupportedDatabase.PostgreSql, new ProviderTypeMapping
@@ -519,19 +491,13 @@ public class AdvancedTypeRegistry
         RegisterMapping<Stream>(SupportedDatabase.Oracle, new ProviderTypeMapping
         {
             DbType = DbType.Binary,
-            ConfigureParameter = (param, value) =>
-            {
-                SetEnumProperty(param, "OracleDbType", "Blob");
-            }
+            ConfigureParameter = (param, value) => { SetEnumProperty(param, "OracleDbType", "Blob"); }
         });
 
         RegisterMapping<TextReader>(SupportedDatabase.Oracle, new ProviderTypeMapping
         {
             DbType = DbType.String,
-            ConfigureParameter = (param, value) =>
-            {
-                SetEnumProperty(param, "OracleDbType", "Clob");
-            }
+            ConfigureParameter = (param, value) => { SetEnumProperty(param, "OracleDbType", "Clob"); }
         });
     }
 
@@ -553,10 +519,7 @@ public class AdvancedTypeRegistry
         RegisterMapping<Guid>(SupportedDatabase.PostgreSql, new ProviderTypeMapping
         {
             DbType = DbType.Guid,
-            ConfigureParameter = (param, value) =>
-            {
-                SetEnumProperty(param, "NpgsqlDbType", "Uuid");
-            }
+            ConfigureParameter = (param, value) => { SetEnumProperty(param, "NpgsqlDbType", "Uuid"); }
         });
     }
 
@@ -590,7 +553,7 @@ public class AdvancedTypeRegistry
     {
         if (enumNames.Length == 1)
         {
-            return Enum.TryParse(enumType, enumNames[0], ignoreCase: true, out var parsedSingle)
+            return Enum.TryParse(enumType, enumNames[0], true, out var parsedSingle)
                 ? parsedSingle
                 : null;
         }
@@ -598,7 +561,7 @@ public class AdvancedTypeRegistry
         long combined = 0;
         foreach (var name in enumNames)
         {
-            if (!Enum.TryParse(enumType, name, ignoreCase: true, out var parsedPart))
+            if (!Enum.TryParse(enumType, name, true, out var parsedPart))
             {
                 return null;
             }

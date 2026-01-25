@@ -205,11 +205,11 @@ public class EntityHelper_IntegrationTests : RealSqliteContextTestBase, IAsyncLi
         await create.ExecuteNonQueryAsync();
 
         var retrieve = entityHelper.BuildBaseRetrieve(string.Empty);
-        var list = (await entityHelper.LoadListAsync(retrieve));
+        var list = await entityHelper.LoadListAsync(retrieve);
         var listOfIds = list.Select(x => x.Id).ToList();
 
         var r = entityHelper.BuildRetrieve(listOfIds);
-        var r2 = (await entityHelper.LoadListAsync(r));
+        var r2 = await entityHelper.LoadListAsync(r);
 
         Assert.True(listOfIds.Count > 0 && r2.Count == listOfIds.Count);
     }

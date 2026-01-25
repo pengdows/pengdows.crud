@@ -49,7 +49,7 @@ public abstract class TestContainer : SafeAsyncDisposableBase, ITestContainer
         var timeout = TimeSpan.FromSeconds(numberOfSecondsToWait);
         var startTime = DateTime.UtcNow;
 
-        var lastError = String.Empty;
+        var lastError = string.Empty;
         while (DateTime.UtcNow - startTime < timeout)
         {
             var created = instance.CreateConnection();
@@ -57,6 +57,7 @@ public abstract class TestContainer : SafeAsyncDisposableBase, ITestContainer
             {
                 throw new InvalidOperationException("DbProviderFactory.CreateConnection() returned null.");
             }
+
             await using var connection = created;
             try
             {
@@ -101,6 +102,7 @@ public abstract class TestContainer : SafeAsyncDisposableBase, ITestContainer
                     {
                         throw new InvalidOperationException("DbProviderFactory.CreateConnection() returned null.");
                     }
+
                     createConn.ConnectionString = csbTemp.ConnectionString;
 
                     await using var createCmd = createConn.CreateCommand();
@@ -108,6 +110,7 @@ public abstract class TestContainer : SafeAsyncDisposableBase, ITestContainer
                     {
                         throw new InvalidOperationException("CreateCommand() returned null.");
                     }
+
                     createCmd.CommandText = $"CREATE DATABASE '{db}';";
 
                     await createConn.OpenAsync();

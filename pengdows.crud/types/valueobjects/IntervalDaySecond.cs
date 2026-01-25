@@ -49,14 +49,18 @@ public readonly struct IntervalDaySecond : IEquatable<IntervalDaySecond>
     public static IntervalDaySecond Parse(string text)
     {
         if (string.IsNullOrWhiteSpace(text))
+        {
             return new IntervalDaySecond(0, TimeSpan.Zero);
+        }
 
         var trimmed = text.Trim();
         if (trimmed.StartsWith("P", StringComparison.OrdinalIgnoreCase))
+        {
             trimmed = trimmed.Substring(1);
+        }
 
         var timeIndex = trimmed.IndexOf('T');
-        string? datePart = trimmed;
+        var datePart = trimmed;
         string? timePart = null;
         if (timeIndex >= 0)
         {
@@ -77,7 +81,9 @@ public readonly struct IntervalDaySecond : IEquatable<IntervalDaySecond>
                 }
 
                 if (buffer.Length == 0)
+                {
                     continue;
+                }
 
                 if (c == 'D' || c == 'd')
                 {
@@ -104,7 +110,9 @@ public readonly struct IntervalDaySecond : IEquatable<IntervalDaySecond>
                 }
 
                 if (buffer.Length == 0)
+                {
                     continue;
+                }
 
                 switch (c)
                 {

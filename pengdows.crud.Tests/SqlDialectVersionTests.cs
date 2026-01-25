@@ -40,20 +40,30 @@ public class SqlDialectVersionTests
 
     private sealed class ThrowingConnection : fakeDbConnection
     {
-        protected override DbCommand CreateDbCommand() => new ThrowingCommand(this);
+        protected override DbCommand CreateDbCommand()
+        {
+            return new ThrowingCommand(this);
+        }
     }
 
     private sealed class ThrowingCommand : fakeDbCommand
     {
-        public ThrowingCommand(DbConnection connection) : base(connection) { }
-        public override object ExecuteScalar() => throw new InvalidOperationException("fail");
+        public ThrowingCommand(DbConnection connection) : base(connection)
+        {
+        }
+
+        public override object ExecuteScalar()
+        {
+            throw new InvalidOperationException("fail");
+        }
     }
 
     [Fact]
     public void GetDatabaseVersion_CommandFails_ReturnsErrorMessage()
     {
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
-        var conn = new ThrowingConnection { ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}" };
+        var conn = new ThrowingConnection
+            { ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}" };
         using var tracked = new TrackedConnection(conn);
         var dialect = SqlDialectFactory.CreateDialectForType(
             SupportedDatabase.SqlServer,

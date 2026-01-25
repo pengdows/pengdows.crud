@@ -5,7 +5,9 @@ namespace pengdows.crud.Tests;
 
 public class ReflectionSerializerNegativeTests
 {
-    private class Dummy { }
+    private class Dummy
+    {
+    }
 
     [Fact]
     public void Deserialize_InvalidData_Throws()

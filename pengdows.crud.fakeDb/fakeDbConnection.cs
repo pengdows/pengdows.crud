@@ -53,6 +53,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
 
     // Enhanced data persistence
     internal readonly FakeDataStore DataStore;
+
     /// <summary>
     /// Controls whether the connection should persist DML results in-memory for subsequent queries.
     /// Tests opt-in explicitly to avoid surprising behavior changes in existing suites.
@@ -301,6 +302,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
                 {
                     clonedRows.Add(CloneRow(row));
                 }
+
                 copies.Add(clonedRows);
             }
 
@@ -327,7 +329,10 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
 
     void IFakeDbConnection.EnqueueReaderResult(IEnumerable<Dictionary<string, object>> rows)
     {
-        var converted = new List<Dictionary<string, object?>>(rows is ICollection<Dictionary<string, object>> collection ? collection.Count : 0);
+        var converted =
+            new List<Dictionary<string, object?>>(rows is ICollection<Dictionary<string, object>> collection
+                ? collection.Count
+                : 0);
         foreach (var row in rows)
         {
             var newRow = new Dictionary<string, object?>(row.Count);
@@ -335,6 +340,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
             {
                 newRow[kvp.Key] = kvp.Value;
             }
+
             converted.Add(newRow);
         }
 
@@ -487,6 +493,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         {
             throw _closeFailureException;
         }
+
         CloseCount++;
         var original = _state;
         _state = ConnectionState.Closed;
@@ -504,6 +511,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         {
             DisposeCount++;
         }
+
         Close();
         base.Dispose(disposing);
     }

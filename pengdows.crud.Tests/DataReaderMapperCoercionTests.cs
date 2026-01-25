@@ -13,8 +13,8 @@ public class DataReaderMapperCoercionTests
     public void CoerceValue_ReturnsDefaultWhenEnumParseFails()
     {
         var method = typeof(DataReaderMapper)
-            .GetMethod("CoerceValue", BindingFlags.NonPublic | BindingFlags.Static)
-            ?? throw new InvalidOperationException("CoerceValue method missing");
+                         .GetMethod("CoerceValue", BindingFlags.NonPublic | BindingFlags.Static)
+                     ?? throw new InvalidOperationException("CoerceValue method missing");
 
         var property = typeof(EnumEntity).GetProperty(nameof(EnumEntity.Color))!;
         var result = method.Invoke(null, new object?[]
@@ -32,8 +32,8 @@ public class DataReaderMapperCoercionTests
     public void TryHandleEnumFailure_SetNullAndLog_ReturnsNullForNullableProperty()
     {
         var method = typeof(DataReaderMapper)
-            .GetMethod("TryHandleEnumFailure", BindingFlags.NonPublic | BindingFlags.Static)
-            ?? throw new InvalidOperationException("TryHandleEnumFailure method missing");
+                         .GetMethod("TryHandleEnumFailure", BindingFlags.NonPublic | BindingFlags.Static)
+                     ?? throw new InvalidOperationException("TryHandleEnumFailure method missing");
 
         var property = typeof(EnumEntity).GetProperty(nameof(EnumEntity.NullableColor))!;
         var args = new object?[]
@@ -63,8 +63,8 @@ public class DataReaderMapperCoercionTests
     public void CoerceValue_CoercesNumericValue()
     {
         var method = typeof(DataReaderMapper)
-            .GetMethod("CoerceValue", BindingFlags.NonPublic | BindingFlags.Static)
-            ?? throw new InvalidOperationException("CoerceValue method missing");
+                         .GetMethod("CoerceValue", BindingFlags.NonPublic | BindingFlags.Static)
+                     ?? throw new InvalidOperationException("CoerceValue method missing");
 
         var property = typeof(EnumEntity).GetProperty(nameof(EnumEntity.Color))!;
         var result = method.Invoke(null, new object?[]

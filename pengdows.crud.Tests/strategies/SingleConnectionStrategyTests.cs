@@ -15,15 +15,13 @@ namespace pengdows.crud.Tests.strategies;
 
 public class SingleConnectionStrategyTests
 {
-    
-
     private static DatabaseContext CreateSingleConnectionContext()
     {
         var cfg = new DatabaseContextConfiguration
         {
             ConnectionString = "Data Source=test;EmulatedProduct=Sqlite",
             ProviderName = SupportedDatabase.Sqlite.ToString(),
-            DbMode = DbMode.SingleConnection,
+            DbMode = DbMode.SingleConnection
         };
         return new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Sqlite), NullLoggerFactory.Instance);
     }
@@ -35,8 +33,8 @@ public class SingleConnectionStrategyTests
         var strategy = new SingleConnectionStrategy(ctx);
         var persistent = ctx.GetConnection(ExecutionType.Read); // under SingleConnection this pins a connection
 
-        var c1 = strategy.GetConnection(ExecutionType.Read, isShared: false);
-        var c2 = strategy.GetConnection(ExecutionType.Write, isShared: true);
+        var c1 = strategy.GetConnection(ExecutionType.Read, false);
+        var c2 = strategy.GetConnection(ExecutionType.Write, true);
 
         Assert.Same(persistent, c1);
         Assert.Same(persistent, c2);
@@ -59,7 +57,7 @@ public class SingleConnectionStrategyTests
         using var ctx = CreateSingleConnectionContext();
         var strategy = new SingleConnectionStrategy(ctx);
         var persistent = ctx.GetConnection(ExecutionType.Read);
-        
+
         // Non-persistent (separate instance)
         var disposed = false;
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);

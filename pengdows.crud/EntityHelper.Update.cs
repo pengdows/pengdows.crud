@@ -16,13 +16,15 @@ public partial class EntityHelper<TEntity, TRowID>
         return BuildUpdateAsync(objectToUpdate, _versionColumn != null, ctx, CancellationToken.None);
     }
 
-    public Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, IDatabaseContext? context, CancellationToken cancellationToken)
+    public Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, IDatabaseContext? context,
+        CancellationToken cancellationToken)
     {
         var ctx = context ?? _context;
         return BuildUpdateAsync(objectToUpdate, _versionColumn != null, ctx, cancellationToken);
     }
 
-    public Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context = null)
+    public Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, bool loadOriginal,
+        IDatabaseContext? context = null)
     {
         return BuildUpdateAsync(objectToUpdate, loadOriginal, context, CancellationToken.None);
     }
@@ -41,10 +43,13 @@ public partial class EntityHelper<TEntity, TRowID>
             throw new NotSupportedException(
                 "Single-ID operations require a designated Id column; use composite-key helpers.");
         }
+
         var sc = ctx.CreateSqlContainer();
         var dialect = GetDialect(ctx);
 
-        var original = loadOriginal ? await LoadOriginalAsync(objectToUpdate, ctx, cancellationToken).ConfigureAwait(false) : null;
+        var original = loadOriginal
+            ? await LoadOriginalAsync(objectToUpdate, ctx, cancellationToken).ConfigureAwait(false)
+            : null;
         if (loadOriginal && original == null)
         {
             throw new InvalidOperationException("Original record not found for update.");
@@ -96,7 +101,8 @@ public partial class EntityHelper<TEntity, TRowID>
         return LoadOriginalAsync(objectToUpdate, context, CancellationToken.None);
     }
 
-    private async Task<TEntity?> LoadOriginalAsync(TEntity objectToUpdate, IDatabaseContext? context, CancellationToken cancellationToken)
+    private async Task<TEntity?> LoadOriginalAsync(TEntity objectToUpdate, IDatabaseContext? context,
+        CancellationToken cancellationToken)
     {
         var ctx = context ?? _context;
         var idValue = _idColumn!.PropertyInfo.GetValue(objectToUpdate);
@@ -120,7 +126,9 @@ public partial class EntityHelper<TEntity, TRowID>
         }
         catch (InvalidCastException ex)
         {
-            throw new InvalidOperationException($"Cannot convert ID value '{idValue}' of type {idValue!.GetType().Name} to {targetType.Name}: {ex.Message}", ex);
+            throw new InvalidOperationException(
+                $"Cannot convert ID value '{idValue}' of type {idValue!.GetType().Name} to {targetType.Name}: {ex.Message}",
+                ex);
         }
         catch (DbException)
         {
@@ -128,7 +136,8 @@ public partial class EntityHelper<TEntity, TRowID>
         }
     }
 
-    private (StringBuilder clause, List<DbParameter> parameters) BuildSetClause(TEntity updated, TEntity? original, ISqlDialect dialect, ClauseCounters counters)
+    private (StringBuilder clause, List<DbParameter> parameters) BuildSetClause(TEntity updated, TEntity? original,
+        ISqlDialect dialect, ClauseCounters counters)
     {
         var clause = new StringBuilder();
         var parameters = new List<DbParameter>();
@@ -162,6 +171,7 @@ public partial class EntityHelper<TEntity, TRowID>
                 {
                     dialect.TryMarkJsonParameter(param, column);
                 }
+
                 parameters.Add(param);
                 var marker = dialect.MakeParameterName(param);
                 if (column.IsJsonType)
@@ -203,9 +213,10 @@ public partial class EntityHelper<TEntity, TRowID>
             case DbType.DateTime:
             case DbType.DateTime2:
                 return NormalizeDateTime(Convert.ToDateTime(newValue, CultureInfo.InvariantCulture)) ==
-                    NormalizeDateTime(Convert.ToDateTime(originalValue, CultureInfo.InvariantCulture));
+                       NormalizeDateTime(Convert.ToDateTime(originalValue, CultureInfo.InvariantCulture));
             case DbType.DateTimeOffset:
-                return NormalizeDateTimeOffset(newValue).UtcDateTime == NormalizeDateTimeOffset(originalValue).UtcDateTime;
+                return NormalizeDateTimeOffset(newValue).UtcDateTime ==
+                       NormalizeDateTimeOffset(originalValue).UtcDateTime;
             default:
                 return Equals(newValue, originalValue);
         }
@@ -252,18 +263,21 @@ public partial class EntityHelper<TEntity, TRowID>
 
         if (HasExplicitOffset(value))
         {
-            if (DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsedWithOffset))
+            if (DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind,
+                    out var parsedWithOffset))
             {
                 return parsedWithOffset;
             }
         }
 
-        if (DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsedDateTime))
+        if (DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind,
+                out var parsedDateTime))
         {
             return new DateTimeOffset(NormalizeDateTime(parsedDateTime), TimeSpan.Zero);
         }
 
-        if (DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var fallback))
+        if (DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind,
+                out var fallback))
         {
             return fallback;
         }
@@ -283,6 +297,7 @@ public partial class EntityHelper<TEntity, TRowID>
         {
             separatorIndex = value.LastIndexOf('t');
         }
+
         if (separatorIndex < 0)
         {
             separatorIndex = value.LastIndexOf(' ');
@@ -307,10 +322,12 @@ public partial class EntityHelper<TEntity, TRowID>
 
     private void IncrementVersion(StringBuilder setClause, ISqlDialect dialect)
     {
-        setClause.Append($", {dialect.WrapObjectName(_versionColumn!.Name)} = {dialect.WrapObjectName(_versionColumn.Name)} + 1");
+        setClause.Append(
+            $", {dialect.WrapObjectName(_versionColumn!.Name)} = {dialect.WrapObjectName(_versionColumn.Name)} + 1");
     }
 
-    private DbParameter? AppendVersionCondition(ISqlContainer sc, object? versionValue, ISqlDialect dialect, ClauseCounters counters)
+    private DbParameter? AppendVersionCondition(ISqlContainer sc, object? versionValue, ISqlDialect dialect,
+        ClauseCounters counters)
     {
         if (versionValue == null)
         {

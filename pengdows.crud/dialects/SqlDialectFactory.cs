@@ -12,7 +12,7 @@ namespace pengdows.crud.dialects;
 /// </summary>
 public static class SqlDialectFactory
 {
-public static async Task<ISqlDialect> CreateDialectAsync(
+    public static async Task<ISqlDialect> CreateDialectAsync(
         ITrackedConnection connection,
         DbProviderFactory factory,
         ILoggerFactory loggerFactory)
@@ -30,18 +30,19 @@ public static async Task<ISqlDialect> CreateDialectAsync(
         await dialect.DetectDatabaseInfoAsync(connection).ConfigureAwait(false);
         return dialect;
     }
+
     public static ISqlDialect CreateDialect(
         ITrackedConnection connection,
         DbProviderFactory factory)
     {
-        return CreateDialectAsync(connection, factory,  NullLoggerFactory.Instance).GetAwaiter().GetResult();
+        return CreateDialectAsync(connection, factory, NullLoggerFactory.Instance).GetAwaiter().GetResult();
     }
 
 
     public static ISqlDialect CreateDialect(
         ITrackedConnection connection,
         DbProviderFactory factory,
-           ILoggerFactory loggerFactory)
+        ILoggerFactory loggerFactory)
     {
         loggerFactory ??= NullLoggerFactory.Instance;
         return CreateDialectAsync(connection, factory, loggerFactory).GetAwaiter().GetResult();
@@ -73,7 +74,8 @@ public static async Task<ISqlDialect> CreateDialectAsync(
 
         return typeName switch
         {
-            var name when name.Contains("sqlserver") || name.Contains("system.data.sqlclient") => SupportedDatabase.SqlServer,
+            var name when name.Contains("sqlserver") || name.Contains("system.data.sqlclient") => SupportedDatabase
+                .SqlServer,
             var name when name.Contains("npgsql") => SupportedDatabase.PostgreSql,
             var name when name.Contains("mariadb") => SupportedDatabase.MariaDb,
             var name when name.Contains("mysql") => SupportedDatabase.MySql,
@@ -101,6 +103,7 @@ public static async Task<ISqlDialect> CreateDialectAsync(
                 {
                     return Task.FromResult(SupportedDatabase.MariaDb);
                 }
+
                 if (inferred != SupportedDatabase.Unknown)
                 {
                     return Task.FromResult(inferred);

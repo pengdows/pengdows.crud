@@ -304,10 +304,8 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
             return;
         }
 
-        Task.Run(async () =>
-        {
-            await _connectionLocker.DisposeAsync().ConfigureAwait(false);
-        }).GetAwaiter().GetResult();
+        Task.Run(async () => { await _connectionLocker.DisposeAsync().ConfigureAwait(false); }).GetAwaiter()
+            .GetResult();
     }
 
     private void DisposeCommand()

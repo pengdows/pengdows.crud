@@ -21,6 +21,7 @@ public static class SqlContainerExtensions
         {
             container.Query.Append(sql);
         }
+
         return container;
     }
 

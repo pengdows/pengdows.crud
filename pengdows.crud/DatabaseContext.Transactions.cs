@@ -21,7 +21,7 @@ public partial class DatabaseContext
         ExecutionType executionType = ExecutionType.Write,
         bool? readOnly = null)
     {
-        var ro = readOnly ?? (executionType == ExecutionType.Read);
+        var ro = readOnly ?? executionType == ExecutionType.Read;
         if (ro)
         {
             executionType = ExecutionType.Read;

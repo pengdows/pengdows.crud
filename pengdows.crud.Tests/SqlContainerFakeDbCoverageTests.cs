@@ -47,7 +47,8 @@ public class SqlContainerFakeDbCoverageTests : IAsyncLifetime
     public void CreateForDialect_UsesProvidedDialect()
     {
         var stubDialect = new StubDialect(_factory, NullLogger.Instance);
-        var container = SqlContainer.CreateForDialect(_context, stubDialect, "SELECT 1", NullLogger<ISqlContainer>.Instance);
+        var container =
+            SqlContainer.CreateForDialect(_context, stubDialect, "SELECT 1", NullLogger<ISqlContainer>.Instance);
 
         Assert.Equal("<", container.QuotePrefix);
         Assert.Equal(">", container.QuoteSuffix);

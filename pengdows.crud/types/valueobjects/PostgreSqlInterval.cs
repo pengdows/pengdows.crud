@@ -17,7 +17,10 @@ public readonly struct PostgreSqlInterval : IEquatable<PostgreSqlInterval>
 
     public TimeSpan TimeComponent => TimeSpan.FromTicks(Microseconds * 10);
 
-    public TimeSpan ToTimeSpan() => TimeSpan.FromDays(Days) + TimeComponent;
+    public TimeSpan ToTimeSpan()
+    {
+        return TimeSpan.FromDays(Days) + TimeComponent;
+    }
 
     public override string ToString()
     {

@@ -41,7 +41,8 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
         _failureMode = ConnectionFailureMode.None;
     }
 
-    public fakeDbFactory(SupportedDatabase pretendToBe, ConnectionFailureMode failureMode, Exception? customException = null, int? failAfterCount = null)
+    public fakeDbFactory(SupportedDatabase pretendToBe, ConnectionFailureMode failureMode,
+        Exception? customException = null, int? failAfterCount = null)
     {
         _pretendToBe = pretendToBe;
         _failureMode = failureMode;
@@ -50,7 +51,8 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
         _skipFirstOpen = false; // Default to not skipping
     }
 
-    private fakeDbFactory(SupportedDatabase pretendToBe, ConnectionFailureMode failureMode, Exception? customException, int? failAfterCount, bool skipFirstOpen)
+    private fakeDbFactory(SupportedDatabase pretendToBe, ConnectionFailureMode failureMode, Exception? customException,
+        int? failAfterCount, bool skipFirstOpen)
     {
         _pretendToBe = pretendToBe;
         _failureMode = failureMode;
@@ -76,6 +78,7 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
             {
                 pre.EmulatedProduct = _pretendToBe;
             }
+
             // Apply data persistence setting from factory
             pre.EnableDataPersistence = EnableDataPersistence;
             _createdConnections.Add(pre);
@@ -150,6 +153,7 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
             _skipFirstOpen = false;
             return 0; // Don't count the first open (context initialization)
         }
+
         return Interlocked.Increment(ref _sharedOpenCount);
     }
 
@@ -163,13 +167,15 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
             _hasOpenedOnce = true;
             return true;
         }
+
         return false;
     }
 
     /// <summary>
     /// Creates a factory that produces connections that fail on open
     /// </summary>
-    public static fakeDbFactory CreateFailingFactory(SupportedDatabase pretendToBe, ConnectionFailureMode failureMode, Exception? customException = null, int? failAfterCount = null)
+    public static fakeDbFactory CreateFailingFactory(SupportedDatabase pretendToBe, ConnectionFailureMode failureMode,
+        Exception? customException = null, int? failAfterCount = null)
     {
         return new fakeDbFactory(pretendToBe, failureMode, customException, failAfterCount);
     }
@@ -177,9 +183,10 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
     /// <summary>
     /// Creates a factory for helper methods that skip the first open (for DatabaseContext initialization)
     /// </summary>
-    internal static fakeDbFactory CreateFailingFactoryWithSkip(SupportedDatabase pretendToBe, ConnectionFailureMode failureMode, Exception? customException = null, int? failAfterCount = null)
+    internal static fakeDbFactory CreateFailingFactoryWithSkip(SupportedDatabase pretendToBe,
+        ConnectionFailureMode failureMode, Exception? customException = null, int? failAfterCount = null)
     {
-        bool skipFirst = failureMode == ConnectionFailureMode.FailOnOpen ||
+        var skipFirst = failureMode == ConnectionFailureMode.FailOnOpen ||
                         failureMode == ConnectionFailureMode.Broken ||
                         failureMode == ConnectionFailureMode.FailAfterCount;
         return new fakeDbFactory(pretendToBe, failureMode, customException, failAfterCount, skipFirst);

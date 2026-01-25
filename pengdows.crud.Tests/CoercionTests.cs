@@ -413,20 +413,22 @@ public class CoercionTests
 
         // First call
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        for (int i = 0; i < 1000; i++)
+        for (var i = 0; i < 1000; i++)
         {
-            _registry.TryRead(dbValue, typeof(Guid), out var _);
+            _registry.TryRead(dbValue, typeof(Guid), out _);
         }
+
         sw.Stop();
 
         var firstBatch = sw.ElapsedMilliseconds;
 
         // Second batch - should be similar performance (testing caching)
         sw.Restart();
-        for (int i = 0; i < 1000; i++)
+        for (var i = 0; i < 1000; i++)
         {
-            _registry.TryRead(dbValue, typeof(Guid), out var _);
+            _registry.TryRead(dbValue, typeof(Guid), out _);
         }
+
         sw.Stop();
 
         var secondBatch = sw.ElapsedMilliseconds;
@@ -447,22 +449,25 @@ public class CoercionTests
         public override DbType DbType { get; set; }
         public override ParameterDirection Direction { get; set; }
         public override bool IsNullable { get; set; }
+
         [AllowNull]
         public override string ParameterName
         {
             get => _parameterName;
             set => _parameterName = value ?? string.Empty;
         }
+
         public override int Size { get; set; }
+
         [AllowNull]
         public override string SourceColumn
         {
             get => _sourceColumn;
             set => _sourceColumn = value ?? string.Empty;
         }
+
         public override bool SourceColumnNullMapping { get; set; }
-        [AllowNull]
-        public override object Value { get; set; } = DBNull.Value;
+        [AllowNull] public override object Value { get; set; } = DBNull.Value;
 
         public override void ResetDbType()
         {

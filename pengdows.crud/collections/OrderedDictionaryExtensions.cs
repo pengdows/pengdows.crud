@@ -11,11 +11,13 @@ public static class OrderedDictionaryExtensions
     // Optional logger for visibility into property access failures
     // Defaults to no-op; set via OrderedDictionaryExtensions.Logger if desired.
     private static ILogger _logger = NullLogger.Instance;
+
     public static ILogger Logger
     {
         get => _logger;
         set => _logger = value ?? NullLogger.Instance;
     }
+
     /// <summary>
     /// Creates a DB parameter dictionary from an object's properties
     /// </summary>
@@ -68,7 +70,9 @@ public static class OrderedDictionaryExtensions
     /// </summary>
     public static bool TryAddParameter(this OrderedDictionary<string, object?> dict,
         string key, object? value)
-        => dict.TryAdd(key, value ?? DBNull.Value);
+    {
+        return dict.TryAdd(key, value ?? DBNull.Value);
+    }
 
     /// <summary>
     /// Removes and returns the parameter value

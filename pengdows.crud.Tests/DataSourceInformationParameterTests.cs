@@ -54,11 +54,11 @@ public class DataSourceInformationParameterTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
 
-        Assert.Throws<ArgumentNullException>(
-            () => DataSourceInformation.Create(null!, factory, NullLoggerFactory.Instance));
+        Assert.Throws<ArgumentNullException>(() =>
+            DataSourceInformation.Create(null!, factory, NullLoggerFactory.Instance));
 
         var tracked = BuildSqliteConnection();
-        Assert.Throws<ArgumentNullException>(
-            () => DataSourceInformation.Create(tracked, null!, NullLoggerFactory.Instance));
+        Assert.Throws<ArgumentNullException>(() =>
+            DataSourceInformation.Create(tracked, null!, NullLoggerFactory.Instance));
     }
 }

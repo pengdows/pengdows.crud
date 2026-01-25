@@ -49,4 +49,3 @@ public class StringBuilderPoolTests
         StringBuilderPool.Return(sb2);
     }
 }
-

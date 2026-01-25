@@ -80,8 +80,7 @@ public class CancellationTokenIntegrationTests : IAsyncLifetime
         cts.Cancel();
 
         // Act & Assert
-        await Assert.ThrowsAsync<TaskCanceledException>(
-            () => _helper.CreateAsync(entity, _context, cts.Token));
+        await Assert.ThrowsAsync<TaskCanceledException>(() => _helper.CreateAsync(entity, _context, cts.Token));
     }
 
     [Fact]
@@ -110,8 +109,7 @@ public class CancellationTokenIntegrationTests : IAsyncLifetime
         cts.Cancel();
 
         // Act & Assert
-        await Assert.ThrowsAsync<TaskCanceledException>(
-            () => _helper.RetrieveAsync(new[] { 4 }, _context, cts.Token));
+        await Assert.ThrowsAsync<TaskCanceledException>(() => _helper.RetrieveAsync(new[] { 4 }, _context, cts.Token));
     }
 
     [Fact]
@@ -141,8 +139,7 @@ public class CancellationTokenIntegrationTests : IAsyncLifetime
         cts.Cancel();
 
         // Act & Assert
-        await Assert.ThrowsAsync<TaskCanceledException>(
-            () => _helper.UpdateAsync(entity, _context, cts.Token));
+        await Assert.ThrowsAsync<TaskCanceledException>(() => _helper.UpdateAsync(entity, _context, cts.Token));
     }
 
     [Fact]
@@ -170,8 +167,7 @@ public class CancellationTokenIntegrationTests : IAsyncLifetime
         cts.Cancel();
 
         // Act & Assert
-        await Assert.ThrowsAsync<TaskCanceledException>(
-            () => _helper.DeleteAsync(8, _context, cts.Token));
+        await Assert.ThrowsAsync<TaskCanceledException>(() => _helper.DeleteAsync(8, _context, cts.Token));
     }
 
     [Fact]
@@ -199,8 +195,7 @@ public class CancellationTokenIntegrationTests : IAsyncLifetime
         cts.Cancel();
 
         // Act & Assert
-        await Assert.ThrowsAsync<TaskCanceledException>(
-            () => _helper.LoadListAsync(container, cts.Token));
+        await Assert.ThrowsAsync<TaskCanceledException>(() => _helper.LoadListAsync(container, cts.Token));
     }
 
     #endregion
@@ -211,7 +206,8 @@ public class CancellationTokenIntegrationTests : IAsyncLifetime
     public async Task SqlContainer_ExecuteNonQueryAsync_WithValidToken_Succeeds()
     {
         // Arrange
-        using var container = _context.CreateSqlContainer("INSERT INTO TestEntity (Id, Name, Value) VALUES (11, 'NonQuery', 1100)");
+        using var container =
+            _context.CreateSqlContainer("INSERT INTO TestEntity (Id, Name, Value) VALUES (11, 'NonQuery', 1100)");
         using var cts = new CancellationTokenSource();
 
         // Act
@@ -225,13 +221,14 @@ public class CancellationTokenIntegrationTests : IAsyncLifetime
     public async Task SqlContainer_ExecuteNonQueryAsync_WithCancelledToken_ThrowsTaskCanceledException()
     {
         // Arrange
-        using var container = _context.CreateSqlContainer("INSERT INTO TestEntity (Id, Name, Value) VALUES (12, 'Test', 1200)");
+        using var container =
+            _context.CreateSqlContainer("INSERT INTO TestEntity (Id, Name, Value) VALUES (12, 'Test', 1200)");
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
         // Act & Assert
-        await Assert.ThrowsAsync<TaskCanceledException>(
-            () => container.ExecuteNonQueryAsync(CommandType.Text, cts.Token));
+        await Assert.ThrowsAsync<TaskCanceledException>(() =>
+            container.ExecuteNonQueryAsync(CommandType.Text, cts.Token));
     }
 
     [Fact]
@@ -258,8 +255,8 @@ public class CancellationTokenIntegrationTests : IAsyncLifetime
         cts.Cancel();
 
         // Act & Assert
-        await Assert.ThrowsAsync<TaskCanceledException>(
-            () => container.ExecuteScalarAsync<int>(CommandType.Text, cts.Token));
+        await Assert.ThrowsAsync<TaskCanceledException>(() =>
+            container.ExecuteScalarAsync<int>(CommandType.Text, cts.Token));
     }
 
     [Fact]
@@ -288,8 +285,8 @@ public class CancellationTokenIntegrationTests : IAsyncLifetime
         cts.Cancel();
 
         // Act & Assert
-        await Assert.ThrowsAsync<TaskCanceledException>(
-            () => container.ExecuteReaderAsync(CommandType.Text, cts.Token));
+        await Assert.ThrowsAsync<TaskCanceledException>(() =>
+            container.ExecuteReaderAsync(CommandType.Text, cts.Token));
     }
 
     #endregion
@@ -341,14 +338,10 @@ public class CancellationTokenIntegrationTests : IAsyncLifetime
     [Table("TestEntity")]
     private class TestEntity
     {
-        [Id]
-        [Column("Id", DbType.Int32)]
-        public int Id { get; set; }
+        [Id] [Column("Id", DbType.Int32)] public int Id { get; set; }
 
-        [Column("Name", DbType.String)]
-        public string Name { get; set; } = string.Empty;
+        [Column("Name", DbType.String)] public string Name { get; set; } = string.Empty;
 
-        [Column("Value", DbType.Int32)]
-        public int Value { get; set; }
+        [Column("Value", DbType.Int32)] public int Value { get; set; }
     }
 }

@@ -41,12 +41,12 @@ public class EntityHelperPrimaryKeyCoverageTests : SqlLiteContextTestBase
     {
         using var container = Context.CreateSqlContainer();
         container.Query.Append("""
-CREATE TABLE primary_key_entities (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    code TEXT NOT NULL UNIQUE,
-    payload TEXT
-);
-""");
+                               CREATE TABLE primary_key_entities (
+                                   id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                   code TEXT NOT NULL UNIQUE,
+                                   payload TEXT
+                               );
+                               """);
         container.ExecuteNonQueryAsync().GetAwaiter().GetResult();
     }
 
@@ -61,7 +61,6 @@ CREATE TABLE primary_key_entities (
         [Column("code", DbType.String)]
         public string Code { get; set; } = string.Empty;
 
-        [Column("payload", DbType.String)]
-        public string Payload { get; set; } = string.Empty;
+        [Column("payload", DbType.String)] public string Payload { get; set; } = string.Empty;
     }
 }

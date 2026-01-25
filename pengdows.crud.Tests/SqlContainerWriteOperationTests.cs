@@ -21,7 +21,7 @@ public class SqlContainerWriteOperationTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         factory.SetScalarResult(123); // Mock returned value from INSERT...RETURNING
-        
+
         var context = new DatabaseContext("test", factory);
         var container = context.CreateSqlContainer("INSERT INTO test (name) VALUES (@p1) RETURNING id");
         container.AddParameterWithValue("p1", DbType.String, "test value");
@@ -39,7 +39,7 @@ public class SqlContainerWriteOperationTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         factory.SetScalarResult(456);
-        
+
         var context = new DatabaseContext("test", factory);
         var container = context.CreateSqlContainer("INSERT INTO test OUTPUT INSERTED.id VALUES (@p1)");
         container.AddParameterWithValue("p1", DbType.String, "test value");
@@ -68,9 +68,9 @@ public class SqlContainerWriteOperationTests
         container.AddParameterWithValue("p1", DbType.String, "value");
 
         // Act & Assert
-        var exception = await Assert.ThrowsAsync<NotSupportedException>(() => 
+        var exception = await Assert.ThrowsAsync<NotSupportedException>(() =>
             container.ExecuteScalarWriteAsync<int>());
-        
+
         Assert.Contains("read-only mode", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -80,7 +80,7 @@ public class SqlContainerWriteOperationTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         factory.SetScalarResult(null); // Mock null result
-        
+
         var context = new DatabaseContext("test", factory);
         var container = context.CreateSqlContainer("SELECT NULL");
 
@@ -97,7 +97,7 @@ public class SqlContainerWriteOperationTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         factory.SetScalarResult(DBNull.Value); // Mock DBNull result
-        
+
         var context = new DatabaseContext("test", factory);
         var container = context.CreateSqlContainer("INSERT INTO test DEFAULT VALUES RETURNING null_column");
 
@@ -108,21 +108,21 @@ public class SqlContainerWriteOperationTests
         Assert.Null(result);
     }
 
-    [Fact] 
+    [Fact]
     public async Task ExecuteScalarWriteAsync_Should_Throw_For_Null_Result_NonNullable_Type()
     {
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         factory.SetScalarResult(null); // Mock null result
-        
+
         var context = new DatabaseContext("test", factory);
         var container = context.CreateSqlContainer("INSERT INTO test OUTPUT NULL VALUES (@p1)");
         container.AddParameterWithValue("p1", DbType.String, "value");
 
         // Act & Assert
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => 
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             container.ExecuteScalarWriteAsync<int>());
-        
+
         Assert.Contains("expected a value but found none", exception.Message);
     }
 
@@ -132,14 +132,14 @@ public class SqlContainerWriteOperationTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         factory.SetScalarResult(DBNull.Value); // Mock DBNull result
-        
+
         var context = new DatabaseContext("test", factory);
         var container = context.CreateSqlContainer("INSERT INTO test RETURNING null_column");
 
         // Act & Assert
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => 
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             container.ExecuteScalarWriteAsync<int>());
-        
+
         Assert.Contains("expected a value but found none", exception.Message);
     }
 
@@ -149,7 +149,7 @@ public class SqlContainerWriteOperationTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         factory.SetScalarResult(42L); // Return long value
-        
+
         var context = new DatabaseContext("test", factory);
         var container = context.CreateSqlContainer("INSERT INTO test OUTPUT INSERTED.id VALUES (@p1)");
         container.AddParameterWithValue("p1", DbType.String, "test");
@@ -167,7 +167,7 @@ public class SqlContainerWriteOperationTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         factory.SetScalarResult(42); // Return int value
-        
+
         var context = new DatabaseContext("test", factory);
         var container = context.CreateSqlContainer("INSERT INTO test RETURNING id");
 
@@ -216,7 +216,7 @@ public class SqlContainerWriteOperationTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         factory.SetScalarResult(999);
-        
+
         var context = new DatabaseContext("test", factory);
         var container = context.CreateSqlContainer("INSERT INTO test RETURNING 999");
 
@@ -234,7 +234,7 @@ public class SqlContainerWriteOperationTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         factory.SetScalarResult(777);
-        
+
         var context = new DatabaseContext("test", factory);
         var container = context.CreateSqlContainer("sp_InsertAndReturn");
         container.AddParameterWithValue("param1", DbType.String, "value");
@@ -269,12 +269,12 @@ public class SqlContainerWriteOperationTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         factory.SetException(new InvalidOperationException("Command preparation failed"));
-        
+
         var context = new DatabaseContext("test", factory);
         var container = context.CreateSqlContainer("INVALID SQL SYNTAX");
 
         // Act & Assert
-        await Assert.ThrowsAsync<InvalidOperationException>(() => 
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
             container.ExecuteScalarWriteAsync<int>());
     }
 
@@ -284,7 +284,7 @@ public class SqlContainerWriteOperationTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         factory.SetScalarResult(555);
-        
+
         var context = new DatabaseContext("test", factory);
         var container = context.CreateSqlContainer("INSERT INTO test OUTPUT INSERTED.id VALUES (1)");
 

@@ -22,7 +22,12 @@ public class OrderedDictionaryExtensionsTests
         public bool IsActive { get; set; }
         public DateTime? LastLogin { get; set; }
         public string ReadOnlyProperty => "readonly";
-        public string WriteOnlyProperty { set { } }
+
+        public string WriteOnlyProperty
+        {
+            set { }
+        }
+
         public string this[int index] => "indexer";
         public string ThrowsOnAccess => throw new InvalidOperationException("Property access failed");
     }

@@ -1,14 +1,18 @@
 # SQL Server Automatic Indexed View Matching
 
-This document explains one of SQL Server's most sophisticated and underutilized optimizations: **automatic indexed view matching**. This feature allows the query optimizer to automatically rewrite queries to use indexed views even when the view is never explicitly mentioned in the query.
+This document explains one of SQL Server's most sophisticated and underutilized optimizations: **automatic indexed view
+matching**. This feature allows the query optimizer to automatically rewrite queries to use indexed views even when the
+view is never explicitly mentioned in the query.
 
 ## The Hidden Optimization
 
 ### What is Automatic View Matching?
 
-When you create an indexed view (materialized view) in SQL Server, the query optimizer can automatically substitute the indexed view for the base tables in your queries **if it determines the view can answer the query more efficiently**.
+When you create an indexed view (materialized view) in SQL Server, the query optimizer can automatically substitute the
+indexed view for the base tables in your queries **if it determines the view can answer the query more efficiently**.
 
-**Key Point**: The view doesn't need to be mentioned in your SQL at all. The optimizer rewrites the query plan behind the scenes.
+**Key Point**: The view doesn't need to be mentioned in your SQL at all. The optimizer rewrites the query plan behind
+the scenes.
 
 ### Example Scenario
 
@@ -56,16 +60,19 @@ SET ANSI_PADDING ON;
 -- ... other settings
 ```
 
-**When `ARITHABORT OFF` is set, SQL Server disables automatic view matching entirely.** This is a documented limitation but is rarely understood by developers.
+**When `ARITHABORT OFF` is set, SQL Server disables automatic view matching entirely.** This is a documented limitation
+but is rarely understood by developers.
 
 ### Performance Impact
 
 Without automatic view matching:
+
 - **Query**: Scans 1M+ order detail records + joins multiple tables
 - **Time**: 500ms - 2000ms
 - **Reads**: 10,000+ logical reads
 
 With automatic view matching:
+
 - **Query**: Index seek on pre-computed view
 - **Time**: 2ms - 5ms
 - **Reads**: 3-5 logical reads
@@ -110,6 +117,7 @@ var results = await helper.LoadListAsync(container);
 ## Real-World Benchmark Results
 
 ### Test Scenario
+
 - 50,000 order detail records
 - 10,000 orders across 500 customers
 - Indexed views for customer summaries, product sales, and monthly revenue
@@ -117,16 +125,16 @@ var results = await helper.LoadListAsync(container);
 
 ### Performance Results
 
-| Framework | Query Type | Avg Time | Optimization Used |
-|-----------|------------|----------|-------------------|
-| **pengdows.crud** | Customer aggregation | **8ms** | ✅ Automatic view matching |
-| **Entity Framework** | Customer aggregation | **890ms** | ❌ Table scans (ARITHABORT OFF) |
-| **Dapper** | Customer aggregation | **850ms** | ❌ Table scans (default settings) |
-| **pengdows.crud** | Product sales | **12ms** | ✅ Automatic view matching |
-| **Entity Framework** | Product sales | **1,240ms** | ❌ Table scans + client evaluation |
-| **Dapper** | Product sales | **920ms** | ❌ Table scans |
-| **pengdows.crud** | Monthly revenue | **6ms** | ✅ Automatic view matching |
-| **Entity Framework** | Monthly revenue | **2,100ms** | ❌ Table scans + grouping |
+| Framework            | Query Type           | Avg Time    | Optimization Used                 |
+|----------------------|----------------------|-------------|-----------------------------------|
+| **pengdows.crud**    | Customer aggregation | **8ms**     | ✅ Automatic view matching         |
+| **Entity Framework** | Customer aggregation | **890ms**   | ❌ Table scans (ARITHABORT OFF)    |
+| **Dapper**           | Customer aggregation | **850ms**   | ❌ Table scans (default settings)  |
+| **pengdows.crud**    | Product sales        | **12ms**    | ✅ Automatic view matching         |
+| **Entity Framework** | Product sales        | **1,240ms** | ❌ Table scans + client evaluation |
+| **Dapper**           | Product sales        | **920ms**   | ❌ Table scans                     |
+| **pengdows.crud**    | Monthly revenue      | **6ms**     | ✅ Automatic view matching         |
+| **Entity Framework** | Monthly revenue      | **2,100ms** | ❌ Table scans + grouping          |
 
 ### Key Findings
 
@@ -138,6 +146,7 @@ var results = await helper.LoadListAsync(container);
 ## Execution Plan Evidence
 
 ### With Automatic View Matching (pengdows.crud)
+
 ```
 |--Clustered Index Seek(OBJECT:([DB].[dbo].[vw_CustomerOrderSummary].[IX_CustomerSummary]))
    Seek Keys: [customer_id] = @customerId
@@ -146,6 +155,7 @@ var results = await helper.LoadListAsync(container);
 ```
 
 ### Without Automatic View Matching (EF/Dapper)
+
 ```
 |--Stream Aggregate(GROUP BY:([c].[customer_id]) DEFINE:([COUNT(*)], [SUM([od].[quantity]*[od].[unit_price])]))
    |--Nested Loops(Inner Join)
@@ -160,17 +170,21 @@ var results = await helper.LoadListAsync(container);
 ## Business Impact
 
 ### Development Productivity
+
 - **No special code required** - automatic optimization
 - **Works with existing SQL patterns** - no view-specific queries needed
 - **Transparent performance scaling** - as data grows, views maintain performance
 
 ### Operational Benefits
+
 - **Reduced server load** - 100x fewer logical reads
 - **Better user experience** - sub-second response times
 - **Lower licensing costs** - less CPU/memory usage
 
 ### Competitive Advantage
-Applications using pengdows.crud automatically leverage sophisticated database optimizations that competitors using EF/Dapper cannot access without significant manual effort.
+
+Applications using pengdows.crud automatically leverage sophisticated database optimizations that competitors using
+EF/Dapper cannot access without significant manual effort.
 
 ## Running the Benchmarks
 
@@ -192,6 +206,9 @@ dotnet run -c Release -- --filter "*MonthlyRevenue*"
 
 ## Conclusion
 
-SQL Server's automatic indexed view matching represents decades of query optimization research. By preserving the correct session settings, pengdows.crud enables this sophisticated optimization automatically, while Entity Framework's design choices inadvertently disable it.
+SQL Server's automatic indexed view matching represents decades of query optimization research. By preserving the
+correct session settings, pengdows.crud enables this sophisticated optimization automatically, while Entity Framework's
+design choices inadvertently disable it.
 
-This is a perfect example of why database-aware architecture matters: **the difference between a 2ms query and a 2000ms query often comes down to letting the database engine do what it was designed to do.**
+This is a perfect example of why database-aware architecture matters: **the difference between a 2ms query and a 2000ms
+query often comes down to letting the database engine do what it was designed to do.**

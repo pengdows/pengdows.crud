@@ -41,12 +41,12 @@ internal sealed class ModeContentionStats
         var avgTicks = waits == 0 ? 0 : totalTicks / waits;
 
         return new ModeContentionSnapshot(
-            CurrentWaiters: (int)Math.Clamp(Interlocked.Read(ref _currentWaiters), 0L, int.MaxValue),
-            PeakWaiters: (int)Math.Clamp(Interlocked.Read(ref _peakWaiters), 0L, int.MaxValue),
-            TotalWaits: waits,
-            TotalTimeouts: Interlocked.Read(ref _totalTimeouts),
-            TotalWaitTimeTicks: totalTicks,
-            AverageWaitTimeTicks: avgTicks);
+            (int)Math.Clamp(Interlocked.Read(ref _currentWaiters), 0L, int.MaxValue),
+            (int)Math.Clamp(Interlocked.Read(ref _peakWaiters), 0L, int.MaxValue),
+            waits,
+            Interlocked.Read(ref _totalTimeouts),
+            totalTicks,
+            avgTicks);
     }
 
     private static void UpdatePeak(ref long peak, long current)

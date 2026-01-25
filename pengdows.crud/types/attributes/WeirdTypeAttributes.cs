@@ -9,6 +9,7 @@ public enum EnumStorage
 {
     /// <summary>Store as enum name (string)</summary>
     Name,
+
     /// <summary>Store as enum integer value</summary>
     Int
 }
@@ -107,7 +108,9 @@ public class MaxLengthForInlineAttribute : Attribute
     public MaxLengthForInlineAttribute(int maxLength)
     {
         if (maxLength <= 0)
+        {
             throw new ArgumentOutOfRangeException(nameof(maxLength), "Max length must be positive");
+        }
 
         MaxLength = maxLength;
     }

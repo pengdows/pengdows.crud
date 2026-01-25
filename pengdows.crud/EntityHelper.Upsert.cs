@@ -83,8 +83,9 @@ public partial class EntityHelper<TEntity, TRowID>
     {
         if (_auditValueResolver != null)
         {
-            SetAuditFields(e, updateOnly: false);
+            SetAuditFields(e, false);
         }
+
         if (_versionColumn == null || _versionColumn.PropertyInfo.PropertyType == typeof(byte[]))
         {
             return;
@@ -114,7 +115,8 @@ public partial class EntityHelper<TEntity, TRowID>
         {
             var value = column.MakeParameterValueFromField(entity);
 
-            if (_auditValueResolver == null && (column.IsCreatedBy || column.IsLastUpdatedBy) && Utils.IsNullOrDbNull(value))
+            if (_auditValueResolver == null && (column.IsCreatedBy || column.IsLastUpdatedBy) &&
+                Utils.IsNullOrDbNull(value))
             {
                 continue;
             }
@@ -132,6 +134,7 @@ public partial class EntityHelper<TEntity, TRowID>
                 {
                     dialect.TryMarkJsonParameter(p, column);
                 }
+
                 parameters.Add(p);
                 var marker = dialect.MakeParameterName(p);
                 if (column.IsJsonType)
@@ -161,7 +164,8 @@ public partial class EntityHelper<TEntity, TRowID>
 
         if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
         {
-            updateSet.Append($", {dialect.WrapObjectName(_versionColumn.Name)} = {dialect.WrapObjectName(_versionColumn.Name)} + 1");
+            updateSet.Append(
+                $", {dialect.WrapObjectName(_versionColumn.Name)} = {dialect.WrapObjectName(_versionColumn.Name)} + 1");
         }
 
         var keys = _tableInfo.PrimaryKeys;
@@ -185,6 +189,7 @@ public partial class EntityHelper<TEntity, TRowID>
 
             sc.Query.Append(columns[i]);
         }
+
         sc.Query.Append(") VALUES (");
         for (var i = 0; i < values.Count; i++)
         {
@@ -195,6 +200,7 @@ public partial class EntityHelper<TEntity, TRowID>
 
             sc.Query.Append(values[i]);
         }
+
         sc.Query.Append(") ON CONFLICT (");
         for (var i = 0; i < conflictCols.Count; i++)
         {
@@ -205,6 +211,7 @@ public partial class EntityHelper<TEntity, TRowID>
 
             sc.Query.Append(dialect.WrapObjectName(conflictCols[i].Name));
         }
+
         sc.Query.Append(") DO UPDATE SET ")
             .Append(updateSet.ToString());
 
@@ -223,8 +230,9 @@ public partial class EntityHelper<TEntity, TRowID>
         return $"CAST({placeholder} AS {typeName})";
     }
 
-    private static string GetFirebirdDataType(IColumnInfo column) =>
-        column.DbType switch
+    private static string GetFirebirdDataType(IColumnInfo column)
+    {
+        return column.DbType switch
         {
             DbType.Boolean => "SMALLINT",
             DbType.Byte => "SMALLINT",
@@ -248,6 +256,7 @@ public partial class EntityHelper<TEntity, TRowID>
             DbType.Binary => "BLOB",
             _ => "VARCHAR(255)"
         };
+    }
 
     private ISqlContainer BuildUpsertOnDuplicate(TEntity entity, IDatabaseContext context)
     {
@@ -277,6 +286,7 @@ public partial class EntityHelper<TEntity, TRowID>
                 {
                     dialect.TryMarkJsonParameter(p, column);
                 }
+
                 parameters.Add(p);
                 var marker = dialect.MakeParameterName(p);
                 if (column.IsJsonType)
@@ -309,7 +319,8 @@ public partial class EntityHelper<TEntity, TRowID>
 
         if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
         {
-            updateSet.Append($", {dialect.WrapObjectName(_versionColumn.Name)} = {dialect.WrapObjectName(_versionColumn.Name)} + 1");
+            updateSet.Append(
+                $", {dialect.WrapObjectName(_versionColumn.Name)} = {dialect.WrapObjectName(_versionColumn.Name)} + 1");
         }
 
         var keys = _tableInfo.PrimaryKeys;
@@ -331,6 +342,7 @@ public partial class EntityHelper<TEntity, TRowID>
 
             sc.Query.Append(columns[i]);
         }
+
         sc.Query.Append(") VALUES (");
         for (var i = 0; i < values.Count; i++)
         {
@@ -341,12 +353,14 @@ public partial class EntityHelper<TEntity, TRowID>
 
             sc.Query.Append(values[i]);
         }
+
         sc.Query.Append(")");
         var incomingAlias = dialect.UpsertIncomingAlias;
         if (!string.IsNullOrEmpty(incomingAlias))
         {
             sc.Query.Append(" AS ").Append(dialect.WrapObjectName(incomingAlias));
         }
+
         sc.Query.Append(" ON DUPLICATE KEY UPDATE ")
             .Append(updateSet.ToString());
 
@@ -387,6 +401,7 @@ public partial class EntityHelper<TEntity, TRowID>
                 {
                     dialect.TryMarkJsonParameter(p, column);
                 }
+
                 parameters.Add(p);
                 var marker = dialect.MakeParameterName(p);
                 if (column.IsJsonType)
@@ -424,7 +439,8 @@ public partial class EntityHelper<TEntity, TRowID>
                 updateSet.Append(", ");
             }
 
-            updateSet.Append($"{targetPrefix}{dialect.WrapObjectName(column.Name)} = s.{dialect.WrapObjectName(column.Name)}");
+            updateSet.Append(
+                $"{targetPrefix}{dialect.WrapObjectName(column.Name)} = s.{dialect.WrapObjectName(column.Name)}");
         }
 
         if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
@@ -468,6 +484,7 @@ public partial class EntityHelper<TEntity, TRowID>
 
             sc.Query.Append(values[i]);
         }
+
         sc.Query.Append(")) AS s (");
         for (var i = 0; i < srcColumns.Count; i++)
         {
@@ -478,6 +495,7 @@ public partial class EntityHelper<TEntity, TRowID>
 
             sc.Query.Append(srcColumns[i]);
         }
+
         sc.Query.Append(") ON ")
             .Append(join.ToString())
             .Append(" WHEN MATCHED THEN UPDATE SET ")
@@ -493,6 +511,7 @@ public partial class EntityHelper<TEntity, TRowID>
 
             sc.Query.Append(insertColumns[i]);
         }
+
         sc.Query.Append(") VALUES (");
         for (var i = 0; i < insertColumns.Count; i++)
         {
@@ -504,6 +523,7 @@ public partial class EntityHelper<TEntity, TRowID>
             sc.Query.Append("s.");
             sc.Query.Append(insertColumns[i]);
         }
+
         sc.Query.Append(");");
 
         sc.AddParameters(parameters);
@@ -538,6 +558,7 @@ public partial class EntityHelper<TEntity, TRowID>
                 {
                     dialect.TryMarkJsonParameter(p, column);
                 }
+
                 parameters.Add(p);
                 var marker = dialect.MakeParameterName(p);
                 if (column.IsJsonType)
@@ -573,6 +594,7 @@ public partial class EntityHelper<TEntity, TRowID>
 
             sc.Query.Append(insertColumns[i]);
         }
+
         sc.Query.Append(") VALUES (");
         for (var i = 0; i < values.Count; i++)
         {
@@ -583,6 +605,7 @@ public partial class EntityHelper<TEntity, TRowID>
 
             sc.Query.Append(values[i]);
         }
+
         sc.Query.Append(") MATCHING (");
         for (var i = 0; i < joinCols.Count; i++)
         {
@@ -593,6 +616,7 @@ public partial class EntityHelper<TEntity, TRowID>
 
             sc.Query.Append(dialect.WrapObjectName(joinCols[i].Name));
         }
+
         sc.Query.Append(");");
 
         sc.AddParameters(parameters);

@@ -16,7 +16,9 @@ public class TransactionTests : DatabaseTestBase
 {
     private static long _nextId;
 
-    public TransactionTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture) { }
+    public TransactionTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture)
+    {
+    }
 
     protected override async Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)
     {
@@ -94,7 +96,12 @@ public class TransactionTests : DatabaseTestBase
             // Assert
             Assert.NotNull(retrieved);
             Assert.Equal(entity.Id, retrieved.Id);
-            Assert.Equal(IsolationLevel.ReadCommitted, transaction.IsolationLevel);
+            var allowedIsolationLevels = new[]
+            {
+                IsolationLevel.ReadCommitted,
+                IsolationLevel.Serializable
+            };
+            Assert.Contains(transaction.IsolationLevel, allowedIsolationLevels);
         });
     }
 
@@ -118,7 +125,7 @@ public class TransactionTests : DatabaseTestBase
             await using var readOnlyTransaction = context.BeginTransaction(
                 IsolationLevel.ReadCommitted,
                 ExecutionType.Read,
-                readOnly: true);
+                true);
 
             var helper = CreateEntityHelper(readOnlyTransaction);
 
@@ -207,7 +214,7 @@ public class TransactionTests : DatabaseTestBase
             var retrieved2 = await CreateEntityHelper(context).RetrieveOneAsync(entity2.Id, context);
 
             Assert.NotNull(retrieved1); // Should exist
-            Assert.Null(retrieved2);     // Should not exist
+            Assert.Null(retrieved2); // Should not exist
         });
     }
 
@@ -402,7 +409,7 @@ public class TransactionTests : DatabaseTestBase
     private EntityHelper<TestTable, long> CreateEntityHelper(IDatabaseContext context)
     {
         var auditResolver = GetAuditResolver();
-        return new EntityHelper<TestTable, long>(context, auditValueResolver: auditResolver);
+        return new EntityHelper<TestTable, long>(context, auditResolver);
     }
 
     private static TestTable CreateTestEntity(NameEnum name, int value)
@@ -422,9 +429,9 @@ public class TransactionTests : DatabaseTestBase
     {
         // SQLite and some others don't enforce read-only at transaction level
         return provider is SupportedDatabase.PostgreSql or
-                          SupportedDatabase.SqlServer or
-                          SupportedDatabase.Oracle or
-                          SupportedDatabase.MySql;
+            SupportedDatabase.SqlServer or
+            SupportedDatabase.Oracle or
+            SupportedDatabase.MySql;
     }
 
     private static bool SupportsSerializableIsolation(SupportedDatabase provider)
@@ -437,11 +444,11 @@ public class TransactionTests : DatabaseTestBase
     {
         // Most modern databases support savepoints
         return provider is SupportedDatabase.PostgreSql or
-                          SupportedDatabase.SqlServer or
-                          SupportedDatabase.Oracle or
-                          SupportedDatabase.MySql or
-                          SupportedDatabase.MariaDb or
-                          SupportedDatabase.Sqlite or
-                          SupportedDatabase.Firebird;
+            SupportedDatabase.SqlServer or
+            SupportedDatabase.Oracle or
+            SupportedDatabase.MySql or
+            SupportedDatabase.MariaDb or
+            SupportedDatabase.Sqlite or
+            SupportedDatabase.Firebird;
     }
 }

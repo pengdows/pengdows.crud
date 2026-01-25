@@ -14,7 +14,9 @@ public class BasicCrudTests : DatabaseTestBase
 {
     private static long _nextId;
 
-    public BasicCrudTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture) { }
+    public BasicCrudTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture)
+    {
+    }
 
     protected override async Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)
     {
@@ -274,7 +276,7 @@ public class BasicCrudTests : DatabaseTestBase
     private EntityHelper<TestTable, long> CreateEntityHelper(IDatabaseContext context)
     {
         var auditResolver = GetAuditResolver();
-        return new EntityHelper<TestTable, long>(context, auditValueResolver: auditResolver);
+        return new EntityHelper<TestTable, long>(context, auditResolver);
     }
 
     private static TestTable CreateTestEntity(NameEnum name, int value)
@@ -293,8 +295,8 @@ public class BasicCrudTests : DatabaseTestBase
     private static bool SupportsMergeUpsert(SupportedDatabase provider)
     {
         return provider is SupportedDatabase.SqlServer or
-                          SupportedDatabase.Oracle or
-                          SupportedDatabase.Firebird or
-                          SupportedDatabase.PostgreSql; // PostgreSQL 15+
+            SupportedDatabase.Oracle or
+            SupportedDatabase.Firebird or
+            SupportedDatabase.PostgreSql; // PostgreSQL 15+
     }
 }

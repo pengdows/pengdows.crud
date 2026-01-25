@@ -27,7 +27,8 @@ public abstract class DatabaseTestBase : IAsyncLifetime
         Output.WriteLine($"[{totalStart:HH:mm:ss.fff}] Starting test initialization...");
 
         var requestedProviders = GetSupportedProviders().ToList();
-        Output.WriteLine($"[{DateTime.UtcNow:HH:mm:ss.fff}] Testing against {requestedProviders.Count} providers: {string.Join(", ", requestedProviders)}");
+        Output.WriteLine(
+            $"[{DateTime.UtcNow:HH:mm:ss.fff}] Testing against {requestedProviders.Count} providers: {string.Join(", ", requestedProviders)}");
 
         var contexts = new Dictionary<SupportedDatabase, IDatabaseContext>();
 
@@ -40,7 +41,8 @@ public abstract class DatabaseTestBase : IAsyncLifetime
             }
             catch (Exception ex)
             {
-                Output.WriteLine($"[{DateTime.UtcNow:HH:mm:ss.fff}] ⚠️ {provider} is not available for testing: {ex.Message}");
+                Output.WriteLine(
+                    $"[{DateTime.UtcNow:HH:mm:ss.fff}] ⚠️ {provider} is not available for testing: {ex.Message}");
             }
         }
 
@@ -56,12 +58,15 @@ public abstract class DatabaseTestBase : IAsyncLifetime
             var setupStart = DateTime.UtcNow;
             Output.WriteLine($"[{setupStart:HH:mm:ss.fff}] Resetting {provider} database...");
             await CleanupDatabaseAsync(provider, context);
-            Output.WriteLine($"[{DateTime.UtcNow:HH:mm:ss.fff}] {provider} cleanup complete, running SetupDatabaseAsync...");
+            Output.WriteLine(
+                $"[{DateTime.UtcNow:HH:mm:ss.fff}] {provider} cleanup complete, running SetupDatabaseAsync...");
             await SetupDatabaseAsync(provider, context);
-            Output.WriteLine($"[{DateTime.UtcNow:HH:mm:ss.fff}] {provider} setup completed (took {(DateTime.UtcNow - setupStart).TotalMilliseconds:F0}ms)");
+            Output.WriteLine(
+                $"[{DateTime.UtcNow:HH:mm:ss.fff}] {provider} setup completed (took {(DateTime.UtcNow - setupStart).TotalMilliseconds:F0}ms)");
         }
 
-        Output.WriteLine($"[{DateTime.UtcNow:HH:mm:ss.fff}] ✅ All initialization complete (total: {(DateTime.UtcNow - totalStart).TotalMilliseconds:F0}ms)");
+        Output.WriteLine(
+            $"[{DateTime.UtcNow:HH:mm:ss.fff}] ✅ All initialization complete (total: {(DateTime.UtcNow - totalStart).TotalMilliseconds:F0}ms)");
     }
 
     public virtual Task DisposeAsync()
@@ -85,14 +90,17 @@ public abstract class DatabaseTestBase : IAsyncLifetime
         }
 
         var filtered = only.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(token => Enum.TryParse<SupportedDatabase>(token, true, out var parsed) ? parsed : (SupportedDatabase?)null)
+            .Select(token => Enum.TryParse<SupportedDatabase>(token, true, out var parsed)
+                ? parsed
+                : (SupportedDatabase?)null)
             .Where(parsed => parsed.HasValue)
             .Select(parsed => parsed!.Value)
             .ToList();
 
         if (filtered.Count == 0)
         {
-            throw new InvalidOperationException($"INTEGRATION_ONLY did not match any SupportedDatabase values: '{only}'.");
+            throw new InvalidOperationException(
+                $"INTEGRATION_ONLY did not match any SupportedDatabase values: '{only}'.");
         }
 
         return providers.Where(filtered.Contains).ToArray();
@@ -126,21 +134,26 @@ public abstract class DatabaseTestBase : IAsyncLifetime
                 var providerStart = DateTime.UtcNow;
                 Output.WriteLine($"[{providerStart:HH:mm:ss.fff}] ▶️ {provider} test starting");
                 Output.WriteLine($"[{providerStart:HH:mm:ss.fff}] Running test against {provider}...");
-                Output.WriteLine($"[{providerStart:HH:mm:ss.fff}] {provider} connections before test: {context.NumberOfOpenConnections} open, max {context.MaxNumberOfConnections}");
+                Output.WriteLine(
+                    $"[{providerStart:HH:mm:ss.fff}] {provider} connections before test: {context.NumberOfOpenConnections} open, max {context.MaxNumberOfConnections}");
                 await testAction(provider, context);
                 Output.WriteLine($"[{DateTime.UtcNow:HH:mm:ss.fff}] ✅ {provider} test finished");
-                Output.WriteLine($"[{DateTime.UtcNow:HH:mm:ss.fff}] {provider} connections after test: {context.NumberOfOpenConnections} open, max {context.MaxNumberOfConnections}");
-                Output.WriteLine($"[{DateTime.UtcNow:HH:mm:ss.fff}] ✅ {provider} test completed successfully (took {(DateTime.UtcNow - providerStart).TotalMilliseconds:F0}ms)");
+                Output.WriteLine(
+                    $"[{DateTime.UtcNow:HH:mm:ss.fff}] {provider} connections after test: {context.NumberOfOpenConnections} open, max {context.MaxNumberOfConnections}");
+                Output.WriteLine(
+                    $"[{DateTime.UtcNow:HH:mm:ss.fff}] ✅ {provider} test completed successfully (took {(DateTime.UtcNow - providerStart).TotalMilliseconds:F0}ms)");
             }
             catch (Exception ex)
             {
                 Output.WriteLine($"[{DateTime.UtcNow:HH:mm:ss.fff}] ❌ {provider} test failed: {ex.Message}");
-                Output.WriteLine($"[{DateTime.UtcNow:HH:mm:ss.fff}] {provider} connections at failure: {context.NumberOfOpenConnections} open, max {context.MaxNumberOfConnections}");
+                Output.WriteLine(
+                    $"[{DateTime.UtcNow:HH:mm:ss.fff}] {provider} connections at failure: {context.NumberOfOpenConnections} open, max {context.MaxNumberOfConnections}");
                 failures.Add((provider, ex));
             }
         }
 
-        Output.WriteLine($"[{DateTime.UtcNow:HH:mm:ss.fff}] Test execution across all providers complete (total: {(DateTime.UtcNow - testStart).TotalMilliseconds:F0}ms)");
+        Output.WriteLine(
+            $"[{DateTime.UtcNow:HH:mm:ss.fff}] Test execution across all providers complete (total: {(DateTime.UtcNow - testStart).TotalMilliseconds:F0}ms)");
 
         if (failures.Any())
         {
@@ -153,7 +166,8 @@ public abstract class DatabaseTestBase : IAsyncLifetime
     /// <summary>
     /// Run a test against a specific database provider
     /// </summary>
-    protected async Task RunTestAgainstProviderAsync(SupportedDatabase provider, Func<IDatabaseContext, Task> testAction)
+    protected async Task RunTestAgainstProviderAsync(SupportedDatabase provider,
+        Func<IDatabaseContext, Task> testAction)
     {
         if (!DatabaseContexts.TryGetValue(provider, out var context))
         {
@@ -202,5 +216,4 @@ public abstract class DatabaseTestBase : IAsyncLifetime
                || message.Contains("invalid object name")
                || message.Contains("ora-00942");
     }
-
 }

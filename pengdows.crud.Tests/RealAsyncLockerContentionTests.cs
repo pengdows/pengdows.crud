@@ -17,7 +17,8 @@ public sealed class RealAsyncLockerContentionTests
         var stats = new ModeContentionStats();
         var semaphore = new SemaphoreSlim(1, 1);
 
-        await using (var locker = new RealAsyncLocker(semaphore, stats, DbMode.SingleConnection, TimeSpan.FromMilliseconds(100)))
+        await using (var locker =
+                     new RealAsyncLocker(semaphore, stats, DbMode.SingleConnection, TimeSpan.FromMilliseconds(100)))
         {
             await locker.LockAsync();
         }
@@ -33,12 +34,14 @@ public sealed class RealAsyncLockerContentionTests
         var stats = new ModeContentionStats();
         var semaphore = new SemaphoreSlim(1, 1);
 
-        await using var holder = new RealAsyncLocker(semaphore, stats, DbMode.SingleConnection, TimeSpan.FromMilliseconds(250));
+        await using var holder =
+            new RealAsyncLocker(semaphore, stats, DbMode.SingleConnection, TimeSpan.FromMilliseconds(250));
         await holder.LockAsync();
 
         var waiter = Task.Run(async () =>
         {
-            await using var locker = new RealAsyncLocker(semaphore, stats, DbMode.SingleConnection, TimeSpan.FromMilliseconds(250));
+            await using var locker = new RealAsyncLocker(semaphore, stats, DbMode.SingleConnection,
+                TimeSpan.FromMilliseconds(250));
             await locker.LockAsync();
         });
 
@@ -58,12 +61,14 @@ public sealed class RealAsyncLockerContentionTests
         var stats = new ModeContentionStats();
         var semaphore = new SemaphoreSlim(1, 1);
 
-        await using var holder = new RealAsyncLocker(semaphore, stats, DbMode.SingleConnection, TimeSpan.FromMilliseconds(25));
+        await using var holder =
+            new RealAsyncLocker(semaphore, stats, DbMode.SingleConnection, TimeSpan.FromMilliseconds(25));
         await holder.LockAsync();
 
         var ex = await Assert.ThrowsAsync<ModeContentionException>(async () =>
         {
-            await using var waiter = new RealAsyncLocker(semaphore, stats, DbMode.SingleConnection, TimeSpan.FromMilliseconds(25));
+            await using var waiter =
+                new RealAsyncLocker(semaphore, stats, DbMode.SingleConnection, TimeSpan.FromMilliseconds(25));
             await waiter.LockAsync();
         });
 
@@ -71,4 +76,3 @@ public sealed class RealAsyncLockerContentionTests
         Assert.True(ex.Snapshot.TotalTimeouts >= 1);
     }
 }
-

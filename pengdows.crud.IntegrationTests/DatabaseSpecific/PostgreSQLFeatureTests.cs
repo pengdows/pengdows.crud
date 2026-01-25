@@ -13,7 +13,9 @@ namespace pengdows.crud.IntegrationTests.DatabaseSpecific;
 [Collection("IntegrationTests")]
 public class PostgreSQLFeatureTests : DatabaseTestBase
 {
-    public PostgreSQLFeatureTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture) { }
+    public PostgreSQLFeatureTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture)
+    {
+    }
 
     protected override IEnumerable<SupportedDatabase> GetSupportedProviders()
     {
@@ -406,10 +408,14 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
     {
         var articles = new[]
         {
-            ("Database Performance Optimization", "Learn about indexing strategies, query optimization techniques, and database tuning for maximum performance."),
-            ("Modern Web Development", "Exploring the latest trends in web development including frameworks, tools, and best practices."),
-            ("Machine Learning Fundamentals", "Introduction to machine learning algorithms, data preprocessing, and model evaluation techniques."),
-            ("Advanced Database Design", "Deep dive into database normalization, optimization patterns, and performance monitoring.")
+            ("Database Performance Optimization",
+                "Learn about indexing strategies, query optimization techniques, and database tuning for maximum performance."),
+            ("Modern Web Development",
+                "Exploring the latest trends in web development including frameworks, tools, and best practices."),
+            ("Machine Learning Fundamentals",
+                "Introduction to machine learning algorithms, data preprocessing, and model evaluation techniques."),
+            ("Advanced Database Design",
+                "Deep dive into database normalization, optimization patterns, and performance monitoring.")
         };
 
         foreach (var (title, content) in articles)

@@ -17,7 +17,7 @@ public class ReflectionSerializerTests
                 FirstName = "Jane",
                 LastName = "Doe",
                 Email = "jane@example.com",
-                DateOfBirth = new DateTime(1990,1,1)
+                DateOfBirth = new DateTime(1990, 1, 1)
             },
             ShippingAddress = new Address
             {
@@ -35,7 +35,7 @@ public class ReflectionSerializerTests
             Summary = new OrderSummary { Subtotal = 5.0m, Shipping = 1.0m },
             Status = OrderStatus.Pending,
             PlacedAt = DateTime.UtcNow,
-            Metadata = new Dictionary<string,string> { {"foo","bar"} }
+            Metadata = new Dictionary<string, string> { { "foo", "bar" } }
         };
 
         var serialized = ReflectionSerializer.Serialize(order);

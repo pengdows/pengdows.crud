@@ -244,11 +244,8 @@ public class QueryCacheTests : SqlLiteContextTestBase
     [Table("CacheEntity")]
     private class CacheEntity
     {
-        [Id]
-        [Column("Id", DbType.Int32)]
-        public int Id { get; set; }
+        [Id] [Column("Id", DbType.Int32)] public int Id { get; set; }
 
-        [Column("Name", DbType.String)]
-        public string? Name { get; set; }
+        [Column("Name", DbType.String)] public string? Name { get; set; }
     }
 }

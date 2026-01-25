@@ -21,32 +21,25 @@ public class TypeMapRegistryBranchTests
     [Table(" ")]
     private sealed class EmptyTableNameEntity
     {
-        [Column("id", DbType.Int32)]
-        [Id]
-        public int Id { get; set; }
+        [Column("id", DbType.Int32)] [Id] public int Id { get; set; }
     }
 
     [Table("test_table")]
     private sealed class EmptyColumnNameEntity
     {
-        [Column(" ", DbType.Int32)]
-        [Id]
-        public int Id { get; set; }
+        [Column(" ", DbType.Int32)] [Id] public int Id { get; set; }
     }
 
     [Table("test_table")]
     private sealed class EnumInvalidDbTypeEntity
     {
-        [Column("status", DbType.Binary)]
-        public SampleEnum Status { get; set; }
+        [Column("status", DbType.Binary)] public SampleEnum Status { get; set; }
     }
 
     [Table("test_table")]
     private sealed class JsonVersionEntity
     {
-        [Column("id", DbType.Int32)]
-        [Id]
-        public int Id { get; set; }
+        [Column("id", DbType.Int32)] [Id] public int Id { get; set; }
 
         [Column("version", DbType.Int32)]
         [Version]
@@ -81,28 +74,21 @@ public class TypeMapRegistryBranchTests
     [Table("test_table")]
     private sealed class NegativeOrdinalEntity
     {
-        [Column("a", DbType.Int32, ordinal: -1)]
-        [Id]
-        public int A { get; set; }
+        [Column("a", DbType.Int32, -1)] [Id] public int A { get; set; }
     }
 
     [Table("test_table")]
     private sealed class DuplicateOrdinalEntity
     {
-        [Column("a", DbType.Int32, ordinal: 1)]
-        [Id]
-        public int A { get; set; }
+        [Column("a", DbType.Int32, 1)] [Id] public int A { get; set; }
 
-        [Column("b", DbType.Int32, ordinal: 1)]
-        public int B { get; set; }
+        [Column("b", DbType.Int32, 1)] public int B { get; set; }
     }
 
     [Table("test_table")]
     private sealed class InvalidLastUpdatedOnEntity
     {
-        [Column("id", DbType.Int32)]
-        [Id]
-        public int Id { get; set; }
+        [Column("id", DbType.Int32)] [Id] public int Id { get; set; }
 
         [Column("updated_on", DbType.String)]
         [LastUpdatedOn]
@@ -112,9 +98,7 @@ public class TypeMapRegistryBranchTests
     [Table("test_table")]
     private sealed class InvalidCreatedByEntity
     {
-        [Column("id", DbType.Int32)]
-        [Id]
-        public int Id { get; set; }
+        [Column("id", DbType.Int32)] [Id] public int Id { get; set; }
 
         [Column("created_by", DbType.Int32)]
         [CreatedBy]
@@ -124,23 +108,17 @@ public class TypeMapRegistryBranchTests
     [Table("test_table")]
     private sealed class JsonInferenceEntity
     {
-        [Column("id", DbType.Int32)]
-        [Id]
-        public int Id { get; set; }
+        [Column("id", DbType.Int32)] [Id] public int Id { get; set; }
 
-        [Column("payload", DbType.String)]
-        public JsonDocument Payload { get; set; } = JsonDocument.Parse("{}");
+        [Column("payload", DbType.String)] public JsonDocument Payload { get; set; } = JsonDocument.Parse("{}");
 
-        [Column("node", DbType.String)]
-        public JsonNode? Node { get; set; }
+        [Column("node", DbType.String)] public JsonNode? Node { get; set; }
     }
 
     [Table("test_table")]
     private sealed class InvalidVersionTypeEntity
     {
-        [Column("id", DbType.Int32)]
-        [Id]
-        public int Id { get; set; }
+        [Column("id", DbType.Int32)] [Id] public int Id { get; set; }
 
         [Column("version", DbType.String)]
         [Version]
@@ -150,7 +128,7 @@ public class TypeMapRegistryBranchTests
     [Table("test_table")]
     private sealed class OrdinalAssignmentEntity
     {
-        [Column("a", DbType.Int32, ordinal: 2)]
+        [Column("a", DbType.Int32, 2)]
         [PrimaryKey]
         public int A { get; set; }
 
@@ -181,12 +159,17 @@ public class TypeMapRegistryBranchTests
         public bool IsLastUpdatedBy { get; set; }
         public bool IsLastUpdatedOn { get; set; }
         public int Ordinal { get; set; }
-        public object? MakeParameterValueFromField<T>(T objectToCreate) => null;
+
+        public object? MakeParameterValueFromField<T>(T objectToCreate)
+        {
+            return null;
+        }
     }
 
     private static void InvokeValidateVersionType(Type entityType, IColumnInfo? column)
     {
-        var method = typeof(TypeMapRegistry).GetMethod("ValidateVersionType", BindingFlags.NonPublic | BindingFlags.Static);
+        var method =
+            typeof(TypeMapRegistry).GetMethod("ValidateVersionType", BindingFlags.NonPublic | BindingFlags.Static);
         Assert.NotNull(method);
         method!.Invoke(null, new object?[] { entityType, column });
     }

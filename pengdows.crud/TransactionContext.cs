@@ -17,7 +17,8 @@ using pengdows.crud.metrics;
 
 namespace pengdows.crud;
 
-public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, IContextIdentity, ISqlDialectProvider, IMetricsCollectorAccessor
+public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, IContextIdentity, ISqlDialectProvider,
+    IMetricsCollectorAccessor
 {
     private readonly ITrackedConnection _connection;
     private readonly IDatabaseContext _context;
@@ -59,7 +60,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
             _transactionMetricsStart = _metricsCollector.TransactionStarted();
         }
 
-        executionType ??= (_context.IsReadOnlyConnection || _isReadOnly) ? ExecutionType.Read : ExecutionType.Write;
+        executionType ??= _context.IsReadOnlyConnection || _isReadOnly ? ExecutionType.Read : ExecutionType.Write;
 
         if ((_context.IsReadOnlyConnection || _isReadOnly) && executionType != ExecutionType.Read)
         {
@@ -97,9 +98,11 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
     internal IDbTransaction Transaction => _transaction;
 
     public bool WasCommitted => Interlocked.CompareExchange(ref _completedState, 0, 0) != 0
-                                 && Interlocked.CompareExchange(ref _committed, 0, 0) != 0;
+                                && Interlocked.CompareExchange(ref _committed, 0, 0) != 0;
+
     public bool WasRolledBack => Interlocked.CompareExchange(ref _completedState, 0, 0) != 0
-                                  && Interlocked.CompareExchange(ref _rolledBack, 0, 0) != 0;
+                                 && Interlocked.CompareExchange(ref _rolledBack, 0, 0) != 0;
+
     public bool IsCompleted => Interlocked.CompareExchange(ref _completedState, 0, 0) != 0;
     public IsolationLevel IsolationLevel => _resolvedIsolationLevel;
 
@@ -157,6 +160,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         {
             logger = dbCtx.CreateSqlContainerLogger();
         }
+
         return SqlContainer.Create(this, query, logger);
     }
 
@@ -209,6 +213,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         {
             throw new InvalidOperationException("Transaction is read-only.");
         }
+
         _context.AssertIsWriteConnection();
     }
 
@@ -243,12 +248,14 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
 
     ProcWrappingStyle IDatabaseContext.ProcWrappingStyle => _context.ProcWrappingStyle;
 
-    ITransactionContext IDatabaseContext.BeginTransaction(IsolationProfile isolationProfile, ExecutionType executionType, bool? readOnly)
+    ITransactionContext IDatabaseContext.BeginTransaction(IsolationProfile isolationProfile,
+        ExecutionType executionType, bool? readOnly)
     {
         throw new InvalidOperationException("Cannot begin a nested transaction from TransactionContext.");
     }
 
-    ITransactionContext IDatabaseContext.BeginTransaction(IsolationLevel? isolationLevel, ExecutionType executionType, bool? readOnly)
+    ITransactionContext IDatabaseContext.BeginTransaction(IsolationLevel? isolationLevel, ExecutionType executionType,
+        bool? readOnly)
     {
         throw new InvalidOperationException("Cannot begin a nested transaction from TransactionContext.");
     }
@@ -386,7 +393,8 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         }
     }
 
-    private async Task CompleteTransactionWithWaitAsync(Func<Task> action, bool markCommitted, CancellationToken cancellationToken = default)
+    private async Task CompleteTransactionWithWaitAsync(Func<Task> action, bool markCommitted,
+        CancellationToken cancellationToken = default)
     {
         await _completionLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -459,7 +467,10 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
     }
 
     // Kept for backward compatibility with existing internal calls
-    private Task RollbackAsync() => RollbackAsync(default);
+    private Task RollbackAsync()
+    {
+        return RollbackAsync(default);
+    }
 
     protected override void DisposeManaged()
     {
@@ -521,7 +532,8 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
                 }
                 else
                 {
-                    _logger.LogError("TransactionContext.DisposeAsync could not acquire lock; skipping explicit rollback.");
+                    _logger.LogError(
+                        "TransactionContext.DisposeAsync could not acquire lock; skipping explicit rollback.");
                 }
             }
             catch (Exception ex)
@@ -552,7 +564,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         }
     }
 
-    public ISqlDialect Dialect =>  _dialect;
+    public ISqlDialect Dialect => _dialect;
 
     // Internal factory used by DatabaseContext
     internal static TransactionContext Create(

@@ -88,7 +88,8 @@ public class TypeCoercionHelperAdvancedTests
             typeof(string),
             column,
             EnumParseFailureMode.Throw,
-            new TypeCoercionOptions(TimeMappingPolicy.PreferDateTimeOffset, JsonPassThrough.PreferDocument, SupportedDatabase.PostgreSql))!;
+            new TypeCoercionOptions(TimeMappingPolicy.PreferDateTimeOffset, JsonPassThrough.PreferDocument,
+                SupportedDatabase.PostgreSql))!;
 
         Assert.Equal(IPAddress.Parse("192.168.1.1"), result.Address);
         Assert.Equal((byte)24, result.PrefixLength);
@@ -104,7 +105,8 @@ public class TypeCoercionHelperAdvancedTests
             typeof(string),
             column,
             EnumParseFailureMode.Throw,
-            new TypeCoercionOptions(TimeMappingPolicy.PreferDateTimeOffset, JsonPassThrough.PreferDocument, SupportedDatabase.PostgreSql)));
+            new TypeCoercionOptions(TimeMappingPolicy.PreferDateTimeOffset, JsonPassThrough.PreferDocument,
+                SupportedDatabase.PostgreSql)));
     }
 
     private static ColumnInfo CreateJsonColumn()

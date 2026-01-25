@@ -16,7 +16,9 @@ public class ConcurrencyTests : DatabaseTestBase
 {
     private static long _nextId;
 
-    public ConcurrencyTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture) { }
+    public ConcurrencyTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture)
+    {
+    }
 
     protected override async Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)
     {
@@ -304,7 +306,7 @@ public class ConcurrencyTests : DatabaseTestBase
                 var readHelper = CreateEntityHelper(context);
                 var results = new List<TestTable>();
 
-                for (int i = 0; i < 10; i++)
+                for (var i = 0; i < 10; i++)
                 {
                     var batch = await readHelper.RetrieveAsync(
                         existingEntities.Take(25).Select(e => e.Id).ToList(),
@@ -437,7 +439,7 @@ public class ConcurrencyTests : DatabaseTestBase
     private EntityHelper<TestTable, long> CreateEntityHelper(IDatabaseContext context)
     {
         var auditResolver = GetAuditResolver();
-        return new EntityHelper<TestTable, long>(context, auditValueResolver: auditResolver);
+        return new EntityHelper<TestTable, long>(context, auditResolver);
     }
 
     private static TestTable CreateTestEntity(NameEnum name, int value)

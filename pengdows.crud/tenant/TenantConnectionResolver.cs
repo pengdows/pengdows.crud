@@ -17,7 +17,8 @@ public class TenantConnectionResolver : ITenantConnectionResolver
 
     public TenantConnectionResolver(IEnumerable<TenantConfiguration>? tenants)
     {
-        _configurations = new ConcurrentDictionary<string, DatabaseContextConfiguration>(StringComparer.OrdinalIgnoreCase);
+        _configurations =
+            new ConcurrentDictionary<string, DatabaseContextConfiguration>(StringComparer.OrdinalIgnoreCase);
 
         if (tenants != null)
         {
@@ -54,7 +55,8 @@ public class TenantConnectionResolver : ITenantConnectionResolver
 
         if (string.IsNullOrWhiteSpace(configuration.ProviderName))
         {
-            throw new ArgumentException("Tenant configuration must include a non-empty ProviderName.", nameof(configuration));
+            throw new ArgumentException("Tenant configuration must include a non-empty ProviderName.",
+                nameof(configuration));
         }
 
         _configurations[tenant] = configuration;
@@ -74,9 +76,11 @@ public class TenantConnectionResolver : ITenantConnectionResolver
                 continue;
             }
 
-            if (tenant.DatabaseContextConfiguration == null || string.IsNullOrWhiteSpace(tenant.DatabaseContextConfiguration.ProviderName))
+            if (tenant.DatabaseContextConfiguration == null ||
+                string.IsNullOrWhiteSpace(tenant.DatabaseContextConfiguration.ProviderName))
             {
-                throw new ArgumentException($"Tenant '{tenant?.Name}' configuration must include a non-empty ProviderName.");
+                throw new ArgumentException(
+                    $"Tenant '{tenant?.Name}' configuration must include a non-empty ProviderName.");
             }
 
             Register(tenant.Name, tenant.DatabaseContextConfiguration);

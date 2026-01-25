@@ -39,4 +39,3 @@ public class ReadWriteModeBehaviorTests
         Assert.Throws<InvalidOperationException>(() => ctx.AssertIsWriteConnection());
     }
 }
-

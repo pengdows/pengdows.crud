@@ -158,7 +158,7 @@ public class MariaDbDialectTests
     {
         // Act
         using var context = new DatabaseContext("Data Source=test;EmulatedProduct=MariaDb", _factory);
-        var settings = _dialect.GetConnectionSessionSettings(context, readOnly: false);
+        var settings = _dialect.GetConnectionSessionSettings(context, false);
 
         // Assert
         Assert.NotNull(settings); // Should return settings or empty string
@@ -430,7 +430,8 @@ public class MariaDbDialectTests
     [InlineData(5, 7, SqlStandardLevel.Sql99)]
     [InlineData(5, 0, SqlStandardLevel.Sql99)]
     [InlineData(4, 1, SqlStandardLevel.Sql92)]
-    public void DetermineStandardCompliance_Should_Return_Correct_Level_For_Version(int major, int minor, SqlStandardLevel expected)
+    public void DetermineStandardCompliance_Should_Return_Correct_Level_For_Version(int major, int minor,
+        SqlStandardLevel expected)
     {
         var version = new Version(major, minor);
 
@@ -468,7 +469,7 @@ public class MariaDbDialectTests
     {
         var context = new DatabaseContext("test", _factory);
 
-        var settings = _dialect.GetConnectionSessionSettings(context, readOnly: true);
+        var settings = _dialect.GetConnectionSessionSettings(context, true);
 
         Assert.Contains("STRICT_ALL_TABLES", settings);
         Assert.Contains("ONLY_FULL_GROUP_BY", settings);
@@ -482,7 +483,7 @@ public class MariaDbDialectTests
     {
         var context = new DatabaseContext("test", _factory);
 
-        var settings = _dialect.GetConnectionSessionSettings(context, readOnly: false);
+        var settings = _dialect.GetConnectionSessionSettings(context, false);
 
         Assert.Contains("STRICT_ALL_TABLES", settings);
         Assert.Contains("ONLY_FULL_GROUP_BY", settings);

@@ -31,7 +31,8 @@ public class DataSourceInformationAsyncTests
     public async Task CreateAsync_ReturnsErrorVersion_WhenCommandFails()
     {
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
-        var conn = new ThrowingConnection { ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}" };
+        var conn = new ThrowingConnection
+            { ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}" };
         await using var tracked = new TrackedConnection(conn);
 
         var info = await DataSourceInformation.CreateAsync(tracked, factory, NullLoggerFactory.Instance);

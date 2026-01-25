@@ -432,17 +432,22 @@ public class BooleanCoercion : DbCoercion<bool>
                 return true;
             case string s:
                 if (bool.TryParse(s, out value))
+                {
                     return true;
+                }
+
                 if (s.Length == 1)
                 {
                     value = EvaluateCharBoolean(char.ToLowerInvariant(s[0]));
                     return true;
                 }
+
                 if (double.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out var dbl))
                 {
                     value = Math.Abs(dbl) > double.Epsilon;
                     return true;
                 }
+
                 value = false;
                 return false;
             case char c:
@@ -506,10 +511,12 @@ public class DateTimeCoercion : DbCoercion<DateTime>
             case DateTimeOffset dto:
                 value = DateTime.SpecifyKind(dto.UtcDateTime, DateTimeKind.Utc);
                 return true;
-            case string s when DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dto):
+            case string s when DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind,
+                out var dto):
                 value = DateTime.SpecifyKind(dto.UtcDateTime, DateTimeKind.Utc);
                 return true;
-            case string s when DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt):
+            case string s
+                when DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt):
                 value = DateTime.SpecifyKind(ConvertToUtc(dt), DateTimeKind.Utc);
                 return true;
             default:

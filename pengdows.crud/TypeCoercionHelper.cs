@@ -81,7 +81,8 @@ public static class TypeCoercionHelper
         var underlyingTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
 
         // Don't take fast path for DateTime types as they may need UTC conversion
-        if (targetType.IsAssignableFrom(sourceType) && underlyingTarget != typeof(DateTime) && underlyingTarget != typeof(DateTimeOffset))
+        if (targetType.IsAssignableFrom(sourceType) && underlyingTarget != typeof(DateTime) &&
+            underlyingTarget != typeof(DateTimeOffset))
         {
             return value;
         }
@@ -99,7 +100,8 @@ public static class TypeCoercionHelper
         var underlyingTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
 
         // Don't take fast path for DateTime types as they may need UTC conversion
-        if (underlyingTarget.IsInstanceOfType(value) && underlyingTarget != typeof(DateTime) && underlyingTarget != typeof(DateTimeOffset))
+        if (underlyingTarget.IsInstanceOfType(value) && underlyingTarget != typeof(DateTime) &&
+            underlyingTarget != typeof(DateTimeOffset))
         {
             return value;
         }
@@ -117,7 +119,8 @@ public static class TypeCoercionHelper
 
         // Primary path: Use unified CoercionRegistry system for other types
         var dbValue = new types.coercion.DbValue(value, sourceType);
-        if (types.coercion.CoercionRegistry.Shared.TryRead(dbValue, underlyingTarget, out var coercedValue, options.Provider))
+        if (types.coercion.CoercionRegistry.Shared.TryRead(dbValue, underlyingTarget, out var coercedValue,
+                options.Provider))
         {
             return coercedValue;
         }
@@ -187,7 +190,8 @@ public static class TypeCoercionHelper
         }
     }
 
-    private static object? HandleEnumFailure(object value, Type enumType, EnumParseFailureMode parseMode, bool targetNullable)
+    private static object? HandleEnumFailure(object value, Type enumType, EnumParseFailureMode parseMode,
+        bool targetNullable)
     {
         switch (parseMode)
         {
@@ -327,9 +331,11 @@ public static class TypeCoercionHelper
                 return options.TimePolicy == TimeMappingPolicy.ForceUtcDateTime
                     ? new DateTimeOffset(ConvertToUtc(dt), TimeSpan.Zero)
                     : CreateFlexibleOffset(dt);
-            case string s when DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed):
+            case string s when DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind,
+                out var parsed):
                 return parsed;
-            case string s when DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt):
+            case string s
+                when DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt):
                 return options.TimePolicy == TimeMappingPolicy.ForceUtcDateTime
                     ? new DateTimeOffset(ConvertToUtc(dt), TimeSpan.Zero)
                     : CreateFlexibleOffset(dt);
@@ -350,9 +356,11 @@ public static class TypeCoercionHelper
                 // Treat empty/whitespace strings as invalid for DateTime
                 // This handles SQLite returning empty strings for TIMESTAMP columns
                 throw new InvalidCastException($"Cannot convert value '{value}' to DateTime.");
-            case string s when DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dto):
+            case string s when DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind,
+                out var dto):
                 return DateTime.SpecifyKind(dto.UtcDateTime, DateTimeKind.Utc);
-            case string s when DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt):
+            case string s
+                when DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt):
                 return DateTime.SpecifyKind(ConvertToUtc(dt), DateTimeKind.Utc);
             default:
                 throw new InvalidCastException($"Cannot convert value '{value}' to DateTime.");

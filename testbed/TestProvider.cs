@@ -20,7 +20,7 @@ public class TestProvider : IAsyncTestProvider
         _context = databaseContext;
         var resolver = serviceProvider.GetService<IAuditValueResolver>() ??
                        new TestAuditValueResolver("system");
-        _helper = new EntityHelper<TestTable, long>(databaseContext, auditValueResolver: resolver);
+        _helper = new EntityHelper<TestTable, long>(databaseContext, resolver);
     }
 
 
@@ -55,6 +55,7 @@ public class TestProvider : IAsyncTestProvider
             {
                 throw new Exception("Delete did not affect expected row count");
             }
+
             Console.WriteLine("Running Transaction rows");
             await TestTransactions();
             Console.WriteLine("Running stored procedure return value test");
@@ -240,7 +241,9 @@ CREATE TABLE {qp}test_table{qs} (
                 sc.Query.Append(wrapped);
                 var value = await sc.ExecuteScalarAsync<int>();
                 if (value != 5)
+                {
                     throw new Exception($"Expected return value 5 but got {value}");
+                }
 
                 sc.Clear();
                 sc.Query.Append("DROP PROCEDURE dbo.ReturnFive");

@@ -15,7 +15,8 @@ public sealed class PoolingConfigReaderTests
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         var dialect = new PostgreSqlDialect(factory, NullLogger.Instance);
 
-        var cs = "Host=localhost;Database=postgres;Username=postgres;Password=x;Pooling=true;Minimum Pool Size=3;Maximum Pool Size=42;";
+        var cs =
+            "Host=localhost;Database=postgres;Username=postgres;Password=x;Pooling=true;Minimum Pool Size=3;Maximum Pool Size=42;";
         var cfg = PoolingConfigReader.GetEffectivePoolConfig(dialect, cs);
 
         Assert.Equal(PoolConfigSource.ConnectionString, cfg.Source);
@@ -30,7 +31,8 @@ public sealed class PoolingConfigReaderTests
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         var dialect = new PostgreSqlDialect(factory, NullLogger.Instance);
 
-        var cs = "Host=localhost;Database=postgres;Username=postgres;Password=x;Pooling=false;Minimum Pool Size=2;Maximum Pool Size=42;";
+        var cs =
+            "Host=localhost;Database=postgres;Username=postgres;Password=x;Pooling=false;Minimum Pool Size=2;Maximum Pool Size=42;";
         var cfg = PoolingConfigReader.GetEffectivePoolConfig(dialect, cs);
 
         Assert.Equal(PoolConfigSource.ConnectionString, cfg.Source);

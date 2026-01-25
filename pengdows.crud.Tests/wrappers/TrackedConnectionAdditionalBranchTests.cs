@@ -29,9 +29,11 @@ public class TrackedConnectionAdditionalBranchTests
     {
         using var conn = new fakeDbConnection();
         using var tracked = new TrackedConnection(conn);
-        var method = typeof(TrackedConnection).GetMethod("HandleMetricsStateChange", BindingFlags.Instance | BindingFlags.NonPublic);
+        var method = typeof(TrackedConnection).GetMethod("HandleMetricsStateChange",
+            BindingFlags.Instance | BindingFlags.NonPublic);
 
-        method!.Invoke(tracked, new object?[] { null, new StateChangeEventArgs(ConnectionState.Closed, ConnectionState.Open) });
+        method!.Invoke(tracked,
+            new object?[] { null, new StateChangeEventArgs(ConnectionState.Closed, ConnectionState.Open) });
     }
 
     [Fact]
@@ -73,8 +75,7 @@ public class TrackedConnectionAdditionalBranchTests
         public bool DisposeAsyncCalled { get; private set; }
         public bool DisposeCalled { get; private set; }
 
-        [AllowNull]
-        public override string ConnectionString { get; set; } = string.Empty;
+        [AllowNull] public override string ConnectionString { get; set; } = string.Empty;
         public override string Database => "test";
         public override string DataSource => "test";
         public override string ServerVersion => "1.0";

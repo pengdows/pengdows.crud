@@ -40,6 +40,7 @@ public partial class EntityHelper<TEntity, TRowID>
 
                 sb.Append(dialect.WrapObjectName(_tableInfo.OrderedColumns[i].Name));
             }
+
             sb.Append("\nFROM ");
             sb.Append(BuildWrappedTableName(dialect));
             if (hasAlias)
@@ -58,7 +59,7 @@ public partial class EntityHelper<TEntity, TRowID>
     public ISqlContainer BuildRetrieve(IReadOnlyCollection<TRowID>? listOfIds,
         string alias, IDatabaseContext? context = null)
     {
-        return BuildRetrieveInternal(listOfIds, alias, context, deduplicate: true);
+        return BuildRetrieveInternal(listOfIds, alias, context, true);
     }
 
     internal ISqlContainer BuildRetrieveInternal(IReadOnlyCollection<TRowID>? listOfIds,
@@ -70,6 +71,7 @@ public partial class EntityHelper<TEntity, TRowID>
             throw new InvalidOperationException(
                 "Single-ID operations require a designated Id column; use composite-key helpers.");
         }
+
         var sc = BuildBaseRetrieve(alias, ctx);
         var wrappedAlias = "";
         if (!string.IsNullOrWhiteSpace(alias))
@@ -132,7 +134,8 @@ public partial class EntityHelper<TEntity, TRowID>
         BuildWhereByPrimaryKey(listOfObjects, sc, alias, dialect);
     }
 
-    public void BuildWhereByPrimaryKey(IReadOnlyCollection<TEntity>? listOfObjects, ISqlContainer sc, string alias, ISqlDialect dialect)
+    public void BuildWhereByPrimaryKey(IReadOnlyCollection<TEntity>? listOfObjects, ISqlContainer sc, string alias,
+        ISqlDialect dialect)
     {
         ValidateWhereInputs(listOfObjects, sc);
 
@@ -184,8 +187,10 @@ public partial class EntityHelper<TEntity, TRowID>
         return keys;
     }
 
-    private static string BuildAliasPrefix(string alias) =>
-        string.IsNullOrWhiteSpace(alias) ? string.Empty : alias + ".";
+    private static string BuildAliasPrefix(string alias)
+    {
+        return string.IsNullOrWhiteSpace(alias) ? string.Empty : alias + ".";
+    }
 
     private string BuildPrimaryKeyClause(TEntity entity, IReadOnlyList<IColumnInfo> keys, string alias,
         List<DbParameter> parameters, ISqlDialect dialect, ClauseCounters counters)
@@ -238,7 +243,7 @@ public partial class EntityHelper<TEntity, TRowID>
 
     public ISqlContainer BuildWhere(string wrappedColumnName, IEnumerable<TRowID> ids, ISqlContainer sqlContainer)
     {
-        return BuildWhereInternal(wrappedColumnName, ids, sqlContainer, deduplicate: true);
+        return BuildWhereInternal(wrappedColumnName, ids, sqlContainer, true);
     }
 
     internal ISqlContainer BuildWhereInternal(string wrappedColumnName, IEnumerable<TRowID> ids,
@@ -251,7 +256,7 @@ public partial class EntityHelper<TEntity, TRowID>
 
         // Build a non-null list and allow at most one NULL (rendered as IS NULL)
         var nonNullIds = new List<TRowID>();
-        HashSet<TRowID?>? seen = deduplicate ? new HashSet<TRowID?>() : null;
+        var seen = deduplicate ? new HashSet<TRowID?>() : null;
         var hasNull = false;
         foreach (var id in ids)
         {
@@ -260,6 +265,7 @@ public partial class EntityHelper<TEntity, TRowID>
                 hasNull = true;
                 continue;
             }
+
             if (!deduplicate)
             {
                 nonNullIds.Add(id);
@@ -345,7 +351,9 @@ public partial class EntityHelper<TEntity, TRowID>
 
         // IN-list with bucketing
         var bucket = 1;
-        for (; bucket < nonNullIds.Count; bucket <<= 1) { }
+        for (; bucket < nonNullIds.Count; bucket <<= 1)
+        {
+        }
 
         var keyIn = $"Where:{wrappedColumnName}:{bucket}";
         if (!_whereParameterNames.TryGet(keyIn, out var names))
@@ -373,6 +381,7 @@ public partial class EntityHelper<TEntity, TRowID>
 
                 sb.Append(names[i]);
             }
+
             sb.Append(')');
             return sb.ToString();
         });
@@ -419,5 +428,4 @@ public partial class EntityHelper<TEntity, TRowID>
 
         return sqlContainer;
     }
-
 }

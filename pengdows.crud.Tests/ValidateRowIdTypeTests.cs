@@ -40,8 +40,6 @@ public class ValidateRowIdTypeTests : SqlLiteContextTestBase
     [Table("Simple")]
     private class SimpleEntity
     {
-        [Id]
-        [Column("Id", DbType.Int32)]
-        public int Id { get; set; }
+        [Id] [Column("Id", DbType.Int32)] public int Id { get; set; }
     }
 }

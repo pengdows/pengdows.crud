@@ -19,14 +19,18 @@ internal class OracleDialect : SqlDialect
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.Oracle;
     public override string ParameterMarker => ":";
+
     public override bool SupportsNamedParameters => true;
+
     // IMMUTABLE: Oracle bind variable limit: we follow 64,000 as a practical upper bound
     // for modern Oracle (12c+) engines and ODP.NET providers. This aligns with
     // widely observed limits in production and avoids overly conservative caps.
     // Do not change without verifying against official Oracle docs/provider behavior.
     public override int MaxParameterLimit => 64000;
+
     // IMMUTABLE: Oracle output parameter limit - do not change without extensive testing
     public override int MaxOutputParameters => 1024;
+
     // IMMUTABLE: Oracle pre-12.2 identifier length limit - do not change without extensive testing
     public override int ParameterNameMaxLength => 30;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.Oracle;
@@ -34,6 +38,7 @@ internal class OracleDialect : SqlDialect
 
     // Oracle prefers statement cache and array binding over manual prepare
     public override bool PrepareStatements => false;
+
     public override SqlStandardLevel MaxSupportedStandard =>
         IsInitialized ? base.MaxSupportedStandard : DetermineStandardCompliance(null);
 
@@ -53,10 +58,14 @@ internal class OracleDialect : SqlDialect
     public override string GetLastInsertedIdQuery()
     {
         // Oracle typically uses sequences; this is a placeholder that would need sequence name
-        throw new NotSupportedException("Oracle requires sequence-specific syntax. Use RETURNING clause or sequence.CURRVAL instead.");
+        throw new NotSupportedException(
+            "Oracle requires sequence-specific syntax. Use RETURNING clause or sequence.CURRVAL instead.");
     }
 
-    public override string GetVersionQuery() => "SELECT * FROM v$version WHERE banner LIKE 'Oracle%'";
+    public override string GetVersionQuery()
+    {
+        return "SELECT * FROM v$version WHERE banner LIKE 'Oracle%'";
+    }
 
     public override string GetNaturalKeyLookupQuery(string tableName, string idColumnName,
         IReadOnlyList<string> columnNames, IReadOnlyList<string> parameterNames)

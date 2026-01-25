@@ -50,7 +50,8 @@ public class DatabaseContextIsolationTests
     {
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.PostgreSql}",
             new fakeDbFactory(SupportedDatabase.PostgreSql.ToString()));
-        Assert.Throws<TransactionModeNotSupportedException>(() => context.BeginTransaction(IsolationProfile.SafeNonBlockingReads));
+        Assert.Throws<TransactionModeNotSupportedException>(() =>
+            context.BeginTransaction(IsolationProfile.SafeNonBlockingReads));
     }
 
     [Theory]

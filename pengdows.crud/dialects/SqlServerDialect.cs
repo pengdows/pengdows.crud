@@ -44,17 +44,22 @@ internal class SqlServerDialect : SqlDialect
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.SqlServer;
     public override string ParameterMarker => "@";
+
     public override bool SupportsNamedParameters => true;
+
     // IMMUTABLE: SQL Server sp_executesql documented limit - do not change without extensive testing
     public override int MaxParameterLimit => 2100;
+
     // IMMUTABLE: SQL Server output parameter limit - do not change without extensive testing  
     public override int MaxOutputParameters => 1024;
+
     // IMMUTABLE: SQL Server identifier length limit - do not change without extensive testing
     public override int ParameterNameMaxLength => 128;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.Exec;
-    
+
     // SQL Server relies on sp_executesql and server plan cache, not manual prepare
     public override bool PrepareStatements => false;
+
     public override SqlStandardLevel MaxSupportedStandard =>
         IsInitialized ? base.MaxSupportedStandard : DetermineStandardCompliance(null);
 
@@ -66,8 +71,15 @@ internal class SqlServerDialect : SqlDialect
     public override bool SupportsSavepoints => true;
 
     // SQL Server uses SAVE TRANSACTION / ROLLBACK TRANSACTION instead of SAVEPOINT
-    public override string GetSavepointSql(string name) => $"SAVE TRANSACTION {name}";
-    public override string GetRollbackToSavepointSql(string name) => $"ROLLBACK TRANSACTION {name}";
+    public override string GetSavepointSql(string name)
+    {
+        return $"SAVE TRANSACTION {name}";
+    }
+
+    public override string GetRollbackToSavepointSql(string name)
+    {
+        return $"ROLLBACK TRANSACTION {name}";
+    }
 
     public override bool SupportsInsertReturning => true;
     public override bool SupportsIdentityColumns => true;
@@ -85,7 +97,10 @@ internal class SqlServerDialect : SqlDialect
         return "SELECT SCOPE_IDENTITY()";
     }
 
-    public override string GetVersionQuery() => "SELECT @@VERSION";
+    public override string GetVersionQuery()
+    {
+        return "SELECT @@VERSION";
+    }
 
     public override async Task<string> GetDatabaseVersionAsync(ITrackedConnection connection)
     {
@@ -143,7 +158,7 @@ internal class SqlServerDialect : SqlDialect
     public override async Task<IDatabaseProductInfo> DetectDatabaseInfoAsync(ITrackedConnection connection)
     {
         var productInfo = await base.DetectDatabaseInfoAsync(connection);
-        
+
         // Check and cache SQL Server session settings during initialization
         if (_sessionSettings == null)
         {
@@ -152,7 +167,8 @@ internal class SqlServerDialect : SqlDialect
 
             if (!string.IsNullOrWhiteSpace(_sessionSettings))
             {
-                Logger.LogInformation("Applying SQL Server session settings on first connect:\n{Settings}", _sessionSettings);
+                Logger.LogInformation("Applying SQL Server session settings on first connect:\n{Settings}",
+                    _sessionSettings);
             }
             else
             {
@@ -173,7 +189,8 @@ internal class SqlServerDialect : SqlDialect
                 cmd.CommandText = "DBCC USEROPTIONS"; // no trailing ';'
 
                 using var reader = cmd.ExecuteReader();
-                var currentSettings = new Dictionary<string, string>(ExpectedSessionSettings.Count, StringComparer.OrdinalIgnoreCase);
+                var currentSettings =
+                    new Dictionary<string, string>(ExpectedSessionSettings.Count, StringComparer.OrdinalIgnoreCase);
 
                 foreach (var kvp in ExpectedSessionSettings)
                 {
@@ -201,9 +218,10 @@ internal class SqlServerDialect : SqlDialect
                         continue;
                     }
 
-                    currentSettings[settingName] = string.Equals(settingValue, "SET", StringComparison.OrdinalIgnoreCase)
-                        ? "ON"
-                        : "OFF";
+                    currentSettings[settingName] =
+                        string.Equals(settingValue, "SET", StringComparison.OrdinalIgnoreCase)
+                            ? "ON"
+                            : "OFF";
                 }
 
                 var script = BuildSessionSettingsScript(
@@ -227,7 +245,7 @@ internal class SqlServerDialect : SqlDialect
             { 13, SqlStandardLevel.Sql2016 }, // SQL Server 2016+
             { 12, SqlStandardLevel.Sql2011 }, // SQL Server 2014
             { 10, SqlStandardLevel.Sql2008 }, // SQL Server 2008+
-            { 8,  SqlStandardLevel.Sql2003 }  // SQL Server 2000+
+            { 8, SqlStandardLevel.Sql2003 } // SQL Server 2000+
         };
     }
 

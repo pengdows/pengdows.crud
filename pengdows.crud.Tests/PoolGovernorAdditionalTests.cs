@@ -12,9 +12,9 @@ public class PoolGovernorAdditionalTests
     [Fact]
     public void Acquire_DisabledGovernor_ReturnsDefaultPermit()
     {
-        var governor = new PoolGovernor(PoolLabel.Reader, "hash", 1, TimeSpan.FromMilliseconds(1), disabled: true);
+        var governor = new PoolGovernor(PoolLabel.Reader, "hash", 1, TimeSpan.FromMilliseconds(1), true);
         var permit = governor.Acquire();
-        Assert.Equal(default(PoolPermit), permit);
+        Assert.Equal(default, permit);
 
         var snapshot = governor.GetSnapshot();
         Assert.True(snapshot.Disabled);

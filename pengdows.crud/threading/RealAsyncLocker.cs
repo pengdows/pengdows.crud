@@ -95,6 +95,7 @@ internal sealed class RealAsyncLocker : SafeAsyncDisposableBase, ILockerAsync
         {
             throw new TaskCanceledException();
         }
+
         _logger.LogTrace("Waiting for lock");
         if (_semaphore.Wait(0))
         {
@@ -142,10 +143,12 @@ internal sealed class RealAsyncLocker : SafeAsyncDisposableBase, ILockerAsync
             {
                 _semaphore.Release();
             }
+
             if (cancellationToken.IsCancellationRequested)
             {
                 throw new TaskCanceledException();
             }
+
             throw;
         }
 
@@ -169,6 +172,7 @@ internal sealed class RealAsyncLocker : SafeAsyncDisposableBase, ILockerAsync
         {
             throw new TaskCanceledException();
         }
+
         _logger.LogTrace("Attempting lock with timeout {Timeout}", timeout);
         if (_semaphore.Wait(0))
         {
@@ -188,6 +192,7 @@ internal sealed class RealAsyncLocker : SafeAsyncDisposableBase, ILockerAsync
         {
             throw new TaskCanceledException();
         }
+
         if (acquired)
         {
             var waitTicks = Stopwatch.GetTimestamp() - start;

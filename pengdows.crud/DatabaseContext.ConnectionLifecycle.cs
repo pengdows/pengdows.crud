@@ -62,7 +62,8 @@ public partial class DatabaseContext
         return GetStandardConnectionWithExecutionType(ExecutionType.Read, isShared, readOnly);
     }
 
-    internal ITrackedConnection GetStandardConnectionWithExecutionType(ExecutionType executionType, bool isShared = false, bool readOnly = false)
+    internal ITrackedConnection GetStandardConnectionWithExecutionType(ExecutionType executionType,
+        bool isShared = false, bool readOnly = false)
     {
         var permit = AcquirePermit(executionType);
         try
@@ -101,12 +102,17 @@ public partial class DatabaseContext
                     // Isolated memory: reuse pinned connection for all reads
                     return GetSingleConnection();
                 }
+
                 // Shared memory: ephemeral read-only connections using the same CS
-                return isShared ? GetSingleConnection() : GetStandardConnectionWithExecutionType(ExecutionType.Read, isShared, true);
+                return isShared
+                    ? GetSingleConnection()
+                    : GetStandardConnectionWithExecutionType(ExecutionType.Read, isShared, true);
             }
 
             // Non-embedded: ephemeral read connection (unless shared within a transaction)
-            return isShared ? GetSingleConnection() : GetStandardConnectionWithExecutionType(ExecutionType.Read, isShared, true);
+            return isShared
+                ? GetSingleConnection()
+                : GetStandardConnectionWithExecutionType(ExecutionType.Read, isShared, true);
         }
 
         return GetSingleConnection();
@@ -121,6 +127,7 @@ public partial class DatabaseContext
         {
             return;
         }
+
         _logger.LogInformation("Applying connection session settings");
         if (_applyConnectionSessionSettings)
         {
@@ -243,11 +250,14 @@ public partial class DatabaseContext
                     try
                     {
                         var schema = conn.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
-                        var productName = schema.Rows.Count > 0 ? schema.Rows[0].Field<string>("DataSourceProductName") : null;
+                        var productName = schema.Rows.Count > 0
+                            ? schema.Rows[0].Field<string>("DataSourceProductName")
+                            : null;
                         var lower = (productName ?? string.Empty).ToLowerInvariant();
                         if (lower.Contains("mysql") || lower.Contains("mariadb"))
                         {
-                            settings = "SET SESSION sql_mode = 'STRICT_ALL_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,ANSI_QUOTES,NO_BACKSLASH_ESCAPES';";
+                            settings =
+                                "SET SESSION sql_mode = 'STRICT_ALL_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,ANSI_QUOTES,NO_BACKSLASH_ESCAPES';";
                             if (readOnly)
                             {
                                 settings += "\nSET SESSION TRANSACTION READ ONLY;";
@@ -287,6 +297,7 @@ public partial class DatabaseContext
                         settings = _connectionSessionSettings ?? string.Empty;
                     }
                 }
+
                 if (!string.IsNullOrWhiteSpace(settings))
                 {
                     // Execute one statement at a time. Do not auto-append semicolons.
@@ -303,6 +314,7 @@ public partial class DatabaseContext
                         cmd.CommandText = stmt; // no trailing ';'
                         cmd.ExecuteNonQuery();
                     }
+
                     _sessionSettingsAppliedOnOpen = true;
                 }
             }
@@ -351,7 +363,7 @@ public partial class DatabaseContext
                 }
             },
             firstOpenHandler,
-            onDispose: conn => { _logger.LogDebug("Connection disposed."); },
+            conn => { _logger.LogDebug("Connection disposed."); },
             null,
             isSharedConnection,
             _metricsCollector,
@@ -366,7 +378,8 @@ public partial class DatabaseContext
     /// <summary>
     /// Overload of FactoryCreateConnection without custom first-open handler.
     /// </summary>
-    internal ITrackedConnection FactoryCreateConnection(string? connectionString = null, bool isSharedConnection = false, bool readOnly = false)
+    internal ITrackedConnection FactoryCreateConnection(string? connectionString = null,
+        bool isSharedConnection = false, bool readOnly = false)
     {
         return FactoryCreateConnection(connectionString, isSharedConnection, readOnly, null);
     }

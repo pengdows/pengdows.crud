@@ -26,68 +26,73 @@ public static class DataSourceTestData
                 continue;
             }
 
-            var productName = db switch
-            {
-                SupportedDatabase.SqlServer => "SQL Server",
-                SupportedDatabase.MySql => "MySQL",
-                SupportedDatabase.MariaDb => "MariaDB",
-                SupportedDatabase.PostgreSql => "PostgreSQL",
-                SupportedDatabase.CockroachDb => "CockroachDB",
-                SupportedDatabase.Sqlite => "SQLite",
-                SupportedDatabase.Firebird => "Firebird",
-                SupportedDatabase.Oracle => "Oracle Database",
-                _ => db.ToString()
-            };
-
-            var markerFormat = db switch
-            {
-                SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.Oracle => ":{0}",
-                SupportedDatabase.DuckDB => "$" + "{0}",
-                _ => "@{0}"
-            };
-
-            var schema = DataSourceInformation.BuildEmptySchema(
-                productName,
-                "1.2.3",
-                db == SupportedDatabase.Sqlite ? "@p[0-9]+" : "@[0-9]+",
-                markerFormat,
-                64,
-                @"@\\w+",
-                @"[@:]\w+",
-                db != SupportedDatabase.Sqlite
-            );
-
-            var factory = new fakeDbFactory(db.ToString());
-
-            SqlDialect dialect = db switch
-            {
-                SupportedDatabase.SqlServer => new SqlServerDialect(factory, NullLogger.Instance),
-                SupportedDatabase.MySql => new MySqlDialect(factory, NullLogger.Instance),
-                SupportedDatabase.MariaDb => new MariaDbDialect(factory, NullLogger.Instance),
-                SupportedDatabase.PostgreSql => new PostgreSqlDialect(factory, NullLogger.Instance),
-                SupportedDatabase.CockroachDb => new PostgreSqlDialect(factory, NullLogger.Instance),
-                SupportedDatabase.Sqlite => new SqliteDialect(factory, NullLogger.Instance),
-                SupportedDatabase.Firebird => new FirebirdDialect(factory, NullLogger.Instance),
-                SupportedDatabase.Oracle => new OracleDialect(factory, NullLogger.Instance),
-                SupportedDatabase.DuckDB => new DuckDbDialect(factory, NullLogger.Instance),
-                _ => new Sql92Dialect(factory, NullLogger.Instance)
-            };
-
-            var versionSql = dialect.GetVersionQuery();
-
-            var versionString = db switch
-            {
-                SupportedDatabase.PostgreSql => "PostgreSQL 15.0",
-                _ => $"{db} v1.2.3"
-            };
-
-            var scalars = new Dictionary<string, object>
-            {
-                [versionSql] = versionString
-            };
-
-            yield return new object[] { db, schema, scalars };
+            yield return new object[] { db };
         }
+    }
+
+    public static (DataTable schema, Dictionary<string, object> scalars) BuildFixture(SupportedDatabase db)
+    {
+        var productName = db switch
+        {
+            SupportedDatabase.SqlServer => "SQL Server",
+            SupportedDatabase.MySql => "MySQL",
+            SupportedDatabase.MariaDb => "MariaDB",
+            SupportedDatabase.PostgreSql => "PostgreSQL",
+            SupportedDatabase.CockroachDb => "CockroachDB",
+            SupportedDatabase.Sqlite => "SQLite",
+            SupportedDatabase.Firebird => "Firebird",
+            SupportedDatabase.Oracle => "Oracle Database",
+            _ => db.ToString()
+        };
+
+        var markerFormat = db switch
+        {
+            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.Oracle => ":{0}",
+            SupportedDatabase.DuckDB => "$" + "{0}",
+            _ => "@{0}"
+        };
+
+        var schema = DataSourceInformation.BuildEmptySchema(
+            productName,
+            "1.2.3",
+            db == SupportedDatabase.Sqlite ? "@p[0-9]+" : "@[0-9]+",
+            markerFormat,
+            64,
+            @"@\\w+",
+            @"[@:]\w+",
+            db != SupportedDatabase.Sqlite
+        );
+
+        var factory = new fakeDbFactory(db.ToString());
+
+        SqlDialect dialect = db switch
+        {
+            SupportedDatabase.SqlServer => new SqlServerDialect(factory, NullLogger.Instance),
+            SupportedDatabase.MySql => new MySqlDialect(factory, NullLogger.Instance),
+            SupportedDatabase.MariaDb => new MariaDbDialect(factory, NullLogger.Instance),
+            SupportedDatabase.PostgreSql => new PostgreSqlDialect(factory, NullLogger.Instance),
+            SupportedDatabase.CockroachDb => new PostgreSqlDialect(factory, NullLogger.Instance),
+            SupportedDatabase.Sqlite => new SqliteDialect(factory, NullLogger.Instance),
+            SupportedDatabase.Firebird => new FirebirdDialect(factory, NullLogger.Instance),
+            SupportedDatabase.Oracle => new OracleDialect(factory, NullLogger.Instance),
+            SupportedDatabase.DuckDB => new DuckDbDialect(factory, NullLogger.Instance),
+            _ => new Sql92Dialect(factory, NullLogger.Instance)
+        };
+
+        var versionSql = dialect.GetVersionQuery();
+
+        var versionString = db switch
+        {
+            SupportedDatabase.PostgreSql => "PostgreSQL 15.0",
+            _ => $"{db} v1.2.3"
+        };
+
+        var scalars = new Dictionary<string, object>
+        {
+            [versionSql] = versionString
+        };
+
+        return (schema, scalars);
     }
 }
 
@@ -95,11 +100,9 @@ public class DataSourceInformationTests
 {
     [Theory]
     [MemberData(nameof(DataSourceTestData.AllDatabases), MemberType = typeof(DataSourceTestData))]
-    public void DataSourceInformation_Should_Configure_Each_Database(
-        SupportedDatabase db,
-        DataTable schema,
-        Dictionary<string, object> scalars)
+    public void DataSourceInformation_Should_Configure_Each_Database(SupportedDatabase db)
     {
+        var (schema, scalars) = DataSourceTestData.BuildFixture(db);
         var factory = new fakeDbFactory(db.ToString());
         // Arrange
         var x = factory.CreateConnection();
@@ -137,20 +140,20 @@ public class DataSourceInformationTests
         Assert.NotEqual(!canMerge, info.SupportsMerge);
 
         // Assert: insert-on-conflict support
-        var canConflict = (new[]
+        var canConflict = new[]
         {
             SupportedDatabase.PostgreSql,
             SupportedDatabase.CockroachDb,
             SupportedDatabase.Sqlite,
             SupportedDatabase.DuckDB
-        }).Contains(db);
+        }.Contains(db);
         Assert.Equal(canConflict, info.SupportsInsertOnConflict);
 
-        var canOnDuplicateKey = (new[]
+        var canOnDuplicateKey = new[]
         {
             SupportedDatabase.MySql,
             SupportedDatabase.MariaDb
-        }).Contains(db);
+        }.Contains(db);
         Assert.Equal(canOnDuplicateKey, info.SupportsOnDuplicateKey);
 
         // Assert: proc wrap style
@@ -196,8 +199,9 @@ public class DataSourceInformationTests
 
     [Theory]
     [MemberData(nameof(DataSourceTestData.AllDatabases), MemberType = typeof(DataSourceTestData))]
-    public void GetDatabaseVersion_Returns_Version(SupportedDatabase db, DataTable schema, Dictionary<string, object> scalars)
+    public void GetDatabaseVersion_Returns_Version(SupportedDatabase db)
     {
+        var (schema, scalars) = DataSourceTestData.BuildFixture(db);
         var factory = new fakeDbFactory(db.ToString());
         var connection = factory.CreateConnection();
         connection.ConnectionString = $"Data Source=test;EmulatedProduct={db}";
@@ -231,7 +235,8 @@ public class DataSourceInformationTests
     public void GetSchema_UsesEmbeddedForSqlite()
     {
         var tracked = BuildSqliteConnectionMock();
-        var info = DataSourceInformation.Create(tracked, new fakeDbFactory(SupportedDatabase.Sqlite), NullLoggerFactory.Instance);
+        var info = DataSourceInformation.Create(tracked, new fakeDbFactory(SupportedDatabase.Sqlite),
+            NullLoggerFactory.Instance);
 
         var schema = info.GetSchema(tracked);
         Assert.Equal("SQLite", schema.Rows[0].Field<string>("DataSourceProductName"));
@@ -251,5 +256,4 @@ public class DataSourceInformationTests
         Assert.Contains("SQL Server", schema.Rows[0].Field<string>("DataSourceProductName"));
         Assert.Equal("{0}", schema.Rows[0].Field<string>("ParameterMarkerFormat"));
     }
-
 }

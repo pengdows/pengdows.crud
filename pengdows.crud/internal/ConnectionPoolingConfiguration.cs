@@ -185,9 +185,10 @@ internal static class ConnectionPoolingConfiguration
             {
                 // Only add MinPoolSize if pooling is enabled
                 var poolingEnabled = string.IsNullOrEmpty(poolingSettingName) ||
-                                   !builder.ContainsKey(poolingSettingName) ||
-                                   (builder.ContainsKey(poolingSettingName) &&
-                                    bool.TryParse(builder[poolingSettingName]?.ToString(), out var pooling) && pooling);
+                                     !builder.ContainsKey(poolingSettingName) ||
+                                     (builder.ContainsKey(poolingSettingName) &&
+                                      bool.TryParse(builder[poolingSettingName]?.ToString(), out var pooling) &&
+                                      pooling);
 
                 if (poolingEnabled)
                 {
@@ -209,7 +210,8 @@ internal static class ConnectionPoolingConfiguration
     {
         foreach (var candidate in MinPoolPropertyCandidates)
         {
-            var property = builder.GetType().GetProperty(candidate, BindingFlags.Instance | BindingFlags.Public | BindingFlags.IgnoreCase);
+            var property = builder.GetType().GetProperty(candidate,
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.IgnoreCase);
             if (property == null || !property.CanWrite)
             {
                 continue;

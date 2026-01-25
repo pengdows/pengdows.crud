@@ -21,7 +21,8 @@ public class ParameterBindingRulesTests
         var parameter = new fakeDbParameter();
         var value = new DateTime(2024, 1, 1, 8, 30, 0, DateTimeKind.Utc);
 
-        var applied = ParameterBindingRules.ApplyBindingRules(parameter, typeof(DateTime), value, SupportedDatabase.PostgreSql);
+        var applied =
+            ParameterBindingRules.ApplyBindingRules(parameter, typeof(DateTime), value, SupportedDatabase.PostgreSql);
 
         Assert.True(applied);
         Assert.Equal(value, parameter.Value);
@@ -46,8 +47,10 @@ public class ParameterBindingRulesTests
         var pgParameter = new fakeDbParameter();
         var sqlParameter = new fakeDbParameter();
 
-        Assert.True(ParameterBindingRules.ApplyBindingRules(pgParameter, typeof(SampleEnum), SampleEnum.Value, SupportedDatabase.PostgreSql));
-        Assert.True(ParameterBindingRules.ApplyBindingRules(sqlParameter, typeof(SampleEnum), SampleEnum.Value, SupportedDatabase.SqlServer));
+        Assert.True(ParameterBindingRules.ApplyBindingRules(pgParameter, typeof(SampleEnum), SampleEnum.Value,
+            SupportedDatabase.PostgreSql));
+        Assert.True(ParameterBindingRules.ApplyBindingRules(sqlParameter, typeof(SampleEnum), SampleEnum.Value,
+            SupportedDatabase.SqlServer));
 
         Assert.Equal(DbType.String, pgParameter.DbType);
         Assert.Equal("Value", pgParameter.Value);
@@ -61,7 +64,8 @@ public class ParameterBindingRulesTests
         var parameter = new fakeDbParameter();
         var values = new[] { 1, 2, 3 };
 
-        var applied = ParameterBindingRules.ApplyBindingRules(parameter, values.GetType(), values, SupportedDatabase.PostgreSql);
+        var applied =
+            ParameterBindingRules.ApplyBindingRules(parameter, values.GetType(), values, SupportedDatabase.PostgreSql);
 
         Assert.True(applied);
         Assert.Same(values, parameter.Value);
@@ -74,7 +78,8 @@ public class ParameterBindingRulesTests
         var parameter = new fakeDbParameter();
         var values = new[] { "a", "b" };
 
-        var applied = ParameterBindingRules.ApplyBindingRules(parameter, values.GetType(), values, SupportedDatabase.SqlServer);
+        var applied =
+            ParameterBindingRules.ApplyBindingRules(parameter, values.GetType(), values, SupportedDatabase.SqlServer);
 
         Assert.True(applied);
         Assert.Equal(DbType.String, parameter.DbType);
@@ -87,12 +92,12 @@ public class ParameterBindingRulesTests
         var parameter = new fakeDbParameter();
         var data = new byte[10];
 
-        var applied = ParameterBindingRules.ApplyBindingRules(parameter, data.GetType(), data, SupportedDatabase.SqlServer);
+        var applied =
+            ParameterBindingRules.ApplyBindingRules(parameter, data.GetType(), data, SupportedDatabase.SqlServer);
 
         Assert.True(applied);
         Assert.Equal(DbType.String, parameter.DbType);
         Assert.Equal("\"AAAAAAAAAAAAAA==\"", parameter.Value);
-        
     }
 
     [Fact]
@@ -101,7 +106,8 @@ public class ParameterBindingRulesTests
         var parameter = new fakeDbParameter();
         var large = new string('x', 9000);
 
-        var applied = ParameterBindingRules.ApplyBindingRules(parameter, large.GetType(), large, SupportedDatabase.SqlServer);
+        var applied =
+            ParameterBindingRules.ApplyBindingRules(parameter, large.GetType(), large, SupportedDatabase.SqlServer);
 
         Assert.True(applied);
         Assert.Equal(DbType.String, parameter.DbType);

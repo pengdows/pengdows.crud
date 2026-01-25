@@ -64,8 +64,7 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
     private readonly Dictionary<string, BenchmarkResult> _results = new();
     private int _benchmarkCounter = 0;
 
-    [Params(5000)]
-    public int TransactionCount;
+    [Params(5000)] public int TransactionCount;
 
     [GlobalSetup]
     public async Task GlobalSetup()
@@ -118,7 +117,7 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
         var efDataSource = dataSourceBuilder.Build();
 
         var options = new DbContextOptionsBuilder<EfTestDbContext>()
-            .UseNpgsql(efDataSource)  // Use configured data source instead of plain connection string
+            .UseNpgsql(efDataSource) // Use configured data source instead of plain connection string
             .Options;
         _efContext = new EfTestDbContext(options);
 
@@ -138,7 +137,7 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
 
     private async Task WaitForReady()
     {
-        for (int i = 0; i < 60; i++)
+        for (var i = 0; i < 60; i++)
         {
             try
             {
@@ -152,6 +151,7 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
                 await Task.Delay(500);
             }
         }
+
         throw new TimeoutException("PostgreSQL container did not become ready in time.");
     }
 
@@ -208,7 +208,7 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
         var currencies = new[] { "USD", "EUR", "GBP", "JPY", "CAD" };
         var tagOptions = new[] { "high_value", "suspicious", "international", "recurring", "manual_review" };
 
-        for (int i = 1; i <= TransactionCount; i++)
+        for (var i = 1; i <= TransactionCount; i++)
         {
             var userId = random.Next(1, 1000); // 1000 users
             var status = statuses[random.Next(statuses.Length)];
@@ -221,13 +221,13 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
                 .ToArray();
 
             var metadata = $$"""
-            {
-                "payment_method": "{{new[] { "credit_card", "bank_transfer", "paypal", "crypto" }[random.Next(4)]}}",
-                "risk_score": {{random.Next(0, 101)}},
-                "merchant_id": "{{random.Next(1000, 9999)}}",
-                "batch_id": "{{Guid.NewGuid():N}}"
-            }
-            """;
+                             {
+                                 "payment_method": "{{new[] { "credit_card", "bank_transfer", "paypal", "crypto" }[random.Next(4)]}}",
+                                 "risk_score": {{random.Next(0, 101)}},
+                                 "merchant_id": "{{random.Next(1000, 9999)}}",
+                                 "batch_id": "{{Guid.NewGuid():N}}"
+                             }
+                             """;
 
             await conn.ExecuteAsync(@"
                 INSERT INTO transactions (
@@ -331,26 +331,34 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
             var efResult = group.FirstOrDefault(r => r.Key.Contains("_EntityFramework"));
             var dapperResult = group.FirstOrDefault(r => r.Key.Contains("_Dapper"));
 
-            Console.WriteLine($"{"Framework",-20} {"Status",-12} {"Time (ms)",-12} {"Success Rate",-12} {"Performance",-15}");
+            Console.WriteLine(
+                $"{"Framework",-20} {"Status",-12} {"Time (ms)",-12} {"Success Rate",-12} {"Performance",-15}");
             Console.WriteLine(new string('-', 75));
 
             if (pengdowsResult.Value != null)
             {
-                Console.WriteLine($"{"pengdows.crud",-20} {"SUCCESS",-12} {pengdowsResult.Value.AvgTimeMs,-12:F2} {pengdowsResult.Value.SuccessRate,-12:P1} {"BASELINE",-15}");
+                Console.WriteLine(
+                    $"{"pengdows.crud",-20} {"SUCCESS",-12} {pengdowsResult.Value.AvgTimeMs,-12:F2} {pengdowsResult.Value.SuccessRate,-12:P1} {"BASELINE",-15}");
             }
 
             if (efResult.Value != null)
             {
                 var efStatus = efResult.Value.FailureCount > 0 ? "FAILURES" : "SUCCESS";
-                var efPerf = pengdowsResult.Value != null ? $"{efResult.Value.AvgTimeMs / pengdowsResult.Value.AvgTimeMs:F1}x slower" : "N/A";
-                Console.WriteLine($"{"Entity Framework",-20} {efStatus,-12} {efResult.Value.AvgTimeMs,-12:F2} {efResult.Value.SuccessRate,-12:P1} {efPerf,-15}");
+                var efPerf = pengdowsResult.Value != null
+                    ? $"{efResult.Value.AvgTimeMs / pengdowsResult.Value.AvgTimeMs:F1}x slower"
+                    : "N/A";
+                Console.WriteLine(
+                    $"{"Entity Framework",-20} {efStatus,-12} {efResult.Value.AvgTimeMs,-12:F2} {efResult.Value.SuccessRate,-12:P1} {efPerf,-15}");
             }
 
             if (dapperResult.Value != null)
             {
                 var dapperStatus = dapperResult.Value.FailureCount > 0 ? "FAILURES" : "SUCCESS";
-                var dapperPerf = pengdowsResult.Value != null ? $"{dapperResult.Value.AvgTimeMs / pengdowsResult.Value.AvgTimeMs:F1}x slower" : "N/A";
-                Console.WriteLine($"{"Dapper",-20} {dapperStatus,-12} {dapperResult.Value.AvgTimeMs,-12:F2} {dapperResult.Value.SuccessRate,-12:P1} {dapperPerf,-15}");
+                var dapperPerf = pengdowsResult.Value != null
+                    ? $"{dapperResult.Value.AvgTimeMs / pengdowsResult.Value.AvgTimeMs:F1}x slower"
+                    : "N/A";
+                Console.WriteLine(
+                    $"{"Dapper",-20} {dapperStatus,-12} {dapperResult.Value.AvgTimeMs,-12:F2} {dapperResult.Value.SuccessRate,-12:P1} {dapperPerf,-15}");
             }
         }
 
@@ -368,13 +376,19 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
         _fullTextSearchTemplate?.Dispose();
 
         if (_pengdowsContext is IAsyncDisposable pad)
+        {
             await pad.DisposeAsync();
+        }
 
         if (_efContext != null)
+        {
             await _efContext.DisposeAsync();
+        }
 
         if (_dapperDataSource != null)
+        {
             await _dapperDataSource.DisposeAsync();
+        }
 
         if (_container != null)
         {
@@ -413,9 +427,10 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
             // pengdows.crud: Can use native PostgreSQL JSONB operators in SQL
             return await _efContext.Transactions
                 .AsNoTracking()
-                .Where(t => t.Status == TransactionStatus.Completed)  // Now works with proper enum mapping
-                .Where(t => t.Metadata != null && t.Metadata.Contains("\"risk_score\"") && t.Metadata.Contains("50"))  // Still string-based JSONB query
-                .Where(t => t.Tags != null && t.Tags.Contains("high_value"))  // Array support now works
+                .Where(t => t.Status == TransactionStatus.Completed) // Now works with proper enum mapping
+                .Where(t => t.Metadata != null && t.Metadata.Contains("\"risk_score\"") &&
+                            t.Metadata.Contains("50")) // Still string-based JSONB query
+                .Where(t => t.Tags != null && t.Tags.Contains("high_value")) // Array support now works
                 .OrderByDescending(t => t.CreatedAt)
                 .Take(100)
                 .ToListAsync();
@@ -482,6 +497,7 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
                     RelevanceScore = Convert.ToDouble(reader["relevance_score"])
                 });
             }
+
             return results;
         });
     }
@@ -495,7 +511,7 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
             var results = await _efContext.Transactions
                 .AsNoTracking()
                 .Where(t => EF.Functions.Like(t.SearchVector ?? "", "%Transaction%") &&
-                           EF.Functions.Like(t.SearchVector ?? "", "%USD%")) // Very slow
+                            EF.Functions.Like(t.SearchVector ?? "", "%USD%")) // Very slow
                 .GroupBy(t => t.Currency)
                 .Select(g => new
                 {
@@ -525,7 +541,7 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
         return await ExecuteWithTracking("BulkUpsert_pengdows", async () =>
         {
             var testTransactions = GenerateTestTransactions(10);
-            int totalAffected = 0;
+            var totalAffected = 0;
 
             foreach (var transaction in testTransactions)
             {
@@ -543,7 +559,7 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
         return await ExecuteWithTracking("BulkUpsert_EntityFramework", async () =>
         {
             var testTransactions = GenerateTestTransactions(10);
-            int totalAffected = 0;
+            var totalAffected = 0;
 
             foreach (var txn in testTransactions)
             {
@@ -572,8 +588,8 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
                         TransactionId = txn.TransactionId,
                         UserId = txn.UserId,
                         // REQUIRED: Convert string to enum types
-                        Status = Enum.Parse<TransactionStatus>(txn.Status, ignoreCase: true),
-                        Currency = Enum.Parse<CurrencyCode>(txn.Currency, ignoreCase: true),
+                        Status = Enum.Parse<TransactionStatus>(txn.Status, true),
+                        Currency = Enum.Parse<CurrencyCode>(txn.Currency, true),
                         Amount = txn.Amount,
                         // LIMITATION: Can't set Metadata (JSONB) or Tags (array) - skip them
                         // pengdows.crud: Handles these natively
@@ -582,6 +598,7 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
                     };
                     _efContext.Transactions.Add(efTxn);
                 }
+
                 totalAffected++;
             }
 
@@ -595,7 +612,7 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
         var random = new Random(42);
         var transactions = new List<Transaction>();
 
-        for (int i = 0; i < count; i++)
+        for (var i = 0; i < count; i++)
         {
             transactions.Add(new Transaction
             {
@@ -638,7 +655,7 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
             Console.WriteLine($"[FAILURE] {benchmarkName} failed: {ex.Message}");
 
             // Return default value but track the failure
-            return default(T)!;
+            return default!;
         }
     }
 
@@ -693,7 +710,7 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
         public decimal Amount { get; set; }
 
         [pengdows.crud.attributes.Column("metadata", DbType.Object)]
-        [pengdows.crud.attributes.Json]
+        [Json]
         public string? Metadata { get; set; }
 
         [pengdows.crud.attributes.Column("tags", DbType.Object)]
@@ -731,7 +748,9 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
         // Modern approach requires creating NpgsqlDataSource with configured enums
         // pengdows.crud: No enum registration needed at all - dialect handles it automatically
 
-        public EfTestDbContext(DbContextOptions<EfTestDbContext> options) : base(options) { }
+        public EfTestDbContext(DbContextOptions<EfTestDbContext> options) : base(options)
+        {
+        }
 
         public DbSet<EfTransaction> Transactions { get; set; }
 
@@ -755,7 +774,7 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
                 // pengdows.crud: Automatic via DbType and type coercion
                 entity.Property(e => e.Status)
                     .HasColumnName("status")
-                    .HasConversion<string>();  // Store enum as string in database
+                    .HasConversion<string>(); // Store enum as string in database
 
                 // REQUIRED: Map currency ENUM
                 entity.Property(e => e.Currency)
@@ -840,8 +859,7 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
         // LIMITATION: EF Core cannot map TSVECTOR type even with explicit configuration
         // Must be excluded from model entirely using [NotMapped]
         // pengdows.crud: Handles TSVECTOR via dialect-specific type mapping
-        [NotMapped]
-        public string? SearchVector { get; set; }
+        [NotMapped] public string? SearchVector { get; set; }
     }
 
     private class BenchmarkResult

@@ -23,12 +23,15 @@ internal class SqliteDialect : SqlDialect
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.Sqlite;
     public override string ParameterMarker => "@";
+
     public override bool SupportsNamedParameters => true;
+
     // IMMUTABLE: SQLite SQLITE_MAX_VARIABLE_NUMBER default - do not change without extensive testing
     public override int MaxParameterLimit => 999;
+
     // IMMUTABLE: SQLite identifier length limit - do not change without extensive testing
     public override int ParameterNameMaxLength => 255;
-    
+
     // SQLite benefits from prepared statements with inherent prepare support
     public override bool PrepareStatements => true;
 
@@ -51,7 +54,10 @@ internal class SqliteDialect : SqlDialect
         return "SELECT last_insert_rowid()";
     }
 
-    public override string GetVersionQuery() => "SELECT sqlite_version()";
+    public override string GetVersionQuery()
+    {
+        return "SELECT sqlite_version()";
+    }
 
     public override string GetBaseSessionSettings()
     {
@@ -111,7 +117,7 @@ internal class SqliteDialect : SqlDialect
     {
         var resourceName = $"pengdows.crud.xml.{SupportedDatabase.Sqlite}.schema.xml";
         using var stream = typeof(SqliteDialect).Assembly.GetManifestResourceStream(resourceName)
-                        ?? throw new FileNotFoundException($"Embedded schema not found: {resourceName}");
+                           ?? throw new FileNotFoundException($"Embedded schema not found: {resourceName}");
         var table = new DataTable();
         table.ReadXml(stream);
         return table;
@@ -179,14 +185,17 @@ internal class SqliteDialect : SqlDialect
 
         if (value is DateTimeOffset dto)
         {
-            return base.CreateDbParameter(name, DbType.String, dto.UtcDateTime.ToString("o", CultureInfo.InvariantCulture));
+            return base.CreateDbParameter(name, DbType.String,
+                dto.UtcDateTime.ToString("o", CultureInfo.InvariantCulture));
         }
 
         return base.CreateDbParameter(name, type, value);
     }
 
     // Connection pooling properties for SQLite (provider-aware)
-    public override bool SupportsExternalPooling => _systemDataSqlite; // Microsoft.Data.Sqlite: true pooling, but no min/max keywords
+    public override bool SupportsExternalPooling =>
+        _systemDataSqlite; // Microsoft.Data.Sqlite: true pooling, but no min/max keywords
+
     public override string? PoolingSettingName => "Pooling"; // set only if absent; harmless for M.D.Sqlite
     public override string? MinPoolSizeSettingName => null; // no min keyword for either
     public override string? MaxPoolSizeSettingName => _systemDataSqlite ? "Max Pool Size" : null;

@@ -6,8 +6,6 @@ namespace pengdows.crud.Tests;
 
 public class SpyDatabaseContextTests : SqlLiteContextTestBase
 {
-
-
     [Fact]
     public void EntityHelper_WithContextMissingDialectProvider_Throws()
     {

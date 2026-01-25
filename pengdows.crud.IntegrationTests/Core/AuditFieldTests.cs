@@ -15,7 +15,9 @@ public class AuditFieldTests : DatabaseTestBase
 {
     private static long _nextId;
 
-    public AuditFieldTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture) { }
+    public AuditFieldTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture)
+    {
+    }
 
     protected override IEnumerable<SupportedDatabase> GetSupportedProviders()
     {
@@ -45,7 +47,7 @@ public class AuditFieldTests : DatabaseTestBase
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            var helper = new EntityHelper<AuditedEntity, long>(context, auditValueResolver: GetAuditResolver());
+            var helper = new EntityHelper<AuditedEntity, long>(context, GetAuditResolver());
             var entity = new AuditedEntity
             {
                 Id = Interlocked.Increment(ref _nextId),
@@ -60,7 +62,7 @@ public class AuditFieldTests : DatabaseTestBase
             var retrieved = await helper.RetrieveOneAsync(entity.Id, context);
             Assert.NotNull(retrieved);
             Assert.Equal("testuser", retrieved.CreatedBy);
-            Assert.NotEqual(default(DateTime), retrieved.CreatedAt);
+            Assert.NotEqual(default, retrieved.CreatedAt);
             Assert.True(retrieved.CreatedAt.Year >= 2024,
                 $"CreatedAt {retrieved.CreatedAt} should be a reasonable date");
 
@@ -74,7 +76,7 @@ public class AuditFieldTests : DatabaseTestBase
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            var helper = new EntityHelper<AuditedEntity, long>(context, auditValueResolver: GetAuditResolver());
+            var helper = new EntityHelper<AuditedEntity, long>(context, GetAuditResolver());
             var entity = new AuditedEntity
             {
                 Id = Interlocked.Increment(ref _nextId),
@@ -102,7 +104,7 @@ public class AuditFieldTests : DatabaseTestBase
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            var helper = new EntityHelper<AuditedEntity, long>(context, auditValueResolver: GetAuditResolver());
+            var helper = new EntityHelper<AuditedEntity, long>(context, GetAuditResolver());
             var entity = new AuditedEntity
             {
                 Id = Interlocked.Increment(ref _nextId),
@@ -136,7 +138,7 @@ public class AuditFieldTests : DatabaseTestBase
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            var helper = new EntityHelper<AuditedEntity, long>(context, auditValueResolver: GetAuditResolver());
+            var helper = new EntityHelper<AuditedEntity, long>(context, GetAuditResolver());
             var entity = new AuditedEntity
             {
                 Id = Interlocked.Increment(ref _nextId),
@@ -169,7 +171,7 @@ public class AuditFieldTests : DatabaseTestBase
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            var helper = new EntityHelper<AuditedEntity, long>(context, auditValueResolver: GetAuditResolver());
+            var helper = new EntityHelper<AuditedEntity, long>(context, GetAuditResolver());
             var entity = new AuditedEntity
             {
                 Id = Interlocked.Increment(ref _nextId),
@@ -225,7 +227,7 @@ public class AuditFieldTests : DatabaseTestBase
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            var helper = new EntityHelper<AuditedEntity, long>(context, auditValueResolver: GetAuditResolver());
+            var helper = new EntityHelper<AuditedEntity, long>(context, GetAuditResolver());
             var entity = new AuditedEntity
             {
                 Id = Interlocked.Increment(ref _nextId),
@@ -271,16 +273,19 @@ CREATE TABLE {table} (
 )";
     }
 
-    private static string GetIdType(SupportedDatabase provider) =>
-        provider switch
+    private static string GetIdType(SupportedDatabase provider)
+    {
+        return provider switch
         {
             SupportedDatabase.Sqlite => "INTEGER",
             SupportedDatabase.Oracle => "NUMBER(19)",
             _ => "BIGINT"
         };
+    }
 
-    private static string GetStringType(SupportedDatabase provider) =>
-        provider switch
+    private static string GetStringType(SupportedDatabase provider)
+    {
+        return provider switch
         {
             SupportedDatabase.Sqlite => "TEXT",
             SupportedDatabase.SqlServer => "NVARCHAR(255)",
@@ -288,9 +293,11 @@ CREATE TABLE {table} (
             SupportedDatabase.Firebird => "VARCHAR(255)",
             _ => "VARCHAR(255)"
         };
+    }
 
-    private static string GetDateTimeType(SupportedDatabase provider) =>
-        provider switch
+    private static string GetDateTimeType(SupportedDatabase provider)
+    {
+        return provider switch
         {
             SupportedDatabase.Sqlite => "DATETIME",
             SupportedDatabase.SqlServer => "DATETIME2",
@@ -298,6 +305,7 @@ CREATE TABLE {table} (
             SupportedDatabase.MariaDb => "DATETIME",
             _ => "TIMESTAMP"
         };
+    }
 
     private static async Task EnsureFirebirdAuditTableAsync(IDatabaseContext context)
     {
@@ -335,12 +343,9 @@ WHERE lower(trim(rdb$relation_name)) = @name
 [Table("audited_entity")]
 public class AuditedEntity
 {
-    [Id]
-    [Column("id", DbType.Int64)]
-    public long Id { get; set; }
+    [Id] [Column("id", DbType.Int64)] public long Id { get; set; }
 
-    [Column("name", DbType.String)]
-    public string Name { get; set; } = string.Empty;
+    [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
 
     [CreatedOn]
     [Column("created_at", DbType.DateTime)]

@@ -34,12 +34,12 @@ public class BuildWhereTests : SqlLiteContextTestBase
         // that would exceed any reasonable database parameter limit
         var sc = Context.CreateSqlContainer();
         var largeParameterArray = new int?[1000];
-        for (int i = 0; i < 1000; i++)
+        for (var i = 0; i < 1000; i++)
         {
             largeParameterArray[i] = i;
         }
 
         Assert.Throws<TooManyParametersException>(() =>
             _helper.BuildWhere(Context.WrapObjectName("Id"), largeParameterArray, sc));
-    } 
+    }
 }

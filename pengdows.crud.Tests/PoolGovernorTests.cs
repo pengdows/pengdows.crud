@@ -11,7 +11,7 @@ public sealed class PoolGovernorTests
     [Fact]
     public async Task AcquireAsync_WhenCapacityAvailable_TracksStats()
     {
-        var governor = new PoolGovernor(PoolLabel.Reader, "reader-key", maxPermits: 2, acquireTimeout: TimeSpan.FromMilliseconds(100));
+        var governor = new PoolGovernor(PoolLabel.Reader, "reader-key", 2, TimeSpan.FromMilliseconds(100));
 
         await using var permit = await governor.AcquireAsync();
 
@@ -26,7 +26,7 @@ public sealed class PoolGovernorTests
     [Fact]
     public async Task AcquireAsync_WhenContended_QueuesAndCompletes()
     {
-        var governor = new PoolGovernor(PoolLabel.Reader, "reader-key", maxPermits: 1, acquireTimeout: TimeSpan.FromMilliseconds(200));
+        var governor = new PoolGovernor(PoolLabel.Reader, "reader-key", 1, TimeSpan.FromMilliseconds(200));
         await using var first = await governor.AcquireAsync();
 
         var waiter = governor.AcquireAsync();
@@ -46,7 +46,7 @@ public sealed class PoolGovernorTests
     [Fact]
     public async Task AcquireAsync_WhenTimeout_ThrowsPoolSaturatedException()
     {
-        var governor = new PoolGovernor(PoolLabel.Reader, "reader-key", maxPermits: 1, acquireTimeout: TimeSpan.FromMilliseconds(25));
+        var governor = new PoolGovernor(PoolLabel.Reader, "reader-key", 1, TimeSpan.FromMilliseconds(25));
         await using var permit = await governor.AcquireAsync();
 
         var ex = await Assert.ThrowsAsync<PoolSaturatedException>(() => governor.AcquireAsync());
@@ -58,7 +58,7 @@ public sealed class PoolGovernorTests
     [Fact]
     public async Task PermitDispose_ReleasesCapacity()
     {
-        var governor = new PoolGovernor(PoolLabel.Reader, "reader-key", maxPermits: 1, acquireTimeout: TimeSpan.FromMilliseconds(100));
+        var governor = new PoolGovernor(PoolLabel.Reader, "reader-key", 1, TimeSpan.FromMilliseconds(100));
         await using (await governor.AcquireAsync())
         {
         }
@@ -71,4 +71,3 @@ public sealed class PoolGovernorTests
         Assert.Equal(1, after.InUse);
     }
 }
-

@@ -54,6 +54,4 @@ public class UpsertPortableTests : SqlLiteContextTestBase, IAsyncLifetime
         var container = Context.CreateSqlContainer(sql);
         await container.ExecuteNonQueryAsync();
     }
-
-
 }

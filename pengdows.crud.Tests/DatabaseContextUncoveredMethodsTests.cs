@@ -140,7 +140,8 @@ public class DatabaseContextUncoveredMethodsTests
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite.ToString());
         var typeMap = new TypeMapRegistry();
 
-        var method = typeof(DatabaseContext).GetConstructor(new[] { typeof(string), typeof(DbProviderFactory), typeof(ITypeMapRegistry) });
+        var method = typeof(DatabaseContext).GetConstructor(new[]
+            { typeof(string), typeof(DbProviderFactory), typeof(ITypeMapRegistry) });
         var context = (DatabaseContext)method!.Invoke(new object[] { "Data Source=:memory:", factory, typeMap });
 
         Assert.NotNull(context);

@@ -15,32 +15,39 @@ public class ProviderParameterFactoryBranchTests
     public void PostgreSqlOptimizations_SetNpgsqlDbType()
     {
         var guidParam = new NpgsqlParameterStub();
-        ProviderParameterFactory.TryConfigureParameter(guidParam, typeof(Guid), Guid.NewGuid(), SupportedDatabase.PostgreSql);
+        ProviderParameterFactory.TryConfigureParameter(guidParam, typeof(Guid), Guid.NewGuid(),
+            SupportedDatabase.PostgreSql);
         Assert.Equal(27, guidParam.NpgsqlDbType);
 
         var stringArrayParam = new NpgsqlParameterStub();
-        ProviderParameterFactory.TryConfigureParameter(stringArrayParam, typeof(string[]), new[] { "a", "b" }, SupportedDatabase.PostgreSql);
+        ProviderParameterFactory.TryConfigureParameter(stringArrayParam, typeof(string[]), new[] { "a", "b" },
+            SupportedDatabase.PostgreSql);
         Assert.Equal((1 << 30) | 16, stringArrayParam.NpgsqlDbType);
 
         var intArrayParam = new NpgsqlParameterStub();
-        ProviderParameterFactory.TryConfigureParameter(intArrayParam, typeof(int[]), new[] { 1, 2 }, SupportedDatabase.PostgreSql);
+        ProviderParameterFactory.TryConfigureParameter(intArrayParam, typeof(int[]), new[] { 1, 2 },
+            SupportedDatabase.PostgreSql);
         Assert.Equal((1 << 30) | 1, intArrayParam.NpgsqlDbType);
 
         using var doc = JsonDocument.Parse("{\"a\":1}");
         var jsonParam = new NpgsqlParameterStub();
-        ProviderParameterFactory.TryConfigureParameter(jsonParam, typeof(JsonElement), doc.RootElement, SupportedDatabase.PostgreSql);
+        ProviderParameterFactory.TryConfigureParameter(jsonParam, typeof(JsonElement), doc.RootElement,
+            SupportedDatabase.PostgreSql);
         Assert.Equal(14, jsonParam.NpgsqlDbType);
 
         var hstoreParam = new NpgsqlParameterStub();
-        ProviderParameterFactory.TryConfigureParameter(hstoreParam, typeof(HStore), new HStore(new System.Collections.Generic.Dictionary<string, string?>()), SupportedDatabase.PostgreSql);
+        ProviderParameterFactory.TryConfigureParameter(hstoreParam, typeof(HStore),
+            new HStore(new System.Collections.Generic.Dictionary<string, string?>()), SupportedDatabase.PostgreSql);
         Assert.Equal(37, hstoreParam.NpgsqlDbType);
 
         var intRangeParam = new NpgsqlParameterStub();
-        ProviderParameterFactory.TryConfigureParameter(intRangeParam, typeof(Range<int>), new Range<int>(1, 2), SupportedDatabase.PostgreSql);
+        ProviderParameterFactory.TryConfigureParameter(intRangeParam, typeof(Range<int>), new Range<int>(1, 2),
+            SupportedDatabase.PostgreSql);
         Assert.Equal(33, intRangeParam.NpgsqlDbType);
 
         var dateRangeParam = new NpgsqlParameterStub();
-        ProviderParameterFactory.TryConfigureParameter(dateRangeParam, typeof(Range<DateTime>), new Range<DateTime>(DateTime.UtcNow, DateTime.UtcNow.AddDays(1)), SupportedDatabase.PostgreSql);
+        ProviderParameterFactory.TryConfigureParameter(dateRangeParam, typeof(Range<DateTime>),
+            new Range<DateTime>(DateTime.UtcNow, DateTime.UtcNow.AddDays(1)), SupportedDatabase.PostgreSql);
         Assert.Equal(35, dateRangeParam.NpgsqlDbType);
     }
 
@@ -48,16 +55,19 @@ public class ProviderParameterFactoryBranchTests
     public void SqlServerOptimizations_HandleCommonTypes()
     {
         var guidParam = new fakeDbParameter();
-        ProviderParameterFactory.TryConfigureParameter(guidParam, typeof(Guid), Guid.NewGuid(), SupportedDatabase.SqlServer);
+        ProviderParameterFactory.TryConfigureParameter(guidParam, typeof(Guid), Guid.NewGuid(),
+            SupportedDatabase.SqlServer);
         Assert.Equal(DbType.Guid, guidParam.DbType);
 
         var jsonParam = new fakeDbParameter();
-        ProviderParameterFactory.TryConfigureParameter(jsonParam, typeof(JsonValue), new JsonValue("{\"a\":1}"), SupportedDatabase.SqlServer);
+        ProviderParameterFactory.TryConfigureParameter(jsonParam, typeof(JsonValue), new JsonValue("{\"a\":1}"),
+            SupportedDatabase.SqlServer);
         Assert.Equal(DbType.String, jsonParam.DbType);
         Assert.Equal(-1, jsonParam.Size);
 
         var rowVersionParam = new fakeDbParameter { Size = 8 };
-        ProviderParameterFactory.TryConfigureParameter(rowVersionParam, typeof(byte[]), new byte[8], SupportedDatabase.SqlServer);
+        ProviderParameterFactory.TryConfigureParameter(rowVersionParam, typeof(byte[]), new byte[8],
+            SupportedDatabase.SqlServer);
         Assert.Equal(DbType.Binary, rowVersionParam.DbType);
         Assert.Equal(8, rowVersionParam.Size);
 
@@ -74,11 +84,13 @@ public class ProviderParameterFactoryBranchTests
         Assert.Equal(DbType.Byte, boolParam.DbType);
 
         var jsonParam = new fakeDbParameter();
-        ProviderParameterFactory.TryConfigureParameter(jsonParam, typeof(JsonValue), new JsonValue("{\"a\":1}"), SupportedDatabase.MySql);
+        ProviderParameterFactory.TryConfigureParameter(jsonParam, typeof(JsonValue), new JsonValue("{\"a\":1}"),
+            SupportedDatabase.MySql);
         Assert.Equal(DbType.String, jsonParam.DbType);
 
         var dtParam = new fakeDbParameter();
-        ProviderParameterFactory.TryConfigureParameter(dtParam, typeof(DateTime), DateTime.UtcNow, SupportedDatabase.MySql);
+        ProviderParameterFactory.TryConfigureParameter(dtParam, typeof(DateTime), DateTime.UtcNow,
+            SupportedDatabase.MySql);
         Assert.Equal(DbType.DateTime, dtParam.DbType);
     }
 
@@ -92,11 +104,13 @@ public class ProviderParameterFactoryBranchTests
         Assert.Equal((byte)10, decimalParam.Scale);
 
         var dtParam = new fakeDbParameter();
-        ProviderParameterFactory.TryConfigureParameter(dtParam, typeof(DateTime), DateTime.UtcNow, SupportedDatabase.Oracle);
+        ProviderParameterFactory.TryConfigureParameter(dtParam, typeof(DateTime), DateTime.UtcNow,
+            SupportedDatabase.Oracle);
         Assert.Equal(DbType.DateTime, dtParam.DbType);
 
         var guidParam = new fakeDbParameter();
-        ProviderParameterFactory.TryConfigureParameter(guidParam, typeof(Guid), Guid.NewGuid(), SupportedDatabase.Oracle);
+        ProviderParameterFactory.TryConfigureParameter(guidParam, typeof(Guid), Guid.NewGuid(),
+            SupportedDatabase.Oracle);
         Assert.Equal(DbType.Binary, guidParam.DbType);
         Assert.Equal(16, guidParam.Size);
     }
@@ -105,23 +119,28 @@ public class ProviderParameterFactoryBranchTests
     public void SqliteAndDuckDbOptimizations_HandleSpecialCases()
     {
         var sqliteJson = new fakeDbParameter();
-        ProviderParameterFactory.TryConfigureParameter(sqliteJson, typeof(JsonValue), new JsonValue("{\"a\":1}"), SupportedDatabase.Sqlite);
+        ProviderParameterFactory.TryConfigureParameter(sqliteJson, typeof(JsonValue), new JsonValue("{\"a\":1}"),
+            SupportedDatabase.Sqlite);
         Assert.Equal(DbType.String, sqliteJson.DbType);
 
         var sqliteGuid = new fakeDbParameter();
-        ProviderParameterFactory.TryConfigureParameter(sqliteGuid, typeof(Guid), Guid.NewGuid(), SupportedDatabase.Sqlite);
+        ProviderParameterFactory.TryConfigureParameter(sqliteGuid, typeof(Guid), Guid.NewGuid(),
+            SupportedDatabase.Sqlite);
         Assert.Equal(DbType.String, sqliteGuid.DbType);
 
         var duckGuid = new fakeDbParameter();
-        ProviderParameterFactory.TryConfigureParameter(duckGuid, typeof(Guid), Guid.NewGuid(), SupportedDatabase.DuckDB);
+        ProviderParameterFactory.TryConfigureParameter(duckGuid, typeof(Guid), Guid.NewGuid(),
+            SupportedDatabase.DuckDB);
         Assert.Equal(DbType.Guid, duckGuid.DbType);
 
         var duckArray = new fakeDbParameter();
-        ProviderParameterFactory.TryConfigureParameter(duckArray, typeof(int[]), new[] { 1, 2 }, SupportedDatabase.DuckDB);
+        ProviderParameterFactory.TryConfigureParameter(duckArray, typeof(int[]), new[] { 1, 2 },
+            SupportedDatabase.DuckDB);
         Assert.Equal(DbType.Object, duckArray.DbType);
 
         var duckJson = new fakeDbParameter();
-        ProviderParameterFactory.TryConfigureParameter(duckJson, typeof(JsonValue), new JsonValue("{\"a\":1}"), SupportedDatabase.DuckDB);
+        ProviderParameterFactory.TryConfigureParameter(duckJson, typeof(JsonValue), new JsonValue("{\"a\":1}"),
+            SupportedDatabase.DuckDB);
         Assert.Equal(DbType.String, duckJson.DbType);
     }
 

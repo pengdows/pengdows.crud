@@ -21,65 +21,190 @@ public class PrepareDisableTests
 {
     private sealed class ThrowOnPrepareFactory : DbProviderFactory
     {
-        public override DbConnection CreateConnection() => new ThrowOnPrepareConnection();
+        public override DbConnection CreateConnection()
+        {
+            return new ThrowOnPrepareConnection();
+        }
     }
 
     private sealed class ThrowOnPrepareConnection : DbConnection
     {
         private string _cs = string.Empty;
         private ConnectionState _state = ConnectionState.Closed;
+
         [AllowNull]
         public override string ConnectionString
         {
             get => _cs;
             set => _cs = value ?? string.Empty;
         }
+
         public override string Database => "test";
         public override string DataSource => "test";
         public override string ServerVersion => "1.0";
         public override ConnectionState State => _state;
-        public override void ChangeDatabase(string databaseName) { }
-        public override void Close() => _state = ConnectionState.Closed;
-        public override void Open() => _state = ConnectionState.Open;
-        protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel) => null!;
-        protected override DbCommand CreateDbCommand() => new ThrowOnPrepareCommand(this);
+
+        public override void ChangeDatabase(string databaseName)
+        {
+        }
+
+        public override void Close()
+        {
+            _state = ConnectionState.Closed;
+        }
+
+        public override void Open()
+        {
+            _state = ConnectionState.Open;
+        }
+
+        protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel)
+        {
+            return null!;
+        }
+
+        protected override DbCommand CreateDbCommand()
+        {
+            return new ThrowOnPrepareCommand(this);
+        }
     }
 
     private sealed class ThrowOnPrepareCommand : DbCommand
     {
         private readonly DbConnection _conn;
-        public ThrowOnPrepareCommand(DbConnection conn) { _conn = conn; }
-        [AllowNull]
-        public override string CommandText { get; set; } = string.Empty;
+
+        public ThrowOnPrepareCommand(DbConnection conn)
+        {
+            _conn = conn;
+        }
+
+        [AllowNull] public override string CommandText { get; set; } = string.Empty;
         public override int CommandTimeout { get; set; }
         public override CommandType CommandType { get; set; } = CommandType.Text;
+
         [AllowNull]
-        protected override DbConnection DbConnection { get => _conn; set { } }
+        protected override DbConnection DbConnection
+        {
+            get => _conn;
+            set { }
+        }
+
         protected override DbParameterCollection DbParameterCollection { get; } = new DummyParams();
         protected override DbTransaction? DbTransaction { get; set; }
         public override bool DesignTimeVisible { get; set; }
         public override UpdateRowSource UpdatedRowSource { get; set; }
-        public override void Cancel() { }
-        public override int ExecuteNonQuery() => -1;
-        public override object ExecuteScalar() => 1;
-        public override void Prepare() => throw new InvalidOperationException("Prepare not supported");
-        protected override DbParameter CreateDbParameter() => new DummyParam();
-        protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) => throw new NotSupportedException();
+
+        public override void Cancel()
+        {
+        }
+
+        public override int ExecuteNonQuery()
+        {
+            return -1;
+        }
+
+        public override object ExecuteScalar()
+        {
+            return 1;
+        }
+
+        public override void Prepare()
+        {
+            throw new InvalidOperationException("Prepare not supported");
+        }
+
+        protected override DbParameter CreateDbParameter()
+        {
+            return new DummyParam();
+        }
+
+        protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior)
+        {
+            throw new NotSupportedException();
+        }
+
         private sealed class DummyParams : DbParameterCollection
         {
-            public override int Count => 0; public override object SyncRoot => this;
-            public override int Add(object value) => 0; public override void AddRange(Array values) { }
-            public override void Clear() { } public override bool Contains(object value) => false;
-            public override bool Contains(string value) => false; public override void CopyTo(Array array, int index) { }
-            public override IEnumerator GetEnumerator() => Array.Empty<object>().GetEnumerator();
-            protected override DbParameter GetParameter(int index) => null!;
-            protected override DbParameter GetParameter(string parameterName) => null!;
-            public override int IndexOf(object value) => -1; public override int IndexOf(string parameterName) => -1;
-            public override void Insert(int index, object value) { } public override void Remove(object value) { }
-            public override void RemoveAt(int index) { } public override void RemoveAt(string parameterName) { }
-            protected override void SetParameter(int index, DbParameter value) { }
-            protected override void SetParameter(string parameterName, DbParameter value) { }
+            public override int Count => 0;
+            public override object SyncRoot => this;
+
+            public override int Add(object value)
+            {
+                return 0;
+            }
+
+            public override void AddRange(Array values)
+            {
+            }
+
+            public override void Clear()
+            {
+            }
+
+            public override bool Contains(object value)
+            {
+                return false;
+            }
+
+            public override bool Contains(string value)
+            {
+                return false;
+            }
+
+            public override void CopyTo(Array array, int index)
+            {
+            }
+
+            public override IEnumerator GetEnumerator()
+            {
+                return Array.Empty<object>().GetEnumerator();
+            }
+
+            protected override DbParameter GetParameter(int index)
+            {
+                return null!;
+            }
+
+            protected override DbParameter GetParameter(string parameterName)
+            {
+                return null!;
+            }
+
+            public override int IndexOf(object value)
+            {
+                return -1;
+            }
+
+            public override int IndexOf(string parameterName)
+            {
+                return -1;
+            }
+
+            public override void Insert(int index, object value)
+            {
+            }
+
+            public override void Remove(object value)
+            {
+            }
+
+            public override void RemoveAt(int index)
+            {
+            }
+
+            public override void RemoveAt(string parameterName)
+            {
+            }
+
+            protected override void SetParameter(int index, DbParameter value)
+            {
+            }
+
+            protected override void SetParameter(string parameterName, DbParameter value)
+            {
+            }
         }
+
         private sealed class DummyParam : DbParameter
         {
             private string _parameterName = string.Empty;
@@ -88,23 +213,28 @@ public class PrepareDisableTests
             public override DbType DbType { get; set; }
             public override ParameterDirection Direction { get; set; }
             public override bool IsNullable { get; set; }
+
             [AllowNull]
             public override string ParameterName
             {
                 get => _parameterName;
                 set => _parameterName = value ?? string.Empty;
             }
+
             [AllowNull]
             public override string SourceColumn
             {
                 get => _sourceColumn;
                 set => _sourceColumn = value ?? string.Empty;
             }
-            [AllowNull]
-            public override object Value { get; set; } = DBNull.Value;
+
+            [AllowNull] public override object Value { get; set; } = DBNull.Value;
             public override bool SourceColumnNullMapping { get; set; }
             public override int Size { get; set; }
-            public override void ResetDbType() { }
+
+            public override void ResetDbType()
+            {
+            }
         }
     }
 
@@ -135,7 +265,8 @@ public class PrepareDisableTests
         }
 
         var disabledLogs = provider.Entries
-            .Where(e => e.Level == LogLevel.Debug && e.Message.Contains("Disabled prepare for connection due to provider exception"))
+            .Where(e => e.Level == LogLevel.Debug &&
+                        e.Message.Contains("Disabled prepare for connection due to provider exception"))
             .ToList();
         Assert.Single(disabledLogs);
     }
@@ -178,13 +309,15 @@ public class PrepareDisableTests
         {
             await sc.ExecuteNonQueryAsync();
         }
+
         using (var sc = ctx.CreateSqlContainer("SELECT 1"))
         {
             await sc.ExecuteNonQueryAsync();
         }
 
         var disabledLogs = provider.Entries
-            .Where(e => e.Level == LogLevel.Debug && e.Message.Contains("Disabled prepare for connection due to provider exception"))
+            .Where(e => e.Level == LogLevel.Debug &&
+                        e.Message.Contains("Disabled prepare for connection due to provider exception"))
             .ToList();
         Assert.True(disabledLogs.Count >= 2);
     }

@@ -15,7 +15,7 @@ namespace pengdows.crud;
 /// Represents a composable, parameterized SQL container that supports dynamic query building,
 /// safe parameter binding, and execution in the context of a tracked database connection.
 /// </summary>
-public interface ISqlContainer :ISafeAsyncDisposableBase
+public interface ISqlContainer : ISafeAsyncDisposableBase
 {
     /// <summary>
     /// Gets the <see cref="StringBuilder"/> used to compose the SQL query.
@@ -276,5 +276,4 @@ public interface ISqlContainer :ISafeAsyncDisposableBase
     /// <param name="context">The database context to use for the cloned container. If null, uses the original context.</param>
     /// <returns>A cloned container with the specified context, ready for parameter value updates.</returns>
     ISqlContainer Clone(IDatabaseContext? context);
-
 }

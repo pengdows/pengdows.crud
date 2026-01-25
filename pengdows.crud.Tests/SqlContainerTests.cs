@@ -411,7 +411,8 @@ public class SqlContainerTests : SqlLiteContextTestBase, IDisposable
     [Theory]
     [InlineData(SupportedDatabase.SqlServer, "dbo.my_proc", ExecutionType.Write, "EXEC \"dbo\".\"my_proc\" {0}")]
     [InlineData(SupportedDatabase.PostgreSql, "my_proc", ExecutionType.Read, "SELECT * FROM \"my_proc\"({0})")]
-    [InlineData(SupportedDatabase.Firebird, "dbo.my_proc", ExecutionType.Read, "SELECT * FROM \"dbo\".\"my_proc\"({0})")]
+    [InlineData(SupportedDatabase.Firebird, "dbo.my_proc", ExecutionType.Read,
+        "SELECT * FROM \"dbo\".\"my_proc\"({0})")]
     public void WrapForStoredProc_ByProvider_FormatsCorrectly(
         SupportedDatabase product,
         string procName,
@@ -437,7 +438,8 @@ public class SqlContainerTests : SqlLiteContextTestBase, IDisposable
         var factory = new fakeDbFactory(product);
         var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
         var container = ctx.CreateSqlContainer("my_proc");
-        Assert.Throws<NotSupportedException>(() => container.WrapForStoredProc(ExecutionType.Read, captureReturn: true));
+        Assert.Throws<NotSupportedException>(() =>
+            container.WrapForStoredProc(ExecutionType.Read, captureReturn: true));
     }
 
     [Theory]
@@ -463,12 +465,14 @@ public class SqlContainerTests : SqlLiteContextTestBase, IDisposable
     public void AddParameter_OutputWithinLimit_Succeeds()
     {
         var info = (DataSourceInformation)Context.DataSourceInfo;
-        var prop = typeof(DataSourceInformation).GetProperty("MaxOutputParameters", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+        var prop = typeof(DataSourceInformation).GetProperty("MaxOutputParameters",
+            BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
         var original = info.MaxOutputParameters;
         prop!.SetValue(info, 1);
 
         var container = Context.CreateSqlContainer();
-        var param = new fakeDbParameter { ParameterName = "p0", DbType = DbType.Int32, Direction = ParameterDirection.Output };
+        var param = new fakeDbParameter
+            { ParameterName = "p0", DbType = DbType.Int32, Direction = ParameterDirection.Output };
 
         container.AddParameter(param);
 
@@ -481,15 +485,18 @@ public class SqlContainerTests : SqlLiteContextTestBase, IDisposable
     public void AddParameter_OutputExceedsLimit_Throws()
     {
         var info = (DataSourceInformation)Context.DataSourceInfo;
-        var prop = typeof(DataSourceInformation).GetProperty("MaxOutputParameters", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+        var prop = typeof(DataSourceInformation).GetProperty("MaxOutputParameters",
+            BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
         var original = info.MaxOutputParameters;
         prop!.SetValue(info, 1);
 
         var container = Context.CreateSqlContainer();
-        var p1 = new fakeDbParameter { ParameterName = "p0", DbType = DbType.Int32, Direction = ParameterDirection.Output };
+        var p1 = new fakeDbParameter
+            { ParameterName = "p0", DbType = DbType.Int32, Direction = ParameterDirection.Output };
         container.AddParameter(p1);
 
-        var p2 = new fakeDbParameter { ParameterName = "p1", DbType = DbType.Int32, Direction = ParameterDirection.Output };
+        var p2 = new fakeDbParameter
+            { ParameterName = "p1", DbType = DbType.Int32, Direction = ParameterDirection.Output };
 
         Assert.Throws<InvalidOperationException>(() => container.AddParameter(p2));
 
@@ -502,7 +509,7 @@ public class SqlContainerTests : SqlLiteContextTestBase, IDisposable
         var mockLogger = new TestLogger();
         mockLogger.SetLogLevel(LogLevel.Critical); // Disable info logging
         var loggerFactory = new TestLoggerFactory(mockLogger);
-        
+
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = "Data Source=:memory:",
@@ -512,7 +519,7 @@ public class SqlContainerTests : SqlLiteContextTestBase, IDisposable
         await using var context = new DatabaseContext(config, SqliteFactory.Instance, loggerFactory, TypeMap);
         await using var container = context.CreateSqlContainer("SELECT 1");
         await using var reader = await container.ExecuteReaderAsync();
-        
+
         Assert.Empty(mockLogger.LogEntries);
     }
 
@@ -522,7 +529,7 @@ public class SqlContainerTests : SqlLiteContextTestBase, IDisposable
         var mockLogger = new TestLogger();
         mockLogger.SetLogLevel(LogLevel.Information); // Enable info logging
         var loggerFactory = new TestLoggerFactory(mockLogger);
-        
+
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = "Data Source=:memory:",
@@ -553,7 +560,8 @@ public class SqlContainerTests : SqlLiteContextTestBase, IDisposable
         await using var container = context.CreateSqlContainer("MyStoredProc");
         container.AddParameterWithValue("param1", DbType.String, "value1");
 
-        await Assert.ThrowsAsync<NotSupportedException>(() => container.ExecuteNonQueryAsync(CommandType.StoredProcedure));
+        await Assert.ThrowsAsync<NotSupportedException>(() =>
+            container.ExecuteNonQueryAsync(CommandType.StoredProcedure));
     }
 
     // removed: consolidated with parameterized tests above
@@ -563,11 +571,23 @@ public class SqlContainerTests : SqlLiteContextTestBase, IDisposable
         public List<string> LogEntries { get; } = new();
         private LogLevel _minLogLevel = LogLevel.Information;
 
-        public void SetLogLevel(LogLevel level) => _minLogLevel = level;
+        public void SetLogLevel(LogLevel level)
+        {
+            _minLogLevel = level;
+        }
 
-        public IDisposable BeginScope<TState>(TState state) where TState : notnull => NullScope.Instance;
-        public bool IsEnabled(LogLevel logLevel) => logLevel >= _minLogLevel;
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        public IDisposable BeginScope<TState>(TState state) where TState : notnull
+        {
+            return NullScope.Instance;
+        }
+
+        public bool IsEnabled(LogLevel logLevel)
+        {
+            return logLevel >= _minLogLevel;
+        }
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter)
         {
             if (IsEnabled(logLevel))
             {
@@ -585,14 +605,26 @@ public class SqlContainerTests : SqlLiteContextTestBase, IDisposable
             _logger = logger;
         }
 
-        public void Dispose() { }
-        public ILogger CreateLogger(string categoryName) => _logger;
-        public void AddProvider(ILoggerProvider provider) { }
+        public void Dispose()
+        {
+        }
+
+        public ILogger CreateLogger(string categoryName)
+        {
+            return _logger;
+        }
+
+        public void AddProvider(ILoggerProvider provider)
+        {
+        }
     }
 
     private sealed class NullScope : IDisposable
     {
         public static readonly NullScope Instance = new();
-        public void Dispose() { }
+
+        public void Dispose()
+        {
+        }
     }
 }

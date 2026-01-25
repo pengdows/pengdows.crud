@@ -68,9 +68,17 @@ internal class KeepAliveConnectionStrategy : StandardConnectionStrategy
         catch
         {
             // Dispose and rethrow to avoid leaking partially initialized connections
-            try { conn.Dispose(); } catch { /* ignore */ }
+            try
+            {
+                conn.Dispose();
+            }
+            catch
+            { /* ignore */
+            }
+
             throw;
         }
+
         return conn;
     }
 
@@ -115,7 +123,8 @@ internal class KeepAliveConnectionStrategy : StandardConnectionStrategy
 
         if (detectionTarget == null)
         {
-            detectionTarget = _context.FactoryCreateConnection(_context.ConnectionString, true, _context.IsReadOnlyConnection);
+            detectionTarget =
+                _context.FactoryCreateConnection(_context.ConnectionString, true, _context.IsReadOnlyConnection);
             ownsConnection = true;
         }
 
@@ -143,17 +152,23 @@ internal class KeepAliveConnectionStrategy : StandardConnectionStrategy
         {
             if (ownsConnection && detectionTarget != null)
             {
-                try { detectionTarget.Dispose(); } catch { /* ignore */ }
+                try
+                {
+                    detectionTarget.Dispose();
+                }
+                catch
+                { /* ignore */
+                }
             }
         }
     }
-
 }
 
 internal static class KeepAliveConnectionStrategyTestExtensions
 {
     // Convenience async helpers expected by tests
-    internal static Task<ITrackedConnection> GetConnectionAsync(this KeepAliveConnectionStrategy _, DatabaseContext context, ExecutionType executionType, bool isShared)
+    internal static Task<ITrackedConnection> GetConnectionAsync(this KeepAliveConnectionStrategy _,
+        DatabaseContext context, ExecutionType executionType, bool isShared)
     {
         var strat = new KeepAliveConnectionStrategy(context);
         var conn = strat.GetConnection(executionType, isShared);
@@ -161,7 +176,8 @@ internal static class KeepAliveConnectionStrategyTestExtensions
         return Task.FromResult(conn);
     }
 
-    internal static Task CloseConnectionAsync(this KeepAliveConnectionStrategy _, ITrackedConnection? connection, DatabaseContext context)
+    internal static Task CloseConnectionAsync(this KeepAliveConnectionStrategy _, ITrackedConnection? connection,
+        DatabaseContext context)
     {
         var strat = new KeepAliveConnectionStrategy(context);
         return strat.ReleaseConnectionAsync(connection).AsTask();

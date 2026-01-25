@@ -16,7 +16,9 @@ public class BulkOperationTests : DatabaseTestBase
 {
     private static long _nextId;
 
-    public BulkOperationTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture) { }
+    public BulkOperationTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture)
+    {
+    }
 
     protected override async Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)
     {
@@ -88,7 +90,7 @@ public class BulkOperationTests : DatabaseTestBase
             await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
             var txHelper = CreateEntityHelper(transaction);
 
-            int totalUpdated = 0;
+            var totalUpdated = 0;
             foreach (var entity in entities)
             {
                 var count = await txHelper.UpdateAsync(entity, transaction);
@@ -204,7 +206,7 @@ public class BulkOperationTests : DatabaseTestBase
             var totalProcessed = 0;
             var sw = Stopwatch.StartNew();
 
-            for (int i = 0; i < entities.Count; i += batchSize)
+            for (var i = 0; i < entities.Count; i += batchSize)
             {
                 var batch = entities.Skip(i).Take(batchSize).ToList();
                 var batchIds = batch.Select(e => e.Id).ToList();
@@ -268,7 +270,7 @@ public class BulkOperationTests : DatabaseTestBase
 
             var insertedIds = new List<long>();
 
-            for (int i = 0; i < 5000; i++)
+            for (var i = 0; i < 5000; i++)
             {
                 var entity = CreateTestEntity(NameEnum.Test, 6000 + i);
                 await helper.CreateAsync(entity, transaction);
@@ -332,7 +334,7 @@ public class BulkOperationTests : DatabaseTestBase
             await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
             var txHelper = CreateEntityHelper(transaction);
 
-            int totalUpserted = 0;
+            var totalUpserted = 0;
             foreach (var entity in allEntities)
             {
                 var count = await txHelper.UpsertAsync(entity, transaction);
@@ -365,7 +367,7 @@ public class BulkOperationTests : DatabaseTestBase
             var tasks = Enumerable.Range(0, 5).Select(async batch =>
             {
                 var entities = Enumerable.Range(0, 200)
-                    .Select(i => CreateTestEntity(NameEnum.Test, 8000 + (batch * 1000) + i))
+                    .Select(i => CreateTestEntity(NameEnum.Test, 8000 + batch * 1000 + i))
                     .ToList();
 
                 await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
@@ -424,7 +426,8 @@ public class BulkOperationTests : DatabaseTestBase
             var results = await helper.LoadListAsync(container);
             sw.Stop();
 
-            Output.WriteLine($"{provider}: Retrieved and processed {results.Count} records in {sw.ElapsedMilliseconds}ms");
+            Output.WriteLine(
+                $"{provider}: Retrieved and processed {results.Count} records in {sw.ElapsedMilliseconds}ms");
 
             // Assert
             Assert.Equal(entities.Count, results.Count);
@@ -468,7 +471,7 @@ public class BulkOperationTests : DatabaseTestBase
     private EntityHelper<TestTable, long> CreateEntityHelper(IDatabaseContext context)
     {
         var auditResolver = GetAuditResolver();
-        return new EntityHelper<TestTable, long>(context, auditValueResolver: auditResolver);
+        return new EntityHelper<TestTable, long>(context, auditResolver);
     }
 
     private static TestTable CreateTestEntity(NameEnum name, int value)
@@ -487,8 +490,8 @@ public class BulkOperationTests : DatabaseTestBase
     private static bool SupportsUpsert(SupportedDatabase provider)
     {
         return provider is SupportedDatabase.SqlServer or
-                          SupportedDatabase.Oracle or
-                          SupportedDatabase.Firebird or
-                          SupportedDatabase.PostgreSql;
+            SupportedDatabase.Oracle or
+            SupportedDatabase.Firebird or
+            SupportedDatabase.PostgreSql;
     }
 }

@@ -59,18 +59,16 @@ public class EntityHelperClientOnlyBenchmarks
         _context.Dispose();
     }
 
-    [Table("film", schema: "public")]
+    [Table("film", "public")]
     public sealed class Film
     {
         [Id(false)]
         [Column("film_id", DbType.Int32)]
         public int Id { get; set; }
 
-        [Column("title", DbType.String)]
-        public string Title { get; set; } = string.Empty;
+        [Column("title", DbType.String)] public string Title { get; set; } = string.Empty;
 
-        [Column("length", DbType.Int32)]
-        public int Length { get; set; }
+        [Column("length", DbType.Int32)] public int Length { get; set; }
     }
 
     private sealed class TestTrackedReader : fakeDbDataReader, ITrackedReader

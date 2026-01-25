@@ -22,14 +22,18 @@ internal class FirebirdDialect : SqlDialect
     public override SupportedDatabase DatabaseType => SupportedDatabase.Firebird;
     public override string ParameterMarker => "@";
     public override bool SupportsNamedParameters => true;
+
     public override bool SupportsSavepoints => true;
+
     // IMMUTABLE: Firebird theoretical parameter limit - do not change without extensive testing
     public override int MaxParameterLimit => 65535;
+
     // IMMUTABLE: Firebird PSQL practical output parameter limit - do not change without extensive testing
     public override int MaxOutputParameters => 1499;
+
     // IMMUTABLE: Firebird identifier length limit - do not change without extensive testing
     public override int ParameterNameMaxLength => 63;
-    
+
     // Firebird provider can be overly strict during explicit prepare; defer to execution-time preparation
     public override bool PrepareStatements => false;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.ExecuteProcedure;
@@ -58,10 +62,14 @@ internal class FirebirdDialect : SqlDialect
 
     public override string GetLastInsertedIdQuery()
     {
-        throw new NotSupportedException("Firebird requires generator-specific syntax. Use RETURNING clause or GEN_ID(generator_name, 0) instead.");
+        throw new NotSupportedException(
+            "Firebird requires generator-specific syntax. Use RETURNING clause or GEN_ID(generator_name, 0) instead.");
     }
 
-    public override string GetVersionQuery() => "SELECT rdb$get_context('SYSTEM', 'ENGINE_VERSION') FROM rdb$database";
+    public override string GetVersionQuery()
+    {
+        return "SELECT rdb$get_context('SYSTEM', 'ENGINE_VERSION') FROM rdb$database";
+    }
 
     public override string GetNaturalKeyLookupQuery(string tableName, string idColumnName,
         IReadOnlyList<string> columnNames, IReadOnlyList<string> parameterNames)
@@ -189,6 +197,7 @@ internal class FirebirdDialect : SqlDialect
             {
                 return s;
             }
+
             // If engine query returned null/empty, tests expect an empty string, not a monitor fallback
             return string.Empty;
         }

@@ -59,6 +59,7 @@ public class PostgreSqlIntervalCoercion : DbCoercion<PostgreSqlInterval>
             value = default;
             return false;
         }
+
         if (src.RawValue is null)
         {
             value = default;
@@ -106,6 +107,7 @@ public class IntervalYearMonthCoercion : DbCoercion<IntervalYearMonth>
             value = default;
             return false;
         }
+
         if (src.RawValue is null)
         {
             value = default;
@@ -163,6 +165,7 @@ public class IntervalDaySecondCoercion : DbCoercion<IntervalDaySecond>
             value = default;
             return false;
         }
+
         if (src.RawValue is null)
         {
             value = default;
@@ -263,10 +266,12 @@ public class InetCoercion : DbCoercion<Inet>
                         {
                             prefix = netmask;
                         }
+
                         value = new Inet(addr, prefix);
                         return true;
                     }
                 }
+
                 value = default;
                 return false;
         }
@@ -330,6 +335,7 @@ public class CidrCoercion : DbCoercion<Cidr>
                         return true;
                     }
                 }
+
                 value = default;
                 return false;
         }
@@ -394,6 +400,7 @@ public class MacAddressCoercion : DbCoercion<MacAddress>
                         return true;
                     }
                 }
+
                 value = default;
                 return false;
         }
@@ -467,6 +474,7 @@ public class GeometryCoercion : DbCoercion<Geometry>
             parameter.Value = value.WellKnownText;
             parameter.DbType = DbType.String;
         }
+
         return true;
     }
 }
@@ -531,6 +539,7 @@ public class GeographyCoercion : DbCoercion<Geography>
             parameter.Value = value.WellKnownText;
             parameter.DbType = DbType.String;
         }
+
         return true;
     }
 }
@@ -688,7 +697,10 @@ public class RowVersionValueCoercion : DbCoercion<RowVersion>
             case ulong ul:
                 var byteArray = BitConverter.GetBytes(ul);
                 if (BitConverter.IsLittleEndian)
+                {
                     Array.Reverse(byteArray);
+                }
+
                 value = new RowVersion(byteArray);
                 return true;
             default:
@@ -723,14 +735,17 @@ public class BlobStreamCoercion : DbCoercion<Stream>
         {
             case Stream stream:
                 if (stream.CanSeek)
+                {
                     stream.Seek(0, SeekOrigin.Begin);
+                }
+
                 value = stream;
                 return true;
             case byte[] bytes:
-                value = new MemoryStream(bytes, writable: false);
+                value = new MemoryStream(bytes, false);
                 return true;
             case ReadOnlyMemory<byte> memory:
-                value = new MemoryStream(memory.ToArray(), writable: false);
+                value = new MemoryStream(memory.ToArray(), false);
                 return true;
             default:
                 value = default!;
@@ -748,7 +763,9 @@ public class BlobStreamCoercion : DbCoercion<Stream>
         }
 
         if (value.CanSeek)
+        {
             value.Seek(0, SeekOrigin.Begin);
+        }
 
         parameter.Value = value;
         parameter.DbType = DbType.Binary;
@@ -780,7 +797,7 @@ public class ClobStreamCoercion : DbCoercion<TextReader>
             case Stream stream:
                 try
                 {
-                    value = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+                    value = new StreamReader(stream, Encoding.UTF8, true, leaveOpen: true);
                     return true;
                 }
                 catch

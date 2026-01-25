@@ -51,7 +51,7 @@ public class DbModeTests
         await using var context = new DatabaseContext(cfg, SqliteFactory.Instance, NullLoggerFactory.Instance, typeMap);
         await BuildUsersTableAsync(context);
 
-        var helper = new EntityHelper<User, int>(context, auditValueResolver: null);
+        var helper = new EntityHelper<User, int>(context, null);
         var users = Enumerable.Range(1, 20)
             .Select(i => new User { Email = $"test{i}@example.com", Name = $"Test{i}", Version = 1 })
             .ToList();
@@ -86,7 +86,7 @@ public class DbModeTests
         await using var context = new DatabaseContext(cfg, SqliteFactory.Instance, NullLoggerFactory.Instance, typeMap);
         await BuildUsersTableAsync(context);
 
-        var helper = new EntityHelper<User, int>(context, auditValueResolver: null);
+        var helper = new EntityHelper<User, int>(context, null);
         var users = Enumerable.Range(1, 20)
             .Select(i => new User { Email = $"test{i}@example.com", Name = $"Test{i}", Version = 1 })
             .ToList();
@@ -104,7 +104,13 @@ public class DbModeTests
         Assert.Equal(20, count);
 
         // Cleanup the temp file
-        try { File.Delete(dbFile); } catch { }
+        try
+        {
+            File.Delete(dbFile);
+        }
+        catch
+        {
+        }
     }
 
     // Minimal entity definition to exercise helper
@@ -123,7 +129,6 @@ public class DbModeTests
         [Column("Version", DbType.Int32)]
         public int Version { get; set; }
 
-        [Column("Name", DbType.String)]
-        public string Name { get; set; } = string.Empty;
+        [Column("Name", DbType.String)] public string Name { get; set; } = string.Empty;
     }
 }

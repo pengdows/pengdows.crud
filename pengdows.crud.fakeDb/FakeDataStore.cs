@@ -33,7 +33,9 @@ public class FakeDataStore
     public int ExecuteNonQuery(string commandText, DbParameterCollection? parameters = null)
     {
         if (string.IsNullOrWhiteSpace(commandText))
+        {
             return 0;
+        }
 
         var sql = commandText.Trim().ToUpperInvariant();
 
@@ -68,7 +70,9 @@ public class FakeDataStore
     public object? ExecuteScalar(string commandText, DbParameterCollection? parameters = null)
     {
         if (string.IsNullOrWhiteSpace(commandText))
+        {
             return null;
+        }
 
         var sql = commandText.Trim().ToUpperInvariant();
 
@@ -104,10 +108,13 @@ public class FakeDataStore
         return null;
     }
 
-    public IEnumerable<Dictionary<string, object?>> ExecuteReader(string commandText, DbParameterCollection? parameters = null)
+    public IEnumerable<Dictionary<string, object?>> ExecuteReader(string commandText,
+        DbParameterCollection? parameters = null)
     {
         if (string.IsNullOrWhiteSpace(commandText))
+        {
             return Enumerable.Empty<Dictionary<string, object?>>();
+        }
 
         var sql = commandText.Trim().ToUpperInvariant();
 
@@ -123,7 +130,8 @@ public class FakeDataStore
     private int HandleCreateTable(string commandText)
     {
         // Extract table name from CREATE TABLE statement
-        var match = Regex.Match(commandText, @"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([`\[\]""'\w]+)", RegexOptions.IgnoreCase);
+        var match = Regex.Match(commandText, @"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([`\[\]""'\w]+)",
+            RegexOptions.IgnoreCase);
         if (match.Success)
         {
             var tableName = CleanIdentifier(match.Groups[1].Value);
@@ -134,8 +142,10 @@ public class FakeDataStore
                     _tables[tableName] = new List<Dictionary<string, object?>>();
                 }
             }
+
             return 1; // CREATE TABLE executed successfully
         }
+
         return 0; // Failed to parse CREATE TABLE
     }
 
@@ -172,8 +182,10 @@ public class FakeDataStore
                     {
                         _tables[tableName].Add(row);
                     }
+
                     return 1;
                 }
+
                 return 1; // Return 1 for unrecognized INSERT formats
             }
 
@@ -202,7 +214,7 @@ public class FakeDataStore
                 rowData["Id"] = nextId;
             }
 
-            for (int i = 0; i < Math.Min(columns.Count, values.Count); i++)
+            for (var i = 0; i < Math.Min(columns.Count, values.Count); i++)
             {
                 rowData[columns[i]] = values[i];
 
@@ -236,7 +248,9 @@ public class FakeDataStore
                 RegexOptions.IgnoreCase);
 
             if (!updateMatch.Success)
+            {
                 return 0;
+            }
 
             var tableName = CleanIdentifier(updateMatch.Groups[1].Value);
             var setPart = updateMatch.Groups[2].Value;
@@ -277,7 +291,9 @@ public class FakeDataStore
                 RegexOptions.IgnoreCase);
 
             if (!deleteMatch.Success)
+            {
                 return 0;
+            }
 
             var tableName = CleanIdentifier(deleteMatch.Groups[1].Value);
             var wherePart = deleteMatch.Groups.Count > 2 ? deleteMatch.Groups[2].Value : null;
@@ -330,7 +346,9 @@ public class FakeDataStore
                 RegexOptions.IgnoreCase);
 
             if (!selectMatch.Success)
+            {
                 return Enumerable.Empty<Dictionary<string, object?>>();
+            }
 
             var selectPart = selectMatch.Groups[1].Value.Trim();
             var tableName = CleanIdentifier(selectMatch.Groups[2].Value);
@@ -367,6 +385,7 @@ public class FakeDataStore
                                 result[col] = row[col];
                             }
                         }
+
                         return result;
                     }).ToList();
                 }
@@ -388,7 +407,9 @@ public class FakeDataStore
                 RegexOptions.IgnoreCase);
 
             if (!countMatch.Success)
+            {
                 return 0;
+            }
 
             var tableName = CleanIdentifier(countMatch.Groups[1].Value);
             var wherePart = countMatch.Groups.Count > 2 ? countMatch.Groups[2].Value : null;
@@ -485,7 +506,9 @@ public class FakeDataStore
     private object? GetParameterValue(string paramName, DbParameterCollection? parameters)
     {
         if (parameters == null)
+        {
             return null;
+        }
 
         foreach (DbParameter param in parameters)
         {
@@ -494,10 +517,12 @@ public class FakeDataStore
                 return param.Value == DBNull.Value ? null : param.Value;
             }
         }
+
         return null;
     }
 
-    private bool EvaluateWhereClause(Dictionary<string, object?> row, string whereClause, DbParameterCollection? parameters)
+    private bool EvaluateWhereClause(Dictionary<string, object?> row, string whereClause,
+        DbParameterCollection? parameters)
     {
         // Simple WHERE clause evaluation - handles basic equality checks
         try
@@ -510,7 +535,9 @@ public class FakeDataStore
                 var valueExpression = match.Groups[2].Value.Trim();
 
                 if (!row.ContainsKey(column))
+                {
                     return false;
+                }
 
                 var rowValue = row[column];
                 var compareValue = GetCompareValue(valueExpression, parameters);
@@ -576,7 +603,8 @@ public class FakeDataStore
         }
     }
 
-    private IEnumerable<Dictionary<string, object?>> HandleLiteralSelect(string selectPart, DbParameterCollection? parameters)
+    private IEnumerable<Dictionary<string, object?>> HandleLiteralSelect(string selectPart,
+        DbParameterCollection? parameters)
     {
         // Parse "1 as id, 'test' as name, 42 as value" into columns and values
         var columnValuePairs = selectPart.Split(',');

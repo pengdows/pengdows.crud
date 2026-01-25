@@ -41,18 +41,17 @@ public class EntityHelperErrorPathTests : IAsyncLifetime
             disp.Dispose();
         }
     }
+
     [Table("test_entity")]
     private class EntityWithNoPrimaryKey
     {
-        [Column("name", DbType.String)]
-        public string Name { get; set; } = "";
+        [Column("name", DbType.String)] public string Name { get; set; } = "";
     }
 
     [Table("test_entity")]
     private class EntityWithoutIdColumn
     {
-        [Column("name", DbType.String)]
-        public string Name { get; set; } = "";
+        [Column("name", DbType.String)] public string Name { get; set; } = "";
 
         [PrimaryKey(1)]
         [Column("composite_key", DbType.String)]
@@ -62,12 +61,9 @@ public class EntityHelperErrorPathTests : IAsyncLifetime
     [Table("test_entity")]
     private class EntityWithUnsupportedId
     {
-        [Id]
-        [Column("id", DbType.Decimal)]
-        public decimal Id { get; set; }
+        [Id] [Column("id", DbType.Decimal)] public decimal Id { get; set; }
 
-        [Column("name", DbType.String)]
-        public string Name { get; set; } = "";
+        [Column("name", DbType.String)] public string Name { get; set; } = "";
     }
 
     [Fact]
@@ -274,8 +270,7 @@ public class EntityHelperErrorPathTests : IAsyncLifetime
     [Table("no_pk_entity")]
     private class EntityWithNoPkAttributes
     {
-        [Column("name", DbType.String)]
-        public string Name { get; set; } = "";
+        [Column("name", DbType.String)] public string Name { get; set; } = "";
     }
 
     [Fact]

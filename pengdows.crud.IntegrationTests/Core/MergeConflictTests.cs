@@ -12,7 +12,9 @@ namespace pengdows.crud.IntegrationTests.Core;
 [Collection("IntegrationTests")]
 public class MergeConflictTests : DatabaseTestBase
 {
-    public MergeConflictTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture) { }
+    public MergeConflictTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture)
+    {
+    }
 
     protected override Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)
     {
@@ -81,7 +83,9 @@ public class MergeConflictTests : DatabaseTestBase
             await using var remoteContext = await CreateAdditionalContextAsync(provider);
             remoteContext.TypeMapRegistry.Register<MergeRecord>();
             var remoteHelper = new EntityHelper<MergeRecord, long>(remoteContext);
-            var remoteCopy = await remoteHelper.RetrieveOneAsync(new MergeRecord { RecordKey = baseRecord.RecordKey }, remoteContext);
+            var remoteCopy =
+                await remoteHelper.RetrieveOneAsync(new MergeRecord { RecordKey = baseRecord.RecordKey },
+                    remoteContext);
             remoteCopy!.Value = 20;
             remoteCopy.LastUpdated = DateTime.UtcNow;
             await remoteHelper.UpdateAsync(remoteCopy, remoteContext);
@@ -160,25 +164,30 @@ CREATE TABLE {table} (
 )";
     }
 
-    private static string GetBigIntType(SupportedDatabase provider) =>
-        provider switch
+    private static string GetBigIntType(SupportedDatabase provider)
+    {
+        return provider switch
         {
             SupportedDatabase.Sqlite => "INTEGER",
             SupportedDatabase.Oracle => "NUMBER(19)",
             SupportedDatabase.Firebird => "BIGINT",
             _ => "BIGINT"
         };
+    }
 
-    private static string GetIntType(SupportedDatabase provider) =>
-        provider switch
+    private static string GetIntType(SupportedDatabase provider)
+    {
+        return provider switch
         {
             SupportedDatabase.Sqlite => "INTEGER",
             SupportedDatabase.Firebird => "INTEGER",
             _ => "INT"
         };
+    }
 
-    private static string GetStringType(SupportedDatabase provider) =>
-        provider switch
+    private static string GetStringType(SupportedDatabase provider)
+    {
+        return provider switch
         {
             SupportedDatabase.Sqlite => "TEXT",
             SupportedDatabase.SqlServer => "NVARCHAR(255)",
@@ -186,9 +195,11 @@ CREATE TABLE {table} (
             SupportedDatabase.Firebird => "VARCHAR(255)",
             _ => "VARCHAR(255)"
         };
+    }
 
-    private static string GetDateTimeType(SupportedDatabase provider) =>
-        provider switch
+    private static string GetDateTimeType(SupportedDatabase provider)
+    {
+        return provider switch
         {
             SupportedDatabase.Sqlite => "TEXT",
             SupportedDatabase.SqlServer => "DATETIME2",
@@ -196,17 +207,15 @@ CREATE TABLE {table} (
             SupportedDatabase.MariaDb => "DATETIME",
             _ => "TIMESTAMP"
         };
+    }
 }
 
 [Table("versioned_entities")]
 public class VersionedEntity
 {
-    [Id]
-    [Column("id", DbType.Int64)]
-    public long Id { get; set; }
+    [Id] [Column("id", DbType.Int64)] public long Id { get; set; }
 
-    [Column("name", DbType.String)]
-    public string Name { get; set; } = string.Empty;
+    [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
 
     [Version]
     [Column("version", DbType.Int32)]
@@ -216,16 +225,13 @@ public class VersionedEntity
 [Table("merge_records")]
 public class MergeRecord
 {
-    [Id]
-    [Column("id", DbType.Int64)]
-    public long Id { get; set; }
+    [Id] [Column("id", DbType.Int64)] public long Id { get; set; }
 
     [PrimaryKey(1)]
     [Column("record_key", DbType.String)]
     public string RecordKey { get; set; } = string.Empty;
 
-    [Column("value", DbType.Int32)]
-    public int Value { get; set; }
+    [Column("value", DbType.Int32)] public int Value { get; set; }
 
     [Column("last_updated", DbType.DateTime)]
     public DateTime LastUpdated { get; set; }

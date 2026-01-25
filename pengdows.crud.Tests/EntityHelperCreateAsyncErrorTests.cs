@@ -31,10 +31,10 @@ public class EntityHelperCreateAsyncErrorTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         factory.SetNonQueryResult(0); // No rows affected
-        
+
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=Unknown", factory, _typeMap);
         var helper = new EntityHelper<TestEntitySimple, int>(context);
-        
+
         var entity = new TestEntitySimple { Name = "Test" };
 
         // Act
@@ -50,10 +50,10 @@ public class EntityHelperCreateAsyncErrorTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.MariaDb);
         factory.SetNonQueryResult(2); // Multiple rows affected (unexpected)
-        
+
         var context = new DatabaseContext("test", factory, _typeMap);
         var helper = new EntityHelper<TestEntitySimple, int>(context);
-        
+
         var entity = new TestEntitySimple { Name = "Test" };
 
         // Act
@@ -69,16 +69,16 @@ public class EntityHelperCreateAsyncErrorTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         factory.SetException(new InvalidOperationException("Connection timeout"));
-        
+
         var context = new DatabaseContext("test", factory, _typeMap);
         var helper = new EntityHelper<TestEntitySimple, int>(context);
-        
+
         var entity = new TestEntitySimple { Name = "Test" };
 
         // Act & Assert
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => 
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             helper.CreateAsync(entity));
-        
+
         Assert.Equal("Connection timeout", exception.Message);
     }
 
@@ -88,10 +88,10 @@ public class EntityHelperCreateAsyncErrorTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         factory.SetException(new InvalidOperationException("Violation of UNIQUE KEY constraint"));
-        
+
         var context = new DatabaseContext("test", factory, _typeMap);
         var helper = new EntityHelper<TestEntity, int>(context);
-        
+
         var entity = new TestEntity { Name = "Duplicate" };
 
         // Act & Assert
@@ -115,11 +115,11 @@ public class EntityHelperCreateAsyncErrorTests
     {
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
-        factory.SetIdPopulationResult(100, rowsAffected: 1);
-        
+        factory.SetIdPopulationResult(100, 1);
+
         var context = new DatabaseContext("test", factory, _typeMap);
         var helper = new EntityHelper<TestEntityWithDefaultId, int>(context);
-        
+
         var entity = new TestEntityWithDefaultId(); // All default values
 
         // Act
@@ -139,10 +139,10 @@ public class EntityHelperCreateAsyncErrorTests
         // Provide string form to avoid provider-level coercion issues in ExecuteScalarWrite
         factory.SetNonQueryResult(1);
         factory.SetScalarResult(expectedGuid.ToString());
-        
+
         var context = new DatabaseContext("test", factory, _typeMap);
         var helper = new EntityHelper<TestEntityWithGuid, Guid>(context);
-        
+
         var entity = new TestEntityWithGuid { Name = "Test" };
 
         // Act
@@ -160,15 +160,15 @@ public class EntityHelperCreateAsyncErrorTests
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         factory.SetNonQueryResult(1);
         factory.SetScalarResult("not-a-valid-int"); // Wrong type for int ID
-        
+
         var context = new DatabaseContext("test", factory, _typeMap);
         var helper = new EntityHelper<TestEntitySimple, int>(context);
-        
+
         var entity = new TestEntitySimple { Name = "Test" };
 
         // Act & Assert
         // This should either handle coercion gracefully or throw appropriate exception
-        try 
+        try
         {
             var result = await helper.CreateAsync(entity);
             // If coercion succeeds, verify reasonable behavior
@@ -188,10 +188,10 @@ public class EntityHelperCreateAsyncErrorTests
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         // Simulate command preparation failure
         factory.SetException(new ArgumentException("Invalid SQL syntax"));
-        
+
         var context = new DatabaseContext("test", factory, _typeMap);
         var helper = new EntityHelper<TestEntitySimple, int>(context);
-        
+
         var entity = new TestEntitySimple { Name = "Test" };
 
         // Act & Assert
@@ -206,7 +206,8 @@ public class EntityHelperCreateAsyncErrorTests
         factory.SetConnectionException(new TimeoutException("Connection pool exhausted"));
 
         // Act & Assert (per contract: ctor open must surface failure immediately)
-        Assert.Throws<pengdows.crud.exceptions.ConnectionFailedException>(() => new DatabaseContext("test", factory, _typeMap));
+        Assert.Throws<pengdows.crud.exceptions.ConnectionFailedException>(() =>
+            new DatabaseContext("test", factory, _typeMap));
     }
 
     [Fact]
@@ -215,12 +216,12 @@ public class EntityHelperCreateAsyncErrorTests
         // Arrange - This tests the general create flow with field validation
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         factory.SetNonQueryResult(1);
-        
+
         var context = new DatabaseContext("test", factory, _typeMap);
         var helper = new EntityHelper<TestEntity, int>(context);
-        
-        var entity = new TestEntity 
-        { 
+
+        var entity = new TestEntity
+        {
             Name = null! // Null required field
         };
 
@@ -237,17 +238,17 @@ public class EntityHelperCreateAsyncErrorTests
     {
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
-        factory.SetIdPopulationResult(42, rowsAffected: 1);
-        
+        factory.SetIdPopulationResult(42, 1);
+
         var context = new DatabaseContext("test", factory, _typeMap);
-        
+
         // Act & Assert - Test within transaction context
         using var transaction = context.BeginTransaction();
         var helper = new EntityHelper<TestEntity, int>(transaction);
         var entity = new TestEntity { Name = "Test in Transaction" };
-        
+
         var result = await helper.CreateAsync(entity);
-        
+
         Assert.True(result);
         Assert.Equal(42, entity.Id);
     }
@@ -256,36 +257,32 @@ public class EntityHelperCreateAsyncErrorTests
     [Table("test_entity")]
     public class TestEntity
     {
-        [Id(writable: false)]
+        [Id(false)]
         [Column("id", DbType.Int32)]
         public int Id { get; set; }
 
-        [Column("name", DbType.String)]
-        public string Name { get; set; } = string.Empty;
+        [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
     }
 
     [Table("test_entity_guid")]
     public class TestEntityWithGuid
     {
-        [Id(writable: false)]
+        [Id(false)]
         [Column("id", DbType.Guid)]
         public Guid Id { get; set; }
 
-        [Column("name", DbType.String)]
-        public string Name { get; set; } = string.Empty;
+        [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
     }
 
     [Table("test_entity_default")]
     public class TestEntityWithDefaultId
     {
-        [Id(writable: false)]
+        [Id(false)]
         [Column("id", DbType.Int32)]
         public int Id { get; set; }
 
-        [Column("name", DbType.String)]
-        public string? Name { get; set; }
+        [Column("name", DbType.String)] public string? Name { get; set; }
 
-        [Column("value", DbType.Int32)]
-        public int Value { get; set; } = 0;
+        [Column("value", DbType.Int32)] public int Value { get; set; } = 0;
     }
 }

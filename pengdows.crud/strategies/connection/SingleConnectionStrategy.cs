@@ -111,5 +111,4 @@ internal class SingleConnectionStrategy : SafeAsyncDisposableBase, IConnectionSt
 
         return (null, null);
     }
-
 }

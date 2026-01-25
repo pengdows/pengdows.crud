@@ -26,8 +26,10 @@ public class DbModeCoercionLoggingTests
         };
         using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Sqlite), lf);
         Assert.Equal(DbMode.SingleWriter, ctx.ConnectionMode);
-        Assert.Contains(provider.Entries, e => e.Level == LogLevel.Information && e.Message.Contains("DbMode auto-selection"));
-        Assert.DoesNotContain(provider.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
+        Assert.Contains(provider.Entries,
+            e => e.Level == LogLevel.Information && e.Message.Contains("DbMode auto-selection"));
+        Assert.DoesNotContain(provider.Entries,
+            e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
     }
 
     [Fact]
@@ -43,8 +45,10 @@ public class DbModeCoercionLoggingTests
         };
         using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.DuckDB), lf);
         Assert.Equal(DbMode.SingleWriter, ctx.ConnectionMode);
-        Assert.Contains(provider.Entries, e => e.Level == LogLevel.Information && e.Message.Contains("DbMode auto-selection"));
-        Assert.DoesNotContain(provider.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
+        Assert.Contains(provider.Entries,
+            e => e.Level == LogLevel.Information && e.Message.Contains("DbMode auto-selection"));
+        Assert.DoesNotContain(provider.Entries,
+            e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
     }
 
     [Fact]
@@ -92,8 +96,10 @@ public class DbModeCoercionLoggingTests
         };
         using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Sqlite), lf);
         Assert.Equal(DbMode.SingleWriter, ctx.ConnectionMode);
-        Assert.Contains(provider.Entries, e => e.Level == LogLevel.Information && e.Message.Contains("DbMode auto-selection"));
-        Assert.DoesNotContain(provider.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
+        Assert.Contains(provider.Entries,
+            e => e.Level == LogLevel.Information && e.Message.Contains("DbMode auto-selection"));
+        Assert.DoesNotContain(provider.Entries,
+            e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
     }
 
     [Fact]
@@ -109,8 +115,10 @@ public class DbModeCoercionLoggingTests
         };
         using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.SqlServer), lf);
         Assert.Equal(DbMode.Standard, ctx.ConnectionMode);
-        Assert.Contains(provider.Entries, e => e.Level == LogLevel.Information && e.Message.Contains("DbMode auto-selection"));
-        Assert.DoesNotContain(provider.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
+        Assert.Contains(provider.Entries,
+            e => e.Level == LogLevel.Information && e.Message.Contains("DbMode auto-selection"));
+        Assert.DoesNotContain(provider.Entries,
+            e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
     }
 
     [Fact]
@@ -142,8 +150,10 @@ public class DbModeCoercionLoggingTests
         };
         using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.SqlServer), lf);
         Assert.Equal(DbMode.KeepAlive, ctx.ConnectionMode);
-        Assert.Contains(provider.Entries, e => e.Level == LogLevel.Information && e.Message.Contains("DbMode auto-selection"));
-        Assert.DoesNotContain(provider.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
+        Assert.Contains(provider.Entries,
+            e => e.Level == LogLevel.Information && e.Message.Contains("DbMode auto-selection"));
+        Assert.DoesNotContain(provider.Entries,
+            e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
     }
 
     [Fact]
@@ -171,7 +181,7 @@ public class DbModeCoercionLoggingTests
         {
             ConnectionString = "Data Source=test;EmulatedProduct=SqlServer",
             ProviderName = SupportedDatabase.SqlServer.ToString(),
-            DbMode = DbMode.KeepAlive  // Explicit force for testing
+            DbMode = DbMode.KeepAlive // Explicit force for testing
         };
         using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.SqlServer), lf);
 
@@ -179,7 +189,8 @@ public class DbModeCoercionLoggingTests
         Assert.Equal(DbMode.KeepAlive, ctx.ConnectionMode);
 
         // No warning should be logged for explicit mode choices
-        Assert.DoesNotContain(provider.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
+        Assert.DoesNotContain(provider.Entries,
+            e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
     }
 
     [Fact]
@@ -195,8 +206,10 @@ public class DbModeCoercionLoggingTests
         };
         using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Firebird), lf);
         Assert.Equal(DbMode.SingleConnection, ctx.ConnectionMode);
-        Assert.Contains(provider.Entries, e => e.Level == LogLevel.Information && e.Message.Contains("DbMode auto-selection"));
-        Assert.DoesNotContain(provider.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
+        Assert.Contains(provider.Entries,
+            e => e.Level == LogLevel.Information && e.Message.Contains("DbMode auto-selection"));
+        Assert.DoesNotContain(provider.Entries,
+            e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
     }
 
     [Fact]

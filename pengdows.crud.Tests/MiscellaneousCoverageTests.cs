@@ -231,7 +231,8 @@ public class MiscellaneousCoverageTests
     [InlineData(SupportedDatabase.Sqlite, "Data Source=memory")]
     [InlineData(SupportedDatabase.PostgreSql, "Host=localhost;Database=test")]
     [InlineData(SupportedDatabase.SqlServer, "Server=localhost;Database=test")]
-    public void DatabaseContext_AllStatisticsProperties_ReturnConsistentValues(SupportedDatabase database, string connectionString)
+    public void DatabaseContext_AllStatisticsProperties_ReturnConsistentValues(SupportedDatabase database,
+        string connectionString)
     {
         // Comprehensive test of all statistics properties
         // Arrange
@@ -291,7 +292,7 @@ public class MiscellaneousCoverageTests
     }
 
     [Theory]
-    [InlineData(3000000000L)]  // > int.MaxValue
+    [InlineData(3000000000L)] // > int.MaxValue
     [InlineData(-3000000000L)] // < int.MinValue
     [InlineData(0L)]
     [InlineData(1000L)]

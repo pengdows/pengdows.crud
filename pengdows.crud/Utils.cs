@@ -65,6 +65,7 @@ public class Utils
         {
             return true;
         }
+
         return arg is DBNull;
     }
 }

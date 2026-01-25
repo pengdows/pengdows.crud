@@ -141,6 +141,4 @@ public class PoolingDefaultsTests
         Assert.Null(dialect.MinPoolSizeSettingName);
         Assert.Null(dialect.MaxPoolSizeSettingName);
     }
-
 }
-

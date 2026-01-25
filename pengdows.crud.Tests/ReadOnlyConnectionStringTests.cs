@@ -43,7 +43,8 @@ public class ReadOnlyConnectionStringTests
         var ctx = new Mock<IDatabaseContext>();
         ctx.SetupGet(c => c.ConnectionString).Returns("Host=test;");
         dialect.ApplyConnectionSettings(conn, ctx.Object, true);
-        Assert.Contains("Options='-c default_transaction_read_only=on'", conn.ConnectionString, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Options='-c default_transaction_read_only=on'", conn.ConnectionString,
+            StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

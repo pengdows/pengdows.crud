@@ -30,7 +30,8 @@ public class TransactionContextAdditionalBranchTests
             ReadWriteMode = ReadWriteMode.ReadOnly,
             DbMode = DbMode.SingleConnection
         };
-        using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Sqlite), NullLoggerFactory.Instance);
+        using var ctx =
+            new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Sqlite), NullLoggerFactory.Instance);
 
         Assert.Throws<NotSupportedException>(() =>
             TransactionContext.Create(ctx, IsolationLevel.ReadCommitted, ExecutionType.Write, false));
@@ -86,7 +87,8 @@ public class TransactionContextAdditionalBranchTests
 
     private static void ReplaceStrategy(DatabaseContext context, IConnectionStrategy strategy)
     {
-        var field = typeof(DatabaseContext).GetField("_connectionStrategy", BindingFlags.Instance | BindingFlags.NonPublic);
+        var field = typeof(DatabaseContext).GetField("_connectionStrategy",
+            BindingFlags.Instance | BindingFlags.NonPublic);
         field!.SetValue(context, strategy);
     }
 
@@ -122,8 +124,7 @@ public class TransactionContextAdditionalBranchTests
         private ConnectionState _state = ConnectionState.Closed;
 
         public NonDbCommand? LastCommand { get; private set; }
-        [AllowNull]
-        public string ConnectionString { get; set; } = string.Empty;
+        [AllowNull] public string ConnectionString { get; set; } = string.Empty;
         public int ConnectionTimeout => 0;
         public string Database => "test";
         public ConnectionState State => _state;
@@ -222,8 +223,7 @@ public class TransactionContextAdditionalBranchTests
         private readonly FakeParameterCollection _parameters = new();
 
         public int ExecuteNonQueryCount { get; private set; }
-        [AllowNull]
-        public string CommandText { get; set; } = string.Empty;
+        [AllowNull] public string CommandText { get; set; } = string.Empty;
         public int CommandTimeout { get; set; }
         public CommandType CommandType { get; set; }
         public IDbConnection? Connection { get; set; }

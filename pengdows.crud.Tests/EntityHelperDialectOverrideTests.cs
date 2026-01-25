@@ -12,8 +12,10 @@ public class EntityHelperDialectOverrideTests
         var typeMap = new TypeMapRegistry();
         typeMap.Register<TestEntity>();
 
-        using var baseCtx = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", new fakeDbFactory(SupportedDatabase.SqlServer), typeMap);
-        using var overrideCtx = new DatabaseContext("Data Source=test;EmulatedProduct=PostgreSql", new fakeDbFactory(SupportedDatabase.PostgreSql), typeMap);
+        using var baseCtx = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer",
+            new fakeDbFactory(SupportedDatabase.SqlServer), typeMap);
+        using var overrideCtx = new DatabaseContext("Data Source=test;EmulatedProduct=PostgreSql",
+            new fakeDbFactory(SupportedDatabase.PostgreSql), typeMap);
 
         var helper = new EntityHelper<TestEntity, int>(baseCtx, new StubAuditValueResolver("tester"));
         var entity = new TestEntity { Name = "foo" };
@@ -32,8 +34,10 @@ public class EntityHelperDialectOverrideTests
         var typeMap = new TypeMapRegistry();
         typeMap.Register<TestEntity>();
 
-        using var baseCtx = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", new fakeDbFactory(SupportedDatabase.SqlServer), typeMap);
-        using var overrideCtx = new DatabaseContext("Data Source=test;EmulatedProduct=PostgreSql", new fakeDbFactory(SupportedDatabase.PostgreSql), typeMap);
+        using var baseCtx = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer",
+            new fakeDbFactory(SupportedDatabase.SqlServer), typeMap);
+        using var overrideCtx = new DatabaseContext("Data Source=test;EmulatedProduct=PostgreSql",
+            new fakeDbFactory(SupportedDatabase.PostgreSql), typeMap);
 
         var helper = new EntityHelper<TestEntity, int>(baseCtx, new StubAuditValueResolver("tester"));
         var sc = helper.BuildDelete(42, overrideCtx);
@@ -50,8 +54,10 @@ public class EntityHelperDialectOverrideTests
         var typeMap = new TypeMapRegistry();
         typeMap.Register<TestEntity>();
 
-        using var baseCtx = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", new fakeDbFactory(SupportedDatabase.SqlServer), typeMap);
-        using var overrideCtx = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", new fakeDbFactory(SupportedDatabase.Sqlite), typeMap);
+        using var baseCtx = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer",
+            new fakeDbFactory(SupportedDatabase.SqlServer), typeMap);
+        using var overrideCtx = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite",
+            new fakeDbFactory(SupportedDatabase.Sqlite), typeMap);
 
         var helper = new EntityHelper<TestEntity, int>(baseCtx, new StubAuditValueResolver("tester"));
         var sc = helper.BuildRetrieve(new[] { 1, 2, 3 }, overrideCtx);
@@ -63,4 +69,3 @@ public class EntityHelperDialectOverrideTests
         Assert.Contains("@w1", sql);
     }
 }
-

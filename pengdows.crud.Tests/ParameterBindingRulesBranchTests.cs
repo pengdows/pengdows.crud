@@ -21,11 +21,13 @@ public class ParameterBindingRulesBranchTests
     public void ApplyBindingRules_DateTimeOffsetAndTimeSpan()
     {
         var dtoParam = new fakeDbParameter();
-        Assert.True(ParameterBindingRules.ApplyBindingRules(dtoParam, typeof(DateTimeOffset), DateTimeOffset.UtcNow, SupportedDatabase.Sqlite));
+        Assert.True(ParameterBindingRules.ApplyBindingRules(dtoParam, typeof(DateTimeOffset), DateTimeOffset.UtcNow,
+            SupportedDatabase.Sqlite));
         Assert.Equal(DbType.DateTimeOffset, dtoParam.DbType);
 
         var tsParam = new fakeDbParameter();
-        Assert.True(ParameterBindingRules.ApplyBindingRules(tsParam, typeof(TimeSpan), TimeSpan.FromMinutes(5), SupportedDatabase.Sqlite));
+        Assert.True(ParameterBindingRules.ApplyBindingRules(tsParam, typeof(TimeSpan), TimeSpan.FromMinutes(5),
+            SupportedDatabase.Sqlite));
         Assert.Equal(DbType.Time, tsParam.DbType);
     }
 
@@ -33,7 +35,8 @@ public class ParameterBindingRulesBranchTests
     public void ApplyBindingRules_Enum_UsesDefaultString()
     {
         var parameter = new fakeDbParameter();
-        Assert.True(ParameterBindingRules.ApplyBindingRules(parameter, typeof(SampleEnum), SampleEnum.B, SupportedDatabase.Unknown));
+        Assert.True(ParameterBindingRules.ApplyBindingRules(parameter, typeof(SampleEnum), SampleEnum.B,
+            SupportedDatabase.Unknown));
         Assert.Equal(DbType.String, parameter.DbType);
         Assert.Equal("B", parameter.Value);
     }
@@ -43,7 +46,8 @@ public class ParameterBindingRulesBranchTests
     {
         var duckParam = new fakeDbParameter();
         var values = new[] { 1, 2, 3 };
-        Assert.True(ParameterBindingRules.ApplyBindingRules(duckParam, values.GetType(), values, SupportedDatabase.DuckDB));
+        Assert.True(ParameterBindingRules.ApplyBindingRules(duckParam, values.GetType(), values,
+            SupportedDatabase.DuckDB));
         Assert.Equal(DbType.Object, duckParam.DbType);
         Assert.Same(values, duckParam.Value);
 
@@ -58,27 +62,32 @@ public class ParameterBindingRulesBranchTests
     {
         var largeBytes = new byte[90000];
         var streamParam = new fakeDbParameter();
-        Assert.True(ParameterBindingRules.ApplyBindingRules(streamParam, typeof(byte[]), largeBytes, SupportedDatabase.SqlServer));
+        Assert.True(ParameterBindingRules.ApplyBindingRules(streamParam, typeof(byte[]), largeBytes,
+            SupportedDatabase.SqlServer));
         Assert.IsType<string>(streamParam.Value);
         Assert.Equal(DbType.String, streamParam.DbType);
 
         var smallBytes = new byte[] { 1, 2, 3 };
         var smallParam = new fakeDbParameter();
-        Assert.True(ParameterBindingRules.ApplyBindingRules(smallParam, typeof(byte[]), smallBytes, SupportedDatabase.SqlServer));
+        Assert.True(ParameterBindingRules.ApplyBindingRules(smallParam, typeof(byte[]), smallBytes,
+            SupportedDatabase.SqlServer));
         Assert.Equal(DbType.String, smallParam.DbType);
 
         var jsonParam = new fakeDbParameter();
         using var doc = JsonDocument.Parse("{\"a\":1}");
-        Assert.True(ParameterBindingRules.ApplyBindingRules(jsonParam, typeof(JsonDocument), doc, SupportedDatabase.SqlServer));
+        Assert.True(ParameterBindingRules.ApplyBindingRules(jsonParam, typeof(JsonDocument), doc,
+            SupportedDatabase.SqlServer));
         Assert.Equal(DbType.String, jsonParam.DbType);
 
         var smallText = "short";
         var textParam = new fakeDbParameter();
-        Assert.True(ParameterBindingRules.ApplyBindingRules(textParam, typeof(string), smallText, SupportedDatabase.SqlServer));
+        Assert.True(ParameterBindingRules.ApplyBindingRules(textParam, typeof(string), smallText,
+            SupportedDatabase.SqlServer));
         Assert.Equal(DbType.String, textParam.DbType);
 
         var nullParam = new fakeDbParameter();
-        Assert.True(ParameterBindingRules.ApplyBindingRules(nullParam, typeof(string), null, SupportedDatabase.SqlServer));
+        Assert.True(
+            ParameterBindingRules.ApplyBindingRules(nullParam, typeof(string), null, SupportedDatabase.SqlServer));
         Assert.Equal(DBNull.Value, nullParam.Value);
     }
 

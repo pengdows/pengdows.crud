@@ -16,10 +16,16 @@ public class EntityHelperRetrieveAsyncSetValuedTests
 {
     private readonly TypeMapRegistry _typeMap;
 
-    [Table("Ret")] private class RetEntity
+    [Table("Ret")]
+    private class RetEntity
     {
-        [Id(false)] [Column("Id", DbType.Int32)] public int Id { get; set; }
-        [PrimaryKey(1)] [Column("Name", DbType.String)] public string Name { get; set; } = string.Empty;
+        [Id(false)]
+        [Column("Id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [PrimaryKey(1)]
+        [Column("Name", DbType.String)]
+        public string Name { get; set; } = string.Empty;
     }
 
     public EntityHelperRetrieveAsyncSetValuedTests()

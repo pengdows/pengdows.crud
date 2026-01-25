@@ -6,7 +6,7 @@
         <Nullable>enable</Nullable>
         <RootNamespace>pengdows.crud</RootNamespace>
         <PackageId>pengdows.crud.abstractions</PackageId>
-        <Description>Interfaces and abstractions for the pengdows.crud library.</Description> 
+        <Description>Interfaces and abstractions for the pengdows.crud library.</Description>
         <Authors>Pengdows</Authors>
         <PackageTags>crud,nuget</PackageTags>
         <RepositoryUrl>https://github.com/pengdows/pengdows.crud</RepositoryUrl>
@@ -29,7 +29,7 @@
         <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.4"/>
     </ItemGroup>
     <ItemGroup>
-        <None Include="README.md" Pack="true" PackagePath="" />
+        <None Include="README.md" Pack="true" PackagePath=""/>
     </ItemGroup>
 
 </Project>
