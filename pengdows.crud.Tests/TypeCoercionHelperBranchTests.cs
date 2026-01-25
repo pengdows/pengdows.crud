@@ -325,7 +325,8 @@ public class TypeCoercionHelperBranchTests
         var unspecified = new DateTime(2024, 3, 1, 0, 0, 0, DateTimeKind.Unspecified);
 
         Assert.Equal(TimeSpan.Zero, InvokePrivate<DateTimeOffset>("CreateFlexibleOffset", utc).Offset);
-        Assert.NotEqual(TimeSpan.Zero, InvokePrivate<DateTimeOffset>("CreateFlexibleOffset", local).Offset);
+        var expectedLocalOffset = TimeZoneInfo.Local.GetUtcOffset(local);
+        Assert.Equal(expectedLocalOffset, InvokePrivate<DateTimeOffset>("CreateFlexibleOffset", local).Offset);
         Assert.Equal(TimeSpan.Zero, InvokePrivate<DateTimeOffset>("CreateFlexibleOffset", unspecified).Offset);
     }
 
