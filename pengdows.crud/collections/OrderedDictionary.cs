@@ -153,29 +153,43 @@ public sealed class OrderedDictionary<TKey, TValue> : IDictionary<TKey, TValue>,
     {
         ArgumentNullException.ThrowIfNull(key);
 
-        if (_buckets != null)
-        {
-            Debug.Assert(_entries != null);
+        var comparer = _comparer;
 
-            var comparer = _comparer;
+        if (_buckets.Length != 0)
+        {
             var hashCode = (uint)comparer.GetHashCode(key);
             var bucket = hashCode % (uint)_buckets.Length;
-            int iPlus1 = _buckets[bucket];
+            var iPlus1 = _buckets[bucket];
 
             while (iPlus1 != 0)
             {
-                int i = iPlus1 - 1;
+                var i = iPlus1 - 1;
                 ref var entry = ref _entries[i];
                 if (entry.HashCode == hashCode && comparer.Equals(entry.Key, key))
                 {
                     return ref entry.Value;
                 }
+
                 iPlus1 = entry.Next;
+            }
+
+            return ref Unsafe.NullRef<TValue>(); // critical
+        }
+
+        // small-mode linear scan
+        var smallHash = (uint)comparer.GetHashCode(key); // perf optimization
+        for (var i = 0; i < _count; i++)
+        {
+            ref var entry = ref _entries[i];
+            if (entry.HashCode == smallHash && comparer.Equals(entry.Key, key))
+            {
+                return ref entry.Value;
             }
         }
 
         return ref Unsafe.NullRef<TValue>();
     }
+
 
     private bool TryInsert(TKey key, TValue value, InsertionBehavior behavior)
     {
