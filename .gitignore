@@ -31,4 +31,5 @@ BenchmarkDotNet.Artifacts/*.log
 BenchmarkDotNet.Artifacts/
 node_modules/
 temp-broken-tests/
+Artifacts/
 output.txt
