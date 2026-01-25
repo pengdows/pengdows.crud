@@ -3,10 +3,8 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Data;
 using Microsoft.Extensions.Logging.Abstractions;
-using pengdows.crud;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
-using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests;

@@ -1,5 +1,3 @@
-using System;
-
 namespace pengdows.crud.types.valueobjects;
 
 public abstract class SpatialValue : IEquatable<SpatialValue>

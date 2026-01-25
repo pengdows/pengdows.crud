@@ -1,5 +1,4 @@
 using System;
-using System.Data.Common;
 using System.Reflection;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.enums;

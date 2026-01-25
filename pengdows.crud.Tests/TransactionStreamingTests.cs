@@ -1,10 +1,8 @@
-using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Threading.Tasks;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
-using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests;

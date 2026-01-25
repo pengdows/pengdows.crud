@@ -5,7 +5,6 @@ using System.Data;
 using System.Threading.Tasks;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
-using pengdows.crud.fakeDb;
 using pengdows.crud.wrappers;
 using Xunit;
 

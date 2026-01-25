@@ -1,5 +1,3 @@
-using System.Reflection;
-using pengdows.crud;
 using Xunit;
 
 namespace pengdows.crud.Tests;

@@ -1,4 +1,3 @@
-using System;
 using System.Text.Json;
 
 namespace pengdows.crud.types.valueobjects;

@@ -1,6 +1,5 @@
 #region
 
-using System.IO;
 using DuckDB.NET.Data;
 using pengdows.crud;
 

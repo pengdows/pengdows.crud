@@ -1,15 +1,8 @@
 #region
 
-using System.Data;
 using System.Data.Common;
-using System.Globalization;
-using System.Reflection;
-using System.Threading;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
-using pengdows.crud.configuration;
 using pengdows.crud.enums;
-using pengdows.crud.exceptions;
 // using pengdows.crud.strategies.connection; // superseded by strategies namespace
 using pengdows.crud.dialects;
 using pengdows.crud.@internal;

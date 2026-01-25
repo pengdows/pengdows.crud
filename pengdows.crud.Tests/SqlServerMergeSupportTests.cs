@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.enums;
-using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests;

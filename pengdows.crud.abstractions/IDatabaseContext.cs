@@ -1,6 +1,5 @@
 ﻿#region
 
-using System;
 using System.Data;
 using System.Data.Common;
 using pengdows.crud.enums;

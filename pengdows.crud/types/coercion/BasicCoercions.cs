@@ -1,10 +1,7 @@
-using System;
 using System.Data;
 using System.Data.Common;
 using System.Globalization;
-using System.Linq;
 using System.Text.Json;
-using System.Collections.Generic;
 using pengdows.crud.types.valueobjects;
 
 namespace pengdows.crud.types.coercion;

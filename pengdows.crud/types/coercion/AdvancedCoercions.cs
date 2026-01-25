@@ -1,12 +1,9 @@
-using System;
 using System.Data;
 using System.Data.Common;
-using System.IO;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Text;
 using System.Diagnostics.CodeAnalysis;
-using pengdows.crud.enums;
 using pengdows.crud.types.valueobjects;
 
 namespace pengdows.crud.types.coercion;

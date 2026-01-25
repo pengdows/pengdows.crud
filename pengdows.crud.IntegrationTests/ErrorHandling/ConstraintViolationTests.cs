@@ -2,7 +2,6 @@ using pengdows.crud.enums;
 using pengdows.crud.IntegrationTests.Infrastructure;
 using System.Data;
 using System.Data.Common;
-using System.Linq;
 using testbed;
 using Xunit.Abstractions;
 

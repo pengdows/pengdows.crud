@@ -2,11 +2,9 @@
 
 using System;
 using System.Collections.Generic;
-using System.Data;
 using System.Data.Common;
 using System.Reflection;
 using System.Threading.Tasks;
-using pengdows.crud;
 using pengdows.crud.fakeDb;
 using Xunit;
 

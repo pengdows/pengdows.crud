@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.enums;
-using pengdows.crud.fakeDb;
 using pengdows.crud.Tests.Mocks;
 using pengdows.crud.wrappers;
 using Xunit;

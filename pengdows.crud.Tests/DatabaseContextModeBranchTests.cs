@@ -1,8 +1,6 @@
-using System;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging.Abstractions;
-using pengdows.crud;
 using pengdows.crud.enums;
 using Xunit;
 

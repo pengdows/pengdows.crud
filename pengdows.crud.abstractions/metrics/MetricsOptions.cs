@@ -1,5 +1,3 @@
-using System;
-
 namespace pengdows.crud.metrics;
 
 /// <summary>

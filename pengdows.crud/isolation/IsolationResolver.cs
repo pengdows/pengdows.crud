@@ -1,7 +1,5 @@
 #region
 
-using System;
-using System.Collections.Generic;
 using System.Data;
 using pengdows.crud.enums;
 

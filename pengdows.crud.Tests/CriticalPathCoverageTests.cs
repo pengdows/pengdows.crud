@@ -1,9 +1,7 @@
 using System;
 using System.Data;
-using System.Data.Common;
 using System.Reflection;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;

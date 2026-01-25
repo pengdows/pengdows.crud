@@ -2,7 +2,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.@internal;
-using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests;

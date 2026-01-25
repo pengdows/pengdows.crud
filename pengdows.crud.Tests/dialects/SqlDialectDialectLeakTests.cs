@@ -3,7 +3,6 @@ using System.Data.Common;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
-using pengdows.crud.fakeDb;
 using pengdows.crud.Tests.Mocks;
 using Xunit;
 

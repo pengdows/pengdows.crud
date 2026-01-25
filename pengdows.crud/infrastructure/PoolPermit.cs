@@ -1,6 +1,3 @@
-using System;
-using System.Threading;
-
 namespace pengdows.crud.infrastructure;
 
 internal readonly struct PoolPermit : IDisposable, IAsyncDisposable

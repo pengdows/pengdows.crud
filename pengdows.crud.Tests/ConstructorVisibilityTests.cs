@@ -1,6 +1,4 @@
-using System.Linq;
 using System.Reflection;
-using pengdows.crud;
 using pengdows.crud.wrappers;
 using Xunit;
 

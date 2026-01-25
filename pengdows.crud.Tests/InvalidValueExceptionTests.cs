@@ -3,7 +3,6 @@ using System.Data.Common;
 using Moq;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;
-using pengdows.crud.fakeDb;
 using pengdows.crud.wrappers;
 using Xunit;
 

@@ -6,7 +6,6 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using pengdows.crud.enums;
-using pengdows.crud.types.valueobjects;
 using Xunit;
 
 namespace pengdows.crud.Tests;

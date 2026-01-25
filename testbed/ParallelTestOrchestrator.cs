@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using Microsoft.Extensions.DependencyInjection;
 using pengdows.crud;
 using pengdows.crud.enums;
 using testbed.Cockroach;

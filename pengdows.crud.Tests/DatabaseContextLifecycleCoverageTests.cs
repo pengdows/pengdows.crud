@@ -1,9 +1,7 @@
 using System;
 using Microsoft.Extensions.Logging.Abstractions;
-using pengdows.crud;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
-using pengdows.crud.fakeDb;
 using pengdows.crud.infrastructure;
 using Xunit;
 
