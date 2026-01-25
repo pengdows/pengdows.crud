@@ -15,9 +15,15 @@ public class CockroachDbTestContainer : TestContainer
 
     public override async Task StartAsync()
     {
+        var suffix = Environment.GetEnvironmentVariable("GITHUB_RUN_ID");
+        if (string.IsNullOrWhiteSpace(suffix))
+        {
+            suffix = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
+        }
+
         _container = new ContainerBuilder()
             .WithImage("cockroachdb/cockroach:v25.1.0")
-            .WithName("test-cockroach")
+            .WithName($"test-cockroach-{suffix}")
             .WithHostname("cockroach")
             .WithPortBinding(26257, 26257)
             .WithPortBinding(8080, true)
