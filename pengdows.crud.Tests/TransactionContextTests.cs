@@ -535,8 +535,7 @@ public class TransactionContextTests
         Assert.False(tx.RCSIEnabled);
         Assert.Equal(context.MaxParameterLimit, tx.MaxParameterLimit);
         Assert.NotEqual(0, tx.MaxParameterLimit);
-        Assert.Equal(DbMode.SingleConnection, tx.ConnectionMode);
-        Assert.NotEqual(DbMode.SingleWriter, tx.ConnectionMode);
+        Assert.Equal(context.ConnectionMode, tx.ConnectionMode);
         Assert.Equal(context.TypeMapRegistry, tx.TypeMapRegistry);
         Assert.NotNull(tx.TypeMapRegistry);
         Assert.Equal(context.DataSourceInfo, tx.DataSourceInfo);
@@ -544,6 +543,39 @@ public class TransactionContextTests
         Assert.Equal(context.SessionSettingsPreamble, tx.SessionSettingsPreamble);
         Assert.Equal(identity.RootId, tx.RootId);
         Assert.NotEqual(Guid.Empty, tx.TransactionId);
+    }
+
+    [Fact]
+    public void GetConnection_AlwaysReturnsTransactionConnection_ForAllExecutionTypes()
+    {
+        using var context = (DatabaseContext)CreateContext(SupportedDatabase.Sqlite);
+        using var tx = (TransactionContext)context.BeginTransaction();
+
+        var writeConnection = tx.GetConnection(ExecutionType.Write);
+        var readConnection = tx.GetConnection(ExecutionType.Read);
+        var sharedReadConnection = tx.GetConnection(ExecutionType.Read, true);
+
+        Assert.Same(writeConnection, readConnection);
+        Assert.Same(writeConnection, sharedReadConnection);
+    }
+
+    [Fact]
+    public void ParentGetConnection_RemainsIndependentOfTransactionConnections()
+    {
+        using var context = (DatabaseContext)CreateContext(SupportedDatabase.Sqlite);
+
+        using var tx = (TransactionContext)context.BeginTransaction();
+        var transactionConnection = tx.GetConnection(ExecutionType.Write);
+
+        var parentReadConnection = context.GetConnection(ExecutionType.Read);
+        var parentWriteConnection = context.GetConnection(ExecutionType.Write);
+
+        Assert.NotSame(transactionConnection, parentReadConnection);
+        Assert.NotSame(context.PersistentConnection, parentReadConnection);
+        Assert.Same(context.PersistentConnection, parentWriteConnection);
+        Assert.Same(transactionConnection, parentWriteConnection);
+
+        context.CloseAndDisposeConnection(parentReadConnection);
     }
 
     private static void ReplaceStrategy(DatabaseContext context, IConnectionStrategy strategy)

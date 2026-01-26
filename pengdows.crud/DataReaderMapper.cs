@@ -157,6 +157,12 @@ public sealed class DataReaderMapper : IDataReaderMapper
                             $"Failed to map column '{rdr.GetName(ordinal)}' to property '{plan.Properties[i].Name}'.",
                             ex);
                     }
+
+                    TypeCoercionHelper.Logger.LogWarning(
+                        ex,
+                        "Failed to map column '{Column}' to property '{Property}'.",
+                        rdr.GetName(ordinal),
+                        plan.Properties[i].Name);
                 }
             }
 

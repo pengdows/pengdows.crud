@@ -124,6 +124,7 @@ public partial class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     private int? _configuredReadPoolSize;
     private int? _configuredWritePoolSize;
 
+    /// <inheritdoc/>
     public Guid RootId { get; } = Guid.NewGuid();
 
     private static readonly char[] _parameterPrefixes = { '@', '?', ':' };
@@ -131,6 +132,7 @@ public partial class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     [Obsolete("Use the constructor that takes DatabaseContextConfiguration instead.")]
     private ReadWriteMode _readWriteMode = ReadWriteMode.ReadWrite;
 
+    /// <inheritdoc/>
     public ReadWriteMode ReadWriteMode
     {
 #pragma warning disable CS0618
@@ -143,15 +145,17 @@ public partial class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
             if (_isWriteConnection)
             {
                 //write connection implies read connection
-                _isWriteConnection = true;
+                _isReadConnection = true;
             }
         }
 #pragma warning restore CS0618
     }
 
+    /// <inheritdoc/>
     public string Name { get; set; }
 
     // Expose original requested mode for internal strategy decisions
+    /// <inheritdoc/>
     public string ConnectionString => _connectionString;
 
     /// <summary>
@@ -159,11 +163,15 @@ public partial class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     /// When available, provides better performance through shared prepared statement caching.
     /// Null if using traditional DbProviderFactory approach.
     /// </summary>
+    /// <inheritdoc/>
     public DbDataSource? DataSource => _dataSource;
 
+    /// <inheritdoc/>
     public bool IsReadOnlyConnection => _isReadConnection && !_isWriteConnection;
+    /// <inheritdoc/>
     public bool RCSIEnabled { get; private set; }
 
+    /// <inheritdoc/>
     public bool SnapshotIsolationEnabled { get; private set; }
 
     /// <summary>
@@ -173,6 +181,7 @@ public partial class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     /// Context-level locking is intentionally a no-op. Serialization happens at the connection level:
     /// connections returned by <c>GetConnection(...)</c> provide the real lock when a mode uses shared/pinned connections.
     /// </remarks>
+    /// <inheritdoc/>
     public ILockerAsync GetLock()
     {
         ThrowIfDisposed();
@@ -181,29 +190,44 @@ public partial class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
 
 
     // ReSharper disable once AutoPropertyCanBeMadeGetOnly.Local
+    /// <inheritdoc/>
     public DbMode ConnectionMode { get; private set; }
 
 
+    /// <inheritdoc/>
     public ITypeMapRegistry TypeMapRegistry { get; }
 
+    /// <inheritdoc/>
     public IDataSourceInformation DataSourceInfo => _dataSourceInfo;
+    /// <inheritdoc/>
     public string SessionSettingsPreamble => _dialect.GetConnectionSessionSettings(this, IsReadOnlyConnection);
 
+    /// <inheritdoc/>
     public string CompositeIdentifierSeparator => _dataSourceInfo.CompositeIdentifierSeparator;
 
+    /// <inheritdoc/>
     public SupportedDatabase Product => _dataSourceInfo?.Product ?? SupportedDatabase.Unknown;
 
     // ProcWrappingStyle is defined below with a setter to update strategy
+    /// <inheritdoc/>
     public int MaxParameterLimit => _dataSourceInfo.MaxParameterLimit;
+    /// <inheritdoc/>
     public int MaxOutputParameters => _dataSourceInfo.MaxOutputParameters;
+    /// <inheritdoc/>
     public long MaxNumberOfConnections => Interlocked.Read(ref _maxNumberOfOpenConnections);
+    /// <inheritdoc/>
     public long NumberOfOpenConnections => Interlocked.Read(ref _connectionCount);
 
+    /// <inheritdoc/>
     public string QuotePrefix => _dialect.QuotePrefix;
+    /// <inheritdoc/>
     public string QuoteSuffix => _dialect.QuoteSuffix;
+    /// <inheritdoc/>
     public bool? ForceManualPrepare => _forceManualPrepare;
+    /// <inheritdoc/>
     public bool? DisablePrepare => _disablePrepare;
 
+    /// <inheritdoc/>
     public void AssertIsReadConnection()
     {
         if (!_isReadConnection)
@@ -212,6 +236,7 @@ public partial class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
         }
     }
 
+    /// <inheritdoc/>
     public void AssertIsWriteConnection()
     {
         if (!_isWriteConnection)

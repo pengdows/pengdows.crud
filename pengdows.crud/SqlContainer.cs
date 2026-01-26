@@ -552,7 +552,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             await using var contextLocker = _context.GetLock();
             await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             var isTransaction = _context is ITransactionContext;
-            conn = _context.GetConnection(ExecutionType.Write, isTransaction);
+            var isShared = ShouldUseSharedConnection(_context, ExecutionType.Write, isTransaction);
+            conn = _context.GetConnection(ExecutionType.Write, isShared);
             // Guard: in SingleWriter mode, writes must target the writer connection
             if (!isTransaction && _context.ConnectionMode == DbMode.SingleWriter && _context is DatabaseContext dc)
             {
@@ -563,8 +564,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 }
             }
 
-            // In SingleWriter mode, providers may still allow ephemeral write connections depending on implementation.
-            // Do not enforce strict persistent-connection usage here; let strategy/context manage it.
+            // SingleWriter mode requires the persistent writer connection for write operations.
             await using var connectionLocker = conn.GetLock();
             await connectionLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             cmd = await PrepareAndCreateCommandAsync(conn, commandType, ExecutionType.Write, cancellationToken)
@@ -651,7 +651,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             await using var contextLocker = _context.GetLock();
             await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             var isTransaction = _context is ITransactionContext;
-            conn = _context.GetConnection(ExecutionType.Write, isTransaction);
+            var isShared = ShouldUseSharedConnection(_context, ExecutionType.Write, isTransaction);
+            conn = _context.GetConnection(ExecutionType.Write, isShared);
             if (!isTransaction && _context.ConnectionMode == DbMode.SingleWriter && _context is DatabaseContext dc)
             {
                 if (!ReferenceEquals(conn, dc.PersistentConnection))
@@ -735,7 +736,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             await using var contextLocker = _context.GetLock();
             await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             var isTransaction = _context is ITransactionContext;
-            conn = _context.GetConnection(ExecutionType.Read, isTransaction);
+            var isShared = ShouldUseSharedConnection(_context, ExecutionType.Read, isTransaction);
+            conn = _context.GetConnection(ExecutionType.Read, isShared);
             connectionLocker = conn.GetLock();
             await connectionLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             cmd = await PrepareAndCreateCommandAsync(conn, commandType, ExecutionType.Read, cancellationToken)
@@ -746,7 +748,6 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             // are going to set the connection to close and dispose when the reader is
             // closed. This prevents leaking
             var isSingleConnection = _context.ConnectionMode == DbMode.SingleConnection;
-            var isReadOnlyConnection = _context.IsReadOnlyConnection;
             var behavior = isTransaction || isSingleConnection
                 ? CommandBehavior.Default
                 : CommandBehavior.CloseConnection;
@@ -801,7 +802,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
             //no matter what we do NOT close the underlying connection
             //or dispose it here—the reader manages command disposal.
-            Cleanup(null, null, ExecutionType.Read);
+            Cleanup(cmd, null, ExecutionType.Read);
         }
     }
 
@@ -821,7 +822,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             await using var contextLocker = _context.GetLock();
             await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             var isTransaction = _context is ITransactionContext;
-            conn = _context.GetConnection(ExecutionType.Read, isTransaction);
+            var isShared = ShouldUseSharedConnection(_context, ExecutionType.Read, isTransaction);
+            conn = _context.GetConnection(ExecutionType.Read, isShared);
             connectionLocker = conn.GetLock();
             await connectionLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             cmd = await PrepareAndCreateCommandAsync(conn, CommandType.Text, ExecutionType.Read, cancellationToken)
@@ -876,7 +878,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             }
 
             // Command lifetime is managed by the returned reader for read operations.
-            Cleanup(null, null, ExecutionType.Read);
+            Cleanup(cmd, null, ExecutionType.Read);
         }
     }
 
@@ -965,6 +967,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             tCmdCreated = Stopwatch.GetTimestamp();
         }
 
+        // Stored procedures are wrapped into provider-specific text (EXEC/CALL/etc.)
+        // so we always execute as CommandType.Text for consistent behavior across providers.
         cmd.CommandType = CommandType.Text;
 
         if (_logger.IsEnabled(LogLevel.Information))
@@ -1146,6 +1150,22 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         return exception is TimeoutException ||
                exception.GetType().Name.Contains("Timeout", StringComparison.OrdinalIgnoreCase) ||
                exception.Message.Contains("timeout", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool ShouldUseSharedConnection(IDatabaseContext context, ExecutionType executionType,
+        bool isTransaction)
+    {
+        if (isTransaction)
+        {
+            return true;
+        }
+
+        return context.ConnectionMode switch
+        {
+            DbMode.SingleConnection => true,
+            DbMode.SingleWriter => executionType == ExecutionType.Write,
+            _ => false
+        };
     }
 
     private static double TicksToMicroseconds(long ticks)

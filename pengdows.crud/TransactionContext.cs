@@ -36,6 +36,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
     private int _rolledBack; // 0 = no, 1 = yes
     private int _completedState;
 
+    /// <inheritdoc/>
     public Guid RootId { get; }
 
     private TransactionContext(
@@ -93,48 +94,72 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         }
     }
 
+    /// <inheritdoc/>
     public Guid TransactionId { get; } = Guid.NewGuid();
     internal IDbTransaction Transaction => _transaction;
 
+    /// <inheritdoc/>
     public bool WasCommitted => Interlocked.CompareExchange(ref _completedState, 0, 0) != 0
                                 && Interlocked.CompareExchange(ref _committed, 0, 0) != 0;
 
+    /// <inheritdoc/>
     public bool WasRolledBack => Interlocked.CompareExchange(ref _completedState, 0, 0) != 0
                                  && Interlocked.CompareExchange(ref _rolledBack, 0, 0) != 0;
 
+    /// <inheritdoc/>
     public bool IsCompleted => Interlocked.CompareExchange(ref _completedState, 0, 0) != 0;
+    /// <inheritdoc/>
     public IsolationLevel IsolationLevel => _resolvedIsolationLevel;
 
+    /// <inheritdoc/>
     public long NumberOfOpenConnections => _context.NumberOfOpenConnections;
+    /// <inheritdoc/>
     public SupportedDatabase Product => _context.Product;
+    /// <inheritdoc/>
     public long MaxNumberOfConnections => _context.MaxNumberOfConnections;
+    /// <inheritdoc/>
     public bool IsReadOnlyConnection => _context.IsReadOnlyConnection || _isReadOnly;
+    /// <inheritdoc/>
     public bool RCSIEnabled => _context.RCSIEnabled;
+    /// <inheritdoc/>
     public bool SnapshotIsolationEnabled => _context.SnapshotIsolationEnabled;
+    /// <inheritdoc/>
     public string ConnectionString => _context.ConnectionString;
 
+    /// <inheritdoc/>
     public string Name
     {
         get => _context.Name;
         set => _context.Name = value;
     }
 
+    /// <inheritdoc/>
     public ReadWriteMode ReadWriteMode => _context.ReadWriteMode;
+    /// <inheritdoc/>
     public DbDataSource? DataSource => _context.DataSource;
+    /// <inheritdoc/>
     public int MaxParameterLimit => _context.MaxParameterLimit;
+    /// <inheritdoc/>
     public int MaxOutputParameters => (_dialect as SqlDialect)?.MaxOutputParameters ?? 0;
-    public DbMode ConnectionMode => DbMode.SingleConnection;
+    /// <inheritdoc/>
+    public DbMode ConnectionMode => _context.ConnectionMode;
+    /// <inheritdoc/>
     public ITypeMapRegistry TypeMapRegistry => _context.TypeMapRegistry;
+    /// <inheritdoc/>
     public IDataSourceInformation DataSourceInfo => _context.DataSourceInfo;
+    /// <inheritdoc/>
     public string SessionSettingsPreamble => _context.SessionSettingsPreamble;
+    /// <inheritdoc/>
     public DatabaseMetrics Metrics => _context.Metrics;
 
+    /// <inheritdoc/>
     public event EventHandler<DatabaseMetrics> MetricsUpdated
     {
         add => _context.MetricsUpdated += value;
         remove => _context.MetricsUpdated -= value;
     }
 
+    /// <inheritdoc/>
     public ILockerAsync GetLock()
     {
         ThrowIfDisposed();
@@ -146,6 +171,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         return new RealAsyncLocker(_userLock);
     }
 
+    /// <inheritdoc/>
     public ISqlContainer CreateSqlContainer(string? query = null)
     {
         if (IsCompleted)
@@ -163,6 +189,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         return SqlContainer.Create(this, query, logger);
     }
 
+    /// <inheritdoc/>
     public DbParameter CreateDbParameter<T>(string? name, DbType type, T value,
         ParameterDirection direction = ParameterDirection.Input)
     {
@@ -172,11 +199,13 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
     }
 
     // Back-compat overloads (interface surface)
+    /// <inheritdoc/>
     public DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
         return _context.CreateDbParameter(name, type, value);
     }
 
+    /// <inheritdoc/>
     public DbParameter CreateDbParameter<T>(DbType type, T value,
         ParameterDirection direction = ParameterDirection.Input)
     {
@@ -186,26 +215,31 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
     }
 
     // Back-compat overload (interface surface)
+    /// <inheritdoc/>
     public DbParameter CreateDbParameter<T>(DbType type, T value)
     {
         return _context.CreateDbParameter(type, value);
     }
 
+    /// <inheritdoc/>
     public ITrackedConnection GetConnection(ExecutionType type, bool isShared = false)
     {
         return _connection;
     }
 
+    /// <inheritdoc/>
     public string GenerateRandomName(int length = 5, int parameterNameMaxLength = 30)
     {
         return _context.GenerateRandomName(length, parameterNameMaxLength);
     }
 
+    /// <inheritdoc/>
     public void AssertIsReadConnection()
     {
         _context.AssertIsReadConnection();
     }
 
+    /// <inheritdoc/>
     public void AssertIsWriteConnection()
     {
         if (_isReadOnly)
@@ -216,16 +250,22 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         _context.AssertIsWriteConnection();
     }
 
+    /// <inheritdoc/>
     public string QuotePrefix => _dialect.QuotePrefix;
 
+    /// <inheritdoc/>
     public string QuoteSuffix => _dialect.QuoteSuffix;
 
+    /// <inheritdoc/>
     public bool? ForceManualPrepare => _context.ForceManualPrepare;
 
+    /// <inheritdoc/>
     public bool? DisablePrepare => _context.DisablePrepare;
 
+    /// <inheritdoc/>
     public string CompositeIdentifierSeparator => _dialect.CompositeIdentifierSeparator;
 
+    /// <inheritdoc/>
     public string WrapObjectName(string name)
     {
         return _dialect.WrapObjectName(name);
@@ -233,16 +273,19 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
 
     MetricsCollector? IMetricsCollectorAccessor.MetricsCollector => _metricsCollector;
 
+    /// <inheritdoc/>
     public string MakeParameterName(DbParameter dbParameter)
     {
         return _dialect.MakeParameterName(dbParameter);
     }
 
+    /// <inheritdoc/>
     public string MakeParameterName(string parameterName)
     {
         return _dialect.MakeParameterName(parameterName);
     }
 
+    /// <inheritdoc/>
     public ProcWrappingStyle ProcWrappingStyle => _context.ProcWrappingStyle;
 
     ProcWrappingStyle IDatabaseContext.ProcWrappingStyle => _context.ProcWrappingStyle;
@@ -259,6 +302,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         throw new InvalidOperationException("Cannot begin a nested transaction from TransactionContext.");
     }
 
+    /// <inheritdoc/>
     public void CloseAndDisposeConnection(ITrackedConnection? conn)
     {
         ThrowIfDisposed();
@@ -275,6 +319,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         _context.CloseAndDisposeConnection(conn);
     }
 
+    /// <inheritdoc/>
     public ValueTask CloseAndDisposeConnectionAsync(ITrackedConnection? conn)
     {
         ThrowIfDisposed();
@@ -291,6 +336,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         return _context.CloseAndDisposeConnectionAsync(conn);
     }
 
+    /// <inheritdoc/>
     public void Commit()
     {
         ThrowIfDisposed();
@@ -308,6 +354,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         }, true, cancellationToken);
     }
 
+    /// <inheritdoc/>
     public void Rollback()
     {
         ThrowIfDisposed();
@@ -324,6 +371,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         }, false, cancellationToken);
     }
 
+    /// <inheritdoc/>
     public Task SavepointAsync(string name)
     {
         return SavepointAsync(name, default);
@@ -349,6 +397,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         }
     }
 
+    /// <inheritdoc/>
     public Task RollbackToSavepointAsync(string name)
     {
         return RollbackToSavepointAsync(name, default);

@@ -184,12 +184,19 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// </summary>
     bool IsReadOnlyConnection { get; }
 
+    /// <summary>
+    /// True if read committed snapshot isolation (RCSI) is enabled on the database.
+    /// </summary>
     bool RCSIEnabled { get; }
 
+    /// <summary>
+    /// True if snapshot isolation is enabled on the database.
+    /// </summary>
     bool SnapshotIsolationEnabled { get; }
 
     /// <summary>
     /// Returns an async-compatible lock for this context instance.
+    /// This is intended for internal coordination within pengdows.crud and should not be required by consumers.
     /// </summary>
     ILockerAsync GetLock();
 

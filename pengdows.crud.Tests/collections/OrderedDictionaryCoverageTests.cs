@@ -228,4 +228,53 @@ public class OrderedDictionaryCoverageTests
         // Assert
         Assert.NotNull(logger);
     }
+
+    [Fact]
+    public void OrderedDictionary_RemoveHashMode_PreservesInsertionOrder()
+    {
+        var dict = new OrderedDictionary<int, string>(capacity: 32);
+        for (var i = 0; i < 12; i++)
+        {
+            dict.Add(i, $"v{i}");
+        }
+
+        var removed = dict.Remove(5);
+
+        Assert.True(removed);
+
+        var keys = new List<int>();
+        foreach (var kvp in dict)
+        {
+            keys.Add(kvp.Key);
+        }
+
+        Assert.Equal(11, keys.Count);
+        Assert.DoesNotContain(5, keys);
+        Assert.Equal(0, keys[0]);
+        Assert.Equal(4, keys[4]);
+        Assert.Equal(6, keys[5]);
+        Assert.Equal(11, keys[^1]);
+    }
+
+    [Fact]
+    public void OrderedDictionary_RemoveMissing_ReturnsFalse_AndKeepsOrder()
+    {
+        var dict = new OrderedDictionary<int, string>(capacity: 32);
+        for (var i = 0; i < 4; i++)
+        {
+            dict.Add(i, $"v{i}");
+        }
+
+        var removed = dict.Remove(99);
+
+        Assert.False(removed);
+
+        var keys = new List<int>();
+        foreach (var kvp in dict)
+        {
+            keys.Add(kvp.Key);
+        }
+
+        Assert.Equal(new[] { 0, 1, 2, 3 }, keys);
+    }
 }

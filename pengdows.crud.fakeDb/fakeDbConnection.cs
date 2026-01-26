@@ -46,6 +46,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     internal readonly Dictionary<string, Exception> CommandFailuresByText = new();
     public readonly List<string> ExecutedNonQueryTexts = new();
     public readonly List<string> ExecutedReaderTexts = new();
+    public fakeDbCommand? LastCreatedCommand { get; private set; }
 
     // Enhanced data persistence
     internal readonly FakeDataStore DataStore;
@@ -618,7 +619,9 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         // Invoke custom command behavior if set
         _customCommandBehavior?.Invoke();
 
-        return new fakeDbCommand(this);
+        var command = new fakeDbCommand(this);
+        LastCreatedCommand = command;
+        return command;
     }
 
     public override DataTable GetSchema()

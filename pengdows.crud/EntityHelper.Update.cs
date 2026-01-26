@@ -9,12 +9,14 @@ namespace pengdows.crud;
 
 public partial class EntityHelper<TEntity, TRowID>
 {
+    /// <inheritdoc/>
     public Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null)
     {
         var ctx = context ?? _context;
         return BuildUpdateAsync(objectToUpdate, _versionColumn != null, ctx, CancellationToken.None);
     }
 
+    /// <inheritdoc/>
     public Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, IDatabaseContext? context,
         CancellationToken cancellationToken)
     {
@@ -22,12 +24,14 @@ public partial class EntityHelper<TEntity, TRowID>
         return BuildUpdateAsync(objectToUpdate, _versionColumn != null, ctx, cancellationToken);
     }
 
+    /// <inheritdoc/>
     public Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, bool loadOriginal,
         IDatabaseContext? context = null)
     {
         return BuildUpdateAsync(objectToUpdate, loadOriginal, context, CancellationToken.None);
     }
 
+    /// <inheritdoc/>
     public async Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, bool loadOriginal,
         IDatabaseContext? context, CancellationToken cancellationToken)
     {
@@ -56,16 +60,18 @@ public partial class EntityHelper<TEntity, TRowID>
 
         var template = GetTemplatesForDialect(dialect);
 
-        if (_hasAuditColumns)
-        {
-            SetAuditFields(objectToUpdate, true);
-        }
-
         var counters = new ClauseCounters();
         var (setClause, parameters) = BuildSetClause(objectToUpdate, original, dialect, counters);
         if (setClause.Length == 0)
         {
             throw new InvalidOperationException("No changes detected for update.");
+        }
+
+        if (_hasAuditColumns)
+        {
+            SetAuditFields(objectToUpdate, true);
+            counters = new ClauseCounters();
+            (setClause, parameters) = BuildSetClause(objectToUpdate, original, dialect, counters);
         }
 
         if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
@@ -110,12 +116,21 @@ public partial class EntityHelper<TEntity, TRowID>
             return null;
         }
 
-        var targetType = typeof(TRowID);
-        var underlying = Nullable.GetUnderlyingType(targetType) ?? targetType;
-
         try
         {
-            var converted = Convert.ChangeType(idValue!, underlying, CultureInfo.InvariantCulture);
+            if (idValue is TRowID typedId)
+            {
+                return await RetrieveOneAsync(typedId, ctx, cancellationToken).ConfigureAwait(false);
+            }
+
+            var targetType = typeof(TRowID);
+            var underlying = Nullable.GetUnderlyingType(targetType) ?? targetType;
+            object? converted = underlying switch
+            {
+                _ when underlying == typeof(Guid) => ConvertToGuid(idValue),
+                _ => Convert.ChangeType(idValue!, underlying, CultureInfo.InvariantCulture)
+            };
+
             if (converted == null)
             {
                 return null;
@@ -123,16 +138,22 @@ public partial class EntityHelper<TEntity, TRowID>
 
             return await RetrieveOneAsync((TRowID)converted, ctx, cancellationToken).ConfigureAwait(false);
         }
-        catch (InvalidCastException ex)
+        catch (Exception ex) when (ex is InvalidCastException or FormatException)
         {
             throw new InvalidOperationException(
-                $"Cannot convert ID value '{idValue}' of type {idValue!.GetType().Name} to {targetType.Name}: {ex.Message}",
+                $"Cannot convert ID value '{idValue}' of type {idValue!.GetType().Name} to {typeof(TRowID).Name}: {ex.Message}",
                 ex);
         }
-        catch (DbException)
+    }
+
+    private static Guid ConvertToGuid(object? value)
+    {
+        return value switch
         {
-            return null;
-        }
+            Guid guid => guid,
+            string text => Guid.Parse(text),
+            _ => Guid.Parse(Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty)
+        };
     }
 
     private (StringBuilder clause, List<DbParameter> parameters) BuildSetClause(TEntity updated, TEntity? original,

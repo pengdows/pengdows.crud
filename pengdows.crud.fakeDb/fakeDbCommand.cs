@@ -13,6 +13,7 @@ public class fakeDbCommand : DbCommand
 {
     private bool _shouldFailOnExecute;
     private Exception? _customExecuteException;
+    public bool WasDisposed { get; private set; }
 
     public fakeDbCommand(DbConnection connection)
     {
@@ -331,6 +332,12 @@ public class fakeDbCommand : DbCommand
     protected override DbParameter CreateDbParameter()
     {
         return new fakeDbParameter();
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        WasDisposed = true;
+        base.Dispose(disposing);
     }
 
     private static IEnumerable<Dictionary<string, object>> ConvertRows(IEnumerable<Dictionary<string, object?>> rows)

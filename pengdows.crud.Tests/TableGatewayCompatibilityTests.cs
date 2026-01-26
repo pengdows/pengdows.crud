@@ -1,46 +1,33 @@
+using System;
+using Moq;
 using pengdows.crud.enums;
 using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public sealed class TableGatewayCompatibilityTests
+public class TableGatewayCompatibilityTests
 {
     [Fact]
-    public void EntityHelper_ImplementsITableGateway()
-    {
-        Assert.True(
-            typeof(ITableGateway<TestEntitySimple, int>).IsAssignableFrom(typeof(EntityHelper<TestEntitySimple, int>)));
-    }
-
-    [Fact]
-    public void IEntityHelper_IsAssignableToITableGateway()
-    {
-#pragma warning disable CS0618
-        Assert.True(
-            typeof(ITableGateway<TestEntitySimple, int>).IsAssignableFrom(
-                typeof(IEntityHelper<TestEntitySimple, int>)));
-#pragma warning restore CS0618
-    }
-
-    [Fact]
-    public void BuildCreate_QueryMatchesBetweenInterfaces()
+    public void TableGateway_ImplementsITableGateway()
     {
         var typeMap = new TypeMapRegistry();
-        typeMap.Register<TestEntitySimple>();
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        using var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory, typeMap);
 
-        using var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite",
-            new fakeDbFactory(SupportedDatabase.Sqlite), typeMap);
-        var helper = new EntityHelper<TestEntitySimple, int>(context, new StubAuditValueResolver("user"));
-        var tableGateway = (ITableGateway<TestEntitySimple, int>)helper;
-#pragma warning disable CS0618
-        var legacyInterface = (IEntityHelper<TestEntitySimple, int>)tableGateway;
-#pragma warning restore CS0618
+        var gateway = new TableGateway<TestEntity, int>(context);
 
-        var entity = new TestEntitySimple { Id = 1, Name = "value" };
+        Assert.IsAssignableFrom<ITableGateway<TestEntity, int>>(gateway);
+        Assert.Contains("Test", gateway.WrappedTableName, StringComparison.Ordinal);
+    }
 
-        var gatewaySql = tableGateway.BuildCreate(entity, context).Query.ToString();
-        var legacySql = legacyInterface.BuildCreate(entity, context).Query.ToString();
+    [Fact]
+    public void TableGateway_ThrowsWhenContextMissingDialect()
+    {
+        var context = new Mock<IDatabaseContext>(MockBehavior.Strict);
 
-        Assert.Equal(legacySql, gatewaySql);
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            new TableGateway<TestEntity, int>(context.Object));
+
+        Assert.Contains("IDatabaseContext must implement ISqlDialectProvider", exception.Message);
     }
 }

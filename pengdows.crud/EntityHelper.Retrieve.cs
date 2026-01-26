@@ -8,6 +8,7 @@ namespace pengdows.crud;
 
 public partial class EntityHelper<TEntity, TRowID>
 {
+    /// <inheritdoc/>
     public ISqlContainer BuildBaseRetrieve(string alias, IDatabaseContext? context = null)
     {
         var ctx = context ?? _context;
@@ -56,6 +57,7 @@ public partial class EntityHelper<TEntity, TRowID>
         return sc;
     }
 
+    /// <inheritdoc/>
     public ISqlContainer BuildRetrieve(IReadOnlyCollection<TRowID>? listOfIds,
         string alias, IDatabaseContext? context = null)
     {
@@ -101,6 +103,7 @@ public partial class EntityHelper<TEntity, TRowID>
         return sc;
     }
 
+    /// <inheritdoc/>
     public ISqlContainer BuildRetrieve(IReadOnlyCollection<TEntity>? listOfObjects,
         string alias, IDatabaseContext? context = null)
     {
@@ -116,11 +119,13 @@ public partial class EntityHelper<TEntity, TRowID>
         return sc;
     }
 
+    /// <inheritdoc/>
     public ISqlContainer BuildRetrieve(IReadOnlyCollection<TRowID>? listOfIds, IDatabaseContext? context = null)
     {
         return BuildRetrieve(listOfIds, "", context);
     }
 
+    /// <inheritdoc/>
     public ISqlContainer BuildRetrieve(IReadOnlyCollection<TEntity>? listOfObjects,
         IDatabaseContext? context = null)
     {
@@ -143,7 +148,7 @@ public partial class EntityHelper<TEntity, TRowID>
         CheckParameterLimit(sc, listOfObjects!.Count * keys.Count);
 
         var parameters = new List<DbParameter>();
-        var wrappedAlias = BuildAliasPrefix(alias);
+        var wrappedAlias = BuildAliasPrefix(alias, dialect);
         var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
         var counters = new ClauseCounters();
         var index = 0;
@@ -187,9 +192,14 @@ public partial class EntityHelper<TEntity, TRowID>
         return keys;
     }
 
-    private static string BuildAliasPrefix(string alias)
+    private static string BuildAliasPrefix(string alias, ISqlDialect dialect)
     {
-        return string.IsNullOrWhiteSpace(alias) ? string.Empty : alias + ".";
+        if (string.IsNullOrWhiteSpace(alias))
+        {
+            return string.Empty;
+        }
+
+        return dialect.WrapObjectName(alias) + ".";
     }
 
     private string BuildPrimaryKeyClause(TEntity entity, IReadOnlyList<IColumnInfo> keys, string alias,

@@ -9,9 +9,7 @@ namespace pengdows.crud;
 /// </summary>
 public partial class DatabaseContext
 {
-    /// <summary>
-    /// Creates a new SQL container for building and executing queries.
-    /// </summary>
+    /// <inheritdoc/>
     public ISqlContainer CreateSqlContainer(string? query = null)
     {
         // Provide a logger so container can emit diagnostics (e.g., prepare-disable notices)
@@ -27,9 +25,7 @@ public partial class DatabaseContext
         return _loggerFactory.CreateLogger<ISqlContainer>();
     }
 
-    /// <summary>
-    /// Creates a database parameter with the specified name, type, value, and direction.
-    /// </summary>
+    /// <inheritdoc/>
     public DbParameter CreateDbParameter<T>(string? name, DbType type, T value,
         ParameterDirection direction = ParameterDirection.Input)
     {
@@ -38,58 +34,44 @@ public partial class DatabaseContext
         return p;
     }
 
-    /// <summary>
-    /// Creates a database parameter with the specified name, type, and value (input direction).
-    /// </summary>
+    /// <inheritdoc/>
     public DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
         return CreateDbParameter(name, type, value, ParameterDirection.Input);
     }
 
-    /// <summary>
-    /// Creates a database parameter with the specified type, value, and direction (no name).
-    /// </summary>
+    /// <inheritdoc/>
     public DbParameter CreateDbParameter<T>(DbType type, T value,
         ParameterDirection direction = ParameterDirection.Input)
     {
         return CreateDbParameter(null, type, value, direction);
     }
 
-    /// <summary>
-    /// Creates a database parameter with the specified type and value (input direction, no name).
-    /// </summary>
+    /// <inheritdoc/>
     public DbParameter CreateDbParameter<T>(DbType type, T value)
     {
         return CreateDbParameter(type, value, ParameterDirection.Input);
     }
 
-    /// <summary>
-    /// Wraps an object name (table, column, etc.) with database-specific quoting.
-    /// </summary>
+    /// <inheritdoc/>
     public string WrapObjectName(string name)
     {
         return _dialect.WrapObjectName(name);
     }
 
-    /// <summary>
-    /// Formats a parameter name for the current database dialect.
-    /// </summary>
+    /// <inheritdoc/>
     public string MakeParameterName(DbParameter dbParameter)
     {
         return _dialect.MakeParameterName(dbParameter);
     }
 
-    /// <summary>
-    /// Formats a parameter name for the current database dialect.
-    /// </summary>
+    /// <inheritdoc/>
     public string MakeParameterName(string parameterName)
     {
         return _dialect.MakeParameterName(parameterName);
     }
 
-    /// <summary>
-    /// Generates a random name suitable for temporary tables, aliases, etc.
-    /// </summary>
+    /// <inheritdoc/>
     public string GenerateRandomName(int length = 5, int parameterNameMaxLength = 30)
     {
         return _dialect.GenerateRandomName(length, parameterNameMaxLength);

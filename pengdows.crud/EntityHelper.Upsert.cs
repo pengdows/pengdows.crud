@@ -7,11 +7,13 @@ namespace pengdows.crud;
 
 public partial class EntityHelper<TEntity, TRowID>
 {
+    /// <inheritdoc/>
     public Task<int> UpsertAsync(TEntity entity, IDatabaseContext? context = null)
     {
         return UpsertAsync(entity, context, CancellationToken.None);
     }
 
+    /// <inheritdoc/>
     public async Task<int> UpsertAsync(TEntity entity, IDatabaseContext? context, CancellationToken cancellationToken)
     {
         if (entity == null)
@@ -26,6 +28,7 @@ public partial class EntityHelper<TEntity, TRowID>
         return await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <inheritdoc/>
     public ISqlContainer BuildUpsert(TEntity entity, IDatabaseContext? context = null)
     {
         if (entity == null)

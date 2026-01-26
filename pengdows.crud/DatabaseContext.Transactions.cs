@@ -10,9 +10,7 @@ namespace pengdows.crud;
 /// </summary>
 public partial class DatabaseContext
 {
-    /// <summary>
-    /// Begins a new database transaction with the specified isolation level and execution type.
-    /// </summary>
+    /// <inheritdoc/>
     public ITransactionContext BeginTransaction(
         IsolationLevel? isolationLevel = null,
         ExecutionType executionType = ExecutionType.Write,
@@ -80,9 +78,7 @@ public partial class DatabaseContext
         return TransactionContext.Create(this, isolationLevel.Value, executionType, ro);
     }
 
-    /// <summary>
-    /// Begins a new database transaction with the specified isolation profile and execution type.
-    /// </summary>
+    /// <inheritdoc/>
     public ITransactionContext BeginTransaction(
         IsolationProfile isolationProfile,
         ExecutionType executionType = ExecutionType.Write,

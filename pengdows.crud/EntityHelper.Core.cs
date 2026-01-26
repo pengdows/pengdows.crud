@@ -1,5 +1,6 @@
 #region
 
+using System;
 using System.Collections.Concurrent;
 using System.Text;
 using System.Data;
@@ -28,12 +29,12 @@ namespace pengdows.crud;
 /// <remarks>
 /// <para><strong>Version 2.0 Breaking Change:</strong></para>
 /// <para>
-/// <c>EntityHelper&lt;TEntity, TRowID&gt;</c> will be renamed to <c>TableSql&lt;TEntity, TRowID&gt;</c> in version 2.0
-/// to better reflect its role as the primary SQL generation and execution API. A compatibility shim will be
-/// provided during the transition period. See VERSION_2.0_PLANNING.md for migration details.
+/// <c>EntityHelper&lt;TEntity, TRowID&gt;</c> has been renamed to <c>TableGateway&lt;TEntity, TRowID&gt;</c> to better
+/// reflect its role as the primary SQL generation and execution API. This type remains as a compatibility shim.
 /// </para>
 /// </remarks>
 #pragma warning disable CS0618
+[Obsolete("EntityHelper is obsolete. Use TableGateway<TEntity, TRowID> instead.", false)]
 public partial class EntityHelper<TEntity, TRowID> :
     ITableGateway<TEntity, TRowID>,
     IEntityHelper<TEntity, TRowID> where TEntity : class, new()
@@ -195,8 +196,10 @@ public partial class EntityHelper<TEntity, TRowID> :
         EnumParseBehavior = enumParseBehavior;
     }
 
+    /// <inheritdoc/>
     public string WrappedTableName { get; set; } = null!;
 
+    /// <inheritdoc/>
     public EnumParseFailureMode EnumParseBehavior { get; set; }
 
     public string QuotePrefix => _dialect.QuotePrefix;
@@ -270,11 +273,13 @@ public partial class EntityHelper<TEntity, TRowID> :
     }
 
 
+    /// <inheritdoc/>
     public Task<bool> CreateAsync(TEntity entity)
     {
         return CreateAsync(entity, _context);
     }
 
+    /// <inheritdoc/>
     public async Task<bool> CreateAsync(TEntity entity, IDatabaseContext context)
     {
         if (entity == null)
@@ -342,6 +347,7 @@ public partial class EntityHelper<TEntity, TRowID> :
         }
     }
 
+    /// <inheritdoc/>
     public async Task<bool> CreateAsync(TEntity entity, IDatabaseContext context, CancellationToken cancellationToken)
     {
         if (entity == null)
@@ -457,6 +463,7 @@ public partial class EntityHelper<TEntity, TRowID> :
     }
 
 
+    /// <inheritdoc/>
     public ISqlContainer BuildCreate(TEntity entity, IDatabaseContext? context = null)
     {
         if (entity == null)
@@ -624,6 +631,7 @@ public partial class EntityHelper<TEntity, TRowID> :
 
     // moved to EntityHelper.Retrieve.cs
 
+    /// <inheritdoc/>
     public ISqlContainer BuildDelete(TRowID id, IDatabaseContext? context = null)
     {
         var ctx = context ?? _context;
@@ -648,11 +656,13 @@ public partial class EntityHelper<TEntity, TRowID> :
         return sc;
     }
 
+    /// <inheritdoc/>
     public Task<int> DeleteAsync(TRowID id, IDatabaseContext? context = null)
     {
         return DeleteAsync(id, context, CancellationToken.None);
     }
 
+    /// <inheritdoc/>
     public async Task<int> DeleteAsync(TRowID id, IDatabaseContext? context, CancellationToken cancellationToken)
     {
         var ctx = context ?? _context;
@@ -660,11 +670,13 @@ public partial class EntityHelper<TEntity, TRowID> :
         return await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <inheritdoc/>
     public Task<List<TEntity>> RetrieveAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null)
     {
         return RetrieveAsync(ids, context, CancellationToken.None);
     }
 
+    /// <inheritdoc/>
     public async Task<List<TEntity>> RetrieveAsync(IEnumerable<TRowID> ids, IDatabaseContext? context,
         CancellationToken cancellationToken)
     {
@@ -755,11 +767,13 @@ public partial class EntityHelper<TEntity, TRowID> :
         }
     }
 
+    /// <inheritdoc/>
     public IAsyncEnumerable<TEntity> RetrieveStreamAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null)
     {
         return RetrieveStreamAsync(ids, context, CancellationToken.None);
     }
 
+    /// <inheritdoc/>
     public async IAsyncEnumerable<TEntity> RetrieveStreamAsync(IEnumerable<TRowID> ids, IDatabaseContext? context,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
@@ -837,11 +851,13 @@ public partial class EntityHelper<TEntity, TRowID> :
         }
     }
 
+    /// <inheritdoc/>
     public Task<int> DeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null)
     {
         return DeleteAsync(ids, context, CancellationToken.None);
     }
 
+    /// <inheritdoc/>
     public async Task<int> DeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context,
         CancellationToken cancellationToken)
     {
@@ -920,11 +936,13 @@ public partial class EntityHelper<TEntity, TRowID> :
     }
 
 
+    /// <inheritdoc/>
     public Task<TEntity?> RetrieveOneAsync(TEntity objectToRetrieve, IDatabaseContext? context = null)
     {
         return RetrieveOneAsync(objectToRetrieve, context, CancellationToken.None);
     }
 
+    /// <inheritdoc/>
     public Task<TEntity?> RetrieveOneAsync(TEntity objectToRetrieve, IDatabaseContext? context,
         CancellationToken cancellationToken)
     {
@@ -939,11 +957,13 @@ public partial class EntityHelper<TEntity, TRowID> :
         return LoadSingleAsync(sc, cancellationToken);
     }
 
+    /// <inheritdoc/>
     public Task<TEntity?> RetrieveOneAsync(TRowID id, IDatabaseContext? context = null)
     {
         return RetrieveOneAsync(id, context, CancellationToken.None);
     }
 
+    /// <inheritdoc/>
     public async Task<TEntity?> RetrieveOneAsync(TRowID id, IDatabaseContext? context,
         CancellationToken cancellationToken)
     {
@@ -972,11 +992,13 @@ public partial class EntityHelper<TEntity, TRowID> :
         return await LoadSingleAsync(container, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <inheritdoc/>
     public Task<TEntity?> LoadSingleAsync(ISqlContainer sc)
     {
         return LoadSingleAsync(sc, CancellationToken.None);
     }
 
+    /// <inheritdoc/>
     public async Task<TEntity?> LoadSingleAsync(ISqlContainer sc, CancellationToken cancellationToken)
     {
         if (sc == null)
@@ -996,11 +1018,13 @@ public partial class EntityHelper<TEntity, TRowID> :
         return null;
     }
 
+    /// <inheritdoc/>
     public Task<List<TEntity>> LoadListAsync(ISqlContainer sc)
     {
         return LoadListAsync(sc, CancellationToken.None);
     }
 
+    /// <inheritdoc/>
     public async Task<List<TEntity>> LoadListAsync(ISqlContainer sc, CancellationToken cancellationToken)
     {
         if (sc == null)
@@ -1035,6 +1059,7 @@ public partial class EntityHelper<TEntity, TRowID> :
         return list;
     }
 
+    /// <inheritdoc/>
     public async IAsyncEnumerable<TEntity> LoadStreamAsync(ISqlContainer sc)
     {
         if (sc == null)
@@ -1066,6 +1091,7 @@ public partial class EntityHelper<TEntity, TRowID> :
         }
     }
 
+    /// <inheritdoc/>
     public async IAsyncEnumerable<TEntity> LoadStreamAsync(ISqlContainer sc,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
@@ -1162,23 +1188,27 @@ public partial class EntityHelper<TEntity, TRowID> :
 
     // moved to EntityHelper.Update.cs
 
+    /// <inheritdoc/>
     public Task<int> UpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null)
     {
         var ctx = context ?? _context;
         return UpdateAsync(objectToUpdate, _versionColumn != null, ctx, CancellationToken.None);
     }
 
+    /// <inheritdoc/>
     public Task<int> UpdateAsync(TEntity objectToUpdate, IDatabaseContext? context, CancellationToken cancellationToken)
     {
         var ctx = context ?? _context;
         return UpdateAsync(objectToUpdate, _versionColumn != null, ctx, cancellationToken);
     }
 
+    /// <inheritdoc/>
     public Task<int> UpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context = null)
     {
         return UpdateAsync(objectToUpdate, loadOriginal, context, CancellationToken.None);
     }
 
+    /// <inheritdoc/>
     public async Task<int> UpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context,
         CancellationToken cancellationToken)
     {
