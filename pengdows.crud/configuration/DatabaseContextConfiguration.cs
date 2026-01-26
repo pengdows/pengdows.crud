@@ -35,6 +35,7 @@ public class DatabaseContextConfiguration : IDatabaseContextConfiguration
     /// For example:
     /// <list type="bullet">
     ///   <item><description><see cref="enums.DbMode.Standard"/> - Force connection-per-operation (client-server DBs)</description></item>
+    ///   <item><description><see cref="enums.DbMode.KeepAlive"/> - Standard Mode with an unused connection to keep the database from unloading.</description></item>
     ///   <item><description><see cref="enums.DbMode.SingleWriter"/> - Force single writer mode (file-based DBs)</description></item>
     ///   <item><description><see cref="enums.DbMode.SingleConnection"/> - Force single connection (testing, :memory:)</description></item>
     /// </list>
