@@ -10,6 +10,7 @@ using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 using pengdows.crud.strategies.connection;
+using pengdows.crud.threading;
 using pengdows.crud.wrappers;
 using Xunit;
 
@@ -263,6 +264,71 @@ public class ConnectionStrategyTests
         var beforeRelease = ctx.NumberOfOpenConnections;
         ctx.CloseAndDisposeConnection(writeConn);
         Assert.Equal(beforeRelease, ctx.NumberOfOpenConnections);
+    }
+
+    [Fact]
+    public void StandardConnections_DefaultToNoOpLockers()
+    {
+        using var ctx = CreateContext(DbMode.Standard, SupportedDatabase.Sqlite, "file.db");
+        var connection = ctx.GetConnection(ExecutionType.Read);
+
+        using var locker = connection.GetLock();
+
+        Assert.IsType<NoOpAsyncLocker>(locker);
+
+        ctx.CloseAndDisposeConnection(connection);
+    }
+
+    [Fact]
+    public void StandardSharedConnections_UseRealLockers()
+    {
+        using var ctx = CreateContext(DbMode.Standard, SupportedDatabase.Sqlite, "file.db");
+        var connection = ctx.GetConnection(ExecutionType.Read, true);
+
+        using var locker = connection.GetLock();
+
+        Assert.IsType<RealAsyncLocker>(locker);
+
+        ctx.CloseAndDisposeConnection(connection);
+    }
+
+    [Fact]
+    public void SingleWriterPinnedConnection_UsesRealLocker()
+    {
+        using var ctx = CreateContext(DbMode.SingleWriter, SupportedDatabase.Sqlite, "file.db");
+        var connection = ctx.GetConnection(ExecutionType.Write);
+
+        using var locker = connection.GetLock();
+
+        Assert.IsType<RealAsyncLocker>(locker);
+
+        ctx.CloseAndDisposeConnection(connection);
+    }
+
+    [Fact]
+    public void SingleWriterReadConnection_UsesNoOpLocker()
+    {
+        using var ctx = CreateContext(DbMode.SingleWriter, SupportedDatabase.Sqlite, "file.db");
+        var connection = ctx.GetConnection(ExecutionType.Read);
+
+        using var locker = connection.GetLock();
+
+        Assert.IsType<NoOpAsyncLocker>(locker);
+
+        ctx.CloseAndDisposeConnection(connection);
+    }
+
+    [Fact]
+    public void SingleConnectionPinnedConnection_UsesRealLocker()
+    {
+        using var ctx = CreateContext(DbMode.SingleConnection, SupportedDatabase.Sqlite, ":memory:");
+        var connection = ctx.GetConnection(ExecutionType.Read);
+
+        using var locker = connection.GetLock();
+
+        Assert.IsType<RealAsyncLocker>(locker);
+
+        ctx.CloseAndDisposeConnection(connection);
     }
 
     [Fact]

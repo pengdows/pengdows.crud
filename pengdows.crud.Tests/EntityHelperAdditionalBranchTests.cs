@@ -2,6 +2,7 @@
 
 using System;
 using System.Data;
+using System.Data.Common;
 using System.Threading.Tasks;
 using pengdows.crud.attributes;
 using pengdows.crud.Tests.fakeDb;
@@ -27,9 +28,35 @@ public class EntityHelperAdditionalBranchTests : SqlLiteContextTestBase
         public int Version { get; set; }
     }
 
+    [Table("GuidBranchTest")]
+    private sealed class GuidBranchEntity
+    {
+        [Id]
+        [Column("Id", DbType.Guid)]
+        public Guid Id { get; set; }
+
+        [Column("Name", DbType.String)] public string Name { get; set; } = string.Empty;
+    }
+
+    [Table("AuditBranchTest")]
+    private sealed class AuditBranchEntity
+    {
+        [Id(false)]
+        [Column("Id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [Column("Name", DbType.String)] public string Name { get; set; } = string.Empty;
+
+        [LastUpdatedOn]
+        [Column("LastUpdatedOn", DbType.DateTime)]
+        public DateTime LastUpdatedOn { get; set; }
+    }
+
     public EntityHelperAdditionalBranchTests()
     {
         TypeMap.Register<BranchEntity>();
+        TypeMap.Register<GuidBranchEntity>();
+        TypeMap.Register<AuditBranchEntity>();
         var qp = Context.QuotePrefix;
         var qs = Context.QuoteSuffix;
         var create = $@"CREATE TABLE IF NOT EXISTS {qp}BranchTest{qs}(
@@ -42,6 +69,19 @@ public class EntityHelperAdditionalBranchTests : SqlLiteContextTestBase
         // Seed a row
         var insert = Context.CreateSqlContainer($"INSERT INTO {qp}BranchTest{qs}({qp}Name{qs}) VALUES('n')");
         insert.ExecuteNonQueryAsync().GetAwaiter().GetResult();
+
+        var guidCreate = $@"CREATE TABLE IF NOT EXISTS {qp}GuidBranchTest{qs}(
+            {qp}Id{qs} TEXT PRIMARY KEY NOT NULL,
+            {qp}Name{qs} TEXT NOT NULL
+        )";
+        Context.CreateSqlContainer(guidCreate).ExecuteNonQueryAsync().GetAwaiter().GetResult();
+
+        var auditCreate = $@"CREATE TABLE IF NOT EXISTS {qp}AuditBranchTest{qs}(
+            {qp}Id{qs} INTEGER PRIMARY KEY AUTOINCREMENT,
+            {qp}Name{qs} TEXT NOT NULL,
+            {qp}LastUpdatedOn{qs} TIMESTAMP NOT NULL
+        )";
+        Context.CreateSqlContainer(auditCreate).ExecuteNonQueryAsync().GetAwaiter().GetResult();
     }
 
     [Fact]
@@ -73,7 +113,62 @@ public class EntityHelperAdditionalBranchTests : SqlLiteContextTestBase
         await using var failing = ConnectionFailureHelper.CreateFailOnCommandContext(customException: dbException);
         var helper = new EntityHelper<BranchEntity, int>((IDatabaseContext)failing, AuditValueResolver);
         var e = new BranchEntity { Id = 1, Name = "x" };
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => helper.BuildUpdateAsync(e, true));
-        Assert.Contains("Original record not found", ex.Message);
+        var ex = await Assert.ThrowsAsync<DbException>(() => helper.BuildUpdateAsync(e, true));
+        Assert.Contains("Simulated database error", ex.Message);
+    }
+
+    [Fact]
+    public async Task BuildUpdateAsync_LoadOriginal_GuidId_UsesGuidValue()
+    {
+        var helper = new EntityHelper<GuidBranchEntity, Guid>(Context, AuditValueResolver);
+        var id = Guid.NewGuid();
+        var qp = Context.QuotePrefix;
+        var qs = Context.QuoteSuffix;
+        var insert = Context.CreateSqlContainer(
+            $"INSERT INTO {qp}GuidBranchTest{qs}({qp}Id{qs}, {qp}Name{qs}) VALUES(@id, 'n')");
+        insert.AddParameterWithValue("@id", DbType.String, id.ToString());
+        await insert.ExecuteNonQueryAsync();
+
+        var entity = new GuidBranchEntity { Id = id, Name = "updated" };
+        var container = await helper.BuildUpdateAsync(entity, true);
+
+        Assert.NotNull(container);
+    }
+
+    [Fact]
+    public async Task BuildUpdateAsync_AuditOnlyChange_Throws()
+    {
+        var helper = new EntityHelper<AuditBranchEntity, int>(Context, AuditValueResolver);
+        var qp = Context.QuotePrefix;
+        var qs = Context.QuoteSuffix;
+        var insert = Context.CreateSqlContainer(
+            $"INSERT INTO {qp}AuditBranchTest{qs}({qp}Name{qs}, {qp}LastUpdatedOn{qs}) VALUES('n', @last)");
+        insert.AddParameterWithValue("@last", DbType.DateTime, DateTime.UtcNow);
+        await insert.ExecuteNonQueryAsync();
+
+        var loaded = await helper.RetrieveOneAsync(1);
+        Assert.NotNull(loaded);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => helper.BuildUpdateAsync(loaded!, true));
+    }
+
+    [Fact]
+    public async Task BuildUpdateAsync_AuditWithBusinessChange_Succeeds()
+    {
+        var helper = new EntityHelper<AuditBranchEntity, int>(Context, AuditValueResolver);
+        var qp = Context.QuotePrefix;
+        var qs = Context.QuoteSuffix;
+        var insert = Context.CreateSqlContainer(
+            $"INSERT INTO {qp}AuditBranchTest{qs}({qp}Name{qs}, {qp}LastUpdatedOn{qs}) VALUES('n2', @last)");
+        insert.AddParameterWithValue("@last", DbType.DateTime, DateTime.UtcNow);
+        await insert.ExecuteNonQueryAsync();
+
+        var loaded = await helper.RetrieveOneAsync(2);
+        Assert.NotNull(loaded);
+        loaded!.Name = "updated";
+
+        var container = await helper.BuildUpdateAsync(loaded, true);
+
+        Assert.NotNull(container);
     }
 }

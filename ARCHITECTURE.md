@@ -87,6 +87,8 @@ This document explains the internal design of pengdows.crud version 1.1 for deve
 
 **Key Insight**: Serialization happens at the **connection lock** (or transaction lock), not the context lock. See [Locking Strategy](#locking-strategy-two-level-locking).
 
+Outside of **SingleConnection**, read operations never reuse the writer connection; in **SingleWriter** mode reads always use ephemeral connections.
+
 ### TransactionContext Concurrency Model
 
 **TransactionContext uses two-level locking** for correctness:

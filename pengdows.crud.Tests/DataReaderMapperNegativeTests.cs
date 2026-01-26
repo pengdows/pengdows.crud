@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using pengdows.crud.fakeDb;
+using pengdows.crud.Tests.Logging;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -28,6 +30,75 @@ public class DataReaderMapperNegativeTests
         Assert.Single(result);
         Assert.Equal("Alice", result[0].Name);
         Assert.Equal(0, result[0].Age); // default due to failed conversion
+    }
+
+    [Fact]
+    public async Task LoadAsync_NonStrict_LogsMappingWarning()
+    {
+        var rows = new[]
+        {
+            new Dictionary<string, object>
+            {
+                ["Name"] = "Alice",
+                ["Age"] = "NaN",
+                ["IsActive"] = true
+            }
+        };
+
+        var loggerProvider = new ListLoggerProvider();
+        using var loggerFactory = new LoggerFactory(new[] { loggerProvider });
+        var logger = loggerFactory.CreateLogger("DataReaderMapper");
+        var originalLogger = TypeCoercionHelper.Logger;
+
+        try
+        {
+            TypeCoercionHelper.Logger = logger;
+            var reader = new fakeDbDataReader(rows);
+
+            await DataReaderMapper.LoadAsync<SampleEntity>(reader, MapperOptions.Default);
+        }
+        finally
+        {
+            TypeCoercionHelper.Logger = originalLogger;
+        }
+
+        Assert.Contains(loggerProvider.Entries,
+            entry => entry.Level == LogLevel.Warning && entry.Message.Contains("Failed to map column"));
+    }
+
+    [Fact]
+    public async Task LoadAsync_Strict_DoesNotLogMappingWarning()
+    {
+        var rows = new[]
+        {
+            new Dictionary<string, object>
+            {
+                ["Name"] = "Alice",
+                ["Age"] = "NaN",
+                ["IsActive"] = true
+            }
+        };
+
+        var loggerProvider = new ListLoggerProvider();
+        using var loggerFactory = new LoggerFactory(new[] { loggerProvider });
+        var logger = loggerFactory.CreateLogger("DataReaderMapper");
+        var originalLogger = TypeCoercionHelper.Logger;
+
+        try
+        {
+            TypeCoercionHelper.Logger = logger;
+            var reader = new fakeDbDataReader(rows);
+            var options = new MapperOptions(true);
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                DataReaderMapper.LoadAsync<SampleEntity>(reader, options));
+        }
+        finally
+        {
+            TypeCoercionHelper.Logger = originalLogger;
+        }
+
+        Assert.DoesNotContain(loggerProvider.Entries, entry => entry.Level == LogLevel.Warning);
     }
 
     [Fact]

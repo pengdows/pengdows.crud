@@ -19,7 +19,7 @@ want **full control** over SQL, **predictable behavior** across databases, and *
 
 ## ✅ Key Features
 
-- `EntityHelper<TEntity, TRowID>`: automatic CRUD with custom SQL injection points.
+- `TableGateway<TEntity, TRowID>`: automatic CRUD with custom SQL injection points (EntityHelper remains as a compatibility shim).
 - Full support for:
     - Enums
     - JSON
@@ -115,7 +115,7 @@ Instead, it helps you write **real SQL** that's:
 
 Topics include:
 
-- `EntityHelper<TEntity, TRowID>`
+- `TableGateway<TEntity, TRowID>` (EntityHelper remains as a compatibility shim)
 - `SqlContainer`
 - `DbMode` and connection management
 - Audit and UTC logging
@@ -137,5 +137,5 @@ using System.Data.SqlClient;
 using pengdows.crud;
 
 var db = new DatabaseContext("your-connection-string", SqlClientFactory.Instance);
-var helper = new EntityHelper<MyEntity, long>(db);
+var helper = new TableGateway<MyEntity, long>(db);
 ```

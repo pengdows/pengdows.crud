@@ -27,10 +27,23 @@ public class EntityHelperBuildWhereByPrimaryKeyTests : SqlLiteContextTestBase
         _helper.BuildWhereByPrimaryKey(list, sc, "t");
         var sql = sc.Query.ToString();
 
-        var pattern = "\\n WHERE \\(t\\.\"Name\" = @\\w+\\) OR \\(t\\.\"Name\" = @\\w+\\)";
+        var pattern = "\\n WHERE \\(\"t\"\\.\"Name\" = @\\w+\\) OR \\(\"t\"\\.\"Name\" = @\\w+\\)";
         Assert.Matches(pattern, sql);
         Assert.Equal(2, sc.ParameterCount);
         Assert.DoesNotContain(":", sql);
+    }
+
+    [Fact]
+    public void BuildWhereByPrimaryKey_WrapsAliasWhenProvided()
+    {
+        var sc = Context.CreateSqlContainer();
+        var list = new List<TestEntity> { new() { Name = "A" } };
+
+        _helper.BuildWhereByPrimaryKey(list, sc, "select");
+        var sql = sc.Query.ToString();
+
+        Assert.Contains("(\"select\".\"Name\" = @", sql);
+        Assert.DoesNotContain("(select.\"Name\"", sql);
     }
 
     [Fact]

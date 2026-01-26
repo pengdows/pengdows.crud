@@ -35,6 +35,25 @@ public class ReadWriteModeBehaviorTests
         };
         using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Sqlite));
         Assert.Equal(ReadWriteMode.ReadOnly, ctx.ReadWriteMode);
+        Assert.True(ctx.IsReadOnlyConnection);
         Assert.Throws<InvalidOperationException>(() => ctx.AssertIsWriteConnection());
+    }
+
+    [Fact]
+    public void SwitchingFromReadOnlyToReadWrite_EnablesReadAndWrite()
+    {
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test;EmulatedProduct=Sqlite",
+            ReadWriteMode = ReadWriteMode.ReadOnly
+        };
+        using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Sqlite));
+
+        ctx.ReadWriteMode = ReadWriteMode.ReadWrite;
+
+        Assert.Equal(ReadWriteMode.ReadWrite, ctx.ReadWriteMode);
+        Assert.False(ctx.IsReadOnlyConnection);
+        ctx.AssertIsReadConnection();
+        ctx.AssertIsWriteConnection();
     }
 }

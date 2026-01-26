@@ -14,25 +14,19 @@ namespace pengdows.crud;
 /// </summary>
 public partial class DatabaseContext
 {
-    /// <summary>
-    /// Gets a tracked connection for the specified execution type.
-    /// </summary>
+    /// <inheritdoc/>
     public ITrackedConnection GetConnection(ExecutionType executionType, bool isShared = false)
     {
         return _connectionStrategy.GetConnection(executionType, isShared);
     }
 
-    /// <summary>
-    /// Closes and disposes a tracked connection, returning it to the connection pool.
-    /// </summary>
+    /// <inheritdoc/>
     public void CloseAndDisposeConnection(ITrackedConnection? connection)
     {
         _connectionStrategy.ReleaseConnection(connection);
     }
 
-    /// <summary>
-    /// Asynchronously closes and disposes a tracked connection, returning it to the connection pool.
-    /// </summary>
+    /// <inheritdoc/>
     public async ValueTask CloseAndDisposeConnectionAsync(ITrackedConnection? connection)
     {
         await _connectionStrategy.ReleaseConnectionAsync(connection).ConfigureAwait(false);

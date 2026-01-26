@@ -98,9 +98,38 @@ public partial class EntityHelper<TEntity, TRowID>
             TypeCode.Double => (r, i) => r.GetDouble(i),
             TypeCode.Single => (r, i) => r.GetFloat(i),
             _ when fieldType == typeof(Guid) => (r, i) => r.GetGuid(i),
-            _ when fieldType == typeof(byte[]) => (r, i) => ((DbDataReader)r).GetFieldValue<byte[]>(i),
+            _ when fieldType == typeof(byte[]) => (r, i) => ReadBytes(r, i),
             _ => (r, i) => r.GetValue(i)
         };
+    }
+
+    private static byte[] ReadBytes(ITrackedReader reader, int ordinal)
+    {
+        var length = reader.GetBytes(ordinal, 0, null, 0, 0);
+        if (length <= 0)
+        {
+            return Array.Empty<byte>();
+        }
+
+        if (length > int.MaxValue)
+        {
+            throw new InvalidOperationException("Byte array length exceeds supported buffer size.");
+        }
+
+        var buffer = new byte[length];
+        var bytesRead = reader.GetBytes(ordinal, 0, buffer, 0, (int)length);
+        if (bytesRead == length)
+        {
+            return buffer;
+        }
+
+        if (bytesRead <= 0)
+        {
+            return Array.Empty<byte>();
+        }
+
+        Array.Resize(ref buffer, (int)bytesRead);
+        return buffer;
     }
 
     // Pre-compiled coercers - null if no coercion needed
