@@ -2,7 +2,9 @@
 
 using System;
 using System.Data;
+using System.Text;
 using System.Threading.Tasks;
+using System.Threading;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
@@ -21,6 +23,7 @@ public class EntityHelperIdPopulationTests
         _typeMap = new TypeMapRegistry();
         _typeMap.Register<TestEntityWithAutoId>();
         _typeMap.Register<TestEntityWithWritableId>();
+        _typeMap.Register<TestEntityWithGuidId>();
     }
 
     [Fact]
@@ -177,6 +180,218 @@ public class EntityHelperIdPopulationTests
         Assert.Equal(0, entity.Id); // ID should not be populated
     }
 
+    [Fact]
+    public void BuildCreateWithReturning_SqlServer_Places_Output_Before_Values()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory, _typeMap);
+        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+
+        var sc = helper.BuildCreateWithReturning(new TestEntityWithAutoId { Name = "Test Entity" }, true, context);
+        var sql = sc.Query.ToString();
+
+        var outputIndex = sql.IndexOf(" OUTPUT INSERTED.", StringComparison.Ordinal);
+        var valuesIndex = sql.IndexOf(" VALUES ", StringComparison.Ordinal);
+
+        Assert.True(outputIndex > 0);
+        Assert.True(valuesIndex > outputIndex);
+    }
+
+    [Fact]
+    public void BuildCreateWithReturning_Sqlite_Appends_Returning_After_Values()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory, _typeMap);
+        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+
+        var sc = helper.BuildCreateWithReturning(new TestEntityWithAutoId { Name = "Test Entity" }, true, context);
+        var sql = sc.Query.ToString();
+
+        var returningIndex = sql.IndexOf(" RETURNING ", StringComparison.Ordinal);
+        var valuesIndex = sql.IndexOf(" VALUES ", StringComparison.Ordinal);
+
+        Assert.True(returningIndex > 0);
+        Assert.True(returningIndex > valuesIndex);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithReturningGuidString_Populates_Guid_Id()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var guidString = Guid.NewGuid().ToString();
+        factory.SetScalarResult(guidString);
+        factory.SetNonQueryResult(1);
+
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory, _typeMap);
+        var helper = new EntityHelper<TestEntityWithGuidId, Guid>(context);
+        var entity = new TestEntityWithGuidId { Name = "Guid Entity" };
+
+        var result = await helper.CreateAsync(entity);
+
+        Assert.True(result);
+        Assert.Equal(Guid.Parse(guidString), entity.Id);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithCancellationToken_Uses_Returning_Value()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        factory.SetScalarResult(73);
+        factory.SetNonQueryResult(1);
+
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory, _typeMap);
+        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+        var entity = new TestEntityWithAutoId { Name = "Cancellation Test" };
+
+        var result = await helper.CreateAsync(entity, context, CancellationToken.None);
+
+        Assert.True(result);
+        Assert.Equal(73, entity.Id);
+    }
+
+    // ============================================================================
+    // SQL Syntax Verification Tests - Verify correct OUTPUT/RETURNING syntax per dialect
+    // ============================================================================
+
+    [Theory]
+    [InlineData(SupportedDatabase.SqlServer, "OUTPUT INSERTED.", true)]  // Before VALUES
+    [InlineData(SupportedDatabase.PostgreSql, " RETURNING ", false)]     // After VALUES
+    [InlineData(SupportedDatabase.Sqlite, " RETURNING ", false)]         // After VALUES
+    [InlineData(SupportedDatabase.Firebird, " RETURNING ", false)]       // After VALUES
+    public void BuildCreateWithReturning_GeneratesCorrectSyntaxForDialect(
+        SupportedDatabase provider, string expectedClause, bool beforeValues)
+    {
+        var factory = new fakeDbFactory(provider);
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={provider}", factory, _typeMap);
+        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+
+        var sc = helper.BuildCreateWithReturning(new TestEntityWithAutoId { Name = "Test" }, true, context);
+        var sql = sc.Query.ToString();
+
+        // Verify the expected clause is present
+        Assert.Contains(expectedClause, sql);
+
+        // Verify positioning relative to VALUES
+        var clauseIndex = sql.IndexOf(expectedClause, StringComparison.Ordinal);
+        var valuesIndex = sql.IndexOf("VALUES", StringComparison.Ordinal);
+
+        if (beforeValues)
+        {
+            Assert.True(clauseIndex < valuesIndex,
+                $"Expected {expectedClause} before VALUES for {provider}. SQL: {sql}");
+        }
+        else
+        {
+            Assert.True(clauseIndex > valuesIndex,
+                $"Expected {expectedClause} after VALUES for {provider}. SQL: {sql}");
+        }
+    }
+
+    [Theory]
+    [InlineData(SupportedDatabase.MySql)]
+    [InlineData(SupportedDatabase.Unknown)]
+    public void BuildCreateWithReturning_NoReturningClauseForUnsupportedDialects(SupportedDatabase provider)
+    {
+        var factory = new fakeDbFactory(provider);
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={provider}", factory, _typeMap);
+        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+
+        var sc = helper.BuildCreateWithReturning(new TestEntityWithAutoId { Name = "Test" }, true, context);
+        var sql = sc.Query.ToString();
+
+        // Should NOT contain OUTPUT or RETURNING
+        Assert.DoesNotContain("OUTPUT", sql);
+        Assert.DoesNotContain("RETURNING", sql);
+
+        // Should still be a valid INSERT statement
+        Assert.Contains("INSERT INTO", sql);
+        Assert.Contains("VALUES", sql);
+    }
+
+    [Fact]
+    public void BuildCreate_NeverContainsReturningClause()
+    {
+        // BuildCreate (without Returning) should never have OUTPUT or RETURNING
+        foreach (var provider in new[] { SupportedDatabase.SqlServer, SupportedDatabase.PostgreSql,
+            SupportedDatabase.Sqlite, SupportedDatabase.MySql })
+        {
+            var factory = new fakeDbFactory(provider);
+            var context = new DatabaseContext($"Data Source=test;EmulatedProduct={provider}", factory, _typeMap);
+            var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+
+            var sc = helper.BuildCreate(new TestEntityWithAutoId { Name = "Test" }, context);
+            var sql = sc.Query.ToString();
+
+            Assert.DoesNotContain("OUTPUT", sql);
+            Assert.DoesNotContain("RETURNING", sql);
+        }
+    }
+
+    // ============================================================================
+    // Fallback Behavior Tests - Databases without RETURNING support
+    // ============================================================================
+
+    [Fact]
+    public async Task CreateAsync_MySql_InsertsWithoutReturningClause()
+    {
+        // MySQL doesn't support RETURNING - INSERT succeeds but ID is not populated via RETURNING
+        var factory = new fakeDbFactory(SupportedDatabase.MySql);
+        factory.SetNonQueryResult(1);
+
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=MySql", factory, _typeMap);
+        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+        var entity = new TestEntityWithAutoId { Name = "MySQL Test" };
+
+        var result = await helper.CreateAsync(entity, context);
+
+        // INSERT should succeed
+        Assert.True(result);
+        // ID is NOT populated via RETURNING (MySQL doesn't support it)
+        // Application would need to use SELECT LAST_INSERT_ID() separately
+        Assert.Equal(0, entity.Id);
+    }
+
+    [Fact]
+    public async Task CreateAsync_Unknown_InsertsWithoutReturningClause()
+    {
+        // Unknown database - no RETURNING support
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
+        factory.SetNonQueryResult(1);
+
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=Unknown", factory, _typeMap);
+        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+        var entity = new TestEntityWithAutoId { Name = "Unknown DB Test" };
+
+        var result = await helper.CreateAsync(entity, context);
+
+        // INSERT should succeed but ID is not populated
+        Assert.True(result);
+        Assert.Equal(0, entity.Id);
+    }
+
+    [Theory]
+    [InlineData(SupportedDatabase.MySql)]
+    [InlineData(SupportedDatabase.Unknown)]
+    public void Dialect_SupportsInsertReturning_IsFalseForUnsupportedDatabases(SupportedDatabase provider)
+    {
+        var factory = new fakeDbFactory(provider);
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={provider}", factory, _typeMap);
+
+        Assert.False(context.Dialect.SupportsInsertReturning);
+    }
+
+    [Theory]
+    [InlineData(SupportedDatabase.SqlServer)]
+    [InlineData(SupportedDatabase.PostgreSql)]
+    [InlineData(SupportedDatabase.Firebird)]
+    public void Dialect_SupportsInsertReturning_IsTrueForSupportedDatabases(SupportedDatabase provider)
+    {
+        var factory = new fakeDbFactory(provider);
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={provider}", factory, _typeMap);
+
+        Assert.True(context.Dialect.SupportsInsertReturning);
+    }
+
     // Test entities for different ID scenarios
     [Table("test_auto_id")]
     public class TestEntityWithAutoId
@@ -184,6 +399,17 @@ public class EntityHelperIdPopulationTests
         [Id(writable: false)]
         [Column("id", DbType.Int32)]
         public int Id { get; set; }
+
+        [Column("name", DbType.String)]
+        public string Name { get; set; } = string.Empty;
+    }
+
+    [Table("test_guid_auto_id")]
+    public class TestEntityWithGuidId
+    {
+        [Id(writable: false)]
+        [Column("id", DbType.String)]
+        public Guid Id { get; set; }
 
         [Column("name", DbType.String)]
         public string Name { get; set; } = string.Empty;
