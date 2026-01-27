@@ -2,7 +2,9 @@
 
 using System;
 using System.Data;
+using System.Text;
 using System.Threading.Tasks;
+using System.Threading;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
@@ -21,6 +23,7 @@ public class EntityHelperIdPopulationTests
         _typeMap = new TypeMapRegistry();
         _typeMap.Register<TestEntityWithAutoId>();
         _typeMap.Register<TestEntityWithWritableId>();
+        _typeMap.Register<TestEntityWithGuidId>();
     }
 
     [Fact]
@@ -211,6 +214,70 @@ public class EntityHelperIdPopulationTests
         Assert.True(returningIndex > valuesIndex);
     }
 
+    [Fact]
+    public void InsertOutputClauseBeforeValues_Appends_When_Values_Token_Missing()
+    {
+        var query = new StringBuilder("INSERT INTO [test_table] SELECT 1");
+        var clause = " OUTPUT INSERTED.Id";
+
+        EntityHelper<TestEntityWithAutoId, int>.InsertOutputClauseBeforeValues(query, clause);
+
+        Assert.EndsWith(clause, query.ToString());
+    }
+
+    [Fact]
+    public void InsertOutputClauseBeforeValues_Ignores_Blank_Returning_Clause()
+    {
+        var query = new StringBuilder("INSERT INTO [test_table] VALUES (1)");
+        var original = query.ToString();
+
+        EntityHelper<TestEntityWithAutoId, int>.InsertOutputClauseBeforeValues(query, "   ");
+
+        Assert.Equal(original, query.ToString());
+    }
+
+    [Fact]
+    public void InsertOutputClauseBeforeValues_Throws_When_Query_Is_Null()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            EntityHelper<TestEntityWithAutoId, int>.InsertOutputClauseBeforeValues(null!, " OUTPUT INSERTED.Id"));
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithReturningGuidString_Populates_Guid_Id()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var guidString = Guid.NewGuid().ToString();
+        factory.SetScalarResult(guidString);
+        factory.SetNonQueryResult(1);
+
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory, _typeMap);
+        var helper = new EntityHelper<TestEntityWithGuidId, Guid>(context);
+        var entity = new TestEntityWithGuidId { Name = "Guid Entity" };
+
+        var result = await helper.CreateAsync(entity);
+
+        Assert.True(result);
+        Assert.Equal(Guid.Parse(guidString), entity.Id);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithCancellationToken_Uses_Returning_Value()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        factory.SetScalarResult(73);
+        factory.SetNonQueryResult(1);
+
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory, _typeMap);
+        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+        var entity = new TestEntityWithAutoId { Name = "Cancellation Test" };
+
+        var result = await helper.CreateAsync(entity, context, CancellationToken.None);
+
+        Assert.True(result);
+        Assert.Equal(73, entity.Id);
+    }
+
     // Test entities for different ID scenarios
     [Table("test_auto_id")]
     public class TestEntityWithAutoId
@@ -218,6 +285,17 @@ public class EntityHelperIdPopulationTests
         [Id(writable: false)]
         [Column("id", DbType.Int32)]
         public int Id { get; set; }
+
+        [Column("name", DbType.String)]
+        public string Name { get; set; } = string.Empty;
+    }
+
+    [Table("test_guid_auto_id")]
+    public class TestEntityWithGuidId
+    {
+        [Id(writable: false)]
+        [Column("id", DbType.String)]
+        public Guid Id { get; set; }
 
         [Column("name", DbType.String)]
         public string Name { get; set; } = string.Empty;

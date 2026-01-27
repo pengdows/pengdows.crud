@@ -566,7 +566,7 @@ public partial class EntityHelper<TEntity, TRowID> :
         return sc;
     }
 
-    private static void InsertOutputClauseBeforeValues(StringBuilder query, string returningClause)
+    internal static void InsertOutputClauseBeforeValues(StringBuilder query, string returningClause)
     {
         if (query == null)
         {
