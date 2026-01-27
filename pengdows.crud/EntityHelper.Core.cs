@@ -432,6 +432,22 @@ public partial class EntityHelper<TEntity, TRowID> :
 
     public ISqlContainer BuildCreate(TEntity entity, IDatabaseContext? context = null)
     {
+        var (sc, dialect, columns, placeholders) = PrepareInsertContainer(entity, context);
+        AppendInsertStatement(sc.Query, dialect, columns, placeholders);
+        return sc;
+    }
+
+    // Placeholders for identity-returning clauses in INSERT statements
+    private const string OutputClausePlaceholder = "{output}";      // SQL Server: OUTPUT INSERTED.id (before VALUES)
+    private const string ReturningClausePlaceholder = "{returning}"; // PostgreSQL/SQLite/etc: RETURNING id (after VALUES)
+
+    /// <summary>
+    /// Prepares the SqlContainer with parameters for an INSERT statement.
+    /// Returns the container, dialect, column names, and parameter placeholders.
+    /// </summary>
+    private (ISqlContainer sc, ISqlDialect dialect, List<string> columns, List<string> placeholders)
+        PrepareInsertContainer(TEntity entity, IDatabaseContext? context)
+    {
         if (entity == null)
         {
             throw new ArgumentNullException(nameof(entity));
@@ -441,7 +457,7 @@ public partial class EntityHelper<TEntity, TRowID> :
         var sc = ctx.CreateSqlContainer();
         var dialect = GetDialect(ctx);
         EnsureWritableIdHasValue(entity);
-        // Always attempt to set audit fields if they exist - validation will happen inside SetAuditFields
+
         if (_hasAuditColumns)
         {
             SetAuditFields(entity, false);
@@ -487,15 +503,38 @@ public partial class EntityHelper<TEntity, TRowID> :
             placeholders.Add(marker);
         }
 
-        sc.Query.Append("INSERT INTO ")
+        return (sc, dialect, columns, placeholders);
+    }
+
+    /// <summary>
+    /// Appends a plain INSERT statement (no identity clause).
+    /// </summary>
+    private void AppendInsertStatement(StringBuilder query, ISqlDialect dialect, List<string> columns, List<string> placeholders)
+    {
+        query.Append("INSERT INTO ")
             .Append(BuildWrappedTableName(dialect))
             .Append(" (")
             .Append(string.Join(", ", columns))
             .Append(") VALUES (")
             .Append(string.Join(", ", placeholders))
-            .Append(")");
+            .Append(')');
+    }
 
-        return sc;
+    /// <summary>
+    /// Appends an INSERT statement with identity clause placeholders.
+    /// </summary>
+    private void AppendInsertStatementWithPlaceholders(StringBuilder query, ISqlDialect dialect, List<string> columns, List<string> placeholders)
+    {
+        query.Append("INSERT INTO ")
+            .Append(BuildWrappedTableName(dialect))
+            .Append(" (")
+            .Append(string.Join(", ", columns))
+            .Append(')')
+            .Append(OutputClausePlaceholder)
+            .Append(" VALUES (")
+            .Append(string.Join(", ", placeholders))
+            .Append(')')
+            .Append(ReturningClausePlaceholder);
     }
 
     private void EnsureWritableIdHasValue(TEntity entity)
@@ -535,61 +574,41 @@ public partial class EntityHelper<TEntity, TRowID> :
     }
 
     /// <summary>
-    /// Builds an INSERT statement with optional RETURNING clause for identity capture.
+    /// Builds an INSERT statement with optional RETURNING/OUTPUT clause for identity capture.
+    /// Uses placeholder replacement for clean, predictable SQL generation.
     /// </summary>
     /// <param name="entity">Entity to insert</param>
-    /// <param name="withReturning">Whether to include RETURNING clause for identity</param>
+    /// <param name="withReturning">Whether to include RETURNING/OUTPUT clause for identity</param>
     /// <param name="context">Database context</param>
     /// <returns>SQL container with INSERT statement</returns>
     public ISqlContainer BuildCreateWithReturning(TEntity entity, bool withReturning, IDatabaseContext? context = null)
     {
-        var sc = BuildCreate(entity, context);
-        var ctx = context ?? _context;
-        var dialect = GetDialect(ctx);
-        
-        // Add RETURNING clause if requested and supported
+        var (sc, dialect, columns, placeholders) = PrepareInsertContainer(entity, context);
+
+        string outputClause = string.Empty;
+        string returningClause = string.Empty;
+
         if (withReturning && _idColumn != null && !_idColumn.IsIdIsWritable && dialect.SupportsInsertReturning)
         {
             var idWrapped = dialect.WrapObjectName(_idColumn.Name);
-            var returningClause = dialect.RenderInsertReturningClause(idWrapped);
-            switch (dialect.DatabaseType)
+            var clause = dialect.RenderInsertReturningClause(idWrapped);
+
+            if (dialect.DatabaseType == SupportedDatabase.SqlServer)
             {
-                case SupportedDatabase.SqlServer:
-                    InsertOutputClauseBeforeValues(sc.Query, returningClause);
-                    break;
-                default:
-                    sc.Query.Append(returningClause);
-                    break;
+                outputClause = clause;  // SQL Server: OUTPUT goes before VALUES
+            }
+            else
+            {
+                returningClause = clause;  // Others: RETURNING goes after VALUES
             }
         }
-        
+
+        // Build INSERT with placeholders, then replace them
+        AppendInsertStatementWithPlaceholders(sc.Query, dialect, columns, placeholders);
+        sc.Query.Replace(OutputClausePlaceholder, outputClause);
+        sc.Query.Replace(ReturningClausePlaceholder, returningClause);
+
         return sc;
-    }
-
-    internal static void InsertOutputClauseBeforeValues(StringBuilder query, string returningClause)
-    {
-        if (query == null)
-        {
-            throw new ArgumentNullException(nameof(query));
-        }
-
-        if (string.IsNullOrWhiteSpace(returningClause))
-        {
-            return;
-        }
-
-        const string valuesToken = " VALUES ";
-        var sql = query.ToString();
-        var valuesIndex = sql.IndexOf(valuesToken, StringComparison.Ordinal);
-
-        if (valuesIndex >= 0)
-        {
-            query.Insert(valuesIndex, returningClause);
-        }
-        else
-        {
-            query.Append(returningClause);
-        }
     }
 
     // moved to EntityHelper.Retrieve.cs
