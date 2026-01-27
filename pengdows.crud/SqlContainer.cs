@@ -29,7 +29,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     private readonly ISqlDialect _dialect;
 
     private readonly ILogger<ISqlContainer> _logger;
-    private readonly IDictionary<string, DbParameter> _parameters = new OrderedDictionary<string, DbParameter>();
+    private readonly IDictionary<string, DbParameter> _parameters = new pengdows.crud.collections.OrderedDictionary<string, DbParameter>();
     private int _outputParameterCount;
     private int _nextParameterId = -1;
     internal List<string> ParamSequence { get; } = new();
