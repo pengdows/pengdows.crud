@@ -177,6 +177,40 @@ public class EntityHelperIdPopulationTests
         Assert.Equal(0, entity.Id); // ID should not be populated
     }
 
+    [Fact]
+    public void BuildCreateWithReturning_SqlServer_Places_Output_Before_Values()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory, _typeMap);
+        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+
+        var sc = helper.BuildCreateWithReturning(new TestEntityWithAutoId { Name = "Test Entity" }, true, context);
+        var sql = sc.Query.ToString();
+
+        var outputIndex = sql.IndexOf(" OUTPUT INSERTED.", StringComparison.Ordinal);
+        var valuesIndex = sql.IndexOf(" VALUES ", StringComparison.Ordinal);
+
+        Assert.True(outputIndex > 0);
+        Assert.True(valuesIndex > outputIndex);
+    }
+
+    [Fact]
+    public void BuildCreateWithReturning_Sqlite_Appends_Returning_After_Values()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory, _typeMap);
+        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+
+        var sc = helper.BuildCreateWithReturning(new TestEntityWithAutoId { Name = "Test Entity" }, true, context);
+        var sql = sc.Query.ToString();
+
+        var returningIndex = sql.IndexOf(" RETURNING ", StringComparison.Ordinal);
+        var valuesIndex = sql.IndexOf(" VALUES ", StringComparison.Ordinal);
+
+        Assert.True(returningIndex > 0);
+        Assert.True(returningIndex > valuesIndex);
+    }
+
     // Test entities for different ID scenarios
     [Table("test_auto_id")]
     public class TestEntityWithAutoId

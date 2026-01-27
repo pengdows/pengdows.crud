@@ -552,10 +552,44 @@ public partial class EntityHelper<TEntity, TRowID> :
         {
             var idWrapped = dialect.WrapObjectName(_idColumn.Name);
             var returningClause = dialect.RenderInsertReturningClause(idWrapped);
-            sc.Query.Append(returningClause);
+            switch (dialect.DatabaseType)
+            {
+                case SupportedDatabase.SqlServer:
+                    InsertOutputClauseBeforeValues(sc.Query, returningClause);
+                    break;
+                default:
+                    sc.Query.Append(returningClause);
+                    break;
+            }
         }
         
         return sc;
+    }
+
+    private static void InsertOutputClauseBeforeValues(StringBuilder query, string returningClause)
+    {
+        if (query == null)
+        {
+            throw new ArgumentNullException(nameof(query));
+        }
+
+        if (string.IsNullOrWhiteSpace(returningClause))
+        {
+            return;
+        }
+
+        const string valuesToken = " VALUES ";
+        var sql = query.ToString();
+        var valuesIndex = sql.IndexOf(valuesToken, StringComparison.Ordinal);
+
+        if (valuesIndex >= 0)
+        {
+            query.Insert(valuesIndex, returningClause);
+        }
+        else
+        {
+            query.Append(returningClause);
+        }
     }
 
     // moved to EntityHelper.Retrieve.cs
