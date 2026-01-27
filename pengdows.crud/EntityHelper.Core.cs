@@ -548,18 +548,34 @@ public partial class EntityHelper<TEntity, TRowID> :
         return sc;
     }
 
-    private static void InsertReturningClauseBeforeValues(StringBuilder builder, string clause)
+    /// <summary>
+    /// Inserts the OUTPUT clause before the VALUES keyword for SQL Server.
+    /// SQL Server requires: INSERT INTO table (cols) OUTPUT INSERTED.id VALUES (values)
+    /// </summary>
+    internal static void InsertOutputClauseBeforeValues(StringBuilder query, string returningClause)
     {
-        const string marker = " VALUES (";
-        var text = builder.ToString();
-        var index = text.IndexOf(marker, StringComparison.Ordinal);
-        if (index < 0)
+        if (query == null)
         {
-            builder.Append(clause);
+            throw new ArgumentNullException(nameof(query));
+        }
+
+        if (string.IsNullOrWhiteSpace(returningClause))
+        {
             return;
         }
 
-        builder.Insert(index, clause);
+        const string valuesToken = " VALUES ";
+        var sql = query.ToString();
+        var valuesIndex = sql.IndexOf(valuesToken, StringComparison.Ordinal);
+
+        if (valuesIndex >= 0)
+        {
+            query.Insert(valuesIndex, returningClause);
+        }
+        else
+        {
+            query.Append(returningClause);
+        }
     }
 
     private void EnsureWritableIdHasValue(TEntity entity)
@@ -616,13 +632,15 @@ public partial class EntityHelper<TEntity, TRowID> :
         {
             var idWrapped = dialect.WrapObjectName(_idColumn.Name);
             var returningClause = dialect.RenderInsertReturningClause(idWrapped);
-            if (dialect.InsertReturningClauseBeforeValues)
+            // SQL Server requires OUTPUT clause to be positioned before VALUES
+            switch (dialect.DatabaseType)
             {
-                InsertReturningClauseBeforeValues(sc.Query, returningClause);
-            }
-            else
-            {
-                sc.Query.Append(returningClause);
+                case SupportedDatabase.SqlServer:
+                    InsertOutputClauseBeforeValues(sc.Query, returningClause);
+                    break;
+                default:
+                    sc.Query.Append(returningClause);
+                    break;
             }
         }
 

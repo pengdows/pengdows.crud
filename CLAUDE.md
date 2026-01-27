@@ -542,6 +542,81 @@ Use the lowest number (closest to Standard) possible for best results.
 - Isolation level management per database
 - Connection strategy patterns for different use cases
 
+### CRITICAL: TransactionContext vs TransactionScope
+
+**DO NOT USE `TransactionScope` WITH pengdows.crud. Use `TransactionContext` instead.**
+
+pengdows.crud uses its own `TransactionContext` (not .NET's `TransactionScope`) for transaction management. This is a deliberate design decision that aligns with the library's connection philosophy.
+
+#### Why TransactionScope Is Incompatible
+
+Using `TransactionScope` with pengdows.crud would cause serious problems:
+
+1. **Distributed transaction promotion** - pengdows.crud's "open late, close early" strategy means multiple operations = multiple connection opens. With `TransactionScope`, this triggers MSDTC (Microsoft Distributed Transaction Coordinator) promotion, which is slow, often disabled in cloud environments, and defeats the library's design goals.
+
+2. **Breaks connection management** - The per-operation connection pattern conflicts with ambient transactions that expect connections to stay enlisted.
+
+3. **Performance degradation** - The complete opposite of what the library is designed to achieve.
+
+#### The Smart Compromise: Dual Connection Strategy
+
+| Context | Connection Behavior | Rationale |
+|---------|---------------------|-----------|
+| Outside transaction | Open/close per operation | Pool efficiency, "open late, close early" |
+| Inside `TransactionContext` | Pinned for duration | Transactional correctness |
+
+This gives you the best of both worlds:
+- **Non-transactional work**: Maximum pool efficiency with per-operation connections
+- **Transactional work**: One pinned connection stays open for the transaction's lifetime
+
+#### How TransactionContext Works
+
+```csharp
+// Correct: Use TransactionContext
+await using var tx = await context.BeginTransaction();
+
+// All operations use the same pinned connection
+await helper.CreateAsync(entity1);
+await helper.CreateAsync(entity2);
+await helper.UpdateAsync(entity3);
+
+await tx.Commit(); // Or auto-rollback on dispose if not committed
+```
+
+#### TransactionContext Features
+
+- **Enforces minimum isolation levels** - READ COMMITTED for writes, REPEATABLE READ for reads
+- **Read/write mode enforcement** - Helps with CQRS patterns
+- **Auto-rollback on dispose** - If not explicitly committed, transaction rolls back
+- **Savepoint support** - For nested transaction-like behavior without actual nested transactions
+
+#### Savepoints Instead of Nested Transactions
+
+Nested transactions are not supported. Use savepoints for partial rollback scenarios:
+
+```csharp
+await using var tx = await context.BeginTransaction();
+
+// Initial work
+await helper.CreateAsync(order);
+
+// Create savepoint before risky operation
+await tx.SavepointAsync("before_risky_operation");
+
+try
+{
+    // Risky work that might fail
+    await helper.CreateAsync(riskyItem);
+}
+catch
+{
+    // Rollback only the risky part, keep the order
+    await tx.RollbackToSavepointAsync("before_risky_operation");
+}
+
+await tx.Commit(); // Order is committed, risky item is not (if it failed)
+```
+
 ## API Reference and Patterns
 
 **IMPORTANT:** All interfaces in `pengdows.crud.abstractions` now include comprehensive XML documentation with detailed descriptions, parameter explanations, usage examples, and code samples. When working with these interfaces, refer to the XML comments for complete API documentation and implementation guidance.

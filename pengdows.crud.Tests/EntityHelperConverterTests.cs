@@ -340,7 +340,7 @@ public class EntityHelperConverterTests : SqlLiteContextTestBase
             return _inner.GetOrdinal(name);
         }
 
-        public DataTable GetSchemaTable()
+        public DataTable? GetSchemaTable()
         {
             return _inner.GetSchemaTable();
         }
