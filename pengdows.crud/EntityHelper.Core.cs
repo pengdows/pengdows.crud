@@ -463,8 +463,23 @@ public partial class EntityHelper<TEntity, TRowID> :
     }
 
 
+    // Placeholders for identity-returning clauses in INSERT statements
+    private const string OutputClausePlaceholder = "{output}";      // SQL Server: OUTPUT INSERTED.id (before VALUES)
+    private const string ReturningClausePlaceholder = "{returning}"; // PostgreSQL/SQLite/etc: RETURNING id (after VALUES)
+
     /// <inheritdoc/>
     public ISqlContainer BuildCreate(TEntity entity, IDatabaseContext? context = null)
+    {
+        var (sc, _) = PrepareInsertContainer(entity, context, stripPlaceholders: true);
+        return sc;
+    }
+
+    /// <summary>
+    /// Prepares the SqlContainer with an INSERT statement.
+    /// When stripPlaceholders is true, identity clause placeholders are removed.
+    /// When false, placeholders remain for BuildCreateWithReturning to replace.
+    /// </summary>
+    private (ISqlContainer sc, ISqlDialect dialect) PrepareInsertContainer(TEntity entity, IDatabaseContext? context, bool stripPlaceholders)
     {
         if (entity == null)
         {
@@ -475,7 +490,7 @@ public partial class EntityHelper<TEntity, TRowID> :
         var sc = ctx.CreateSqlContainer();
         var dialect = GetDialect(ctx);
         EnsureWritableIdHasValue(entity);
-        // Always attempt to set audit fields if they exist - validation will happen inside SetAuditFields
+
         if (_hasAuditColumns)
         {
             SetAuditFields(entity, false);
@@ -524,7 +539,10 @@ public partial class EntityHelper<TEntity, TRowID> :
             sc.Query.Append(dialect.WrapObjectName(column.Name));
         }
 
-        sc.Query.Append(") VALUES (");
+        // Insert OUTPUT placeholder (for SQL Server) between column list and VALUES
+        sc.Query.Append(')')
+            .Append(OutputClausePlaceholder)
+            .Append(" VALUES (");
 
         for (var i = 0; i < template.InsertColumns.Count; i++)
         {
@@ -543,39 +561,17 @@ public partial class EntityHelper<TEntity, TRowID> :
             sc.Query.Append(marker);
         }
 
-        sc.Query.Append(")");
+        // Insert RETURNING placeholder (for PostgreSQL/SQLite/etc) after VALUES
+        sc.Query.Append(')')
+            .Append(ReturningClausePlaceholder);
 
-        return sc;
-    }
-
-    /// <summary>
-    /// Inserts the OUTPUT clause before the VALUES keyword for SQL Server.
-    /// SQL Server requires: INSERT INTO table (cols) OUTPUT INSERTED.id VALUES (values)
-    /// </summary>
-    internal static void InsertOutputClauseBeforeValues(StringBuilder query, string returningClause)
-    {
-        if (query == null)
+        if (stripPlaceholders)
         {
-            throw new ArgumentNullException(nameof(query));
+            sc.Query.Replace(OutputClausePlaceholder, string.Empty);
+            sc.Query.Replace(ReturningClausePlaceholder, string.Empty);
         }
 
-        if (string.IsNullOrWhiteSpace(returningClause))
-        {
-            return;
-        }
-
-        const string valuesToken = " VALUES ";
-        var sql = query.ToString();
-        var valuesIndex = sql.IndexOf(valuesToken, StringComparison.Ordinal);
-
-        if (valuesIndex >= 0)
-        {
-            query.Insert(valuesIndex, returningClause);
-        }
-        else
-        {
-            query.Append(returningClause);
-        }
+        return (sc, dialect);
     }
 
     private void EnsureWritableIdHasValue(TEntity entity)
@@ -615,34 +611,38 @@ public partial class EntityHelper<TEntity, TRowID> :
     }
 
     /// <summary>
-    /// Builds an INSERT statement with optional RETURNING clause for identity capture.
+    /// Builds an INSERT statement with optional RETURNING/OUTPUT clause for identity capture.
+    /// Uses placeholder replacement for clean, predictable SQL generation.
     /// </summary>
     /// <param name="entity">Entity to insert</param>
-    /// <param name="withReturning">Whether to include RETURNING clause for identity</param>
+    /// <param name="withReturning">Whether to include RETURNING/OUTPUT clause for identity</param>
     /// <param name="context">Database context</param>
     /// <returns>SQL container with INSERT statement</returns>
     public ISqlContainer BuildCreateWithReturning(TEntity entity, bool withReturning, IDatabaseContext? context = null)
     {
-        var sc = BuildCreate(entity, context);
-        var ctx = context ?? _context;
-        var dialect = GetDialect(ctx);
+        var (sc, dialect) = PrepareInsertContainer(entity, context, stripPlaceholders: false);
 
-        // Add RETURNING clause if requested and supported
+        string outputClause = string.Empty;
+        string returningClause = string.Empty;
+
         if (withReturning && _idColumn != null && !_idColumn.IsIdIsWritable && dialect.SupportsInsertReturning)
         {
             var idWrapped = dialect.WrapObjectName(_idColumn.Name);
-            var returningClause = dialect.RenderInsertReturningClause(idWrapped);
-            // SQL Server requires OUTPUT clause to be positioned before VALUES
-            switch (dialect.DatabaseType)
+            var clause = dialect.RenderInsertReturningClause(idWrapped);
+
+            if (dialect.DatabaseType == SupportedDatabase.SqlServer)
             {
-                case SupportedDatabase.SqlServer:
-                    InsertOutputClauseBeforeValues(sc.Query, returningClause);
-                    break;
-                default:
-                    sc.Query.Append(returningClause);
-                    break;
+                outputClause = clause;  // SQL Server: OUTPUT goes before VALUES
+            }
+            else
+            {
+                returningClause = clause;  // Others: RETURNING goes after VALUES
             }
         }
+
+        // Replace placeholders with actual clauses (or empty strings)
+        sc.Query.Replace(OutputClausePlaceholder, outputClause);
+        sc.Query.Replace(ReturningClausePlaceholder, returningClause);
 
         return sc;
     }

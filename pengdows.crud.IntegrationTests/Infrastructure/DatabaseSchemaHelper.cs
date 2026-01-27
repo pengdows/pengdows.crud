@@ -11,6 +11,8 @@ internal static class DatabaseSchemaHelper
         "test_table",
         "order_items",
         "user_roles",
+        "user_info_temp",
+        "returning_test",
         "merge_records",
         "versioned_entities",
         "audited_entity",

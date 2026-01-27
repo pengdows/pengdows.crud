@@ -1,5 +1,6 @@
 using System;
 using System.Data;
+using System.Threading;
 using System.Threading.Tasks;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
@@ -9,8 +10,8 @@ using Xunit;
 namespace pengdows.crud.Tests;
 
 /// <summary>
-/// Tests for SQL Server INT IDENTITY with OUTPUT clause positioning.
-/// Regression test for GitHub issue #137.
+/// Tests for INSERT identity population across different scenarios and dialects.
+/// Includes SQL Server OUTPUT clause positioning (regression test for GitHub issue #137).
 /// </summary>
 #pragma warning disable CS0618 // EntityHelper is obsolete
 public class SqlServerIdentityOutputClauseTests
@@ -21,6 +22,9 @@ public class SqlServerIdentityOutputClauseTests
     {
         _typeMap = new TypeMapRegistry();
         _typeMap.Register<UserInfoEntity>();
+        _typeMap.Register<TestEntityWithAutoId>();
+        _typeMap.Register<TestEntityWithWritableId>();
+        _typeMap.Register<TestEntityWithGuidId>();
     }
 
     /// <summary>
@@ -218,69 +222,271 @@ public class SqlServerIdentityOutputClauseTests
         Assert.Contains("VALUES", afterOutput);
     }
 
-    [Fact]
-    public void InsertOutputClauseBeforeValues_InsertsAtCorrectPosition()
-    {
-        // Arrange - simulate typical INSERT statement
-        var builder = new System.Text.StringBuilder("INSERT INTO \"t\" (\"c1\", \"c2\") VALUES (@p0, @p1)");
-        var outputClause = " OUTPUT INSERTED.\"id\"";
-
-        // Act
-        EntityHelper<UserInfoEntity, int>.InsertOutputClauseBeforeValues(builder, outputClause);
-        var result = builder.ToString();
-
-        // Assert - OUTPUT should appear between column list and VALUES
-        Assert.Contains("OUTPUT INSERTED.\"id\"", result);
-        Assert.Contains("VALUES", result);
-
-        // Verify order: closing paren, then OUTPUT, then VALUES
-        var closeParenIndex = result.IndexOf(')');
-        var outputIndex = result.IndexOf("OUTPUT");
-        var valuesIndex = result.IndexOf("VALUES");
-
-        Assert.True(closeParenIndex < outputIndex, "Closing paren must come before OUTPUT");
-        Assert.True(outputIndex < valuesIndex, "OUTPUT must come before VALUES");
-
-        // Verify the exact expected format
-        Assert.Equal("INSERT INTO \"t\" (\"c1\", \"c2\") OUTPUT INSERTED.\"id\" VALUES (@p0, @p1)", result);
-    }
+    // ============================================================================
+    // Broader ID Population Tests (ported from 1.0 EntityHelperIdPopulationTests)
+    // ============================================================================
 
     [Fact]
-    public void InsertOutputClauseBeforeValues_WhenNoValuesFound_AppendsToEnd()
-    {
-        // Arrange - malformed SQL without VALUES
-        var builder = new System.Text.StringBuilder("INSERT INTO \"t\" (\"c1\")");
-        var outputClause = " OUTPUT INSERTED.\"id\"";
-
-        // Act
-        EntityHelper<UserInfoEntity, int>.InsertOutputClauseBeforeValues(builder, outputClause);
-        var result = builder.ToString();
-
-        // Assert - should append to end as fallback
-        Assert.EndsWith(outputClause, result);
-    }
-
-    [Fact]
-    public void InsertOutputClauseBeforeValues_WithEmptyClause_DoesNotModify()
+    public async Task CreateAsync_Should_Populate_Generated_Id_For_Auto_Increment_Column()
     {
         // Arrange
-        var original = "INSERT INTO \"t\" (\"c1\") VALUES (@p0)";
-        var builder = new System.Text.StringBuilder(original);
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        factory.SetIdPopulationResult(42, rowsAffected: 1);
+
+        var context = new DatabaseContext("test", factory, _typeMap);
+        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+        var entity = new TestEntityWithAutoId { Name = "Test Entity" };
 
         // Act
-        EntityHelper<UserInfoEntity, int>.InsertOutputClauseBeforeValues(builder, "");
-        var result = builder.ToString();
+        var result = await helper.CreateAsync(entity);
 
-        // Assert - should be unchanged
-        Assert.Equal(original, result);
+        // Assert
+        Assert.True(result);
+        Assert.Equal(42, entity.Id);
     }
 
     [Fact]
-    public void InsertOutputClauseBeforeValues_WithNullBuilder_ThrowsArgumentNullException()
+    public async Task CreateAsync_Should_Not_Populate_Id_For_Writable_Id_Column()
     {
+        // Arrange
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var context = new DatabaseContext("test", factory, _typeMap);
+        var helper = new EntityHelper<TestEntityWithWritableId, int>(context);
+
+        factory.SetNonQueryResult(1);
+
+        var entity = new TestEntityWithWritableId { Id = 100, Name = "Test Entity" };
+
+        // Act
+        var result = await helper.CreateAsync(entity);
+
+        // Assert
+        Assert.True(result);
+        Assert.Equal(100, entity.Id); // ID should remain unchanged
+    }
+
+    [Fact]
+    public void CreateAsync_Should_Throw_For_Entity_Without_Id_Column()
+    {
+        // Arrange
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var context = new DatabaseContext("test", factory, _typeMap);
+
+        // Assert: constructing helper should fail due to missing [Id]/[PrimaryKey]
+        Assert.Throws<InvalidOperationException>(() => new EntityHelper<TestEntityWithoutId, int>(context));
+    }
+
+    [Fact]
+    public async Task CreateAsync_Should_Handle_Dialect_With_Returning_Populates_Id()
+    {
+        // Arrange - Use Sqlite which uses RETURNING clause
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory, _typeMap);
+        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+
+        factory.SetNonQueryResult(1);
+        factory.SetScalarResult(42);
+
+        var entity = new TestEntityWithAutoId { Name = "Test Entity" };
+
+        // Act
+        var result = await helper.CreateAsync(entity);
+
+        // Assert
+        Assert.True(result);
+        Assert.Equal(42, entity.Id);
+    }
+
+    [Fact]
+    public async Task CreateAsync_Should_Handle_Null_Generated_Id_Result()
+    {
+        // Arrange
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        var context = new DatabaseContext("test", factory, _typeMap);
+        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+
+        factory.SetNonQueryResult(1);
+        factory.SetScalarResult(null);
+
+        var entity = new TestEntityWithAutoId { Name = "Test Entity" };
+
+        // Act
+        var result = await helper.CreateAsync(entity);
+
+        // Assert
+        Assert.True(result);
+        Assert.Equal(0, entity.Id); // Should handle null gracefully
+    }
+
+    [Fact]
+    public async Task CreateAsync_Should_Handle_Database_Exception_During_Id_Population()
+    {
+        // Arrange
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        factory.SetException(new InvalidOperationException("Database connection lost"));
+
+        var context = new DatabaseContext("test", factory, _typeMap);
+        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+
+        factory.SetNonQueryResult(1);
+
+        var entity = new TestEntityWithAutoId { Name = "Test Entity" };
+
         // Act & Assert
-        Assert.Throws<ArgumentNullException>(() =>
-            EntityHelper<UserInfoEntity, int>.InsertOutputClauseBeforeValues(null!, " OUTPUT x"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => helper.CreateAsync(entity));
+    }
+
+    [Fact]
+    public async Task CreateAsync_Should_Not_Attempt_Id_Population_When_Insert_Fails()
+    {
+        // Arrange
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=Unknown", factory, _typeMap);
+        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+
+        factory.SetNonQueryResult(0); // Insert fails
+
+        var entity = new TestEntityWithAutoId { Name = "Test Entity" };
+
+        // Act
+        var result = await helper.CreateAsync(entity);
+
+        // Assert
+        Assert.False(result);
+        Assert.Equal(0, entity.Id);
+    }
+
+    [Fact]
+    public async Task CreateAsync_Should_Handle_Multiple_Rows_Affected_Gracefully()
+    {
+        // Arrange
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=Unknown", factory, _typeMap);
+        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+
+        factory.SetNonQueryResult(2); // Multiple rows affected
+
+        var entity = new TestEntityWithAutoId { Name = "Test Entity" };
+
+        // Act
+        var result = await helper.CreateAsync(entity);
+
+        // Assert
+        Assert.False(result);
+        Assert.Equal(0, entity.Id);
+    }
+
+    [Fact]
+    public void BuildCreateWithReturning_SqlServer_Places_Output_Before_Values()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory, _typeMap);
+        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+
+        var sc = helper.BuildCreateWithReturning(new TestEntityWithAutoId { Name = "Test Entity" }, true, context);
+        var sql = sc.Query.ToString();
+
+        var outputIndex = sql.IndexOf(" OUTPUT INSERTED.", StringComparison.Ordinal);
+        var valuesIndex = sql.IndexOf(" VALUES ", StringComparison.Ordinal);
+
+        Assert.True(outputIndex > 0);
+        Assert.True(valuesIndex > outputIndex);
+    }
+
+    [Fact]
+    public void BuildCreateWithReturning_Sqlite_Appends_Returning_After_Values()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory, _typeMap);
+        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+
+        var sc = helper.BuildCreateWithReturning(new TestEntityWithAutoId { Name = "Test Entity" }, true, context);
+        var sql = sc.Query.ToString();
+
+        var returningIndex = sql.IndexOf(" RETURNING ", StringComparison.Ordinal);
+        var valuesIndex = sql.IndexOf(" VALUES ", StringComparison.Ordinal);
+
+        Assert.True(returningIndex > 0);
+        Assert.True(returningIndex > valuesIndex);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithReturningGuidString_Populates_Guid_Id()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var guidString = Guid.NewGuid().ToString();
+        factory.SetScalarResult(guidString);
+        factory.SetNonQueryResult(1);
+
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory, _typeMap);
+        var helper = new EntityHelper<TestEntityWithGuidId, Guid>(context);
+        var entity = new TestEntityWithGuidId { Name = "Guid Entity" };
+
+        var result = await helper.CreateAsync(entity);
+
+        Assert.True(result);
+        Assert.Equal(Guid.Parse(guidString), entity.Id);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithCancellationToken_Uses_Returning_Value()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        factory.SetScalarResult(73);
+        factory.SetNonQueryResult(1);
+
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory, _typeMap);
+        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+        var entity = new TestEntityWithAutoId { Name = "Cancellation Test" };
+
+        var result = await helper.CreateAsync(entity, context, CancellationToken.None);
+
+        Assert.True(result);
+        Assert.Equal(73, entity.Id);
+    }
+
+    // ============================================================================
+    // Test Entities
+    // ============================================================================
+
+    [Table("test_auto_id")]
+    public class TestEntityWithAutoId
+    {
+        [Id(writable: false)]
+        [Column("id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [Column("name", DbType.String)]
+        public string Name { get; set; } = string.Empty;
+    }
+
+    [Table("test_guid_auto_id")]
+    public class TestEntityWithGuidId
+    {
+        [Id(writable: false)]
+        [Column("id", DbType.String)]
+        public Guid Id { get; set; }
+
+        [Column("name", DbType.String)]
+        public string Name { get; set; } = string.Empty;
+    }
+
+    [Table("test_writable_id")]
+    public class TestEntityWithWritableId
+    {
+        [Id(writable: true)]
+        [Column("id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [Column("name", DbType.String)]
+        public string Name { get; set; } = string.Empty;
+    }
+
+    [Table("test_no_id")]
+    public class TestEntityWithoutId
+    {
+        [Column("name", DbType.String)]
+        public string Name { get; set; } = string.Empty;
     }
 }
 #pragma warning restore CS0618
