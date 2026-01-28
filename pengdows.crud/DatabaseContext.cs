@@ -452,6 +452,7 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
     }
     public string QuotePrefix => _dialect.QuotePrefix;
     public string QuoteSuffix => _dialect.QuoteSuffix;
+    public bool SupportsInsertReturning => _dialect.SupportsInsertReturning;
     public bool? ForceManualPrepare => _forceManualPrepare;
     public bool? DisablePrepare => _disablePrepare;
 

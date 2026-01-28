@@ -12,15 +12,28 @@ using Xunit.Abstractions;
 
 namespace pengdows.crud.IntegrationTests.DatabaseSpecific;
 
+/// <summary>
+/// Integration tests for INSERT with identity population across different database providers.
+/// Tests both RETURNING-capable providers (SqlServer, PostgreSQL, SQLite, Firebird, Oracle)
+/// and non-RETURNING providers (MySQL).
+/// </summary>
 public class InsertReturningTests : DatabaseTestBase
 {
     private const string TableName = "returning_test";
+
+    // Providers that support RETURNING/OUTPUT clause
     private static readonly SupportedDatabase[] ReturningProviders =
     {
         SupportedDatabase.Sqlite,
         SupportedDatabase.PostgreSql,
         SupportedDatabase.SqlServer,
         SupportedDatabase.Firebird
+    };
+
+    // Providers that do NOT support RETURNING (INSERT works, but ID not populated inline)
+    private static readonly SupportedDatabase[] NonReturningProviders =
+    {
+        SupportedDatabase.MySql
     };
 
     public InsertReturningTests(ITestOutputHelper output) : base(output)
@@ -30,6 +43,8 @@ public class InsertReturningTests : DatabaseTestBase
     protected override IEnumerable<SupportedDatabase> GetSupportedProviders()
     {
         var providers = ReturningProviders.ToList();
+        providers.AddRange(NonReturningProviders);
+
         if (ShouldIncludeOracle())
         {
             providers.Add(SupportedDatabase.Oracle);
@@ -51,7 +66,14 @@ public class InsertReturningTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            context.TypeMapRegistry.Register<ReturningEntity>();
+            // Skip non-RETURNING providers in this test
+            if (NonReturningProviders.Contains(provider))
+            {
+                Output.WriteLine($"Skipping {provider} - does not support RETURNING clause");
+                return;
+            }
+
+            ((TypeMapRegistry)context.TypeMapRegistry).Register<ReturningEntity>();
             var helper = new EntityHelper<ReturningEntity, long>(context);
             var entity = new ReturningEntity
             {
@@ -60,13 +82,72 @@ public class InsertReturningTests : DatabaseTestBase
 
             var created = await helper.CreateAsync(entity, context);
             Assert.True(created);
-            Assert.True(entity.Id > 0);
+            Assert.True(entity.Id > 0, $"Expected ID > 0 for {provider}, got {entity.Id}");
 
             var retrieved = await helper.RetrieveOneAsync(entity.Id, context);
             Assert.NotNull(retrieved);
             Assert.Equal(entity.Name, retrieved!.Name);
 
             await VerifyRowExistsAsync(context, entity.Name);
+
+            Output.WriteLine($"{provider}: ID populated via RETURNING/OUTPUT = {entity.Id}");
+        });
+    }
+
+    [Fact]
+    public async Task CreateAsync_NonReturningProviders_InsertsSuccessfully()
+    {
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            // Only test non-RETURNING providers
+            if (!NonReturningProviders.Contains(provider))
+            {
+                return;
+            }
+
+            ((TypeMapRegistry)context.TypeMapRegistry).Register<ReturningEntity>();
+            var helper = new EntityHelper<ReturningEntity, long>(context);
+            var uniqueName = $"noreturning-{provider}-{Guid.NewGuid():N}";
+            var entity = new ReturningEntity
+            {
+                Name = uniqueName
+            };
+
+            var created = await helper.CreateAsync(entity, context);
+
+            // INSERT should succeed
+            Assert.True(created, $"INSERT should succeed for {provider}");
+
+            // Row should exist in database (verify via raw SQL)
+            await VerifyRowExistsAsync(context, uniqueName);
+
+            // Note: ID may or may not be populated depending on provider's fallback mechanism
+            Output.WriteLine($"{provider}: INSERT succeeded, ID = {entity.Id} (may be 0 if no RETURNING support)");
+        });
+    }
+
+    [Fact]
+    public async Task VerifyDialect_SupportsInsertReturning_MatchesExpectation()
+    {
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            var supportsReturning = context.SupportsInsertReturning;
+            var expectedSupport = ReturningProviders.Contains(provider) ||
+                                  provider == SupportedDatabase.Oracle;
+
+            if (NonReturningProviders.Contains(provider))
+            {
+                Assert.False(supportsReturning,
+                    $"{provider} should NOT support INSERT RETURNING");
+            }
+            else if (expectedSupport)
+            {
+                Assert.True(supportsReturning,
+                    $"{provider} should support INSERT RETURNING");
+            }
+
+            Output.WriteLine($"{provider}: SupportsInsertReturning = {supportsReturning}");
+            await Task.CompletedTask;
         });
     }
 
@@ -105,6 +186,11 @@ CREATE TABLE {table} (
 CREATE TABLE {table} (
     id NUMBER GENERATED BY DEFAULT ON NULL AS IDENTITY PRIMARY KEY,
     name VARCHAR2(255) NOT NULL
+);",
+            SupportedDatabase.MySql => $@"
+CREATE TABLE {table} (
+    `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+    `name` VARCHAR(255) NOT NULL
 );",
             _ => throw new NotSupportedException($"Provider {provider} is not supported by this test")
         };

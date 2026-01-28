@@ -105,6 +105,11 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     bool SupportsNamedParameters => DataSourceInfo.SupportsNamedParameters;
 
     /// <summary>
+    /// True if the provider supports INSERT ... RETURNING or OUTPUT clause for identity retrieval.
+    /// </summary>
+    bool SupportsInsertReturning { get; }
+
+    /// <summary>
     /// Prefix used for quoting identifiers.
     /// </summary>
     string QuotePrefix { get; }

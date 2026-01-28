@@ -188,6 +188,8 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
 
     public string QuoteSuffix => _dialect.QuoteSuffix;
 
+    public bool SupportsInsertReturning => _dialect.SupportsInsertReturning;
+
     public bool? ForceManualPrepare => _context.ForceManualPrepare;
 
     public bool? DisablePrepare => _context.DisablePrepare;
