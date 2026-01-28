@@ -608,16 +608,27 @@ public sealed class OrderedDictionary<TKey, TValue> :
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static uint FastMod(uint value, uint divisor, ulong multiplier)
+    internal static uint FastMod(uint value, uint divisor, ulong multiplier)
     {
+        Debug.Assert(divisor != 0);
+
         var quotient = (uint)((multiplier * value) >> 32);
-        return value - quotient * divisor;
+        var prod = (ulong)quotient * divisor;
+
+        if (value < prod)
+        {
+            quotient--;
+            prod -= divisor;
+        }
+
+        return (uint)(value - prod);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static ulong GetFastModMultiplier(uint divisor)
+    internal static ulong GetFastModMultiplier(uint divisor)
     {
-        return ulong.MaxValue / divisor + 1;
+        Debug.Assert(divisor != 0);
+        return (1UL << 32) / divisor + 1;
     }
 
     private static int GetPrime(int min)
@@ -689,30 +700,18 @@ public sealed class OrderedDictionary<TKey, TValue> :
             if (_version != _d._version) ThrowInvalidOperationException();
 
             var needed = _d.Count;
-            var limit = _d.IsHashMode ? _d._orderTail : needed;
-
-            for (; _yielded < needed && _orderScan < limit; _orderScan++)
+            if (_yielded >= needed)
             {
-                int idx;
-                if (_d.IsHashMode)
-                {
-                    var ip1 = _d._insertionOrder[_orderScan];
-                    if (ip1 == 0)
-                    {
-                        continue;
-                    }
+                _current = default;
+                _yielded = needed + 1;
+                return false;
+            }
 
-                    idx = ip1 - 1;
-                }
-                else
-                {
-                    idx = _orderScan;
-                }
-
+            if (_d.TryGetNextIndex(ref _orderScan, out var idx))
+            {
                 ref var e = ref _d._entries[idx];
                 _current = new KeyValuePair<TKey, TValue>(e.Key, e.Value);
                 _yielded++;
-                _orderScan++;
                 return true;
             }
 
@@ -863,29 +862,17 @@ public sealed class OrderedDictionary<TKey, TValue> :
             if (_version != _d._version) ThrowInvalidOperationException();
 
             var needed = _d.Count;
-            var limit = _d.IsHashMode ? _d._orderTail : needed;
-
-            for (; _yielded < needed && _orderScan < limit; _orderScan++)
+            if (_yielded >= needed)
             {
-                int idx;
-                if (_d.IsHashMode)
-                {
-                    var ip1 = _d._insertionOrder[_orderScan];
-                    if (ip1 == 0)
-                    {
-                        continue;
-                    }
+                _current = default!;
+                _yielded = needed + 1;
+                return false;
+            }
 
-                    idx = ip1 - 1;
-                }
-                else
-                {
-                    idx = _orderScan;
-                }
-
+            if (_d.TryGetNextIndex(ref _orderScan, out var idx))
+            {
                 _current = _d._entries[idx].Key;
                 _yielded++;
-                _orderScan++;
                 return true;
             }
 
@@ -934,29 +921,17 @@ public sealed class OrderedDictionary<TKey, TValue> :
             if (_version != _d._version) ThrowInvalidOperationException();
 
             var needed = _d.Count;
-            var limit = _d.IsHashMode ? _d._orderTail : needed;
-
-            for (; _yielded < needed && _orderScan < limit; _orderScan++)
+            if (_yielded >= needed)
             {
-                int idx;
-                if (_d.IsHashMode)
-                {
-                    var ip1 = _d._insertionOrder[_orderScan];
-                    if (ip1 == 0)
-                    {
-                        continue;
-                    }
+                _current = default!;
+                _yielded = needed + 1;
+                return false;
+            }
 
-                    idx = ip1 - 1;
-                }
-                else
-                {
-                    idx = _orderScan;
-                }
-
+            if (_d.TryGetNextIndex(ref _orderScan, out var idx))
+            {
                 _current = _d._entries[idx].Value;
                 _yielded++;
-                _orderScan++;
                 return true;
             }
 

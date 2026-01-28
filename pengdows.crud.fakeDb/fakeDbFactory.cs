@@ -1,6 +1,9 @@
 #region
 
+using System;
+using System.Collections.Generic;
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using pengdows.crud.enums;
 
 #endregion
@@ -24,6 +27,8 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
 
     // Shared data store across all connections from this factory
     private readonly FakeDataStore _sharedDataStore = new();
+    private readonly Dictionary<string, Exception> _sharedCommandFailures =
+        new(StringComparer.OrdinalIgnoreCase);
 
     private fakeDbFactory()
     {
@@ -81,6 +86,7 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
 
             // Apply data persistence setting from factory
             pre.EnableDataPersistence = EnableDataPersistence;
+            pre.SetFactoryReference(this);
             _createdConnections.Add(pre);
             return pre;
         }
@@ -124,6 +130,7 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
         // Apply data persistence setting from factory
         c.EnableDataPersistence = EnableDataPersistence;
 
+        c.SetFactoryReference(this);
         _createdConnections.Add(c);
         return c;
     }
@@ -136,6 +143,18 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
     public void SetGlobalPersistentScalarException(Exception? exception)
     {
         _globalPersistentScalarException = exception;
+    }
+
+    public void SetCommandFailure(string commandText, Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(commandText);
+        ArgumentNullException.ThrowIfNull(exception);
+        _sharedCommandFailures[commandText] = exception;
+    }
+
+    internal bool TryGetCommandFailure(string commandText, [NotNullWhen(true)] out Exception? exception)
+    {
+        return _sharedCommandFailures.TryGetValue(commandText, out exception);
     }
 
     public override DbParameter CreateParameter()

@@ -282,6 +282,22 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         _factoryRef = null;
     }
 
+    internal bool TryGetCommandFailure(string commandText, [NotNullWhen(true)] out Exception? exception)
+    {
+        if (CommandFailuresByText.TryGetValue(commandText, out exception))
+        {
+            return true;
+        }
+
+        if (_factoryRef?.TryGetCommandFailure(commandText, out exception) == true)
+        {
+            return true;
+        }
+
+        exception = null;
+        return false;
+    }
+
     IReadOnlyCollection<IEnumerable<Dictionary<string, object>>> IFakeDbConnection.RemainingReaderResults
     {
         get

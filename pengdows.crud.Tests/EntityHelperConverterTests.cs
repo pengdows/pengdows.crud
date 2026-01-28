@@ -4,6 +4,7 @@ using System.Data;
 using System.Threading;
 using System.Threading.Tasks;
 using pengdows.crud.attributes;
+using pengdows.crud.exceptions;
 using pengdows.crud.fakeDb;
 using pengdows.crud.wrappers;
 using Xunit;
@@ -113,7 +114,7 @@ public class EntityHelperConverterTests : SqlLiteContextTestBase
         using var reader = CreateThrowingReader(new byte[] { 1, 2, 3 });
         reader.Read();
 
-        Assert.Throws<InvalidOperationException>(() => helper.MapReaderToObject(reader));
+        Assert.Throws<InvalidValueException>(() => helper.MapReaderToObject(reader));
     }
 
     [Table("EnumEntity")]

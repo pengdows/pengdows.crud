@@ -113,8 +113,10 @@ public class EntityHelperAdditionalBranchTests : SqlLiteContextTestBase
         await using var failing = ConnectionFailureHelper.CreateFailOnCommandContext(customException: dbException);
         var helper = new EntityHelper<BranchEntity, int>((IDatabaseContext)failing, AuditValueResolver);
         var e = new BranchEntity { Id = 1, Name = "x" };
-        var ex = await Assert.ThrowsAsync<DbException>(() => helper.BuildUpdateAsync(e, true));
-        Assert.Contains("Simulated database error", ex.Message);
+        var ex = await Record.ExceptionAsync(() => helper.BuildUpdateAsync(e, true));
+        Assert.NotNull(ex);
+        Assert.IsAssignableFrom<DbException>(ex);
+        Assert.Contains("Simulated database error", ex!.Message);
     }
 
     [Fact]
@@ -136,7 +138,7 @@ public class EntityHelperAdditionalBranchTests : SqlLiteContextTestBase
     }
 
     [Fact]
-    public async Task BuildUpdateAsync_AuditOnlyChange_Throws()
+    public async Task BuildUpdateAsync_AuditOnlyChange_IncludesAuditColumns()
     {
         var helper = new EntityHelper<AuditBranchEntity, int>(Context, AuditValueResolver);
         var qp = Context.QuotePrefix;
@@ -149,7 +151,9 @@ public class EntityHelperAdditionalBranchTests : SqlLiteContextTestBase
         var loaded = await helper.RetrieveOneAsync(1);
         Assert.NotNull(loaded);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => helper.BuildUpdateAsync(loaded!, true));
+        var sc = await helper.BuildUpdateAsync(loaded!, true);
+        var sql = sc.Query.ToString();
+        Assert.Contains(Context.WrapObjectName("LastUpdatedOn"), sql);
     }
 
     [Fact]

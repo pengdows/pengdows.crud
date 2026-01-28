@@ -16,7 +16,7 @@ using Xunit.Abstractions;
 namespace pengdows.crud.Tests;
 
 [Collection("TypeRegistry")]
-public class TypeCoercionHelperExtensiveTests
+public class TypeCoercionHelperExtensiveTests : IDisposable
 {
     private readonly ITestOutputHelper _output;
     private readonly TestLogger _logger;
@@ -26,6 +26,12 @@ public class TypeCoercionHelperExtensiveTests
         _output = output;
         _logger = new TestLogger(_output);
         TypeCoercionHelper.Logger = _logger;
+    }
+
+    public void Dispose()
+    {
+        // Reset to NullLogger to avoid stale ITestOutputHelper references
+        TypeCoercionHelper.Logger = NullLogger.Instance;
     }
 
     #region Logger Testing

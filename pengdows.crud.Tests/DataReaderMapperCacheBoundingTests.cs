@@ -16,6 +16,7 @@ namespace pengdows.crud.Tests;
 /// Tests to validate that DataReaderMapper caches are bounded and evict entries
 /// to prevent unbounded memory growth with varied query shapes.
 /// </summary>
+[Collection("MapperCacheSerial")]
 public class DataReaderMapperCacheBoundingTests
 {
     [Fact]

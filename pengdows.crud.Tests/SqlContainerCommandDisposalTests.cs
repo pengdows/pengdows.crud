@@ -14,7 +14,9 @@ public class SqlContainerCommandDisposalTests
     {
         var typeMap = new TypeMapRegistry();
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var initConnection = new fakeDbConnection();
         var connection = new fakeDbConnection();
+        factory.Connections.Add(initConnection);
         factory.Connections.Add(connection);
 
         await using var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory, typeMap);
@@ -47,7 +49,7 @@ public class SqlContainerCommandDisposalTests
         await using var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory, typeMap);
         await using var container = context.CreateSqlContainer("SELECT 1");
 
-        connection.SetCommandFailure("SELECT 1", new InvalidOperationException("fail"));
+        factory.SetCommandFailure("SELECT 1", new InvalidOperationException("fail"));
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => container.ExecuteReaderAsync());
 

@@ -282,7 +282,7 @@ public class ConnectionStrategyTests
     [Fact]
     public void StandardSharedConnections_UseRealLockers()
     {
-        using var ctx = CreateContext(DbMode.Standard, SupportedDatabase.Sqlite, "file.db");
+        using var ctx = CreateContext(DbMode.Standard, SupportedDatabase.SqlServer);
         var connection = ctx.GetConnection(ExecutionType.Read, true);
 
         using var locker = connection.GetLock();

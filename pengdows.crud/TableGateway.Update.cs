@@ -60,18 +60,16 @@ public partial class TableGateway<TEntity, TRowID>
 
         var template = GetTemplatesForDialect(dialect);
 
+        if (_hasAuditColumns)
+        {
+            SetAuditFields(objectToUpdate, true);
+        }
+
         var counters = new ClauseCounters();
         var (setClause, parameters) = BuildSetClause(objectToUpdate, original, dialect, counters);
         if (setClause.Length == 0)
         {
             throw new InvalidOperationException("No changes detected for update.");
-        }
-
-        if (_hasAuditColumns)
-        {
-            SetAuditFields(objectToUpdate, true);
-            counters = new ClauseCounters();
-            (setClause, parameters) = BuildSetClause(objectToUpdate, original, dialect, counters);
         }
 
         if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))

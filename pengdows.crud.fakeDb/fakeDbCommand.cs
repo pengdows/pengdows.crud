@@ -96,8 +96,7 @@ public class fakeDbCommand : DbCommand
             throw ex;
         }
 
-        if (conn != null && !string.IsNullOrEmpty(CommandText) &&
-            conn.CommandFailuresByText.TryGetValue(CommandText, out var exNonQuery))
+        if (TryGetCommandFailure(conn, CommandText, out var exNonQuery))
         {
             throw exNonQuery;
         }
@@ -143,8 +142,7 @@ public class fakeDbCommand : DbCommand
                 throw ex;
             }
 
-            if (!string.IsNullOrEmpty(CommandText) &&
-                conn.CommandFailuresByText.TryGetValue(CommandText, out var exScalar))
+            if (TryGetCommandFailure(conn, CommandText, out var exScalar))
             {
                 throw exScalar;
             }
@@ -278,8 +276,7 @@ public class fakeDbCommand : DbCommand
     {
         ThrowIfShouldFail(nameof(ExecuteDbDataReader));
         var conn = FakeConnection;
-        if (conn != null && !string.IsNullOrEmpty(CommandText) &&
-            conn.CommandFailuresByText.TryGetValue(CommandText, out var exReader))
+        if (TryGetCommandFailure(conn, CommandText, out var exReader))
         {
             throw exReader;
         }
@@ -338,6 +335,17 @@ public class fakeDbCommand : DbCommand
     {
         WasDisposed = true;
         base.Dispose(disposing);
+    }
+
+    private static bool TryGetCommandFailure(fakeDbConnection? conn, string? commandText, out Exception? failure)
+    {
+        failure = null;
+        if (string.IsNullOrEmpty(commandText))
+        {
+            return false;
+        }
+
+        return conn?.TryGetCommandFailure(commandText, out failure) == true;
     }
 
     private static IEnumerable<Dictionary<string, object>> ConvertRows(IEnumerable<Dictionary<string, object?>> rows)

@@ -15,7 +15,9 @@ public class SqlContainerStoredProcedureWrappingTests
     {
         var typeMap = new TypeMapRegistry();
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var initConnection = new fakeDbConnection();
         var connection = new fakeDbConnection();
+        factory.Connections.Add(initConnection);
         factory.Connections.Add(connection);
 
         await using var context = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory, typeMap);
@@ -33,7 +35,7 @@ public class SqlContainerStoredProcedureWrappingTests
         Assert.NotNull(command);
         Assert.Equal(CommandType.Text, command!.CommandType);
         Assert.Single(connection.ExecutedReaderTexts);
-        Assert.Equal("EXEC [my_proc] @param1", connection.ExecutedReaderTexts[0]);
+        Assert.Equal("EXEC \"my_proc\" @param1", connection.ExecutedReaderTexts[0]);
 
         await reader.DisposeAsync();
     }
