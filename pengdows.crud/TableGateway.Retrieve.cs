@@ -6,7 +6,7 @@ using pengdows.crud.@internal;
 
 namespace pengdows.crud;
 
-public partial class EntityHelper<TEntity, TRowID>
+public partial class TableGateway<TEntity, TRowID>
 {
     /// <inheritdoc/>
     public ISqlContainer BuildBaseRetrieve(string alias, IDatabaseContext? context = null)

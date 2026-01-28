@@ -22,23 +22,19 @@ using pengdows.crud.wrappers;
 namespace pengdows.crud;
 
 /// <summary>
+/// Primary SQL-first CRUD gateway for table-mapped entities.
 /// Provides SQL generation and CRUD operations for entities mapped to database tables.
 /// </summary>
 /// <typeparam name="TEntity">The entity type to operate on.</typeparam>
 /// <typeparam name="TRowID">The row ID type (must be primitive integer, Guid, or string).</typeparam>
 /// <remarks>
-/// <para><strong>Version 2.0 Breaking Change:</strong></para>
 /// <para>
-/// <c>EntityHelper&lt;TEntity, TRowID&gt;</c> has been renamed to <c>TableGateway&lt;TEntity, TRowID&gt;</c> to better
-/// reflect its role as the primary SQL generation and execution API. This type remains as a compatibility shim.
+/// This is the primary table gateway API. The legacy <c>EntityHelper&lt;TEntity, TRowID&gt;</c>
+/// type remains as a compatibility shim that inherits from this class.
 /// </para>
 /// </remarks>
-#pragma warning disable CS0618
-[Obsolete("EntityHelper is obsolete. Use TableGateway<TEntity, TRowID> instead.", false)]
-public partial class EntityHelper<TEntity, TRowID> :
-    ITableGateway<TEntity, TRowID>,
-    IEntityHelper<TEntity, TRowID> where TEntity : class, new()
-#pragma warning restore CS0618
+public partial class TableGateway<TEntity, TRowID> :
+    ITableGateway<TEntity, TRowID> where TEntity : class, new()
 {
     // Cache for compiled property setters
     private static readonly ConcurrentDictionary<PropertyInfo, Action<object, object?>> _propertySetters = new();
@@ -54,7 +50,7 @@ public partial class EntityHelper<TEntity, TRowID> :
         set => _logger = value ?? NullLogger.Instance;
     }
 
-    static EntityHelper()
+    static TableGateway()
     {
         ValidateRowIdType();
     }
@@ -145,7 +141,7 @@ public partial class EntityHelper<TEntity, TRowID> :
 
 
     // Unified constructor accepting optional audit resolver and optional logger (by name)
-    public EntityHelper(IDatabaseContext databaseContext,
+    public TableGateway(IDatabaseContext databaseContext,
         IAuditValueResolver? auditValueResolver = null,
         EnumParseFailureMode enumParseBehavior = EnumParseFailureMode.Throw,
         ILogger? logger = null)
@@ -1157,7 +1153,7 @@ public partial class EntityHelper<TEntity, TRowID> :
 
     // moved to EntityHelper.Retrieve.cs
 
-    private IReadOnlyList<IColumnInfo> GetCachedInsertableColumns()
+    internal IReadOnlyList<IColumnInfo> GetCachedInsertableColumns()
     {
         if (_columnListCache.TryGet("Insertable", out var cached))
         {
@@ -1171,7 +1167,7 @@ public partial class EntityHelper<TEntity, TRowID> :
         return _columnListCache.GetOrAdd("Insertable", _ => insertable);
     }
 
-    private IReadOnlyList<IColumnInfo> GetCachedUpdatableColumns()
+    internal IReadOnlyList<IColumnInfo> GetCachedUpdatableColumns()
     {
         if (_columnListCache.TryGet("Updatable", out var cached))
         {

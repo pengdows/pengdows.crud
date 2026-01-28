@@ -7,7 +7,7 @@ using pengdows.crud.wrappers;
 
 namespace pengdows.crud;
 
-public partial class EntityHelper<TEntity, TRowID>
+public partial class TableGateway<TEntity, TRowID>
 {
     public TEntity MapReaderToObject(ITrackedReader reader)
     {
@@ -83,7 +83,7 @@ public partial class EntityHelper<TEntity, TRowID>
     }
 
     // Pre-compiled value extractors for optimal performance
-    private static Func<ITrackedReader, int, object?> BuildValueExtractor(Type fieldType)
+    internal static Func<ITrackedReader, int, object?> BuildValueExtractor(Type fieldType)
     {
         return Type.GetTypeCode(fieldType) switch
         {

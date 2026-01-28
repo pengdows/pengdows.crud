@@ -46,7 +46,7 @@ public class CachedSqlTemplatesTests : IAsyncLifetime
 
         // Build create twice with same helper to verify template reuse within instance
         var sc1 = helper1.BuildCreate(entity1);
-        var field = typeof(EntityHelper<TestEntity, int>).GetField("_templatesByDialect",
+        var field = typeof(TableGateway<TestEntity, int>).GetField("_templatesByDialect",
             BindingFlags.Instance | BindingFlags.NonPublic)!;
         var dialectCache1 = field.GetValue(helper1) as IDictionary;
         var initialCacheCount = dialectCache1!.Count;
@@ -91,7 +91,7 @@ public class CachedSqlTemplatesTests : IAsyncLifetime
         // Build update twice with same helper to verify template reuse within instance
         await helper1.BuildUpdateAsync(entity1, false);
 
-        var field = typeof(EntityHelper<TestEntity, int>).GetField("_templatesByDialect",
+        var field = typeof(TableGateway<TestEntity, int>).GetField("_templatesByDialect",
             BindingFlags.Instance | BindingFlags.NonPublic)!;
         var dialectCache1 = field.GetValue(helper1) as IDictionary;
         var initialCacheCount = dialectCache1!.Count;

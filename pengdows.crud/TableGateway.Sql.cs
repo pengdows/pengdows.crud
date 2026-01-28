@@ -3,7 +3,7 @@ using pengdows.crud.dialects;
 
 namespace pengdows.crud;
 
-public partial class EntityHelper<TEntity, TRowID>
+public partial class TableGateway<TEntity, TRowID>
 {
     private class CachedSqlTemplates
     {

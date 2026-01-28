@@ -198,7 +198,7 @@ public class QueryCacheTests : SqlLiteContextTestBase
         helper.BuildBaseRetrieve("a0");
         var cache = GetQueryCache(helper);
 
-        var limit = (int)typeof(EntityHelper<CacheEntity, int>)
+        var limit = (int)typeof(TableGateway<CacheEntity, int>)
             .GetField("MaxCacheSize", BindingFlags.NonPublic | BindingFlags.Static)!
             .GetValue(null)!;
 
@@ -231,10 +231,10 @@ public class QueryCacheTests : SqlLiteContextTestBase
         Assert.True(cache.ContainsKey("DeleteById"));
     }
 
-    private static ConcurrentDictionary<string, string> GetQueryCache<TEntity, TId>(EntityHelper<TEntity, TId> helper)
+    private static ConcurrentDictionary<string, string> GetQueryCache<TEntity, TId>(TableGateway<TEntity, TId> helper)
         where TEntity : class, new()
     {
-        var field = typeof(EntityHelper<TEntity, TId>)
+        var field = typeof(TableGateway<TEntity, TId>)
             .GetField("_queryCache", BindingFlags.NonPublic | BindingFlags.Instance);
         var cache = field!.GetValue(helper)!;
         var mapField = cache.GetType().GetField("_map", BindingFlags.NonPublic | BindingFlags.Instance);

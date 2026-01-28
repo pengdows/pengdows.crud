@@ -1,6 +1,6 @@
 namespace pengdows.crud;
 
-public partial class EntityHelper<TEntity, TRowID>
+public partial class TableGateway<TEntity, TRowID>
 {
     private const int MaxCacheSize = 100;
 

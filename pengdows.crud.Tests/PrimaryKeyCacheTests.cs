@@ -37,9 +37,9 @@ public class PrimaryKeyCacheTests : SqlLiteContextTestBase
     public void GetPrimaryKeys_NoKeys_Throws()
     {
         TypeMap.Register<IdOnlyEntity>();
-        var helper = new EntityHelper<IdOnlyEntity, int>(Context);
+        var helper = new TableGateway<IdOnlyEntity, int>(Context);
         var method =
-            typeof(EntityHelper<IdOnlyEntity, int>).GetMethod("GetPrimaryKeys",
+            typeof(TableGateway<IdOnlyEntity, int>).GetMethod("GetPrimaryKeys",
                 BindingFlags.NonPublic | BindingFlags.Instance);
         var ex = Assert.Throws<TargetInvocationException>(() => method!.Invoke(helper, null));
         Assert.Contains("No primary keys found", ex.InnerException?.Message);

@@ -7,7 +7,7 @@ using pengdows.crud.@internal;
 
 namespace pengdows.crud;
 
-public partial class EntityHelper<TEntity, TRowID>
+public partial class TableGateway<TEntity, TRowID>
 {
     /// <inheritdoc/>
     public Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null)
@@ -206,7 +206,7 @@ public partial class EntityHelper<TEntity, TRowID>
         return (clause, parameters);
     }
 
-    private static bool ValuesAreEqual(object? newValue, object? originalValue, DbType dbType)
+    internal static bool ValuesAreEqual(object? newValue, object? originalValue, DbType dbType)
     {
         if (newValue == null && originalValue == null)
         {
@@ -252,7 +252,7 @@ public partial class EntityHelper<TEntity, TRowID>
         };
     }
 
-    private static DateTimeOffset NormalizeDateTimeOffset(object value)
+    internal static DateTimeOffset NormalizeDateTimeOffset(object value)
     {
         switch (value)
         {

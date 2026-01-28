@@ -2,7 +2,7 @@ using System.Globalization;
 
 namespace pengdows.crud;
 
-public partial class EntityHelper<TEntity, TRowID>
+public partial class TableGateway<TEntity, TRowID>
 {
     /// <summary>
     /// Type-safe coercion for audit field values (handles string to Guid, etc.)

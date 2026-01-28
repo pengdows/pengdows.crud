@@ -12,7 +12,7 @@ public class EntityHelperObsoleteTests
         var attr = GetObsoleteAttribute();
 
         Assert.NotNull(attr);
-        Assert.Contains("ITableGateway", attr!.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("TableGateway", attr!.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

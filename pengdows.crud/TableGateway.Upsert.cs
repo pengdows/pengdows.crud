@@ -5,7 +5,7 @@ using pengdows.crud.enums;
 
 namespace pengdows.crud;
 
-public partial class EntityHelper<TEntity, TRowID>
+public partial class TableGateway<TEntity, TRowID>
 {
     /// <inheritdoc/>
     public Task<int> UpsertAsync(TEntity entity, IDatabaseContext? context = null)

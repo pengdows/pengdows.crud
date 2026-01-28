@@ -1,8 +1,6 @@
 #region
 
-using System.Collections.Generic;
 using System.Data;
-using System.Reflection;
 using pengdows.crud.attributes;
 using Xunit;
 
@@ -16,11 +14,9 @@ public class ColumnListCacheTests : SqlLiteContextTestBase
     public void GetInsertableColumns_CachesList()
     {
         TypeMap.Register<CacheTestEntity>();
-        var helper = new EntityHelper<CacheTestEntity, int>(Context);
-        var method = typeof(EntityHelper<CacheTestEntity, int>).GetMethod("GetCachedInsertableColumns",
-            BindingFlags.NonPublic | BindingFlags.Instance);
-        var first = (IReadOnlyList<IColumnInfo>)method!.Invoke(helper, null)!;
-        var second = (IReadOnlyList<IColumnInfo>)method.Invoke(helper, null)!;
+        var helper = new TableGateway<CacheTestEntity, int>(Context);
+        var first = helper.GetCachedInsertableColumns();
+        var second = helper.GetCachedInsertableColumns();
         Assert.Contains(first, c => c.Name == "Name");
         Assert.DoesNotContain(first, c => c.Name == "NoInsert" || c.Name == "Id");
         Assert.Same(first, second);
@@ -30,11 +26,9 @@ public class ColumnListCacheTests : SqlLiteContextTestBase
     public void GetInsertableColumns_NoInsertables_ReturnsEmpty()
     {
         TypeMap.Register<OnlyNonInsertEntity>();
-        var helper = new EntityHelper<OnlyNonInsertEntity, int>(Context);
-        var method = typeof(EntityHelper<OnlyNonInsertEntity, int>).GetMethod("GetCachedInsertableColumns",
-            BindingFlags.NonPublic | BindingFlags.Instance);
-        var first = (IReadOnlyList<IColumnInfo>)method!.Invoke(helper, null)!;
-        var second = (IReadOnlyList<IColumnInfo>)method.Invoke(helper, null)!;
+        var helper = new TableGateway<OnlyNonInsertEntity, int>(Context);
+        var first = helper.GetCachedInsertableColumns();
+        var second = helper.GetCachedInsertableColumns();
         Assert.Empty(first);
         Assert.Same(first, second);
     }
@@ -43,11 +37,9 @@ public class ColumnListCacheTests : SqlLiteContextTestBase
     public void GetUpdatableColumns_CachesList()
     {
         TypeMap.Register<CacheTestEntity>();
-        var helper = new EntityHelper<CacheTestEntity, int>(Context);
-        var method = typeof(EntityHelper<CacheTestEntity, int>).GetMethod("GetCachedUpdatableColumns",
-            BindingFlags.NonPublic | BindingFlags.Instance);
-        var first = (IReadOnlyList<IColumnInfo>)method!.Invoke(helper, null)!;
-        var second = (IReadOnlyList<IColumnInfo>)method.Invoke(helper, null)!;
+        var helper = new TableGateway<CacheTestEntity, int>(Context);
+        var first = helper.GetCachedUpdatableColumns();
+        var second = helper.GetCachedUpdatableColumns();
         Assert.Contains(first, c => c.Name == "Name");
         Assert.Contains(first, c => c.Name == "NoInsert");
         Assert.DoesNotContain(first, c => c.Name == "Immutable" || c.Name == "Id" || c.Name == "Version");
@@ -58,11 +50,9 @@ public class ColumnListCacheTests : SqlLiteContextTestBase
     public void GetUpdatableColumns_NoUpdatables_ReturnsEmpty()
     {
         TypeMap.Register<OnlyNonUpdateEntity>();
-        var helper = new EntityHelper<OnlyNonUpdateEntity, int>(Context);
-        var method = typeof(EntityHelper<OnlyNonUpdateEntity, int>).GetMethod("GetCachedUpdatableColumns",
-            BindingFlags.NonPublic | BindingFlags.Instance);
-        var first = (IReadOnlyList<IColumnInfo>)method!.Invoke(helper, null)!;
-        var second = (IReadOnlyList<IColumnInfo>)method.Invoke(helper, null)!;
+        var helper = new TableGateway<OnlyNonUpdateEntity, int>(Context);
+        var first = helper.GetCachedUpdatableColumns();
+        var second = helper.GetCachedUpdatableColumns();
         Assert.Empty(first);
         Assert.Same(first, second);
     }
