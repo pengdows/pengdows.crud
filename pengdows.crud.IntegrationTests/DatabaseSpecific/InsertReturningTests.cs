@@ -70,7 +70,7 @@ public class InsertReturningTests : DatabaseTestBase
                 return;
             }
 
-            context.TypeMapRegistry.Register<ReturningEntity>();
+            ((TypeMapRegistry)context.TypeMapRegistry).Register<ReturningEntity>();
             var helper = new EntityHelper<ReturningEntity, long>(context);
             var entity = new ReturningEntity
             {
@@ -102,7 +102,7 @@ public class InsertReturningTests : DatabaseTestBase
                 return;
             }
 
-            context.TypeMapRegistry.Register<ReturningEntity>();
+            ((TypeMapRegistry)context.TypeMapRegistry).Register<ReturningEntity>();
             var helper = new EntityHelper<ReturningEntity, long>(context);
             var uniqueName = $"noreturning-{provider}-{Guid.NewGuid():N}";
             var entity = new ReturningEntity
@@ -128,7 +128,7 @@ public class InsertReturningTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            var supportsReturning = context.Dialect.SupportsInsertReturning;
+            var supportsReturning = context.SupportsInsertReturning;
 
             if (NonReturningProviders.Contains(provider))
             {

@@ -223,6 +223,8 @@ public partial class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     /// <inheritdoc/>
     public string QuoteSuffix => _dialect.QuoteSuffix;
     /// <inheritdoc/>
+    public bool SupportsInsertReturning => _dialect.SupportsInsertReturning;
+    /// <inheritdoc/>
     public bool? ForceManualPrepare => _forceManualPrepare;
     /// <inheritdoc/>
     public bool? DisablePrepare => _disablePrepare;

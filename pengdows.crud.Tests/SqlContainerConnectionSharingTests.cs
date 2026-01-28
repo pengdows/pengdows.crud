@@ -93,6 +93,7 @@ public class SqlContainerConnectionSharingTests
         public bool? DisablePrepare => _context.DisablePrepare;
         public string QuotePrefix => _context.QuotePrefix;
         public string QuoteSuffix => _context.QuoteSuffix;
+        public bool SupportsInsertReturning => _context.SupportsInsertReturning;
         public string CompositeIdentifierSeparator => _context.CompositeIdentifierSeparator;
         public bool IsReadOnlyConnection => _context.IsReadOnlyConnection;
         public bool RCSIEnabled => _context.RCSIEnabled;
