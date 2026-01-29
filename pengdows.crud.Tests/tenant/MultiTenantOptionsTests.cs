@@ -11,6 +11,7 @@ public class MultiTenantOptionsTests
     {
         var options = new MultiTenantOptions();
 
+        Assert.Equal(string.Empty, options.ApplicationName);
         Assert.NotNull(options.Tenants);
         Assert.Empty(options.Tenants);
         Assert.IsType<List<TenantConfiguration>>(options.Tenants);
@@ -83,5 +84,16 @@ public class MultiTenantOptionsTests
 
         Assert.Same(originalList, options.Tenants);
         Assert.Single(options.Tenants);
+    }
+
+    [Fact]
+    public void ApplicationName_CanBeSet()
+    {
+        var options = new MultiTenantOptions
+        {
+            ApplicationName = "app-core"
+        };
+
+        Assert.Equal("app-core", options.ApplicationName);
     }
 }

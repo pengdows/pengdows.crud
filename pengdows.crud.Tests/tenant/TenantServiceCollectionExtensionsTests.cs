@@ -16,10 +16,10 @@ public class TenantServiceCollectionExtensionsTests
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["MultiTenant:Tenants:0:Name"] = "a",
-                ["MultiTenant:Tenants:0:DatabaseContextConfiguration:ProviderName"] = "fake-a",
+                ["MultiTenant:Tenants:0:DatabaseContextConfiguration:ProviderName"] = "Microsoft.Data.Sqlite",
                 ["MultiTenant:Tenants:0:DatabaseContextConfiguration:ConnectionString"] = "Server=A;",
                 ["MultiTenant:Tenants:1:Name"] = "b",
-                ["MultiTenant:Tenants:1:DatabaseContextConfiguration:ProviderName"] = "fake-b",
+                ["MultiTenant:Tenants:1:DatabaseContextConfiguration:ProviderName"] = "Microsoft.Data.Sqlite",
                 ["MultiTenant:Tenants:1:DatabaseContextConfiguration:ConnectionString"] = "Server=B;"
             })
             .Build();
@@ -38,5 +38,33 @@ public class TenantServiceCollectionExtensionsTests
         Assert.Equal("Server=B;", resolver.GetDatabaseContextConfiguration("b").ConnectionString);
         Assert.NotNull(contextRegistry);
         Assert.Equal(2, options.Value.Tenants.Count);
+    }
+
+    [Fact]
+    public void AddMultiTenancy_ComposesApplicationNameForTenants()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["MultiTenant:ApplicationName"] = "core-app",
+                ["MultiTenant:Tenants:0:Name"] = "a",
+                ["MultiTenant:Tenants:0:DatabaseContextConfiguration:ProviderName"] = "Microsoft.Data.Sqlite",
+                ["MultiTenant:Tenants:0:DatabaseContextConfiguration:ConnectionString"] = "Server=A;",
+                ["MultiTenant:Tenants:1:Name"] = "b",
+                ["MultiTenant:Tenants:1:DatabaseContextConfiguration:ProviderName"] = "Microsoft.Data.Sqlite",
+                ["MultiTenant:Tenants:1:DatabaseContextConfiguration:ConnectionString"] = "Server=B;"
+            })
+            .Build();
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddMultiTenancy(config);
+
+        using var provider = services.BuildServiceProvider();
+
+        var resolver = provider.GetRequiredService<ITenantConnectionResolver>();
+
+        Assert.Equal("core-app:a", resolver.GetDatabaseContextConfiguration("a").ApplicationName);
+        Assert.Equal("core-app:b", resolver.GetDatabaseContextConfiguration("b").ApplicationName);
     }
 }

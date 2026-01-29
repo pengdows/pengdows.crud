@@ -24,7 +24,7 @@ public static class TenantServiceCollectionExtensions
         services.Configure<MultiTenantOptions>(configuration.GetSection("MultiTenant"));
 
         var resolver = new TenantConnectionResolver();
-        resolver.Register(options.Tenants);
+        resolver.Register(options);
 
         services.AddSingleton<ITenantConnectionResolver>(resolver);
         services.AddSingleton<ITenantContextRegistry, TenantContextRegistry>();
