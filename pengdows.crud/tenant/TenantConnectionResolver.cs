@@ -91,7 +91,38 @@ public class TenantConnectionResolver : ITenantConnectionResolver
             throw new ArgumentNullException(nameof(options));
         }
 
-        Register(options.Tenants);
+        var baseApp = options.ApplicationName?.Trim();
+        if (string.IsNullOrWhiteSpace(baseApp))
+        {
+            Register(options.Tenants);
+            return;
+        }
+
+        foreach (var tenant in options.Tenants)
+        {
+            if (tenant == null)
+            {
+                continue;
+            }
+
+            var tenantName = tenant.Name?.Trim();
+            if (string.IsNullOrWhiteSpace(tenantName))
+            {
+                throw new ArgumentException("Tenant configuration must include a non-empty Name.");
+            }
+
+            var configuration = tenant.DatabaseContextConfiguration
+                                ?? throw new ArgumentException(
+                                    $"Tenant '{tenantName}' configuration missing DatabaseContextConfiguration.");
+
+            if (!string.IsNullOrWhiteSpace(baseApp) &&
+                string.IsNullOrWhiteSpace(configuration.ApplicationName))
+            {
+                configuration.ApplicationName = $"{baseApp}:{tenantName}";
+            }
+
+            Register(tenantName, configuration);
+        }
     }
 
     public void Clear()
