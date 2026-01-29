@@ -1,9 +1,13 @@
 #region
 
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics;
 using System.Data.Common;
 using System.Globalization;
+using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
@@ -24,12 +28,16 @@ namespace pengdows.crud;
 public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectProvider
 {
     private static readonly Regex ParamPlaceholderRegex = new(@"\{P\}([A-Za-z_][A-Za-z0-9_]*)", RegexOptions.Compiled);
+    private static readonly ConcurrentDictionary<Type, Action<DbParameter>?> ParameterDetachActions = new();
 
     private readonly IDatabaseContext _context;
     private readonly ISqlDialect _dialect;
 
     private readonly ILogger<ISqlContainer> _logger;
-    private readonly IDictionary<string, DbParameter> _parameters = new pengdows.crud.collections.OrderedDictionary<string, DbParameter>();
+
+    private readonly IDictionary<string, DbParameter> _parameters =
+        new pengdows.crud.collections.OrderedDictionary<string, DbParameter>();
+
     private int _outputParameterCount;
     private int _nextParameterId = -1;
     internal List<string> ParamSequence { get; } = new();
@@ -55,6 +63,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         _logger = logger ?? NullLogger<ISqlContainer>.Instance;
         Query = StringBuilderPool.Get(query);
     }
+
 
     // Legacy constructor kept for binary compatibility but made unreachable to callers.
     // Any attempt to call this directly will fail at compile time.
@@ -345,29 +354,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 $"Query exceeds the maximum parameter limit of {_context.MaxParameterLimit} for {_context.DatabaseProductName}.");
         }
 
-        if (_context.SupportsNamedParameters)
-        {
-            var unique = new HashSet<DbParameter>();
-            foreach (var param in _parameters.Values)
-            {
-                if (!unique.Add(param))
-                {
-                    continue;
-                }
-
-                dbCommand.Parameters.Add(param);
-            }
-        }
-        else
-        {
-            foreach (var name in ParamSequence)
-            {
-                if (_parameters.TryGetValue(name, out var param))
-                {
-                    dbCommand.Parameters.Add(param);
-                }
-            }
-        }
+        AddParametersToCommand(dbCommand);
 
         return dbCommand;
     }
@@ -383,6 +370,48 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
         return cmd as DbCommand
                ?? throw new InvalidOperationException("Command is not a DbCommand");
+    }
+
+    private void AddParametersToCommand(DbCommand dbCommand)
+    {
+        if (_parameters.Count == 0)
+        {
+            return;
+        }
+
+        if (_context.SupportsNamedParameters)
+        {
+            var unique = new HashSet<DbParameter>();
+            foreach (var param in _parameters.Values)
+            {
+                if (!unique.Add(param))
+                {
+                    continue;
+                }
+
+                dbCommand.Parameters.Add(param);
+            }
+
+            return;
+        }
+
+        if (ParamSequence.Count == 0)
+        {
+            foreach (var param in _parameters.Values)
+            {
+                dbCommand.Parameters.Add(param);
+            }
+
+            return;
+        }
+
+        foreach (var name in ParamSequence)
+        {
+            if (_parameters.TryGetValue(name, out var param))
+            {
+                dbCommand.Parameters.Add(param);
+            }
+        }
     }
 
     public void Clear()
@@ -1002,26 +1031,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }
 
         cmd.CommandText = cmdText;
-        var cloneParameters = _dialect.DatabaseType == SupportedDatabase.Firebird
-                              || _dialect.DatabaseType == SupportedDatabase.SqlServer;
-        if (_context.SupportsNamedParameters)
-        {
-            foreach (var param in _parameters.Values)
-            {
-                // Preserve normalized names expected by tests (no marker in ParameterName)
-                cmd.Parameters.Add(cloneParameters ? CloneParameter(param) : param);
-            }
-        }
-        else
-        {
-            foreach (var name in ParamSequence)
-            {
-                if (_parameters.TryGetValue(name, out var param))
-                {
-                    cmd.Parameters.Add(cloneParameters ? CloneParameter(param) : param);
-                }
-            }
-        }
+        // Bind parameters consistently with CreateCommand
+        AddParametersToCommand(cmd);
 
         if (traceTimings)
         {
@@ -1057,16 +1068,6 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }
 
         return cmd;
-    }
-
-    private DbParameter CloneParameter(DbParameter param)
-    {
-        var cloned = _dialect.CreateDbParameter(param.ParameterName, param.DbType, param.Value);
-        cloned.Direction = param.Direction;
-        cloned.Size = param.Size;
-        cloned.Scale = param.Scale;
-        cloned.Precision = param.Precision;
-        return cloned;
     }
 
     /// <summary>
@@ -1195,6 +1196,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             try
             {
                 cmd.Parameters?.Clear();
+
                 try
                 {
                     cmd.Connection = null;
@@ -1267,30 +1269,28 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         // Use the target context's dialect for parameter creation
         foreach (var kvp in _parameters)
         {
-            var originalParam = kvp.Value;
-            var clonedParam = clone._dialect.CreateDbParameter(
-                originalParam.ParameterName,
-                originalParam.DbType,
-                originalParam.Value);
-
-            // Preserve parameter properties
-            clonedParam.Direction = originalParam.Direction;
-            clonedParam.Size = originalParam.Size;
-            clonedParam.Scale = originalParam.Scale;
-            clonedParam.Precision = originalParam.Precision;
-
-            clone.AddParameter(clonedParam);
+            clone.AddParameter(CloneParameter(kvp.Value, clone._dialect));
         }
 
         // Copy parameter sequence for rendering (reuse cached if available)
         if (ParamSequence.Count > 0)
         {
-            clone.ParamSequence.AddRange(ParamSequence);
+            clone.ParamSequence.AddRange(ParamSequence); 
         }
 
         clone._outputParameterCount = _outputParameterCount;
 
         return clone;
+    }
+
+    private static DbParameter CloneParameter(DbParameter param, ISqlDialect dialect)
+    {
+        var cloned = dialect.CreateDbParameter(param.ParameterName, param.DbType, param.Value);
+        cloned.Direction = param.Direction;
+        cloned.Size = param.Size;
+        cloned.Scale = param.Scale;
+        cloned.Precision = param.Precision;
+        return cloned;
     }
 
     /// <summary>

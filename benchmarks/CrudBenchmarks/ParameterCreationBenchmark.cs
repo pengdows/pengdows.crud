@@ -4,6 +4,7 @@ using BenchmarkDotNet.Attributes;
 using pengdows.crud;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
+using Dapper;
 
 namespace CrudBenchmarks;
 
@@ -25,8 +26,9 @@ public class ParameterCreationBenchmark
     [Benchmark(Baseline = true)]
     public object ParameterCreation_Dapper()
     {
-        // Dapper creates an anonymous object
-        return new { id = _testValue };
+        var parameters = new DynamicParameters();
+        parameters.Add("id", _testValue, DbType.Int32);
+        return parameters;
     }
 
     [Benchmark]

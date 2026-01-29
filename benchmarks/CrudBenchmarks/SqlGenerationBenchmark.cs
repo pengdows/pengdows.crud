@@ -6,6 +6,7 @@ using pengdows.crud.attributes;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
+using Dapper;
 
 namespace CrudBenchmarks;
 
@@ -101,7 +102,9 @@ public class SqlGenerationBenchmark
     [Benchmark]
     public object ParameterCreation_Dapper()
     {
-        return new { id = _filmId };
+        var parameters = new DynamicParameters();
+        parameters.Add("id", _filmId, DbType.Int32);
+        return parameters;
     }
 
     [Benchmark]

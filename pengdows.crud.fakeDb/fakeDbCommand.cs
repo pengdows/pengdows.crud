@@ -106,6 +106,9 @@ public class fakeDbCommand : DbCommand
             conn.ExecutedNonQueryTexts.Add(CommandText);
         }
 
+        // Apply output parameter values if queued
+        ApplyOutputParameterValues(conn);
+
         // Prefer queued results when present (test control)
         if (conn != null && conn.NonQueryResults.Count > 0)
         {
@@ -146,6 +149,9 @@ public class fakeDbCommand : DbCommand
             {
                 throw exScalar;
             }
+
+            // Apply output parameter values if queued
+            ApplyOutputParameterValues(conn);
 
             // Command-text-based result
             if (!string.IsNullOrEmpty(CommandText) &&
@@ -287,6 +293,9 @@ public class fakeDbCommand : DbCommand
             conn.ExecutedReaderTexts.Add(CommandText);
         }
 
+        // Apply output parameter values if queued
+        ApplyOutputParameterValues(conn);
+
         if (conn != null && conn.ReaderResults.Count > 0)
         {
             var queued = conn.ReaderResults.Dequeue();
@@ -346,6 +355,38 @@ public class fakeDbCommand : DbCommand
         }
 
         return conn?.TryGetCommandFailure(commandText, out failure) == true;
+    }
+
+    /// <summary>
+    /// Applies queued output parameter values to the command's parameters.
+    /// This simulates stored procedure output parameter behavior.
+    /// </summary>
+    private void ApplyOutputParameterValues(fakeDbConnection? conn)
+    {
+        if (conn == null || conn.OutputParameterResults.Count == 0)
+        {
+            return;
+        }
+
+        var outputValues = conn.OutputParameterResults.Dequeue();
+        foreach (var kvp in outputValues)
+        {
+            // Find the parameter by name (case-insensitive)
+            foreach (DbParameter param in _parameterCollection)
+            {
+                if (string.Equals(param.ParameterName, kvp.Key, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (param.Direction == ParameterDirection.Output ||
+                        param.Direction == ParameterDirection.InputOutput ||
+                        param.Direction == ParameterDirection.ReturnValue)
+                    {
+                        param.Value = kvp.Value;
+                    }
+
+                    break;
+                }
+            }
+        }
     }
 
     private static IEnumerable<Dictionary<string, object>> ConvertRows(IEnumerable<Dictionary<string, object?>> rows)

@@ -26,7 +26,10 @@ namespace CrudBenchmarks;
 public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
 {
     private IContainer? _sqlServerContainer;
-    private string _connStr = string.Empty;
+    private string _baseConnStr = string.Empty;
+    private string _pengdowsConnStr = string.Empty;
+    private string _efConnStr = string.Empty;
+    private string _dapperConnStr = string.Empty;
     private const string Password = "YourStrong@Passw0rd";
     private const string Database = "AutoViewMatching";
 
@@ -65,10 +68,17 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
         await _sqlServerContainer.StartAsync();
 
         var hostPort = _sqlServerContainer.GetMappedPublicPort(1433);
-        _connStr =
+
+        // Use different Application Names to ensure separate connection pools for each library
+        // This prevents one library from benefiting from another's session settings
+        _baseConnStr =
             $"Server=localhost,{hostPort};Database={Database};User Id=sa;Password={Password};TrustServerCertificate=true;Connection Timeout=30;";
+        _pengdowsConnStr = _baseConnStr + "Application Name=Benchmark_PengdowsCrud;";
+        _efConnStr = _baseConnStr + "Application Name=Benchmark_EntityFramework;";
+        _dapperConnStr = _baseConnStr + "Application Name=Benchmark_Dapper;";
 
         Console.WriteLine($"[BENCHMARK] SQL Server container started on port {hostPort}");
+        Console.WriteLine($"[BENCHMARK] Using separate connection pools per library (via Application Name)");
 
         // Wait for SQL Server to be ready with retry logic
         await WaitForSqlServerAsync();
@@ -76,27 +86,27 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
         await CreateDatabaseAndSchemaAsync();
         await SeedDataAsync();
 
-        // Setup pengdows.crud with standard configuration
+        // Setup pengdows.crud with its own connection pool
         _map = new TypeMapRegistry();
         _map.Register<OrderDetail>();
 
         var cfg = new DatabaseContextConfiguration
         {
-            ConnectionString = _connStr,
+            ConnectionString = _pengdowsConnStr,
             ReadWriteMode = ReadWriteMode.ReadWrite,
             DbMode = DbMode.Standard
         };
         _pengdowsContext = new DatabaseContext(cfg, SqlClientFactory.Instance, null, _map);
         _orderDetailHelper = new EntityHelper<OrderDetail, int>(_pengdowsContext);
 
-        // Setup Entity Framework with standard configuration
+        // Setup Entity Framework with its own connection pool
         var options = new DbContextOptionsBuilder<EfTestDbContext>()
-            .UseSqlServer(_connStr)
+            .UseSqlServer(_efConnStr)
             .Options;
         _efContext = new EfTestDbContext(options);
 
-        // Setup Dapper with standard connection
-        _dapperConnection = new SqlConnection(_connStr);
+        // Setup Dapper with its own connection pool (completely separate from others)
+        _dapperConnection = new SqlConnection(_dapperConnStr);
         await _dapperConnection.OpenAsync();
 
         Console.WriteLine($"[BENCHMARK] Testing SQL Server automatic indexed view matching");
@@ -114,7 +124,7 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
 
     private async Task WaitForSqlServerAsync()
     {
-        var masterConnStr = _connStr.Replace($"Database={Database}", "Database=master");
+        var masterConnStr = _baseConnStr.Replace($"Database={Database}", "Database=master");
         Console.WriteLine("[BENCHMARK] Waiting for SQL Server to be ready...");
 
         for (var i = 0; i < 120; i++) // 2 minutes max
@@ -147,7 +157,7 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
     private async Task CreateDatabaseAndSchemaAsync()
     {
         // Create database if it doesn't exist
-        var masterConnStr = _connStr.Replace($"Database={Database}", "Database=master");
+        var masterConnStr = _baseConnStr.Replace($"Database={Database}", "Database=master");
         await using var masterConn = new SqlConnection(masterConnStr);
         await masterConn.OpenAsync();
 
@@ -158,7 +168,7 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
             END");
 
         // Create schema with indexed views for automatic matching - split into batches
-        await using var conn = new SqlConnection(_connStr);
+        await using var conn = new SqlConnection(_baseConnStr);
         await conn.OpenAsync();
 
         // Drop existing objects
@@ -273,7 +283,7 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
 
     private async Task SeedDataAsync()
     {
-        await using var conn = new SqlConnection(_connStr);
+        await using var conn = new SqlConnection(_baseConnStr);
         await conn.OpenAsync();
         await using var tx = await conn.BeginTransactionAsync();
 
@@ -358,7 +368,7 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
 
     private async Task VerifyIndexedViewsAsync()
     {
-        await using var conn = new SqlConnection(_connStr);
+        await using var conn = new SqlConnection(_baseConnStr);
         await conn.OpenAsync();
 
         // Verify indexed views exist and have data
@@ -479,38 +489,55 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
         Console.WriteLine("queries to use indexed views EVEN WHEN THE VIEW IS NOT DIRECTLY QUERIED.");
         Console.WriteLine("This requires correct session settings (ARITHABORT ON).\n");
 
-        var scenarios = new[] { "CustomerAggregation", "ProductSales", "MonthlyRevenue" };
+        // Show CustomerAggregation comparison in detail
+        Console.WriteLine("CUSTOMERAGGREGATION SCENARIO - INDEXED VIEW MATCHING COMPARISON:");
+        Console.WriteLine(new string('-', 90));
+        Console.WriteLine($"{"Method",-40} {"Time",-12} {"Notes"}");
+        Console.WriteLine(new string('-', 90));
 
-        foreach (var scenario in scenarios)
+        var directViewKey = "CustomerAggregation_DirectViewQuery";
+        var pengdowsKey = "CustomerAggregation_pengdows";
+        var dapperWithKey = "CustomerAggregation_Dapper_WithSessionMgmt";
+        var dapperNoKey = "CustomerAggregation_Dapper_NoViewMatching";
+        var efKey = "CustomerAggregation_EntityFramework";
+
+        if (_results.TryGetValue(directViewKey, out var directView))
+            Console.WriteLine($"{"Direct View Query (baseline)",-40} {directView.AvgTimeMs,-10:F1}ms  {"Fastest possible - direct indexed view",-30}");
+
+        if (_results.TryGetValue(pengdowsKey, out var pengdows))
+            Console.WriteLine($"{"pengdows.crud (auto view matching)",-40} {pengdows.AvgTimeMs,-10:F1}ms  {"ARITHABORT ON set automatically",-30}");
+
+        if (_results.TryGetValue(dapperWithKey, out var dapperWith))
+            Console.WriteLine($"{"Dapper (manual session mgmt)",-40} {dapperWith.AvgTimeMs,-10:F1}ms  {"Requires SET ARITHABORT ON manually",-30}");
+
+        if (_results.TryGetValue(dapperNoKey, out var dapperNo))
+            Console.WriteLine($"{"Dapper (no session mgmt)",-40} {dapperNo.AvgTimeMs,-10:F1}ms  {"ARITHABORT OFF - NO view matching",-30}");
+
+        if (_results.TryGetValue(efKey, out var ef))
+            Console.WriteLine($"{"Entity Framework",-40} {ef.AvgTimeMs,-10:F1}ms  {"ARITHABORT OFF - NO view matching",-30}");
+
+        Console.WriteLine();
+
+        // Show other scenarios
+        var otherScenarios = new[] { "ProductSales", "MonthlyRevenue" };
+        foreach (var scenario in otherScenarios)
         {
             Console.WriteLine($"{scenario.ToUpper()} SCENARIO:");
             Console.WriteLine(new string('-', 70));
 
-            var pengdowsKey = $"{scenario}_pengdows";
-            var efKey = $"{scenario}_EntityFramework";
-            var dapperKey = $"{scenario}_Dapper";
+            var scenarioPengdowsKey = $"{scenario}_pengdows";
+            var scenarioEfKey = $"{scenario}_EntityFramework";
 
-            if (_results.ContainsKey(pengdowsKey))
+            if (_results.TryGetValue(scenarioPengdowsKey, out var scenarioPengdows))
             {
-                var pengdows = _results[pengdowsKey];
                 Console.WriteLine(
-                    $"{"pengdows.crud",-20} {"SUCCESS",-10} {pengdows.AvgTimeMs,-10:F1}ms {"Uses automatic view matching",-30}");
+                    $"{"pengdows.crud",-20} {"SUCCESS",-10} {scenarioPengdows.AvgTimeMs,-10:F1}ms {"Uses automatic view matching",-30}");
             }
 
-            if (_results.ContainsKey(efKey))
+            if (_results.TryGetValue(scenarioEfKey, out var scenarioEf))
             {
-                var ef = _results[efKey];
-                var status = ef.FailureCount > 0 ? "SLOW" : "SUCCESS";
                 var note = "ARITHABORT OFF prevents view matching";
-                Console.WriteLine($"{"Entity Framework",-20} {status,-10} {ef.AvgTimeMs,-10:F1}ms {note,-30}");
-            }
-
-            if (_results.ContainsKey(dapperKey))
-            {
-                var dapper = _results[dapperKey];
-                var status = dapper.FailureCount > 0 ? "MANUAL" : "SUCCESS";
-                var note = "Requires manual session management";
-                Console.WriteLine($"{"Dapper",-20} {status,-10} {dapper.AvgTimeMs,-10:F1}ms {note,-30}");
+                Console.WriteLine($"{"Entity Framework",-20} {"SLOW",-10} {scenarioEf.AvgTimeMs,-10:F1}ms {note,-30}");
             }
 
             Console.WriteLine();
@@ -555,10 +582,10 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
         {
             // Clone pre-built template (56% faster than rebuilding)
             // This query can be automatically rewritten to use vw_CustomerOrderSummary
-            using var container = _customerAggregationTemplate.Clone();
+            await using var container = _customerAggregationTemplate.Clone();
             // Parameters are already set with correct values from template
 
-            using var reader = await container.ExecuteReaderAsync();
+            await using var reader = await container.ExecuteReaderAsync();
             var results = new List<dynamic>();
             while (await reader.ReadAsync())
             {
@@ -600,12 +627,19 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
         });
     }
 
+    /// <summary>
+    /// Dapper WITHOUT proper session settings - cannot use automatic indexed view matching.
+    /// This demonstrates typical Dapper usage without manual session management.
+    /// </summary>
     [Benchmark]
-    public async Task<List<dynamic>> CustomerAggregation_Dapper()
+    public async Task<List<dynamic>> CustomerAggregation_Dapper_NoViewMatching()
     {
-        return await ExecuteWithTracking("CustomerAggregation_Dapper", async () =>
+        return await ExecuteWithTracking("CustomerAggregation_Dapper_NoViewMatching", async () =>
         {
-            // Dapper uses default session settings (ARITHABORT OFF) - no automatic view matching
+            // Explicitly disable ARITHABORT to prevent automatic indexed view matching
+            // This simulates Dapper's typical behavior without manual session management
+            await _dapperConnection.ExecuteAsync("SET ARITHABORT OFF");
+
             var results = await _dapperConnection.QueryAsync<dynamic>(@"
                 SELECT
                     c.customer_id,
@@ -625,6 +659,72 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
     }
 
     /// <summary>
+    /// Dapper WITH manual session settings - CAN use automatic indexed view matching.
+    /// This requires developers to know about and manually manage session settings.
+    /// </summary>
+    [Benchmark]
+    public async Task<List<dynamic>> CustomerAggregation_Dapper_WithSessionMgmt()
+    {
+        return await ExecuteWithTracking("CustomerAggregation_Dapper_WithSessionMgmt", async () =>
+        {
+            // With proper session settings, Dapper CAN use indexed views
+            // But this requires manual management that pengdows.crud does automatically
+            await _dapperConnection.ExecuteAsync("SET ARITHABORT ON");
+
+            var results = await _dapperConnection.QueryAsync<dynamic>(@"
+                SELECT
+                    c.customer_id,
+                    c.company_name,
+                    COUNT(*) as order_count,
+                    SUM(od.quantity * od.unit_price * (1 - od.discount)) as total_revenue
+                FROM dbo.Customers c
+                INNER JOIN dbo.Orders o ON c.customer_id = o.customer_id
+                INNER JOIN dbo.OrderDetails od ON o.order_id = od.order_id
+                WHERE c.customer_id BETWEEN @startId AND @endId
+                GROUP BY c.customer_id, c.company_name
+                ORDER BY total_revenue DESC",
+                new { startId = 1, endId = 50 });
+
+            return results.ToList();
+        });
+    }
+
+    /// <summary>
+    /// Direct query against the indexed view - the fastest possible approach.
+    /// This is what the optimizer rewrites queries TO when automatic matching works.
+    /// </summary>
+    [Benchmark]
+    public async Task<List<dynamic>> CustomerAggregation_DirectViewQuery()
+    {
+        return await ExecuteWithTracking("CustomerAggregation_DirectViewQuery", async () =>
+        {
+            await using var container = _pengdowsContext.CreateSqlContainer(@"
+                SELECT customer_id, company_name, order_count, total_revenue,
+                       (sum_order_value / NULLIF(count_for_avg, 0)) as avg_order_value
+                FROM dbo.vw_CustomerOrderSummary WITH (NOEXPAND)
+                WHERE customer_id BETWEEN @startId AND @endId
+                ORDER BY total_revenue DESC");
+            container.AddParameterWithValue("startId", DbType.Int32, 1);
+            container.AddParameterWithValue("endId", DbType.Int32, 50);
+
+            await using var reader = await container.ExecuteReaderAsync();
+            var results = new List<dynamic>();
+            while (await reader.ReadAsync())
+            {
+                results.Add(new
+                {
+                    CustomerId = Convert.ToInt32(reader["customer_id"]),
+                    CompanyName = reader["company_name"]?.ToString() ?? "",
+                    OrderCount = Convert.ToInt64(reader["order_count"]),
+                    TotalRevenue = Convert.ToDecimal(reader["total_revenue"])
+                });
+            }
+
+            return results;
+        });
+    }
+
+    /// <summary>
     /// Product sales aggregation - can automatically use vw_ProductSales
     /// </summary>
     [Benchmark]
@@ -633,10 +733,10 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
         return await ExecuteWithTracking("ProductSales_pengdows", async () =>
         {
             // Clone pre-built template (56% faster than rebuilding)
-            using var container = _productSalesTemplate.Clone();
+            await using var container = _productSalesTemplate.Clone();
             // Parameters are already set with correct values from template
 
-            using var reader = await container.ExecuteReaderAsync();
+            await using var reader = await container.ExecuteReaderAsync();
             var results = new List<dynamic>();
             while (await reader.ReadAsync())
             {
@@ -687,10 +787,10 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
         return await ExecuteWithTracking("MonthlyRevenue_pengdows", async () =>
         {
             // Clone pre-built template (56% faster than rebuilding)
-            using var container = _monthlyRevenueTemplate.Clone();
+            await using var container = _monthlyRevenueTemplate.Clone();
             // Parameters are already set with correct values from template
 
-            using var reader = await container.ExecuteReaderAsync();
+            await using var reader = await container.ExecuteReaderAsync();
             var results = new List<dynamic>();
             while (await reader.ReadAsync())
             {

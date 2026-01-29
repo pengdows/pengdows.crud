@@ -47,7 +47,10 @@ namespace CrudBenchmarks;
 public class RealWorldScenarioBenchmarks : IAsyncDisposable
 {
     private IContainer? _container;
-    private string _connStr = string.Empty;
+    private string _baseConnStr = string.Empty;
+    private string _pengdowsConnStr = string.Empty;
+    private string _efConnStr = string.Empty;
+    private string _dapperConnStr = string.Empty;
     private IDatabaseContext _pengdowsContext = null!;
     private TypeMapRegistry _map = null!;
     private EntityHelper<Transaction, long> _transactionHelper = null!;
@@ -80,8 +83,12 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
 
         var mappedPort = _container.GetMappedPublicPort(5432);
 
-        // STANDARD connection string - no special optimization parameters
-        _connStr = $"Host=localhost;Port={mappedPort};Database=realworld_test;Username=postgres;Password=postgres";
+        // Use different Application Names to ensure separate connection pools for each library
+        // This ensures fair benchmarking without cross-pollination of session states
+        _baseConnStr = $"Host=localhost;Port={mappedPort};Database=realworld_test;Username=postgres;Password=postgres;";
+        _pengdowsConnStr = _baseConnStr + "Application Name=Benchmark_PengdowsCrud;";
+        _efConnStr = _baseConnStr + "Application Name=Benchmark_EntityFramework;";
+        _dapperConnStr = _baseConnStr + "Application Name=Benchmark_Dapper;";
 
         await WaitForReady();
         await CreateSchemaAndSeedAsync();
@@ -92,7 +99,7 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
 
         var cfg = new DatabaseContextConfiguration
         {
-            ConnectionString = _connStr, // Standard connection string
+            ConnectionString = _pengdowsConnStr,
             ReadWriteMode = ReadWriteMode.ReadWrite,
             DbMode = DbMode.Standard // Standard mode with pooling defaults
         };
@@ -101,7 +108,7 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
         // DataSource is used for creating connections (shared cache benefit)
         // Factory is still required for creating parameters and other provider objects
         // pengdows.crud auto-detects PostgreSQL ENUMs and other features via dialect system
-        var pengdowsDataSource = NpgsqlDataSource.Create(_connStr);
+        var pengdowsDataSource = NpgsqlDataSource.Create(_pengdowsConnStr);
         _pengdowsContext = new DatabaseContext(cfg, pengdowsDataSource, NpgsqlFactory.Instance, null, _map);
         _transactionHelper = new EntityHelper<Transaction, long>(_pengdowsContext);
 
@@ -109,7 +116,7 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
         // REQUIRED: Create NpgsqlDataSource with registered ENUMs
         // This is the modern way (GlobalTypeMapper is obsolete)
         // pengdows.crud: No data source configuration needed
-        var dataSourceBuilder = new NpgsqlDataSourceBuilder(_connStr);
+        var dataSourceBuilder = new NpgsqlDataSourceBuilder(_efConnStr);
         dataSourceBuilder.MapEnum<TransactionStatus>("transaction_status");
         dataSourceBuilder.MapEnum<CurrencyCode>("currency_code");
         var efDataSource = dataSourceBuilder.Build();
@@ -119,15 +126,15 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
             .Options;
         _efContext = new EfTestDbContext(options);
 
-        // Dapper with STANDARD data source
-        _dapperDataSource = NpgsqlDataSource.Create(_connStr); // Standard connection string
+        // Dapper with its own connection pool
+        _dapperDataSource = NpgsqlDataSource.Create(_dapperConnStr);
 
         // Pre-build query templates ONCE for cloning (56% faster than rebuilding each time)
         _complexQueryTemplate = BuildComplexQueryTemplate();
         _fullTextSearchTemplate = BuildFullTextSearchTemplate();
 
         Console.WriteLine($"[BENCHMARK] Testing real-world scenarios with STANDARD configurations");
-        Console.WriteLine($"[BENCHMARK] Connection String: {_connStr}");
+        Console.WriteLine($"[BENCHMARK] Using separate connection pools per library (via Application Name)");
         Console.WriteLine($"[BENCHMARK] pengdows.crud ConnectionMode: {_pengdowsContext.ConnectionMode}");
         Console.WriteLine($"[BENCHMARK] Dataset: {TransactionCount} transactions");
         Console.WriteLine($"[BENCHMARK] Query templates pre-built for optimal performance");
@@ -139,7 +146,7 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
         {
             try
             {
-                await using var conn = new NpgsqlConnection(_connStr);
+                await using var conn = new NpgsqlConnection(_baseConnStr);
                 await conn.OpenAsync();
                 await conn.CloseAsync();
                 return;
@@ -155,7 +162,7 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
 
     private async Task CreateSchemaAndSeedAsync()
     {
-        await using var conn = new NpgsqlConnection(_connStr);
+        await using var conn = new NpgsqlConnection(_baseConnStr);
         await conn.OpenAsync();
         await using var tx = await conn.BeginTransactionAsync();
 
@@ -407,7 +414,7 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
         return await ExecuteWithTracking("ComplexQuery_pengdows", async () =>
         {
             // Clone pre-built template (56% faster than rebuilding)
-            using var container = _complexQueryTemplate.Clone();
+            await using var container = _complexQueryTemplate.Clone();
             // Parameters are already set with correct values from template
 
             return await _transactionHelper.LoadListAsync(container);
@@ -478,11 +485,11 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
         return await ExecuteWithTracking("FullTextSearchAggregation_pengdows", async () =>
         {
             // Clone pre-built template (56% faster than rebuilding)
-            using var container = _fullTextSearchTemplate.Clone();
+            await using var container = _fullTextSearchTemplate.Clone();
             // Parameters are already set with correct values from template
 
             // Return as dynamic for aggregation results
-            using var reader = await container.ExecuteReaderAsync();
+            await using var reader = await container.ExecuteReaderAsync();
             var results = new List<dynamic>();
             while (await reader.ReadAsync())
             {

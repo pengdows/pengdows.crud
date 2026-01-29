@@ -300,7 +300,7 @@ public class DatabaseSpecificFeatureBenchmarks : IAsyncDisposable
     [Benchmark]
     public async Task<List<Product>> PostgreSQL_JSONB_Query_pengdows()
     {
-        using var container = _pengdowsContext.CreateSqlContainer(@"
+        await using var container = _pengdowsContext.CreateSqlContainer(@"
             SELECT product_id, category_id, product_name, price_category, price, tags, specifications, warehouse_location, created_at
             FROM products
             WHERE specifications->>'brand' = ");
@@ -358,7 +358,7 @@ public class DatabaseSpecificFeatureBenchmarks : IAsyncDisposable
     [Benchmark]
     public async Task<List<Product>> PostgreSQL_Array_Contains_pengdows()
     {
-        using var container = _pengdowsContext.CreateSqlContainer(@"
+        await using var container = _pengdowsContext.CreateSqlContainer(@"
             SELECT product_id, category_id, product_name, price_category, price, tags, specifications, warehouse_location, created_at
             FROM products
             WHERE ");
@@ -388,7 +388,7 @@ public class DatabaseSpecificFeatureBenchmarks : IAsyncDisposable
     [Benchmark]
     public async Task<List<Product>> PostgreSQL_FullTextSearch_pengdows()
     {
-        using var container = _pengdowsContext.CreateSqlContainer(@"
+        await using var container = _pengdowsContext.CreateSqlContainer(@"
             SELECT product_id, category_id, product_name, price_category, price, tags, specifications, warehouse_location, created_at
             FROM products
             WHERE search_vector @@ plainto_tsquery('english', ");
@@ -422,7 +422,7 @@ public class DatabaseSpecificFeatureBenchmarks : IAsyncDisposable
     [Benchmark]
     public async Task<List<Product>> PostgreSQL_Geospatial_Query_pengdows()
     {
-        using var container = _pengdowsContext.CreateSqlContainer(@"
+        await using var container = _pengdowsContext.CreateSqlContainer(@"
             SELECT product_id, category_id, product_name, price_category, price, tags, specifications, warehouse_location, created_at
             FROM products
             WHERE warehouse_location <-> point(50, 50) < ");

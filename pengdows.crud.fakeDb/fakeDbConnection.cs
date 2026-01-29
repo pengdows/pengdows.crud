@@ -48,6 +48,12 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     public readonly List<string> ExecutedReaderTexts = new();
     public fakeDbCommand? LastCreatedCommand { get; private set; }
 
+    /// <summary>
+    /// Queue of output parameter values to apply after command execution.
+    /// Each dictionary maps parameter name to its output value.
+    /// </summary>
+    internal readonly Queue<Dictionary<string, object?>> OutputParameterResults = new();
+
     // Enhanced data persistence
     internal readonly FakeDataStore DataStore;
 
@@ -79,6 +85,15 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     public void EnqueueNonQueryResult(int value)
     {
         NonQueryResults.Enqueue(value);
+    }
+
+    /// <summary>
+    /// Enqueues output parameter values to be applied after the next command execution.
+    /// The dictionary maps parameter names to their output values.
+    /// </summary>
+    public void EnqueueOutputParameterResult(Dictionary<string, object?> outputValues)
+    {
+        OutputParameterResults.Enqueue(outputValues);
     }
 
     public void SetScalarResultForCommand(string commandText, object? value)

@@ -7,8 +7,10 @@ using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 using pengdows.crud.wrappers;
+using Dapper;
 
-// Dapper/Npgsql removed to avoid external DB dependency in this fixture
+// Uses FakeDb to isolate from external DB dependency while ensuring
+// each framework uses its OWN native infrastructure for fair comparison
 
 namespace CrudBenchmarks;
 
@@ -21,6 +23,9 @@ public class IsolationBenchmarks
     private IDatabaseContext _ctx = null!;
     private TypeMapRegistry _map = null!;
     private EntityHelper<Film, int> _filmHelper = null!;
+
+    // Dapper uses its OWN factory and connections - NOT pengdows.crud infrastructure
+    private fakeDbFactory _dapperFactory = null!;
 
     private int _filmId = 1;
     private string _staticSql = null!;
@@ -37,14 +42,19 @@ public class IsolationBenchmarks
             ReadWriteMode = ReadWriteMode.ReadWrite,
             DbMode = DbMode.Standard
         };
-        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
-        _ctx = new DatabaseContext(cfg, factory, null, _map);
+        // pengdows.crud uses its own factory instance
+        var pengdowsFactory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        _ctx = new DatabaseContext(cfg, pengdowsFactory, null, _map);
         _filmHelper = new EntityHelper<Film, int>(_ctx);
+
+        // Dapper gets its OWN factory instance - completely separate from pengdows.crud
+        _dapperFactory = new fakeDbFactory(SupportedDatabase.PostgreSql);
 
         // EntityHelper will handle internal caching automatically
 
         // Static SQL for comparison
-        _staticSql = "SELECT \"film_id\", \"title\", \"length\" FROM \"public\".\"film\" WHERE \"film_id\" = ANY($1)";
+        _staticSql =
+            "SELECT \"film_id\", \"title\", \"length\" FROM \"public\".\"film\" WHERE \"film_id\" = ANY(@ids)";
     }
 
     // ============= SQL GENERATION BENCHMARKS =============
@@ -84,10 +94,11 @@ public class IsolationBenchmarks
     public async Task<Film?> ObjectLoading_Mine_DirectReader()
     {
         // Test just the object mapping part by using direct SQL
-        using var conn = _ctx.GetConnection(ExecutionType.Read);
+        await using var conn = _ctx.GetConnection(ExecutionType.Read);
         using var cmd = conn.CreateCommand();
         cmd.CommandText = _staticSql;
         var param = cmd.CreateParameter();
+        param.ParameterName = "ids";
         param.Value = new[] { _filmId };
         cmd.Parameters.Add(param);
 
@@ -104,21 +115,23 @@ public class IsolationBenchmarks
     [Benchmark]
     public async Task<Film?> ObjectLoading_Dapper()
     {
-        // Replace Dapper baseline with direct SQL via context to keep benchmark self-contained
-        using var conn = _ctx.GetConnection(ExecutionType.Read);
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = _staticSql;
-        var p = cmd.CreateParameter();
-        p.Value = new[] { _filmId };
-        cmd.Parameters.Add(p);
+        // Dapper uses its OWN factory and connection - NOT pengdows.crud infrastructure
+        await using var conn = _dapperFactory.CreateConnection();
+        conn.ConnectionString = _connStr;
         await conn.OpenAsync();
-        using var reader = cmd.ExecuteReader();
-        if (reader.Read())
+        var row = await conn.QuerySingleOrDefaultAsync<DapperFilmRow>(_staticSql, new { ids = new[] { _filmId } });
+        if (row == null)
         {
-            return _filmHelper.MapReaderToObject((ITrackedReader)reader);
+            return null;
         }
 
-        return null;
+        // Map to a new object (Dapper handles its own mapping)
+        return new Film
+        {
+            Id = row.film_id,
+            Title = row.title,
+            Length = row.length
+        };
     }
 
     // ============= PARAMETER CREATION BENCHMARKS =============
@@ -132,7 +145,9 @@ public class IsolationBenchmarks
     [Benchmark]
     public object ParameterCreation_Dapper()
     {
-        return new { id = _filmId };
+        var parameters = new DynamicParameters();
+        parameters.Add("id", _filmId, DbType.Int32);
+        return parameters;
     }
 
     // ============= CONNECTION OVERHEAD BENCHMARKS =============
@@ -140,23 +155,27 @@ public class IsolationBenchmarks
     [Benchmark]
     public async Task<ITrackedConnection> ConnectionOverhead_Mine()
     {
+        // pengdows.crud connection management (with tracking, wrapping, etc.)
         var conn = _ctx.GetConnection(ExecutionType.Read);
         await conn.OpenAsync();
-        conn.Close();
         _ctx.CloseAndDisposeConnection(conn);
         return conn;
     }
 
     [Benchmark]
-    public async Task<ITrackedConnection> ConnectionOverhead_Direct()
+    public async Task<DbConnection> ConnectionOverhead_Direct()
     {
-        // Use context connection to avoid external dependency
-        var conn = _ctx.GetConnection(ExecutionType.Read);
+        // Direct ADO.NET/Dapper style - uses factory directly, NO pengdows.crud infrastructure
+        var conn = _dapperFactory.CreateConnection();
+        conn.ConnectionString = _connStr;
         await conn.OpenAsync();
         conn.Close();
-        _ctx.CloseAndDisposeConnection(conn);
+        conn.Dispose();
         return conn;
     }
+
+    // Dapper-specific DTO - no pengdows.crud attributes
+    private sealed record DapperFilmRow(int film_id, string title, int length);
 
     [Table("film", "public")]
     public class Film

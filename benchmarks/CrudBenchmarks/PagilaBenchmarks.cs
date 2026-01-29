@@ -27,7 +27,10 @@ namespace CrudBenchmarks;
 public class PagilaBenchmarks : IAsyncDisposable
 {
     private IContainer? _container;
-    private string _connStr = string.Empty;
+    private string _baseConnStr = string.Empty;
+    private string _pengdowsConnStr = string.Empty;
+    private string _efConnStr = string.Empty;
+    private string _dapperConnStr = string.Empty;
     private IDatabaseContext _ctx = null!;
     private ILoggerFactory? _loggerFactory;
     private TypeMapRegistry _map = null!;
@@ -82,14 +85,20 @@ public class PagilaBenchmarks : IAsyncDisposable
         await _container.StartAsync();
 
         var mappedPort = _container.GetMappedPublicPort(5432);
-        _connStr =
-            $"Host=localhost;Port={mappedPort};Database=pagila;Username=postgres;Password=postgres;Maximum Pool Size=100";
+
+        // Use different Application Names to ensure separate connection pools for each library
+        // This ensures fair benchmarking without cross-pollination of session states
+        _baseConnStr =
+            $"Host=localhost;Port={mappedPort};Database=pagila;Username=postgres;Password=postgres;Maximum Pool Size=100;";
+        _pengdowsConnStr = _baseConnStr + "Application Name=Benchmark_PengdowsCrud;";
+        _efConnStr = _baseConnStr + "Application Name=Benchmark_EntityFramework;";
+        _dapperConnStr = _baseConnStr + "Application Name=Benchmark_Dapper;";
 
         await WaitForReady();
         await CreateSchemaAndSeedAsync();
 
         // Initialize pg_stat_statements and reset stats before running benchmarks
-        await using (var admin = new NpgsqlConnection(_connStr))
+        await using (var admin = new NpgsqlConnection(_baseConnStr))
         {
             await admin.OpenAsync();
             await admin.ExecuteAsync("CREATE EXTENSION IF NOT EXISTS pg_stat_statements;");
@@ -102,7 +111,7 @@ public class PagilaBenchmarks : IAsyncDisposable
         // Use Standard mode for fair comparison with Dapper's ephemeral connections
         var cfg = new DatabaseContextConfiguration
         {
-            ConnectionString = _connStr,
+            ConnectionString = _pengdowsConnStr,
             ReadWriteMode = ReadWriteMode.ReadWrite,
             DbMode = DbMode.Standard
         };
@@ -124,19 +133,19 @@ public class PagilaBenchmarks : IAsyncDisposable
         _filmHelper = new EntityHelper<Film, int>(_ctx);
         _filmActorHelper = new EntityHelper<FilmActor, int>(_ctx);
 
-        // Initialize Entity Framework DbContext
+        // Initialize Entity Framework DbContext with its own connection pool
         var options = new DbContextOptionsBuilder<PagilaDbContext>()
-            .UseNpgsql(_connStr)
+            .UseNpgsql(_efConnStr)
             .Options;
         _efDbContext = new PagilaDbContext(options);
 
-        // Initialize Dapper data source for fair comparison
-        _dapperDataSource = NpgsqlDataSource.Create(_connStr);
+        // Initialize Dapper data source with its own connection pool
+        _dapperDataSource = NpgsqlDataSource.Create(_dapperConnStr);
 
         // EntityHelper will handle internal caching and cloning automatically
 
         // pick keys to use in benchmarks
-        await using var conn = new NpgsqlConnection(_connStr);
+        await using var conn = new NpgsqlConnection(_baseConnStr);
         await conn.OpenAsync();
         _filmId = await conn.ExecuteScalarAsync<int>("select film_id from film order by film_id limit 1");
         var row = await conn.QuerySingleAsync<(int actor_id, int film_id)>(
@@ -184,7 +193,7 @@ public class PagilaBenchmarks : IAsyncDisposable
         // Dump Postgres statistics for analysis
         try
         {
-            await PgStats.DumpSummaryAsync(_connStr);
+            await PgStats.DumpSummaryAsync(_baseConnStr);
         }
         catch (Exception ex)
         {
@@ -203,7 +212,7 @@ public class PagilaBenchmarks : IAsyncDisposable
     {
         if (_collectPerIteration)
         {
-            PgStats.ResetAsync(_connStr).GetAwaiter().GetResult();
+            PgStats.ResetAsync(_baseConnStr).GetAwaiter().GetResult();
         }
 
         _breakdownBuildTicks = 0;
@@ -226,7 +235,7 @@ public class PagilaBenchmarks : IAsyncDisposable
         if (_collectPerIteration)
         {
             var label = _currentBenchmarkLabel ?? "(unknown)";
-            PgStats.DumpSummaryAsync(_connStr, label).GetAwaiter().GetResult();
+            PgStats.DumpSummaryAsync(_baseConnStr, label).GetAwaiter().GetResult();
             if (label.Contains("_Mine", StringComparison.OrdinalIgnoreCase))
             {
                 DumpPengdowsMetrics(label);
@@ -259,7 +268,7 @@ public class PagilaBenchmarks : IAsyncDisposable
         {
             try
             {
-                await using var conn = new NpgsqlConnection(_connStr);
+                await using var conn = new NpgsqlConnection(_baseConnStr);
                 await conn.OpenAsync();
                 await conn.CloseAsync();
                 return;
@@ -275,7 +284,7 @@ public class PagilaBenchmarks : IAsyncDisposable
 
     private async Task CreateSchemaAndSeedAsync()
     {
-        await using var conn = new NpgsqlConnection(_connStr);
+        await using var conn = new NpgsqlConnection(_baseConnStr);
         await conn.OpenAsync();
         await using var tx = await conn.BeginTransactionAsync();
 
@@ -459,7 +468,7 @@ CREATE TABLE film_actor (
         _currentBenchmarkLabel = nameof(GetFilmById_Mine_Breakdown);
 
         var t0 = Stopwatch.GetTimestamp();
-        using var sc = _filmHelper.BuildRetrieve(new[] { _filmId }, _ctx);
+        await using var sc = _filmHelper.BuildRetrieve(new[] { _filmId }, _ctx);
         var t1 = Stopwatch.GetTimestamp();
         await using var reader = await sc.ExecuteReaderSingleRowAsync();
         var t2 = Stopwatch.GetTimestamp();

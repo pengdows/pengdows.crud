@@ -70,4 +70,6 @@ public class DatabaseContextConfiguration : IDatabaseContextConfiguration
     public TimeSpan PoolAcquireTimeout { get; set; } = TimeSpan.FromSeconds(5);
     public TimeSpan? ModeLockTimeout { get; set; } = TimeSpan.FromSeconds(30);
     public bool EnablePoolGovernor { get; set; } = true;
+    
+    public string ApplicationName { get; set; } = string.Empty;
 }
