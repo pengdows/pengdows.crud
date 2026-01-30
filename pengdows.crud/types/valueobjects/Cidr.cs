@@ -1,7 +1,32 @@
+// =============================================================================
+// FILE: Cidr.cs
+// PURPOSE: Immutable value object for PostgreSQL CIDR type (network subnet).
+//
+// AI SUMMARY:
+// - Represents a network subnet in CIDR notation (e.g., "192.168.0.0/16").
+// - Readonly struct implementing IEquatable<Cidr>.
+// - Properties:
+//   * Network: IPAddress - the network address (canonicalized, host bits zeroed)
+//   * PrefixLength: byte - required CIDR prefix length
+// - Validates prefix length against address family (32 for IPv4, 128 for IPv6).
+// - Canonicalize(): Zeros host bits beyond prefix for proper network address.
+// - Parse(): Parses "network/prefix" format strings (prefix required).
+// - ToString(): Returns "network/prefix" format.
+// - Differs from Inet: Cidr requires prefix and enforces host bits = 0.
+// - Thread-safe and immutable.
+// =============================================================================
+
 using System.Net;
 
 namespace pengdows.crud.types.valueobjects;
 
+/// <summary>
+/// Immutable value object representing a network subnet in CIDR notation.
+/// </summary>
+/// <remarks>
+/// Maps to PostgreSQL CIDR type. Unlike <see cref="Inet"/>, the prefix length
+/// is required and host bits are automatically zeroed (canonicalized).
+/// </remarks>
 public readonly struct Cidr : IEquatable<Cidr>
 {
     public Cidr(IPAddress network, byte prefixLength)

@@ -1,3 +1,23 @@
+// =============================================================================
+// FILE: AdvancedTypeRegistry.cs
+// PURPOSE: Registry for advanced database type mappings across providers.
+//
+// AI SUMMARY:
+// - Central registry for complex/exotic database type handling.
+// - Maps CLR types to provider-specific type configurations (JSON, spatial, arrays, etc.).
+// - AdvancedTypeRegistry.Shared provides singleton with default mappings.
+// - MappingKey: High-performance struct key (Type + SupportedDatabase) to avoid allocation.
+// - CachedParameterConfig: Caches mapping + converter lookups for hot paths.
+// - RegisterMapping<T>(): Associates CLR type with ProviderTypeMapping for a database.
+// - RegisterConverter<T>(): Registers AdvancedTypeConverter for complex transformations.
+// - TryConfigureParameter(): Configures DbParameter with provider-specific type info.
+// - TryConfigureParameterEnhanced(): Tries legacy system, then CoercionRegistry, then ParameterBindingRules.
+// - Default mappings: JSON (JSONB, JSON), spatial (Geometry, Geography), arrays, ranges,
+//   network types (inet, cidr, macaddr), temporal (interval), LOBs, identity/concurrency.
+// - ProviderTypeMapping: Holds DbType + ConfigureParameter action for provider customization.
+// - Uses reflection to set provider-specific enum properties (NpgsqlDbType, OracleDbType, etc.).
+// =============================================================================
+
 using System.Data;
 using System.Data.Common;
 using System.Text.Json;

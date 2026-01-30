@@ -14,7 +14,7 @@ public class CloningPerformanceTest
 {
     private IDatabaseContext _ctx = null!;
     private TypeMapRegistry _map = null!;
-    private EntityHelper<Film, int> _filmHelper = null!;
+    private TableGateway<Film, int> _filmHelper = null!;
 
     private int _filmId = 1;
     private ISqlContainer _cachedContainer = null!;
@@ -34,7 +34,7 @@ public class CloningPerformanceTest
             DbMode = DbMode.Standard
         };
         _ctx = new DatabaseContext(cfg, factory, null, _map);
-        _filmHelper = new EntityHelper<Film, int>(_ctx);
+        _filmHelper = new TableGateway<Film, int>(_ctx);
 
         // Pre-build container for cloning tests
         _cachedContainer = _filmHelper.BuildRetrieve(new[] { _filmId });

@@ -1,3 +1,20 @@
+// =============================================================================
+// FILE: MacAddressConverter.cs
+// PURPOSE: Converter for PostgreSQL MACADDR type (hardware MAC address).
+//
+// AI SUMMARY:
+// - Converts between database macaddr values and MacAddress value objects.
+// - Supports 48-bit (6-byte) and 64-bit (8-byte) MAC addresses.
+// - Provider-specific:
+//   * PostgreSQL: MACADDR or MACADDR8 type ("08:00:2b:01:02:03")
+//   * Others: Store as VARCHAR or BINARY
+// - ConvertToProvider(): Returns string for PostgreSQL, PhysicalAddress otherwise.
+// - TryConvertFromProvider(): Handles MacAddress, string, PhysicalAddress, NpgsqlMacAddress.
+// - Accepts colon-separated, hyphen-separated, or raw hex formats.
+// - Output standardized to colon-separated format.
+// - Thread-safe and immutable value objects.
+// =============================================================================
+
 using System.Net.NetworkInformation;
 using pengdows.crud.enums;
 using pengdows.crud.types.valueobjects;

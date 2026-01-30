@@ -1,7 +1,27 @@
+// =============================================================================
+// FILE: TableGateway.Audit.cs
+// PURPOSE: Audit field handling for CreatedBy/On and LastUpdatedBy/On columns.
+//
+// AI SUMMARY:
+// - SetAuditFields() populates audit columns during Create and Update:
+//   * On Create: Sets CreatedBy, CreatedOn, LastUpdatedBy, LastUpdatedOn
+//   * On Update: Sets only LastUpdatedBy, LastUpdatedOn
+// - Requires AuditValueResolver if entity has user audit columns (CreatedBy/LastUpdatedBy).
+// - Time-only audit (CreatedOn/LastUpdatedOn) works without resolver (uses UTC now).
+// - Coerce() helper handles type conversion for audit values:
+//   * String to Guid parsing
+//   * Culture-invariant numeric conversion
+// - Throws InvalidOperationException if user audit columns exist but no resolver provided.
+// - Skips audit processing if entity has no audit columns (performance optimization).
+// =============================================================================
+
 using System.Globalization;
 
 namespace pengdows.crud;
 
+/// <summary>
+/// TableGateway partial: Audit field population logic.
+/// </summary>
 public partial class TableGateway<TEntity, TRowID>
 {
     /// <summary>

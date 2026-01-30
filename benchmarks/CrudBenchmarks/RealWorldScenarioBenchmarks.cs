@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Data;
 using System.Diagnostics;
@@ -46,6 +47,73 @@ namespace CrudBenchmarks;
 [SimpleJob(warmupCount: 2, iterationCount: 3, invocationCount: 10)]
 public class RealWorldScenarioBenchmarks : IAsyncDisposable
 {
+    private const string ComplexQuerySqlTemplate = """
+        SELECT transaction_id,
+               user_id,
+               status,
+               currency,
+               amount,
+               metadata,
+               tags,
+               created_at,
+               updated_at,
+               search_vector
+        FROM transactions
+        WHERE status = {status}::transaction_status
+          AND (metadata->>'risk_score')::int > {riskScore}
+          AND {tag} = ANY(tags)
+        ORDER BY created_at DESC
+        LIMIT 100
+        """;
+
+    private const string FullTextSearchSqlTemplate = """
+        SELECT
+            currency,
+            COUNT(*) as transaction_count,
+            SUM(amount) as total_amount,
+            AVG(amount) as avg_amount,
+            ts_rank(search_vector, plainto_tsquery('english', {searchTerm})) as relevance_score
+        FROM transactions
+        WHERE search_vector @@ plainto_tsquery('english', {searchTerm2})
+        GROUP BY currency, search_vector
+        ORDER BY relevance_score DESC, total_amount DESC
+        LIMIT 50
+        """;
+
+    private const string UpsertSqlTemplate = """
+        INSERT INTO transactions (
+            transaction_id,
+            user_id,
+            status,
+            currency,
+            amount,
+            metadata,
+            tags,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            {transactionId},
+            {userId},
+            {status}::transaction_status,
+            {currency}::currency_code,
+            {amount},
+            {metadata}::jsonb,
+            {tags},
+            {createdAt},
+            {updatedAt}
+        )
+        ON CONFLICT (transaction_id)
+        DO UPDATE SET
+            user_id = EXCLUDED.user_id,
+            status = EXCLUDED.status,
+            currency = EXCLUDED.currency,
+            amount = EXCLUDED.amount,
+            metadata = EXCLUDED.metadata,
+            tags = EXCLUDED.tags,
+            updated_at = EXCLUDED.updated_at;
+        """;
+
     private IContainer? _container;
     private string _baseConnStr = string.Empty;
     private string _pengdowsConnStr = string.Empty;
@@ -53,19 +121,18 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
     private string _dapperConnStr = string.Empty;
     private IDatabaseContext _pengdowsContext = null!;
     private TypeMapRegistry _map = null!;
-    private EntityHelper<Transaction, long> _transactionHelper = null!;
+    private TableGateway<Transaction, long> _transactionHelper = null!;
     private EfTestDbContext _efContext = null!;
+    private DbContextOptions<EfTestDbContext> _efOptions = null!;
     private NpgsqlDataSource _dapperDataSource = null!;
-
-    // Pre-built query templates for cloning (56% faster than rebuilding)
-    private ISqlContainer _complexQueryTemplate = null!;
-    private ISqlContainer _fullTextSearchTemplate = null!;
 
     // Tracking for failures and performance
     private readonly Dictionary<string, BenchmarkResult> _results = new();
     private int _benchmarkCounter = 0;
 
     [Params(5000)] public int TransactionCount;
+    [Params(16)] public int Parallelism;
+    [Params(64)] public int OperationsPerRun;
 
     [GlobalSetup]
     public async Task GlobalSetup()
@@ -110,7 +177,7 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
         // pengdows.crud auto-detects PostgreSQL ENUMs and other features via dialect system
         var pengdowsDataSource = NpgsqlDataSource.Create(_pengdowsConnStr);
         _pengdowsContext = new DatabaseContext(cfg, pengdowsDataSource, NpgsqlFactory.Instance, null, _map);
-        _transactionHelper = new EntityHelper<Transaction, long>(_pengdowsContext);
+        _transactionHelper = new TableGateway<Transaction, long>(_pengdowsContext);
 
         // Entity Framework with PostgreSQL-specific configuration
         // REQUIRED: Create NpgsqlDataSource with registered ENUMs
@@ -121,23 +188,18 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
         dataSourceBuilder.MapEnum<CurrencyCode>("currency_code");
         var efDataSource = dataSourceBuilder.Build();
 
-        var options = new DbContextOptionsBuilder<EfTestDbContext>()
+        _efOptions = new DbContextOptionsBuilder<EfTestDbContext>()
             .UseNpgsql(efDataSource) // Use configured data source instead of plain connection string
             .Options;
-        _efContext = new EfTestDbContext(options);
+        _efContext = new EfTestDbContext(_efOptions);
 
         // Dapper with its own connection pool
         _dapperDataSource = NpgsqlDataSource.Create(_dapperConnStr);
-
-        // Pre-build query templates ONCE for cloning (56% faster than rebuilding each time)
-        _complexQueryTemplate = BuildComplexQueryTemplate();
-        _fullTextSearchTemplate = BuildFullTextSearchTemplate();
 
         Console.WriteLine($"[BENCHMARK] Testing real-world scenarios with STANDARD configurations");
         Console.WriteLine($"[BENCHMARK] Using separate connection pools per library (via Application Name)");
         Console.WriteLine($"[BENCHMARK] pengdows.crud ConnectionMode: {_pengdowsContext.ConnectionMode}");
         Console.WriteLine($"[BENCHMARK] Dataset: {TransactionCount} transactions");
-        Console.WriteLine($"[BENCHMARK] Query templates pre-built for optimal performance");
     }
 
     private async Task WaitForReady()
@@ -265,58 +327,6 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
         await conn.ExecuteAsync("ANALYZE transactions;");
     }
 
-    /// <summary>
-    /// Pre-build ComplexQuery template for cloning (56% faster than rebuilding)
-    /// </summary>
-    private ISqlContainer BuildComplexQueryTemplate()
-    {
-        var container = _pengdowsContext.CreateSqlContainer(@"
-                SELECT transaction_id, user_id, status, currency, amount, metadata, tags, created_at, updated_at
-                FROM transactions
-                WHERE status = ");
-        container.Query.Append(container.MakeParameterName("status"));
-        container.Query.Append("::transaction_status AND metadata->>'risk_score' > ");
-        container.Query.Append(container.MakeParameterName("riskScore"));
-        container.Query.Append(" AND ");
-        container.Query.Append(container.MakeParameterName("tag"));
-        container.Query.Append(" = ANY(tags) ORDER BY created_at DESC LIMIT 100");
-
-        container.AddParameterWithValue("status", DbType.String, "completed");
-        container.AddParameterWithValue("riskScore", DbType.String, "50");
-        container.AddParameterWithValue("tag", DbType.String, "high_value");
-
-        return container;
-    }
-
-    /// <summary>
-    /// Pre-build FullTextSearch template for cloning (56% faster than rebuilding)
-    /// </summary>
-    private ISqlContainer BuildFullTextSearchTemplate()
-    {
-        var container = _pengdowsContext.CreateSqlContainer(@"
-                SELECT
-                    currency,
-                    COUNT(*) as transaction_count,
-                    SUM(amount) as total_amount,
-                    AVG(amount) as avg_amount,
-                    ts_rank(search_vector, plainto_tsquery('english', ");
-        container.Query.Append(container.MakeParameterName("searchTerm"));
-        container.Query.Append(")) as relevance_score");
-        container.Query.Append(@"
-                FROM transactions
-                WHERE search_vector @@ plainto_tsquery('english', ");
-        container.Query.Append(container.MakeParameterName("searchTerm2"));
-        container.Query.Append(@")
-                GROUP BY currency, search_vector
-                ORDER BY relevance_score DESC, total_amount DESC
-                LIMIT 50");
-
-        container.AddParameterWithValue("searchTerm", DbType.String, "Transaction USD");
-        container.AddParameterWithValue("searchTerm2", DbType.String, "Transaction USD");
-
-        return container;
-    }
-
     [GlobalCleanup]
     public async Task GlobalCleanup()
     {
@@ -376,10 +386,6 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
         Console.WriteLine($"{new string('=', 80)}\n");
 
         // Cleanup resources
-        // Dispose query templates first
-        _complexQueryTemplate?.Dispose();
-        _fullTextSearchTemplate?.Dispose();
-
         if (_pengdowsContext is IAsyncDisposable pad)
         {
             await pad.DisposeAsync();
@@ -413,9 +419,12 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
     {
         return await ExecuteWithTracking("ComplexQuery_pengdows", async () =>
         {
-            // Clone pre-built template (56% faster than rebuilding)
-            await using var container = _complexQueryTemplate.Clone();
-            // Parameters are already set with correct values from template
+            await using var container = _pengdowsContext.CreateSqlContainer();
+            var sql = BuildComplexQuerySql(param => container.MakeParameterName(param));
+            container.Query.Append(sql);
+            container.AddParameterWithValue("status", DbType.String, "completed");
+            container.AddParameterWithValue("riskScore", DbType.Int32, 50);
+            container.AddParameterWithValue("tag", DbType.String, "high_value");
 
             return await _transactionHelper.LoadListAsync(container);
         });
@@ -423,22 +432,21 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
 
 
     [Benchmark]
-    public async Task<List<EfTransaction>> ComplexQuery_EntityFramework()
+    public async Task<List<Transaction>> ComplexQuery_EntityFramework()
     {
         return await ExecuteWithTracking("ComplexQuery_EntityFramework", async () =>
         {
-            // NOW PROPERLY CONFIGURED: EF can handle ENUMs, JSONB, and arrays
-            // But note the JSONB query still requires string manipulation - no native operators
-            // pengdows.crud: Can use native PostgreSQL JSONB operators in SQL
-            return await _efContext.Transactions
+            var sql = BuildComplexQuerySql(param => $"@{param}");
+            var rows = await _efContext.TransactionRows
+                .FromSqlRaw(
+                    sql,
+                    new NpgsqlParameter("status", "completed"),
+                    new NpgsqlParameter("riskScore", 50),
+                    new NpgsqlParameter("tag", "high_value"))
                 .AsNoTracking()
-                .Where(t => t.Status == TransactionStatus.Completed) // Now works with proper enum mapping
-                .Where(t => t.Metadata != null && t.Metadata.Contains("\"risk_score\"") &&
-                            t.Metadata.Contains("50")) // Still string-based JSONB query
-                .Where(t => t.Tags != null && t.Tags.Contains("high_value")) // Array support now works
-                .OrderByDescending(t => t.CreatedAt)
-                .Take(100)
                 .ToListAsync();
+
+            return rows.Select(r => r.ToTransaction()).ToList();
         });
     }
 
@@ -448,28 +456,12 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
         return await ExecuteWithTracking("ComplexQuery_Dapper", async () =>
         {
             await using var conn = await _dapperDataSource.OpenConnectionAsync();
-            var results = await conn.QueryAsync<dynamic>(@"
-                SELECT transaction_id, user_id, status, currency, amount, metadata, tags, created_at, updated_at
-                FROM transactions
-                WHERE status = @status::transaction_status
-                  AND (metadata->>'risk_score')::int > @riskScore
-                  AND @tag = ANY(tags)
-                ORDER BY created_at DESC
-                LIMIT 100",
+            var sql = BuildComplexQuerySql(param => $"@{param}");
+            var results = await conn.QueryAsync<TransactionRow>(
+                sql,
                 new { status = "completed", riskScore = 50, tag = "high_value" });
 
-            // Manual mapping required - this is error-prone
-            return results.Select(r => new Transaction
-            {
-                TransactionId = r.transaction_id,
-                UserId = r.user_id,
-                Status = r.status,
-                Currency = r.currency,
-                Amount = r.amount,
-                CreatedAt = r.created_at,
-                UpdatedAt = r.updated_at
-                // Metadata and Tags require complex manual parsing
-            }).ToList();
+            return results.Select(r => r.ToTransaction()).ToList();
         });
     }
 
@@ -484,9 +476,11 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
     {
         return await ExecuteWithTracking("FullTextSearchAggregation_pengdows", async () =>
         {
-            // Clone pre-built template (56% faster than rebuilding)
-            await using var container = _fullTextSearchTemplate.Clone();
-            // Parameters are already set with correct values from template
+            await using var container = _pengdowsContext.CreateSqlContainer();
+            var sql = BuildFullTextSearchSql(param => container.MakeParameterName(param));
+            container.Query.Append(sql);
+            container.AddParameterWithValue("searchTerm", DbType.String, "Transaction USD");
+            container.AddParameterWithValue("searchTerm2", DbType.String, "Transaction USD");
 
             // Return as dynamic for aggregation results
             await using var reader = await container.ExecuteReaderAsync();
@@ -512,22 +506,13 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
     {
         return await ExecuteWithTracking("FullTextSearchAggregation_EntityFramework", async () =>
         {
-            // EF has no FTS support, must use slow LIKE queries
-            var results = await _efContext.Transactions
+            var sql = BuildFullTextSearchSql(param => $"@{param}");
+            var results = await _efContext.FullTextRows
+                .FromSqlRaw(
+                    sql,
+                    new NpgsqlParameter("searchTerm", "Transaction USD"),
+                    new NpgsqlParameter("searchTerm2", "Transaction USD"))
                 .AsNoTracking()
-                .Where(t => EF.Functions.Like(t.SearchVector ?? "", "%Transaction%") &&
-                            EF.Functions.Like(t.SearchVector ?? "", "%USD%")) // Very slow
-                .GroupBy(t => t.Currency)
-                .Select(g => new
-                {
-                    Currency = g.Key,
-                    TransactionCount = g.Count(),
-                    TotalAmount = g.Sum(t => t.Amount),
-                    AvgAmount = g.Average(t => t.Amount),
-                    RelevanceScore = 0.0 // Can't calculate relevance without FTS
-                })
-                .OrderByDescending(r => r.TotalAmount)
-                .Take(50)
                 .ToListAsync();
 
             return results.Cast<dynamic>().ToList();
@@ -568,48 +553,192 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
 
             foreach (var txn in testTransactions)
             {
-                // REQUIRED: EF has no native UPSERT - must do SELECT + INSERT/UPDATE (2 round trips per row)
-                // pengdows.crud: Single MERGE/ON CONFLICT statement via BuildUpsert()
+                var sql = BuildUpsertSql(param => $"@{param}");
 
-                // LIMITATION: Can't load existing rows because they have JSONB/arrays that EF can't deserialize properly
-                // even with configuration. So we only SELECT the ID to check existence.
-                var existingId = await _efContext.Transactions
-                    .Where(t => t.TransactionId == txn.TransactionId)
-                    .Select(t => (long?)t.TransactionId)
-                    .FirstOrDefaultAsync();
-
-                if (existingId.HasValue)
-                {
-                    // LIMITATION: EF requires loading the full entity to update it
-                    // But loading full entity fails due to JSONB/array deserial issues
-                    // So we use ExecuteUpdateAsync (EF 7.0+) or skip updates entirely
-                    // For this benchmark, we'll just skip updates to avoid the complexity
-                    // pengdows.crud: No such issues, handles all PostgreSQL types natively
-                }
-                else
-                {
-                    var efTxn = new EfTransaction
-                    {
-                        TransactionId = txn.TransactionId,
-                        UserId = txn.UserId,
-                        // REQUIRED: Convert string to enum types
-                        Status = Enum.Parse<TransactionStatus>(txn.Status, true),
-                        Currency = Enum.Parse<CurrencyCode>(txn.Currency, true),
-                        Amount = txn.Amount,
-                        // LIMITATION: Can't set Metadata (JSONB) or Tags (array) - skip them
-                        // pengdows.crud: Handles these natively
-                        CreatedAt = txn.CreatedAt,
-                        UpdatedAt = DateTime.UtcNow
-                    };
-                    _efContext.Transactions.Add(efTxn);
-                }
+                await _efContext.Database.ExecuteSqlRawAsync(
+                    sql,
+                    new NpgsqlParameter("transactionId", txn.TransactionId),
+                    new NpgsqlParameter("userId", txn.UserId),
+                    new NpgsqlParameter("status", txn.Status),
+                    new NpgsqlParameter("currency", txn.Currency),
+                    new NpgsqlParameter("amount", txn.Amount),
+                    new NpgsqlParameter("metadata", txn.Metadata ?? "{}"),
+                    new NpgsqlParameter("tags", txn.Tags ?? Array.Empty<string>()),
+                    new NpgsqlParameter("createdAt", txn.CreatedAt),
+                    new NpgsqlParameter("updatedAt", DateTime.UtcNow));
 
                 totalAffected++;
             }
 
-            await _efContext.SaveChangesAsync();
             return totalAffected;
         });
+    }
+
+    [Benchmark]
+    public async Task ComplexQuery_pengdows_Concurrent()
+    {
+        await BenchmarkConcurrency.RunConcurrent(OperationsPerRun, Parallelism, async () =>
+        {
+            await using var container = _pengdowsContext.CreateSqlContainer();
+            var sql = BuildComplexQuerySql(param => container.MakeParameterName(param));
+            container.Query.Append(sql);
+            container.AddParameterWithValue("status", DbType.String, "completed");
+            container.AddParameterWithValue("riskScore", DbType.Int32, 50);
+            container.AddParameterWithValue("tag", DbType.String, "high_value");
+            await _transactionHelper.LoadListAsync(container);
+        });
+    }
+
+    [Benchmark]
+    public async Task ComplexQuery_EntityFramework_Concurrent()
+    {
+        await BenchmarkConcurrency.RunConcurrent(OperationsPerRun, Parallelism, async () =>
+        {
+            await using var ctx = new EfTestDbContext(_efOptions);
+            var sql = BuildComplexQuerySql(param => $"@{param}");
+            await ctx.TransactionRows
+                .FromSqlRaw(
+                    sql,
+                    new NpgsqlParameter("status", "completed"),
+                    new NpgsqlParameter("riskScore", 50),
+                    new NpgsqlParameter("tag", "high_value"))
+                .AsNoTracking()
+                .ToListAsync();
+        });
+    }
+
+    [Benchmark]
+    public async Task ComplexQuery_Dapper_Concurrent()
+    {
+        await BenchmarkConcurrency.RunConcurrent(OperationsPerRun, Parallelism, async () =>
+        {
+            await using var conn = await _dapperDataSource.OpenConnectionAsync();
+            var sql = BuildComplexQuerySql(param => $"@{param}");
+            var results = await conn.QueryAsync<TransactionRow>(
+                sql,
+                new { status = "completed", riskScore = 50, tag = "high_value" });
+            results.Select(r => r.ToTransaction()).ToList();
+        });
+    }
+
+    [Benchmark]
+    public async Task FullTextSearchAggregation_pengdows_Concurrent()
+    {
+        await BenchmarkConcurrency.RunConcurrent(OperationsPerRun, Parallelism, async () =>
+        {
+            await using var container = _pengdowsContext.CreateSqlContainer();
+            var sql = BuildFullTextSearchSql(param => container.MakeParameterName(param));
+            container.Query.Append(sql);
+            container.AddParameterWithValue("searchTerm", DbType.String, "Transaction USD");
+            container.AddParameterWithValue("searchTerm2", DbType.String, "Transaction USD");
+            await using var reader = await container.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+            }
+        });
+    }
+
+    [Benchmark]
+    public async Task FullTextSearchAggregation_EntityFramework_Concurrent()
+    {
+        await BenchmarkConcurrency.RunConcurrent(OperationsPerRun, Parallelism, async () =>
+        {
+            await using var ctx = new EfTestDbContext(_efOptions);
+            var sql = BuildFullTextSearchSql(param => $"@{param}");
+            await ctx.FullTextRows
+                .FromSqlRaw(
+                    sql,
+                    new NpgsqlParameter("searchTerm", "Transaction USD"),
+                    new NpgsqlParameter("searchTerm2", "Transaction USD"))
+                .AsNoTracking()
+                .ToListAsync();
+        });
+    }
+
+    [Benchmark]
+    public async Task BulkUpsert_pengdows_Concurrent()
+    {
+        await BenchmarkConcurrency.RunConcurrent(OperationsPerRun, Parallelism, async () =>
+        {
+            var testTransactions = GenerateTestTransactions(10);
+            foreach (var transaction in testTransactions)
+            {
+                await using var container = _pengdowsContext.CreateSqlContainer();
+                var sql = BuildUpsertSql(param => container.MakeParameterName(param));
+                container.Query.Append(sql);
+                BindUpsertParameters(container, transaction);
+                await container.ExecuteNonQueryAsync();
+            }
+        });
+    }
+
+    [Benchmark]
+    public async Task BulkUpsert_EntityFramework_Concurrent()
+    {
+        await BenchmarkConcurrency.RunConcurrent(OperationsPerRun, Parallelism, async () =>
+        {
+            await using var ctx = new EfTestDbContext(_efOptions);
+            var testTransactions = GenerateTestTransactions(10);
+
+            foreach (var txn in testTransactions)
+            {
+                var sql = BuildUpsertSql(param => $"@{param}");
+
+                await ctx.Database.ExecuteSqlRawAsync(
+                    sql,
+                    new NpgsqlParameter("transactionId", txn.TransactionId),
+                    new NpgsqlParameter("userId", txn.UserId),
+                    new NpgsqlParameter("status", txn.Status),
+                    new NpgsqlParameter("currency", txn.Currency),
+                    new NpgsqlParameter("amount", txn.Amount),
+                    new NpgsqlParameter("metadata", txn.Metadata ?? "{}"),
+                    new NpgsqlParameter("tags", txn.Tags ?? Array.Empty<string>()),
+                    new NpgsqlParameter("createdAt", txn.CreatedAt),
+                    new NpgsqlParameter("updatedAt", DateTime.UtcNow));
+            }
+        });
+    }
+
+    private static string BuildComplexQuerySql(Func<string, string> param)
+    {
+        return ComplexQuerySqlTemplate
+            .Replace("{status}", param("status"))
+            .Replace("{riskScore}", param("riskScore"))
+            .Replace("{tag}", param("tag"));
+    }
+
+    private static string BuildFullTextSearchSql(Func<string, string> param)
+    {
+        return FullTextSearchSqlTemplate
+            .Replace("{searchTerm}", param("searchTerm"))
+            .Replace("{searchTerm2}", param("searchTerm2"));
+    }
+
+    private static string BuildUpsertSql(Func<string, string> param)
+    {
+        return UpsertSqlTemplate
+            .Replace("{transactionId}", param("transactionId"))
+            .Replace("{userId}", param("userId"))
+            .Replace("{status}", param("status"))
+            .Replace("{currency}", param("currency"))
+            .Replace("{amount}", param("amount"))
+            .Replace("{metadata}", param("metadata"))
+            .Replace("{tags}", param("tags"))
+            .Replace("{createdAt}", param("createdAt"))
+            .Replace("{updatedAt}", param("updatedAt"));
+    }
+
+    private static void BindUpsertParameters(ISqlContainer container, Transaction txn)
+    {
+        container.AddParameterWithValue("transactionId", DbType.Int64, txn.TransactionId);
+        container.AddParameterWithValue("userId", DbType.Int32, txn.UserId);
+        container.AddParameterWithValue("status", DbType.String, txn.Status);
+        container.AddParameterWithValue("currency", DbType.String, txn.Currency);
+        container.AddParameterWithValue("amount", DbType.Decimal, txn.Amount);
+        container.AddParameterWithValue("metadata", DbType.String, txn.Metadata ?? "{}");
+        container.AddParameterWithValue("tags", DbType.Object, txn.Tags ?? Array.Empty<string>());
+        container.AddParameterWithValue("createdAt", DbType.DateTime, txn.CreatedAt);
+        container.AddParameterWithValue("updatedAt", DbType.DateTime, DateTime.UtcNow);
     }
 
     private List<Transaction> GenerateTestTransactions(int count)
@@ -758,6 +887,8 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
         }
 
         public DbSet<EfTransaction> Transactions { get; set; }
+        public DbSet<TransactionRow> TransactionRows { get; set; }
+        public DbSet<FullTextSearchRow> FullTextRows { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -809,6 +940,33 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
                 // Property must be marked [NotMapped] and excluded from model
                 // This means full-text search features are unavailable in EF without raw SQL
                 // pengdows.crud: Handles TSVECTOR natively via PostgreSQL dialect
+            });
+
+            modelBuilder.Entity<TransactionRow>(entity =>
+            {
+                entity.HasNoKey();
+                entity.ToView(null);
+                entity.Property(e => e.TransactionId).HasColumnName("transaction_id");
+                entity.Property(e => e.UserId).HasColumnName("user_id");
+                entity.Property(e => e.Status).HasColumnName("status");
+                entity.Property(e => e.Currency).HasColumnName("currency");
+                entity.Property(e => e.Amount).HasColumnName("amount");
+                entity.Property(e => e.Metadata).HasColumnName("metadata");
+                entity.Property(e => e.Tags).HasColumnName("tags");
+                entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+                entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+                entity.Property(e => e.SearchVector).HasColumnName("search_vector");
+            });
+
+            modelBuilder.Entity<FullTextSearchRow>(entity =>
+            {
+                entity.HasNoKey();
+                entity.ToView(null);
+                entity.Property(e => e.Currency).HasColumnName("currency");
+                entity.Property(e => e.TransactionCount).HasColumnName("transaction_count");
+                entity.Property(e => e.TotalAmount).HasColumnName("total_amount");
+                entity.Property(e => e.AvgAmount).HasColumnName("avg_amount");
+                entity.Property(e => e.RelevanceScore).HasColumnName("relevance_score");
             });
         }
     }
@@ -865,6 +1023,48 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
         // Must be excluded from model entirely using [NotMapped]
         // pengdows.crud: Handles TSVECTOR via dialect-specific type mapping
         [NotMapped] public string? SearchVector { get; set; }
+    }
+
+    [Keyless]
+    public class TransactionRow
+    {
+        public long TransactionId { get; set; }
+        public int UserId { get; set; }
+        public string Status { get; set; } = string.Empty;
+        public string Currency { get; set; } = string.Empty;
+        public decimal Amount { get; set; }
+        public string? Metadata { get; set; }
+        public string[]? Tags { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public DateTime UpdatedAt { get; set; }
+        public string? SearchVector { get; set; }
+
+        public Transaction ToTransaction()
+        {
+            return new Transaction
+            {
+                TransactionId = TransactionId,
+                UserId = UserId,
+                Status = Status,
+                Currency = Currency,
+                Amount = Amount,
+                Metadata = Metadata,
+                Tags = Tags,
+                CreatedAt = CreatedAt,
+                UpdatedAt = UpdatedAt,
+                SearchVector = SearchVector
+            };
+        }
+    }
+
+    [Keyless]
+    public class FullTextSearchRow
+    {
+        public string Currency { get; set; } = string.Empty;
+        public long TransactionCount { get; set; }
+        public decimal TotalAmount { get; set; }
+        public decimal AvgAmount { get; set; }
+        public double RelevanceScore { get; set; }
     }
 
     private class BenchmarkResult

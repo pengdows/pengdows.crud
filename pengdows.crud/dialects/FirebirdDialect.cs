@@ -1,3 +1,21 @@
+// =============================================================================
+// FILE: FirebirdDialect.cs
+// PURPOSE: Firebird Database specific dialect implementation.
+//
+// AI SUMMARY:
+// - Supports Firebird 2.5+ and 3.0+ with version-specific features.
+// - Key features:
+//   * MERGE statement support (Firebird 2.0+)
+//   * Parameter marker: @ (at sign)
+//   * Identifier quoting: "name" (double quotes)
+//   * Max parameters: 65535 (theoretical limit)
+//   * EXECUTE PROCEDURE for stored proc calls
+// - Window functions support in Firebird 3.0+.
+// - RETURNING clause for getting generated IDs.
+// - Generator (sequence) based ID generation.
+// - Embedded and server modes supported.
+// =============================================================================
+
 using System.Data;
 using System.Data.Common;
 using System.Text.RegularExpressions;
@@ -8,8 +26,21 @@ using pengdows.crud.wrappers;
 namespace pengdows.crud.dialects;
 
 /// <summary>
-/// Firebird dialect with SQL standard compliance and database-specific features
+/// Firebird Database dialect with SQL standard compliance.
 /// </summary>
+/// <remarks>
+/// <para>
+/// Supports Firebird 2.5 and later with automatic version detection.
+/// Firebird 3.0+ adds window function support.
+/// </para>
+/// <para>
+/// <strong>UPSERT:</strong> Uses MERGE statement (Firebird 2.0+).
+/// </para>
+/// <para>
+/// <strong>ID Generation:</strong> Uses generators (sequences) with
+/// RETURNING clause to fetch generated values.
+/// </para>
+/// </remarks>
 internal class FirebirdDialect : SqlDialect
 {
     internal FirebirdDialect(DbProviderFactory factory, ILogger logger)

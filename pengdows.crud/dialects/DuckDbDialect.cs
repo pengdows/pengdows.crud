@@ -1,3 +1,22 @@
+// =============================================================================
+// FILE: DuckDbDialect.cs
+// PURPOSE: DuckDB specific dialect implementation for analytical workloads.
+//
+// AI SUMMARY:
+// - Supports DuckDB 0.8+ with modern analytical SQL features.
+// - Key features:
+//   * MERGE statement support (DuckDB 1.4+)
+//   * Parameter marker: $ (dollar sign)
+//   * Identifier quoting: "name" (double quotes)
+//   * Max parameters: 65535 (theoretical limit)
+//   * Excellent SQL standard compliance
+// - MERGE RETURNING support in DuckDB 1.4+.
+// - DuckDB MERGE does not allow table alias on UPDATE SET left side.
+// - Embedded analytics database with columnar storage.
+// - Handles in-memory and file-based connections.
+// - Connection mode similar to SQLite handling.
+// =============================================================================
+
 using System.Data;
 using System.Data.Common;
 using System.Text.RegularExpressions;
@@ -8,8 +27,22 @@ using pengdows.crud.wrappers;
 namespace pengdows.crud.dialects;
 
 /// <summary>
-/// DuckDB dialect with modern analytical SQL features and excellent standard compliance
+/// DuckDB dialect with modern analytical SQL features.
 /// </summary>
+/// <remarks>
+/// <para>
+/// Supports DuckDB 0.8 and later with excellent SQL standard compliance.
+/// Optimized for analytical/OLAP workloads with columnar storage.
+/// </para>
+/// <para>
+/// <strong>UPSERT:</strong> Uses MERGE statement (DuckDB 1.4+).
+/// Note: MERGE UPDATE SET cannot use table alias on left side.
+/// </para>
+/// <para>
+/// <strong>Connection Modes:</strong> Similar to SQLite, uses SingleConnection
+/// or SingleWriter mode based on connection string.
+/// </para>
+/// </remarks>
 internal class DuckDbDialect : SqlDialect
 {
     internal DuckDbDialect(DbProviderFactory factory, ILogger logger)

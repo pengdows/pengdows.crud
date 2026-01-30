@@ -205,6 +205,63 @@ internal static class ConnectionPoolingConfiguration
         }
     }
 
+    /// <summary>
+    /// Applies application name to connection string if supported by dialect and configured.
+    /// Does not override if application name is already set in the connection string.
+    /// </summary>
+    /// <param name="connectionString">The connection string to modify.</param>
+    /// <param name="applicationName">The application name to set.</param>
+    /// <param name="applicationNameSettingName">The provider-specific setting name (e.g., "Application Name").</param>
+    /// <param name="builder">Optional pre-existing connection string builder to reuse.</param>
+    /// <returns>The modified connection string, or the original if no changes were made.</returns>
+    public static string ApplyApplicationName(
+        string connectionString,
+        string? applicationName,
+        string? applicationNameSettingName,
+        DbConnectionStringBuilder? builder = null)
+    {
+        // Return unchanged if no app name configured or provider doesn't support it
+        if (string.IsNullOrWhiteSpace(applicationName) ||
+            string.IsNullOrWhiteSpace(applicationNameSettingName))
+        {
+            return connectionString;
+        }
+
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            return connectionString;
+        }
+
+        try
+        {
+            // Use provided builder or create a new one
+            if (builder == null)
+            {
+                builder = new DbConnectionStringBuilder { ConnectionString = connectionString };
+            }
+
+            // Skip raw connection strings (e.g., ":memory:", file paths)
+            if (RepresentsRawConnectionString(builder, connectionString))
+            {
+                return connectionString;
+            }
+
+            // Don't override if already set in connection string
+            if (builder.ContainsKey(applicationNameSettingName))
+            {
+                return connectionString;
+            }
+
+            builder[applicationNameSettingName] = applicationName;
+            return builder.ConnectionString;
+        }
+        catch
+        {
+            // If parsing fails, return original
+            return connectionString;
+        }
+    }
+
     private static bool TrySetMinPoolViaProperty(DbConnectionStringBuilder builder, int minPoolSize)
     {
         foreach (var candidate in MinPoolPropertyCandidates)

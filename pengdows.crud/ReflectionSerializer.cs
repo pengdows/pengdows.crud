@@ -1,10 +1,55 @@
+// =============================================================================
+// FILE: ReflectionSerializer.cs
+// PURPOSE: Lightweight reflection-based serializer/deserializer for converting
+//          objects to/from dictionary representations without JSON dependencies.
+//
+// AI SUMMARY:
+// - Provides Serialize() to convert any object to a Dictionary<string, object?>
+//   representation (similar to what JSON would produce, but as CLR objects).
+// - Provides Deserialize<T>() to reconstruct objects from dictionary data.
+// - Handles:
+//   * Simple types (primitives, enums, Guid) - passed through unchanged
+//   * Strings - passed through unchanged
+//   * Dictionaries - recursively serialized with string keys
+//   * Collections/Arrays - recursively serialized as List<object?>
+//   * Complex objects - serialized as Dictionary<string, object?> of properties
+// - Use cases:
+//   * Logging/diagnostics without JSON serialization overhead
+//   * Configuration storage in non-JSON formats
+//   * Testing and debugging object structures
+// - Does not handle circular references or private fields.
+// =============================================================================
+
 using System.Collections;
 using System.Reflection;
 
 namespace pengdows.crud;
 
+/// <summary>
+/// Provides lightweight reflection-based serialization and deserialization
+/// of objects to dictionary representations.
+/// </summary>
+/// <remarks>
+/// <para>
+/// This serializer converts objects to nested <see cref="Dictionary{TKey,TValue}"/>
+/// structures, similar to what JSON serialization produces but without string
+/// encoding. Useful for logging, debugging, or storing configuration.
+/// </para>
+/// <para>
+/// <strong>Limitations:</strong>
+/// </para>
+/// <list type="bullet">
+/// <item><description>Does not detect or handle circular references</description></item>
+/// <item><description>Only public readable properties are serialized</description></item>
+/// <item><description>Only public writable properties are deserialized</description></item>
+/// <item><description>Uses Activator.CreateInstance, requiring parameterless constructors</description></item>
+/// </list>
+/// </remarks>
 public static class ReflectionSerializer
 {
+    /// <summary>
+    /// Determines if a type is a simple/primitive type that should be passed through unchanged.
+    /// </summary>
     private static bool IsSimpleType(Type type)
     {
         if (type.IsEnum)
@@ -16,6 +61,20 @@ public static class ReflectionSerializer
         return tc != TypeCode.Object || type == typeof(Guid);
     }
 
+    /// <summary>
+    /// Serializes an object to a dictionary representation.
+    /// </summary>
+    /// <param name="obj">The object to serialize.</param>
+    /// <returns>
+    /// A representation of the object:
+    /// <list type="bullet">
+    /// <item><description>null for null input</description></item>
+    /// <item><description>The same value for simple types (primitives, enums, Guid, strings)</description></item>
+    /// <item><description>A <see cref="Dictionary{TKey,TValue}"/> for dictionaries</description></item>
+    /// <item><description>A <see cref="List{T}"/> for collections</description></item>
+    /// <item><description>A <see cref="Dictionary{TKey,TValue}"/> with property names as keys for complex objects</description></item>
+    /// </list>
+    /// </returns>
     public static object? Serialize(object? obj)
     {
         if (obj == null)
@@ -71,6 +130,15 @@ public static class ReflectionSerializer
         return objDict;
     }
 
+    /// <summary>
+    /// Deserializes a dictionary representation back to an object of type <typeparamref name="T"/>.
+    /// </summary>
+    /// <typeparam name="T">The target type. Must have a parameterless constructor.</typeparam>
+    /// <param name="data">The dictionary data produced by <see cref="Serialize"/>.</param>
+    /// <returns>A new instance of <typeparamref name="T"/> with properties populated from the data.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when the data structure does not match the expected format for the target type.
+    /// </exception>
     public static T Deserialize<T>(object? data) where T : new()
     {
         return (T)Deserialize(typeof(T), data)!;

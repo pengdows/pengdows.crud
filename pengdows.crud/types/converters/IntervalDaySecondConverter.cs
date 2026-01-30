@@ -1,3 +1,21 @@
+// =============================================================================
+// FILE: IntervalDaySecondConverter.cs
+// PURPOSE: Converter for Oracle INTERVAL DAY TO SECOND type.
+//
+// AI SUMMARY:
+// - Converts between database interval values and IntervalDaySecond value objects.
+// - Represents intervals with Days and sub-day Time (hours/minutes/seconds).
+// - Provider-specific:
+//   * Oracle: INTERVAL DAY TO SECOND type
+//   * PostgreSQL/CockroachDB: INTERVAL (ISO 8601 format)
+//   * Others: TimeSpan equivalent
+// - ConvertToProvider(): Returns ISO 8601 format (P5DT12H30M45.5S) for Oracle/PostgreSQL.
+// - TryConvertFromProvider(): Handles IntervalDaySecond, TimeSpan, and string.
+// - Parse(): Handles ISO 8601 duration format with time component.
+// - Components: Days (int) and Time (TimeSpan).
+// - Thread-safe and immutable value objects.
+// =============================================================================
+
 using System.Globalization;
 using pengdows.crud.enums;
 using pengdows.crud.types.valueobjects;

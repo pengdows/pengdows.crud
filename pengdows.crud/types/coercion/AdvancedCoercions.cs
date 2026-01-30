@@ -1,3 +1,28 @@
+// =============================================================================
+// FILE: AdvancedCoercions.cs
+// PURPOSE: Advanced type coercions for database-specific exotic types.
+//
+// AI SUMMARY:
+// - Contains coercion implementations for complex database-specific types.
+// - RegisterAll(): Registers all advanced coercions with a CoercionRegistry.
+// - Temporal types:
+//   * PostgreSqlIntervalCoercion: PostgreSQL INTERVAL type
+//   * IntervalYearMonthCoercion: Oracle INTERVAL YEAR TO MONTH
+//   * IntervalDaySecondCoercion: Oracle INTERVAL DAY TO SECOND
+// - Network types (PostgreSQL):
+//   * InetCoercion: IP address with optional netmask (inet)
+//   * CidrCoercion: Network address (cidr)
+//   * MacAddressCoercion: MAC hardware address (macaddr)
+// - Spatial types:
+//   * GeometryCoercion: WKB/WKT/GeoJSON to Geometry
+//   * GeographyCoercion: WKB/WKT/GeoJSON to Geography
+// - Range types:
+//   * PostgreSqlRangeIntCoercion, PostgreSqlRangeDateTimeCoercion, PostgreSqlRangeLongCoercion
+// - Concurrency: RowVersionValueCoercion (SQL Server timestamp/rowversion)
+// - LOBs: BlobStreamCoercion (binary), ClobStreamCoercion (character)
+// - Handles provider-specific types via reflection (e.g., NpgsqlInet).
+// =============================================================================
+
 using System.Data;
 using System.Data.Common;
 using System.Net;

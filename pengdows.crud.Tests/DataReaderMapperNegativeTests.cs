@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.fakeDb;
 using pengdows.crud.Tests.Logging;
 using Xunit;
@@ -25,11 +26,21 @@ public class DataReaderMapperNegativeTests
         };
         var reader = new fakeDbDataReader(rows);
 
-        var result = await DataReaderMapper.LoadObjectsFromDataReaderAsync<SampleEntity>(reader);
+        var originalLogger = TypeCoercionHelper.Logger;
+        try
+        {
+            TypeCoercionHelper.Logger = NullLogger.Instance;
 
-        Assert.Single(result);
-        Assert.Equal("Alice", result[0].Name);
-        Assert.Equal(0, result[0].Age); // default due to failed conversion
+            var result = await DataReaderMapper.LoadObjectsFromDataReaderAsync<SampleEntity>(reader);
+
+            Assert.Single(result);
+            Assert.Equal("Alice", result[0].Name);
+            Assert.Equal(0, result[0].Age); // default due to failed conversion
+        }
+        finally
+        {
+            TypeCoercionHelper.Logger = originalLogger;
+        }
     }
 
     [Fact]

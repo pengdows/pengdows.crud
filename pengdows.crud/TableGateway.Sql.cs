@@ -1,8 +1,28 @@
+// =============================================================================
+// FILE: TableGateway.Sql.cs
+// PURPOSE: SQL template generation and caching infrastructure.
+//
+// AI SUMMARY:
+// - Contains cached SQL template classes:
+//   * CachedSqlTemplates - Pre-built INSERT, UPDATE, DELETE SQL strings
+//   * CachedContainerTemplates - Pre-configured SqlContainer instances
+// - SQL templates are cached per dialect (SQL Server, PostgreSQL, etc.).
+// - Template building methods:
+//   * BuildWrappedTableName() - Schema.Table with proper quoting
+//   * GetOrBuildTemplates() - Lazy template initialization
+// - Helper methods for column lists and parameter naming.
+// - CreateTemplateRowId() - Creates placeholder ID for template building.
+// - Performance: Templates built once per dialect, then cloned for use.
+// =============================================================================
+
 using System.Runtime.CompilerServices;
 using pengdows.crud.dialects;
 
 namespace pengdows.crud;
 
+/// <summary>
+/// TableGateway partial: SQL template generation and caching.
+/// </summary>
 public partial class TableGateway<TEntity, TRowID>
 {
     private class CachedSqlTemplates

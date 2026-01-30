@@ -1,3 +1,20 @@
+// =============================================================================
+// FILE: CidrConverter.cs
+// PURPOSE: Converter for PostgreSQL CIDR type (network subnet address).
+//
+// AI SUMMARY:
+// - Converts between database cidr values and Cidr value objects.
+// - Represents IPv4/IPv6 network subnets in CIDR notation (prefix required).
+// - CIDR vs INET: CIDR requires prefix and enforces host bits = zero.
+// - Provider-specific:
+//   * PostgreSQL/CockroachDB: CIDR type ("192.168.0.0/16")
+//   * Others: Store as VARCHAR
+// - ConvertToProvider(): Returns string for PostgreSQL, raw value otherwise.
+// - TryConvertFromProvider(): Handles Cidr, string, and NpgsqlCidr.
+// - Parse(): Internal helper requiring "network/prefix" format.
+// - Thread-safe and immutable value objects.
+// =============================================================================
+
 using System.Net;
 using pengdows.crud.enums;
 using pengdows.crud.types.valueobjects;

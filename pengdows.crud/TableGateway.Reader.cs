@@ -1,3 +1,25 @@
+// =============================================================================
+// FILE: TableGateway.Reader.cs
+// PURPOSE: DataReader-to-entity mapping with cached execution plans.
+//
+// AI SUMMARY:
+// - MapReaderToObject() - Converts current DataReader row to TEntity.
+// - Uses ColumnPlan[] for compiled, cache-optimized mapping.
+// - GetOrBuildRecordsetPlan() - Caches plans by recordset shape hash:
+//   * Field count + names + types determine shape
+//   * Hash collision resistant via strong hashing
+// - ColumnPlan struct contains:
+//   * Column ordinal for fast reader access
+//   * Compiled setter delegate for property assignment
+//   * Type coercion logic for conversions
+// - Handles:
+//   * Enum columns (string or numeric storage)
+//   * JSON columns (deserialized via JsonSerializer)
+//   * Nullable types
+//   * Type mismatches via TypeCoercionHelper
+// - Performance: Plan building is O(n) once, then O(1) lookup.
+// =============================================================================
+
 using System.Data.Common;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -7,6 +29,9 @@ using pengdows.crud.wrappers;
 
 namespace pengdows.crud;
 
+/// <summary>
+/// TableGateway partial: DataReader mapping to entities.
+/// </summary>
 public partial class TableGateway<TEntity, TRowID>
 {
     public TEntity MapReaderToObject(ITrackedReader reader)

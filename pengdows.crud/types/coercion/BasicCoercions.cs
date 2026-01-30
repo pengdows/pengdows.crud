@@ -1,3 +1,23 @@
+// =============================================================================
+// FILE: BasicCoercions.cs
+// PURPOSE: Basic type coercions for common database types.
+//
+// AI SUMMARY:
+// - Contains coercion implementations for fundamental .NET and database types.
+// - RegisterAll(): Registers all basic coercions with a CoercionRegistry.
+// - Primitive coercions:
+//   * GuidCoercion: Handles Guid, byte[16], string, ReadOnlyMemory<byte>, ArraySegment, char[]
+//   * BooleanCoercion: Handles bool, string (t/f/y/n/1/0), char, all numeric types
+//   * DateTimeCoercion: Always normalizes to UTC, handles DateTime, DateTimeOffset, strings
+//   * DateTimeOffsetCoercion: Handles DateTimeOffset and DateTime conversion
+//   * TimeSpanCoercion: Handles TimeSpan, double (seconds), time strings
+//   * DecimalCoercion: Handles all numeric conversions with CultureInfo.InvariantCulture
+// - Binary: ByteArrayCoercion handles byte[], ReadOnlyMemory<byte>, ArraySegment<byte>
+// - Array coercions: IntArrayCoercion, StringArrayCoercion
+// - JSON coercions: JsonValueCoercion, JsonDocumentCoercion, JsonElementCoercion
+// - PostgreSQL-specific: HStoreCoercion, IntRangeCoercion, DateTimeRangeCoercion
+// =============================================================================
+
 using System.Data;
 using System.Data.Common;
 using System.Globalization;

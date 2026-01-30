@@ -17,26 +17,50 @@ namespace CrudBenchmarks;
 /// Demonstrates pengdows.crud's database-specific feature advantages that EF/Dapper cannot easily leverage.
 /// Each database has unique optimizations that pengdows.crud's dialect system can exploit.
 ///
-/// NOTE: Entity Framework benchmarks are expected to fail (show as NA in results).
-/// This is intentional and demonstrates EF's limitations with advanced PostgreSQL features:
-/// - JSONB queries require client-side evaluation or raw SQL
-/// - Array operations are not natively supported
-/// - Full-text search requires extensions EF doesn't understand
-/// - Geospatial queries need PostGIS which EF can't handle natively
-///
-/// These failures highlight pengdows.crud's advantage: native database feature support.
+/// NOTE: Entity Framework benchmarks use raw SQL to keep the SQL identical across libraries.
+/// This keeps the comparison focused on execution/mapping overhead rather than LINQ translation.
 /// </summary>
 [MemoryDiagnoser]
 [SimpleJob(warmupCount: 3, iterationCount: 5, invocationCount: 25)]
 public class DatabaseSpecificFeatureBenchmarks : IAsyncDisposable
 {
+    private const string JsonbBrandSqlTemplate = """
+        SELECT product_id, category_id, product_name, price_category::text as price_category, price, tags,
+               specifications::text as specifications, warehouse_location, created_at
+        FROM products
+        WHERE specifications->>'brand' = {brand}
+        """;
+
+    private const string TagContainsSqlTemplate = """
+        SELECT product_id, category_id, product_name, price_category::text as price_category, price, tags,
+               specifications::text as specifications, warehouse_location, created_at
+        FROM products
+        WHERE {tag} = ANY(tags)
+        """;
+
+    private const string FullTextSqlTemplate = """
+        SELECT product_id, category_id, product_name, price_category::text as price_category, price, tags,
+               specifications::text as specifications, warehouse_location, created_at
+        FROM products
+        WHERE search_vector @@ plainto_tsquery('english', {searchTerm})
+        ORDER BY ts_rank(search_vector, plainto_tsquery('english', {searchTerm2})) DESC
+        """;
+
+    private const string GeoDistanceSqlTemplate = """
+        SELECT product_id, category_id, product_name, price_category::text as price_category, price, tags,
+               specifications::text as specifications, warehouse_location, created_at
+        FROM products
+        WHERE warehouse_location <-> point(50, 50) < {distance}
+        ORDER BY warehouse_location <-> point(50, 50)
+        """;
     private IContainer? _container;
     private string _connStr = string.Empty;
     private IDatabaseContext _pengdowsContext = null!;
     private TypeMapRegistry _map = null!;
-    private EntityHelper<Product, int> _productHelper = null!;
-    private EntityHelper<ProductCategory, int> _categoryHelper = null!;
+    private TableGateway<Product, int> _productHelper = null!;
+    private TableGateway<ProductCategory, int> _categoryHelper = null!;
     private EfTestDbContext _efContext = null!;
+    private DbContextOptions<EfTestDbContext> _efOptions = null!;
     private NpgsqlDataSource _dapperDataSource = null!;
 
     private readonly List<int> _productIds = new();
@@ -45,6 +69,8 @@ public class DatabaseSpecificFeatureBenchmarks : IAsyncDisposable
     [Params(1000)] public int ProductCount;
 
     [Params(50)] public int CategoryCount;
+    [Params(16)] public int Parallelism;
+    [Params(64)] public int OperationsPerRun;
 
     [GlobalSetup]
     public async Task GlobalSetup()
@@ -62,7 +88,7 @@ public class DatabaseSpecificFeatureBenchmarks : IAsyncDisposable
 
         var mappedPort = _container.GetMappedPublicPort(5432);
         _connStr =
-            $"Host=localhost;Port={mappedPort};Database=dbfeatures_test;Username=postgres;Password=postgres;Maximum Pool Size=100";
+            $"Host=localhost;Port={mappedPort};Database=dbfeatures_test;Username=postgres;Password=postgres";
 
         await WaitForReady();
         await CreateSchemaAndSeedAsync();
@@ -79,14 +105,14 @@ public class DatabaseSpecificFeatureBenchmarks : IAsyncDisposable
             DbMode = DbMode.Standard
         };
         _pengdowsContext = new DatabaseContext(cfg, NpgsqlFactory.Instance, null, _map);
-        _productHelper = new EntityHelper<Product, int>(_pengdowsContext);
-        _categoryHelper = new EntityHelper<ProductCategory, int>(_pengdowsContext);
+        _productHelper = new TableGateway<Product, int>(_pengdowsContext);
+        _categoryHelper = new TableGateway<ProductCategory, int>(_pengdowsContext);
 
         // Setup Entity Framework context
-        var options = new DbContextOptionsBuilder<EfTestDbContext>()
+        _efOptions = new DbContextOptionsBuilder<EfTestDbContext>()
             .UseNpgsql(_connStr)
             .Options;
-        _efContext = new EfTestDbContext(options);
+        _efContext = new EfTestDbContext(_efOptions);
 
         // Setup Dapper data source
         _dapperDataSource = NpgsqlDataSource.Create(_connStr);
@@ -300,11 +326,9 @@ public class DatabaseSpecificFeatureBenchmarks : IAsyncDisposable
     [Benchmark]
     public async Task<List<Product>> PostgreSQL_JSONB_Query_pengdows()
     {
-        await using var container = _pengdowsContext.CreateSqlContainer(@"
-            SELECT product_id, category_id, product_name, price_category, price, tags, specifications, warehouse_location, created_at
-            FROM products
-            WHERE specifications->>'brand' = ");
-        container.Query.Append(container.MakeParameterName("brand"));
+        await using var container = _pengdowsContext.CreateSqlContainer();
+        var sql = BuildJsonbBrandSql(param => container.MakeParameterName(param));
+        container.Query.Append(sql);
         container.AddParameterWithValue("brand", DbType.String, "Brand5");
 
         return await _productHelper.LoadListAsync(container);
@@ -317,12 +341,10 @@ public class DatabaseSpecificFeatureBenchmarks : IAsyncDisposable
     [Benchmark]
     public async Task<List<EfProduct>> PostgreSQL_JSONB_Query_EntityFramework()
     {
-        // EF Core has limited JSONB support, often requires client evaluation
-        // This may force client-side evaluation since EF's JSON support is limited
+        var sql = BuildJsonbBrandSql(param => $"@{param}");
         return await _efContext.Products
+            .FromSqlRaw(sql, new NpgsqlParameter("brand", "Brand5"))
             .AsNoTracking()
-            .Where(p => p.Specifications != null
-                        && EF.Functions.JsonContains(p.Specifications, "{\"brand\":\"Brand5\"}"))
             .ToListAsync();
     }
 
@@ -333,11 +355,8 @@ public class DatabaseSpecificFeatureBenchmarks : IAsyncDisposable
     public async Task<List<Product>> PostgreSQL_JSONB_Query_Dapper()
     {
         await using var conn = await _dapperDataSource.OpenConnectionAsync();
-        var products = await conn.QueryAsync<dynamic>(@"
-            SELECT product_id, category_id, product_name, price_category, price, tags, specifications, warehouse_location, created_at
-            FROM products
-            WHERE specifications->>'brand' = @brand",
-            new { brand = "Brand5" });
+        var sql = BuildJsonbBrandSql(param => $"@{param}");
+        var products = await conn.QueryAsync<dynamic>(sql, new { brand = "Brand5" });
 
         // Manual mapping required for complex types
         return products.Select(p => new Product
@@ -358,12 +377,9 @@ public class DatabaseSpecificFeatureBenchmarks : IAsyncDisposable
     [Benchmark]
     public async Task<List<Product>> PostgreSQL_Array_Contains_pengdows()
     {
-        await using var container = _pengdowsContext.CreateSqlContainer(@"
-            SELECT product_id, category_id, product_name, price_category, price, tags, specifications, warehouse_location, created_at
-            FROM products
-            WHERE ");
-        container.Query.Append(container.MakeParameterName("tag"));
-        container.Query.Append(" = ANY(tags)");
+        await using var container = _pengdowsContext.CreateSqlContainer();
+        var sql = BuildTagContainsSql(param => container.MakeParameterName(param));
+        container.Query.Append(sql);
         container.AddParameterWithValue("tag", DbType.String, "featured");
 
         return await _productHelper.LoadListAsync(container);
@@ -375,10 +391,10 @@ public class DatabaseSpecificFeatureBenchmarks : IAsyncDisposable
     [Benchmark]
     public async Task<List<EfProduct>> PostgreSQL_Array_Contains_EntityFramework()
     {
-        // EF Core has some array support but it's limited and verbose
+        var sql = BuildTagContainsSql(param => $"@{param}");
         return await _efContext.Products
+            .FromSqlRaw(sql, new NpgsqlParameter("tag", "featured"))
             .AsNoTracking()
-            .Where(p => p.Tags != null && p.Tags.Contains("featured"))
             .ToListAsync();
     }
 
@@ -388,14 +404,9 @@ public class DatabaseSpecificFeatureBenchmarks : IAsyncDisposable
     [Benchmark]
     public async Task<List<Product>> PostgreSQL_FullTextSearch_pengdows()
     {
-        await using var container = _pengdowsContext.CreateSqlContainer(@"
-            SELECT product_id, category_id, product_name, price_category, price, tags, specifications, warehouse_location, created_at
-            FROM products
-            WHERE search_vector @@ plainto_tsquery('english', ");
-        container.Query.Append(container.MakeParameterName("searchTerm"));
-        container.Query.Append(") ORDER BY ts_rank(search_vector, plainto_tsquery('english', ");
-        container.Query.Append(container.MakeParameterName("searchTerm2"));
-        container.Query.Append(")) DESC");
+        await using var container = _pengdowsContext.CreateSqlContainer();
+        var sql = BuildFullTextSql(param => container.MakeParameterName(param));
+        container.Query.Append(sql);
         container.AddParameterWithValue("searchTerm", DbType.String, "Product");
         container.AddParameterWithValue("searchTerm2", DbType.String, "Product");
 
@@ -409,10 +420,13 @@ public class DatabaseSpecificFeatureBenchmarks : IAsyncDisposable
     [Benchmark]
     public async Task<List<EfProduct>> PostgreSQL_FullTextSearch_EntityFramework()
     {
-        // EF has no native FTS support, falls back to slow LIKE
+        var sql = BuildFullTextSql(param => $"@{param}");
         return await _efContext.Products
+            .FromSqlRaw(
+                sql,
+                new NpgsqlParameter("searchTerm", "Product"),
+                new NpgsqlParameter("searchTerm2", "Product"))
             .AsNoTracking()
-            .Where(p => EF.Functions.Like(p.ProductName, "%Product%"))
             .ToListAsync();
     }
 
@@ -422,12 +436,9 @@ public class DatabaseSpecificFeatureBenchmarks : IAsyncDisposable
     [Benchmark]
     public async Task<List<Product>> PostgreSQL_Geospatial_Query_pengdows()
     {
-        await using var container = _pengdowsContext.CreateSqlContainer(@"
-            SELECT product_id, category_id, product_name, price_category, price, tags, specifications, warehouse_location, created_at
-            FROM products
-            WHERE warehouse_location <-> point(50, 50) < ");
-        container.Query.Append(container.MakeParameterName("distance"));
-        container.Query.Append(" ORDER BY warehouse_location <-> point(50, 50)");
+        await using var container = _pengdowsContext.CreateSqlContainer();
+        var sql = BuildGeoDistanceSql(param => container.MakeParameterName(param));
+        container.Query.Append(sql);
         container.AddParameterWithValue("distance", DbType.Double, 25.0);
 
         return await _productHelper.LoadListAsync(container);
@@ -439,12 +450,165 @@ public class DatabaseSpecificFeatureBenchmarks : IAsyncDisposable
     [Benchmark]
     public async Task<List<EfProduct>> PostgreSQL_Geospatial_Query_EntityFramework()
     {
-        // EF requires additional packages and complex setup for geospatial
-        // This is a simplified version - real implementation much more complex
+        var sql = BuildGeoDistanceSql(param => $"@{param}");
         return await _efContext.Products
+            .FromSqlRaw(sql, new NpgsqlParameter("distance", 25.0))
             .AsNoTracking()
-            .Where(p => Math.Sqrt(Math.Pow(50 - 50, 2) + Math.Pow(50 - 50, 2)) < 25)
             .ToListAsync();
+    }
+
+    [Benchmark]
+    public async Task PostgreSQL_JSONB_Query_pengdows_Concurrent()
+    {
+        await BenchmarkConcurrency.RunConcurrent(OperationsPerRun, Parallelism, async () =>
+        {
+            await using var container = _pengdowsContext.CreateSqlContainer();
+            var sql = BuildJsonbBrandSql(param => container.MakeParameterName(param));
+            container.Query.Append(sql);
+            container.AddParameterWithValue("brand", DbType.String, "Brand5");
+            await _productHelper.LoadListAsync(container);
+        });
+    }
+
+    [Benchmark]
+    public async Task PostgreSQL_JSONB_Query_EntityFramework_Concurrent()
+    {
+        await BenchmarkConcurrency.RunConcurrent(OperationsPerRun, Parallelism, async () =>
+        {
+            await using var ctx = new EfTestDbContext(_efOptions);
+            var sql = BuildJsonbBrandSql(param => $"@{param}");
+            await ctx.Products
+                .FromSqlRaw(sql, new NpgsqlParameter("brand", "Brand5"))
+                .AsNoTracking()
+                .ToListAsync();
+        });
+    }
+
+    [Benchmark]
+    public async Task PostgreSQL_JSONB_Query_Dapper_Concurrent()
+    {
+        await BenchmarkConcurrency.RunConcurrent(OperationsPerRun, Parallelism, async () =>
+        {
+            await using var conn = await _dapperDataSource.OpenConnectionAsync();
+            var sql = BuildJsonbBrandSql(param => $"@{param}");
+            var products = await conn.QueryAsync<dynamic>(sql, new { brand = "Brand5" });
+            products.Select(p => new Product
+            {
+                ProductId = p.product_id,
+                CategoryId = p.category_id,
+                ProductName = p.product_name,
+                PriceCategory = p.price_category,
+                Price = p.price,
+                CreatedAt = p.created_at
+            }).ToList();
+        });
+    }
+
+    [Benchmark]
+    public async Task PostgreSQL_Array_Contains_pengdows_Concurrent()
+    {
+        await BenchmarkConcurrency.RunConcurrent(OperationsPerRun, Parallelism, async () =>
+        {
+            await using var container = _pengdowsContext.CreateSqlContainer();
+            var sql = BuildTagContainsSql(param => container.MakeParameterName(param));
+            container.Query.Append(sql);
+            container.AddParameterWithValue("tag", DbType.String, "featured");
+            await _productHelper.LoadListAsync(container);
+        });
+    }
+
+    [Benchmark]
+    public async Task PostgreSQL_Array_Contains_EntityFramework_Concurrent()
+    {
+        await BenchmarkConcurrency.RunConcurrent(OperationsPerRun, Parallelism, async () =>
+        {
+            await using var ctx = new EfTestDbContext(_efOptions);
+            var sql = BuildTagContainsSql(param => $"@{param}");
+            await ctx.Products
+                .FromSqlRaw(sql, new NpgsqlParameter("tag", "featured"))
+                .AsNoTracking()
+                .ToListAsync();
+        });
+    }
+
+    [Benchmark]
+    public async Task PostgreSQL_FullTextSearch_pengdows_Concurrent()
+    {
+        await BenchmarkConcurrency.RunConcurrent(OperationsPerRun, Parallelism, async () =>
+        {
+            await using var container = _pengdowsContext.CreateSqlContainer();
+            var sql = BuildFullTextSql(param => container.MakeParameterName(param));
+            container.Query.Append(sql);
+            container.AddParameterWithValue("searchTerm", DbType.String, "Product");
+            container.AddParameterWithValue("searchTerm2", DbType.String, "Product");
+            await _productHelper.LoadListAsync(container);
+        });
+    }
+
+    [Benchmark]
+    public async Task PostgreSQL_FullTextSearch_EntityFramework_Concurrent()
+    {
+        await BenchmarkConcurrency.RunConcurrent(OperationsPerRun, Parallelism, async () =>
+        {
+            await using var ctx = new EfTestDbContext(_efOptions);
+            var sql = BuildFullTextSql(param => $"@{param}");
+            await ctx.Products
+                .FromSqlRaw(
+                    sql,
+                    new NpgsqlParameter("searchTerm", "Product"),
+                    new NpgsqlParameter("searchTerm2", "Product"))
+                .AsNoTracking()
+                .ToListAsync();
+        });
+    }
+
+    [Benchmark]
+    public async Task PostgreSQL_Geospatial_Query_pengdows_Concurrent()
+    {
+        await BenchmarkConcurrency.RunConcurrent(OperationsPerRun, Parallelism, async () =>
+        {
+            await using var container = _pengdowsContext.CreateSqlContainer();
+            var sql = BuildGeoDistanceSql(param => container.MakeParameterName(param));
+            container.Query.Append(sql);
+            container.AddParameterWithValue("distance", DbType.Double, 25.0);
+            await _productHelper.LoadListAsync(container);
+        });
+    }
+
+    [Benchmark]
+    public async Task PostgreSQL_Geospatial_Query_EntityFramework_Concurrent()
+    {
+        await BenchmarkConcurrency.RunConcurrent(OperationsPerRun, Parallelism, async () =>
+        {
+            await using var ctx = new EfTestDbContext(_efOptions);
+            var sql = BuildGeoDistanceSql(param => $"@{param}");
+            await ctx.Products
+                .FromSqlRaw(sql, new NpgsqlParameter("distance", 25.0))
+                .AsNoTracking()
+                .ToListAsync();
+        });
+    }
+
+    private static string BuildJsonbBrandSql(Func<string, string> param)
+    {
+        return JsonbBrandSqlTemplate.Replace("{brand}", param("brand"));
+    }
+
+    private static string BuildTagContainsSql(Func<string, string> param)
+    {
+        return TagContainsSqlTemplate.Replace("{tag}", param("tag"));
+    }
+
+    private static string BuildFullTextSql(Func<string, string> param)
+    {
+        return FullTextSqlTemplate
+            .Replace("{searchTerm}", param("searchTerm"))
+            .Replace("{searchTerm2}", param("searchTerm2"));
+    }
+
+    private static string BuildGeoDistanceSql(Func<string, string> param)
+    {
+        return GeoDistanceSqlTemplate.Replace("{distance}", param("distance"));
     }
 
     public async ValueTask DisposeAsync()

@@ -1,3 +1,23 @@
+// =============================================================================
+// FILE: GeometryConverter.cs
+// PURPOSE: Converter for planar geometry (Cartesian coordinate) spatial types.
+//
+// AI SUMMARY:
+// - Converts between database spatial values and Geometry value objects.
+// - Supports 2D/3D/4D geometries in Cartesian (flat-earth) coordinate systems.
+// - Provider-specific:
+//   * SQL Server: GEOMETRY type (SqlGeometry from Microsoft.SqlServer.Types)
+//   * PostgreSQL: PostGIS GEOMETRY (WKB/EWKB/WKT/EWKT)
+//   * MySQL: GEOMETRY, POINT, LINESTRING, POLYGON types
+//   * Oracle: SDO_GEOMETRY with coordinate system
+// - FromBinary(): Converts WKB/EWKB to Geometry with SRID extraction.
+// - FromTextInternal(): Converts WKT/EWKT (extracts "SRID=nnnn;").
+// - FromGeoJsonInternal(): Converts GeoJSON with SRID extraction.
+// - ExtractSridFromEwkb(): Reads SRID from EWKB format (flag 0x20000000).
+// - Use Geometry for planar coordinates (maps, engineering, local surveys).
+// - Use Geography for lat/lon coordinates on Earth's surface.
+// =============================================================================
+
 using System.Buffers.Binary;
 using pengdows.crud.enums;
 using pengdows.crud.@internal;

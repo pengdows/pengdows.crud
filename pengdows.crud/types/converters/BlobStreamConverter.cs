@@ -1,3 +1,22 @@
+// =============================================================================
+// FILE: BlobStreamConverter.cs
+// PURPOSE: Converter for BLOB (Binary Large Object) streaming.
+//
+// AI SUMMARY:
+// - Converts between database BLOB values and Stream instances.
+// - Enables memory-efficient streaming without loading entire content.
+// - Provider-specific:
+//   * SQL Server: VARBINARY(MAX), IMAGE columns
+//   * PostgreSQL: BYTEA columns (returns byte[])
+//   * Oracle: BLOB columns (returns Oracle-specific stream)
+//   * MySQL: BLOB, LONGBLOB columns
+//   * SQLite: BLOB type
+// - ConvertToProvider(): Returns Stream, seeks to beginning if seekable.
+// - TryConvertFromProvider(): Handles Stream, byte[], ReadOnlyMemory<byte>, ArraySegment<byte>.
+// - Memory efficiency: Wraps byte[] in MemoryStream without copying.
+// - Thread-safe converter, but returned streams are NOT thread-safe.
+// =============================================================================
+
 using pengdows.crud.enums;
 
 namespace pengdows.crud.types.converters;

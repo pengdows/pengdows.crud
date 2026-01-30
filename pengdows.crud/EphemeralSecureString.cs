@@ -1,3 +1,22 @@
+// =============================================================================
+// FILE: EphemeralSecureString.cs
+// PURPOSE: Provides short-lived, encrypted in-memory storage for sensitive
+//          strings like connection string passwords or API keys.
+//
+// AI SUMMARY:
+// - This class encrypts sensitive strings in memory using AES encryption.
+// - The plaintext is only decrypted when Reveal() is called and is
+//   automatically cleared from memory after 750ms (TTL_MS).
+// - Designed to minimize the window during which sensitive data is exposed
+//   in plaintext in process memory.
+// - Uses CryptographicOperations.ZeroMemory to securely clear byte arrays.
+// - Implements IDisposable/IAsyncDisposable via SafeAsyncDisposableBase.
+// - Use case: Store database passwords in memory without leaving them
+//   as plaintext strings that could be captured in memory dumps.
+// - The WithRevealed() method provides a callback pattern for using the
+//   string without storing it in a variable.
+// =============================================================================
+
 #region
 
 using System.Security.Cryptography;
@@ -8,8 +27,50 @@ using pengdows.crud.infrastructure;
 
 namespace pengdows.crud;
 
+/// <summary>
+/// Provides secure, short-lived storage for sensitive strings with automatic memory clearing.
+/// </summary>
+/// <remarks>
+/// <para>
+/// This class addresses the challenge of storing sensitive data like passwords or API keys
+/// in memory. Unlike <see cref="System.Security.SecureString"/> (which is deprecated on
+/// .NET Core), this implementation uses AES encryption to keep the data secure in memory.
+/// </para>
+/// <para>
+/// <strong>Security Model:</strong>
+/// </para>
+/// <list type="bullet">
+/// <item><description>The input string is immediately encrypted using a randomly generated AES key.</description></item>
+/// <item><description>The key and IV are stored in memory (protected by runtime only).</description></item>
+/// <item><description>When <see cref="Reveal"/> is called, the plaintext is decrypted and cached.</description></item>
+/// <item><description>The plaintext cache is automatically cleared after 750ms.</description></item>
+/// <item><description>On disposal, all byte arrays are securely zeroed.</description></item>
+/// </list>
+/// <para>
+/// <strong>Limitations:</strong> This provides defense-in-depth but cannot prevent
+/// a determined attacker with debugger access. The primary goal is to reduce the
+/// window of exposure and prevent sensitive strings from appearing in crash dumps.
+/// </para>
+/// </remarks>
+/// <example>
+/// <code>
+/// // Store a password securely
+/// using var securePassword = new EphemeralSecureString(passwordFromUser);
+///
+/// // Later, when building a connection string:
+/// securePassword.WithRevealed(password =>
+/// {
+///     connectionStringBuilder.Password = password;
+/// });
+/// // Password is cleared from memory after 750ms
+/// </code>
+/// </example>
+/// <seealso cref="IEphemeralSecureString"/>
 public sealed class EphemeralSecureString : SafeAsyncDisposableBase, IEphemeralSecureString
 {
+    /// <summary>
+    /// Time-to-live in milliseconds before the cached plaintext is cleared.
+    /// </summary>
     private const int TTL_MS = 750;
     private readonly byte[] _cipherText;
     private readonly Encoding _encoding;

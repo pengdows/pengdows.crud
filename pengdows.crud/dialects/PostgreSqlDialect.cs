@@ -1,3 +1,22 @@
+// =============================================================================
+// FILE: PostgreSqlDialect.cs
+// PURPOSE: PostgreSQL specific dialect implementation.
+//
+// AI SUMMARY:
+// - Supports PostgreSQL 10+ with comprehensive SQL standard compliance.
+// - Key features:
+//   * INSERT ... ON CONFLICT for upserts (supports DO UPDATE and DO NOTHING)
+//   * Parameter marker: : (colon prefix, Npgsql standard)
+//   * Identifier quoting: "name" (double quotes)
+//   * Max parameters: 32767 (practical limit)
+//   * Prepared statements enabled for performance
+// - Session settings: standard_conforming_strings, client_min_messages.
+// - RETURNING clause for getting generated IDs.
+// - Array/range type support via Npgsql.
+// - CockroachDB uses this dialect (Postgres-compatible wire protocol).
+// - Stored procedure support via CALL statement.
+// =============================================================================
+
 using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
@@ -7,8 +26,20 @@ using pengdows.crud.wrappers;
 namespace pengdows.crud.dialects;
 
 /// <summary>
-/// PostgreSQL dialect with comprehensive standard support
+/// PostgreSQL dialect with comprehensive SQL standard compliance.
 /// </summary>
+/// <remarks>
+/// <para>
+/// Supports PostgreSQL 10 and later with automatic version detection.
+/// Also used for CockroachDB (Postgres-compatible).
+/// </para>
+/// <para>
+/// <strong>UPSERT:</strong> Uses INSERT ... ON CONFLICT (key) DO UPDATE.
+/// </para>
+/// <para>
+/// <strong>Prepared Statements:</strong> Enabled by default for performance.
+/// </para>
+/// </remarks>
 internal class PostgreSqlDialect : SqlDialect
 {
     private const string DefaultSessionSettings =
@@ -357,5 +388,6 @@ SET client_min_messages = warning;";
     public override string? PoolingSettingName => "Pooling";
     public override string? MinPoolSizeSettingName => "Minimum Pool Size";
     public override string? MaxPoolSizeSettingName => "Maximum Pool Size";
+    public override string? ApplicationNameSettingName => "Application Name";
     internal override int DefaultMaxPoolSize => 100;
 }

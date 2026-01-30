@@ -1,3 +1,20 @@
+// =============================================================================
+// FILE: SingleConnectionStrategy.cs
+// PURPOSE: Connection strategy where ALL operations use ONE persistent connection.
+//
+// AI SUMMARY:
+// - Most restrictive strategy: all reads AND writes share single connection.
+// - Required for isolated in-memory databases (SQLite :memory:, DuckDB :memory:).
+// - Connection loss = data loss for in-memory databases.
+// - GetConnection() always returns the same persistent connection.
+// - ReleaseConnection() never disposes the persistent connection.
+// - PostInitialize() stores connection as persistent on DatabaseContext.
+// - HandleDialectDetection() uses persistent connection directly.
+// - Thread safety: Application code must serialize access externally.
+// - Lowest overhead but highest latency (no concurrency).
+// - Extends SafeAsyncDisposableBase for proper cleanup on context disposal.
+// =============================================================================
+
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.dialects;

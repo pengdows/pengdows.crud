@@ -1,3 +1,27 @@
+// =============================================================================
+// FILE: DatabaseContext.Initialization.cs
+// PURPOSE: DatabaseContext constructors, initialization, and configuration.
+//
+// AI SUMMARY:
+// - Contains all DatabaseContext constructors:
+//   * (connectionString, providerName) - Uses DbProviderFactories
+//   * (connectionString, DbProviderFactory) - Direct factory
+//   * (IDatabaseContextConfiguration, factory) - Full configuration object
+// - Initialization flow:
+//   1. Parse connection string for pool settings and mode hints
+//   2. Detect database product (SQL Server, PostgreSQL, etc.)
+//   3. Create appropriate SQL dialect
+//   4. Initialize connection strategy (Standard, KeepAlive, etc.)
+//   5. Set up metrics collector if enabled
+// - Auto-detection of DbMode for embedded databases:
+//   * SQLite :memory: -> SingleConnection
+//   * SQLite file mode -> SingleWriter
+//   * DuckDB in-memory -> appropriate mode
+// - Pool governor setup for connection limiting
+// - Application name handling for connection string
+// - Session settings application (timeouts, isolation levels)
+// =============================================================================
+
 using System.Data.Common;
 using System.Security.Cryptography;
 using System.Text;
@@ -19,8 +43,13 @@ using pengdows.crud.wrappers;
 namespace pengdows.crud;
 
 /// <summary>
-/// DatabaseContext partial class: Constructors and initialization methods
+/// DatabaseContext partial class: Constructors and initialization methods.
 /// </summary>
+/// <remarks>
+/// This partial contains all the constructor overloads and the initialization
+/// logic that sets up the database context including dialect detection,
+/// connection strategy selection, and metrics configuration.
+/// </remarks>
 public partial class DatabaseContext
 {
     #region Constructors
@@ -166,6 +195,8 @@ public partial class DatabaseContext
                 _dataSourceInfo = new DataSourceInformation(_dialect);
             }
 
+            _sessionSettingsDetectionCompleted = true;
+
             Name = _dataSourceInfo.DatabaseProductName;
             _procWrappingStyle = _dataSourceInfo.ProcWrappingStyle;
 
@@ -179,6 +210,14 @@ public partial class DatabaseContext
                 _dialect?.PoolingSettingName,
                 _dialect?.MinPoolSizeSettingName,
                 builder);
+
+            // Apply application name if configured
+            _connectionString = ConnectionPoolingConfiguration.ApplyApplicationName(
+                _connectionString,
+                configuration.ApplicationName,
+                _dialect?.ApplicationNameSettingName,
+                builder);
+
             InitializePoolGovernors();
 
             if (initialConnection != null)
@@ -325,6 +364,8 @@ public partial class DatabaseContext
                 _dataSourceInfo = new DataSourceInformation(_dialect);
             }
 
+            _sessionSettingsDetectionCompleted = true;
+
             Name = _dataSourceInfo.DatabaseProductName;
             _procWrappingStyle = _dataSourceInfo.ProcWrappingStyle;
 
@@ -338,6 +379,14 @@ public partial class DatabaseContext
                 _dialect?.PoolingSettingName,
                 _dialect?.MinPoolSizeSettingName,
                 builder);
+
+            // Apply application name if configured
+            _connectionString = ConnectionPoolingConfiguration.ApplyApplicationName(
+                _connectionString,
+                configuration.ApplicationName,
+                _dialect?.ApplicationNameSettingName,
+                builder);
+
             InitializePoolGovernors();
 
             if (initialConnection != null)
@@ -535,12 +584,7 @@ public partial class DatabaseContext
                 }
                 else
                 {
-                    // Standard: apply per-connection session hints that must be present during dialect init
-                    _connectionSessionSettings =
-                        SessionSettingsConfigurator.GetSessionSettings(Product, ConnectionMode);
-                    _applyConnectionSessionSettings =
-                        SessionSettingsConfigurator.ShouldApplySettings(_connectionSessionSettings, ConnectionMode);
-                    // Do NOT SetPersistentConnection
+                    // Standard: no persistent connection to configure here
                 }
             }
 

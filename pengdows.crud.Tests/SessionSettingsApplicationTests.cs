@@ -21,12 +21,10 @@ public class SessionSettingsApplicationTests
         };
         using var ctx = new DatabaseContext(config, factory);
 
-        var field = typeof(DatabaseContext)
-            .GetField("_connectionSessionSettings", BindingFlags.NonPublic | BindingFlags.Instance);
-        var settings = (string?)field!.GetValue(ctx);
+        var preamble = ctx.SessionSettingsPreamble;
 
-        Assert.False(string.IsNullOrWhiteSpace(settings));
-        Assert.Contains("sql_mode", settings, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("ANSI_QUOTES", settings, StringComparison.OrdinalIgnoreCase);
+        Assert.False(string.IsNullOrWhiteSpace(preamble));
+        Assert.Contains("sql_mode", preamble, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ANSI_QUOTES", preamble, StringComparison.OrdinalIgnoreCase);
     }
 }

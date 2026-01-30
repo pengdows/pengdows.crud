@@ -1,3 +1,24 @@
+// =============================================================================
+// FILE: DataSourceInformation.cs
+// PURPOSE: Provides metadata about a database connection's capabilities,
+//          including version info, parameter formats, and feature support.
+//
+// AI SUMMARY:
+// - Wraps an ISqlDialect to expose database metadata in a read-only fashion.
+// - Created during DatabaseContext initialization to capture:
+//   * Product name and version (e.g., "PostgreSQL 14.2")
+//   * Parameter marker format (@, :, ?)
+//   * Identifier quoting (", [], `)
+//   * Feature support (MERGE, ON CONFLICT, etc.)
+//   * Max parameter limits
+// - The CreateAsync factory method connects to the database and auto-detects
+//   the dialect based on provider type and server version.
+// - Used by SqlContainer and TableGateway to generate database-appropriate SQL.
+// - Exposes compatibility warnings for unsupported/fallback dialects.
+// - BuildEmptySchema() creates a DataTable matching ADO.NET schema format
+//   for testing and compatibility scenarios.
+// =============================================================================
+
 using System.Data;
 using System.Data.Common;
 using System.Text.RegularExpressions;
@@ -9,11 +30,37 @@ using pengdows.crud.wrappers;
 
 namespace pengdows.crud;
 
+/// <summary>
+/// Provides metadata about a database connection's capabilities and SQL dialect.
+/// </summary>
+/// <remarks>
+/// <para>
+/// This class exposes information about the connected database including its product
+/// name, version, parameter format, identifier quoting rules, and supported features
+/// like MERGE statements or upsert syntax.
+/// </para>
+/// <para>
+/// <strong>Creation:</strong> Typically created automatically by <see cref="DatabaseContext"/>
+/// during initialization, or manually via <see cref="CreateAsync"/>.
+/// </para>
+/// <para>
+/// <strong>Thread Safety:</strong> This class is immutable after construction and safe
+/// for concurrent access.
+/// </para>
+/// </remarks>
+/// <seealso cref="IDataSourceInformation"/>
+/// <seealso cref="ISqlDialect"/>
+/// <seealso cref="DatabaseContext"/>
 public class DataSourceInformation : IDataSourceInformation
 {
     private readonly ISqlDialect _dialect;
     private int? _maxOutputParameters;
 
+    /// <summary>
+    /// Initializes a new instance from an existing dialect.
+    /// </summary>
+    /// <param name="dialect">The SQL dialect providing database-specific information.</param>
+    /// <exception cref="ArgumentNullException">Thrown if <paramref name="dialect"/> is null.</exception>
     internal DataSourceInformation(ISqlDialect dialect)
     {
         _dialect = dialect ?? throw new ArgumentNullException(nameof(dialect));
@@ -35,11 +82,22 @@ public class DataSourceInformation : IDataSourceInformation
         ParameterNamePatternRegex = dialect.ParameterNamePattern;
     }
 
+    /// <inheritdoc />
     public string DatabaseProductName { get; }
+
+    /// <inheritdoc />
     public string DatabaseProductVersion { get; }
+
+    /// <inheritdoc />
     public Version? ParsedVersion { get; private set; }
+
+    /// <inheritdoc />
     public SupportedDatabase Product { get; }
+
+    /// <inheritdoc />
     public SqlStandardLevel StandardCompliance { get; }
+
+    /// <inheritdoc />
     public string ParameterMarkerPattern { get; }
     public string QuotePrefix => _dialect.QuotePrefix;
     public string QuoteSuffix => _dialect.QuoteSuffix;

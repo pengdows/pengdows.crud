@@ -1,7 +1,35 @@
+// =============================================================================
+// FILE: DecimalHelpers.cs
+// PURPOSE: Utilities for analyzing decimal values to infer SQL DECIMAL
+//          precision and scale for dynamic schema/parameter configuration.
+//
+// AI SUMMARY:
+// - Provides the Infer() method which analyzes a decimal value and returns
+//   its (Precision, Scale) in SQL DECIMAL semantics.
+// - Precision = total significant digits (left + right of decimal point).
+// - Scale = digits to the right of the decimal point (after trimming zeros).
+// - Uses a pre-computed Pow10 lookup table for fast multiplication.
+// - Handles trailing fractional zeros correctly (1.2300 => scale 2, not 4).
+// - Returns (0, 0) for zero values.
+// - Use case: When you need to dynamically determine the appropriate
+//   DECIMAL(p,s) type for a value, or validate that a value fits within
+//   a column's declared precision/scale constraints.
+// =============================================================================
+
 namespace pengdows.crud;
 
+/// <summary>
+/// Provides utility methods for analyzing decimal values.
+/// </summary>
+/// <remarks>
+/// This class is used internally to determine the precision and scale of decimal
+/// values for SQL parameter configuration and validation.
+/// </remarks>
 public static class DecimalHelpers
 {
+    /// <summary>
+    /// Pre-computed powers of 10 for fast decimal multiplication.
+    /// </summary>
     private static readonly decimal[] Pow10 =
     {
         1m, 10m, 100m, 1000m, 10000m, 100000m, 1000000m, 10000000m,

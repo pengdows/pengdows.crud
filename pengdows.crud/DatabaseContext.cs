@@ -1,3 +1,32 @@
+// =============================================================================
+// FILE: DatabaseContext.cs
+// PURPOSE: Primary entry point for database operations - manages connections,
+//          transactions, SQL execution, and dialect detection.
+//
+// AI SUMMARY:
+// - This is the main class users create to interact with a database.
+// - Key responsibilities:
+//   * Connection management (pooling, open late/close early philosophy)
+//   * Transaction creation (BeginTransaction returns TransactionContext)
+//   * SQL container creation (CreateSqlContainer for building queries)
+//   * Dialect detection (auto-detects PostgreSQL, SQL Server, etc.)
+//   * Metrics collection (connection counts, timings)
+// - Connection modes (DbMode):
+//   * Standard - ephemeral connections per operation (recommended for production)
+//   * KeepAlive - sentinel connection + ephemeral work connections
+//   * SingleWriter - pinned writer + ephemeral readers (for SQLite file mode)
+//   * SingleConnection - all work through one connection (for :memory: SQLite)
+// - Thread-safe: concurrent operations are supported in all modes.
+// - Singleton per connection string: register in DI as singleton.
+// - Partial class split across multiple files:
+//   * DatabaseContext.cs - Core properties and disposal
+//   * DatabaseContext.Initialization.cs - Constructor and setup
+//   * DatabaseContext.ConnectionLifecycle.cs - Connection acquisition/release
+//   * DatabaseContext.Commands.cs - SqlContainer creation
+//   * DatabaseContext.Transactions.cs - Transaction handling
+//   * DatabaseContext.Metrics.cs - Performance metrics
+// =============================================================================
+
 #region
 
 using System.Data.Common;
@@ -87,7 +116,6 @@ public partial class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     private IConnectionStrategy _connectionStrategy = null!;
     private IProcWrappingStrategy _procWrappingStrategy = null!;
     private ProcWrappingStyle _procWrappingStyle;
-    private bool _applyConnectionSessionSettings;
     private ITrackedConnection? _connection = null;
 
     private long _connectionCount;
@@ -104,13 +132,13 @@ public partial class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     private long _totalConnectionsReused;
     private long _totalConnectionFailures;
     private long _totalConnectionTimeoutFailures;
-    private string _connectionSessionSettings = string.Empty;
     private readonly bool? _forceManualPrepare;
     private readonly bool? _disablePrepare;
     private bool? _rcsiPrefetch;
     private bool? _snapshotIsolationPrefetch;
     private int _initializing; // 0 = false, 1 = true
     private bool _sessionSettingsAppliedOnOpen;
+    private bool _sessionSettingsDetectionCompleted;
     private readonly MetricsCollector? _metricsCollector;
     private EventHandler<DatabaseMetrics>? _metricsUpdated;
     private int _metricsHasActivity;

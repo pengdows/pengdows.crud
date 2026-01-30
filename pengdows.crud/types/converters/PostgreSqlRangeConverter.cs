@@ -1,3 +1,21 @@
+// =============================================================================
+// FILE: PostgreSqlRangeConverter.cs
+// PURPOSE: Converter for PostgreSQL range types (int4range, tsrange, etc.).
+//
+// AI SUMMARY:
+// - Generic converter for Range<T> value objects (T: int, long, DateTime, decimal, etc.).
+// - Supports PostgreSQL range types with inclusive/exclusive bounds and infinite ranges.
+// - Bracket notation: [lower,upper] inclusive, (lower,upper) exclusive, [lower,) open-ended.
+// - Provider-specific:
+//   * PostgreSQL/CockroachDB: Native range types (int4range, int8range, daterange, tsrange)
+//   * Others: Raw Range<T> value
+// - ConvertToProvider(): Returns bracket notation string for PostgreSQL.
+// - TryConvertFromProvider(): Handles Range<T>, string, NpgsqlRange<T>, Tuple<T?,T?>.
+// - Parse(): Parses "[1,10)", "(,100]", "[5,]", "empty" formats.
+// - Common types: int4range, int8range, numrange, daterange, tsrange, tstzrange.
+// - Thread-safe and immutable value objects.
+// =============================================================================
+
 using System.ComponentModel;
 using System.Globalization;
 using pengdows.crud.enums;

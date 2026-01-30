@@ -74,9 +74,8 @@ public class MySqlSessionSettingsTests
     }
 
     [Fact]
-    public void SessionSettingsAppliedDuringConstructionInStandardMode()
+    public void SessionSettingsAppliedWhenStandardConnectionOpens()
     {
-        // Session settings should be applied on first open for ALL modes, including Standard
         var factory = new RecordingFactory();
         var config = new DatabaseContextConfiguration
         {
@@ -86,7 +85,10 @@ public class MySqlSessionSettingsTests
         };
 
         using var ctx = new DatabaseContext(config, factory);
+        using var connection = ctx.GetConnection(ExecutionType.Read);
+        connection.Open();
+
         var count = factory.Connection.ExecutedCommands.Count(c => c.StartsWith("SET SESSION sql_mode"));
-        Assert.True(count >= 1, "Session settings should be applied during construction");
+        Assert.True(count >= 1, "Session settings should be applied when the first standard connection opens");
     }
 }

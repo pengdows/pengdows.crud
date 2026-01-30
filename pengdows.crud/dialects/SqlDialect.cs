@@ -1,3 +1,27 @@
+// =============================================================================
+// FILE: SqlDialect.cs
+// PURPOSE: Abstract base class for all database-specific SQL dialects.
+//
+// AI SUMMARY:
+// - Base class that all specific dialects (SqlServerDialect, etc.) inherit from.
+// - Implements ISqlDialect interface with common SQL generation logic.
+// - Key responsibilities:
+//   * Parameter creation and naming (MakeParameterName, CreateDbParameter)
+//   * Identifier quoting (WrapObjectName) - overridden by specific dialects
+//   * Feature detection (SupportsMerge, SupportsInsertOnConflict, etc.)
+//   * Type conversions for provider-specific quirks
+//   * Database version detection (DetectDatabaseInfoAsync)
+// - Performance optimizations:
+//   * Caches wrapped names and parameter names
+//   * Pools DbParameter instances to reduce allocations
+//   * Pre-compiled type conversion delegates
+//   * Pooled parameter name generation
+// - Abstract properties for dialect-specific behavior:
+//   * DatabaseType, ParameterMarker, QuotePrefix/Suffix
+// - Session settings application via ApplySessionSettingsAsync().
+// - MERGE/UPSERT SQL generation helpers.
+// =============================================================================
+
 using System.Collections.Concurrent;
 using System.Data;
 using System.Data.Common;
@@ -12,8 +36,30 @@ using pengdows.crud.wrappers;
 namespace pengdows.crud.dialects;
 
 /// <summary>
-/// Base SQL dialect implementing standard SQL behaviors with feature detection
+/// Abstract base class implementing common SQL dialect functionality.
 /// </summary>
+/// <remarks>
+/// <para>
+/// This class provides the foundation for all database-specific dialects,
+/// implementing common SQL generation logic and exposing abstract properties
+/// for database-specific customization.
+/// </para>
+/// <para>
+/// <strong>Key Features:</strong>
+/// </para>
+/// <list type="bullet">
+/// <item><description>Parameter creation with dialect-specific markers (@, :, ?, $)</description></item>
+/// <item><description>Identifier quoting for reserved words and special characters</description></item>
+/// <item><description>Feature detection (MERGE, ON CONFLICT, stored procedures)</description></item>
+/// <item><description>Type conversion for provider-specific quirks</description></item>
+/// </list>
+/// <para>
+/// <strong>Performance:</strong> Uses caching extensively for wrapped names,
+/// parameter names, and type conversions to minimize allocations.
+/// </para>
+/// </remarks>
+/// <seealso cref="ISqlDialect"/>
+/// <seealso cref="SqlDialectFactory"/>
 internal abstract class SqlDialect : ISqlDialect
 {
     protected readonly DbProviderFactory Factory;
@@ -1482,6 +1528,13 @@ internal abstract class SqlDialect : ISqlDialect
     /// Default: null (no standard), may be overridden in provider-specific dialects.
     /// </summary>
     public virtual string? MaxPoolSizeSettingName => null;
+
+    /// <summary>
+    /// The connection string parameter name for application/client identification.
+    /// Used for telemetry and connection tagging in database monitoring tools.
+    /// Default: null (not supported), override in provider-specific dialects.
+    /// </summary>
+    public virtual string? ApplicationNameSettingName => null;
 
     // Dialect defaults used when pool settings are not discoverable from the connection string.
     // These are intentionally internal (not part of the public API surface).

@@ -1,3 +1,21 @@
+// =============================================================================
+// FILE: MySqlDialect.cs
+// PURPOSE: MySQL specific dialect implementation.
+//
+// AI SUMMARY:
+// - Supports MySQL 5.7+ and 8.0+ with version-specific features.
+// - Key features:
+//   * INSERT ... ON DUPLICATE KEY UPDATE for upserts
+//   * Parameter marker: @ (at sign)
+//   * Identifier quoting: "name" (with ANSI_QUOTES mode)
+//   * Max parameters: 65535 (theoretical max)
+//   * Prepared statements enabled
+// - Session settings: STRICT_ALL_TABLES, ANSI_QUOTES mode for SQL standard.
+// - MySQL 8.0.20+ uses new alias syntax for ON DUPLICATE KEY UPDATE.
+// - Detects MySqlConnector vs Oracle's MySql.Data provider.
+// - LAST_INSERT_ID() for returning generated IDs.
+// =============================================================================
+
 using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
@@ -7,8 +25,22 @@ using pengdows.crud.wrappers;
 namespace pengdows.crud.dialects;
 
 /// <summary>
-/// MySQL dialect with limited standard compliance
+/// MySQL dialect with ANSI SQL mode configuration.
 /// </summary>
+/// <remarks>
+/// <para>
+/// Supports MySQL 5.7 and 8.0+ with automatic version detection.
+/// Enforces ANSI-compatible SQL mode for consistent behavior.
+/// </para>
+/// <para>
+/// <strong>UPSERT:</strong> Uses INSERT ... ON DUPLICATE KEY UPDATE.
+/// MySQL 8.0.20+ uses the new alias syntax.
+/// </para>
+/// <para>
+/// <strong>Providers:</strong> Supports both MySqlConnector (recommended)
+/// and Oracle's MySql.Data.
+/// </para>
+/// </remarks>
 internal class MySqlDialect : SqlDialect
 {
     private const string DefaultSqlMode =
@@ -201,5 +233,6 @@ internal class MySqlDialect : SqlDialect
     public override string? PoolingSettingName => "Pooling";
     public override string? MinPoolSizeSettingName => _isMySqlConnector ? "MinimumPoolSize" : "Min Pool Size";
     public override string? MaxPoolSizeSettingName => _isMySqlConnector ? "MaximumPoolSize" : "Max Pool Size";
+    public override string? ApplicationNameSettingName => "Application Name";
     internal override int DefaultMaxPoolSize => 100;
 }

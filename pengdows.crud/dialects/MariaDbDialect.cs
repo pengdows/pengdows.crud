@@ -1,3 +1,18 @@
+// =============================================================================
+// FILE: MariaDbDialect.cs
+// PURPOSE: MariaDB specific dialect implementation (extends MySqlDialect).
+//
+// AI SUMMARY:
+// - Inherits from MySqlDialect with MariaDB-specific overrides.
+// - Key differences from MySQL:
+//   * No native JSON type (uses LONGTEXT)
+//   * CTEs and window functions in 10.2+ (earlier than MySQL 8.0)
+//   * No INSERT ... AS alias syntax for upserts
+// - Uses LAST_INSERT_ID() for returning generated IDs.
+// - Session settings: Inherits ANSI_QUOTES mode from MySqlDialect.
+// - AUTO_INCREMENT for identity columns.
+// =============================================================================
+
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
@@ -6,9 +21,22 @@ using pengdows.crud.wrappers;
 namespace pengdows.crud.dialects;
 
 /// <summary>
-/// MariaDB dialect. Inherits MySQL compatibility with MariaDB-specific feature differences
-/// (e.g., CTEs, window functions available in 10.2+, no native JSON type).
+/// MariaDB dialect inheriting MySQL compatibility with MariaDB-specific differences.
 /// </summary>
+/// <remarks>
+/// <para>
+/// MariaDB is a MySQL fork with additional features. This dialect inherits
+/// from <see cref="MySqlDialect"/> and overrides only the differences.
+/// </para>
+/// <para>
+/// <strong>Feature Differences:</strong>
+/// </para>
+/// <list type="bullet">
+/// <item><description>No native JSON type (mapped to LONGTEXT)</description></item>
+/// <item><description>CTEs and window functions available in 10.2+ (vs MySQL 8.0)</description></item>
+/// <item><description>Different upsert alias syntax handling</description></item>
+/// </list>
+/// </remarks>
 internal class MariaDbDialect : MySqlDialect
 {
     internal MariaDbDialect(DbProviderFactory factory, ILogger logger)
@@ -108,4 +136,5 @@ internal class MariaDbDialect : MySqlDialect
     public override string? PoolingSettingName => "Pooling";
     public override string? MinPoolSizeSettingName => "Min Pool Size";
     public override string? MaxPoolSizeSettingName => "Max Pool Size";
+    public override string? ApplicationNameSettingName => "Application Name";
 }

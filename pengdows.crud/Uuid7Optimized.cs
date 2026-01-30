@@ -1,3 +1,27 @@
+// =============================================================================
+// FILE: Uuid7Optimized.cs
+// PURPOSE: High-performance, RFC 9562-compliant UUIDv7 generator with
+//          configurable clock modes and thread-local state for lock-free operation.
+//
+// AI SUMMARY:
+// - Generates time-sortable UUIDs following RFC 9562 (UUIDv7 specification).
+// - Key advantages of UUIDv7 over UUIDv4:
+//   * Chronologically sortable (great for database indexes)
+//   * Contains timestamp (useful for debugging/auditing)
+//   * No index fragmentation issues like random UUIDs
+// - Performance optimizations:
+//   * Thread-local counters eliminate CAS contention
+//   * Buffered random bytes reduce syscall overhead
+//   * Lock-free design for high throughput
+// - Clock modes for different deployment scenarios:
+//   * PtpSynced - Tight tolerance for PTP-synchronized clusters
+//   * NtpSynced - Standard NTP environments (default)
+//   * SingleInstance - Single-writer services
+// - Throughput: Up to 4096 IDs per millisecond per thread.
+// - Clock drift handling: Bounded backward drift with logical clock fallback.
+// - TryNewUuid7() provides non-blocking generation for latency-sensitive code.
+// =============================================================================
+
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 

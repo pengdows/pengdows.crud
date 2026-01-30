@@ -1,3 +1,19 @@
+// =============================================================================
+// FILE: SqlDialectFactory.cs
+// PURPOSE: Factory for creating database-specific ISqlDialect instances.
+//
+// AI SUMMARY:
+// - CreateDialectAsync() - Creates and initializes dialect from live connection.
+// - CreateDialectForType() - Creates dialect for known SupportedDatabase type.
+// - Auto-detection flow:
+//   1. Try to infer type from connection metadata (ServerVersion, GetSchema)
+//   2. Fall back to provider type name matching
+//   3. Use Sql92Dialect if all detection fails
+// - Supported dialects: SqlServer, PostgreSql, MySql, MariaDb, Oracle,
+//   Sqlite, Firebird, DuckDb, CockroachDb (uses PostgreSql dialect)
+// - Each dialect is initialized via DetectDatabaseInfoAsync() after creation.
+// =============================================================================
+
 using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
@@ -8,8 +24,23 @@ using pengdows.crud.wrappers;
 namespace pengdows.crud.dialects;
 
 /// <summary>
-/// Factory for creating dialect instances with automatic detection
+/// Factory for creating database-specific dialect instances with automatic detection.
 /// </summary>
+/// <remarks>
+/// <para>
+/// This factory creates the appropriate <see cref="ISqlDialect"/> implementation
+/// based on the database type, either detected automatically from the connection
+/// or specified explicitly.
+/// </para>
+/// <para>
+/// <strong>Detection Order:</strong>
+/// </para>
+/// <list type="number">
+/// <item><description>Query connection metadata (ServerVersion, database functions)</description></item>
+/// <item><description>Match provider factory type name</description></item>
+/// <item><description>Fall back to SQL-92 dialect</description></item>
+/// </list>
+/// </remarks>
 public static class SqlDialectFactory
 {
     public static async Task<ISqlDialect> CreateDialectAsync(

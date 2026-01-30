@@ -1,3 +1,17 @@
+// =============================================================================
+// FILE: IAdvancedTypeConverter.cs
+// PURPOSE: Interface and base class for advanced type converters.
+//
+// AI SUMMARY:
+// - Defines contract for converting between .NET types and provider-specific values.
+// - IAdvancedTypeConverter: Non-generic interface with ToProviderValue/FromProviderValue.
+// - AdvancedTypeConverter<T>: Generic abstract base class reducing boilerplate.
+// - ConvertToProvider(): Override in subclass for custom write conversion.
+// - TryConvertFromProvider(): Override in subclass for custom read conversion.
+// - Used by AdvancedTypeRegistry to configure DbParameters.
+// - Implementations: GeometryConverter, GeographyConverter, InetConverter, etc.
+// =============================================================================
+
 using pengdows.crud.enums;
 
 namespace pengdows.crud.types.converters;

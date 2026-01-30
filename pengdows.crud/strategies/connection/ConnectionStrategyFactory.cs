@@ -1,3 +1,20 @@
+// =============================================================================
+// FILE: ConnectionStrategyFactory.cs
+// PURPOSE: Factory for creating appropriate connection strategies based on DbMode.
+//
+// AI SUMMARY:
+// - Creates IConnectionStrategy implementations based on DbMode:
+//   * Standard - Ephemeral connections with provider pooling (default)
+//   * KeepAlive - Standard + sentinel connection to prevent unload
+//   * SingleWriter - Pinned writer + ephemeral readers (file SQLite)
+//   * SingleConnection - All work on one connection (:memory: SQLite)
+// - Database-to-strategy mapping based on connection string/provider:
+//   * SQL Server/PostgreSQL/MySQL -> Standard
+//   * LocalDB -> KeepAlive
+//   * SQLite file -> SingleWriter
+//   * SQLite :memory: -> SingleConnection
+// =============================================================================
+
 using pengdows.crud.enums;
 
 namespace pengdows.crud.strategies.connection;

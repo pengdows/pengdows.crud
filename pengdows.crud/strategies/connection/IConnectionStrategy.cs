@@ -1,3 +1,19 @@
+// =============================================================================
+// FILE: IConnectionStrategy.cs
+// PURPOSE: Interface defining connection lifecycle management strategies.
+//
+// AI SUMMARY:
+// - Defines the contract for connection management policies.
+// - Strategies encapsulate: connection acquisition, lifecycle, disposal, threading.
+// - Key methods:
+//   * GetConnection(ExecutionType) - Acquire connection (persistent or ephemeral)
+//   * ReleaseConnection() - Return/dispose connection based on policy
+//   * HandleDialectDetection() - Strategy-specific dialect initialization
+// - Implementations: StandardConnectionStrategy, KeepAliveConnectionStrategy,
+//   SingleWriterConnectionStrategy, SingleConnectionStrategy.
+// - DatabaseContext delegates all connection decisions to the active strategy.
+// =============================================================================
+
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.dialects;

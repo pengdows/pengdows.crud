@@ -1,3 +1,17 @@
+// =============================================================================
+// FILE: StandardConnectionStrategy.cs
+// PURPOSE: Default connection strategy using ephemeral connections with pooling.
+//
+// AI SUMMARY:
+// - Production-recommended strategy for scalable database connections.
+// - Creates ephemeral connections per operation, relying on ADO.NET pooling.
+// - "Open late, close early" - connections disposed immediately after use.
+// - No persistent connections - each GetConnection() creates new from pool.
+// - Thread-safe: No shared state between concurrent operations.
+// - Ideal for: SQL Server, PostgreSQL, MySQL, Oracle with connection pooling.
+// - Base class for KeepAliveConnectionStrategy (adds sentinel connection).
+// =============================================================================
+
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.dialects;

@@ -1,3 +1,21 @@
+// =============================================================================
+// FILE: IntervalYearMonthConverter.cs
+// PURPOSE: Converter for Oracle INTERVAL YEAR TO MONTH type.
+//
+// AI SUMMARY:
+// - Converts between database interval values and IntervalYearMonth value objects.
+// - Represents intervals with Years and Months components only (no days/time).
+// - Provider-specific:
+//   * Oracle: INTERVAL YEAR TO MONTH type
+//   * PostgreSQL/CockroachDB: INTERVAL (ISO 8601 format)
+//   * Others: Raw value
+// - ConvertToProvider(): Returns ISO 8601 format (P3Y6M) for Oracle/PostgreSQL.
+// - TryConvertFromProvider(): Handles IntervalYearMonth and string (ISO 8601).
+// - Parse(): Handles ISO 8601 duration format (P{years}Y{months}M).
+// - Use case: Date arithmetic where month boundaries matter.
+// - Thread-safe and immutable value objects.
+// =============================================================================
+
 using System.Globalization;
 using pengdows.crud.enums;
 using pengdows.crud.types.valueobjects;

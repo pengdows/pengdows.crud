@@ -16,7 +16,7 @@ public class SqlGenerationBenchmark
 {
     private IDatabaseContext _ctx = null!;
     private TypeMapRegistry _map = null!;
-    private EntityHelper<Film, int> _filmHelper = null!;
+    private TableGateway<Film, int> _filmHelper = null!;
 
     private int _filmId = 1;
     private string _staticSql = null!;
@@ -36,9 +36,9 @@ public class SqlGenerationBenchmark
             DbMode = DbMode.Standard
         };
         _ctx = new DatabaseContext(config, factory, null, _map);
-        _filmHelper = new EntityHelper<Film, int>(_ctx);
+        _filmHelper = new TableGateway<Film, int>(_ctx);
 
-        // EntityHelper will handle internal caching automatically
+        // TableGateway will handle internal caching automatically
 
         // Static SQL for comparison (what Dapper essentially uses)
         _staticSql = "SELECT \"film_id\", \"title\", \"length\" FROM \"public\".\"film\" WHERE \"film_id\" = ANY($1)";
@@ -78,7 +78,7 @@ public class SqlGenerationBenchmark
     [Benchmark]
     public ISqlContainer SqlGeneration_Mine_BuildUpdate()
     {
-        // Uses EntityHelper's internal caching and optimized template generation
+        // Uses TableGateway's internal caching and optimized template generation
         var film = new Film { Id = _filmId, Title = "Test", Length = 120 };
         return _filmHelper.BuildUpdateAsync(film, false, _ctx).Result;
     }
@@ -86,7 +86,7 @@ public class SqlGenerationBenchmark
     [Benchmark]
     public ISqlContainer SqlGeneration_Mine_BuildCreate()
     {
-        // Uses EntityHelper's internal caching and optimized template generation
+        // Uses TableGateway's internal caching and optimized template generation
         var film = new Film { Id = _filmId, Title = "Test", Length = 120 };
         return _filmHelper.BuildCreate(film, _ctx);
     }

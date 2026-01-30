@@ -1,3 +1,24 @@
+// =============================================================================
+// FILE: GeographyConverter.cs
+// PURPOSE: Converter for geodetic geography (Earth surface) spatial types.
+//
+// AI SUMMARY:
+// - Converts between database spatial values and Geography value objects.
+// - Supports geodetic coordinates on Earth's surface with spherical calculations.
+// - Provider-specific:
+//   * SQL Server: GEOGRAPHY type (SqlGeography from Microsoft.SqlServer.Types)
+//   * PostgreSQL: PostGIS GEOGRAPHY (WGS84 SRID 4326 default)
+//   * MySQL: No native geography; use GEOMETRY with SRID 4326
+//   * Oracle: SDO_GEOMETRY with geodetic coordinate system
+// - SRID defaults to 4326 (WGS84) when unspecified - standard for GPS/GeoJSON.
+// - FromBinary(): Converts WKB/EWKB to Geography (defaults SRID to 4326).
+// - FromTextInternal(): Converts WKT/EWKT (defaults SRID to 4326).
+// - FromGeoJsonInternal(): Converts GeoJSON (defaults SRID to 4326).
+// - Coordinate order: WKT is "POINT(longitude latitude)", GeoJSON is [lon, lat].
+// - Use Geography for lat/lon coordinates (GPS, addresses, routes).
+// - Use Geometry for planar/projected coordinates (maps, engineering).
+// =============================================================================
+
 using System.Buffers.Binary;
 using pengdows.crud.enums;
 using pengdows.crud.@internal;

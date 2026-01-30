@@ -1,3 +1,21 @@
+// =============================================================================
+// FILE: SqlServerDialect.cs
+// PURPOSE: SQL Server specific dialect implementation.
+//
+// AI SUMMARY:
+// - Supports SQL Server 2012+ with version-specific feature detection.
+// - Key features:
+//   * MERGE statement support for upserts
+//   * Parameter marker: @ (supports named parameters)
+//   * Identifier quoting: [name] (brackets)
+//   * Max parameters: 2100 (sp_executesql limit)
+//   * Session settings: ANSI_NULLS, QUOTED_IDENTIFIER, etc.
+// - Session settings enforced for consistent behavior across connections.
+// - Snapshot isolation detection via sys.databases queries.
+// - OFFSET/FETCH pagination (SQL Server 2012+).
+// - IDENTITY column handling with OUTPUT clause for returning IDs.
+// =============================================================================
+
 using System.Data;
 using System.Data.Common;
 using System.Globalization;
@@ -8,8 +26,20 @@ using pengdows.crud.wrappers;
 namespace pengdows.crud.dialects;
 
 /// <summary>
-/// SQL Server dialect with version-specific feature support
+/// SQL Server dialect with version-specific feature support.
 /// </summary>
+/// <remarks>
+/// <para>
+/// Supports Microsoft SQL Server 2012 and later with automatic version detection.
+/// </para>
+/// <para>
+/// <strong>Session Settings:</strong> Enforces ANSI-compliant settings including
+/// ANSI_NULLS, QUOTED_IDENTIFIER, and ARITHABORT for consistent behavior.
+/// </para>
+/// <para>
+/// <strong>UPSERT:</strong> Uses MERGE statement with OUTPUT clause.
+/// </para>
+/// </remarks>
 internal class SqlServerDialect : SqlDialect
 {
     private const string DefaultSessionSettings =
@@ -258,5 +288,6 @@ internal class SqlServerDialect : SqlDialect
     public override string? PoolingSettingName => "Pooling";
     public override string? MinPoolSizeSettingName => "Min Pool Size";
     public override string? MaxPoolSizeSettingName => "Max Pool Size";
+    public override string? ApplicationNameSettingName => "Application Name";
     internal override int DefaultMaxPoolSize => 100;
 }

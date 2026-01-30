@@ -1,3 +1,24 @@
+// =============================================================================
+// FILE: WeirdTypeAttributes.cs
+// PURPOSE: Attributes for configuring exotic/unusual database type handling.
+//
+// AI SUMMARY:
+// - Collection of attributes for "weird" database type scenarios.
+// - EnumStorage: Enum for Name vs Int storage strategy.
+// - DbEnumAttribute: Configure enum handling (AllowUnknown, StoreAs).
+// - JsonContractAttribute: Specifies JSON schema contract type for a property.
+// - ConcurrencyTokenAttribute: Marks property as optimistic concurrency token.
+// - RangeTypeAttribute: Configures PostgreSQL range type formatting.
+// - ComputedAttribute: Marks computed/generated columns (Stored vs virtual).
+// - CaseInsensitiveAttribute: Documents case-insensitive text behavior.
+// - AsStringAttribute: Forces numeric to string when precision exceeds .NET limits.
+// - MaxLengthForInlineAttribute: Controls binary data memory allocation strategy.
+// - AllowZeroDateAttribute: Allows MySQL '0000-00-00' zero dates.
+// - CaseFoldOnReadAttribute: Applies case folding when reading text values.
+// - SpatialTypeAttribute: Configures spatial SRID enforcement and conversion.
+// - CurrencyAttribute: Configures ISO currency code for money types.
+// =============================================================================
+
 namespace pengdows.crud.types.attributes;
 
 /// <summary>

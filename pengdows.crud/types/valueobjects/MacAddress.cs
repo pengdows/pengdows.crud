@@ -1,8 +1,32 @@
+// =============================================================================
+// FILE: MacAddress.cs
+// PURPOSE: Immutable value object for PostgreSQL MACADDR type.
+//
+// AI SUMMARY:
+// - Represents a MAC hardware address (e.g., "08:00:2b:01:02:03").
+// - Readonly struct implementing IEquatable<MacAddress>.
+// - Wraps .NET PhysicalAddress type.
+// - Properties:
+//   * Address: PhysicalAddress - the underlying .NET type
+// - Parse(): Accepts colon-separated, hyphen-separated, or raw hex formats.
+// - ToString(): Returns colon-separated uppercase format (e.g., "08:00:2B:01:02:03").
+// - Uses SbLite for efficient string building.
+// - Supports 48-bit (6-byte) and 64-bit (8-byte) addresses.
+// - Thread-safe and immutable.
+// =============================================================================
+
 using System.Net.NetworkInformation;
 using pengdows.crud.@internal;
 
 namespace pengdows.crud.types.valueobjects;
 
+/// <summary>
+/// Immutable value object representing a MAC hardware address.
+/// </summary>
+/// <remarks>
+/// Maps to PostgreSQL MACADDR or MACADDR8 types.
+/// Accepts multiple input formats and outputs colon-separated format.
+/// </remarks>
 public readonly struct MacAddress : IEquatable<MacAddress>
 {
     public MacAddress(PhysicalAddress address)

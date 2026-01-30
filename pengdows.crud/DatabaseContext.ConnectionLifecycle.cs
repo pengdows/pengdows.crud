@@ -1,3 +1,26 @@
+// =============================================================================
+// FILE: DatabaseContext.ConnectionLifecycle.cs
+// PURPOSE: Connection acquisition, release, and lifecycle management.
+//
+// AI SUMMARY:
+// - Manages the "open late, close early" connection philosophy.
+// - Key methods:
+//   * GetConnection(ExecutionType) - Acquires a connection (read or write)
+//   * CloseAndDisposeConnection() - Returns connection to pool
+//   * CloseAndDisposeConnectionAsync() - Async version
+// - Delegates to IConnectionStrategy for mode-specific behavior:
+//   * Standard - Creates ephemeral connections from pool
+//   * KeepAlive - Maintains sentinel + ephemeral work connections
+//   * SingleWriter - Pinned writer + ephemeral readers
+//   * SingleConnection - All operations on one connection
+// - Pool governor integration for connection limiting/backpressure.
+// - Session settings application (timeouts, read-only mode).
+// - Internal helpers for strategy implementations:
+//   * PersistentConnection - The pinned connection (if any)
+//   * GetStandardConnection() - Creates new pooled connection
+//   * AcquirePermit() - Gets pool permit with backpressure
+// =============================================================================
+
 using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
@@ -10,8 +33,13 @@ using pengdows.crud.wrappers;
 namespace pengdows.crud;
 
 /// <summary>
-/// DatabaseContext partial class: Connection lifecycle management methods
+/// DatabaseContext partial class: Connection lifecycle management methods.
 /// </summary>
+/// <remarks>
+/// This partial implements the connection acquisition and release patterns,
+/// delegating to the configured <see cref="strategies.connection.IConnectionStrategy"/>
+/// for mode-specific behavior.
+/// </remarks>
 public partial class DatabaseContext
 {
     /// <inheritdoc/>
@@ -114,21 +142,43 @@ public partial class DatabaseContext
     /// </summary>
     internal void ApplyConnectionSessionSettings(IDbConnection connection)
     {
-        if (ConnectionMode == DbMode.Standard)
+        if (ConnectionMode == DbMode.Standard || !_sessionSettingsDetectionCompleted || _dialect == null)
+        {
+            return;
+        }
+
+        if (_sessionSettingsAppliedOnOpen && ReferenceEquals(connection, _connection))
         {
             return;
         }
 
         _logger.LogInformation("Applying connection session settings");
-        if (_applyConnectionSessionSettings)
+        var sessionSettings = _dialect.GetConnectionSessionSettings(this, IsReadOnlyConnection);
+        if (string.IsNullOrWhiteSpace(sessionSettings))
         {
-            var success = SessionSettingsConfigurator.ApplySessionSettings(connection, _connectionSessionSettings);
-            if (!success)
+            return;
+        }
+
+        foreach (var part in sessionSettings.Split(';'))
+        {
+            var stmt = part.Trim();
+            if (string.IsNullOrEmpty(stmt))
             {
-                _logger.LogError("Error setting session settings");
-                _applyConnectionSessionSettings = false;
+                continue;
+            }
+
+            try
+            {
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = stmt; // no trailing ';'
+                cmd.ExecuteNonQuery();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("Error setting session settings:" + ex.Message);
             }
         }
+        _sessionSettingsAppliedOnOpen = true;
     }
 
     /// <summary>
@@ -136,7 +186,7 @@ public partial class DatabaseContext
     /// </summary>
     public void ApplyPersistentConnectionSessionSettings(IDbConnection connection)
     {
-        if (ConnectionMode == DbMode.Standard)
+        if (ConnectionMode == DbMode.Standard || !_sessionSettingsDetectionCompleted)
         {
             return;
         }
@@ -182,6 +232,8 @@ public partial class DatabaseContext
             {
                 _logger.LogError("Error setting session settings:" + ex.Message);
             }
+
+            _sessionSettingsAppliedOnOpen = true;
         }
     }
 
@@ -227,86 +279,28 @@ public partial class DatabaseContext
             {
                 guard = GetLock();
                 guard.Lock();
-                // Apply session settings for all connection modes.
-                // Prefer dialect-provided settings when available; fall back to precomputed string.
-                string settings;
-                if (_dialect != null)
+                if (_sessionSettingsDetectionCompleted && _dialect != null)
                 {
-                    settings = _dialect.GetConnectionSessionSettings(this, readOnly) ?? string.Empty;
-                }
-                else
-                {
-                    // Dialect not initialized yet (constructor path). Derive lightweight settings
-                    // from the opened connection's product metadata for first application.
-                    try
+                    var settings = _dialect.GetConnectionSessionSettings(this, readOnly) ?? string.Empty;
+                    if (!string.IsNullOrWhiteSpace(settings))
                     {
-                        var schema = conn.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
-                        var productName = schema.Rows.Count > 0
-                            ? schema.Rows[0].Field<string>("DataSourceProductName")
-                            : null;
-                        var lower = (productName ?? string.Empty).ToLowerInvariant();
-                        if (lower.Contains("mysql") || lower.Contains("mariadb"))
+                        // Execute one statement at a time. Do not auto-append semicolons.
+                        var parts = settings.Split(';');
+                        foreach (var part in parts)
                         {
-                            settings =
-                                "SET SESSION sql_mode = 'STRICT_ALL_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,ANSI_QUOTES,NO_BACKSLASH_ESCAPES';";
-                            if (readOnly)
+                            var stmt = part.Trim();
+                            if (string.IsNullOrEmpty(stmt))
                             {
-                                settings += "\nSET SESSION TRANSACTION READ ONLY;";
+                                continue;
                             }
-                        }
-                        else if (lower.Contains("oracle"))
-                        {
-                            settings = "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD';";
-                            if (readOnly)
-                            {
-                                settings += "\nALTER SESSION SET READ ONLY;";
-                            }
-                        }
-                        else if (lower.Contains("postgres"))
-                        {
-                            settings = "SET standard_conforming_strings = on;\nSET client_min_messages = warning;";
-                        }
-                        else if (lower.Contains("sqlite"))
-                        {
-                            settings = "PRAGMA foreign_keys = ON;";
-                            if (readOnly)
-                            {
-                                settings += "\nPRAGMA query_only = ON;";
-                            }
-                        }
-                        else if (lower.Contains("duckdb") || lower.Contains("duck db"))
-                        {
-                            settings = readOnly ? "PRAGMA read_only = 1;" : string.Empty;
-                        }
-                        else
-                        {
-                            settings = _connectionSessionSettings ?? string.Empty;
-                        }
-                    }
-                    catch
-                    {
-                        settings = _connectionSessionSettings ?? string.Empty;
-                    }
-                }
 
-                if (!string.IsNullOrWhiteSpace(settings))
-                {
-                    // Execute one statement at a time. Do not auto-append semicolons.
-                    var parts = settings.Split(';');
-                    foreach (var part in parts)
-                    {
-                        var stmt = part.Trim();
-                        if (string.IsNullOrEmpty(stmt))
-                        {
-                            continue;
+                            using var cmd = conn.CreateCommand();
+                            cmd.CommandText = stmt; // no trailing ';'
+                            cmd.ExecuteNonQuery();
                         }
 
-                        using var cmd = conn.CreateCommand();
-                        cmd.CommandText = stmt; // no trailing ';'
-                        cmd.ExecuteNonQuery();
+                        _sessionSettingsAppliedOnOpen = true;
                     }
-
-                    _sessionSettingsAppliedOnOpen = true;
                 }
             }
             catch (Exception ex)

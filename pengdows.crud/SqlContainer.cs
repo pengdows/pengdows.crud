@@ -1,3 +1,27 @@
+// =============================================================================
+// FILE: SqlContainer.cs
+// PURPOSE: The core SQL query builder and executor that handles parameterized
+//          queries, stored procedures, and connection management.
+//
+// AI SUMMARY:
+// - This is the primary class for building and executing SQL statements.
+// - Created via IDatabaseContext.CreateSqlContainer() - not directly instantiated.
+// - Key features:
+//   * Query property (StringBuilder) for building SQL dynamically
+//   * AddParameterWithValue/CreateDbParameter for safe parameterization
+//   * ExecuteNonQueryAsync/ExecuteScalarAsync/ExecuteReaderAsync for execution
+//   * WrapObjectName for dialect-specific identifier quoting
+//   * MakeParameterName for dialect-specific parameter naming (@p, :p, ?)
+// - Manages parameter ordering for positional parameter databases (Oracle, ODBC).
+// - Uses StringBuilderPool for efficient StringBuilder reuse.
+// - Implements IDisposable/IAsyncDisposable for cleanup.
+// - Thread-safe for building (not for concurrent modification).
+// - Internally uses dialects (ISqlDialect) for database-specific SQL generation.
+// - Stored procedure wrapping via IProcWrappingStrategy for cross-database compat.
+// - Tracks whether WHERE clause was appended (HasWhereAppended) for convenience.
+// - Limits max parameters per query (MaxParameterLimit) to prevent SQL errors.
+// =============================================================================
+
 #region
 
 using System.Collections.Concurrent;
@@ -25,6 +49,56 @@ using pengdows.crud.@internal;
 
 namespace pengdows.crud;
 
+/// <summary>
+/// A SQL query builder and executor that provides parameterized, database-agnostic SQL operations.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <strong>Creation:</strong> Always create instances via <see cref="IDatabaseContext.CreateSqlContainer"/>
+/// rather than direct instantiation.
+/// </para>
+/// <para>
+/// <strong>Query Building:</strong> Use the <see cref="Query"/> property (StringBuilder) to build SQL
+/// dynamically. Use <see cref="AddParameterWithValue{T}"/> to add parameters safely.
+/// </para>
+/// <para>
+/// <strong>Execution:</strong> Choose the appropriate execution method:
+/// </para>
+/// <list type="bullet">
+/// <item><description><see cref="ExecuteNonQueryAsync"/> - INSERT, UPDATE, DELETE returning row count</description></item>
+/// <item><description><see cref="ExecuteScalarAsync{T}"/> - Single value queries (COUNT, MAX, etc.)</description></item>
+/// <item><description><see cref="ExecuteReaderAsync"/> - Multi-row result sets</description></item>
+/// </list>
+/// <para>
+/// <strong>Parameter Naming:</strong> Use <see cref="MakeParameterName(string)"/> to generate
+/// database-appropriate parameter markers (@param for SQL Server, :param for Oracle, etc.).
+/// </para>
+/// <para>
+/// <strong>Identifier Quoting:</strong> Use <see cref="WrapObjectName"/> to quote table/column names
+/// appropriately for the target database ("name" for most, [name] for SQL Server).
+/// </para>
+/// </remarks>
+/// <example>
+/// <code>
+/// using var container = context.CreateSqlContainer();
+/// container.Query.Append("SELECT * FROM ");
+/// container.Query.Append(container.WrapObjectName("users"));
+/// container.Query.Append(" WHERE ");
+/// container.Query.Append(container.WrapObjectName("email"));
+/// container.Query.Append(" = ");
+/// var emailParam = container.AddParameterWithValue("email", DbType.String, "user@example.com");
+/// container.Query.Append(container.MakeParameterName(emailParam));
+///
+/// await using var reader = await container.ExecuteReaderAsync();
+/// while (await reader.ReadAsync())
+/// {
+///     // Process rows
+/// }
+/// </code>
+/// </example>
+/// <seealso cref="ISqlContainer"/>
+/// <seealso cref="IDatabaseContext.CreateSqlContainer"/>
+/// <seealso cref="TableGateway{TEntity,TRowID}"/>
 public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectProvider
 {
     private static readonly Regex ParamPlaceholderRegex = new(@"\{P\}([A-Za-z_][A-Za-z0-9_]*)", RegexOptions.Compiled);

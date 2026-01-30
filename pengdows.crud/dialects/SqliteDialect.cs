@@ -1,3 +1,24 @@
+// =============================================================================
+// FILE: SqliteDialect.cs
+// PURPOSE: SQLite specific dialect implementation.
+//
+// AI SUMMARY:
+// - Supports SQLite 3.24+ with good SQL standard compliance.
+// - Key features:
+//   * INSERT ... ON CONFLICT for upserts (no MERGE support)
+//   * Parameter marker: @ (at sign)
+//   * Identifier quoting: "name" (double quotes)
+//   * Max parameters: 999 (SQLITE_MAX_VARIABLE_NUMBER default)
+//   * Prepared statements enabled
+// - Connection mode detection:
+//   * :memory: -> SingleConnection mode
+//   * File mode -> SingleWriter mode
+//   * Shared cache -> appropriate mode
+// - Detects System.Data.SQLite vs Microsoft.Data.Sqlite provider.
+// - RETURNING clause for getting generated IDs (SQLite 3.35+).
+// - Savepoint support for nested transaction semantics.
+// =============================================================================
+
 using System.Data;
 using System.Data.Common;
 using System.Globalization;
@@ -8,8 +29,24 @@ using pengdows.crud.wrappers;
 namespace pengdows.crud.dialects;
 
 /// <summary>
-/// SQLite dialect with good standard compliance despite being embedded
+/// SQLite dialect with good SQL standard compliance.
 /// </summary>
+/// <remarks>
+/// <para>
+/// Supports SQLite 3.24+ for UPSERT and 3.35+ for RETURNING clause.
+/// </para>
+/// <para>
+/// <strong>Connection Modes:</strong> DatabaseContext automatically selects
+/// appropriate DbMode based on connection string:
+/// </para>
+/// <list type="bullet">
+/// <item><description><c>:memory:</c> - Uses SingleConnection mode</description></item>
+/// <item><description>File path - Uses SingleWriter mode</description></item>
+/// </list>
+/// <para>
+/// <strong>UPSERT:</strong> Uses INSERT ... ON CONFLICT DO UPDATE.
+/// </para>
+/// </remarks>
 internal class SqliteDialect : SqlDialect
 {
     private readonly bool _systemDataSqlite;

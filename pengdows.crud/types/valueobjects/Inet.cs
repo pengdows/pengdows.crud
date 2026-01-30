@@ -1,7 +1,31 @@
+// =============================================================================
+// FILE: Inet.cs
+// PURPOSE: Immutable value object for PostgreSQL INET type (IP address).
+//
+// AI SUMMARY:
+// - Represents an IP address with optional CIDR prefix (like "192.168.1.1/24").
+// - Readonly struct implementing IEquatable<Inet>.
+// - Properties:
+//   * Address: IPAddress - the IP address
+//   * PrefixLength: byte? - optional CIDR prefix (null = no prefix)
+// - Validates prefix length against address family (32 for IPv4, 128 for IPv6).
+// - Parse(): Parses "ip" or "ip/prefix" format strings.
+// - ToString(): Returns "ip" or "ip/prefix" format.
+// - Differs from Cidr: Inet can omit prefix, Cidr requires it.
+// - Thread-safe and immutable.
+// =============================================================================
+
 using System.Net;
 
 namespace pengdows.crud.types.valueobjects;
 
+/// <summary>
+/// Immutable value object representing an IP address with optional CIDR prefix.
+/// </summary>
+/// <remarks>
+/// Maps to PostgreSQL INET type. Supports IPv4 and IPv6 addresses.
+/// Unlike <see cref="Cidr"/>, the prefix length is optional.
+/// </remarks>
 public readonly struct Inet : IEquatable<Inet>
 {
     public Inet(IPAddress address, byte? prefixLength = null)

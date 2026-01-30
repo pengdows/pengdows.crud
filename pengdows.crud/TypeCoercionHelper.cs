@@ -1,3 +1,27 @@
+// =============================================================================
+// FILE: TypeCoercionHelper.cs
+// PURPOSE: Static utilities for converting between .NET types and database
+//          types, handling nulls, enums, JSON, dates, and provider quirks.
+//
+// AI SUMMARY:
+// - Central type conversion logic used when reading from DataReader.
+// - Coerce() method handles:
+//   * Null/DBNull detection and propagation
+//   * Enum parsing (from string or numeric, with configurable failure mode)
+//   * JSON deserialization (from string or JsonDocument to typed objects)
+//   * Date/time conversions (DateOnly, TimeOnly, DateTimeOffset)
+//   * Guid from byte[] (for providers that return Guid as 16-byte array)
+//   * Numeric type conversions (respecting precision/overflow)
+// - GetJsonText() serializes objects to JSON strings for storage.
+// - Handles provider-specific quirks:
+//   * Some return TimeSpan as string
+//   * Some return Guid as byte[]
+//   * Some return DateTimeOffset as DateTime
+// - Configurable via TypeCoercionOptions for fine-tuning behavior.
+// - Logger property allows capturing coercion warnings/errors.
+// - Performance: Fast path for assignable types, no conversion needed.
+// =============================================================================
+
 #region
 
 using System.Globalization;
@@ -13,6 +37,28 @@ using pengdows.crud.types;
 
 namespace pengdows.crud;
 
+/// <summary>
+/// Provides static utilities for type coercion between database and .NET types.
+/// </summary>
+/// <remarks>
+/// <para>
+/// This helper is used by <see cref="DataReaderMapper"/> and <see cref="TableGateway{TEntity,TRowID}"/>
+/// to convert values read from the database to the appropriate .NET types.
+/// </para>
+/// <para>
+/// <strong>Null Handling:</strong> Both null and <see cref="DBNull.Value"/> are converted to null.
+/// </para>
+/// <para>
+/// <strong>Enum Handling:</strong> Enums can be stored as strings or numeric values.
+/// The <see cref="EnumParseFailureMode"/> parameter controls behavior when parsing fails.
+/// </para>
+/// <para>
+/// <strong>JSON Handling:</strong> Columns marked with <see cref="Attributes.JsonAttribute"/>
+/// are deserialized from JSON strings or <see cref="JsonDocument"/> to the target type.
+/// </para>
+/// </remarks>
+/// <seealso cref="TypeCoercionOptions"/>
+/// <seealso cref="EnumParseFailureMode"/>
 public static class TypeCoercionHelper
 {
     private static readonly Type GuidType = typeof(Guid);

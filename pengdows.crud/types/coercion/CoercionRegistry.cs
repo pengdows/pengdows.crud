@@ -1,3 +1,19 @@
+// =============================================================================
+// FILE: CoercionRegistry.cs
+// PURPOSE: Thread-safe registry for database type coercions.
+//
+// AI SUMMARY:
+// - High-performance, thread-safe registry for IDbCoercion implementations.
+// - CoercionRegistry.Shared provides singleton with standard coercions registered.
+// - Uses ConcurrentDictionary for both general and provider-specific coercions.
+// - Register<T>(): Registers coercion for a CLR type (optionally provider-specific).
+// - GetCoercion(): Retrieves coercion, preferring provider-specific if available.
+// - TryRead(): Converts DbValue to target type using registered coercion.
+// - TryWrite(): Configures DbParameter using registered coercion.
+// - RegisterStandardCoercions(): Calls BasicCoercions + AdvancedCoercions.RegisterAll().
+// - DbCoercion<T>: Abstract base class reducing boilerplate for implementations.
+// =============================================================================
+
 using System.Collections.Concurrent;
 using System.Data.Common;
 using pengdows.crud.enums;

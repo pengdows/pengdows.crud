@@ -1,3 +1,26 @@
+// =============================================================================
+// FILE: TransactionContext.cs
+// PURPOSE: Represents an active database transaction with commit/rollback
+//          control, savepoint support, and automatic cleanup.
+//
+// AI SUMMARY:
+// - Created via DatabaseContext.BeginTransaction() - not directly instantiated.
+// - Holds a pinned connection for the duration of the transaction.
+// - Implements IDatabaseContext so it can be used with TableGateway/SqlContainer.
+// - Key features:
+//   * Commit() / Rollback() for explicit transaction control
+//   * SavepointAsync() / RollbackToSavepointAsync() for partial rollbacks
+//   * Auto-rollback on disposal if not committed
+//   * Isolation level enforcement (promotes to minimum safe level)
+//   * Read-only transaction support
+// - Thread-safe: uses internal locks for concurrent access.
+// - NOT for use with TransactionScope - pengdows.crud uses its own model.
+// - Metrics: tracks transaction duration and commit/rollback counts.
+// - CockroachDB note: forces Serializable isolation (only level supported).
+// - All database operations within a TransactionContext use the same connection,
+//   which is the key difference from non-transactional operations.
+// =============================================================================
+
 #region
 
 using System.Data;
@@ -16,6 +39,45 @@ using pengdows.crud.metrics;
 
 namespace pengdows.crud;
 
+/// <summary>
+/// Represents an active database transaction with commit/rollback control and savepoint support.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <strong>Creation:</strong> Always create via <see cref="IDatabaseContext.BeginTransaction"/>
+/// rather than direct instantiation.
+/// </para>
+/// <para>
+/// <strong>Behavior:</strong> The transaction holds a pinned database connection for its entire
+/// lifetime. All operations performed through this context use that same connection.
+/// </para>
+/// <para>
+/// <strong>Cleanup:</strong> If the transaction is disposed without calling <see cref="ITransactionContext.Commit"/>,
+/// it will be automatically rolled back.
+/// </para>
+/// <para>
+/// <strong>Savepoints:</strong> Use <see cref="ITransactionContext.SavepointAsync"/> and
+/// <see cref="ITransactionContext.RollbackToSavepointAsync"/> for partial rollback scenarios.
+/// </para>
+/// </remarks>
+/// <example>
+/// <code>
+/// await using var tx = await context.BeginTransaction();
+/// try
+/// {
+///     await gateway.CreateAsync(entity1);
+///     await gateway.CreateAsync(entity2);
+///     await tx.Commit();
+/// }
+/// catch
+/// {
+///     // Auto-rollback on dispose if Commit() wasn't called
+///     throw;
+/// }
+/// </code>
+/// </example>
+/// <seealso cref="ITransactionContext"/>
+/// <seealso cref="IDatabaseContext.BeginTransaction"/>
 public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, IContextIdentity, ISqlDialectProvider,
     IMetricsCollectorAccessor
 {

@@ -11,9 +11,9 @@ namespace CrudBenchmarks;
 
 [MemoryDiagnoser]
 [SimpleJob(warmupCount: 3, iterationCount: 10)]
-public class EntityHelperClientOnlyBenchmarks
+public class TableGatewayClientOnlyBenchmarks
 {
-    private EntityHelper<Film, int> _helper = null!;
+    private TableGateway<Film, int> _helper = null!;
     private DatabaseContext _context = null!;
     private TypeMapRegistry _typeMap = null!;
     private IReadOnlyCollection<int> _ids = null!;
@@ -25,7 +25,7 @@ public class EntityHelperClientOnlyBenchmarks
         _typeMap = new TypeMapRegistry();
         _typeMap.Register<Film>();
         _context = new DatabaseContext("Data Source=:memory:", factory, _typeMap);
-        _helper = new EntityHelper<Film, int>(_context);
+        _helper = new TableGateway<Film, int>(_context);
         _ids = new[] { 1 };
     }
 

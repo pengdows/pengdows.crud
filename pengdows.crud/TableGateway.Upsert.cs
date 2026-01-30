@@ -1,3 +1,23 @@
+// =============================================================================
+// FILE: TableGateway.Upsert.cs
+// PURPOSE: UPSERT (INSERT or UPDATE) operations with database-specific syntax.
+//
+// AI SUMMARY:
+// - UpsertAsync() - Inserts new or updates existing based on conflict key.
+// - BuildUpsert() - Creates database-specific upsert SQL.
+// - Conflict key selection:
+//   1. [PrimaryKey] columns if any exist
+//   2. [Id] column if writable ([Id(true)] or [Id])
+//   3. Error if neither available
+// - Database-specific syntax:
+//   * SQL Server/Oracle: MERGE statement
+//   * PostgreSQL: INSERT ... ON CONFLICT (key) DO UPDATE
+//   * MySQL/MariaDB: INSERT ... ON DUPLICATE KEY UPDATE
+// - Handles audit columns and version columns appropriately.
+// - Throws NotSupportedException for fallback/unknown dialects.
+// - Returns affected row count (typically 1 for single-entity upsert).
+// =============================================================================
+
 using System.Data;
 using System.Data.Common;
 using pengdows.crud.@internal;
@@ -5,6 +25,9 @@ using pengdows.crud.enums;
 
 namespace pengdows.crud;
 
+/// <summary>
+/// TableGateway partial: UPSERT (INSERT or UPDATE) operations.
+/// </summary>
 public partial class TableGateway<TEntity, TRowID>
 {
     /// <inheritdoc/>

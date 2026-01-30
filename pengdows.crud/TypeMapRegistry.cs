@@ -1,3 +1,28 @@
+// =============================================================================
+// FILE: TypeMapRegistry.cs
+// PURPOSE: Caches entity type metadata (table name, columns, keys, audit fields)
+//          for efficient SQL generation and data mapping.
+//
+// AI SUMMARY:
+// - Central registry for entity-to-table mapping metadata.
+// - Builds TableInfo from entity attributes ([Table], [Column], [Id], etc.).
+// - Key methods:
+//   * GetTableInfo<T>() - Returns cached metadata, auto-builds on first access
+//   * Register<T>() - Explicitly pre-register (optional, for early validation)
+//   * Clear() - Clears cache (mainly for testing)
+// - Thread-safe: uses ConcurrentDictionary for caching.
+// - Instance property provides singleton access, but instances can be created
+//   for isolated testing scenarios.
+// - Build process:
+//   1. Reads [Table] attribute for table name and schema
+//   2. Scans public properties for [Column] attributes
+//   3. Identifies [Id] (row ID), [PrimaryKey] (business key), [Version]
+//   4. Detects audit columns ([CreatedBy], [CreatedOn], [LastUpdatedBy], [LastUpdatedOn])
+//   5. Compiles fast property getters for performance
+// - Validates: no [PrimaryKey] on [Id] columns, at least one column required.
+// - Handles special types: enums (string or numeric), JSON columns, Guid, etc.
+// =============================================================================
+
 #region
 
 using System.Collections.Concurrent;
@@ -15,6 +40,36 @@ using pengdows.crud.types.valueobjects;
 
 namespace pengdows.crud;
 
+/// <summary>
+/// Provides cached entity type metadata for table mapping and SQL generation.
+/// </summary>
+/// <remarks>
+/// <para>
+/// This registry builds and caches <see cref="ITableInfo"/> instances by analyzing entity
+/// attributes. The metadata is used by <see cref="TableGateway{TEntity,TRowID}"/> and
+/// <see cref="DataReaderMapper"/> for efficient operations.
+/// </para>
+/// <para>
+/// <strong>Thread Safety:</strong> This class is fully thread-safe. Concurrent calls to
+/// <see cref="GetTableInfo{T}"/> are safe and will not duplicate metadata building.
+/// </para>
+/// <para>
+/// <strong>Singleton vs Instance:</strong> Use <see cref="Instance"/> for typical applications.
+/// Create separate instances for isolated testing scenarios.
+/// </para>
+/// </remarks>
+/// <example>
+/// <code>
+/// // Automatic registration on first use (recommended)
+/// var tableInfo = TypeMapRegistry.Instance.GetTableInfo&lt;MyEntity&gt;();
+///
+/// // Explicit pre-registration for early validation
+/// TypeMapRegistry.Instance.Register&lt;MyEntity&gt;();
+/// </code>
+/// </example>
+/// <seealso cref="ITypeMapRegistry"/>
+/// <seealso cref="ITableInfo"/>
+/// <seealso cref="TableGateway{TEntity,TRowID}"/>
 public sealed class TypeMapRegistry : ITypeMapRegistry
 {
     private readonly ConcurrentDictionary<Type, TableInfo> _typeMap = new();

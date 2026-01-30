@@ -80,7 +80,7 @@ public class SessionSettingsEnforcementTests
     }
 
     [Fact]
-    public void DatabaseContext_FallsBackToHeuristic_WhenDialectNotInitialized()
+    public void DatabaseContext_AppliesSessionSettingsAfterDialectDetection()
     {
         // Arrange - use MySQL which has session settings
         var factory = new fakeDbFactory(SupportedDatabase.MySql);
@@ -90,12 +90,21 @@ public class SessionSettingsEnforcementTests
         using var connection = context.GetConnection(ExecutionType.Write);
         connection.Open();
 
-        // Assert
-        var fakeConn = factory.CreatedConnections[0];
-        var executed = fakeConn.ExecutedNonQueryTexts;
+        // Assert - at least one physical connection applied the SET statements
+        Assert.Contains(factory.CreatedConnections,
+            conn => conn.ExecutedNonQueryTexts.Any(cmd => cmd.StartsWith("SET ")));
+    }
 
-        // Should have executed some session settings (heuristic or dialect)
-        Assert.NotEmpty(executed);
+    [Fact]
+    public void SessionSettingsSkippedWhenDialectProvidesNoStatements()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.DuckDB);
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=DuckDB", factory);
+
+        using var connection = context.GetConnection(ExecutionType.Write);
+        connection.Open();
+
+        Assert.All(factory.CreatedConnections, conn => Assert.Empty(conn.ExecutedNonQueryTexts));
     }
 
     [Fact]

@@ -1,3 +1,22 @@
+// =============================================================================
+// FILE: ClobStreamConverter.cs
+// PURPOSE: Converter for CLOB (Character Large Object) streaming.
+//
+// AI SUMMARY:
+// - Converts between database CLOB values and TextReader instances.
+// - Enables memory-efficient streaming without loading entire content.
+// - Provider-specific:
+//   * SQL Server: VARCHAR(MAX), NVARCHAR(MAX), TEXT, NTEXT columns
+//   * PostgreSQL: TEXT columns (returns string)
+//   * Oracle: CLOB, NCLOB columns
+//   * MySQL: TEXT, LONGTEXT columns
+//   * SQLite: TEXT type
+// - ConvertToProvider(): Returns TextReader directly.
+// - TryConvertFromProvider(): Handles TextReader, string, Stream, ReadOnlyMemory<char>.
+// - Stream conversion: UTF-8 with BOM detection, leaves stream open.
+// - Thread-safe converter, but returned TextReaders are NOT thread-safe.
+// =============================================================================
+
 using System.Text;
 using pengdows.crud.enums;
 

@@ -19,7 +19,7 @@ namespace CrudBenchmarks;
 [SimpleJob(warmupCount: 3, iterationCount: 5)]
 public class ReaderMappingBenchmark
 {
-    private EntityHelper<TestEntity, int> _helper = null!;
+    private TableGateway<TestEntity, int> _helper = null!;
     private TypeMapRegistry _typeMap = null!;
     private DatabaseContext _context = null!;
     private PropertyInfo[] _properties = null!;
@@ -34,7 +34,7 @@ public class ReaderMappingBenchmark
         _typeMap = new TypeMapRegistry();
         _typeMap.Register<TestEntity>();
         _context = new DatabaseContext("Data Source=:memory:", factory, _typeMap);
-        _helper = new EntityHelper<TestEntity, int>(_context);
+        _helper = new TableGateway<TestEntity, int>(_context);
 
         // Setup for pure reflection path
         _properties = typeof(TestEntity).GetProperties(BindingFlags.Public | BindingFlags.Instance);

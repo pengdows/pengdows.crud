@@ -22,7 +22,7 @@ public class IsolationBenchmarks
     private string _connStr = "fake";
     private IDatabaseContext _ctx = null!;
     private TypeMapRegistry _map = null!;
-    private EntityHelper<Film, int> _filmHelper = null!;
+    private TableGateway<Film, int> _filmHelper = null!;
 
     // Dapper uses its OWN factory and connections - NOT pengdows.crud infrastructure
     private fakeDbFactory _dapperFactory = null!;
@@ -45,12 +45,12 @@ public class IsolationBenchmarks
         // pengdows.crud uses its own factory instance
         var pengdowsFactory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         _ctx = new DatabaseContext(cfg, pengdowsFactory, null, _map);
-        _filmHelper = new EntityHelper<Film, int>(_ctx);
+        _filmHelper = new TableGateway<Film, int>(_ctx);
 
         // Dapper gets its OWN factory instance - completely separate from pengdows.crud
         _dapperFactory = new fakeDbFactory(SupportedDatabase.PostgreSql);
 
-        // EntityHelper will handle internal caching automatically
+        // TableGateway will handle internal caching automatically
 
         // Static SQL for comparison
         _staticSql =
@@ -86,7 +86,7 @@ public class IsolationBenchmarks
     [Benchmark]
     public async Task<Film?> ObjectLoading_Mine()
     {
-        // Integrated path: EntityHelper handles caching/optimization internally
+        // Integrated path: TableGateway handles caching/optimization internally
         return await _filmHelper.RetrieveOneAsync(_filmId, _ctx);
     }
 

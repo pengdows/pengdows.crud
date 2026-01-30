@@ -1,3 +1,21 @@
+// =============================================================================
+// FILE: SingleWriterConnectionStrategy.cs
+// PURPOSE: Connection strategy with one persistent writer and ephemeral readers.
+//
+// AI SUMMARY:
+// - Optimized for single-writer/multi-reader database architectures.
+// - Write operations: Always use the single persistent writer connection.
+// - Read operations: Create ephemeral read-only connections (like Standard).
+// - Ideal for: SQLite with WAL mode, SQLCE, file-based DBs with expensive write locks.
+// - GetConnection(Write) returns persistent connection; GetConnection(Read) creates new.
+// - ReleaseConnection() disposes readers but never the persistent writer.
+// - PostInitialize() stores writer connection as persistent on DatabaseContext.
+// - Eliminates write lock acquisition overhead on every write operation.
+// - Read connections get read-only hints applied via dialect.
+// - Thread-safe: Writer protected by DB-level locking; readers are ephemeral.
+// - Extends SafeAsyncDisposableBase for proper cleanup on context disposal.
+// =============================================================================
+
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.dialects;

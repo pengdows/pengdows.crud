@@ -79,4 +79,9 @@ public interface IDatabaseContextConfiguration
     /// Enables or disables internal pool governor behavior.
     /// </summary>
     bool EnablePoolGovernor { get; set; }
+
+    /// <summary>
+    /// Optional value passed to the provider (Application Name / Client Info) used for telemetry/connection tagging.
+    /// </summary>
+    string ApplicationName { get; set; }
 }

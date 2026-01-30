@@ -1,3 +1,20 @@
+// =============================================================================
+// FILE: TableGateway.Retrieve.cs
+// PURPOSE: SELECT query building and entity retrieval operations.
+//
+// AI SUMMARY:
+// - BuildBaseRetrieve() - Creates SELECT with all columns, no WHERE clause.
+// - BuildRetrieve() - SELECT with WHERE id IN (...) clause.
+// - RetrieveAsync() - Loads multiple entities by their row IDs.
+// - RetrieveOneAsync(TRowID) - Loads single entity by row ID.
+// - RetrieveOneAsync(TEntity) - Loads entity by primary key values.
+// - LoadListAsync() - Executes query and maps all rows to entities.
+// - LoadSingleAsync() - Executes query and maps first row or null.
+// - SQL caching by alias and database product for performance.
+// - Uses dialect-specific identifier quoting and parameter formatting.
+// - Primary key lookup uses [PrimaryKey] columns, not [Id].
+// =============================================================================
+
 using System.Data;
 using System.Data.Common;
 using pengdows.crud.dialects;
@@ -6,6 +23,9 @@ using pengdows.crud.@internal;
 
 namespace pengdows.crud;
 
+/// <summary>
+/// TableGateway partial: SELECT query building and retrieval operations.
+/// </summary>
 public partial class TableGateway<TEntity, TRowID>
 {
     /// <inheritdoc/>

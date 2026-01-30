@@ -1,3 +1,25 @@
+// =============================================================================
+// FILE: ProviderParameterFactory.cs
+// PURPOSE: Factory for creating provider-optimized database parameters.
+//
+// AI SUMMARY:
+// - Creates and configures DbParameter with provider-specific optimizations.
+// - TryConfigureParameter(): Main entry point - tries provider-specific then general coercion.
+// - Provider-specific optimizations:
+//   * PostgreSQL: NpgsqlDbType for UUID, arrays, JSONB, HStore, ranges via reflection
+//   * SQL Server: GUID, JSON as NVARCHAR(MAX), rowversion optimization
+//   * MySQL/MariaDB: TINYINT for boolean, native JSON type
+//   * Oracle: NUMBER precision (38), RAW(16) for GUID
+//   * SQLite: TEXT for GUID, flexible typing
+//   * DuckDB: Native UUID and LIST support
+// - ParameterBindingRules: Cross-database binding rules with coercion support.
+//   * Rule 1: Always parameterize date/time (never embed literals)
+//   * Rule 2: Boolean normalization (MySQL uses TINYINT)
+//   * Rule 3: Enum handling (PostgreSQL=string, others=int)
+//   * Rule 4: Array binding (PostgreSQL/DuckDB native, others=JSON)
+//   * Rule 5: Large object streaming (avoid LOH allocations)
+// =============================================================================
+
 using System.Data;
 using System.Data.Common;
 using pengdows.crud.enums;

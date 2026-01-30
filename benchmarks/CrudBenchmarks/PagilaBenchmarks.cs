@@ -7,6 +7,7 @@ using DotNet.Testcontainers.Containers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Npgsql;
+using NpgsqlTypes;
 using pengdows.crud;
 using pengdows.crud.attributes;
 using pengdows.crud.configuration;
@@ -26,23 +27,71 @@ namespace CrudBenchmarks;
 [SimpleJob(warmupCount: 5, iterationCount: 10, invocationCount: 100)]
 public class PagilaBenchmarks : IAsyncDisposable
 {
+    private const string FilmByIdSqlTemplate = """
+        select film_id, title, length
+        from film
+        where film_id = {id}
+        """;
+
+    private const string FilmActorCompositeSqlTemplate = """
+        select actor_id, film_id
+        from film_actor
+        where actor_id = {actorId} and film_id = {filmId}
+        """;
+
+    private const string FilmLengthByIdSqlTemplate = """
+        select length
+        from film
+        where film_id = {id}
+        """;
+
+    private const string FilmUpdateLengthSqlTemplate = """
+        update film
+        set length = {len}
+        where film_id = {id}
+        """;
+
+    private const string FilmInsertSqlTemplate = """
+        insert into film(title, length)
+        values ({title}, {length})
+        returning film_id
+        """;
+
+    private const string FilmDeleteSqlTemplate = """
+        delete from film
+        where film_id = {id}
+        """;
+
+    private const string FilmIdsSqlTemplate = """
+        select film_id, title, length
+        from film
+        where film_id = any({ids})
+        """;
     private IContainer? _container;
     private string _baseConnStr = string.Empty;
     private string _pengdowsConnStr = string.Empty;
     private string _efConnStr = string.Empty;
+    private string _efSettingsConnStr = string.Empty;
     private string _dapperConnStr = string.Empty;
+    private string _dapperSettingsConnStr = string.Empty;
     private IDatabaseContext _ctx = null!;
     private ILoggerFactory? _loggerFactory;
     private TypeMapRegistry _map = null!;
-    private EntityHelper<Film, int> _filmHelper = null!;
-    private EntityHelper<FilmActor, int> _filmActorHelper = null!;
+    private TableGateway<Film, int> _filmHelper = null!;
+    private TableGateway<FilmActor, int> _filmActorHelper = null!;
     private PagilaDbContext _efDbContext = null!;
+    private PagilaDbContext _efDbContextWithSettings = null!;
+    private DbContextOptions<PagilaDbContext> _efOptions = null!;
+    private DbContextOptions<PagilaDbContext> _efOptionsWithSettings = null!;
     private NpgsqlDataSource _dapperDataSource = null!;
-    // Remove manual template caching - use EntityHelper's built-in caching
+    private NpgsqlDataSource _dapperSettingsDataSource = null!;
+    // Remove manual template caching - use TableGateway's built-in caching
 
     [Params(1000)] public int FilmCount;
 
     [Params(200)] public int ActorCount;
+    [Params(16)] public int Parallelism;
+    [Params(64)] public int OperationsPerRun;
 
     private int _filmId;
     private List<int> _filmIds10 = new();
@@ -89,10 +138,12 @@ public class PagilaBenchmarks : IAsyncDisposable
         // Use different Application Names to ensure separate connection pools for each library
         // This ensures fair benchmarking without cross-pollination of session states
         _baseConnStr =
-            $"Host=localhost;Port={mappedPort};Database=pagila;Username=postgres;Password=postgres;Maximum Pool Size=100;";
+            $"Host=localhost;Port={mappedPort};Database=pagila;Username=postgres;Password=postgres;";
         _pengdowsConnStr = _baseConnStr + "Application Name=Benchmark_PengdowsCrud;";
         _efConnStr = _baseConnStr + "Application Name=Benchmark_EntityFramework;";
+        _efSettingsConnStr = _baseConnStr + "Application Name=Benchmark_EntityFramework_Settings;";
         _dapperConnStr = _baseConnStr + "Application Name=Benchmark_Dapper;";
+        _dapperSettingsConnStr = _baseConnStr + "Application Name=Benchmark_Dapper_Settings;";
 
         await WaitForReady();
         await CreateSchemaAndSeedAsync();
@@ -130,19 +181,27 @@ public class PagilaBenchmarks : IAsyncDisposable
         Console.WriteLine($"[BENCHMARK] Configured DbMode: {cfg.DbMode}");
         Console.WriteLine($"[BENCHMARK] Actual ConnectionMode: {_ctx.ConnectionMode}");
 
-        _filmHelper = new EntityHelper<Film, int>(_ctx);
-        _filmActorHelper = new EntityHelper<FilmActor, int>(_ctx);
+        _filmHelper = new TableGateway<Film, int>(_ctx);
+        _filmActorHelper = new TableGateway<FilmActor, int>(_ctx);
 
         // Initialize Entity Framework DbContext with its own connection pool
-        var options = new DbContextOptionsBuilder<PagilaDbContext>()
+        _efOptions = new DbContextOptionsBuilder<PagilaDbContext>()
             .UseNpgsql(_efConnStr)
             .Options;
-        _efDbContext = new PagilaDbContext(options);
+        _efDbContext = new PagilaDbContext(_efOptions);
+
+        // Initialize Entity Framework DbContext with session settings parity
+        _efOptionsWithSettings = new DbContextOptionsBuilder<PagilaDbContext>()
+            .UseNpgsql(_efSettingsConnStr)
+            .AddInterceptors(new SessionSettingsConnectionInterceptor(BenchmarkSessionSettings.PostgresSessionSettings))
+            .Options;
+        _efDbContextWithSettings = new PagilaDbContext(_efOptionsWithSettings);
 
         // Initialize Dapper data source with its own connection pool
         _dapperDataSource = NpgsqlDataSource.Create(_dapperConnStr);
+        _dapperSettingsDataSource = NpgsqlDataSource.Create(_dapperSettingsConnStr);
 
-        // EntityHelper will handle internal caching and cloning automatically
+        // TableGateway will handle internal caching and cloning automatically
 
         // pick keys to use in benchmarks
         await using var conn = new NpgsqlConnection(_baseConnStr);
@@ -155,18 +214,35 @@ public class PagilaBenchmarks : IAsyncDisposable
 
         // Warmup both systems to ensure fair comparison
         Console.WriteLine("[WARMUP] Warming up pengdows.crud...");
-        var warmupFilm = await _filmHelper.RetrieveOneAsync(_filmId);
-        Console.WriteLine($"[WARMUP] pengdows.crud warmed up - retrieved film: {warmupFilm?.Title}");
+        await using (var warmupContainer = _ctx.CreateSqlContainer())
+        {
+            var warmupSql = BuildFilmByIdSql(param => warmupContainer.MakeParameterName(param));
+            warmupContainer.Query.Append(warmupSql);
+            warmupContainer.AddParameterWithValue("id", DbType.Int32, _filmId);
+            await using var warmupReader = await warmupContainer.ExecuteReaderSingleRowAsync();
+            Film? warmupFilm = null;
+            if (await warmupReader.ReadAsync())
+            {
+                warmupFilm = _filmHelper.MapReaderToObject(warmupReader);
+            }
+
+            Console.WriteLine($"[WARMUP] pengdows.crud warmed up - retrieved film: {warmupFilm?.Title}");
+        }
 
         Console.WriteLine("[WARMUP] Warming up Dapper...");
         await using var warmupConn = await _dapperDataSource.OpenConnectionAsync();
-        var dapperWarmup = await warmupConn.QuerySingleOrDefaultAsync<Film>(
-            "select film_id as \"Id\", title as \"Title\", length as \"Length\" from film where film_id=@id",
+        var dapperWarmupSql = BuildFilmByIdSql(param => $"@{param}");
+        var dapperWarmupRow = await warmupConn.QuerySingleOrDefaultAsync<DapperFilmRow>(
+            dapperWarmupSql,
             new { id = _filmId });
+        var dapperWarmup = dapperWarmupRow == null ? null : MapFilm(dapperWarmupRow);
         Console.WriteLine($"[WARMUP] Dapper warmed up - retrieved film: {dapperWarmup?.Title}");
 
         Console.WriteLine("[WARMUP] Warming up Entity Framework...");
-        var efWarmup = await _efDbContext.Films.FirstOrDefaultAsync(f => f.Id == _filmId);
+        var efWarmupSql = BuildFilmByIdSql(param => $"@{param}");
+        var efWarmup = await _efDbContext.Films
+            .FromSqlRaw(efWarmupSql, new NpgsqlParameter("id", _filmId))
+            .FirstOrDefaultAsync();
         Console.WriteLine($"[WARMUP] Entity Framework warmed up - retrieved film: {efWarmup?.Title}");
     }
 
@@ -183,9 +259,19 @@ public class PagilaBenchmarks : IAsyncDisposable
             await _efDbContext.DisposeAsync();
         }
 
+        if (_efDbContextWithSettings != null)
+        {
+            await _efDbContextWithSettings.DisposeAsync();
+        }
+
         if (_dapperDataSource != null)
         {
             await _dapperDataSource.DisposeAsync();
+        }
+
+        if (_dapperSettingsDataSource != null)
+        {
+            await _dapperSettingsDataSource.DisposeAsync();
         }
 
         _loggerFactory?.Dispose();
@@ -459,7 +545,13 @@ CREATE TABLE film_actor (
     public async Task<Film?> GetFilmById_Mine()
     {
         _currentBenchmarkLabel = nameof(GetFilmById_Mine);
-        return await _filmHelper.RetrieveOneAsync(_filmId, _ctx);
+        await using var container = _ctx.CreateSqlContainer();
+        var sql = BuildFilmByIdSql(param => container.MakeParameterName(param));
+        container.Query.Append(sql);
+        container.AddParameterWithValue("id", DbType.Int32, _filmId);
+
+        await using var reader = await container.ExecuteReaderSingleRowAsync();
+        return await reader.ReadAsync() ? _filmHelper.MapReaderToObject(reader) : null;
     }
 
     [Benchmark]
@@ -468,7 +560,10 @@ CREATE TABLE film_actor (
         _currentBenchmarkLabel = nameof(GetFilmById_Mine_Breakdown);
 
         var t0 = Stopwatch.GetTimestamp();
-        await using var sc = _filmHelper.BuildRetrieve(new[] { _filmId }, _ctx);
+        await using var sc = _ctx.CreateSqlContainer();
+        var sql = BuildFilmByIdSql(param => sc.MakeParameterName(param));
+        sc.Query.Append(sql);
+        sc.AddParameterWithValue("id", DbType.Int32, _filmId);
         var t1 = Stopwatch.GetTimestamp();
         await using var reader = await sc.ExecuteReaderSingleRowAsync();
         var t2 = Stopwatch.GetTimestamp();
@@ -496,8 +591,7 @@ CREATE TABLE film_actor (
         await using var conn = await _dapperDataSource.OpenConnectionAsync();
         var t0 = Stopwatch.GetTimestamp();
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText =
-            "select film_id as \"Id\", title as \"Title\", length as \"Length\" from film where film_id=@id";
+        cmd.CommandText = BuildFilmByIdSql(param => $"@{param}");
         var param = cmd.CreateParameter();
         param.ParameterName = "id";
         param.Value = _filmId;
@@ -510,8 +604,9 @@ CREATE TABLE film_actor (
         Film? result = null;
         if (await reader.ReadAsync())
         {
-            var parser = SqlMapper.GetRowParser<Film>(reader);
-            result = parser(reader);
+            var parser = SqlMapper.GetRowParser<DapperFilmRow>(reader);
+            var row = parser(reader);
+            result = MapFilm(row);
         }
 
         var t3 = Stopwatch.GetTimestamp();
@@ -530,7 +625,10 @@ CREATE TABLE film_actor (
         _currentBenchmarkLabel = nameof(GetFilmById_EntityFramework_NoTracking_Breakdown);
 
         var t0 = Stopwatch.GetTimestamp();
-        var query = _efDbContext.Films.AsNoTracking().Where(f => f.Id == _filmId);
+        var sql = BuildFilmByIdSql(param => $"@{param}");
+        var query = _efDbContext.Films
+            .FromSqlRaw(sql, new NpgsqlParameter("id", _filmId))
+            .AsNoTracking();
         var t1 = Stopwatch.GetTimestamp();
 
         var result = await query.FirstOrDefaultAsync();
@@ -549,18 +647,34 @@ CREATE TABLE film_actor (
     {
         _currentBenchmarkLabel = nameof(GetFilmById_Dapper);
         await using var conn = await _dapperDataSource.OpenConnectionAsync();
-        return await conn.QuerySingleOrDefaultAsync<Film>(
-            "select film_id as \"Id\", title as \"Title\", length as \"Length\" from film where film_id=@id",
-            new { id = _filmId });
+        var sql = BuildFilmByIdSql(param => $"@{param}");
+        var row = await conn.QuerySingleOrDefaultAsync<DapperFilmRow>(sql, new { id = _filmId });
+        return row == null ? null : MapFilm(row);
+    }
+
+    [Benchmark]
+    public async Task<Film?> GetFilmById_Dapper_WithSessionSettings()
+    {
+        _currentBenchmarkLabel = nameof(GetFilmById_Dapper_WithSessionSettings);
+        await using var conn = await _dapperSettingsDataSource.OpenConnectionAsync();
+        await BenchmarkSessionSettings.ApplyAsync(conn, BenchmarkSessionSettings.PostgresSessionSettings);
+        var sql = BuildFilmByIdSql(param => $"@{param}");
+        var row = await conn.QuerySingleOrDefaultAsync<DapperFilmRow>(sql, new { id = _filmId });
+        return row == null ? null : MapFilm(row);
     }
 
     [Benchmark]
     public async Task<FilmActor?> GetFilmActorComposite_Mine()
     {
         _currentBenchmarkLabel = nameof(GetFilmActorComposite_Mine);
-        // Use simple approach for composite key retrieval
-        var key = new FilmActor { ActorId = _compositeKey.actorId, FilmId = _compositeKey.filmId };
-        return await _filmActorHelper.RetrieveOneAsync(key);
+        await using var container = _ctx.CreateSqlContainer();
+        var sql = BuildFilmActorCompositeSql(param => container.MakeParameterName(param));
+        container.Query.Append(sql);
+        container.AddParameterWithValue("actorId", DbType.Int32, _compositeKey.actorId);
+        container.AddParameterWithValue("filmId", DbType.Int32, _compositeKey.filmId);
+
+        await using var reader = await container.ExecuteReaderSingleRowAsync();
+        return await reader.ReadAsync() ? _filmActorHelper.MapReaderToObject(reader) : null;
     }
 
     [Benchmark]
@@ -568,29 +682,45 @@ CREATE TABLE film_actor (
     {
         _currentBenchmarkLabel = nameof(GetFilmActorComposite_Dapper);
         await using var conn = await _dapperDataSource.OpenConnectionAsync();
-        return await conn.QuerySingleOrDefaultAsync<FilmActor>(
-            "select actor_id as \"ActorId\", film_id as \"FilmId\" from film_actor where actor_id=@a and film_id=@f",
-            new { a = _compositeKey.actorId, f = _compositeKey.filmId });
+        var sql = BuildFilmActorCompositeSql(param => $"@{param}");
+        var row = await conn.QuerySingleOrDefaultAsync<DapperFilmActorRow>(
+            sql,
+            new { actorId = _compositeKey.actorId, filmId = _compositeKey.filmId });
+        return row == null ? null : MapFilmActor(row);
+    }
+
+    [Benchmark]
+    public async Task<FilmActor?> GetFilmActorComposite_Dapper_WithSessionSettings()
+    {
+        _currentBenchmarkLabel = nameof(GetFilmActorComposite_Dapper_WithSessionSettings);
+        await using var conn = await _dapperSettingsDataSource.OpenConnectionAsync();
+        await BenchmarkSessionSettings.ApplyAsync(conn, BenchmarkSessionSettings.PostgresSessionSettings);
+        var sql = BuildFilmActorCompositeSql(param => $"@{param}");
+        var row = await conn.QuerySingleOrDefaultAsync<DapperFilmActorRow>(
+            sql,
+            new { actorId = _compositeKey.actorId, filmId = _compositeKey.filmId });
+        return row == null ? null : MapFilmActor(row);
     }
 
     [Benchmark]
     public async Task<int> UpdateFilm_Mine()
     {
         _currentBenchmarkLabel = nameof(UpdateFilm_Mine);
+        await using var lengthContainer = _ctx.CreateSqlContainer();
+        var lengthSql = BuildFilmLengthByIdSql(param => lengthContainer.MakeParameterName(param));
+        lengthContainer.Query.Append(lengthSql);
+        lengthContainer.AddParameterWithValue("id", DbType.Int32, _filmId);
+        var currentLength = await lengthContainer.ExecuteScalarAsync<int>(CommandType.Text);
 
-        // Retrieve film
-        var film = await _filmHelper.RetrieveOneAsync(_filmId);
-        if (film == null)
-        {
-            return 0;
-        }
-
-        // Toggle length to avoid no-op updates
-        film.Length = _flip ? film.Length + 1 : film.Length - 1;
+        var newLength = _flip ? currentLength + 1 : currentLength - 1;
         _flip = !_flip;
 
-        // Update film
-        return await _filmHelper.UpdateAsync(film);
+        await using var updateContainer = _ctx.CreateSqlContainer();
+        var updateSql = BuildFilmUpdateLengthSql(param => updateContainer.MakeParameterName(param));
+        updateContainer.Query.Append(updateSql);
+        updateContainer.AddParameterWithValue("id", DbType.Int32, _filmId);
+        updateContainer.AddParameterWithValue("len", DbType.Int32, newLength);
+        return await updateContainer.ExecuteNonQueryAsync();
     }
 
     [Benchmark]
@@ -598,13 +728,26 @@ CREATE TABLE film_actor (
     {
         _currentBenchmarkLabel = nameof(UpdateFilm_Dapper);
         await using var conn = await _dapperDataSource.OpenConnectionAsync();
-        var len = await conn.ExecuteScalarAsync<int>(
-            "select length from film where film_id=@id", new { id = _filmId });
+        var lengthSql = BuildFilmLengthByIdSql(param => $"@{param}");
+        var len = await conn.ExecuteScalarAsync<int>(lengthSql, new { id = _filmId });
         var newLen = _flip ? len + 1 : len - 1;
         _flip = !_flip;
-        return await conn.ExecuteAsync(
-            "update film set length=@len where film_id=@id",
-            new { id = _filmId, len = newLen });
+        var updateSql = BuildFilmUpdateLengthSql(param => $"@{param}");
+        return await conn.ExecuteAsync(updateSql, new { id = _filmId, len = newLen });
+    }
+
+    [Benchmark]
+    public async Task<int> UpdateFilm_Dapper_WithSessionSettings()
+    {
+        _currentBenchmarkLabel = nameof(UpdateFilm_Dapper_WithSessionSettings);
+        await using var conn = await _dapperSettingsDataSource.OpenConnectionAsync();
+        await BenchmarkSessionSettings.ApplyAsync(conn, BenchmarkSessionSettings.PostgresSessionSettings);
+        var lengthSql = BuildFilmLengthByIdSql(param => $"@{param}");
+        var len = await conn.ExecuteScalarAsync<int>(lengthSql, new { id = _filmId });
+        var newLen = _flip ? len + 1 : len - 1;
+        _flip = !_flip;
+        var updateSql = BuildFilmUpdateLengthSql(param => $"@{param}");
+        return await conn.ExecuteAsync(updateSql, new { id = _filmId, len = newLen });
     }
 
     [Benchmark]
@@ -613,14 +756,18 @@ CREATE TABLE film_actor (
         _currentBenchmarkLabel = nameof(InsertThenDeleteFilm_Mine);
         var title = $"Bench_{Interlocked.Increment(ref _runCounter):D10}";
 
-        var film = new Film { Title = title, Length = 123 };
-        var created = await _filmHelper.CreateAsync(film, _ctx);
-        if (!created)
-        {
-            return 0;
-        }
+        await using var insertContainer = _ctx.CreateSqlContainer();
+        var insertSql = BuildFilmInsertSql(param => insertContainer.MakeParameterName(param));
+        insertContainer.Query.Append(insertSql);
+        insertContainer.AddParameterWithValue("title", DbType.String, title);
+        insertContainer.AddParameterWithValue("length", DbType.Int32, 123);
+        var id = await insertContainer.ExecuteScalarAsync<int>(CommandType.Text);
 
-        return await _filmHelper.DeleteAsync(film.Id, _ctx);
+        await using var deleteContainer = _ctx.CreateSqlContainer();
+        var deleteSql = BuildFilmDeleteSql(param => deleteContainer.MakeParameterName(param));
+        deleteContainer.Query.Append(deleteSql);
+        deleteContainer.AddParameterWithValue("id", DbType.Int32, id);
+        return await deleteContainer.ExecuteNonQueryAsync();
     }
 
     [Benchmark]
@@ -629,26 +776,61 @@ CREATE TABLE film_actor (
         _currentBenchmarkLabel = nameof(InsertThenDeleteFilm_Dapper);
         await using var conn = await _dapperDataSource.OpenConnectionAsync();
         var title = $"Bench_{Guid.NewGuid():N}";
-        var id = await conn.ExecuteScalarAsync<int>(
-            "insert into film(title, length) values (@t, @l) returning film_id",
-            new { t = title, l = 123 });
-        return await conn.ExecuteAsync("delete from film where film_id=@id", new { id });
+        var insertSql = BuildFilmInsertSql(param => $"@{param}");
+        var id = await conn.ExecuteScalarAsync<int>(insertSql, new { title, length = 123 });
+        var deleteSql = BuildFilmDeleteSql(param => $"@{param}");
+        return await conn.ExecuteAsync(deleteSql, new { id });
+    }
+
+    [Benchmark]
+    public async Task<int> InsertThenDeleteFilm_Dapper_WithSessionSettings()
+    {
+        _currentBenchmarkLabel = nameof(InsertThenDeleteFilm_Dapper_WithSessionSettings);
+        await using var conn = await _dapperSettingsDataSource.OpenConnectionAsync();
+        await BenchmarkSessionSettings.ApplyAsync(conn, BenchmarkSessionSettings.PostgresSessionSettings);
+        var title = $"Bench_{Guid.NewGuid():N}";
+        var insertSql = BuildFilmInsertSql(param => $"@{param}");
+        var id = await conn.ExecuteScalarAsync<int>(insertSql, new { title, length = 123 });
+        var deleteSql = BuildFilmDeleteSql(param => $"@{param}");
+        return await conn.ExecuteAsync(deleteSql, new { id });
     }
 
 
     [Benchmark]
     public async Task<List<Film>> GetTenFilms_Mine()
     {
-        return await _filmHelper.RetrieveAsync(_filmIds10, _ctx);
+        await using var container = _ctx.CreateSqlContainer();
+        var sql = BuildFilmIdsSql(param => container.MakeParameterName(param));
+        container.Query.Append(sql);
+        container.AddParameterWithValue("ids", DbType.Object, _filmIds10.ToArray());
+
+        await using var reader = await container.ExecuteReaderAsync();
+        var results = new List<Film>();
+        while (await reader.ReadAsync())
+        {
+            results.Add(_filmHelper.MapReaderToObject(reader));
+        }
+
+        return results;
     }
 
     [Benchmark]
     public async Task<List<Film>> GetTenFilms_Dapper()
     {
         await using var conn = await _dapperDataSource.OpenConnectionAsync();
-        var sql =
-            "select film_id as \"Id\", title as \"Title\", length as \"Length\" from film where film_id = any(@ids)";
-        return (await conn.QueryAsync<Film>(sql, new { ids = _filmIds10.ToArray() })).ToList();
+        var sql = BuildFilmIdsSql(param => $"@{param}");
+        var rows = await conn.QueryAsync<DapperFilmRow>(sql, new { ids = _filmIds10.ToArray() });
+        return rows.Select(MapFilm).ToList();
+    }
+
+    [Benchmark]
+    public async Task<List<Film>> GetTenFilms_Dapper_WithSessionSettings()
+    {
+        await using var conn = await _dapperSettingsDataSource.OpenConnectionAsync();
+        await BenchmarkSessionSettings.ApplyAsync(conn, BenchmarkSessionSettings.PostgresSessionSettings);
+        var sql = BuildFilmIdsSql(param => $"@{param}");
+        var rows = await conn.QueryAsync<DapperFilmRow>(sql, new { ids = _filmIds10.ToArray() });
+        return rows.Select(MapFilm).ToList();
     }
 
     // Entity Framework Benchmarks
@@ -656,45 +838,138 @@ CREATE TABLE film_actor (
     public async Task<EfFilm?> GetFilmById_EntityFramework()
     {
         _currentBenchmarkLabel = nameof(GetFilmById_EntityFramework);
-        return await _efDbContext.Films.FirstOrDefaultAsync(f => f.Id == _filmId);
+        var sql = BuildFilmByIdSql(param => $"@{param}");
+        return await _efDbContext.Films
+            .FromSqlRaw(sql, new NpgsqlParameter("id", _filmId))
+            .FirstOrDefaultAsync();
+    }
+
+    [Benchmark]
+    public async Task<EfFilm?> GetFilmById_EntityFramework_WithSessionSettings()
+    {
+        _currentBenchmarkLabel = nameof(GetFilmById_EntityFramework_WithSessionSettings);
+        var sql = BuildFilmByIdSql(param => $"@{param}");
+        return await _efDbContextWithSettings.Films
+            .FromSqlRaw(sql, new NpgsqlParameter("id", _filmId))
+            .FirstOrDefaultAsync();
     }
 
     [Benchmark]
     public async Task<EfFilm?> GetFilmById_EntityFramework_NoTracking()
     {
         _currentBenchmarkLabel = nameof(GetFilmById_EntityFramework_NoTracking);
-        return await _efDbContext.Films.AsNoTracking().FirstOrDefaultAsync(f => f.Id == _filmId);
+        var sql = BuildFilmByIdSql(param => $"@{param}");
+        return await _efDbContext.Films
+            .FromSqlRaw(sql, new NpgsqlParameter("id", _filmId))
+            .AsNoTracking()
+            .FirstOrDefaultAsync();
+    }
+
+    [Benchmark]
+    public async Task<EfFilm?> GetFilmById_EntityFramework_NoTracking_WithSessionSettings()
+    {
+        _currentBenchmarkLabel = nameof(GetFilmById_EntityFramework_NoTracking_WithSessionSettings);
+        var sql = BuildFilmByIdSql(param => $"@{param}");
+        return await _efDbContextWithSettings.Films
+            .FromSqlRaw(sql, new NpgsqlParameter("id", _filmId))
+            .AsNoTracking()
+            .FirstOrDefaultAsync();
     }
 
     [Benchmark]
     public async Task<EfFilmActor?> GetFilmActorComposite_EntityFramework()
     {
         _currentBenchmarkLabel = nameof(GetFilmActorComposite_EntityFramework);
+        var sql = BuildFilmActorCompositeSql(param => $"@{param}");
         return await _efDbContext.FilmActors
-            .FirstOrDefaultAsync(fa => fa.ActorId == _compositeKey.actorId && fa.FilmId == _compositeKey.filmId);
+            .FromSqlRaw(
+                sql,
+                new NpgsqlParameter("actorId", _compositeKey.actorId),
+                new NpgsqlParameter("filmId", _compositeKey.filmId))
+            .FirstOrDefaultAsync();
+    }
+
+    [Benchmark]
+    public async Task<EfFilmActor?> GetFilmActorComposite_EntityFramework_WithSessionSettings()
+    {
+        _currentBenchmarkLabel = nameof(GetFilmActorComposite_EntityFramework_WithSessionSettings);
+        var sql = BuildFilmActorCompositeSql(param => $"@{param}");
+        return await _efDbContextWithSettings.FilmActors
+            .FromSqlRaw(
+                sql,
+                new NpgsqlParameter("actorId", _compositeKey.actorId),
+                new NpgsqlParameter("filmId", _compositeKey.filmId))
+            .FirstOrDefaultAsync();
     }
 
     [Benchmark]
     public async Task<EfFilmActor?> GetFilmActorComposite_EntityFramework_NoTracking()
     {
         _currentBenchmarkLabel = nameof(GetFilmActorComposite_EntityFramework_NoTracking);
+        var sql = BuildFilmActorCompositeSql(param => $"@{param}");
         return await _efDbContext.FilmActors
+            .FromSqlRaw(
+                sql,
+                new NpgsqlParameter("actorId", _compositeKey.actorId),
+                new NpgsqlParameter("filmId", _compositeKey.filmId))
             .AsNoTracking()
-            .FirstOrDefaultAsync(fa => fa.ActorId == _compositeKey.actorId && fa.FilmId == _compositeKey.filmId);
+            .FirstOrDefaultAsync();
+    }
+
+    [Benchmark]
+    public async Task<EfFilmActor?> GetFilmActorComposite_EntityFramework_NoTracking_WithSessionSettings()
+    {
+        _currentBenchmarkLabel = nameof(GetFilmActorComposite_EntityFramework_NoTracking_WithSessionSettings);
+        var sql = BuildFilmActorCompositeSql(param => $"@{param}");
+        return await _efDbContextWithSettings.FilmActors
+            .FromSqlRaw(
+                sql,
+                new NpgsqlParameter("actorId", _compositeKey.actorId),
+                new NpgsqlParameter("filmId", _compositeKey.filmId))
+            .AsNoTracking()
+            .FirstOrDefaultAsync();
     }
 
     [Benchmark]
     public async Task<int> UpdateFilm_EntityFramework()
     {
         _currentBenchmarkLabel = nameof(UpdateFilm_EntityFramework);
+        var lengthSql = BuildFilmLengthByIdSql(param => $"@{param}");
+        var currentLength = await _efDbContext.FilmLengthRows
+            .FromSqlRaw(lengthSql, new NpgsqlParameter("id", _filmId))
+            .AsNoTracking()
+            .Select(r => r.Length)
+            .FirstAsync();
 
-        var film = await _efDbContext.Films.FirstAsync(f => f.Id == _filmId);
-
-        // Toggle length to avoid no-op updates
-        film.Length = _flip ? film.Length + 1 : film.Length - 1;
+        var newLength = _flip ? currentLength + 1 : currentLength - 1;
         _flip = !_flip;
 
-        return await _efDbContext.SaveChangesAsync();
+        var updateSql = BuildFilmUpdateLengthSql(param => $"@{param}");
+        return await _efDbContext.Database.ExecuteSqlRawAsync(
+            updateSql,
+            new NpgsqlParameter("id", _filmId),
+            new NpgsqlParameter("len", newLength));
+    }
+
+    [Benchmark]
+    public async Task<int> UpdateFilm_EntityFramework_WithSessionSettings()
+    {
+        _currentBenchmarkLabel = nameof(UpdateFilm_EntityFramework_WithSessionSettings);
+        var lengthSql = BuildFilmLengthByIdSql(param => $"@{param}");
+        var currentLength = await _efDbContextWithSettings.FilmLengthRows
+            .FromSqlRaw(lengthSql, new NpgsqlParameter("id", _filmId))
+            .AsNoTracking()
+            .Select(r => r.Length)
+            .FirstAsync();
+
+        var newLength = _flip ? currentLength + 1 : currentLength - 1;
+        _flip = !_flip;
+
+        var updateSql = BuildFilmUpdateLengthSql(param => $"@{param}");
+        return await _efDbContextWithSettings.Database.ExecuteSqlRawAsync(
+            updateSql,
+            new NpgsqlParameter("id", _filmId),
+            new NpgsqlParameter("len", newLength));
     }
 
     [Benchmark]
@@ -702,26 +977,62 @@ CREATE TABLE film_actor (
     {
         _currentBenchmarkLabel = nameof(InsertThenDeleteFilm_EntityFramework);
         var title = $"Bench_{Interlocked.Increment(ref _runCounter):D10}";
+        var insertSql = BuildFilmInsertSql(param => $"@{param}");
+        var id = await ExecuteScalarAsync(
+            _efDbContext,
+            insertSql,
+            new NpgsqlParameter("title", title),
+            new NpgsqlParameter("length", 123));
+        var deleteSql = BuildFilmDeleteSql(param => $"@{param}");
+        return await ExecuteNonQueryAsync(
+            _efDbContext,
+            deleteSql,
+            new NpgsqlParameter("id", id));
+    }
 
-        var film = new EfFilm { Title = title, Length = 123 };
-        _efDbContext.Films.Add(film);
-        var insertResult = await _efDbContext.SaveChangesAsync();
-
-        if (insertResult > 0)
-        {
-            _efDbContext.Films.Remove(film);
-            return await _efDbContext.SaveChangesAsync();
-        }
-
-        return 0;
+    [Benchmark]
+    public async Task<int> InsertThenDeleteFilm_EntityFramework_WithSessionSettings()
+    {
+        _currentBenchmarkLabel = nameof(InsertThenDeleteFilm_EntityFramework_WithSessionSettings);
+        var title = $"Bench_{Interlocked.Increment(ref _runCounter):D10}";
+        var insertSql = BuildFilmInsertSql(param => $"@{param}");
+        var id = await ExecuteScalarAsync(
+            _efDbContextWithSettings,
+            insertSql,
+            new NpgsqlParameter("title", title),
+            new NpgsqlParameter("length", 123));
+        var deleteSql = BuildFilmDeleteSql(param => $"@{param}");
+        return await ExecuteNonQueryAsync(
+            _efDbContextWithSettings,
+            deleteSql,
+            new NpgsqlParameter("id", id));
     }
 
     [Benchmark]
     public async Task<List<EfFilm>> GetTenFilms_EntityFramework()
     {
         _currentBenchmarkLabel = nameof(GetTenFilms_EntityFramework);
+        var sql = BuildFilmIdsSql(param => $"@{param}");
+        var idsParam = new NpgsqlParameter<int[]>("ids", _filmIds10.ToArray())
+        {
+            NpgsqlDbType = NpgsqlDbType.Array | NpgsqlDbType.Integer
+        };
         return await _efDbContext.Films
-            .Where(f => _filmIds10.Contains(f.Id))
+            .FromSqlRaw(sql, idsParam)
+            .ToListAsync();
+    }
+
+    [Benchmark]
+    public async Task<List<EfFilm>> GetTenFilms_EntityFramework_WithSessionSettings()
+    {
+        _currentBenchmarkLabel = nameof(GetTenFilms_EntityFramework_WithSessionSettings);
+        var sql = BuildFilmIdsSql(param => $"@{param}");
+        var idsParam = new NpgsqlParameter<int[]>("ids", _filmIds10.ToArray())
+        {
+            NpgsqlDbType = NpgsqlDbType.Array | NpgsqlDbType.Integer
+        };
+        return await _efDbContextWithSettings.Films
+            .FromSqlRaw(sql, idsParam)
             .ToListAsync();
     }
 
@@ -729,10 +1040,236 @@ CREATE TABLE film_actor (
     public async Task<List<EfFilm>> GetTenFilms_EntityFramework_NoTracking()
     {
         _currentBenchmarkLabel = nameof(GetTenFilms_EntityFramework_NoTracking);
+        var sql = BuildFilmIdsSql(param => $"@{param}");
+        var idsParam = new NpgsqlParameter<int[]>("ids", _filmIds10.ToArray())
+        {
+            NpgsqlDbType = NpgsqlDbType.Array | NpgsqlDbType.Integer
+        };
         return await _efDbContext.Films
+            .FromSqlRaw(sql, idsParam)
             .AsNoTracking()
-            .Where(f => _filmIds10.Contains(f.Id))
             .ToListAsync();
+    }
+
+    [Benchmark]
+    public async Task<List<EfFilm>> GetTenFilms_EntityFramework_NoTracking_WithSessionSettings()
+    {
+        _currentBenchmarkLabel = nameof(GetTenFilms_EntityFramework_NoTracking_WithSessionSettings);
+        var sql = BuildFilmIdsSql(param => $"@{param}");
+        var idsParam = new NpgsqlParameter<int[]>("ids", _filmIds10.ToArray())
+        {
+            NpgsqlDbType = NpgsqlDbType.Array | NpgsqlDbType.Integer
+        };
+        return await _efDbContextWithSettings.Films
+            .FromSqlRaw(sql, idsParam)
+            .AsNoTracking()
+            .ToListAsync();
+    }
+
+    [Benchmark]
+    public async Task GetFilmById_Mine_Concurrent()
+    {
+        _currentBenchmarkLabel = nameof(GetFilmById_Mine_Concurrent);
+        await BenchmarkConcurrency.RunConcurrent(OperationsPerRun, Parallelism, async () =>
+        {
+            await using var container = _ctx.CreateSqlContainer();
+            var sql = BuildFilmByIdSql(param => container.MakeParameterName(param));
+            container.Query.Append(sql);
+            container.AddParameterWithValue("id", DbType.Int32, _filmId);
+            await using var reader = await container.ExecuteReaderSingleRowAsync();
+            if (await reader.ReadAsync())
+            {
+                _filmHelper.MapReaderToObject(reader);
+            }
+        });
+    }
+
+    [Benchmark]
+    public async Task GetFilmById_Dapper_Concurrent()
+    {
+        _currentBenchmarkLabel = nameof(GetFilmById_Dapper_Concurrent);
+        await BenchmarkConcurrency.RunConcurrent(OperationsPerRun, Parallelism, async () =>
+        {
+            await using var conn = await _dapperDataSource.OpenConnectionAsync();
+            var sql = BuildFilmByIdSql(param => $"@{param}");
+            var row = await conn.QuerySingleOrDefaultAsync<DapperFilmRow>(sql, new { id = _filmId });
+            if (row != null)
+            {
+                MapFilm(row);
+            }
+        });
+    }
+
+    [Benchmark]
+    public async Task GetFilmById_Dapper_WithSessionSettings_Concurrent()
+    {
+        _currentBenchmarkLabel = nameof(GetFilmById_Dapper_WithSessionSettings_Concurrent);
+        await BenchmarkConcurrency.RunConcurrent(OperationsPerRun, Parallelism, async () =>
+        {
+            await using var conn = await _dapperSettingsDataSource.OpenConnectionAsync();
+            await BenchmarkSessionSettings.ApplyAsync(conn, BenchmarkSessionSettings.PostgresSessionSettings);
+            var sql = BuildFilmByIdSql(param => $"@{param}");
+            var row = await conn.QuerySingleOrDefaultAsync<DapperFilmRow>(sql, new { id = _filmId });
+            if (row != null)
+            {
+                MapFilm(row);
+            }
+        });
+    }
+
+    [Benchmark]
+    public async Task GetFilmById_EntityFramework_NoTracking_Concurrent()
+    {
+        _currentBenchmarkLabel = nameof(GetFilmById_EntityFramework_NoTracking_Concurrent);
+        await BenchmarkConcurrency.RunConcurrent(OperationsPerRun, Parallelism, async () =>
+        {
+            await using var ctx = new PagilaDbContext(_efOptions);
+            var sql = BuildFilmByIdSql(param => $"@{param}");
+            await ctx.Films
+                .FromSqlRaw(sql, new NpgsqlParameter("id", _filmId))
+                .AsNoTracking()
+                .FirstOrDefaultAsync();
+        });
+    }
+
+    [Benchmark]
+    public async Task GetFilmById_EntityFramework_NoTracking_WithSessionSettings_Concurrent()
+    {
+        _currentBenchmarkLabel = nameof(GetFilmById_EntityFramework_NoTracking_WithSessionSettings_Concurrent);
+        await BenchmarkConcurrency.RunConcurrent(OperationsPerRun, Parallelism, async () =>
+        {
+            await using var ctx = new PagilaDbContext(_efOptionsWithSettings);
+            var sql = BuildFilmByIdSql(param => $"@{param}");
+            await ctx.Films
+                .FromSqlRaw(sql, new NpgsqlParameter("id", _filmId))
+                .AsNoTracking()
+                .FirstOrDefaultAsync();
+        });
+    }
+
+    private static string BuildFilmByIdSql(Func<string, string> param)
+    {
+        return FilmByIdSqlTemplate.Replace("{id}", param("id"));
+    }
+
+    private static string BuildFilmActorCompositeSql(Func<string, string> param)
+    {
+        return FilmActorCompositeSqlTemplate
+            .Replace("{actorId}", param("actorId"))
+            .Replace("{filmId}", param("filmId"));
+    }
+
+    private static string BuildFilmLengthByIdSql(Func<string, string> param)
+    {
+        return FilmLengthByIdSqlTemplate.Replace("{id}", param("id"));
+    }
+
+    private static string BuildFilmUpdateLengthSql(Func<string, string> param)
+    {
+        return FilmUpdateLengthSqlTemplate
+            .Replace("{id}", param("id"))
+            .Replace("{len}", param("len"));
+    }
+
+    private static string BuildFilmInsertSql(Func<string, string> param)
+    {
+        return FilmInsertSqlTemplate
+            .Replace("{title}", param("title"))
+            .Replace("{length}", param("length"));
+    }
+
+    private static string BuildFilmDeleteSql(Func<string, string> param)
+    {
+        return FilmDeleteSqlTemplate.Replace("{id}", param("id"));
+    }
+
+    private static string BuildFilmIdsSql(Func<string, string> param)
+    {
+        return FilmIdsSqlTemplate.Replace("{ids}", param("ids"));
+    }
+
+    private static Film MapFilm(DapperFilmRow row)
+    {
+        return new Film
+        {
+            Id = row.film_id,
+            Title = row.title,
+            Length = row.length
+        };
+    }
+
+    private static FilmActor MapFilmActor(DapperFilmActorRow row)
+    {
+        return new FilmActor
+        {
+            ActorId = row.actor_id,
+            FilmId = row.film_id
+        };
+    }
+
+    private static async Task<int> ExecuteScalarAsync(
+        DbContext context,
+        string sql,
+        params NpgsqlParameter[] parameters)
+    {
+        var connection = context.Database.GetDbConnection();
+        var shouldClose = connection.State == ConnectionState.Closed;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = sql;
+            foreach (var parameter in parameters)
+            {
+                command.Parameters.Add(parameter);
+            }
+
+            var result = await command.ExecuteScalarAsync();
+            return result == null || result is DBNull ? 0 : Convert.ToInt32(result);
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    private static async Task<int> ExecuteNonQueryAsync(
+        DbContext context,
+        string sql,
+        params NpgsqlParameter[] parameters)
+    {
+        var connection = context.Database.GetDbConnection();
+        var shouldClose = connection.State == ConnectionState.Closed;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = sql;
+            foreach (var parameter in parameters)
+            {
+                command.Parameters.Add(parameter);
+            }
+
+            return await command.ExecuteNonQueryAsync();
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
     }
 
     public async ValueTask DisposeAsync()
@@ -765,6 +1302,19 @@ CREATE TABLE film_actor (
         public int FilmId { get; set; }
     }
 
+    private sealed class DapperFilmRow
+    {
+        public int film_id { get; set; }
+        public string title { get; set; } = string.Empty;
+        public int length { get; set; }
+    }
+
+    private sealed class DapperFilmActorRow
+    {
+        public int actor_id { get; set; }
+        public int film_id { get; set; }
+    }
+
     // Entity Framework DbContext and entities
     public class PagilaDbContext : DbContext
     {
@@ -775,6 +1325,7 @@ CREATE TABLE film_actor (
         public DbSet<EfFilm> Films { get; set; }
         public DbSet<EfActor> Actors { get; set; }
         public DbSet<EfFilmActor> FilmActors { get; set; }
+        public DbSet<FilmLengthRow> FilmLengthRows { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -811,6 +1362,13 @@ CREATE TABLE film_actor (
                     .WithMany(f => f.FilmActors)
                     .HasForeignKey(fa => fa.FilmId);
             });
+
+            modelBuilder.Entity<FilmLengthRow>(entity =>
+            {
+                entity.HasNoKey();
+                entity.ToView(null);
+                entity.Property(e => e.Length).HasColumnName("length");
+            });
         }
     }
 
@@ -837,5 +1395,11 @@ CREATE TABLE film_actor (
         public int FilmId { get; set; }
         public virtual EfActor Actor { get; set; } = null!;
         public virtual EfFilm Film { get; set; } = null!;
+    }
+
+    [Keyless]
+    public class FilmLengthRow
+    {
+        public int Length { get; set; }
     }
 }

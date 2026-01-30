@@ -1,3 +1,24 @@
+// =============================================================================
+// FILE: SpatialConverter.cs
+// PURPOSE: Base class for spatial type converters (Geometry and Geography).
+//
+// AI SUMMARY:
+// - Abstract base for GeometryConverter and GeographyConverter.
+// - Supports WKB/EWKB, WKT/EWKT, and GeoJSON formats with SRID handling.
+// - ConvertToProvider(): Creates provider-specific spatial objects:
+//   * SQL Server: SqlGeometry/SqlGeography via reflection
+//   * PostgreSQL: byte[] (EWKB) or string (WKT/GeoJSON)
+//   * MySQL: byte[] (WKB) or UTF-8 encoded WKT
+//   * Oracle: Requires ProviderValue to be set with SDO_GEOMETRY
+// - TryConvertFromProvider(): Converts database values back to TSpatial:
+//   * byte[]/ReadOnlyMemory<byte>/ArraySegment<byte> -> WKB parsing
+//   * string -> WKT or GeoJSON (auto-detected by leading '{')
+//   * Provider-specific types via reflection (SqlGeometry, NpgsqlTypes)
+// - Abstract methods for subclasses:
+//   * FromBinary(), FromTextInternal(), FromGeoJsonInternal(), WrapWithProvider()
+// - Thread-safe: Converter instances and spatial value objects are immutable.
+// =============================================================================
+
 using System.Text;
 using pengdows.crud.enums;
 using pengdows.crud.types.valueobjects;

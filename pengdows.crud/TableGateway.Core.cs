@@ -1,3 +1,30 @@
+// =============================================================================
+// FILE: TableGateway.Core.cs
+// PURPOSE: Core partial of TableGateway - the primary CRUD API for entities.
+//          Contains constructor, initialization, and core infrastructure.
+//
+// AI SUMMARY:
+// - TableGateway<TEntity, TRowID> is the main API for entity CRUD operations.
+// - Replaces the older EntityHelper<> name (which is now a compatibility shim).
+// - This partial contains:
+//   * Static initialization and TRowID type validation
+//   * Constructor that takes DatabaseContext and optional AuditValueResolver
+//   * Core field declarations (context, dialect, tableInfo, caches)
+//   * BoundedCache instances for query templates and column lists
+// - Partial class structure:
+//   * Core.cs - This file (initialization, fields)
+//   * Audit.cs - Audit column handling
+//   * Caching.cs - Template caching
+//   * Reader.cs - DataReader mapping
+//   * Retrieve.cs - SELECT operations
+//   * Sql.cs - SQL generation helpers
+//   * Update.cs - UPDATE operations
+//   * Upsert.cs - UPSERT operations
+// - TRowID validation: Must be primitive integer, Guid, or string.
+// - Thread-safe: Uses bounded caches and thread-safe data structures.
+// - Uses TypeMapRegistry to get entity metadata (TableInfo).
+// =============================================================================
+
 #region
 
 using System;

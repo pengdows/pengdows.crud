@@ -1,3 +1,22 @@
+// =============================================================================
+// FILE: RowVersionConverter.cs
+// PURPOSE: Converter for SQL Server ROWVERSION/TIMESTAMP optimistic concurrency.
+//
+// AI SUMMARY:
+// - Converts between database row version values and RowVersion value objects.
+// - Provides optimistic concurrency control via automatic version tracking.
+// - Provider-specific:
+//   * SQL Server: ROWVERSION or TIMESTAMP (8-byte auto-incrementing binary)
+//   * PostgreSQL: BYTEA or xmin system column
+//   * Oracle: RAW columns
+//   * MySQL/SQLite: No native type, use BINARY
+// - ConvertToProvider(): Returns byte[] via ToArray().
+// - TryConvertFromProvider(): Handles RowVersion, byte[], ReadOnlyMemory<byte>, ArraySegment<byte>.
+// - With [Version] attribute, pengdows.crud includes version in UPDATE WHERE clause.
+// - Detects concurrent modifications when UPDATE affects 0 rows.
+// - Thread-safe and immutable value objects.
+// =============================================================================
+
 using pengdows.crud.enums;
 using pengdows.crud.types.valueobjects;
 

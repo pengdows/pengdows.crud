@@ -1,3 +1,27 @@
+// =============================================================================
+// FILE: DataReaderMapper.cs
+// PURPOSE: High-performance mapper that converts IDataReader rows to strongly
+//          typed entity objects using cached execution plans.
+//
+// AI SUMMARY:
+// - Maps DataReader columns to entity properties via compiled delegates.
+// - Key methods:
+//   * LoadAsync<T>() - Loads all rows into a List<T>
+//   * StreamAsync<T>() - Returns IAsyncEnumerable<T> for streaming large results
+//   * Instance - Singleton for typical use
+// - Performance optimizations:
+//   * Caches execution plans per (Type, schema shape, options) tuple
+//   * Caches compiled setters per (Type, PropertyInfo) tuple
+//   * Bounded LRU caches prevent unbounded memory growth
+// - Column matching:
+//   * By default matches columns to properties by name (case-insensitive)
+//   * With ColumnsOnly=true, only maps [Column]-attributed properties
+// - Type coercion: Uses TypeCoercionHelper for automatic type conversion.
+// - Enum handling: Configurable via MapperOptions.EnumParseFailureMode.
+// - Null handling: Nullable properties receive null; non-nullable get defaults.
+// - Thread-safe: All caches use thread-safe data structures.
+// =============================================================================
+
 #region
 
 using System.Data;
@@ -14,6 +38,40 @@ using pengdows.crud.@internal;
 
 namespace pengdows.crud;
 
+/// <summary>
+/// High-performance mapper for converting <see cref="IDataReader"/> rows to strongly-typed entities.
+/// </summary>
+/// <remarks>
+/// <para>
+/// This mapper uses cached execution plans and compiled delegates to achieve near-manual
+/// performance when mapping database results to entities.
+/// </para>
+/// <para>
+/// <strong>Cache Management:</strong> Execution plans are cached based on the combination of
+/// entity type, reader schema (column names/types), and mapping options. Bounded LRU caches
+/// prevent unbounded memory growth.
+/// </para>
+/// <para>
+/// <strong>Streaming:</strong> Use <see cref="StreamAsync{T}"/> for large result sets to avoid
+/// loading all rows into memory at once.
+/// </para>
+/// </remarks>
+/// <example>
+/// <code>
+/// // Load all results
+/// await using var reader = await container.ExecuteReaderAsync();
+/// var entities = await DataReaderMapper.LoadAsync&lt;MyEntity&gt;(reader, MapperOptions.Default);
+///
+/// // Stream large results
+/// await foreach (var entity in DataReaderMapper.StreamAsync&lt;MyEntity&gt;(reader))
+/// {
+///     ProcessEntity(entity);
+/// }
+/// </code>
+/// </example>
+/// <seealso cref="IDataReaderMapper"/>
+/// <seealso cref="MapperOptions"/>
+/// <seealso cref="TypeCoercionHelper"/>
 public sealed class DataReaderMapper : IDataReaderMapper
 {
     public static readonly IDataReaderMapper Instance = new DataReaderMapper();

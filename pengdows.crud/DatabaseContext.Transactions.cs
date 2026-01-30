@@ -1,3 +1,22 @@
+// =============================================================================
+// FILE: DatabaseContext.Transactions.cs
+// PURPOSE: Transaction creation and isolation level management.
+//
+// AI SUMMARY:
+// - BeginTransaction() overloads for starting database transactions:
+//   * With IsolationLevel - Native ADO.NET isolation level
+//   * With IsolationProfile - Portable isolation semantics
+// - Isolation level validation and resolution:
+//   * Ensures requested level is supported by the database
+//   * Degrades gracefully with logging when exact level unavailable
+// - Read-only transaction support for read replicas.
+// - IsolationProfile mapping:
+//   * SafeNonBlockingReads - Snapshot isolation where available
+//   * RepeatableReads - Serializable-lite semantics
+// - Returns TransactionContext which pins a connection for the duration.
+// - NOT compatible with TransactionScope - uses pengdows.crud's own model.
+// =============================================================================
+
 using System.Data;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
@@ -6,8 +25,13 @@ using pengdows.crud.exceptions;
 namespace pengdows.crud;
 
 /// <summary>
-/// DatabaseContext partial class: Transaction management methods
+/// DatabaseContext partial class: Transaction creation and management.
 /// </summary>
+/// <remarks>
+/// This partial provides transaction factory methods that create
+/// <see cref="TransactionContext"/> instances with appropriate isolation
+/// levels and connection handling.
+/// </remarks>
 public partial class DatabaseContext
 {
     /// <inheritdoc/>

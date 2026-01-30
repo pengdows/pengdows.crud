@@ -1,3 +1,23 @@
+// =============================================================================
+// FILE: DatabaseContext.Metrics.cs
+// PURPOSE: Performance metrics collection and monitoring integration.
+//
+// AI SUMMARY:
+// - Metrics property - Returns current DatabaseMetrics snapshot.
+// - MetricsUpdated event - Fires when metrics change (connections, queries).
+// - Tracked metrics:
+//   * Connection counts (current open, max ever open)
+//   * Connection wait times and pool saturation
+//   * Transaction counts (started, committed, rolled back)
+//   * Query timing and counts
+// - MetricsCollector (internal) aggregates data from all operations.
+// - IMPORTANT: MetricsUpdated handlers must NOT call back into the context.
+//   They are observer notifications only - log, update UI, send to monitoring,
+//   but don't execute queries or transactions.
+// - Pool statistics available via GetPoolStatistics().
+// - Attribution tracking for caller identification.
+// =============================================================================
+
 using Microsoft.Extensions.Logging;
 using pengdows.crud.@internal;
 using pengdows.crud.infrastructure;
@@ -6,8 +26,12 @@ using pengdows.crud.metrics;
 namespace pengdows.crud;
 
 /// <summary>
-/// DatabaseContext partial class: Metrics and monitoring methods
+/// DatabaseContext partial class: Metrics and performance monitoring.
 /// </summary>
+/// <remarks>
+/// This partial provides metrics collection and event notifications for
+/// monitoring database performance and resource usage.
+/// </remarks>
 public partial class DatabaseContext
 {
     /// <summary>

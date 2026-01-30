@@ -1,3 +1,23 @@
+// =============================================================================
+// FILE: TableGateway.Update.cs
+// PURPOSE: UPDATE statement building and execution.
+//
+// AI SUMMARY:
+// - BuildUpdateAsync() - Creates UPDATE statement with parameters.
+// - UpdateAsync() - Executes UPDATE and returns rows affected.
+// - Handles:
+//   * Optimistic concurrency via [Version] column
+//   * Audit field updates (LastUpdatedBy/On)
+//   * Non-updateable columns (excluded from SET)
+//   * Original value loading for concurrency checks
+// - loadOriginal parameter: If true, loads current DB values for version check.
+// - Version column behavior:
+//   * SET version = version + 1
+//   * WHERE version = @currentVersion
+//   * Returns 0 if version mismatch (concurrent modification)
+// - Requires [Id] column for WHERE clause.
+// =============================================================================
+
 using System.Data;
 using System.Data.Common;
 using System.Globalization;
@@ -7,6 +27,9 @@ using pengdows.crud.@internal;
 
 namespace pengdows.crud;
 
+/// <summary>
+/// TableGateway partial: UPDATE statement building and execution.
+/// </summary>
 public partial class TableGateway<TEntity, TRowID>
 {
     /// <inheritdoc/>

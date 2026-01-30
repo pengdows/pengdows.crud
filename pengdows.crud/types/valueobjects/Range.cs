@@ -1,7 +1,34 @@
+// =============================================================================
+// FILE: Range.cs
+// PURPOSE: Generic value object for PostgreSQL range types.
+//
+// AI SUMMARY:
+// - Represents a range of values with inclusive/exclusive bounds.
+// - Generic readonly struct Range<T> where T : struct.
+// - Properties:
+//   * Lower, Upper: T? - nullable bounds (null = infinite)
+//   * IsLowerInclusive, IsUpperInclusive: bool - bound inclusion
+//   * HasLowerBound, HasUpperBound, IsEmpty: convenience properties
+// - Static Empty property for default empty range.
+// - Parse(): Parses PostgreSQL bracket notation (e.g., "[1,10)", "(,100]").
+// - ToString(): Returns bracket notation with invariant culture.
+// - ParseValue(): Handles int, long, decimal, double, DateTime, DateTimeOffset.
+// - Common PostgreSQL types: int4range, int8range, numrange, daterange, tsrange.
+// - Thread-safe and immutable.
+// =============================================================================
+
 using System.Globalization;
 
 namespace pengdows.crud.types.valueobjects;
 
+/// <summary>
+/// Generic value object representing a range with inclusive/exclusive bounds.
+/// </summary>
+/// <typeparam name="T">The element type of the range.</typeparam>
+/// <remarks>
+/// Maps to PostgreSQL range types (int4range, daterange, tsrange, etc.).
+/// Uses bracket notation: [inclusive, exclusive) or (exclusive, inclusive].
+/// </remarks>
 public readonly struct Range<T> : IEquatable<Range<T>> where T : struct
 {
     public Range(T? lower, T? upper, bool isLowerInclusive = true, bool isUpperInclusive = false)

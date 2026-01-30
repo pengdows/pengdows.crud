@@ -22,12 +22,35 @@ namespace CrudBenchmarks;
 [SimpleJob(warmupCount: 3, iterationCount: 5, invocationCount: 50)]
 public class MaterializedViewBenchmarks : IAsyncDisposable
 {
+    private const string CustomerSummaryTableScanSqlTemplate = """
+        SELECT
+            customer_id as customer_id,
+            COUNT(*) as order_count,
+            SUM(total_amount) as total_amount,
+            AVG(total_amount) as avg_order_amount,
+            MAX(order_date) as last_order_date
+        FROM orders
+        WHERE customer_id = {customerId} AND status = {status}
+        GROUP BY customer_id
+        """;
+
+    private const string CustomerSummaryViewSqlTemplate = """
+        SELECT
+            customer_id as customer_id,
+            order_count as order_count,
+            total_amount as total_amount,
+            avg_order_amount as avg_order_amount,
+            last_order_date as last_order_date
+        FROM customer_order_summary
+        WHERE customer_id = {customerId}
+        """;
     private IContainer? _container;
     private string _connStr = string.Empty;
     private IDatabaseContext _pengdowsContext = null!;
     private TypeMapRegistry _map = null!;
-    private EntityHelper<CustomerOrderSummary, int> _summaryHelper = null!;
+    private TableGateway<CustomerOrderSummary, int> _summaryHelper = null!;
     private EfTestDbContext _efContext = null!;
+    private DbContextOptions<EfTestDbContext> _efOptions = null!;
     private NpgsqlDataSource _dapperDataSource = null!;
 
     private readonly List<int> _customerIds = new();
@@ -38,6 +61,8 @@ public class MaterializedViewBenchmarks : IAsyncDisposable
 
     [Params(15)] // Orders per customer average
     public int OrdersPerCustomer;
+    [Params(16)] public int Parallelism;
+    [Params(64)] public int OperationsPerRun;
 
     [GlobalSetup]
     public async Task GlobalSetup()
@@ -55,7 +80,7 @@ public class MaterializedViewBenchmarks : IAsyncDisposable
 
         var mappedPort = _container.GetMappedPublicPort(5432);
         _connStr =
-            $"Host=localhost;Port={mappedPort};Database=materializedview_test;Username=postgres;Password=postgres;Maximum Pool Size=100";
+            $"Host=localhost;Port={mappedPort};Database=materializedview_test;Username=postgres;Password=postgres";
 
         await WaitForReady();
         await CreateSchemaAndSeedAsync();
@@ -71,13 +96,13 @@ public class MaterializedViewBenchmarks : IAsyncDisposable
             DbMode = DbMode.Standard
         };
         _pengdowsContext = new DatabaseContext(cfg, NpgsqlFactory.Instance, null, _map);
-        _summaryHelper = new EntityHelper<CustomerOrderSummary, int>(_pengdowsContext);
+        _summaryHelper = new TableGateway<CustomerOrderSummary, int>(_pengdowsContext);
 
         // Setup Entity Framework context
-        var options = new DbContextOptionsBuilder<EfTestDbContext>()
+        _efOptions = new DbContextOptionsBuilder<EfTestDbContext>()
             .UseNpgsql(_connStr)
             .Options;
-        _efContext = new EfTestDbContext(options);
+        _efContext = new EfTestDbContext(_efOptions);
 
         // Setup Dapper data source
         _dapperDataSource = NpgsqlDataSource.Create(_connStr);
@@ -259,17 +284,10 @@ public class MaterializedViewBenchmarks : IAsyncDisposable
     public async Task<CustomerOrderSummary?> GetCustomerSummary_Dapper_TableScan()
     {
         await using var conn = await _dapperDataSource.OpenConnectionAsync();
-        return await conn.QuerySingleOrDefaultAsync<CustomerOrderSummary>(@"
-            SELECT
-                customer_id as CustomerId,
-                COUNT(*) as OrderCount,
-                SUM(total_amount) as TotalAmount,
-                AVG(total_amount) as AvgOrderAmount,
-                MAX(order_date) as LastOrderDate
-            FROM orders
-            WHERE customer_id = @customerId AND status = 'Active'
-            GROUP BY customer_id",
-            new { customerId = _testCustomerId });
+        var sql = BuildCustomerSummaryTableScanSql(param => $"@{param}");
+        return await conn.QuerySingleOrDefaultAsync<CustomerOrderSummary>(
+            sql,
+            new { customerId = _testCustomerId, status = "Active" });
     }
 
     /// <summary>
@@ -279,15 +297,9 @@ public class MaterializedViewBenchmarks : IAsyncDisposable
     public async Task<CustomerOrderSummary?> GetCustomerSummary_Dapper_ExplicitMaterializedView()
     {
         await using var conn = await _dapperDataSource.OpenConnectionAsync();
-        return await conn.QuerySingleOrDefaultAsync<CustomerOrderSummary>(@"
-            SELECT
-                customer_id as CustomerId,
-                order_count as OrderCount,
-                total_amount as TotalAmount,
-                avg_order_amount as AvgOrderAmount,
-                last_order_date as LastOrderDate
-            FROM customer_order_summary
-            WHERE customer_id = @customerId",
+        var sql = BuildCustomerSummaryViewSql(param => $"@{param}");
+        return await conn.QuerySingleOrDefaultAsync<CustomerOrderSummary>(
+            sql,
             new { customerId = _testCustomerId });
     }
 
@@ -297,18 +309,80 @@ public class MaterializedViewBenchmarks : IAsyncDisposable
     [Benchmark]
     public async Task<EfCustomerOrderSummary?> GetCustomerSummary_EntityFramework_TableScan()
     {
-        return await _efContext.Orders
-            .Where(o => o.CustomerId == _testCustomerId && o.Status == "Active")
-            .GroupBy(o => o.CustomerId)
-            .Select(g => new EfCustomerOrderSummary
-            {
-                CustomerId = g.Key,
-                OrderCount = g.Count(),
-                TotalAmount = g.Sum(o => o.TotalAmount),
-                AvgOrderAmount = g.Average(o => o.TotalAmount),
-                LastOrderDate = g.Max(o => o.OrderDate)
-            })
+        var sql = BuildCustomerSummaryTableScanSql(param => $"@{param}");
+        var row = await _efContext.CustomerOrderSummaryRows
+            .FromSqlRaw(
+                sql,
+                new NpgsqlParameter("customerId", _testCustomerId),
+                new NpgsqlParameter("status", "Active"))
+            .AsNoTracking()
             .FirstOrDefaultAsync();
+
+        return row?.ToSummary();
+    }
+
+    [Benchmark]
+    public async Task GetCustomerSummary_pengdows_MaterializedView_Concurrent()
+    {
+        await BenchmarkConcurrency.RunConcurrent(OperationsPerRun, Parallelism, async () =>
+        {
+            await _summaryHelper.RetrieveOneAsync(_testCustomerId);
+        });
+    }
+
+    [Benchmark]
+    public async Task GetCustomerSummary_Dapper_TableScan_Concurrent()
+    {
+        await BenchmarkConcurrency.RunConcurrent(OperationsPerRun, Parallelism, async () =>
+        {
+            await using var conn = await _dapperDataSource.OpenConnectionAsync();
+            var sql = BuildCustomerSummaryTableScanSql(param => $"@{param}");
+            await conn.QuerySingleOrDefaultAsync<CustomerOrderSummary>(
+                sql,
+                new { customerId = _testCustomerId, status = "Active" });
+        });
+    }
+
+    [Benchmark]
+    public async Task GetCustomerSummary_Dapper_ExplicitMaterializedView_Concurrent()
+    {
+        await BenchmarkConcurrency.RunConcurrent(OperationsPerRun, Parallelism, async () =>
+        {
+            await using var conn = await _dapperDataSource.OpenConnectionAsync();
+            var sql = BuildCustomerSummaryViewSql(param => $"@{param}");
+            await conn.QuerySingleOrDefaultAsync<CustomerOrderSummary>(
+                sql,
+                new { customerId = _testCustomerId });
+        });
+    }
+
+    [Benchmark]
+    public async Task GetCustomerSummary_EntityFramework_TableScan_Concurrent()
+    {
+        await BenchmarkConcurrency.RunConcurrent(OperationsPerRun, Parallelism, async () =>
+        {
+            await using var ctx = new EfTestDbContext(_efOptions);
+            var sql = BuildCustomerSummaryTableScanSql(param => $"@{param}");
+            await ctx.CustomerOrderSummaryRows
+                .FromSqlRaw(
+                    sql,
+                    new NpgsqlParameter("customerId", _testCustomerId),
+                    new NpgsqlParameter("status", "Active"))
+                .AsNoTracking()
+                .FirstOrDefaultAsync();
+        });
+    }
+
+    private static string BuildCustomerSummaryTableScanSql(Func<string, string> param)
+    {
+        return CustomerSummaryTableScanSqlTemplate
+            .Replace("{customerId}", param("customerId"))
+            .Replace("{status}", param("status"));
+    }
+
+    private static string BuildCustomerSummaryViewSql(Func<string, string> param)
+    {
+        return CustomerSummaryViewSqlTemplate.Replace("{customerId}", param("customerId"));
     }
 
     public async ValueTask DisposeAsync()
@@ -345,6 +419,7 @@ public class MaterializedViewBenchmarks : IAsyncDisposable
 
         public DbSet<EfCustomer> Customers { get; set; }
         public DbSet<EfOrder> Orders { get; set; }
+        public DbSet<CustomerOrderSummaryRow> CustomerOrderSummaryRows { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -366,6 +441,17 @@ public class MaterializedViewBenchmarks : IAsyncDisposable
                 entity.Property(e => e.OrderDate).HasColumnName("order_date");
                 entity.Property(e => e.TotalAmount).HasColumnName("total_amount");
                 entity.Property(e => e.Status).HasColumnName("status");
+            });
+
+            modelBuilder.Entity<CustomerOrderSummaryRow>(entity =>
+            {
+                entity.HasNoKey();
+                entity.ToView(null);
+                entity.Property(e => e.CustomerId).HasColumnName("customer_id");
+                entity.Property(e => e.OrderCount).HasColumnName("order_count");
+                entity.Property(e => e.TotalAmount).HasColumnName("total_amount");
+                entity.Property(e => e.AvgOrderAmount).HasColumnName("avg_order_amount");
+                entity.Property(e => e.LastOrderDate).HasColumnName("last_order_date");
             });
         }
     }
@@ -395,5 +481,27 @@ public class MaterializedViewBenchmarks : IAsyncDisposable
         public decimal TotalAmount { get; set; }
         public decimal AvgOrderAmount { get; set; }
         public DateTime LastOrderDate { get; set; }
+    }
+
+    [Keyless]
+    public class CustomerOrderSummaryRow
+    {
+        public int CustomerId { get; set; }
+        public int OrderCount { get; set; }
+        public decimal TotalAmount { get; set; }
+        public decimal AvgOrderAmount { get; set; }
+        public DateTime LastOrderDate { get; set; }
+
+        public EfCustomerOrderSummary ToSummary()
+        {
+            return new EfCustomerOrderSummary
+            {
+                CustomerId = CustomerId,
+                OrderCount = OrderCount,
+                TotalAmount = TotalAmount,
+                AvgOrderAmount = AvgOrderAmount,
+                LastOrderDate = LastOrderDate
+            };
+        }
     }
 }

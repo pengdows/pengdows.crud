@@ -1,3 +1,18 @@
+// =============================================================================
+// FILE: DatabaseContext.Commands.cs
+// PURPOSE: SqlContainer creation and parameter/name helpers.
+//
+// AI SUMMARY:
+// - CreateSqlContainer() - Factory for building SQL queries/commands.
+// - CreateDbParameter() - Creates ADO.NET parameters with dialect support.
+// - WrapObjectName() - Quotes identifiers for the current database
+//   (e.g., "table" for PostgreSQL, [table] for SQL Server).
+// - MakeParameterName() - Formats parameter markers
+//   (e.g., @param for SQL Server, :param for Oracle).
+// - GenerateRandomName() - Creates unique identifiers for temp tables, etc.
+// - All methods delegate to the SQL dialect for database-specific behavior.
+// =============================================================================
+
 using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
@@ -5,8 +20,12 @@ using Microsoft.Extensions.Logging;
 namespace pengdows.crud;
 
 /// <summary>
-/// DatabaseContext partial class: Command and Parameter creation methods
+/// DatabaseContext partial class: SqlContainer and parameter creation methods.
 /// </summary>
+/// <remarks>
+/// This partial provides the factory methods for creating SQL containers and
+/// database parameters, as well as identifier formatting helpers.
+/// </remarks>
 public partial class DatabaseContext
 {
     /// <inheritdoc/>

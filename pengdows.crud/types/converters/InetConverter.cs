@@ -1,3 +1,19 @@
+// =============================================================================
+// FILE: InetConverter.cs
+// PURPOSE: Converter for PostgreSQL INET type (IP address with optional prefix).
+//
+// AI SUMMARY:
+// - Converts between database inet values and Inet value objects.
+// - Supports IPv4 and IPv6 addresses with optional CIDR prefix notation.
+// - Provider-specific:
+//   * PostgreSQL/CockroachDB: INET type ("192.168.1.1/24" or "2001:db8::1/64")
+//   * Others: Store as VARCHAR
+// - ConvertToProvider(): Returns string for PostgreSQL, raw value otherwise.
+// - TryConvertFromProvider(): Handles Inet, string, IPAddress, and NpgsqlInet.
+// - Parse(): Internal helper parsing "ip/prefix" format.
+// - Thread-safe and immutable value objects.
+// =============================================================================
+
 using System.Net;
 using pengdows.crud.enums;
 using pengdows.crud.types.valueobjects;

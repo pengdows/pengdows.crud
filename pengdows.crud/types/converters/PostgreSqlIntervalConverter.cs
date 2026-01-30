@@ -1,3 +1,20 @@
+// =============================================================================
+// FILE: PostgreSqlIntervalConverter.cs
+// PURPOSE: Converter for PostgreSQL INTERVAL type (complex time duration).
+//
+// AI SUMMARY:
+// - Converts between database interval values and PostgreSqlInterval value objects.
+// - Supports years, months, days, hours, minutes, seconds, and microseconds.
+// - Provider-specific:
+//   * PostgreSQL/CockroachDB: INTERVAL type with ISO 8601 output
+//   * Others: Raw value (application-level storage)
+// - ConvertToProvider(): Returns ISO 8601 format (P3Y6M4DT12H30M5S) for PostgreSQL.
+// - TryConvertFromProvider(): Handles PostgreSqlInterval, TimeSpan, string, NpgsqlTimeSpan.
+// - Parse(): Handles ISO 8601 duration and PostgreSQL text format.
+// - Components: Months (includes years), Days, Microseconds (sub-day time).
+// - Thread-safe and immutable value objects.
+// =============================================================================
+
 using System.Globalization;
 using pengdows.crud.enums;
 using pengdows.crud.types.valueobjects;

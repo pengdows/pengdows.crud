@@ -1,3 +1,21 @@
+// =============================================================================
+// FILE: OracleDialect.cs
+// PURPOSE: Oracle Database specific dialect implementation.
+//
+// AI SUMMARY:
+// - Supports Oracle Database 12c+ with enterprise feature support.
+// - Key features:
+//   * MERGE statement for upserts (with RETURNING via dual table)
+//   * Parameter marker: : (colon prefix, ODP.NET standard)
+//   * Identifier quoting: "name" (double quotes)
+//   * Max parameters: 64000 (practical limit)
+//   * Sequence-based ID generation
+// - Uses Oracle-specific RETURNING INTO clause via PL/SQL block.
+// - Statement cache preferred over manual prepare.
+// - Stored procedure support via Oracle anonymous blocks.
+// - Parameter name limit: 30 chars (pre-12.2), 128 chars (12.2+).
+// =============================================================================
+
 using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
@@ -6,8 +24,20 @@ using pengdows.crud.enums;
 namespace pengdows.crud.dialects;
 
 /// <summary>
-/// Oracle dialect with comprehensive enterprise features
+/// Oracle Database dialect with comprehensive enterprise features.
 /// </summary>
+/// <remarks>
+/// <para>
+/// Supports Oracle Database 12c and later with automatic version detection.
+/// Uses Oracle-specific syntax for sequences, upserts, and returning values.
+/// </para>
+/// <para>
+/// <strong>UPSERT:</strong> Uses MERGE statement with optional RETURNING via PL/SQL.
+/// </para>
+/// <para>
+/// <strong>Parameters:</strong> Uses colon prefix (:param) with ODP.NET naming.
+/// </para>
+/// </remarks>
 internal class OracleDialect : SqlDialect
 {
     internal OracleDialect(DbProviderFactory factory, ILogger logger)

@@ -1,3 +1,19 @@
+// =============================================================================
+// FILE: KeepAliveConnectionStrategy.cs
+// PURPOSE: Connection strategy that maintains a sentinel connection to prevent database unload.
+//
+// AI SUMMARY:
+// - Extends StandardConnectionStrategy with one additional persistent "sentinel" connection.
+// - Sentinel connection is NEVER used for operations - exists only to keep DB engine loaded.
+// - All actual work uses ephemeral connections (identical to Standard behavior).
+// - Prevents costly shutdown/reload cycles in embedded databases (LocalDB, SQLite WAL).
+// - PostInitialize() stores the sentinel connection on DatabaseContext.
+// - ReleaseConnection() skips disposal if connection is the sentinel.
+// - HandleDialectDetection() can use sentinel or create throwaway for detection.
+// - Thread-safe: Sentinel is read-only after initialization.
+// - Test extensions provide async convenience helpers for GetConnectionAsync/CloseConnectionAsync.
+// =============================================================================
+
 using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
