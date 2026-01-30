@@ -1,3 +1,26 @@
+// =============================================================================
+// FILE: OrderedDictionary.cs
+// PURPOSE: High-performance ordered dictionary for database parameters.
+//
+// AI SUMMARY:
+// - Generic ordered dictionary optimized for .NET 8 and SQL parameter use cases.
+// - Guarantees insertion order during enumeration.
+// - NOT thread-safe (by design for single-threaded SQL building).
+// - Two modes:
+//   * Small-mode (≤8 items): Simple array, no hashing overhead
+//   * Hash-mode (>8 items): Full hash table with free-list
+// - Memory behavior: Clear() aggressively releases memory (unlike Dictionary<K,V>).
+// - Performance features:
+//   * FastMod for hash bucket calculation
+//   * Inline-able hot paths with AggressiveInlining
+//   * Prime-sized bucket arrays
+// - Implements IDictionary<K,V> and IReadOnlyDictionary<K,V>.
+// - Entry struct: HashCode, Next (chain), Key, Value.
+// - Separate insertion order tracking via _insertionOrder and _orderIndex arrays.
+// - TrimExcess(): Compact to logical size, can downgrade to small-mode.
+// - Version tracking for enumeration invalidation.
+// =============================================================================
+
 using System.Collections;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;

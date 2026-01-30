@@ -43,9 +43,14 @@ namespace pengdows.crud;
 public partial class DatabaseContext
 {
     /// <inheritdoc/>
-    public ITrackedConnection GetConnection(ExecutionType executionType, bool isShared = false)
+    internal ITrackedConnection GetConnection(ExecutionType executionType, bool isShared = false)
     {
         return _connectionStrategy.GetConnection(executionType, isShared);
+    }
+
+    ITrackedConnection IInternalConnectionProvider.GetConnection(ExecutionType executionType, bool isShared)
+    {
+        return GetConnection(executionType, isShared);
     }
 
     /// <inheritdoc/>

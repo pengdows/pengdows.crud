@@ -1,5 +1,28 @@
+// =============================================================================
+// FILE: IntervalDaySecond.cs
+// PURPOSE: Immutable value object for Oracle INTERVAL DAY TO SECOND type.
+//
+// AI SUMMARY:
+// - Represents an interval with days and sub-day time components.
+// - Readonly struct implementing IEquatable<IntervalDaySecond>.
+// - Properties:
+//   * Days: int - number of days
+//   * Time: TimeSpan - hours, minutes, seconds, milliseconds
+//   * TotalTime: TimeSpan - combined Days as TimeSpan + Time
+// - FromTimeSpan(): Splits TimeSpan into Days + residual Time.
+// - Parse(): Parses ISO 8601 format (P{days}DT{hours}H{mins}M{secs}S).
+// - Thread-safe and immutable.
+// =============================================================================
+
 namespace pengdows.crud.types.valueobjects;
 
+/// <summary>
+/// Immutable value object representing an Oracle INTERVAL DAY TO SECOND.
+/// </summary>
+/// <remarks>
+/// Represents a duration in days, hours, minutes, seconds, and fractional seconds.
+/// No month/year component - use <see cref="IntervalYearMonth"/> for those.
+/// </remarks>
 public readonly struct IntervalDaySecond : IEquatable<IntervalDaySecond>
 {
     public IntervalDaySecond(int days, TimeSpan time)

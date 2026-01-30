@@ -93,8 +93,8 @@ public void TestConnectionFailure()
     // This will throw InvalidOperationException
     Assert.Throws<InvalidOperationException>(() =>
     {
-        using var conn = context.GetConnection(ExecutionType.Read);
-        conn.Open();
+        using var container = context.CreateSqlContainer("SELECT 1");
+        container.ExecuteScalarAsync<int>().GetAwaiter().GetResult();
     });
 }
 ```
@@ -110,7 +110,11 @@ var factory = fakeDbFactory.CreateFailingFactory(
 var context = new DatabaseContext("test", factory);
 
 // All connections from this context will fail on open
-Assert.Throws<InvalidOperationException>(() => context.GetConnection(ExecutionType.Read));
+Assert.Throws<InvalidOperationException>(() =>
+{
+    using var container = context.CreateSqlContainer("SELECT 1");
+    container.ExecuteScalarAsync<int>().GetAwaiter().GetResult();
+});
 ```
 
 ### Connection Failure Modes
@@ -174,7 +178,10 @@ public void TestDatabaseContextFailureHandling()
 
     // Test your error handling logic
     var ex = Assert.Throws<InvalidOperationException>(() =>
-        context.GetConnection(ExecutionType.Read));
+    {
+        using var container = context.CreateSqlContainer("SELECT 1");
+        container.ExecuteScalarAsync<int>().GetAwaiter().GetResult();
+    });
 
     Assert.Contains("Connection failed", ex.Message);
 }
@@ -370,8 +377,8 @@ public async Task TestSlowConnection()
     var context = new DatabaseContext("test", factory);
     var stopwatch = Stopwatch.StartNew();
 
-    using var conn = context.GetConnection(ExecutionType.Read);
-    conn.Open();
+    using var container = context.CreateSqlContainer("SELECT 1");
+    await container.ExecuteScalarAsync<int>();
 
     stopwatch.Stop();
     Assert.True(stopwatch.ElapsedMilliseconds >= 500);

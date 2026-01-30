@@ -1185,31 +1185,10 @@ var retrieved = await helper.RetrieveOneAsync(location.Id);
 
 **What it is:** Per-physical-connection state tracking for prepare behavior.
 
-```csharp
-using var conn = context.GetConnection(ExecutionType.Write);
-var localState = conn.LocalState;
+**Important:** Direct connection access is internal-only. Connection-local state is not part of the public API.
 
-// Check if prepare disabled (e.g., due to prior failure)
-if (localState.IsPrepareDisabled)
-    _logger.LogWarning("Prepare disabled for this connection");
-
-// Check prepared statement cache
-if (localState.IsAlreadyPreparedForShape(sqlShapeHash))
-{
-    // Cache hit
-}
-else
-{
-    // Cache miss - will prepare
-    localState.MarkShapePrepared(sqlShapeHash);
-}
-
-// Cache: 32 shapes (LRU), persists across operations on same connection
-```
-
-**When it matters:** Debugging prepare failures. Understanding why prepare was disabled.
-
-**When to skip:** Production code. This is a diagnostic tool.
+**Use instead:** `DatabaseContext.Metrics` and `MetricsUpdated` for diagnostics, or add instrumentation inside the
+connection strategies when debugging the library itself.
 
 ---
 

@@ -106,8 +106,8 @@ namespace pengdows.crud;
 /// </para>
 ///
 /// </remarks>
-public partial class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IContextIdentity, ISqlDialectProvider,
-    IMetricsCollectorAccessor
+public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextIdentity, ISqlDialectProvider,
+    IMetricsCollectorAccessor, IInternalConnectionProvider
 {
     private readonly DbProviderFactory? _factory;
     private readonly DbDataSource? _dataSource;
@@ -231,27 +231,21 @@ public partial class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
     public string SessionSettingsPreamble => _dialect.GetConnectionSessionSettings(this, IsReadOnlyConnection);
 
     /// <inheritdoc/>
-    public string CompositeIdentifierSeparator => _dataSourceInfo.CompositeIdentifierSeparator;
-
-    /// <inheritdoc/>
     public SupportedDatabase Product => _dataSourceInfo?.Product ?? SupportedDatabase.Unknown;
 
     // ProcWrappingStyle is defined below with a setter to update strategy
     /// <inheritdoc/>
     public int MaxParameterLimit => _dataSourceInfo.MaxParameterLimit;
     /// <inheritdoc/>
-    public int MaxOutputParameters => _dataSourceInfo.MaxOutputParameters;
+    public override int MaxOutputParameters => _dataSourceInfo.MaxOutputParameters;
     /// <inheritdoc/>
     public long MaxNumberOfConnections => Interlocked.Read(ref _maxNumberOfOpenConnections);
     /// <inheritdoc/>
     public long NumberOfOpenConnections => Interlocked.Read(ref _connectionCount);
 
     /// <inheritdoc/>
-    public string QuotePrefix => _dialect.QuotePrefix;
-    /// <inheritdoc/>
-    public string QuoteSuffix => _dialect.QuoteSuffix;
-    /// <inheritdoc/>
-    public bool SupportsInsertReturning => _dialect.SupportsInsertReturning;
+    public override string CompositeIdentifierSeparator => _dataSourceInfo.CompositeIdentifierSeparator;
+
     /// <inheritdoc/>
     public bool? ForceManualPrepare => _forceManualPrepare;
     /// <inheritdoc/>
@@ -397,5 +391,5 @@ public partial class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext
         await base.DisposeManagedAsync().ConfigureAwait(false);
     }
 
-    public ISqlDialect Dialect => _dialect;
+    protected override ISqlDialect DialectCore => _dialect;
 }

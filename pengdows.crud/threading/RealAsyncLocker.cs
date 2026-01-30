@@ -1,3 +1,25 @@
+// =============================================================================
+// FILE: RealAsyncLocker.cs
+// PURPOSE: Real semaphore-based locker for shared connection synchronization.
+//
+// AI SUMMARY:
+// - Implements ILockerAsync with actual SemaphoreSlim-based locking.
+// - Used for shared (persistent) connections in SingleWriter/SingleConnection modes.
+// - Key methods:
+//   * Lock(): Sync lock acquisition with optional timeout
+//   * LockAsync(ct): Async lock acquisition with cancellation
+//   * TryLockAsync(timeout, ct): Timeout-based acquisition attempt
+// - Throws ModeContentionException on timeout (includes diagnostics snapshot).
+// - Contention tracking:
+//   * ModeContentionStats integration for wait metrics
+//   * Records wait start/end, timeouts
+// - Lock state tracking:
+//   * _lockState ensures lock acquired only once per instance
+//   * ReleaseIfHeld(): Safe release on dispose
+// - Logging: Trace-level lock acquisition/release events.
+// - Extends SafeAsyncDisposableBase: auto-releases lock on dispose.
+// =============================================================================
+
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;

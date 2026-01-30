@@ -1,3 +1,19 @@
+// =============================================================================
+// FILE: PoolingConfigReader.cs
+// PURPOSE: Reads effective pooling configuration from dialect and connection string.
+//
+// AI SUMMARY:
+// - Determines effective pool configuration from multiple sources.
+// - PoolConfigSource enum: ConnectionString, DialectDefault, PoolingDisabled.
+// - PoolConfig record: PoolingEnabled, MinPoolSize, MaxPoolSize, Source.
+// - GetEffectivePoolConfig(): Combines dialect defaults with connection string settings.
+// - Priority: Explicit connection string values > dialect defaults.
+// - Returns null for max pool size when pooling is disabled.
+// - Parses common variants: true/false, 1/0, integer values.
+// - Uses dialect properties for setting names (e.g., "Max Pool Size").
+// - Falls back to dialect defaults when connection string is empty/invalid.
+// =============================================================================
+
 using System.Data.Common;
 using pengdows.crud.dialects;
 

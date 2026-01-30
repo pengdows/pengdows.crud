@@ -1,5 +1,29 @@
+// =============================================================================
+// FILE: RowVersion.cs
+// PURPOSE: Immutable value object for SQL Server ROWVERSION/TIMESTAMP.
+//
+// AI SUMMARY:
+// - Represents an 8-byte optimistic concurrency token.
+// - Readonly struct implementing IEquatable<RowVersion>.
+// - Properties:
+//   * Value: ReadOnlyMemory<byte> - the 8-byte version value
+// - ToArray(): Returns a copy of the internal byte array.
+// - FromBytes(): Factory method creating from byte array.
+// - Enforces exactly 8 bytes length (SQL Server rowversion size).
+// - ToString(): Returns hex string without dashes.
+// - Used with [Version] attribute for optimistic concurrency.
+// - Thread-safe and immutable.
+// =============================================================================
+
 namespace pengdows.crud.types.valueobjects;
 
+/// <summary>
+/// Immutable value object representing a SQL Server ROWVERSION/TIMESTAMP.
+/// </summary>
+/// <remarks>
+/// Used for optimistic concurrency control. SQL Server auto-generates these values.
+/// With the [Version] attribute, pengdows.crud includes this in UPDATE WHERE clauses.
+/// </remarks>
 public readonly struct RowVersion : IEquatable<RowVersion>
 {
     private const int RequiredLength = 8;

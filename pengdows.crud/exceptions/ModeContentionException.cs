@@ -1,3 +1,19 @@
+// =============================================================================
+// FILE: ModeContentionException.cs
+// PURPOSE: Exception for DbMode contention timeout (SingleWriter/SingleConnection).
+//
+// AI SUMMARY:
+// - Thrown when connection acquisition times out due to mode contention.
+// - Extends TimeoutException with additional diagnostic properties.
+// - Properties:
+//   * Mode: DbMode that caused contention (SingleWriter, SingleConnection)
+//   * Snapshot: ModeContentionSnapshot with waiter count and queue state
+//   * Timeout: TimeSpan that was exceeded
+// - Occurs in SingleWriter mode when write connection is held too long.
+// - Indicates need for shorter transactions or different DbMode.
+// - Message includes waiter count and timeout duration for diagnostics.
+// =============================================================================
+
 using pengdows.crud.enums;
 using pengdows.crud.metrics;
 

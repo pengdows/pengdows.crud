@@ -78,8 +78,8 @@ namespace pengdows.crud;
 /// </example>
 /// <seealso cref="ITransactionContext"/>
 /// <seealso cref="IDatabaseContext.BeginTransaction"/>
-public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, IContextIdentity, ISqlDialectProvider,
-    IMetricsCollectorAccessor
+public class TransactionContext : ContextBase, ITransactionContext, IContextIdentity, ISqlDialectProvider,
+    IMetricsCollectorAccessor, IInternalConnectionProvider
 {
     private readonly ITrackedConnection _connection;
     private readonly IDatabaseContext _context;
@@ -137,7 +137,12 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         // Defer all connection routing to the configured connection strategy.
         // The strategy (and DatabaseContext helpers it uses) handle in-memory,
         // SingleConnection, and SingleWriter cases.
-        _connection = _context.GetConnection(executionType.Value, true);
+        if (_context is not IInternalConnectionProvider connectionProvider)
+        {
+            throw new InvalidOperationException("IDatabaseContext must provide internal connection access.");
+        }
+
+        _connection = connectionProvider.GetConnection(executionType.Value, true);
         EnsureConnectionIsOpen();
         _userLock = new SemaphoreSlim(1, 1);
         _completionLock = new SemaphoreSlim(1, 1);
@@ -158,6 +163,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
 
     /// <inheritdoc/>
     public Guid TransactionId { get; } = Guid.NewGuid();
+
     internal IDbTransaction Transaction => _transaction;
 
     /// <inheritdoc/>
@@ -170,21 +176,28 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
 
     /// <inheritdoc/>
     public bool IsCompleted => Interlocked.CompareExchange(ref _completedState, 0, 0) != 0;
+
     /// <inheritdoc/>
     public IsolationLevel IsolationLevel => _resolvedIsolationLevel;
 
     /// <inheritdoc/>
     public long NumberOfOpenConnections => _context.NumberOfOpenConnections;
+
     /// <inheritdoc/>
     public SupportedDatabase Product => _context.Product;
+
     /// <inheritdoc/>
     public long MaxNumberOfConnections => _context.MaxNumberOfConnections;
+
     /// <inheritdoc/>
     public bool IsReadOnlyConnection => _context.IsReadOnlyConnection || _isReadOnly;
+
     /// <inheritdoc/>
     public bool RCSIEnabled => _context.RCSIEnabled;
+
     /// <inheritdoc/>
     public bool SnapshotIsolationEnabled => _context.SnapshotIsolationEnabled;
+
     /// <inheritdoc/>
     public string ConnectionString => _context.ConnectionString;
 
@@ -197,20 +210,25 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
 
     /// <inheritdoc/>
     public ReadWriteMode ReadWriteMode => _context.ReadWriteMode;
+
     /// <inheritdoc/>
     public DbDataSource? DataSource => _context.DataSource;
+
     /// <inheritdoc/>
     public int MaxParameterLimit => _context.MaxParameterLimit;
-    /// <inheritdoc/>
-    public int MaxOutputParameters => (_dialect as SqlDialect)?.MaxOutputParameters ?? 0;
+
     /// <inheritdoc/>
     public DbMode ConnectionMode => _context.ConnectionMode;
+
     /// <inheritdoc/>
     public ITypeMapRegistry TypeMapRegistry => _context.TypeMapRegistry;
+
     /// <inheritdoc/>
     public IDataSourceInformation DataSourceInfo => _context.DataSourceInfo;
+
     /// <inheritdoc/>
     public string SessionSettingsPreamble => _context.SessionSettingsPreamble;
+
     /// <inheritdoc/>
     public DatabaseMetrics Metrics => _context.Metrics;
 
@@ -233,66 +251,28 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         return new RealAsyncLocker(_userLock);
     }
 
-    /// <inheritdoc/>
-    public ISqlContainer CreateSqlContainer(string? query = null)
+    protected override void ValidateCanCreateContainer()
     {
         if (IsCompleted)
         {
             throw new InvalidOperationException("Cannot create a SQL container because the transaction is completed.");
         }
-
-        // Try to reuse the parent context's logger factory if available so tests can capture logs
-        ILogger<ISqlContainer>? logger = null;
-        if (_context is DatabaseContext dbCtx)
-        {
-            logger = dbCtx.CreateSqlContainerLogger();
-        }
-
-        return SqlContainer.Create(this, query, logger);
     }
 
-    /// <inheritdoc/>
-    public DbParameter CreateDbParameter<T>(string? name, DbType type, T value,
-        ParameterDirection direction = ParameterDirection.Input)
+    protected override ILogger<ISqlContainer>? ResolveSqlContainerLogger()
     {
-        var p = _context.CreateDbParameter(name, type, value);
-        p.Direction = direction;
-        return p;
-    }
-
-    // Back-compat overloads (interface surface)
-    /// <inheritdoc/>
-    public DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
-    {
-        return _context.CreateDbParameter(name, type, value);
+        return _context is DatabaseContext dbCtx ? dbCtx.CreateSqlContainerLogger() : null;
     }
 
     /// <inheritdoc/>
-    public DbParameter CreateDbParameter<T>(DbType type, T value,
-        ParameterDirection direction = ParameterDirection.Input)
-    {
-        var p = _context.CreateDbParameter(type, value);
-        p.Direction = direction;
-        return p;
-    }
-
-    // Back-compat overload (interface surface)
-    /// <inheritdoc/>
-    public DbParameter CreateDbParameter<T>(DbType type, T value)
-    {
-        return _context.CreateDbParameter(type, value);
-    }
-
-    /// <inheritdoc/>
-    public ITrackedConnection GetConnection(ExecutionType type, bool isShared = false)
+    internal ITrackedConnection GetConnection(ExecutionType type, bool isShared = false)
     {
         return _connection;
     }
 
-    /// <inheritdoc/>
-    public string GenerateRandomName(int length = 5, int parameterNameMaxLength = 30)
+    ITrackedConnection IInternalConnectionProvider.GetConnection(ExecutionType executionType, bool isShared)
     {
-        return _context.GenerateRandomName(length, parameterNameMaxLength);
+        return GetConnection(executionType, isShared);
     }
 
     /// <inheritdoc/>
@@ -313,42 +293,12 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
     }
 
     /// <inheritdoc/>
-    public string QuotePrefix => _dialect.QuotePrefix;
-
-    /// <inheritdoc/>
-    public string QuoteSuffix => _dialect.QuoteSuffix;
-
-    /// <inheritdoc/>
-    public bool SupportsInsertReturning => _dialect.SupportsInsertReturning;
-
-    /// <inheritdoc/>
     public bool? ForceManualPrepare => _context.ForceManualPrepare;
 
     /// <inheritdoc/>
     public bool? DisablePrepare => _context.DisablePrepare;
 
-    /// <inheritdoc/>
-    public string CompositeIdentifierSeparator => _dialect.CompositeIdentifierSeparator;
-
-    /// <inheritdoc/>
-    public string WrapObjectName(string name)
-    {
-        return _dialect.WrapObjectName(name);
-    }
-
     MetricsCollector? IMetricsCollectorAccessor.MetricsCollector => _metricsCollector;
-
-    /// <inheritdoc/>
-    public string MakeParameterName(DbParameter dbParameter)
-    {
-        return _dialect.MakeParameterName(dbParameter);
-    }
-
-    /// <inheritdoc/>
-    public string MakeParameterName(string parameterName)
-    {
-        return _dialect.MakeParameterName(parameterName);
-    }
 
     /// <inheritdoc/>
     public ProcWrappingStyle ProcWrappingStyle => _context.ProcWrappingStyle;
@@ -677,7 +627,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         }
     }
 
-    public ISqlDialect Dialect => _dialect;
+    protected override ISqlDialect DialectCore => _dialect;
 
     // Internal factory used by DatabaseContext
     internal static TransactionContext Create(

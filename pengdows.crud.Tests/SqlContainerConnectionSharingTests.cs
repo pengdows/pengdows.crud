@@ -9,6 +9,7 @@ using pengdows.crud.fakeDb;
 using pengdows.crud.infrastructure;
 using pengdows.crud.metrics;
 using pengdows.crud.threading;
+using pengdows.crud.@internal;
 using pengdows.crud.wrappers;
 using Xunit;
 
@@ -56,7 +57,7 @@ public class SqlContainerConnectionSharingTests
         Assert.False(context.LastIsShared.Value);
     }
 
-    private sealed class RecordingContext : IDatabaseContext, ISqlDialectProvider
+    private sealed class RecordingContext : IDatabaseContext, ISqlDialectProvider, IInternalConnectionProvider
     {
         private readonly DatabaseContext _context;
 
@@ -151,6 +152,11 @@ public class SqlContainerConnectionSharingTests
         {
             LastIsShared = isShared;
             return _context.GetConnection(executionType, isShared);
+        }
+
+        ITrackedConnection IInternalConnectionProvider.GetConnection(ExecutionType executionType, bool isShared)
+        {
+            return GetConnection(executionType, isShared);
         }
 
         public ITransactionContext BeginTransaction(IsolationLevel? isolationLevel = null,

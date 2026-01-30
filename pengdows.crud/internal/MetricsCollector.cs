@@ -1,3 +1,28 @@
+// =============================================================================
+// FILE: MetricsCollector.cs
+// PURPOSE: Collects performance metrics for database operations.
+//
+// AI SUMMARY:
+// - Central metrics collection for connections, commands, and transactions.
+// - Thread-safe: uses Interlocked/Volatile for all counters.
+// - Connection metrics:
+//   * ConnectionOpened/Closed, current/max counts
+//   * Connection hold duration (EWMA), open/close duration
+//   * Long-lived connection tracking (threshold-based)
+// - Command metrics:
+//   * Commands executed/failed/timed out/cancelled
+//   * Average command duration (EWMA), P95/P99 percentiles
+//   * Max parameters observed, rows read/affected
+//   * Prepared statements, statement cache hits/evictions
+// - Transaction metrics:
+//   * Active/max transactions, average duration
+// - EWMA (Exponentially Weighted Moving Average): smoothed averages.
+// - PercentileRing: circular buffer for approximate P95/P99 calculation.
+// - MetricsSnapshot: immutable point-in-time metrics capture.
+// - MetricsChanged event: notifies subscribers of metric updates.
+// - ToMilliseconds(): Converts Stopwatch ticks to milliseconds.
+// =============================================================================
+
 using System.Diagnostics;
 using pengdows.crud.metrics;
 

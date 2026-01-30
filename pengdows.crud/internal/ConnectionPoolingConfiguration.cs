@@ -1,3 +1,22 @@
+// =============================================================================
+// FILE: ConnectionPoolingConfiguration.cs
+// PURPOSE: Configures connection pooling defaults across database providers.
+//
+// AI SUMMARY:
+// - Manages connection pool settings for optimal performance.
+// - DefaultMinPoolSize (1): Ensures at least one pooled connection exists.
+// - Key methods:
+//   * IsPoolingDisabled(): Checks if Pooling=false in connection string
+//   * HasMinPoolSize(): Detects if min pool size is already configured
+//   * TrySetMinPoolSize(): Sets minimum pool size via property or indexer
+//   * ApplyPoolingDefaults(): Adds Pooling=true and MinPoolSize if not present
+//   * ApplyApplicationName(): Adds application name to connection string
+// - Handles multiple provider-specific aliases (Min Pool Size, MinPoolSize, etc.).
+// - Only applies to Standard and KeepAlive modes with external pooling.
+// - Skips raw connection strings like ":memory:" or file paths.
+// - Uses reflection for strongly-typed builder properties as fallback.
+// =============================================================================
+
 using System.Data.Common;
 using System.Globalization;
 using System.Reflection;

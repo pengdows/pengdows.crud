@@ -1,11 +1,31 @@
-#region
+// =============================================================================
+// FILE: TrackedReader.cs
+// PURPOSE: Wraps DbDataReader with auto-disposal and metrics tracking.
+//
+// AI SUMMARY:
+// - Implements ITrackedReader wrapping underlying DbDataReader.
+// - Auto-disposal behavior:
+//   * Read()/ReadAsync(): Auto-disposes when returning false (end of results)
+//   * Ensures resources are released even if caller forgets to dispose
+// - Connection lifecycle:
+//   * shouldCloseConnection: Whether to close connection on reader dispose
+//   * _connectionLocker: Holds lock during reader lifetime
+// - Metrics tracking:
+//   * Rows read count (Interlocked increment per row)
+//   * Records affected from reader
+//   * RecordMetricsOnce(): Reports metrics once on dispose
+// - Command disposal:
+//   * Clears parameters, nulls connection, disposes command
+//   * Prevents double-dispose with Interlocked exchange
+// - NextResult(): Throws NotSupportedException (multiple result sets unsupported).
+// - Extends SafeAsyncDisposableBase for proper cleanup order.
+// - All IDataReader methods pass through to underlying reader.
+// =============================================================================
 
 using System.Data;
 using System.Data.Common;
 using pengdows.crud.@internal;
 using pengdows.crud.infrastructure;
-
-#endregion
 
 namespace pengdows.crud.wrappers;
 

@@ -679,7 +679,6 @@ await tx.Commit(); // Order is committed, risky item is not (if it failed)
 ### DatabaseContext Key Methods
 
 **Connection Management:**
-- `GetConnection(ExecutionType executionType, bool isShared = false)` - Get tracked connection
 - `CloseAndDisposeConnection(ITrackedConnection? conn)` - Return connection to pool
 - `CloseAndDisposeConnectionAsync(ITrackedConnection? conn)` - Async version of connection cleanup
 
@@ -827,7 +826,8 @@ var factory = FakeDbFactory.CreateFailingFactory(
 **Using Connection Failure Helpers:**
 ```csharp
 using var context = ConnectionFailureHelper.CreateFailOnOpenContext();
-Assert.Throws<InvalidOperationException>(() => context.GetConnection(ExecutionType.Read));
+using var container = context.CreateSqlContainer("SELECT 1");
+Assert.Throws<InvalidOperationException>(() => container.ExecuteScalarAsync<int>().GetAwaiter().GetResult());
 ```
 
 ## Working with the Codebase

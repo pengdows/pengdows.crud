@@ -225,11 +225,11 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// </summary>
     DbParameter CreateDbParameter<T>(DbType type, T value);
 
-    /// <summary>
-    /// Returns a tracked connection for the given execution type.
-    /// Optionally reused depending on mode.
-    /// </summary>
-    ITrackedConnection GetConnection(ExecutionType executionType, bool isShared = false);
+    // /// <summary>
+    // /// Returns a tracked connection for the given execution type.
+    // /// Optionally reused depending on mode.
+    // /// </summary>
+    // ITrackedConnection GetConnection(ExecutionType executionType, bool isShared = false);
 
 
     /// <summary>

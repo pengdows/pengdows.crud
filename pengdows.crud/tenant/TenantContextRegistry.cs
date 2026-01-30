@@ -1,12 +1,26 @@
-#region
+// =============================================================================
+// FILE: TenantContextRegistry.cs
+// PURPOSE: Registry managing DatabaseContext instances per tenant.
+//
+// AI SUMMARY:
+// - Implements ITenantContextRegistry for tenant context lifecycle management.
+// - Thread-safe: uses ConcurrentDictionary for context storage.
+// - GetContext(tenant): Returns cached context or creates new one.
+// - Lazy initialization: contexts created on first access per tenant.
+// - Context creation:
+//   * Gets config from ITenantConnectionResolver
+//   * Resolves DbProviderFactory via keyed DI service
+//   * Creates DatabaseContext with config, factory, and logger
+// - Extends SafeAsyncDisposableBase for proper cleanup.
+// - DisposeManaged/Async: disposes all cached tenant contexts.
+// - Logs warnings for disposal errors (doesn't throw).
+// =============================================================================
 
 using System.Collections.Concurrent;
 using System.Data.Common;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.infrastructure;
-
-#endregion
 
 namespace pengdows.crud.tenant;
 

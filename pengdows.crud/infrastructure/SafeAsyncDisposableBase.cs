@@ -1,3 +1,24 @@
+// =============================================================================
+// FILE: SafeAsyncDisposableBase.cs
+// PURPOSE: Base class for implementing safe synchronous and async disposal.
+//
+// AI SUMMARY:
+// - Abstract base implementing IDisposable and IAsyncDisposable patterns.
+// - Thread-safe: uses Interlocked to ensure single disposal.
+// - IsDisposed property: tracks disposal state.
+// - Overridable cleanup methods:
+//   * DisposeManaged(): Sync managed resource cleanup
+//   * DisposeManagedAsync(): Async managed cleanup (defaults to sync)
+//   * DisposeUnmanaged(): Sync unmanaged cleanup (prefer SafeHandle)
+//   * DisposeUnmanagedAsync(): Async unmanaged cleanup (defaults to sync)
+// - OnDisposeException(): Optional hook for logging swallowed exceptions.
+// - ThrowIfDisposed(): Guard method throws ObjectDisposedException.
+// - TrackDisposeState: Virtual property to opt-out (for singletons).
+// - GC.SuppressFinalize called after cleanup completes.
+// - Exception handling: Both sync and async paths call OnDisposeException for observability.
+// - Preserves first exception, continues cleanup, then rethrows (async) or swallows (sync).
+// =============================================================================
+
 using System.Runtime.CompilerServices;
 using System.Runtime.ExceptionServices;
 
@@ -69,7 +90,7 @@ public abstract class SafeAsyncDisposableBase : ISafeAsyncDisposableBase, IDispo
             }
             else
             {
-                OnDisposeException(ex, nameof(DisposeUnmanagedAsync)); // don't mask the first
+                OnDisposeException(ex, nameof(DisposeUnmanagedAsync)); // log only suppressed failures
             }
         }
         finally

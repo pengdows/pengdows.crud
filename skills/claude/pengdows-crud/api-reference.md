@@ -103,10 +103,11 @@ ISqlContainer WrapForStoredProc(ExecutionType type, bool includeParams = true);
 ### Connection Management
 
 ```csharp
-ITrackedConnection GetConnection(ExecutionType type, bool isShared = false);
 void CloseAndDisposeConnection(ITrackedConnection? conn);
 Task CloseAndDisposeConnectionAsync(ITrackedConnection? conn);
 ```
+
+Note: Direct connection access is internal-only; use `ISqlContainer` for execution.
 
 ### Transaction Management
 

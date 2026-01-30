@@ -482,7 +482,10 @@ public class OrderGatewayTests
         var context = new DatabaseContext("test", factory);
 
         Assert.Throws<InvalidOperationException>(() =>
-            context.GetConnection(ExecutionType.Read));
+        {
+            using var container = context.CreateSqlContainer("SELECT 1");
+            container.ExecuteScalarAsync<int>().GetAwaiter().GetResult();
+        });
     }
 }
 ```

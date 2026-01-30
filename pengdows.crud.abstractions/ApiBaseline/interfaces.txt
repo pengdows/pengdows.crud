@@ -43,7 +43,6 @@ method pengdows.crud.IDatabaseContext::CreateDbParameter<T>(string, System.Data.
 method pengdows.crud.IDatabaseContext::CreateDbParameter<T>(string, System.Data.DbType, T, System.Data.ParameterDirection) -> System.Data.Common.DbParameter
 method pengdows.crud.IDatabaseContext::CreateSqlContainer(string) -> pengdows.crud.ISqlContainer
 method pengdows.crud.IDatabaseContext::GenerateRandomName(int, int) -> string
-method pengdows.crud.IDatabaseContext::GetConnection(pengdows.crud.enums.ExecutionType, bool) -> pengdows.crud.wrappers.ITrackedConnection
 method pengdows.crud.IDatabaseContext::GetLock() -> pengdows.crud.threading.ILockerAsync
 method pengdows.crud.IDatabaseContext::MakeParameterName(System.Data.Common.DbParameter) -> string
 method pengdows.crud.IDatabaseContext::MakeParameterName(string) -> string

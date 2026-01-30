@@ -1,4 +1,29 @@
-#region
+// =============================================================================
+// FILE: TrackedConnection.cs
+// PURPOSE: Wraps DbConnection with lifecycle tracking, locking, and metrics.
+//
+// AI SUMMARY:
+// - Implements ITrackedConnection wrapping underlying DbConnection.
+// - Lifecycle tracking:
+//   * WasOpened: Tracks if connection was ever opened
+//   * onFirstOpen callback: For session settings application
+//   * onStateChange callback: For metrics state tracking
+//   * onDispose callback: For connection counting
+// - Two-level locking strategy:
+//   * Shared connections (persistent): RealAsyncLocker with SemaphoreSlim
+//   * Ephemeral connections (per-op): NoOpAsyncLocker, zero overhead
+// - GetLock(): Returns appropriate locker for connection type.
+// - LocalState: Per-connection state for prepare behavior tracking.
+// - Pool permit integration:
+//   * AttachPermit(): Associates governor permit with connection
+//   * ReleasePermit(): Returns permit on dispose (once only)
+// - Metrics collection:
+//   * Open/close duration timing
+//   * Connection hold duration
+//   * State change tracking
+// - Extends SafeAsyncDisposableBase for proper cleanup.
+// - DisposeManaged/Async: Closes connection, invokes callbacks, releases permit.
+// =============================================================================
 
 using System.Data;
 using System.Data.Common;
@@ -12,8 +37,6 @@ using pengdows.crud.@internal;
 using pengdows.crud.infrastructure;
 using pengdows.crud.metrics;
 using pengdows.crud.threading;
-
-#endregion
 
 namespace pengdows.crud.wrappers;
 

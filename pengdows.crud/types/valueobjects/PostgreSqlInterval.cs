@@ -1,5 +1,29 @@
+// =============================================================================
+// FILE: PostgreSqlInterval.cs
+// PURPOSE: Immutable value object for PostgreSQL INTERVAL type.
+//
+// AI SUMMARY:
+// - Represents PostgreSQL INTERVAL with three components matching internal storage.
+// - Readonly struct implementing IEquatable<PostgreSqlInterval>.
+// - Properties:
+//   * Months: int - months component (includes years as months*12)
+//   * Days: int - days component (separate from time)
+//   * Microseconds: long - sub-day time in microseconds
+// - TimeComponent: TimeSpan from Microseconds (Microseconds * 10 ticks).
+// - ToTimeSpan(): Converts Days + TimeComponent (loses Months info).
+// - FromTimeSpan(): Creates from TimeSpan (Days + microseconds, no months).
+// - Thread-safe and immutable.
+// =============================================================================
+
 namespace pengdows.crud.types.valueobjects;
 
+/// <summary>
+/// Immutable value object representing a PostgreSQL INTERVAL.
+/// </summary>
+/// <remarks>
+/// PostgreSQL intervals have three separate components: months, days, and microseconds.
+/// This matches the internal storage format and allows precise round-trip conversion.
+/// </remarks>
 public readonly struct PostgreSqlInterval : IEquatable<PostgreSqlInterval>
 {
     public PostgreSqlInterval(int months, int days, long microseconds)

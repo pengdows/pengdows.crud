@@ -1,3 +1,23 @@
+// =============================================================================
+// FILE: HStore.cs
+// PURPOSE: Immutable value object for PostgreSQL HSTORE key-value type.
+//
+// AI SUMMARY:
+// - Represents PostgreSQL HSTORE - key-value store in a single column.
+// - Readonly struct implementing IEquatable<HStore>, IEnumerable<KeyValuePair>.
+// - Properties:
+//   * Indexer [key]: Returns value or null if key doesn't exist
+//   * Keys, Values: Enumerate keys and values
+//   * Count, IsEmpty: Size information
+//   * ContainsKey(): Check for key existence
+// - Parse(): Parses HSTORE string format (key1=>val1, "key 2"=>"val 2", key3=>NULL).
+// - ToString(): Converts to canonical HSTORE format with proper escaping.
+// - Escaping rules: Quotes strings with whitespace/special chars, backslash-escapes.
+// - Null values: Represented as unquoted NULL in string format.
+// - Uses SbLite for efficient string building during parsing/serialization.
+// - Thread-safe and immutable.
+// =============================================================================
+
 using System.Collections;
 using pengdows.crud.@internal;
 

@@ -1,3 +1,22 @@
+// =============================================================================
+// FILE: OrderedDictionaryExtensions.cs
+// PURPOSE: Extension methods for OrderedDictionary in database parameter scenarios.
+//
+// AI SUMMARY:
+// - Static extension methods for OrderedDictionary<string, object?> and DbParameter.
+// - FromObject<T>(): Creates dictionary from object's public properties.
+//   * Uses reflection to read properties
+//   * Logs warnings for properties that throw on access
+//   * Skips indexers and write-only properties
+// - AddParameter(key, value): Adds with automatic null -> DBNull.Value conversion.
+// - TryAddParameter(key, value): Non-throwing add attempt.
+// - RemoveParameter(key, out value): Remove and return value.
+// - AddDbParameter(dict, param): Adds DbParameter using its name as key.
+//   * Trims @, :, ?, $ prefixes from parameter names
+// - GetParametersInOrder(): Yields parameters in insertion order.
+// - Static Logger property: Optional ILogger for visibility into failures.
+// =============================================================================
+
 using System.Data.Common;
 using System.Reflection;
 using Microsoft.Extensions.Logging;

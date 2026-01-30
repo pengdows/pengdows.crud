@@ -1,3 +1,20 @@
+// =============================================================================
+// FILE: AttributionStats.cs
+// PURPOSE: Tracks read/write request attribution and governor wait statistics.
+//
+// AI SUMMARY:
+// - Internal metrics collector for request attribution.
+// - Thread-safe: all counters use Interlocked operations.
+// - Tracked metrics:
+//   * ReadRequests, WriteRequests: Total operation counts
+//   * ReadGovernorWaits, WriteGovernorWaits: Pool wait events
+//   * ReadGovernorTimeouts, WriteGovernorTimeouts: Pool timeout counts
+//   * ReadModeWaits, WriteModeWaits: Mode lock contention events
+// - GetSnapshot(): Returns immutable AttributionSnapshot.
+// - AttributionSnapshot: Readonly record struct with all counters.
+// - Used for debugging pool pressure and read/write distribution.
+// =============================================================================
+
 namespace pengdows.crud.metrics;
 
 internal sealed class AttributionStats

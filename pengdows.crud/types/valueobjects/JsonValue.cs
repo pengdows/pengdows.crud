@@ -1,3 +1,24 @@
+// =============================================================================
+// FILE: JsonValue.cs
+// PURPOSE: Immutable value object for JSON storage in databases.
+//
+// AI SUMMARY:
+// - Represents JSON data for database storage with lazy serialization.
+// - Readonly struct implementing IEquatable<JsonValue>.
+// - Constructors accept: string (raw JSON), JsonDocument, or JsonElement.
+// - Conversion methods:
+//   * AsString(): Returns JSON as string (lazy serializes if from document/element)
+//   * AsDocument(): Returns JsonDocument (lazy parses if from string)
+//   * AsElement(): Returns JsonElement (clones to avoid disposal issues)
+// - Factory methods:
+//   * Parse(): Validates and creates from JSON string
+//   * FromObject<T>(): Serializes any object to JsonValue
+// - ToObject<T>(): Deserializes JsonValue back to typed object.
+// - Implicit conversions to/from string, JsonDocument, JsonElement.
+// - Optimized for PostgreSQL jsonb, MySQL JSON, SQL Server JSON support.
+// - Thread-safe and immutable (though JsonDocument needs care with disposal).
+// =============================================================================
+
 using System.Text.Json;
 
 namespace pengdows.crud.types.valueobjects;

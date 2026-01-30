@@ -1,41 +1,14 @@
 // =============================================================================
 // FILE: DatabaseContext.Commands.cs
-// PURPOSE: SqlContainer creation and parameter/name helpers.
-//
-// AI SUMMARY:
-// - CreateSqlContainer() - Factory for building SQL queries/commands.
-// - CreateDbParameter() - Creates ADO.NET parameters with dialect support.
-// - WrapObjectName() - Quotes identifiers for the current database
-//   (e.g., "table" for PostgreSQL, [table] for SQL Server).
-// - MakeParameterName() - Formats parameter markers
-//   (e.g., @param for SQL Server, :param for Oracle).
-// - GenerateRandomName() - Creates unique identifiers for temp tables, etc.
-// - All methods delegate to the SQL dialect for database-specific behavior.
+// PURPOSE: SqlContainer logging hook for DatabaseContext.
 // =============================================================================
 
-using System.Data;
-using System.Data.Common;
 using Microsoft.Extensions.Logging;
 
 namespace pengdows.crud;
 
-/// <summary>
-/// DatabaseContext partial class: SqlContainer and parameter creation methods.
-/// </summary>
-/// <remarks>
-/// This partial provides the factory methods for creating SQL containers and
-/// database parameters, as well as identifier formatting helpers.
-/// </remarks>
 public partial class DatabaseContext
 {
-    /// <inheritdoc/>
-    public ISqlContainer CreateSqlContainer(string? query = null)
-    {
-        // Provide a logger so container can emit diagnostics (e.g., prepare-disable notices)
-        var logger = _loggerFactory.CreateLogger<ISqlContainer>();
-        return SqlContainer.Create(this, query, logger);
-    }
-
     /// <summary>
     /// Internal helper so TransactionContext can reuse the same logger factory for containers.
     /// </summary>
@@ -44,55 +17,8 @@ public partial class DatabaseContext
         return _loggerFactory.CreateLogger<ISqlContainer>();
     }
 
-    /// <inheritdoc/>
-    public DbParameter CreateDbParameter<T>(string? name, DbType type, T value,
-        ParameterDirection direction = ParameterDirection.Input)
+    protected override ILogger<ISqlContainer>? ResolveSqlContainerLogger()
     {
-        var p = _dialect.CreateDbParameter(name, type, value);
-        p.Direction = direction;
-        return p;
-    }
-
-    /// <inheritdoc/>
-    public DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
-    {
-        return CreateDbParameter(name, type, value, ParameterDirection.Input);
-    }
-
-    /// <inheritdoc/>
-    public DbParameter CreateDbParameter<T>(DbType type, T value,
-        ParameterDirection direction = ParameterDirection.Input)
-    {
-        return CreateDbParameter(null, type, value, direction);
-    }
-
-    /// <inheritdoc/>
-    public DbParameter CreateDbParameter<T>(DbType type, T value)
-    {
-        return CreateDbParameter(type, value, ParameterDirection.Input);
-    }
-
-    /// <inheritdoc/>
-    public string WrapObjectName(string name)
-    {
-        return _dialect.WrapObjectName(name);
-    }
-
-    /// <inheritdoc/>
-    public string MakeParameterName(DbParameter dbParameter)
-    {
-        return _dialect.MakeParameterName(dbParameter);
-    }
-
-    /// <inheritdoc/>
-    public string MakeParameterName(string parameterName)
-    {
-        return _dialect.MakeParameterName(parameterName);
-    }
-
-    /// <inheritdoc/>
-    public string GenerateRandomName(int length = 5, int parameterNameMaxLength = 30)
-    {
-        return _dialect.GenerateRandomName(length, parameterNameMaxLength);
+        return CreateSqlContainerLogger();
     }
 }

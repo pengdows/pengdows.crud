@@ -1,9 +1,29 @@
-#region
+// =============================================================================
+// FILE: DatabaseContextConfiguration.cs
+// PURPOSE: POCO configuration for DatabaseContext initialization.
+//
+// AI SUMMARY:
+// - Implements IDatabaseContextConfiguration for full context setup.
+// - Core settings:
+//   * ConnectionString, ProviderName: Required for connection
+//   * ApplicationName: Added to connection string for monitoring
+// - Connection mode:
+//   * DbMode: Best (auto-detect), Standard, KeepAlive, SingleWriter, SingleConnection
+//   * ReadWriteMode: ReadWrite, ReadOnly (WriteOnly converted to ReadWrite)
+// - Statement preparation:
+//   * ForceManualPrepare, DisablePrepare: Override provider defaults
+// - Pool governance:
+//   * WritePoolSize, ReadPoolSize: Custom pool limits
+//   * PoolAcquireTimeout: How long to wait for pool permit
+//   * EnablePoolGovernor: Enable/disable permit-based pooling
+// - Mode locking:
+//   * ModeLockTimeout: Timeout for SingleWriter/SingleConnection lock
+// - Metrics:
+//   * EnableMetrics, MetricsOptions: Performance tracking configuration
+// =============================================================================
 
 using pengdows.crud.enums;
 using pengdows.crud.metrics;
-
-#endregion
 
 namespace pengdows.crud.configuration;
 

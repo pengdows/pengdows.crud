@@ -1,3 +1,21 @@
+// =============================================================================
+// FILE: TenantConnectionResolver.cs
+// PURPOSE: Resolves database configuration for tenant identifiers.
+//
+// AI SUMMARY:
+// - Implements ITenantConnectionResolver for tenant-to-config mapping.
+// - Thread-safe: uses ConcurrentDictionary with case-insensitive keys.
+// - GetDatabaseContextConfiguration(tenant): Returns config or throws.
+// - Register methods:
+//   * Register(tenant, config): Single tenant registration
+//   * Register(IEnumerable<TenantConfiguration>): Batch registration
+//   * Register(MultiTenantOptions): With application name composition
+// - Application name composition: "{baseApp}:{tenantName}" format.
+// - Clear(): Removes all registered configurations.
+// - Throws InvalidOperationException for unknown tenants.
+// - Validates ProviderName is non-empty during registration.
+// =============================================================================
+
 using System.Collections.Concurrent;
 using pengdows.crud.configuration;
 

@@ -1,9 +1,29 @@
-#region
+// =============================================================================
+// FILE: IsolationResolver.cs
+// PURPOSE: Resolves IsolationProfile to database-specific IsolationLevel.
+//
+// AI SUMMARY:
+// - Implements IIsolationResolver for portable isolation level handling.
+// - Maps IsolationProfile (semantic intent) to IsolationLevel (ADO.NET).
+// - Profiles:
+//   * SafeNonBlockingReads: Non-blocking reads (Snapshot, RepeatableRead, ReadCommitted)
+//   * StrictConsistency: Serializable everywhere
+//   * FastWithRisks: ReadUncommitted where supported
+// - Database-specific mappings:
+//   * SQL Server: Snapshot (if enabled), else ReadCommitted; supports ReadUncommitted
+//   * PostgreSQL: MVCC-based ReadCommitted; no ReadUncommitted
+//   * MySQL/MariaDB: RepeatableRead for safe reads; has ReadUncommitted
+//   * Oracle: ReadCommitted or Serializable only
+//   * CockroachDB/DuckDB: Serializable only
+// - Resolve(profile): Returns IsolationLevel.
+// - ResolveWithDetail(profile): Returns IsolationResolution with degradation info.
+// - Validate(level): Throws if level not supported by database.
+// - GetSupportedLevels(): Returns set of supported levels for current database.
+// - Constructor params: product, readCommittedSnapshotEnabled, allowSnapshotIsolation.
+// =============================================================================
 
 using System.Data;
 using pengdows.crud.enums;
-
-#endregion
 
 namespace pengdows.crud.isolation;
 

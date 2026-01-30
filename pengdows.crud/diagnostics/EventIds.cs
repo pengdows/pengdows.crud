@@ -1,3 +1,24 @@
+// =============================================================================
+// FILE: EventIds.cs
+// PURPOSE: Structured logging event IDs for pengdows.crud diagnostics.
+//
+// AI SUMMARY:
+// - Static class containing EventId constants for structured logging.
+// - Event ID ranges by category:
+//   * 1xxx: Connection mode events (mismatch, coercion)
+//   * 2xxx: Metrics events (collection issues)
+//   * 3xxx: Dialect/detection events
+//   * 4xxx: Connection lifecycle events
+// - Defined events:
+//   * ModeMismatch (1001): Connection mode suboptimal for database type
+//   * ModeCoerced (1002): Mode auto-changed for correctness/safety
+//   * MetricsIssue (2001): Non-fatal metrics collection problem
+//   * DialectDetection (3001): Database detection/dialect initialization issue
+//   * ConnectionLifecycle (4001): Pool/lifecycle informational event
+// - All EventIds have descriptive names for log filtering.
+// - Used with ILogger.Log() for structured event logging.
+// =============================================================================
+
 using Microsoft.Extensions.Logging;
 
 namespace pengdows.crud.diagnostics;

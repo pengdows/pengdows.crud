@@ -1,3 +1,23 @@
+// =============================================================================
+// FILE: ModeContentionStats.cs
+// PURPOSE: Tracks contention statistics for SingleWriter/SingleConnection modes.
+//
+// AI SUMMARY:
+// - Internal metrics for mode lock contention tracking.
+// - Thread-safe: all counters use Interlocked operations.
+// - Tracked metrics:
+//   * CurrentWaiters: Operations currently waiting for lock
+//   * PeakWaiters: Maximum concurrent waiters observed
+//   * TotalWaits: Lifetime wait count
+//   * TotalTimeouts: Lock acquisition timeout count
+//   * TotalWaitTimeTicks: Cumulative wait time in ticks
+// - RecordWaitStart(): Increments waiters, updates peak
+// - RecordWaitEnd(ticks): Decrements waiters, adds wait time
+// - RecordTimeout(ticks): Increments timeouts, calls RecordWaitEnd
+// - GetSnapshot(): Returns ModeContentionSnapshot with averages.
+// - ModeContentionSnapshot: Public readonly record struct for exception context.
+// =============================================================================
+
 namespace pengdows.crud.metrics;
 
 internal sealed class ModeContentionStats

@@ -348,26 +348,7 @@ public class IndexedViewBenchmarks : IAsyncDisposable
     /// Entity Framework querying base tables - another aggregation query for comparison.
     /// Shows consistent runtime aggregation overhead regardless of approach.
     /// </summary>
-    [Benchmark]
-    public async Task<EfCustomerOrderSummary?> GetCustomerSummary_EntityFramework_WithWorkaround()
-    {
-        var row = await _efContext.CustomerOrderSummaryRows
-            .FromSqlRaw(BuildCustomerSummarySql(param => $"@{param}"),
-                new SqlParameter("customerId", _testCustomerId))
-            .AsNoTracking()
-            .FirstOrDefaultAsync();
-
-        return row == null
-            ? null
-            : new EfCustomerOrderSummary
-            {
-                CustomerId = row.CustomerId,
-                OrderCount = row.OrderCount > int.MaxValue ? int.MaxValue : (int)row.OrderCount,
-                TotalAmount = row.TotalAmount,
-                AvgOrderAmount = row.CountForAvg > 0 ? row.SumOrderAmount / row.CountForAvg : 0,
-                LastOrderDate = default
-            };
-    }
+    // Intentionally no EF workaround benchmark here.
 
     /// <summary>
     /// Direct SQL querying indexed view - opens/closes connection each call for fair comparison.
@@ -388,17 +369,7 @@ public class IndexedViewBenchmarks : IAsyncDisposable
     /// <summary>
     /// Direct SQL querying indexed view with explicit session settings for view matching parity.
     /// </summary>
-    [Benchmark]
-    public async Task<CustomerOrderSummary?> GetCustomerSummary_DirectSQL_IndexedView_WithSessionSettings()
-    {
-        await using var conn = new SqlConnection(_directSqlConnStr);
-        await conn.OpenAsync();
-        await BenchmarkSessionSettings.ApplyAsync(conn, BenchmarkSessionSettings.SqlServerSessionSettings);
-        var sql = BuildCustomerSummarySql(param => $"@{param}");
-        return await conn.QuerySingleOrDefaultAsync<CustomerOrderSummary>(
-            sql,
-            new { customerId = _testCustomerId });
-    }
+    // Intentionally no session-settings variant for direct SQL.
 
     [Benchmark]
     public async Task GetCustomerSummary_pengdows_IndexedView_Concurrent()
@@ -427,19 +398,7 @@ public class IndexedViewBenchmarks : IAsyncDisposable
         });
     }
 
-    [Benchmark]
-    public async Task GetCustomerSummary_EntityFramework_WithWorkaround_Concurrent()
-    {
-        await BenchmarkConcurrency.RunConcurrent(OperationsPerRun, Parallelism, async () =>
-        {
-            await using var ctx = new EfTestDbContext(_efOptions);
-            await ctx.CustomerOrderSummaryRows
-                .FromSqlRaw(BuildCustomerSummarySql(param => $"@{param}"),
-                    new SqlParameter("customerId", _testCustomerId))
-                .AsNoTracking()
-                .FirstOrDefaultAsync();
-        });
-    }
+    // Intentionally no EF workaround concurrent benchmark here.
 
     [Benchmark]
     public async Task GetCustomerSummary_DirectSQL_IndexedView_Concurrent()
@@ -455,20 +414,7 @@ public class IndexedViewBenchmarks : IAsyncDisposable
         });
     }
 
-    [Benchmark]
-    public async Task GetCustomerSummary_DirectSQL_IndexedView_WithSessionSettings_Concurrent()
-    {
-        await BenchmarkConcurrency.RunConcurrent(OperationsPerRun, Parallelism, async () =>
-        {
-            await using var conn = new SqlConnection(_directSqlConnStr);
-            await conn.OpenAsync();
-            await BenchmarkSessionSettings.ApplyAsync(conn, BenchmarkSessionSettings.SqlServerSessionSettings);
-            var sql = BuildCustomerSummarySql(param => $"@{param}");
-            await conn.QuerySingleOrDefaultAsync<CustomerOrderSummary>(
-                sql,
-                new { customerId = _testCustomerId });
-        });
-    }
+    // Intentionally no session-settings concurrent variant for direct SQL.
 
     private static string BuildCustomerSummarySql(Func<string, string> param)
     {

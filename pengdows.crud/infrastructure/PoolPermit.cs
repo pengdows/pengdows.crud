@@ -1,3 +1,17 @@
+// =============================================================================
+// FILE: PoolPermit.cs
+// PURPOSE: RAII struct representing an acquired pool slot.
+//
+// AI SUMMARY:
+// - Readonly struct implementing IDisposable and IAsyncDisposable.
+// - Returned by PoolGovernor.Acquire/AcquireAsync.
+// - Dispose(): Releases permit back to governor (once only).
+// - PoolPermitToken: Inner class ensuring single release via Interlocked.
+// - Usage: using var permit = await governor.AcquireAsync();
+// - Struct design: efficient, stack-allocated, no heap pressure.
+// - Null token (default struct) is valid no-op for disabled governors.
+// =============================================================================
+
 namespace pengdows.crud.infrastructure;
 
 internal readonly struct PoolPermit : IDisposable, IAsyncDisposable

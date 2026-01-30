@@ -1,3 +1,20 @@
+// =============================================================================
+// FILE: BoundedCache.cs
+// PURPOSE: Thread-safe bounded LRU-style cache with automatic eviction.
+//
+// AI SUMMARY:
+// - Generic bounded cache with configurable max size.
+// - Thread-safe: uses ConcurrentDictionary + ConcurrentQueue.
+// - FIFO eviction: oldest entries removed when capacity exceeded.
+// - Key methods:
+//   * GetOrAdd(key, factory) - retrieves or creates entry
+//   * TryGet(key, out value) - retrieves without creating
+//   * Clear() - removes all entries
+// - Uses Interlocked for thread-safe count tracking.
+// - Used internally for caching compiled accessors, type info, etc.
+// - Eviction happens inline during GetOrAdd, not in background.
+// =============================================================================
+
 using System.Collections.Concurrent;
 
 namespace pengdows.crud.@internal;

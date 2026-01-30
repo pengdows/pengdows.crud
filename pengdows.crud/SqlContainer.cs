@@ -135,7 +135,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         _context = context;
         _dialect = dialect ?? throw new ArgumentNullException(nameof(dialect));
         _logger = logger ?? NullLogger<ISqlContainer>.Instance;
-        Query = StringBuilderPool.Get(query);
+        Query = new StringBuilder(query ?? string.Empty);
     }
 
 
@@ -656,7 +656,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             var isTransaction = _context is ITransactionContext;
             var isShared = ShouldUseSharedConnection(_context, ExecutionType.Write, isTransaction);
-            conn = _context.GetConnection(ExecutionType.Write, isShared);
+            conn = GetConnection(ExecutionType.Write, isShared);
             // Guard: in SingleWriter mode, writes must target the writer connection
             if (!isTransaction && _context.ConnectionMode == DbMode.SingleWriter && _context is DatabaseContext dc)
             {
@@ -755,7 +755,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             var isTransaction = _context is ITransactionContext;
             var isShared = ShouldUseSharedConnection(_context, ExecutionType.Write, isTransaction);
-            conn = _context.GetConnection(ExecutionType.Write, isShared);
+            conn = GetConnection(ExecutionType.Write, isShared);
             if (!isTransaction && _context.ConnectionMode == DbMode.SingleWriter && _context is DatabaseContext dc)
             {
                 if (!ReferenceEquals(conn, dc.PersistentConnection))
@@ -840,7 +840,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             var isTransaction = _context is ITransactionContext;
             var isShared = ShouldUseSharedConnection(_context, ExecutionType.Read, isTransaction);
-            conn = _context.GetConnection(ExecutionType.Read, isShared);
+            conn = GetConnection(ExecutionType.Read, isShared);
             connectionLocker = conn.GetLock();
             await connectionLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             cmd = await PrepareAndCreateCommandAsync(conn, commandType, ExecutionType.Read, cancellationToken)
@@ -926,7 +926,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             var isTransaction = _context is ITransactionContext;
             var isShared = ShouldUseSharedConnection(_context, ExecutionType.Read, isTransaction);
-            conn = _context.GetConnection(ExecutionType.Read, isShared);
+            conn = GetConnection(ExecutionType.Read, isShared);
             connectionLocker = conn.GetLock();
             await connectionLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             cmd = await PrepareAndCreateCommandAsync(conn, CommandType.Text, ExecutionType.Read, cancellationToken)
@@ -1243,6 +1243,16 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         };
     }
 
+    private ITrackedConnection GetConnection(ExecutionType executionType, bool isShared)
+    {
+        if (_context is not IInternalConnectionProvider provider)
+        {
+            throw new InvalidOperationException("IDatabaseContext must provide internal connection access.");
+        }
+
+        return provider.GetConnection(executionType, isShared);
+    }
+
     private static double TicksToMicroseconds(long ticks)
     {
         if (ticks <= 0)
@@ -1384,13 +1394,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
     protected override void DisposeManaged()
     {
-        // Dispose managed resources here (clear parameters and return the builder to pool)
-        ReturnParametersToPool();
-        _outputParameterCount = 0;
-        ParamSequence.Clear();
-        _cachedCommandText = null; // Clear cache on disposal
-        _commandTextDirty = true;
-        StringBuilderPool.Return(Query);
+        Clear();
     }
 
     private void ReturnParametersToPool()

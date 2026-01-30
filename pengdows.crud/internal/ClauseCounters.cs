@@ -1,3 +1,21 @@
+// =============================================================================
+// FILE: ClauseCounters.cs
+// PURPOSE: Generates unique parameter names for SQL clause components.
+//
+// AI SUMMARY:
+// - Generates sequential, unique parameter name prefixes for SQL building.
+// - Each clause type has its own counter to avoid collisions.
+// - Methods:
+//   * NextSet() → "s0", "s1", "s2"... (SET clause parameters)
+//   * NextWhere() → "w0", "w1", "w2"... (WHERE clause parameters)
+//   * NextJoin() → "j0", "j1", "j2"... (JOIN parameters)
+//   * NextKey() → "k0", "k1", "k2"... (key/ID parameters)
+//   * NextVer() → "v0", "v1", "v2"... (version parameters)
+//   * NextIns() → "i0", "i1", "i2"... (INSERT parameters)
+// - Used by EntityHelper and SQL builders for unique parameter naming.
+// - Instance per operation; not shared across contexts.
+// =============================================================================
+
 namespace pengdows.crud.@internal;
 
 internal sealed class ClauseCounters

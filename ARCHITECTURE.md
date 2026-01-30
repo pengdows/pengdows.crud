@@ -293,21 +293,13 @@ public ILockerAsync GetLock()
 **Standard call path** (pengdows.crud/SqlContainer.cs):
 
 ```csharp
-// 1. Acquire context lock (NoOp - immediate)
-using (await _context.GetLock().LockAsync())
-{
-    // 2. Get connection (may be shared or ephemeral)
-    var conn = await _context.GetConnection(executionType);
-
-    // 3. Acquire connection lock (Real if shared, NoOp if ephemeral)
-    using (await conn.GetLock().LockAsync())
-    {
-        // 4. Execute command
-        var cmd = _context.CreateCommand(conn);
-        return await cmd.ExecuteScalarAsync();
-    }
-}
+using var container = context.CreateSqlContainer("SELECT 1");
+var value = await container.ExecuteScalarAsync<int>();
 ```
+
+**Notes:**
+- Connection acquisition happens inside `SqlContainer` through internal connection providers.
+- The public API does not expose `GetConnection`.
 
 **Why two locks?**
 - Context lock: Reserved for future use, no-op today avoids overhead
@@ -975,7 +967,7 @@ This section documents **contracts between internal components** that aren't vis
 ### IConnectionStrategy ↔ DatabaseContext
 
 **Contract**:
-- Strategy **must** return ephemeral connections via GetConnection() for Standard/KeepAlive modes
+- Strategy **must** return ephemeral connections via internal GetConnection for Standard/KeepAlive modes
 - Strategy **must** return the persistent connection for SingleWriter write operations
 - Strategy **must** return ephemeral read connections for SingleWriter read operations
 - Strategy **must** return the persistent connection for SingleConnection all operations
@@ -1139,8 +1131,8 @@ context.MetricsUpdated += (sender, metrics) =>
 Add diagnostics to connection strategies:
 
 ```csharp
-// In development build, add logging to lock acquisition
-public async Task<ITrackedConnection> GetConnection(ExecutionType executionType)
+// In development build, add logging to lock acquisition (internal)
+public async Task<ITrackedConnection> AcquireConnection(ExecutionType executionType)
 {
     var sw = Stopwatch.StartNew();
     var conn = await GetConnectionCore(executionType);

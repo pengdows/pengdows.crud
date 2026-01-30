@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
@@ -61,5 +62,36 @@ public class PoolGovernorAdditionalTests
         permit.Dispose();
         var snapshot = governor.GetSnapshot();
         Assert.Equal(1, snapshot.TotalTimeouts);
+    }
+
+    [Fact]
+    public void Acquire_WithSharedSemaphore_UsesSharedCapacity()
+    {
+        using var shared = new SemaphoreSlim(1, 1);
+        var governor = new PoolGovernor(PoolLabel.Reader, "shared", 3, TimeSpan.FromMilliseconds(20),
+            sharedSemaphore: shared);
+
+        Assert.False(governor.OwnsSemaphore);
+
+        using var permit = governor.Acquire();
+        var snapshot = governor.GetSnapshot();
+        Assert.Equal(3, snapshot.MaxPermits);
+        Assert.Equal(1, snapshot.InUse);
+
+        Assert.Throws<PoolSaturatedException>(() => governor.Acquire());
+    }
+
+    [Fact]
+    public void Permit_DisposeTwice_DoesNotOverRelease()
+    {
+        var governor = new PoolGovernor(PoolLabel.Reader, "double-release", 1, TimeSpan.FromMilliseconds(20));
+
+        var permit = governor.Acquire();
+        permit.Dispose();
+        permit.Dispose();
+
+        using var second = governor.Acquire();
+
+        Assert.Throws<PoolSaturatedException>(() => governor.Acquire());
     }
 }

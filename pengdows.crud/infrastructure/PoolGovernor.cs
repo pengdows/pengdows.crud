@@ -1,3 +1,25 @@
+// =============================================================================
+// FILE: PoolGovernor.cs
+// PURPOSE: Semaphore-based pool governor limiting concurrent connection usage.
+//
+// AI SUMMARY:
+// - Controls maximum concurrent connections via SemaphoreSlim.
+// - Thread-safe: all counters use Interlocked operations.
+// - Key methods:
+//   * Acquire(ct): Sync permit acquisition with timeout
+//   * AcquireAsync(ct): Async permit acquisition with timeout (uses WaitAsync throughout)
+//   * Release(): Returns permit to pool (called by PoolPermit)
+//   * GetSnapshot(): Returns current pool statistics
+// - Throws PoolSaturatedException when timeout expires waiting for permit.
+// - Tracks: inUse, peakInUse, queued, totalAcquired, totalTimeouts.
+// - Can be disabled (returns default permits without blocking).
+// - Shared semaphore support:
+//   * OwnsSemaphore: true if governor created its own semaphore
+//   * When using shared semaphore, caller must ensure maxPermits matches actual capacity
+//   * Telemetry uses maxPermits as reported capacity (not verified at runtime)
+// - PoolPermit: RAII struct ensuring permit release on dispose.
+// =============================================================================
+
 using System.Diagnostics;
 using pengdows.crud.exceptions;
 using pengdows.crud.metrics;
@@ -12,6 +34,7 @@ internal sealed class PoolGovernor
     private readonly TimeSpan _acquireTimeout;
     private readonly int _maxPermits;
     private readonly bool _disabled;
+    private readonly bool _ownsSemaphore;
 
     private long _inUse;
     private long _peakInUse;
@@ -37,6 +60,7 @@ internal sealed class PoolGovernor
         {
             _maxPermits = 0;
             _semaphore = null;
+            _ownsSemaphore = false;
             return;
         }
 
@@ -46,8 +70,28 @@ internal sealed class PoolGovernor
         }
 
         _maxPermits = maxPermits;
-        _semaphore = sharedSemaphore ?? new SemaphoreSlim(maxPermits, maxPermits);
+
+        if (sharedSemaphore != null)
+        {
+            // Shared semaphore: caller is responsible for ensuring maxPermits matches
+            // the semaphore's actual capacity. We cannot verify this at runtime since
+            // SemaphoreSlim does not expose its max count. Telemetry will use maxPermits
+            // as the reported capacity - caller must ensure consistency.
+            _semaphore = sharedSemaphore;
+            _ownsSemaphore = false;
+        }
+        else
+        {
+            _semaphore = new SemaphoreSlim(maxPermits, maxPermits);
+            _ownsSemaphore = true;
+        }
     }
+
+    /// <summary>
+    /// Whether this governor owns its semaphore (vs using a shared one).
+    /// When false, telemetry maxPermits may not reflect actual semaphore capacity.
+    /// </summary>
+    internal bool OwnsSemaphore => _ownsSemaphore;
 
     public PoolLabel Label => _label;
     public string PoolKeyHash => _poolKeyHash;
@@ -110,7 +154,9 @@ internal sealed class PoolGovernor
             throw new InvalidOperationException("Pool governor is not initialized.");
         }
 
-        if (_semaphore.Wait(0, cancellationToken))
+        // Use WaitAsync even for zero-timeout to maintain consistent async behavior
+        // (Wait(0, ct) can throw OperationCanceledException synchronously)
+        if (await _semaphore.WaitAsync(0, cancellationToken).ConfigureAwait(false))
         {
             return OnAcquired();
         }

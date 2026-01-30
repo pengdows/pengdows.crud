@@ -1,3 +1,23 @@
+// =============================================================================
+// FILE: DatabaseDetectionService.cs
+// PURPOSE: Detects database products and topology from connections and factories.
+//
+// AI SUMMARY:
+// - Centralized database product detection for all supported providers.
+// - Detection methods (in priority order):
+//   * DetectFromConnection(): Uses GetSchema("DataSourceInformation")
+//   * DetectFromFactory(): Falls back to factory type name matching
+//   * DetectProduct(): Tries connection first, then factory
+// - DetectTopology(): Identifies LocalDB, embedded modes from connection string.
+// - Special handling for FakeDb test infrastructure (EmulatedProduct property).
+// - Token matching for:
+//   * Schema products: "sql server", "postgres", "mysql", "oracle", etc.
+//   * Factory types: "npgsql", "sqlclient", "mysqlconnector", etc.
+// - DatabaseTopology record: IsLocalDb, IsEmbedded flags.
+// - Firebird embedded detection: checks ServerType, ClientLibrary, path patterns.
+// - Used by DatabaseContext to select appropriate SqlDialect.
+// =============================================================================
+
 using System.Data;
 using System.Data.Common;
 using pengdows.crud.enums;

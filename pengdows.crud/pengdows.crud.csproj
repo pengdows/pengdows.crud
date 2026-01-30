@@ -39,6 +39,9 @@
     </ItemGroup>
     <ItemGroup>
         <InternalsVisibleTo Include="pengdows.crud.Tests"/>
+        <InternalsVisibleTo Include="pengdows.crud.IntegrationTests"/>
+        <InternalsVisibleTo Include="CrudBenchmarks"/>
+        <InternalsVisibleTo Include="testbed"/>
         <InternalsVisibleTo Include="DynamicProxyGenAssembly2"/>
     </ItemGroup>
 
