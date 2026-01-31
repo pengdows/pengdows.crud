@@ -110,7 +110,9 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     IMetricsCollectorAccessor, IInternalConnectionProvider
 {
     private readonly DbProviderFactory? _factory;
-    private readonly DbDataSource? _dataSource;
+    private DbDataSource? _dataSource;
+    private DbDataSource? _readerDataSource;
+    private readonly bool _dataSourceProvided;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<IDatabaseContext> _logger;
     private IConnectionStrategy _connectionStrategy = null!;
@@ -120,12 +122,13 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
 
     private long _connectionCount;
     private string _connectionString = string.Empty;
+    private string _readerConnectionString = string.Empty;
     private DataSourceInformation _dataSourceInfo = null!;
     private readonly SqlDialect _dialect = null!;
     private IIsolationResolver _isolationResolver = null!;
     private bool _isReadConnection = true;
     private bool _isWriteConnection = true;
-    private long _maxNumberOfOpenConnections;
+    private long _peakOpenConnections;
 
     // Additional performance counters for granular connection pool monitoring
     private long _totalConnectionsCreated;
@@ -140,6 +143,8 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private bool _sessionSettingsAppliedOnOpen;
     private bool _sessionSettingsDetectionCompleted;
     private readonly MetricsCollector? _metricsCollector;
+    private readonly MetricsCollector? _readerMetricsCollector;
+    private readonly MetricsCollector? _writerMetricsCollector;
     private EventHandler<DatabaseMetrics>? _metricsUpdated;
     private int _metricsHasActivity;
     private PoolGovernor? _readerGovernor;
@@ -151,6 +156,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private bool _enablePoolGovernor = true;
     private int? _configuredReadPoolSize;
     private int? _configuredWritePoolSize;
+    private const string ReadOnlyApplicationNameSuffix = ":ro";
 
     /// <inheritdoc/>
     public Guid RootId { get; } = Guid.NewGuid();
@@ -239,7 +245,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     /// <inheritdoc/>
     public override int MaxOutputParameters => _dataSourceInfo.MaxOutputParameters;
     /// <inheritdoc/>
-    public long MaxNumberOfConnections => Interlocked.Read(ref _maxNumberOfOpenConnections);
+    public long PeakOpenConnections => Interlocked.Read(ref _peakOpenConnections);
     /// <inheritdoc/>
     public long NumberOfOpenConnections => Interlocked.Read(ref _connectionCount);
 

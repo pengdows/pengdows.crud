@@ -112,9 +112,9 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     SupportedDatabase Product { get; }
 
     /// <summary>
-    /// Max observed number of concurrently open connections. Used for tuning.
+    /// Peak observed number of concurrently open connections. Used for tuning.
     /// </summary>
-    long MaxNumberOfConnections { get; }
+    long PeakOpenConnections { get; }
 
     /// <summary>
     /// The raw database product name (from metadata).

@@ -19,6 +19,7 @@
 // =============================================================================
 
 using Microsoft.Extensions.Logging;
+using pengdows.crud.enums;
 using pengdows.crud.@internal;
 using pengdows.crud.infrastructure;
 using pengdows.crud.metrics;
@@ -69,8 +70,8 @@ public partial class DatabaseContext
     /// // ✅ GOOD: Observer pattern (no re-entrancy)
     /// context.MetricsUpdated += (sender, metrics) =>
     /// {
-    ///     _logger.LogInformation("Open connections: {count}", metrics.CurrentOpenConnections);
-    ///     _monitoring.RecordMetric("db.connections", metrics.CurrentOpenConnections);
+    ///     _logger.LogInformation("Open connections: {count}", metrics.ConnectionsCurrent);
+    ///     _monitoring.RecordMetric("db.connections", metrics.ConnectionsCurrent);
     /// };
     ///
     /// // ❌ BAD: Re-entrant call (may cause undefined behavior)
@@ -126,6 +127,12 @@ public partial class DatabaseContext
     /// Exposes the internal MetricsCollector for infrastructure use.
     /// </summary>
     MetricsCollector? IMetricsCollectorAccessor.MetricsCollector => _metricsCollector;
+    MetricsCollector? IMetricsCollectorAccessor.ReadMetricsCollector => _readerMetricsCollector;
+    MetricsCollector? IMetricsCollectorAccessor.WriteMetricsCollector => _writerMetricsCollector;
+    MetricsCollector? IMetricsCollectorAccessor.GetMetricsCollector(ExecutionType executionType)
+    {
+        return executionType == ExecutionType.Read ? _readerMetricsCollector : _writerMetricsCollector;
+    }
 
     internal PoolStatisticsSnapshot GetPoolStatisticsSnapshot(PoolLabel label)
     {
@@ -185,15 +192,54 @@ public partial class DatabaseContext
         if (_metricsCollector == null)
         {
             return new DatabaseMetrics(
+                default,
+                default,
                 SaturateToInt(NumberOfOpenConnections),
-                SaturateToInt(MaxNumberOfConnections),
+                SaturateToInt(PeakOpenConnections),
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         }
 
         var snapshot = _metricsCollector.CreateSnapshot();
+        var readSnapshot = _readerMetricsCollector?.CreateSnapshot();
+        var writeSnapshot = _writerMetricsCollector?.CreateSnapshot();
+
+        var readMetrics = readSnapshot.HasValue ? CreateRoleMetrics(readSnapshot.Value) : default;
+        var writeMetrics = writeSnapshot.HasValue ? CreateRoleMetrics(writeSnapshot.Value) : default;
+
         return new DatabaseMetrics(
+            readMetrics,
+            writeMetrics,
             SaturateToInt(NumberOfOpenConnections),
-            SaturateToInt(MaxNumberOfConnections),
+            SaturateToInt(PeakOpenConnections),
+            snapshot.ConnectionsOpened,
+            snapshot.ConnectionsClosed,
+            snapshot.AvgConnectionHoldMs,
+            snapshot.AvgConnectionOpenMs,
+            snapshot.AvgConnectionCloseMs,
+            snapshot.LongLivedConnections,
+            snapshot.CommandsExecuted,
+            snapshot.CommandsFailed,
+            snapshot.CommandsTimedOut,
+            snapshot.CommandsCancelled,
+            snapshot.AvgCommandMs,
+            snapshot.P95CommandMs,
+            snapshot.P99CommandMs,
+            snapshot.MaxParametersObserved,
+            snapshot.RowsReadTotal,
+            snapshot.RowsAffectedTotal,
+            snapshot.PreparedStatements,
+            snapshot.StatementsCached,
+            snapshot.StatementsEvicted,
+            snapshot.TransactionsActive,
+            snapshot.TransactionsMax,
+            snapshot.AvgTransactionMs);
+    }
+
+    private static DatabaseRoleMetrics CreateRoleMetrics(in MetricsCollector.MetricsSnapshot snapshot)
+    {
+        return new DatabaseRoleMetrics(
+            snapshot.ConnectionsCurrent,
+            snapshot.PeakOpenConnections,
             snapshot.ConnectionsOpened,
             snapshot.ConnectionsClosed,
             snapshot.AvgConnectionHoldMs,

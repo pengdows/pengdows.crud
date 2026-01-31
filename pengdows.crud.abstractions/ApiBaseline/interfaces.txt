@@ -236,7 +236,7 @@ property pengdows.crud.IDatabaseContext::DatabaseProductName : string { get; }
 property pengdows.crud.IDatabaseContext::DisablePrepare : System.Nullable`1<bool> { get; }
 property pengdows.crud.IDatabaseContext::ForceManualPrepare : System.Nullable`1<bool> { get; }
 property pengdows.crud.IDatabaseContext::IsReadOnlyConnection : bool { get; }
-property pengdows.crud.IDatabaseContext::MaxNumberOfConnections : long { get; }
+property pengdows.crud.IDatabaseContext::PeakOpenConnections : long { get; }
 property pengdows.crud.IDatabaseContext::MaxOutputParameters : int { get; }
 property pengdows.crud.IDatabaseContext::MaxParameterLimit : int { get; }
 property pengdows.crud.IDatabaseContext::Metrics : pengdows.crud.metrics.DatabaseMetrics { get; }

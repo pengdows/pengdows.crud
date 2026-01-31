@@ -340,11 +340,11 @@ public class ConnectionStrategyTests
         await a.OpenAsync();
         await b.OpenAsync();
         Assert.Equal(2, ctx.NumberOfOpenConnections);
-        Assert.Equal(2, ctx.MaxNumberOfConnections);
+        Assert.Equal(2, ctx.PeakOpenConnections);
         ctx.CloseAndDisposeConnection(a);
         ctx.CloseAndDisposeConnection(b);
         Assert.Equal(0, ctx.NumberOfOpenConnections);
-        Assert.Equal(2, ctx.MaxNumberOfConnections);
+        Assert.Equal(2, ctx.PeakOpenConnections);
     }
 
     [Fact]
@@ -355,7 +355,7 @@ public class ConnectionStrategyTests
         var read = ctx.GetConnection(ExecutionType.Read);
         await read.OpenAsync();
         Assert.True(ctx.NumberOfOpenConnections >= before + 1);
-        Assert.True(ctx.MaxNumberOfConnections >= ctx.NumberOfOpenConnections);
+        Assert.True(ctx.PeakOpenConnections >= ctx.NumberOfOpenConnections);
         ctx.CloseAndDisposeConnection(read);
     }
 

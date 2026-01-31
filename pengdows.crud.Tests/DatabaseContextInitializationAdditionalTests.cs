@@ -2,6 +2,9 @@ using System;
 using System.Data.Common;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using Microsoft.Extensions.Logging.Abstractions;
+using pengdows.crud.configuration;
+using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 using Xunit;
 
@@ -73,6 +76,27 @@ public class DatabaseContextInitializationAdditionalTests
         var result = (bool)method!.Invoke(context, Array.Empty<object>())!;
 
         Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void ReaderConnectionString_UsesBaseConnectionString_WhenNoReadOnlyParameter()
+    {
+        var configuration = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=test;",
+            DbMode = DbMode.SingleWriter,
+            ApplicationName = "app"
+        };
+        var factory = new fakeDbFactory(SupportedDatabase.MySql);
+
+        using var ctx = new DatabaseContext(configuration, factory, NullLoggerFactory.Instance, null);
+
+        var field = typeof(DatabaseContext).GetField("_readerConnectionString",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        var readerConnectionString = (string)field!.GetValue(ctx)!;
+
+        Assert.Contains("Server=test", readerConnectionString, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Application Name=app:ro", readerConnectionString, StringComparison.OrdinalIgnoreCase);
     }
 
     private sealed class StringDataSourceFactory : DbProviderFactory

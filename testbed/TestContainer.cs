@@ -26,7 +26,7 @@ public abstract class TestContainer : SafeAsyncDisposableBase, ITestContainer
         Console.WriteLine($"Running test with container: {GetType().Name}");
         await testProvider.RunTest();
         Console.WriteLine(
-            $"Test finished: MaxConnections={dbContext.MaxNumberOfConnections} CurrentOpenConnection={dbContext.NumberOfOpenConnections}");
+            $"Test finished: PeakOpenConnections={dbContext.PeakOpenConnections} CurrentOpenConnection={dbContext.NumberOfOpenConnections}");
     }
 
     public abstract Task StartAsync();

@@ -31,6 +31,7 @@ namespace pengdows.crud.@internal;
 internal sealed class MetricsCollector
 {
     private readonly MetricsOptions _options;
+    private readonly MetricsCollector? _parent;
     private readonly Ewma _commandDuration = new(64);
     private readonly Ewma _connectionHold = new(64);
     private readonly Ewma _connectionOpenDuration = new(64);
@@ -59,9 +60,10 @@ internal sealed class MetricsCollector
     private int _transactionsActive;
     private int _transactionsMax;
 
-    internal MetricsCollector(MetricsOptions options)
+    internal MetricsCollector(MetricsOptions options, MetricsCollector? parent = null)
     {
         _options = options ?? MetricsOptions.Default;
+        _parent = parent;
         if (_options.EnableApproxPercentiles)
         {
             _percentileRing = new PercentileRing(_options.PercentileWindowSize);
@@ -86,6 +88,7 @@ internal sealed class MetricsCollector
 
     internal void ConnectionOpened()
     {
+        _parent?.ConnectionOpened();
         var current = Interlocked.Increment(ref _connectionsCurrent);
         UpdateMax(ref _connectionsMax, current);
         Interlocked.Increment(ref _connectionsOpened);
@@ -94,6 +97,7 @@ internal sealed class MetricsCollector
 
     internal void ConnectionClosed(double holdDurationMs)
     {
+        _parent?.ConnectionClosed(holdDurationMs);
         Decrement(ref _connectionsCurrent);
         Interlocked.Increment(ref _connectionsClosed);
         if (holdDurationMs > 0d)
@@ -110,6 +114,7 @@ internal sealed class MetricsCollector
 
     internal void RecordConnectionOpenDuration(double durationMs)
     {
+        _parent?.RecordConnectionOpenDuration(durationMs);
         if (durationMs <= 0d)
         {
             return;
@@ -121,6 +126,7 @@ internal sealed class MetricsCollector
 
     internal void RecordConnectionCloseDuration(double durationMs)
     {
+        _parent?.RecordConnectionCloseDuration(durationMs);
         if (durationMs <= 0d)
         {
             return;
@@ -132,6 +138,7 @@ internal sealed class MetricsCollector
 
     internal long CommandStarted(int parameterCount)
     {
+        _parent?.CommandStarted(parameterCount);
         if (parameterCount > 0)
         {
             var previous = Volatile.Read(ref _maxParametersObserved);
@@ -147,6 +154,7 @@ internal sealed class MetricsCollector
 
     internal void CommandSucceeded(long startTimestamp, long rowsAffected)
     {
+        _parent?.CommandSucceeded(startTimestamp, rowsAffected);
         RecordCommandDuration(startTimestamp, true);
         if (rowsAffected > 0)
         {
@@ -159,6 +167,7 @@ internal sealed class MetricsCollector
 
     internal void CommandCancelled(long startTimestamp)
     {
+        _parent?.CommandCancelled(startTimestamp);
         RecordCommandDuration(startTimestamp, false);
         Interlocked.Increment(ref _commandsCancelled);
         Interlocked.Increment(ref _commandsFailed);
@@ -167,6 +176,7 @@ internal sealed class MetricsCollector
 
     internal void CommandTimedOut(long startTimestamp)
     {
+        _parent?.CommandTimedOut(startTimestamp);
         RecordCommandDuration(startTimestamp, false);
         Interlocked.Increment(ref _commandsTimedOut);
         Interlocked.Increment(ref _commandsFailed);
@@ -175,6 +185,7 @@ internal sealed class MetricsCollector
 
     internal void CommandFailed(long startTimestamp)
     {
+        _parent?.CommandFailed(startTimestamp);
         RecordCommandDuration(startTimestamp, false);
         Interlocked.Increment(ref _commandsFailed);
         NotifyUpdated();
@@ -182,6 +193,7 @@ internal sealed class MetricsCollector
 
     internal void RecordRowsRead(long count)
     {
+        _parent?.RecordRowsRead(count);
         if (count <= 0)
         {
             return;
@@ -193,6 +205,7 @@ internal sealed class MetricsCollector
 
     internal void RecordRowsAffected(long count)
     {
+        _parent?.RecordRowsAffected(count);
         if (count <= 0)
         {
             return;
@@ -204,18 +217,21 @@ internal sealed class MetricsCollector
 
     internal void RecordPreparedStatement()
     {
+        _parent?.RecordPreparedStatement();
         Interlocked.Increment(ref _preparedStatements);
         NotifyUpdated();
     }
 
     internal void RecordStatementCached()
     {
+        _parent?.RecordStatementCached();
         Interlocked.Increment(ref _statementsCached);
         NotifyUpdated();
     }
 
     internal void RecordStatementEvicted(int count)
     {
+        _parent?.RecordStatementEvicted(count);
         if (count <= 0)
         {
             return;
@@ -227,6 +243,7 @@ internal sealed class MetricsCollector
 
     internal long TransactionStarted()
     {
+        _parent?.TransactionStarted();
         var active = Interlocked.Increment(ref _transactionsActive);
         UpdateMax(ref _transactionsMax, active);
         NotifyUpdated();
@@ -235,6 +252,7 @@ internal sealed class MetricsCollector
 
     internal void TransactionCompleted(long startTimestamp)
     {
+        _parent?.TransactionCompleted(startTimestamp);
         Decrement(ref _transactionsActive);
         var duration = ToMilliseconds(Stopwatch.GetTimestamp() - startTimestamp);
         if (duration > 0d)
@@ -249,6 +267,8 @@ internal sealed class MetricsCollector
     {
         var percentiles = _percentileRing?.CreateSnapshot() ?? PercentileSnapshot.Empty;
         return new MetricsSnapshot(
+            Volatile.Read(ref _connectionsCurrent),
+            Volatile.Read(ref _connectionsMax),
             Interlocked.Read(ref _connectionsOpened),
             Interlocked.Read(ref _connectionsClosed),
             _connectionHold.GetValue(),
@@ -357,6 +377,8 @@ internal sealed class MetricsCollector
     }
 
     internal readonly struct MetricsSnapshot(
+        int ConnectionsCurrent,
+        int PeakOpenConnections,
         long ConnectionsOpened,
         long ConnectionsClosed,
         double AvgConnectionHoldMs,
@@ -380,6 +402,8 @@ internal sealed class MetricsCollector
         int TransactionsMax,
         double AvgTransactionMs)
     {
+        public int ConnectionsCurrent { get; } = ConnectionsCurrent;
+        public int PeakOpenConnections { get; } = PeakOpenConnections;
         public long ConnectionsOpened { get; } = ConnectionsOpened;
         public long ConnectionsClosed { get; } = ConnectionsClosed;
         public double AvgConnectionHoldMs { get; } = AvgConnectionHoldMs;

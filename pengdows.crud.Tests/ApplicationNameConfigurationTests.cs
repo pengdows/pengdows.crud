@@ -143,4 +143,51 @@ public class ApplicationNameConfigurationTests
     }
 
     #endregion
+
+    #region ApplyApplicationNameSuffix Tests
+
+    [Fact]
+    public void ApplyApplicationNameSuffix_AppendsSuffix_WhenPresent()
+    {
+        var connectionString = "Server=localhost;Database=test;Application Name=MyApp";
+
+        var result = ConnectionPoolingConfiguration.ApplyApplicationNameSuffix(
+            connectionString,
+            "Application Name",
+            ":ro");
+
+        var builder = new DbConnectionStringBuilder { ConnectionString = result };
+        Assert.Equal("MyApp:ro", builder["Application Name"]);
+    }
+
+    [Fact]
+    public void ApplyApplicationNameSuffix_UsesFallback_WhenMissing()
+    {
+        var connectionString = "Server=localhost;Database=test";
+
+        var result = ConnectionPoolingConfiguration.ApplyApplicationNameSuffix(
+            connectionString,
+            "Application Name",
+            ":ro",
+            "MyApp");
+
+        var builder = new DbConnectionStringBuilder { ConnectionString = result };
+        Assert.Equal("MyApp:ro", builder["Application Name"]);
+    }
+
+    [Fact]
+    public void ApplyApplicationNameSuffix_ReturnsUnchanged_ForRawConnectionString()
+    {
+        var connectionString = ":memory:";
+
+        var result = ConnectionPoolingConfiguration.ApplyApplicationNameSuffix(
+            connectionString,
+            "Application Name",
+            ":ro",
+            "MyApp");
+
+        Assert.Equal(connectionString, result);
+    }
+
+    #endregion
 }

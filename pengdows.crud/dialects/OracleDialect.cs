@@ -127,8 +127,14 @@ internal class OracleDialect : SqlDialect
         return "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD';";
     }
 
-    public override void ApplyConnectionSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)
+    internal override void ApplyConnectionSettingsCore(
+        IDbConnection connection,
+        IDatabaseContext context,
+        bool readOnly,
+        string? connectionStringOverride)
     {
+        base.ApplyConnectionSettingsCore(connection, context, readOnly, connectionStringOverride);
+
         // Configure Oracle-specific connection settings for optimal performance
         if (connection.GetType().FullName?.Contains("Oracle") == true)
         {

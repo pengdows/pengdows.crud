@@ -21,7 +21,8 @@ public class SingleWriterWriteGuardTests
         {
             ConnectionString = "Data Source=file.db;EmulatedProduct=Sqlite",
             DbMode = DbMode.SingleWriter,
-            ReadWriteMode = ReadWriteMode.ReadWrite
+            ReadWriteMode = ReadWriteMode.ReadWrite,
+            EnablePoolGovernor = false
         };
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var context = new DatabaseContext(config, factory);
@@ -49,7 +50,7 @@ public class SingleWriterWriteGuardTests
 
         public ITrackedConnection GetConnection(ExecutionType executionType, bool isShared)
         {
-            return _ctx.FactoryCreateConnection(null, isShared, true);
+            return _ctx.GetStandardConnectionWithExecutionType(executionType, isShared, true);
         }
 
         public void ReleaseConnection(ITrackedConnection? connection)

@@ -15,7 +15,7 @@ public class UpdateMaxConnectionCountTests
 
     private static FieldInfo GetField()
     {
-        return typeof(DatabaseContext).GetField("_maxNumberOfOpenConnections",
+        return typeof(DatabaseContext).GetField("_peakOpenConnections",
             BindingFlags.Instance | BindingFlags.NonPublic)!;
     }
 

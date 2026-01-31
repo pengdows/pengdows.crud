@@ -234,7 +234,61 @@ public class DatabaseMetricsTests
     [Fact]
     public void DatabaseMetrics_RecordExposesConstructorValues()
     {
+        var read = new DatabaseRoleMetrics(
+            101,
+            102,
+            103,
+            104,
+            105,
+            106,
+            107,
+            108,
+            109,
+            110,
+            111,
+            112,
+            113,
+            114,
+            115,
+            116,
+            117,
+            118,
+            119,
+            120,
+            121,
+            122,
+            123,
+            124);
+
+        var write = new DatabaseRoleMetrics(
+            201,
+            202,
+            203,
+            204,
+            205,
+            206,
+            207,
+            208,
+            209,
+            210,
+            211,
+            212,
+            213,
+            214,
+            215,
+            216,
+            217,
+            218,
+            219,
+            220,
+            221,
+            222,
+            223,
+            224);
+
         var metrics = new DatabaseMetrics(
+            read,
+            write,
             1,
             2,
             3,
@@ -260,8 +314,10 @@ public class DatabaseMetricsTests
             23,
             24);
 
+        Assert.Equal(read, metrics.Read);
+        Assert.Equal(write, metrics.Write);
         Assert.Equal(1, metrics.ConnectionsCurrent);
-        Assert.Equal(2, metrics.ConnectionsMax);
+        Assert.Equal(2, metrics.PeakOpenConnections);
         Assert.Equal(3, metrics.ConnectionsOpened);
         Assert.Equal(4, metrics.ConnectionsClosed);
         Assert.Equal(5, metrics.AvgConnectionHoldMs);

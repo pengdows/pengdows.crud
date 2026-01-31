@@ -1,11 +1,9 @@
 namespace pengdows.crud.metrics;
 
 /// <summary>
-/// Snapshot of cheap database metrics collected per <see cref="IDatabaseContext"/> instance.
+/// Snapshot of metrics collected for a specific execution role (read or write).
 /// </summary>
-/// <param name="Read">Metrics scoped to read operations.</param>
-/// <param name="Write">Metrics scoped to write operations.</param>
-/// <param name="ConnectionsCurrent">Current number of open connections held by the context.</param>
+/// <param name="ConnectionsCurrent">Current number of open connections held by the role.</param>
 /// <param name="PeakOpenConnections">Historical maximum number of concurrently open connections observed.</param>
 /// <param name="ConnectionsOpened">Total connections opened since context creation.</param>
 /// <param name="ConnectionsClosed">Total connections closed since context creation.</param>
@@ -29,9 +27,7 @@ namespace pengdows.crud.metrics;
 /// <param name="TransactionsActive">Current active transactions.</param>
 /// <param name="TransactionsMax">Historical max concurrent transactions.</param>
 /// <param name="AvgTransactionMs">Exponential weighted moving average of transaction duration in milliseconds.</param>
-public readonly record struct DatabaseMetrics(
-    DatabaseRoleMetrics Read,
-    DatabaseRoleMetrics Write,
+public readonly record struct DatabaseRoleMetrics(
     int ConnectionsCurrent,
     int PeakOpenConnections,
     long ConnectionsOpened,

@@ -287,7 +287,7 @@ public class MiscellaneousCoverageTests
 
         // Assert - DatabaseMetrics is a struct, verify properties are valid
         Assert.True(metrics.ConnectionsCurrent >= 0);
-        Assert.True(metrics.ConnectionsMax >= 0);
+        Assert.True(metrics.PeakOpenConnections >= 0);
     }
 
     [Theory]

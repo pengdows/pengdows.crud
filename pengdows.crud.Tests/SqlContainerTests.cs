@@ -544,6 +544,57 @@ public class SqlContainerTests : SqlLiteContextTestBase, IDisposable
     }
 
     [Fact]
+    public async Task Dispose_WithActiveReader_LogsWarning_AndSkipsPooling()
+    {
+        var mockLogger = new TestLogger();
+        mockLogger.SetLogLevel(LogLevel.Warning);
+        var loggerFactory = new TestLoggerFactory(mockLogger);
+
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:;EmulatedProduct=Sqlite",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        var typeMap = new TypeMapRegistry();
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        await using var context = new DatabaseContext(config, factory, loggerFactory, typeMap);
+
+        await using var container = context.CreateSqlContainer("SELECT 1");
+        var param = container.AddParameterWithValue("p0", DbType.Int32, 1);
+
+        var reader = await container.ExecuteReaderAsync();
+
+        container.Dispose();
+
+        Assert.Contains(mockLogger.LogEntries, entry => entry.Contains("skipping parameter pooling"));
+
+        var newParam = context.CreateDbParameter("p1", DbType.Int32, 2);
+        Assert.NotSame(param, newParam);
+
+        await reader.DisposeAsync();
+
+        var pooled = context.CreateDbParameter("p2", DbType.Int32, 3);
+        Assert.Same(param, pooled);
+    }
+
+    [Fact]
+    public async Task Dispose_WithoutReader_ReturnsParametersToPoolImmediately()
+    {
+        var param = Context.CreateDbParameter("p0", DbType.Int32, 1);
+        var container = Context.CreateSqlContainer();
+        container.AddParameter(param);
+
+        await container.DisposeAsync();
+
+        var reused = Context.CreateDbParameter("p1", DbType.Int32, 2);
+
+        Assert.Same(param, reused);
+        Assert.Equal(2, reused.Value);
+    }
+
+    [Fact]
     public async Task ExecuteNonQueryAsync_WithStoredProcedure_OnSqlite_ThrowsNotSupported()
     {
         var mockLogger = new TestLogger();

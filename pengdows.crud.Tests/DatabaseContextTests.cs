@@ -379,7 +379,7 @@ public class DatabaseContextTests
     }
 
     [Fact]
-    public void MaxNumberOfConnections_TracksPeakUsage()
+    public void PeakOpenConnections_TracksPeakUsage()
     {
         var product = SupportedDatabase.SqlServer;
         var factory = new fakeDbFactory(product);
@@ -388,10 +388,10 @@ public class DatabaseContextTests
         var c2 = context.GetConnection(ExecutionType.Read);
         c1.Open();
         c2.Open();
-        Assert.Equal(2, context.MaxNumberOfConnections);
+        Assert.Equal(2, context.PeakOpenConnections);
         context.CloseAndDisposeConnection(c1);
         context.CloseAndDisposeConnection(c2);
-        Assert.Equal(2, context.MaxNumberOfConnections);
+        Assert.Equal(2, context.PeakOpenConnections);
     }
 
     [Fact]

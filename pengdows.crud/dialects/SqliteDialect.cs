@@ -117,18 +117,26 @@ internal class SqliteDialect : SqlDialect
         return "PRAGMA foreign_keys = ON;";
     }
 
-    public override void ApplyConnectionSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)
+    internal override void ApplyConnectionSettingsCore(
+        IDbConnection connection,
+        IDatabaseContext context,
+        bool readOnly,
+        string? connectionStringOverride)
     {
+        var baseConnectionString = string.IsNullOrWhiteSpace(connectionStringOverride)
+            ? context.ConnectionString
+            : connectionStringOverride;
+
         // SQLite: Only apply read-only connection parameter if not a memory database
-        if (readOnly && IsMemoryDatabase(context.ConnectionString))
+        if (readOnly && IsMemoryDatabase(baseConnectionString))
         {
             // For memory databases, just set the connection string without read-only parameter
-            connection.ConnectionString = context.ConnectionString;
+            connection.ConnectionString = baseConnectionString;
         }
         else
         {
             // Use base class implementation for non-memory databases
-            base.ApplyConnectionSettings(connection, context, readOnly);
+            base.ApplyConnectionSettingsCore(connection, context, readOnly, baseConnectionString);
         }
     }
 

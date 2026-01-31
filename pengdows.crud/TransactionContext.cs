@@ -91,6 +91,8 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     private readonly IsolationLevel _resolvedIsolationLevel;
     private readonly bool _isReadOnly;
     private readonly MetricsCollector? _metricsCollector;
+    private readonly MetricsCollector? _readMetricsCollector;
+    private readonly MetricsCollector? _writeMetricsCollector;
     private readonly long _transactionMetricsStart;
     private int _metricsCompleted;
 
@@ -116,7 +118,10 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
                            "IDatabaseContext must implement ISqlDialectProvider and expose a non-null Dialect.");
         _dialect = provider.Dialect;
         RootId = ((IContextIdentity)_context).RootId;
-        _metricsCollector = (context as IMetricsCollectorAccessor)?.MetricsCollector;
+        var metricsAccessor = context as IMetricsCollectorAccessor;
+        _metricsCollector = metricsAccessor?.MetricsCollector;
+        _readMetricsCollector = metricsAccessor?.ReadMetricsCollector;
+        _writeMetricsCollector = metricsAccessor?.WriteMetricsCollector;
         if (_metricsCollector != null)
         {
             _transactionMetricsStart = _metricsCollector.TransactionStarted();
@@ -187,7 +192,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     public SupportedDatabase Product => _context.Product;
 
     /// <inheritdoc/>
-    public long MaxNumberOfConnections => _context.MaxNumberOfConnections;
+    public long PeakOpenConnections => _context.PeakOpenConnections;
 
     /// <inheritdoc/>
     public bool IsReadOnlyConnection => _context.IsReadOnlyConnection || _isReadOnly;
@@ -299,6 +304,12 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     public bool? DisablePrepare => _context.DisablePrepare;
 
     MetricsCollector? IMetricsCollectorAccessor.MetricsCollector => _metricsCollector;
+    MetricsCollector? IMetricsCollectorAccessor.ReadMetricsCollector => _readMetricsCollector;
+    MetricsCollector? IMetricsCollectorAccessor.WriteMetricsCollector => _writeMetricsCollector;
+    MetricsCollector? IMetricsCollectorAccessor.GetMetricsCollector(ExecutionType executionType)
+    {
+        return executionType == ExecutionType.Read ? _readMetricsCollector : _writeMetricsCollector;
+    }
 
     /// <inheritdoc/>
     public ProcWrappingStyle ProcWrappingStyle => _context.ProcWrappingStyle;

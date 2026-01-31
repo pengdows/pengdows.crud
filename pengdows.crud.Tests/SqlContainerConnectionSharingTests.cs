@@ -89,7 +89,7 @@ public class SqlContainerConnectionSharingTests
         public long NumberOfOpenConnections => _context.NumberOfOpenConnections;
         public DatabaseMetrics Metrics => _context.Metrics;
         public SupportedDatabase Product => _context.Product;
-        public long MaxNumberOfConnections => _context.MaxNumberOfConnections;
+        public long PeakOpenConnections => _context.PeakOpenConnections;
         public bool? ForceManualPrepare => _context.ForceManualPrepare;
         public bool? DisablePrepare => _context.DisablePrepare;
         public string QuotePrefix => _context.QuotePrefix;

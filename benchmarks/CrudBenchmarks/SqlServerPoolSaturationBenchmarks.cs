@@ -116,7 +116,7 @@ public class SqlServerPoolSaturationBenchmarks : IAsyncDisposable
             _ => Interlocked.Increment(ref _lastFailures));
 
         Logger.WriteLine(
-            $"[PoolSaturation] Pengdows_OpenPerTask_PoolSizeX2 => Success={_lastSuccesses}, Failures={_lastFailures}, PoolSize={PoolSize}, Overcommit={OvercommitFactor}, HoldMs={HoldConnectionMs}, TimeoutSeconds={ConnectionTimeoutSeconds}, OpenConnections={_pengdowsContext.NumberOfOpenConnections}, MaxOpenConnections={_pengdowsContext.MaxNumberOfConnections}, TotalCreated={_pengdowsContext.TotalConnectionsCreated}, TotalReused={_pengdowsContext.TotalConnectionsReused}, TimeoutFailures={_pengdowsContext.TotalConnectionTimeoutFailures}");
+            $"[PoolSaturation] Pengdows_OpenPerTask_PoolSizeX2 => Success={_lastSuccesses}, Failures={_lastFailures}, PoolSize={PoolSize}, Overcommit={OvercommitFactor}, HoldMs={HoldConnectionMs}, TimeoutSeconds={ConnectionTimeoutSeconds}, OpenConnections={_pengdowsContext.NumberOfOpenConnections}, PeakOpenConnections={_pengdowsContext.PeakOpenConnections}, TotalCreated={_pengdowsContext.TotalConnectionsCreated}, TotalReused={_pengdowsContext.TotalConnectionsReused}, TimeoutFailures={_pengdowsContext.TotalConnectionTimeoutFailures}");
     }
 
     [GlobalCleanup]

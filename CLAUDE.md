@@ -700,7 +700,7 @@ await tx.Commit(); // Order is committed, risky item is not (if it failed)
 - `DataSourceInfo` - Metadata from connection.GetSchema and provider heuristics
 - `Product` - Detected database product (PostgreSQL, Oracle, etc.)
 - `NumberOfOpenConnections` - Current open connection count
-- `MaxNumberOfConnections` - Max observed concurrent connections
+- `PeakOpenConnections` - Peak observed concurrent connections
 
 ### Transaction Context (ITransactionContext)
 

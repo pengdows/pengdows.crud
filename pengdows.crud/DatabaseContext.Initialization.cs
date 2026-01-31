@@ -157,7 +157,9 @@ public partial class DatabaseContext
             TypeMapRegistry = typeMapRegistry ?? global::pengdows.crud.TypeMapRegistry.Instance;
             ConnectionMode = configuration.DbMode;
             _factory = factory ?? throw new ArgumentNullException(nameof(factory));
-            _dataSource = TryCreateDataSource(_factory, configuration.ConnectionString);
+            _dataSource = null;
+            _readerDataSource = null;
+            _dataSourceProvided = false;
             _forceManualPrepare = configuration.ForceManualPrepare;
             _disablePrepare = configuration.DisablePrepare;
             _poolAcquireTimeout = configuration.PoolAcquireTimeout;
@@ -167,7 +169,10 @@ public partial class DatabaseContext
             _configuredWritePoolSize = configuration.WritePoolSize;
             if (configuration.EnableMetrics)
             {
-                _metricsCollector = new MetricsCollector(configuration.MetricsOptions ?? MetricsOptions.Default);
+                var options = configuration.MetricsOptions ?? MetricsOptions.Default;
+                _metricsCollector = new MetricsCollector(options);
+                _readerMetricsCollector = new MetricsCollector(options, _metricsCollector);
+                _writerMetricsCollector = new MetricsCollector(options, _metricsCollector);
                 _metricsCollector.MetricsChanged += OnMetricsCollectorUpdated;
             }
 
@@ -218,6 +223,7 @@ public partial class DatabaseContext
                 _dialect?.ApplicationNameSettingName,
                 builder);
 
+            InitializeReadOnlyConnectionResources(configuration);
             InitializePoolGovernors();
 
             if (initialConnection != null)
@@ -251,7 +257,7 @@ public partial class DatabaseContext
                 initialConnection.Dispose();
                 // Reset counters to "fresh" state after initialization probe
                 Interlocked.Exchange(ref _connectionCount, 0);
-                Interlocked.Exchange(ref _maxNumberOfOpenConnections, 0);
+                Interlocked.Exchange(ref _peakOpenConnections, 0);
             }
 
             _isolationResolver = new IsolationResolver(Product, RCSIEnabled, SnapshotIsolationEnabled);
@@ -326,6 +332,8 @@ public partial class DatabaseContext
             TypeMapRegistry = typeMapRegistry ?? global::pengdows.crud.TypeMapRegistry.Instance;
             ConnectionMode = configuration.DbMode;
             _dataSource = dataSource ?? throw new ArgumentNullException(nameof(dataSource));
+            _readerDataSource = _dataSource;
+            _dataSourceProvided = true;
             _factory = factory ?? throw new ArgumentNullException(nameof(factory));
             _forceManualPrepare = configuration.ForceManualPrepare;
             _disablePrepare = configuration.DisablePrepare;
@@ -336,7 +344,10 @@ public partial class DatabaseContext
             _configuredWritePoolSize = configuration.WritePoolSize;
             if (configuration.EnableMetrics)
             {
-                _metricsCollector = new MetricsCollector(configuration.MetricsOptions ?? MetricsOptions.Default);
+                var options = configuration.MetricsOptions ?? MetricsOptions.Default;
+                _metricsCollector = new MetricsCollector(options);
+                _readerMetricsCollector = new MetricsCollector(options, _metricsCollector);
+                _writerMetricsCollector = new MetricsCollector(options, _metricsCollector);
                 _metricsCollector.MetricsChanged += OnMetricsCollectorUpdated;
             }
 
@@ -387,6 +398,7 @@ public partial class DatabaseContext
                 _dialect?.ApplicationNameSettingName,
                 builder);
 
+            InitializeReadOnlyConnectionResources(configuration);
             InitializePoolGovernors();
 
             if (initialConnection != null)
@@ -420,7 +432,7 @@ public partial class DatabaseContext
                 initialConnection.Dispose();
                 // Reset counters to "fresh" state after initialization probe
                 Interlocked.Exchange(ref _connectionCount, 0);
-                Interlocked.Exchange(ref _maxNumberOfOpenConnections, 0);
+                Interlocked.Exchange(ref _peakOpenConnections, 0);
             }
 
             _isolationResolver = new IsolationResolver(Product, RCSIEnabled, SnapshotIsolationEnabled);
@@ -472,7 +484,8 @@ public partial class DatabaseContext
         try
         {
             // 2) Create + open
-            initConn = FactoryCreateConnection(_connectionString, true, IsReadOnlyConnection, null);
+            var initExecutionType = IsReadOnlyConnection ? ExecutionType.Read : ExecutionType.Write;
+            initConn = FactoryCreateConnection(initExecutionType, _connectionString, true, IsReadOnlyConnection, null);
             try
             {
                 initConn.Open();
@@ -643,9 +656,9 @@ public partial class DatabaseContext
         }
 
         var writerConnectionString = _connectionString;
-        var readerConnectionString = UsesReadOnlyConnectionStringForReads()
-            ? _dialect.GetReadOnlyConnectionString(writerConnectionString)
-            : writerConnectionString;
+        var readerConnectionString = string.IsNullOrWhiteSpace(_readerConnectionString)
+            ? writerConnectionString
+            : _readerConnectionString;
 
         var writerConfig = PoolingConfigReader.GetEffectivePoolConfig(_dialect, writerConnectionString);
         var readerConfig = PoolingConfigReader.GetEffectivePoolConfig(_dialect, readerConnectionString);
@@ -699,6 +712,55 @@ public partial class DatabaseContext
         {
             AttachPinnedPermitIfNeeded();
         }
+    }
+
+    private void InitializeReadOnlyConnectionResources(IDatabaseContextConfiguration configuration)
+    {
+        _readerConnectionString = BuildReaderConnectionString(configuration);
+
+        if (!_dataSourceProvided && _factory != null && _dataSource == null)
+        {
+            _dataSource = TryCreateDataSource(_factory, _connectionString);
+        }
+
+        _readerDataSource = _dataSource;
+
+        if (!_dataSourceProvided &&
+            _factory != null &&
+            UsesReadOnlyConnectionStringForReads() &&
+            !string.Equals(_readerConnectionString, _connectionString, StringComparison.OrdinalIgnoreCase))
+        {
+            _readerDataSource = TryCreateDataSource(_factory, _readerConnectionString) ?? _dataSource;
+        }
+
+        if (_dataSourceProvided &&
+            UsesReadOnlyConnectionStringForReads() &&
+            !string.Equals(_readerConnectionString, _connectionString, StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogInformation(
+                "Read-only connection string differs, but DbDataSource was provided; using the provided DataSource for reads.");
+        }
+    }
+
+    private string BuildReaderConnectionString(IDatabaseContextConfiguration configuration)
+    {
+        if (_dialect == null || !UsesReadOnlyConnectionStringForReads())
+        {
+            return _connectionString;
+        }
+
+        var readOnly = _dialect.GetReadOnlyConnectionString(_connectionString);
+        if (string.IsNullOrWhiteSpace(readOnly) ||
+            string.Equals(readOnly, _connectionString, StringComparison.OrdinalIgnoreCase))
+        {
+            readOnly = _connectionString;
+        }
+
+        return ConnectionPoolingConfiguration.ApplyApplicationNameSuffix(
+            readOnly,
+            _dialect.ApplicationNameSettingName,
+            ReadOnlyApplicationNameSuffix,
+            configuration.ApplicationName);
     }
 
     private bool UsesReadOnlyConnectionStringForReads()

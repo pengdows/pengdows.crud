@@ -120,21 +120,23 @@ var context = new DatabaseContext(connectionString, factory);
 // Get real-time snapshot
 var metrics = context.Metrics;
 
-Console.WriteLine($"Current connections: {metrics.CurrentOpenConnections}");
-Console.WriteLine($"Max connections: {metrics.MaxOpenConnections}");
-Console.WriteLine($"Avg command duration: {metrics.AverageCommandDuration}ms");
-Console.WriteLine($"P95 latency: {metrics.CommandDurationP95}ms");
-Console.WriteLine($"P99 latency: {metrics.CommandDurationP99}ms");
-Console.WriteLine($"Failed commands: {metrics.TotalCommandsFailed}");
-Console.WriteLine($"Rows read: {metrics.TotalRowsRead}");
+Console.WriteLine($"Current connections: {metrics.ConnectionsCurrent}");
+Console.WriteLine($"Peak open connections: {metrics.PeakOpenConnections}");
+Console.WriteLine($"Avg command duration: {metrics.AvgCommandMs}ms");
+Console.WriteLine($"P95 latency: {metrics.P95CommandMs}ms");
+Console.WriteLine($"P99 latency: {metrics.P99CommandMs}ms");
+Console.WriteLine($"Failed commands: {metrics.CommandsFailed}");
+Console.WriteLine($"Rows read: {metrics.RowsReadTotal}");
+Console.WriteLine($"Read connections: {metrics.Read.ConnectionsCurrent}");
+Console.WriteLine($"Write connections: {metrics.Write.ConnectionsCurrent}");
 
 // Subscribe to metrics updates
 context.MetricsUpdated += (sender, m) =>
 {
-    if (m.AverageCommandDuration > 1000)
+    if (m.AvgCommandMs > 1000)
         _logger.LogWarning("Slow queries detected!");
 
-    if (m.CurrentOpenConnections > 50)
+    if (m.ConnectionsCurrent > 50)
         _logger.LogWarning("High connection count!");
 };
 ```
@@ -147,6 +149,7 @@ context.MetricsUpdated += (sender, m) =>
 - Row operations (total read, total affected)
 - Prepared statement cache (cached, evicted, total)
 - Transaction tracking (active, max, average duration)
+- Read/write split metrics (per-role counts and timings)
 
 **Neither EF Core nor Dapper has built-in metrics.**
 
@@ -908,31 +911,26 @@ var context = new DatabaseContext(connectionString, factory, options: new Databa
 context.MetricsUpdated += (sender, m) =>
 {
     // SLA violation detection
-    if (m.CommandDurationP95 > 500)
-        _logger.LogWarning("P95 latency {P95}ms exceeds 500ms SLA", m.CommandDurationP95);
+    if (m.P95CommandMs > 500)
+        _logger.LogWarning("P95 latency {P95}ms exceeds 500ms SLA", m.P95CommandMs);
 
-    if (m.CommandDurationP99 > 1000)
-        _logger.LogError("P99 latency {P99}ms exceeds 1s SLA", m.CommandDurationP99);
+    if (m.P99CommandMs > 1000)
+        _logger.LogError("P99 latency {P99}ms exceeds 1s SLA", m.P99CommandMs);
 
     // Connection leak detection
     if (m.LongLivedConnections > 5)
         _logger.LogWarning("{Count} connections held > {Threshold}s",
             m.LongLivedConnections, m.LongLivedConnectionThreshold);
-
-    // Pool exhaustion warning
-    if (m.CurrentOpenConnections > m.MaxOpenConnections * 0.8)
-        _logger.LogWarning("Pool 80% full: {Current}/{Max}",
-            m.CurrentOpenConnections, m.MaxOpenConnections);
 };
 
 // Poll metrics anytime
 var metrics = context.Metrics;
-Console.WriteLine($"P95: {metrics.CommandDurationP95}ms");
-Console.WriteLine($"P99: {metrics.CommandDurationP99}ms");
-Console.WriteLine($"Avg: {metrics.AverageCommandDuration}ms");
-Console.WriteLine($"Failed: {metrics.TotalCommandsFailed}");
-Console.WriteLine($"Timed out: {metrics.TotalCommandsTimedOut}");
-Console.WriteLine($"Rows read: {metrics.TotalRowsRead}");
+Console.WriteLine($"P95: {metrics.P95CommandMs}ms");
+Console.WriteLine($"P99: {metrics.P99CommandMs}ms");
+Console.WriteLine($"Avg: {metrics.AvgCommandMs}ms");
+Console.WriteLine($"Failed: {metrics.CommandsFailed}");
+Console.WriteLine($"Timed out: {metrics.CommandsTimedOut}");
+Console.WriteLine($"Rows read: {metrics.RowsReadTotal}");
 ```
 
 **23+ tracked metrics:** Connections (current, max, reused, long-lived), commands (total, failed, timed-out, cancelled), latency (avg, P95, P99), rows (read, affected), prepared statements (cached, evicted), transactions (active, max, avg duration).

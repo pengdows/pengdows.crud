@@ -22,6 +22,7 @@
 // - All IDataReader methods pass through to underlying reader.
 // =============================================================================
 
+using System;
 using System.Data;
 using System.Data.Common;
 using pengdows.crud.@internal;
@@ -37,6 +38,7 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
     private readonly DbDataReader _reader;
     private readonly bool _shouldCloseConnection;
     private readonly MetricsCollector? _metricsCollector;
+    private readonly IReaderLifetimeListener? _lifetimeListener;
     private long _rowsRead;
     private int _metricsRecorded;
 
@@ -46,7 +48,8 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
         IAsyncDisposable connectionLocker,
         bool shouldCloseConnection,
         DbCommand? command = null,
-        MetricsCollector? metricsCollector = null)
+        MetricsCollector? metricsCollector = null,
+        IReaderLifetimeListener? lifetimeListener = null)
     {
         _reader = reader;
         _connection = connection;
@@ -54,6 +57,7 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
         _shouldCloseConnection = shouldCloseConnection;
         _command = command;
         _metricsCollector = metricsCollector;
+        _lifetimeListener = lifetimeListener;
     }
 
     protected override void DisposeManaged()
@@ -69,6 +73,7 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
         }
 
         DisposeLockerSynchronously();
+        _lifetimeListener?.OnReaderDisposed();
     }
 
     /// <summary>
@@ -236,6 +241,7 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
         }
 
         await _connectionLocker.DisposeAsync().ConfigureAwait(false);
+        _lifetimeListener?.OnReaderDisposed();
     }
 
     /// <summary>

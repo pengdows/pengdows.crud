@@ -114,10 +114,18 @@ internal class DuckDbDialect : SqlDialect
         return "SELECT version()";
     }
 
-    public override void ApplyConnectionSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)
+    internal override void ApplyConnectionSettingsCore(
+        IDbConnection connection,
+        IDatabaseContext context,
+        bool readOnly,
+        string? connectionStringOverride)
     {
-        var cs = context.ConnectionString;
-        if (readOnly && !IsMemoryConnection(cs))
+        var cs = string.IsNullOrWhiteSpace(connectionStringOverride)
+            ? context.ConnectionString
+            : connectionStringOverride;
+
+        if (readOnly && !IsMemoryConnection(cs) &&
+            cs.IndexOf("access_mode=READ_ONLY", StringComparison.OrdinalIgnoreCase) < 0)
         {
             cs = $"{cs};access_mode=READ_ONLY";
         }

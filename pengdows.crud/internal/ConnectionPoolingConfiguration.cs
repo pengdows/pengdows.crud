@@ -281,6 +281,68 @@ internal static class ConnectionPoolingConfiguration
         }
     }
 
+    /// <summary>
+    /// Appends a suffix to the application name in the connection string when supported.
+    /// Falls back to the provided application name when none is set in the connection string.
+    /// </summary>
+    /// <param name="connectionString">The connection string to modify.</param>
+    /// <param name="applicationNameSettingName">The provider-specific setting name (e.g., "Application Name").</param>
+    /// <param name="suffix">Suffix to append (e.g., ":ro").</param>
+    /// <param name="fallbackApplicationName">Fallback application name if none exists in the connection string.</param>
+    /// <param name="builder">Optional pre-existing connection string builder to reuse.</param>
+    /// <returns>The modified connection string, or the original if no changes were made.</returns>
+    public static string ApplyApplicationNameSuffix(
+        string connectionString,
+        string? applicationNameSettingName,
+        string suffix,
+        string? fallbackApplicationName = null,
+        DbConnectionStringBuilder? builder = null)
+    {
+        if (string.IsNullOrWhiteSpace(suffix) || string.IsNullOrWhiteSpace(applicationNameSettingName))
+        {
+            return connectionString;
+        }
+
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            return connectionString;
+        }
+
+        try
+        {
+            builder ??= new DbConnectionStringBuilder { ConnectionString = connectionString };
+
+            if (RepresentsRawConnectionString(builder, connectionString))
+            {
+                return connectionString;
+            }
+
+            if (builder.TryGetValue(applicationNameSettingName, out var value))
+            {
+                var current = Convert.ToString(value) ?? string.Empty;
+                if (!current.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                {
+                    builder[applicationNameSettingName] = current + suffix;
+                    return builder.ConnectionString;
+                }
+
+                return connectionString;
+            }
+
+            if (!string.IsNullOrWhiteSpace(fallbackApplicationName))
+            {
+                builder[applicationNameSettingName] = $"{fallbackApplicationName}{suffix}";
+                return builder.ConnectionString;
+            }
+
+            return connectionString;
+        }
+        catch
+        {
+            return connectionString;
+        }
+    }
+
     private static bool TrySetMinPoolViaProperty(DbConnectionStringBuilder builder, int minPoolSize)
     {
         foreach (var candidate in MinPoolPropertyCandidates)

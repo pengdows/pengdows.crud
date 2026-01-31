@@ -527,8 +527,8 @@ public class TransactionContextTests
         Assert.Equal(context.NumberOfOpenConnections, tx.NumberOfOpenConnections);
         Assert.NotEqual(0, tx.NumberOfOpenConnections);
         Assert.Equal(context.Product, tx.Product);
-        Assert.Equal(context.MaxNumberOfConnections, tx.MaxNumberOfConnections);
-        Assert.NotEqual(0, tx.MaxNumberOfConnections);
+        Assert.Equal(context.PeakOpenConnections, tx.PeakOpenConnections);
+        Assert.NotEqual(0, tx.PeakOpenConnections);
         Assert.Equal(context.IsReadOnlyConnection, tx.IsReadOnlyConnection);
         Assert.False(tx.IsReadOnlyConnection);
         Assert.Equal(context.RCSIEnabled, tx.RCSIEnabled);

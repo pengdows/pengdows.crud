@@ -92,7 +92,11 @@ public partial class DatabaseContext
         var permit = AcquirePermit(executionType);
         try
         {
-            var conn = FactoryCreateConnection(null, isShared, readOnly, null, permit);
+            var useReadOnly = readOnly && UsesReadOnlyConnectionStringForReads();
+            var connectionString = useReadOnly && !string.IsNullOrWhiteSpace(_readerConnectionString)
+                ? _readerConnectionString
+                : _connectionString;
+            var conn = FactoryCreateConnection(executionType, connectionString, isShared, readOnly, null, permit);
             return conn;
         }
         catch
@@ -246,6 +250,7 @@ public partial class DatabaseContext
     /// Factory method to create a new tracked connection with state change monitoring and session settings.
     /// </summary>
     private ITrackedConnection FactoryCreateConnection(
+        ExecutionType executionType,
         string? connectionString = null,
         bool isSharedConnection = false,
         bool readOnly = false,
@@ -254,19 +259,31 @@ public partial class DatabaseContext
     {
         SanitizeConnectionString(connectionString);
 
+        var activeConnectionString = string.IsNullOrWhiteSpace(connectionString)
+            ? _connectionString
+            : connectionString;
+        var dataSource = ResolveDataSource(readOnly);
+
         // Prefer DataSource over Factory for better performance (shared prepared statement cache)
         DbConnection connection;
-        if (_dataSource != null)
+        if (dataSource != null)
         {
-            connection = _dataSource.CreateConnection();
+            connection = dataSource.CreateConnection();
             // Connection string is already configured in the DataSource
+            _dialect?.ConfigureProviderSpecificSettings(connection, this, readOnly);
         }
         else if (_factory != null)
         {
             connection = _factory.CreateConnection() ??
                          throw new InvalidOperationException("Factory returned null DbConnection.");
-            connection.ConnectionString = ConnectionString;
-            _dialect?.ApplyConnectionSettings(connection, this, readOnly);
+            if (_dialect != null)
+            {
+                _dialect.ApplyConnectionSettingsCore(connection, this, readOnly, activeConnectionString);
+            }
+            else
+            {
+                connection.ConnectionString = activeConnectionString;
+            }
         }
         else
         {
@@ -328,6 +345,7 @@ public partial class DatabaseContext
             onFirstOpen?.Invoke(conn);
         };
 
+        var metricsCollector = executionType == ExecutionType.Read ? _readerMetricsCollector : _writerMetricsCollector;
         var tracked = new TrackedConnection(
             connection,
             (sender, args) =>
@@ -356,7 +374,7 @@ public partial class DatabaseContext
             conn => { _logger.LogDebug("Connection disposed."); },
             null,
             isSharedConnection,
-            _metricsCollector,
+            metricsCollector,
             _modeContentionStats,
             ConnectionMode,
             _modeLockTimeout,
@@ -371,7 +389,22 @@ public partial class DatabaseContext
     internal ITrackedConnection FactoryCreateConnection(string? connectionString = null,
         bool isSharedConnection = false, bool readOnly = false)
     {
-        return FactoryCreateConnection(connectionString, isSharedConnection, readOnly, null);
+        return FactoryCreateConnection(ExecutionType.Read, connectionString, isSharedConnection, readOnly, null);
+    }
+
+    private DbDataSource? ResolveDataSource(bool readOnly)
+    {
+        if (_dataSource == null)
+        {
+            return null;
+        }
+
+        if (readOnly && UsesReadOnlyConnectionStringForReads() && _readerDataSource != null)
+        {
+            return _readerDataSource;
+        }
+
+        return _dataSource;
     }
 
     private PoolPermit AcquirePermit(ExecutionType executionType)
@@ -429,7 +462,7 @@ public partial class DatabaseContext
         long previous;
         do
         {
-            previous = Interlocked.Read(ref _maxNumberOfOpenConnections);
+            previous = Interlocked.Read(ref _peakOpenConnections);
             if (current <= previous)
             {
                 return; // no update needed
@@ -437,7 +470,7 @@ public partial class DatabaseContext
 
             // try to update only if no one else has changed it
         } while (Interlocked.CompareExchange(
-                     ref _maxNumberOfOpenConnections,
+                     ref _peakOpenConnections,
                      current,
                      previous) != previous);
     }

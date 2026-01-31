@@ -135,11 +135,11 @@ public abstract class DatabaseTestBase : IAsyncLifetime
                 Output.WriteLine($"[{providerStart:HH:mm:ss.fff}] ▶️ {provider} test starting");
                 Output.WriteLine($"[{providerStart:HH:mm:ss.fff}] Running test against {provider}...");
                 Output.WriteLine(
-                    $"[{providerStart:HH:mm:ss.fff}] {provider} connections before test: {context.NumberOfOpenConnections} open, max {context.MaxNumberOfConnections}");
+                    $"[{providerStart:HH:mm:ss.fff}] {provider} connections before test: {context.NumberOfOpenConnections} open, peak {context.PeakOpenConnections}");
                 await testAction(provider, context);
                 Output.WriteLine($"[{DateTime.UtcNow:HH:mm:ss.fff}] ✅ {provider} test finished");
                 Output.WriteLine(
-                    $"[{DateTime.UtcNow:HH:mm:ss.fff}] {provider} connections after test: {context.NumberOfOpenConnections} open, max {context.MaxNumberOfConnections}");
+                    $"[{DateTime.UtcNow:HH:mm:ss.fff}] {provider} connections after test: {context.NumberOfOpenConnections} open, peak {context.PeakOpenConnections}");
                 Output.WriteLine(
                     $"[{DateTime.UtcNow:HH:mm:ss.fff}] ✅ {provider} test completed successfully (took {(DateTime.UtcNow - providerStart).TotalMilliseconds:F0}ms)");
             }
@@ -147,7 +147,7 @@ public abstract class DatabaseTestBase : IAsyncLifetime
             {
                 Output.WriteLine($"[{DateTime.UtcNow:HH:mm:ss.fff}] ❌ {provider} test failed: {ex.Message}");
                 Output.WriteLine(
-                    $"[{DateTime.UtcNow:HH:mm:ss.fff}] {provider} connections at failure: {context.NumberOfOpenConnections} open, max {context.MaxNumberOfConnections}");
+                    $"[{DateTime.UtcNow:HH:mm:ss.fff}] {provider} connections at failure: {context.NumberOfOpenConnections} open, peak {context.PeakOpenConnections}");
                 failures.Add((provider, ex));
             }
         }

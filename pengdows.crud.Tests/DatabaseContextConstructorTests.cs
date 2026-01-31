@@ -306,7 +306,7 @@ public class DatabaseContextConstructorTests
         Assert.Equal(ReadWriteMode.ReadWrite, context.ReadWriteMode); // Default
         Assert.NotNull(context.TypeMapRegistry); // Should create default
         Assert.True(context.NumberOfOpenConnections >= 0);
-        Assert.True(context.MaxNumberOfConnections >= 0);
+        Assert.True(context.PeakOpenConnections >= 0);
     }
 
     [Fact]
@@ -406,7 +406,7 @@ public class DatabaseContextConstructorTests
         // Assert
         // For SQL Server in Standard mode, counters should be 0 after initialization connection is disposed
         Assert.Equal(0, context.NumberOfOpenConnections); // Should start at 0 after initialization reset
-        Assert.Equal(0, context.MaxNumberOfConnections); // Should start at 0 after initialization reset
+        Assert.Equal(0, context.PeakOpenConnections); // Should start at 0 after initialization reset
     }
 
     [Fact]
@@ -671,6 +671,6 @@ public class DatabaseContextConstructorTests
         Assert.Equal(ReadWriteMode.ReadWrite, context.ReadWriteMode); // Default
         Assert.NotNull(context.TypeMapRegistry); // Should create default
         Assert.True(context.NumberOfOpenConnections >= 0);
-        Assert.True(context.MaxNumberOfConnections >= 0);
+        Assert.True(context.PeakOpenConnections >= 0);
     }
 }

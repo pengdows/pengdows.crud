@@ -130,7 +130,7 @@ ITypeMapRegistry TypeMapRegistry { get; }
 IDataSourceInfo DataSourceInfo { get; }
 SupportedDatabase Product { get; }
 int NumberOfOpenConnections { get; }
-int MaxNumberOfConnections { get; }
+int PeakOpenConnections { get; }
 ```
 
 ## ITransactionContext

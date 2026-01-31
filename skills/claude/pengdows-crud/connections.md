@@ -95,7 +95,7 @@ services.AddSingleton<IDatabaseContext>(sp =>
 
 ```csharp
 var openConns = context.NumberOfOpenConnections;  // Current count
-var maxConns = context.MaxNumberOfConnections;    // Peak observed
+var maxConns = context.PeakOpenConnections;    // Peak observed
 var dbProduct = context.Product;                   // Detected database
 var mode = context.ConnectionMode;                 // Current DbMode
 ```

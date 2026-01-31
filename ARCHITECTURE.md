@@ -1119,7 +1119,7 @@ var context = new DatabaseContext(
 ```csharp
 context.MetricsUpdated += (sender, metrics) =>
 {
-    Console.WriteLine($"Open connections: {metrics.CurrentOpenConnections}");
+    Console.WriteLine($"Open connections: {metrics.ConnectionsCurrent}");
     Console.WriteLine($"Total created: {metrics.TotalConnectionsCreated}");
     Console.WriteLine($"Reused: {metrics.TotalConnectionsReused}");
     Console.WriteLine($"Failures: {metrics.TotalConnectionFailures}");

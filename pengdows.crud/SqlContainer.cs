@@ -34,6 +34,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.collections;
@@ -99,7 +100,7 @@ namespace pengdows.crud;
 /// <seealso cref="ISqlContainer"/>
 /// <seealso cref="IDatabaseContext.CreateSqlContainer"/>
 /// <seealso cref="TableGateway{TEntity,TRowID}"/>
-public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectProvider
+public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectProvider, IReaderLifetimeListener
 {
     private static readonly Regex ParamPlaceholderRegex = new(@"\{P\}([A-Za-z_][A-Za-z0-9_]*)", RegexOptions.Compiled);
     private static readonly ConcurrentDictionary<Type, Action<DbParameter>?> ParameterDetachActions = new();
@@ -119,8 +120,19 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     // Performance optimization: cache rendered command text to avoid repeated Query.ToString() calls
     private string? _cachedCommandText;
     private bool _commandTextDirty = true;
+    private int _activeReaders;
+    private int _deferParameterPooling;
 
-    private MetricsCollector? MetricsCollector => (_context as IMetricsCollectorAccessor)?.MetricsCollector;
+    private MetricsCollector? GetMetricsCollector(ExecutionType executionType)
+    {
+        var accessor = _context as IMetricsCollectorAccessor;
+        if (accessor == null)
+        {
+            return null;
+        }
+
+        return accessor.GetMetricsCollector(executionType) ?? accessor.MetricsCollector;
+    }
 
     private TypeCoercionOptions DefaultCoercionOptions => TypeCoercionOptions.Default with
     {
@@ -648,7 +660,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         _context.AssertIsWriteConnection();
         ITrackedConnection? conn = null;
         DbCommand? cmd = null;
-        var metrics = MetricsCollector;
+        var metrics = GetMetricsCollector(ExecutionType.Write);
         var startTimestamp = metrics?.CommandStarted(_parameters.Count) ?? 0;
         try
         {
@@ -747,7 +759,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         _context.AssertIsWriteConnection();
         ITrackedConnection? conn = null;
         DbCommand? cmd = null;
-        var metrics = MetricsCollector;
+        var metrics = GetMetricsCollector(ExecutionType.Read);
         var startTimestamp = metrics?.CommandStarted(_parameters.Count) ?? 0;
         try
         {
@@ -831,7 +843,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         ITrackedConnection conn;
         DbCommand? cmd = null;
         ILockerAsync? connectionLocker = null;
-        var metrics = MetricsCollector;
+        var metrics = GetMetricsCollector(ExecutionType.Write);
         var startTimestamp = metrics?.CommandStarted(_parameters.Count) ?? 0;
         var lockTransferred = false;
         try
@@ -862,13 +874,15 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             //close the underlying connection when the DbDataReader is closed;
             var dr = await cmd.ExecuteReaderAsync(behavior, cancellationToken).ConfigureAwait(false);
             metrics?.CommandSucceeded(startTimestamp, 0);
+            Interlocked.Increment(ref _activeReaders);
             var trackedReader = new TrackedReader(
                 dr,
                 conn,
                 connectionLocker,
                 behavior == CommandBehavior.CloseConnection,
                 cmd,
-                metrics);
+                metrics,
+                this);
             cmd = null;
             lockTransferred = true; // TrackedReader now owns the lock
             return trackedReader;
@@ -917,7 +931,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         ITrackedConnection conn;
         DbCommand? cmd = null;
         ILockerAsync? connectionLocker = null;
-        var metrics = MetricsCollector;
+        var metrics = GetMetricsCollector(ExecutionType.Read);
         var startTimestamp = metrics?.CommandStarted(_parameters.Count) ?? 0;
         var lockTransferred = false;
         try
@@ -939,13 +953,15 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
             var dr = await cmd.ExecuteReaderAsync(behavior, cancellationToken).ConfigureAwait(false);
             metrics?.CommandSucceeded(startTimestamp, 0);
+            Interlocked.Increment(ref _activeReaders);
             var trackedReader = new TrackedReader(
                 dr,
                 conn,
                 connectionLocker,
                 (behavior & CommandBehavior.CloseConnection) == CommandBehavior.CloseConnection,
                 cmd,
-                metrics);
+                metrics,
+                this);
             cmd = null;
             lockTransferred = true; // TrackedReader now owns the lock
             return trackedReader;
@@ -1114,7 +1130,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }
 
         // Apply per-text prepare logic
-        MaybePrepareCommand(cmd, conn);
+        MaybePrepareCommand(cmd, conn, executionType);
         if (traceTimings)
         {
             tPrepared = Stopwatch.GetTimestamp();
@@ -1148,7 +1164,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     /// Applies prepare logic: prepares once per connection per SQL text,
     /// with fallback to disable prepare on provider failures.
     /// </summary>
-    private void MaybePrepareCommand(DbCommand cmd, ITrackedConnection conn)
+    private void MaybePrepareCommand(DbCommand cmd, ITrackedConnection conn, ExecutionType executionType)
     {
         var shouldPrepare = ComputeEffectivePrepareSettings();
 
@@ -1166,13 +1182,13 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         try
         {
             cmd.Prepare();
-            MetricsCollector?.RecordPreparedStatement();
+            GetMetricsCollector(executionType)?.RecordPreparedStatement();
             if (conn.LocalState.MarkShapePrepared(sqlText, out var evicted))
             {
-                MetricsCollector?.RecordStatementCached();
+                GetMetricsCollector(executionType)?.RecordStatementCached();
                 if (evicted > 0)
                 {
-                    MetricsCollector?.RecordStatementEvicted(evicted);
+                    GetMetricsCollector(executionType)?.RecordStatementEvicted(evicted);
                 }
             }
         }
@@ -1280,7 +1296,6 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             try
             {
                 cmd.Parameters?.Clear();
-
                 try
                 {
                     cmd.Connection = null;
@@ -1405,6 +1420,15 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             return;
         }
 
+        if (_activeReaders > 0)
+        {
+            Volatile.Write(ref _deferParameterPooling, 1);
+            _logger.LogWarning(
+                "SqlContainer disposed while {ActiveReaders} reader(s) still active; skipping parameter pooling.",
+                _activeReaders);
+            return;
+        }
+
         if (_dialect is SqlDialect sqlDialect)
         {
             foreach (var parameter in _parameters.Values)
@@ -1414,5 +1438,15 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }
 
         _parameters.Clear();
+        Volatile.Write(ref _deferParameterPooling, 0);
+    }
+
+    void IReaderLifetimeListener.OnReaderDisposed()
+    {
+        var remaining = Interlocked.Decrement(ref _activeReaders);
+        if (remaining == 0 && Volatile.Read(ref _deferParameterPooling) == 1)
+        {
+            ReturnParametersToPool();
+        }
     }
 }
