@@ -149,6 +149,11 @@ internal class DuckDbDialect : SqlDialect
             : $"{connectionString};access_mode=READ_ONLY";
     }
 
+    public override string? GetReadOnlyConnectionParameter()
+    {
+        return "access_mode=READ_ONLY";
+    }
+
     public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
     {
         return readOnly ? "PRAGMA read_only = 1;" : string.Empty;

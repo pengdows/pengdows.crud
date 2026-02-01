@@ -85,7 +85,7 @@ internal static class PoolingConfigReader
                 false,
                 minPool ?? defaultMin,
                 null,
-                maxPool.HasValue ? PoolConfigSource.ConnectionString : PoolConfigSource.PoolingDisabled);
+                PoolConfigSource.ConnectionString);
         }
 
         // Prefer explicit connection string values.

@@ -138,7 +138,7 @@ public sealed class DatabaseContextPoolGovernorSettingsTests
         Assert.False(reader.Disabled);
         Assert.False(writer.Disabled);
         Assert.Equal(5, reader.MaxPermits);
-        Assert.Equal(10, writer.MaxPermits);
+        Assert.Equal(1, writer.MaxPermits);
     }
 
     [Fact]

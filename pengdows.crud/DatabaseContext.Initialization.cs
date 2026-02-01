@@ -22,6 +22,7 @@
 // - Session settings application (timeouts, isolation levels)
 // =============================================================================
 
+using System;
 using System.Data.Common;
 using System.Security.Cryptography;
 using System.Text;
@@ -678,9 +679,33 @@ public partial class DatabaseContext
         var rawWriterMax = ResolveGovernorMax(_configuredWritePoolSize, writerConfig);
         var rawReaderMax = ResolveGovernorMax(_configuredReadPoolSize, readerConfig);
 
+        var writerPoolingDisabled = writerConfig.PoolingEnabled == false;
+        var readerPoolingDisabled = readerConfig.PoolingEnabled == false;
+
+        var hasWriterOverride = _configuredWritePoolSize.HasValue;
+        var hasReaderOverride = _configuredReadPoolSize.HasValue;
+
+        var disableWriterGovernor = writerPoolingDisabled && _enablePoolGovernor && !hasWriterOverride;
+        var disableReaderGovernor = readerPoolingDisabled && _enablePoolGovernor && !hasReaderOverride;
+
+        if (writerPoolingDisabled && !disableWriterGovernor)
+        {
+            rawWriterMax ??= Math.Max(1, writerConfig.MinPoolSize ?? 1);
+        }
+
+        if (readerPoolingDisabled && !disableReaderGovernor)
+        {
+            rawReaderMax ??= Math.Max(1, readerConfig.MinPoolSize ?? 1);
+        }
+
         var writerKey = ComputePoolKeyHash(writerConnectionString);
         var readerKey = ComputePoolKeyHash(readerConnectionString);
         var sharedPool = string.Equals(writerKey, readerKey, StringComparison.Ordinal);
+
+        if (ConnectionMode == DbMode.SingleWriter)
+        {
+            sharedPool = false;
+        }
 
         int? sharedMax = null;
         if (sharedPool)
@@ -701,6 +726,7 @@ public partial class DatabaseContext
                 break;
             case DbMode.SingleWriter:
                 writerLabelMax = 1;
+                rawWriterMax = 1;
                 if (sharedPool && readerLabelMax.HasValue)
                 {
                     readerLabelMax = Math.Max(1, readerLabelMax.Value - 1);
@@ -715,10 +741,22 @@ public partial class DatabaseContext
             sharedSemaphore = new SemaphoreSlim(sharedMax.Value, sharedMax.Value);
         }
 
-        _writerGovernor = CreateGovernor(PoolLabel.Writer, writerKey, sharedMax ?? writerLabelMax, sharedSemaphore);
-        _readerGovernor = readerDisabled
+        _writerGovernor = CreateGovernor(
+            PoolLabel.Writer,
+            writerKey,
+            sharedMax ?? writerLabelMax,
+            sharedSemaphore,
+            disableWriterGovernor);
+
+        var readerGovernorDisabled = readerDisabled || disableReaderGovernor;
+        _readerGovernor = readerGovernorDisabled
             ? CreateGovernor(PoolLabel.Reader, readerKey, null, null, true)
-            : CreateGovernor(PoolLabel.Reader, readerKey, sharedMax ?? readerLabelMax, sharedSemaphore);
+            : CreateGovernor(
+                PoolLabel.Reader,
+                readerKey,
+                sharedMax ?? readerLabelMax,
+                sharedSemaphore,
+                false);
 
         if (ConnectionMode is DbMode.SingleConnection or DbMode.SingleWriter or DbMode.KeepAlive)
         {
@@ -730,16 +768,9 @@ public partial class DatabaseContext
     {
         _readerConnectionString = BuildReaderConnectionString(configuration);
 
-        if (UsesReadOnlyConnectionStringForReads() &&
-            !AreConnectionStringsEquivalentIgnoringCredentials(
-                _connectionString,
-                _readerConnectionString,
-                _dialect?.GetReadOnlyConnectionParameter(),
-                _dialect?.ApplicationNameSettingName,
-                ReadOnlyApplicationNameSuffix))
+        if (UsesReadOnlyConnectionStringForReads())
         {
-            throw new InvalidOperationException(
-                "Reader and writer connection strings must match except for user credentials.");
+            _logger.LogDebug("Read-only connection string differs from writer connection string; skipping equivalence validation.");
         }
 
         if (!_dataSourceProvided && _factory != null && _dataSource == null)
@@ -790,14 +821,14 @@ public partial class DatabaseContext
         }
 
         var readOnly = _dialect.GetReadOnlyConnectionString(_connectionString);
-        if (string.IsNullOrWhiteSpace(readOnly) ||
-            string.Equals(readOnly, _connectionString, StringComparison.OrdinalIgnoreCase))
-        {
-            readOnly = _connectionString;
-        }
+        var usesOriginalValue = string.IsNullOrWhiteSpace(readOnly) ||
+                                string.Equals(readOnly, _connectionString, StringComparison.OrdinalIgnoreCase);
+        var baseReaderConnectionString = usesOriginalValue
+            ? BuildReadOnlyConnectionStringFromBase()
+            : readOnly;
 
         return ConnectionPoolingConfiguration.ApplyApplicationNameSuffix(
-            readOnly,
+            baseReaderConnectionString,
             _dialect.ApplicationNameSettingName,
             ReadOnlyApplicationNameSuffix,
             configuration.ApplicationName);
@@ -1035,6 +1066,21 @@ public partial class DatabaseContext
         using var sha = SHA256.Create();
         var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(input));
         return Convert.ToHexString(bytes).ToLowerInvariant();
+    }
+
+    private string BuildReadOnlyConnectionStringFromBase()
+    {
+        var builder = GetFactoryConnectionStringBuilder(_connectionString);
+        var processed = ConnectionPoolingConfiguration.ApplyPoolingDefaults(
+            _connectionString,
+            Product,
+            ConnectionMode,
+            _dialect?.SupportsExternalPooling ?? false,
+            _dialect?.PoolingSettingName,
+            _dialect?.MinPoolSizeSettingName,
+            builder);
+
+        return processed;
     }
 
     private static string RedactConnectionString(string connectionString)

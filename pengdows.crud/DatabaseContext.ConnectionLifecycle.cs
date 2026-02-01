@@ -346,7 +346,10 @@ public partial class DatabaseContext
 
                         }
 
-                        trackedConnection?.LocalState.SessionSettingsApplied = true;
+                        if (trackedConnection != null)
+                        {
+                            trackedConnection.LocalState.SessionSettingsApplied = true;
+                        }
                     }
                 }
             }
