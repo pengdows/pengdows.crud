@@ -140,7 +140,6 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private bool? _rcsiPrefetch;
     private bool? _snapshotIsolationPrefetch;
     private int _initializing; // 0 = false, 1 = true
-    private bool _sessionSettingsAppliedOnOpen;
     private bool _sessionSettingsDetectionCompleted;
     private readonly MetricsCollector? _metricsCollector;
     private readonly MetricsCollector? _readerMetricsCollector;

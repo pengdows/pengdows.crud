@@ -156,7 +156,8 @@ public partial class DatabaseContext
             return;
         }
 
-        if (_sessionSettingsAppliedOnOpen && ReferenceEquals(connection, _connection))
+        var tracked = connection as ITrackedConnection;
+        if (tracked?.LocalState.SessionSettingsApplied == true)
         {
             return;
         }
@@ -165,6 +166,11 @@ public partial class DatabaseContext
         var sessionSettings = _dialect.GetConnectionSessionSettings(this, IsReadOnlyConnection);
         if (string.IsNullOrWhiteSpace(sessionSettings))
         {
+            if (tracked != null)
+            {
+                tracked.LocalState.SessionSettingsApplied = true;
+            }
+
             return;
         }
 
@@ -187,7 +193,11 @@ public partial class DatabaseContext
                 _logger.LogError("Error setting session settings:" + ex.Message);
             }
         }
-        _sessionSettingsAppliedOnOpen = true;
+
+        if (tracked != null)
+        {
+            tracked.LocalState.SessionSettingsApplied = true;
+        }
     }
 
     /// <summary>
@@ -206,9 +216,8 @@ public partial class DatabaseContext
             return;
         }
 
-        // If session settings were already applied on the persistent connection, avoid double
-        // application only for that same connection; still allow explicit application to other connections
-        if (_sessionSettingsAppliedOnOpen && ReferenceEquals(connection, _connection))
+        var tracked = connection as ITrackedConnection;
+        if (tracked?.LocalState.SessionSettingsApplied == true)
         {
             return;
         }
@@ -219,30 +228,40 @@ public partial class DatabaseContext
         // use the dialect's session settings which include read-only settings when appropriate
         var sessionSettings = _dialect.GetConnectionSessionSettings(this, IsReadOnlyConnection);
 
-        if (!string.IsNullOrEmpty(sessionSettings))
+        if (string.IsNullOrWhiteSpace(sessionSettings))
         {
-            try
+            if (tracked != null)
             {
-                var parts = sessionSettings.Split(';');
-                foreach (var part in parts)
+                tracked.LocalState.SessionSettingsApplied = true;
+            }
+
+            return;
+        }
+
+        try
+        {
+            var parts = sessionSettings.Split(';');
+            foreach (var part in parts)
+            {
+                var stmt = part.Trim();
+                if (string.IsNullOrEmpty(stmt))
                 {
-                    var stmt = part.Trim();
-                    if (string.IsNullOrEmpty(stmt))
-                    {
-                        continue;
-                    }
-
-                    using var cmd = connection.CreateCommand();
-                    cmd.CommandText = stmt; // no trailing ';'
-                    cmd.ExecuteNonQuery();
+                    continue;
                 }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError("Error setting session settings:" + ex.Message);
-            }
 
-            _sessionSettingsAppliedOnOpen = true;
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = stmt; // no trailing ';'
+                cmd.ExecuteNonQuery();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError("Error setting session settings:" + ex.Message);
+        }
+
+        if (tracked != null)
+        {
+            tracked.LocalState.SessionSettingsApplied = true;
         }
     }
 
@@ -292,6 +311,8 @@ public partial class DatabaseContext
         // Increment total connections created counter when a new connection is actually created
         Interlocked.Increment(ref _totalConnectionsCreated);
 
+        TrackedConnection? trackedConnection = null;
+
         // Ensure session settings from the active dialect are applied on first open for all modes.
         Action<DbConnection>? firstOpenHandler = conn =>
         {
@@ -302,25 +323,30 @@ public partial class DatabaseContext
                 guard.Lock();
                 if (_sessionSettingsDetectionCompleted && _dialect != null)
                 {
-                    var settings = _dialect.GetConnectionSessionSettings(this, readOnly) ?? string.Empty;
-                    if (!string.IsNullOrWhiteSpace(settings))
+                    if (trackedConnection?.LocalState.SessionSettingsApplied != true)
                     {
-                        // Execute one statement at a time. Do not auto-append semicolons.
-                        var parts = settings.Split(';');
-                        foreach (var part in parts)
+                        _logger.LogInformation("Applying connection session settings");
+                        var settings = _dialect.GetConnectionSessionSettings(this, readOnly) ?? string.Empty;
+                        if (!string.IsNullOrWhiteSpace(settings))
                         {
-                            var stmt = part.Trim();
-                            if (string.IsNullOrEmpty(stmt))
+                            // Execute one statement at a time. Do not auto-append semicolons.
+                            var parts = settings.Split(';');
+                            foreach (var part in parts)
                             {
-                                continue;
+                                var stmt = part.Trim();
+                                if (string.IsNullOrEmpty(stmt))
+                                {
+                                    continue;
+                                }
+
+                                using var cmd = conn.CreateCommand();
+                                cmd.CommandText = stmt; // no trailing ';'
+                                cmd.ExecuteNonQuery();
                             }
 
-                            using var cmd = conn.CreateCommand();
-                            cmd.CommandText = stmt; // no trailing ';'
-                            cmd.ExecuteNonQuery();
                         }
 
-                        _sessionSettingsAppliedOnOpen = true;
+                        trackedConnection?.LocalState.SessionSettingsApplied = true;
                     }
                 }
             }
@@ -379,6 +405,7 @@ public partial class DatabaseContext
             _modeLockTimeout,
             permit
         );
+        trackedConnection = tracked;
         return tracked;
     }
 
