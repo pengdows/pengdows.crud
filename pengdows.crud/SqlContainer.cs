@@ -1099,7 +1099,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         {
             // SECURITY: Never log parameter values - they may contain credentials, tokens, PII
             // Log only metadata: name, type, size, direction
-            var paramDump = new StringBuilder();
+            Span<char> scratch = stackalloc char[256];
+            var paramDump = SbLite.Create(scratch);
             var index = 0;
             foreach (var p in _parameters.Values)
             {

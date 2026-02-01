@@ -269,7 +269,6 @@ public partial class DatabaseContext
         if (dataSource != null)
         {
             connection = dataSource.CreateConnection();
-            // Connection string is already configured in the DataSource
             _dialect?.ConfigureProviderSpecificSettings(connection, this, readOnly);
         }
         else if (_factory != null)
@@ -404,12 +403,19 @@ public partial class DatabaseContext
             return _readerDataSource;
         }
 
+        if (readOnly && UsesReadOnlyConnectionStringForReads() && _dataSourceProvided &&
+            _readerDataSource == null &&
+            !string.Equals(_readerConnectionString, _connectionString, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
         return _dataSource;
     }
 
     private PoolPermit AcquirePermit(ExecutionType executionType)
     {
-        if (!_enablePoolGovernor)
+        if (!_effectivePoolGovernorEnabled)
         {
             return default;
         }

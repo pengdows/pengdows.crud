@@ -154,6 +154,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private TimeSpan _poolAcquireTimeout = TimeSpan.FromSeconds(5);
     private TimeSpan? _modeLockTimeout = TimeSpan.FromSeconds(30);
     private bool _enablePoolGovernor = true;
+    private bool _effectivePoolGovernorEnabled = true;
     private int? _configuredReadPoolSize;
     private int? _configuredWritePoolSize;
     private const string ReadOnlyApplicationNameSuffix = ":ro";

@@ -615,6 +615,51 @@ public class SqlContainerTests : SqlLiteContextTestBase, IDisposable
             container.ExecuteNonQueryAsync(CommandType.StoredProcedure));
     }
 
+    [Fact]
+    public async Task ExecuteNonQueryAsync_LogsParameterMetadata_WhenDebugEnabled()
+    {
+        var mockLogger = new TestLogger();
+        mockLogger.SetLogLevel(LogLevel.Debug);
+        var loggerFactory = new TestLoggerFactory(mockLogger);
+
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test;EmulatedProduct=SqlServer",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+        await using var context = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.SqlServer),
+            loggerFactory, TypeMap);
+        await using var container = context.CreateSqlContainer("SELECT @p0");
+        container.AddParameterWithValue("p0", DbType.String, "value");
+
+        await container.ExecuteNonQueryAsync();
+
+        Assert.Contains(mockLogger.LogEntries, entry => entry.StartsWith("Parameters:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ExecuteNonQueryAsync_DoesNotLogParameters_WhenNoneProvided()
+    {
+        var mockLogger = new TestLogger();
+        mockLogger.SetLogLevel(LogLevel.Debug);
+        var loggerFactory = new TestLoggerFactory(mockLogger);
+
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test;EmulatedProduct=SqlServer",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+        await using var context = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.SqlServer),
+            loggerFactory, TypeMap);
+        await using var container = context.CreateSqlContainer("SELECT 1");
+
+        await container.ExecuteNonQueryAsync();
+
+        Assert.DoesNotContain(mockLogger.LogEntries, entry => entry.StartsWith("Parameters:", StringComparison.Ordinal));
+    }
+
     // removed: consolidated with parameterized tests above
 
     private class TestLogger : ILogger

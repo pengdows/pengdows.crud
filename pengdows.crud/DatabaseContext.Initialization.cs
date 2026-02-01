@@ -648,7 +648,19 @@ public partial class DatabaseContext
 
     private void InitializePoolGovernors()
     {
-        if (!_enablePoolGovernor || _dialect == null)
+        if (_dialect == null)
+        {
+            _effectivePoolGovernorEnabled = false;
+            _readerGovernor = null;
+            _writerGovernor = null;
+            return;
+        }
+
+        _effectivePoolGovernorEnabled = ConnectionMode == DbMode.SingleConnection
+            ? _enablePoolGovernor
+            : true;
+
+        if (!_effectivePoolGovernorEnabled)
         {
             _readerGovernor = null;
             _writerGovernor = null;
@@ -663,8 +675,8 @@ public partial class DatabaseContext
         var writerConfig = PoolingConfigReader.GetEffectivePoolConfig(_dialect, writerConnectionString);
         var readerConfig = PoolingConfigReader.GetEffectivePoolConfig(_dialect, readerConnectionString);
 
-        var rawWriterMax = _configuredWritePoolSize ?? writerConfig.MaxPoolSize;
-        var rawReaderMax = _configuredReadPoolSize ?? readerConfig.MaxPoolSize;
+        var rawWriterMax = ResolveGovernorMax(_configuredWritePoolSize, writerConfig);
+        var rawReaderMax = ResolveGovernorMax(_configuredReadPoolSize, readerConfig);
 
         var writerKey = ComputePoolKeyHash(writerConnectionString);
         var readerKey = ComputePoolKeyHash(readerConnectionString);
@@ -718,6 +730,18 @@ public partial class DatabaseContext
     {
         _readerConnectionString = BuildReaderConnectionString(configuration);
 
+        if (UsesReadOnlyConnectionStringForReads() &&
+            !AreConnectionStringsEquivalentIgnoringCredentials(
+                _connectionString,
+                _readerConnectionString,
+                _dialect?.GetReadOnlyConnectionParameter(),
+                _dialect?.ApplicationNameSettingName,
+                ReadOnlyApplicationNameSuffix))
+        {
+            throw new InvalidOperationException(
+                "Reader and writer connection strings must match except for user credentials.");
+        }
+
         if (!_dataSourceProvided && _factory != null && _dataSource == null)
         {
             _dataSource = TryCreateDataSource(_factory, _connectionString);
@@ -725,20 +749,36 @@ public partial class DatabaseContext
 
         _readerDataSource = _dataSource;
 
-        if (!_dataSourceProvided &&
-            _factory != null &&
-            UsesReadOnlyConnectionStringForReads() &&
-            !string.Equals(_readerConnectionString, _connectionString, StringComparison.OrdinalIgnoreCase))
+        if (!UsesReadOnlyConnectionStringForReads() ||
+            string.Equals(_readerConnectionString, _connectionString, StringComparison.OrdinalIgnoreCase))
         {
-            _readerDataSource = TryCreateDataSource(_factory, _readerConnectionString) ?? _dataSource;
+            return;
         }
 
-        if (_dataSourceProvided &&
-            UsesReadOnlyConnectionStringForReads() &&
-            !string.Equals(_readerConnectionString, _connectionString, StringComparison.OrdinalIgnoreCase))
+        if (_factory != null)
         {
-            _logger.LogInformation(
-                "Read-only connection string differs, but DbDataSource was provided; using the provided DataSource for reads.");
+            var readDataSource = TryCreateDataSource(_factory, _readerConnectionString);
+            if (readDataSource != null)
+            {
+                _readerDataSource = readDataSource;
+                return;
+            }
+
+            if (_dataSourceProvided)
+            {
+                _readerDataSource = null;
+                _logger.LogWarning(
+                    "Read-only connection string differs, but no read-only DbDataSource could be created. Falling back to factory connections for read-only operations.");
+            }
+
+            return;
+        }
+
+        if (_dataSourceProvided)
+        {
+            _readerDataSource = null;
+            _logger.LogWarning(
+                "Read-only connection string differs, but no provider factory is available. Read-only operations will reuse the provided DbDataSource.");
         }
     }
 
@@ -825,7 +865,165 @@ public partial class DatabaseContext
             return writerMax;
         }
 
-        return Math.Max(writerMax.Value, readerMax.Value);
+        return Math.Min(writerMax.Value, readerMax.Value);
+    }
+
+    private static int? ResolveGovernorMax(int? configuredMax, PoolConfig config)
+    {
+        return configuredMax ?? config switch
+        {
+            { MaxPoolSize: int max } => max,
+            _ => null
+        };
+    }
+
+    private static bool AreConnectionStringsEquivalentIgnoringCredentials(
+        string primary,
+        string secondary,
+        string? readOnlyParameter,
+        string? applicationNameSettingName,
+        string readOnlySuffix)
+    {
+        if (string.IsNullOrWhiteSpace(primary) && string.IsNullOrWhiteSpace(secondary))
+        {
+            return true;
+        }
+
+        if (string.IsNullOrWhiteSpace(primary) || string.IsNullOrWhiteSpace(secondary))
+        {
+            return false;
+        }
+
+        if (!TryParseReadOnlyParameter(readOnlyParameter, out var readOnlyKey, out var readOnlyValue))
+        {
+            readOnlyKey = null;
+            readOnlyValue = null;
+        }
+
+        if (!TryBuildNormalizedConnectionMap(primary, readOnlyKey, readOnlyValue,
+                applicationNameSettingName, readOnlySuffix, out var primaryMap))
+        {
+            return false;
+        }
+
+        if (!TryBuildNormalizedConnectionMap(secondary, readOnlyKey, readOnlyValue,
+                applicationNameSettingName, readOnlySuffix, out var secondaryMap))
+        {
+            return false;
+        }
+
+        if (primaryMap.Count != secondaryMap.Count)
+        {
+            return false;
+        }
+
+        foreach (var entry in primaryMap)
+        {
+            if (!secondaryMap.TryGetValue(entry.Key, out var value))
+            {
+                return false;
+            }
+
+            if (!string.Equals(entry.Value, value, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool TryBuildNormalizedConnectionMap(
+        string connectionString,
+        string? readOnlyKey,
+        string? readOnlyValue,
+        string? applicationNameSettingName,
+        string readOnlySuffix,
+        out Dictionary<string, string> normalized)
+    {
+        normalized = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        DbConnectionStringBuilder builder;
+        try
+        {
+            builder = new DbConnectionStringBuilder { ConnectionString = connectionString };
+        }
+        catch
+        {
+            return false;
+        }
+
+        foreach (var keyObj in builder.Keys)
+        {
+            var key = keyObj?.ToString() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                continue;
+            }
+
+            if (ShouldIgnoreKey(key))
+            {
+                continue;
+            }
+
+            var value = builder[key]?.ToString() ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(readOnlyKey) &&
+                string.Equals(key, readOnlyKey, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(value, readOnlyValue, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(applicationNameSettingName) &&
+                string.Equals(key, applicationNameSettingName, StringComparison.OrdinalIgnoreCase) &&
+                value.EndsWith(readOnlySuffix, StringComparison.OrdinalIgnoreCase))
+            {
+                value = value.Substring(0, value.Length - readOnlySuffix.Length);
+            }
+
+            normalized[key] = value;
+        }
+
+        return true;
+    }
+
+    private static bool ShouldIgnoreKey(string key)
+    {
+        var lowered = key.ToLowerInvariant();
+        return lowered switch
+        {
+            "password" => true,
+            "pwd" => true,
+            "user id" => true,
+            "uid" => true,
+            "user" => true,
+            "username" => true,
+            _ => lowered.Contains("password", StringComparison.OrdinalIgnoreCase)
+                 || lowered.Contains("secret", StringComparison.OrdinalIgnoreCase)
+        };
+    }
+
+    private static bool TryParseReadOnlyParameter(
+        string? readOnlyParameter,
+        out string? key,
+        out string? value)
+    {
+        key = null;
+        value = null;
+
+        if (string.IsNullOrWhiteSpace(readOnlyParameter))
+        {
+            return false;
+        }
+
+        var parts = readOnlyParameter.Split('=', 2, StringSplitOptions.TrimEntries);
+        if (parts.Length != 2)
+        {
+            return false;
+        }
+
+        key = parts[0];
+        value = parts[1];
+        return !string.IsNullOrWhiteSpace(key);
     }
 
     private string ComputePoolKeyHash(string connectionString)
