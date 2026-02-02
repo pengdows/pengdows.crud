@@ -39,6 +39,7 @@ internal sealed class PoolGovernor
     private readonly int _maxPermits;
     private readonly bool _disabled;
     private readonly bool _ownsSemaphore;
+    private readonly object _drainLock = new();
     private TaskCompletionSource<bool> _drainSignal;
 
     // Turnstile fairness support: prevents writer starvation under reader pressure
@@ -205,9 +206,8 @@ internal sealed class PoolGovernor
         var turnstileAcquired = false;
         if (_turnstile != null)
         {
-            if (!_turnstile.Wait(_acquireTimeout, cancellationToken))
+            if (!_turnstile.Wait(0, cancellationToken))
             {
-                Interlocked.Increment(ref _totalTimeouts);
                 permit = default;
                 return false;
             }
@@ -221,53 +221,19 @@ internal sealed class PoolGovernor
             }
         }
 
-        try
+        if (_semaphore.Wait(0, cancellationToken))
         {
-            if (_semaphore.Wait(0, cancellationToken))
-            {
-                permit = OnAcquired();
-                return true;
-            }
-
-            var waitStart = Stopwatch.GetTimestamp();
-            Interlocked.Increment(ref _queued);
-
-            try
-            {
-                try
-                {
-                    var acquired = _semaphore.Wait(_acquireTimeout, cancellationToken);
-                    if (!acquired)
-                    {
-                        Interlocked.Increment(ref _totalTimeouts);
-                        permit = default;
-                        return false;
-                    }
-
-                    permit = OnAcquired();
-                    return true;
-                }
-                catch (OperationCanceledException)
-                {
-                    Interlocked.Increment(ref _totalCanceledWaits);
-                    throw;
-                }
-            }
-            finally
-            {
-                Interlocked.Decrement(ref _queued);
-                _ = waitStart;
-            }
+            permit = OnAcquired();
+            return true;
         }
-        catch
+
+        if (turnstileAcquired && _turnstile != null)
         {
-            if (turnstileAcquired && _turnstile != null)
-            {
-                _turnstile.Release();
-            }
-
-            throw;
+            _turnstile.Release();
         }
+
+        permit = default;
+        return false;
     }
 
     public async Task<PoolPermit> AcquireAsync(CancellationToken cancellationToken = default)
@@ -366,9 +332,8 @@ internal sealed class PoolGovernor
         var turnstileAcquired = false;
         if (_turnstile != null)
         {
-            if (!await _turnstile.WaitAsync(_acquireTimeout, cancellationToken).ConfigureAwait(false))
+            if (!await _turnstile.WaitAsync(0, cancellationToken).ConfigureAwait(false))
             {
-                Interlocked.Increment(ref _totalTimeouts);
                 return (false, default);
             }
 
@@ -381,50 +346,17 @@ internal sealed class PoolGovernor
             }
         }
 
-        try
+        if (await _semaphore.WaitAsync(0, cancellationToken).ConfigureAwait(false))
         {
-            if (await _semaphore.WaitAsync(0, cancellationToken).ConfigureAwait(false))
-            {
-                return (true, OnAcquired());
-            }
-
-            var waitStart = Stopwatch.GetTimestamp();
-            Interlocked.Increment(ref _queued);
-
-            try
-            {
-                try
-                {
-                    var acquired = await _semaphore.WaitAsync(_acquireTimeout, cancellationToken).ConfigureAwait(false);
-                    if (!acquired)
-                    {
-                        Interlocked.Increment(ref _totalTimeouts);
-                        return (false, default);
-                    }
-
-                    return (true, OnAcquired());
-                }
-                catch (OperationCanceledException)
-                {
-                    Interlocked.Increment(ref _totalCanceledWaits);
-                    throw;
-                }
-            }
-            finally
-            {
-                Interlocked.Decrement(ref _queued);
-                _ = waitStart;
-            }
+            return (true, OnAcquired());
         }
-        catch
+
+        if (turnstileAcquired && _turnstile != null)
         {
-            if (turnstileAcquired && _turnstile != null)
-            {
-                _turnstile.Release();
-            }
-
-            throw;
+            _turnstile.Release();
         }
+
+        return (false, default);
     }
 
     public Task WaitForDrainAsync(CancellationToken cancellationToken = default)
@@ -434,22 +366,18 @@ internal sealed class PoolGovernor
             return Task.CompletedTask;
         }
 
-        for (;;)
+        if (Interlocked.Read(ref _inUse) == 0)
         {
-            var inUse = Interlocked.Read(ref _inUse);
-            if (inUse == 0)
-            {
-                return Task.CompletedTask;
-            }
-
-            var signal = _drainSignal;
-            if (!signal.Task.IsCompleted)
-            {
-                return signal.Task.WaitAsync(cancellationToken);
-            }
-
-            ResetDrainSignalIfNeeded(inUse);
+            return Task.CompletedTask;
         }
+
+        TaskCompletionSource<bool> signal;
+        lock (_drainLock)
+        {
+            signal = _drainSignal;
+        }
+
+        return signal.Task.WaitAsync(cancellationToken);
     }
 
     private PoolPermit OnAcquired()
@@ -466,7 +394,13 @@ internal sealed class PoolGovernor
         var inUse = Interlocked.Decrement(ref _inUse);
         if (inUse == 0)
         {
-            _drainSignal.TrySetResult(true);
+            TaskCompletionSource<bool> signal;
+            lock (_drainLock)
+            {
+                signal = _drainSignal;
+            }
+
+            signal.TrySetResult(true);
         }
 
         _semaphore?.Release();
@@ -523,18 +457,17 @@ internal sealed class PoolGovernor
 
     private void ResetDrainSignalIfNeeded(long inUse)
     {
-        if (inUse <= 0)
+        if (inUse != 1)
         {
             return;
         }
 
-        var current = _drainSignal;
-        if (!current.Task.IsCompleted)
+        lock (_drainLock)
         {
-            return;
+            if (_drainSignal.Task.IsCompleted)
+            {
+                _drainSignal = CreateDrainSignal(completed: false);
+            }
         }
-
-        var next = CreateDrainSignal(completed: false);
-        Interlocked.CompareExchange(ref _drainSignal, next, current);
     }
 }

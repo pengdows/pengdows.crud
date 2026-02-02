@@ -119,7 +119,7 @@ public class PoolGovernorAdditionalTests
 
         Assert.False(acquired);
         Assert.Equal(default, second);
-        Assert.Equal(1, governor.GetSnapshot().TotalTimeouts);
+        Assert.Equal(0, governor.GetSnapshot().TotalTimeouts);
     }
 
     [Fact]
@@ -146,7 +146,7 @@ public class PoolGovernorAdditionalTests
 
         Assert.False(acquired.Success);
         Assert.Equal(default, acquired.Permit);
-        Assert.Equal(1, governor.GetSnapshot().TotalTimeouts);
+        Assert.Equal(0, governor.GetSnapshot().TotalTimeouts);
     }
 
     [Fact]
