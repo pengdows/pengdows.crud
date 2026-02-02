@@ -68,14 +68,14 @@ public class PoolGovernorAdditionalTests
     public void Acquire_WithSharedSemaphore_UsesSharedCapacity()
     {
         using var shared = new SemaphoreSlim(1, 1);
-        var governor = new PoolGovernor(PoolLabel.Reader, "shared", 3, TimeSpan.FromMilliseconds(20),
+        var governor = new PoolGovernor(PoolLabel.Reader, "shared", 1, TimeSpan.FromMilliseconds(20),
             sharedSemaphore: shared);
 
         Assert.False(governor.OwnsSemaphore);
 
         using var permit = governor.Acquire();
         var snapshot = governor.GetSnapshot();
-        Assert.Equal(3, snapshot.MaxPermits);
+        Assert.Equal(1, snapshot.MaxPermits);
         Assert.Equal(1, snapshot.InUse);
 
         Assert.Throws<PoolSaturatedException>(() => governor.Acquire());
@@ -93,5 +93,84 @@ public class PoolGovernorAdditionalTests
         using var second = governor.Acquire();
 
         Assert.Throws<PoolSaturatedException>(() => governor.Acquire());
+    }
+
+    [Fact]
+    public void TryAcquire_WhenPermitAvailable_ReturnsTrueAndPermit()
+    {
+        var governor = new PoolGovernor(PoolLabel.Reader, "try-reader", 1, TimeSpan.FromMilliseconds(50));
+
+        var acquired = governor.TryAcquire(out var permit);
+
+        Assert.True(acquired);
+        Assert.NotEqual(default, permit);
+        Assert.Equal(1, governor.GetSnapshot().InUse);
+
+        permit.Dispose();
+    }
+
+    [Fact]
+    public void TryAcquire_WhenSaturated_ReturnsFalse()
+    {
+        var governor = new PoolGovernor(PoolLabel.Reader, "try-reader", 1, TimeSpan.FromMilliseconds(10));
+        using var permit = governor.Acquire();
+
+        var acquired = governor.TryAcquire(out var second);
+
+        Assert.False(acquired);
+        Assert.Equal(default, second);
+        Assert.Equal(1, governor.GetSnapshot().TotalTimeouts);
+    }
+
+    [Fact]
+    public async Task TryAcquireAsync_WhenPermitAvailable_ReturnsTrueAndPermit()
+    {
+        var governor = new PoolGovernor(PoolLabel.Writer, "try-writer", 1, TimeSpan.FromMilliseconds(50));
+
+        var acquired = await governor.TryAcquireAsync();
+
+        Assert.True(acquired.Success);
+        Assert.NotEqual(default, acquired.Permit);
+        Assert.Equal(1, governor.GetSnapshot().InUse);
+
+        await acquired.Permit.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task TryAcquireAsync_WhenSaturated_ReturnsFalse()
+    {
+        var governor = new PoolGovernor(PoolLabel.Writer, "try-writer", 1, TimeSpan.FromMilliseconds(10));
+        await using var permit = await governor.AcquireAsync();
+
+        var acquired = await governor.TryAcquireAsync();
+
+        Assert.False(acquired.Success);
+        Assert.Equal(default, acquired.Permit);
+        Assert.Equal(1, governor.GetSnapshot().TotalTimeouts);
+    }
+
+    [Fact]
+    public async Task WaitForDrainAsync_CompletesAfterRelease()
+    {
+        var governor = new PoolGovernor(PoolLabel.Reader, "drain", 1, TimeSpan.FromMilliseconds(50));
+        var permit = governor.Acquire();
+
+        var waitTask = governor.WaitForDrainAsync();
+
+        Assert.False(waitTask.IsCompleted);
+        permit.Dispose();
+
+        await waitTask;
+        Assert.Equal(0, governor.GetSnapshot().InUse);
+    }
+
+    [Fact]
+    public async Task WaitForDrainAsync_WhenCanceled_Throws()
+    {
+        var governor = new PoolGovernor(PoolLabel.Reader, "drain-cancel", 1, TimeSpan.FromMilliseconds(50));
+        using var permit = governor.Acquire();
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(20));
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => governor.WaitForDrainAsync(cts.Token));
     }
 }
