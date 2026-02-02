@@ -5,8 +5,10 @@ using System.Data.Common;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using pengdows.crud;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.tenant;
 using Xunit;
 
@@ -117,14 +119,20 @@ public class MultitenantIntegrationTests : IAsyncLifetime
         }
         else if (tenant == "TenantB")
         {
-            // shared in-memory coerces/keeps SingleWriter; reads are ephemeral, writes use pinned writer
+            // shared in-memory should still coerce to SingleWriter, but writes are serialized via governor
             Assert.Equal(DbMode.SingleWriter, ctx.ConnectionMode);
             var w1 = ctx.GetConnection(ExecutionType.Write);
+            ctx.CloseAndDisposeConnection(w1);
+
             var w2 = ctx.GetConnection(ExecutionType.Write);
-            Assert.Same(w1, w2); // pinned writer reused
+            ctx.CloseAndDisposeConnection(w2);
+
+            var dbContext = Assert.IsType<DatabaseContext>(ctx);
+            var writerSnapshot = dbContext.GetPoolStatisticsSnapshot(PoolLabel.Writer);
+            Assert.True(writerSnapshot.TotalAcquired >= 2, "Each write should acquire its own permit.");
 
             var r = ctx.GetConnection(ExecutionType.Read);
-            Assert.NotSame(w1, r); // read connection is distinct/ephemeral under SingleWriter
+            Assert.NotSame(w2, r); // read connection should be independent
             ctx.CloseAndDisposeConnection(r);
         }
 

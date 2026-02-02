@@ -23,7 +23,7 @@ public enum DbMode
 {
     Standard = 0,         // Recommended for production
     KeepAlive = 1,        // Keeps one sentinel connection open
-    SingleWriter = 2,     // One pinned writer, concurrent ephemeral readers
+    SingleWriter = 2,     // Governor-enforced single writer, concurrent ephemeral readers
     SingleConnection = 4, // All work goes through one pinned connection
     Best = 15             // Auto-select best mode for the database
 }
@@ -46,9 +46,8 @@ public enum DbMode
 
 ### SingleWriter
 
-- Holds one persistent write connection open
-- Acquires ephemeral read-only connections as needed
-- Used automatically for file-based SQLite (see Connection Pooling)
+- Uses the Standard lifecycle but enforces `MaxConcurrentWrites = 1` with a writer-preference gate, keeping readers ephemeral while writers serialize.
+- Ideal for file-based SQLite and shared in-memory databases where writes must serialize without pinning a dedicated connection.
 
 ### SingleConnection
 

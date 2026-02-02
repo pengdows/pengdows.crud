@@ -22,6 +22,7 @@
 //   * EnableMetrics, MetricsOptions: Performance tracking configuration
 // =============================================================================
 
+using System;
 using pengdows.crud.enums;
 using pengdows.crud.metrics;
 
@@ -85,8 +86,53 @@ public class DatabaseContextConfiguration : IDatabaseContextConfiguration
     public bool EnableMetrics { get; set; } = false;
     public MetricsOptions MetricsOptions { get; set; } = MetricsOptions.Default;
 
-    public int? WritePoolSize { get; set; }
-    public int? ReadPoolSize { get; set; }
+    private int? _maxConcurrentWrites;
+    private int? _maxConcurrentReads;
+
+    /// <summary>
+    /// Maximum number of concurrent write operations allowed by the governor.
+    /// Overrides <see cref="ReadPoolSize"/> for backward compatibility.
+    /// </summary>
+    public int? MaxConcurrentWrites
+    {
+        get => _maxConcurrentWrites;
+        set => _maxConcurrentWrites = value;
+    }
+
+    /// <summary>
+    /// Maximum number of concurrent read operations allowed by the governor.
+    /// Overrides <see cref="ReadPoolSize"/> for backward compatibility.
+    /// </summary>
+    public int? MaxConcurrentReads
+    {
+        get => _maxConcurrentReads;
+        set => _maxConcurrentReads = value;
+    }
+
+    /// <summary>
+    /// Legacy alias for <see cref="MaxConcurrentWrites"/>.
+    /// </summary>
+    [Obsolete("Use MaxConcurrentWrites instead.")]
+    public int? WritePoolSize
+    {
+        get => MaxConcurrentWrites;
+        set => MaxConcurrentWrites = value;
+    }
+
+    /// <summary>
+    /// Legacy alias for <see cref="MaxConcurrentReads"/>.
+    /// </summary>
+    [Obsolete("Use MaxConcurrentReads instead.")]
+    public int? ReadPoolSize
+    {
+        get => MaxConcurrentReads;
+        set => MaxConcurrentReads = value;
+    }
+
+    /// <summary>
+    /// When true, the governor enforces writer-preference gates (turnstile) for SingleWriter mode.
+    /// </summary>
+    public bool EnableWriterPreference { get; set; } = true;
     public TimeSpan PoolAcquireTimeout { get; set; } = TimeSpan.FromSeconds(5);
     public TimeSpan? ModeLockTimeout { get; set; } = TimeSpan.FromSeconds(30);
     public bool EnablePoolGovernor { get; set; } = true;

@@ -498,7 +498,7 @@ public enum DbMode
 {
     Standard = 0,       // Recommended for production
     KeepAlive = 1,      // Keeps one sentinel connection open
-    SingleWriter = 2,   // One pinned writer, concurrent ephemeral readers
+    SingleWriter = 2,   // Governor-enforced single writer + concurrent ephemeral readers
     SingleConnection = 4, // All work goes through one pinned connection
     Best = 15
 }
@@ -511,7 +511,7 @@ Use the lowest number (closest to Standard) possible for best results.
 
 - **KeepAlive**: Keeps a single sentinel connection open (never used for work) to prevent unloads in some embedded/local DBs. Otherwise behaves like Standard.
 
-- **SingleWriter**: Holds one persistent write connection open. Acquires ephemeral read-only connections as needed. Used automatically for file-based SQLite/DuckDB and named in-memory databases that enable `Mode=Memory;Cache=Shared` so multiple connections share one database.
+- **SingleWriter**: Runs the Standard lifecycle but enforces `MaxConcurrentWrites = 1` with a writer-preference turnstile, allowing read-heavy workloads to keep using ephemeral connections while writers serialize deterministically. Still the default for file-based SQLite/DuckDB and shared in-memory databases that need a single writer.
 
 - **SingleConnection**: All work — reads and writes — is funneled through a single pinned connection. Used automatically for isolated in-memory SQLite/DuckDB where each `:memory:` connection would otherwise have its own private database.
 

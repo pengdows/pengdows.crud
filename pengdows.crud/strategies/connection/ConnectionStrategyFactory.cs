@@ -6,7 +6,7 @@
 // - Creates IConnectionStrategy implementations based on DbMode:
 //   * Standard - Ephemeral connections with provider pooling (default)
 //   * KeepAlive - Standard + sentinel connection to prevent unload
-//   * SingleWriter - Pinned writer + ephemeral readers (file SQLite)
+//   * SingleWriter - Standard lifecycle with governor-enforced single writer (file SQLite)
 //   * SingleConnection - All work on one connection (:memory: SQLite)
 // - Database-to-strategy mapping based on connection string/provider:
 //   * SQL Server/PostgreSQL/MySQL -> Standard
@@ -30,8 +30,8 @@ namespace pengdows.crud.strategies.connection;
 /// 1. SingleConnection - ONE connection for everything
 ///    └─ In-memory databases where connection loss = data loss
 ///
-/// 2. SingleWriter - ONE persistent writer + ephemeral readers
-///    └─ Databases with single-writer limitations (SQLCE, file-based)
+/// 2. SingleWriter - StandardConnectionStrategy + governor (write slot = 1)
+///    └─ Databases with single-writer file-based limitations (SQLite, DuckDB)
 ///
 /// 3. KeepAlive - Standard + one unused sentinel connection
 ///    └─ Embedded databases that benefit from staying loaded
@@ -41,8 +41,8 @@ namespace pengdows.crud.strategies.connection;
 ///
 /// DATABASE-TO-STRATEGY MAPPING:
 /// - SQLite/DuckDB isolated :memory: → SingleConnection (each connection owns its own database)
-/// - SQLite/DuckDB shared in-memory (Mode=Memory;Cache=Shared) → SingleWriter (one writer, many readers)
-/// - File SQLite → SingleWriter (single writer coordination)
+/// - SQLite/DuckDB shared in-memory (Mode=Memory;Cache=Shared) → SingleWriter (governed writer)
+/// - File SQLite → SingleWriter (write-serialized via governor)
 /// - LocalDB → KeepAlive (prevent shutdown between operations)
 /// - SQL Server/PostgreSQL/MySQL → Standard (connection pooling)
 ///
@@ -61,7 +61,9 @@ internal static class ConnectionStrategyFactory
             DbMode.Standard => new StandardConnectionStrategy(context),
             DbMode.KeepAlive => new KeepAliveConnectionStrategy(context),
             DbMode.SingleConnection => new SingleConnectionStrategy(context),
-            DbMode.SingleWriter => new SingleWriterConnectionStrategy(context),
+            // SingleWriter now uses Standard lifecycle with governor policy (WriteSlots=1 + turnstile)
+            // This provides: per-operation connections, connection recovery, writer starvation prevention
+            DbMode.SingleWriter => new StandardConnectionStrategy(context),
             _ => throw new NotSupportedException($"Unsupported database mode: {mode}")
         };
     }

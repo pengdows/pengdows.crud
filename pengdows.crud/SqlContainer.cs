@@ -13,7 +13,7 @@
 //   * WrapObjectName for dialect-specific identifier quoting
 //   * MakeParameterName for dialect-specific parameter naming (@p, :p, ?)
 // - Manages parameter ordering for positional parameter databases (Oracle, ODBC).
-// - Uses StringBuilderPool for efficient StringBuilder reuse.
+// - Uses StringBuilderLite for efficient SQL construction with zero allocations.
 // - Implements IDisposable/IAsyncDisposable for cleanup.
 // - Thread-safe for building (not for concurrent modification).
 // - Internally uses dialects (ISqlDialect) for database-specific SQL generation.
@@ -669,17 +669,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             var isTransaction = _context is ITransactionContext;
             var isShared = ShouldUseSharedConnection(_context, ExecutionType.Write, isTransaction);
             conn = GetConnection(ExecutionType.Write, isShared);
-            // Guard: in SingleWriter mode, writes must target the writer connection
-            if (!isTransaction && _context.ConnectionMode == DbMode.SingleWriter && _context is DatabaseContext dc)
-            {
-                if (!ReferenceEquals(conn, dc.PersistentConnection))
-                {
-                    throw new InvalidOperationException(
-                        "Write operations must use the writer connection in SingleWriter mode.");
-                }
-            }
-
-            // SingleWriter mode requires the persistent writer connection for write operations.
+            // Note: SingleWriter mode now uses Standard lifecycle with governor policy.
+            // The governor (WriteSlots=1) ensures only one write at a time.
             await using var connectionLocker = conn.GetLock();
             await connectionLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             cmd = await PrepareAndCreateCommandAsync(conn, commandType, ExecutionType.Write, cancellationToken)
@@ -768,16 +759,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             var isTransaction = _context is ITransactionContext;
             var isShared = ShouldUseSharedConnection(_context, ExecutionType.Write, isTransaction);
             conn = GetConnection(ExecutionType.Write, isShared);
-            if (!isTransaction && _context.ConnectionMode == DbMode.SingleWriter && _context is DatabaseContext dc)
-            {
-                if (!ReferenceEquals(conn, dc.PersistentConnection))
-                {
-                    throw new InvalidOperationException(
-                        "Write operations must use the writer connection in SingleWriter mode.");
-                }
-            }
-
-            // Do not enforce persistent connection for SingleWriter here; strategy/context will manage it.
+            // Note: SingleWriter mode now uses Standard lifecycle with governor policy.
+            // The governor (WriteSlots=1) ensures only one write at a time.
             await using var connectionLocker = conn.GetLock();
             await connectionLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             cmd = await PrepareAndCreateCommandAsync(conn, commandType, ExecutionType.Write, cancellationToken)
@@ -1254,7 +1237,6 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         return context.ConnectionMode switch
         {
             DbMode.SingleConnection => true,
-            DbMode.SingleWriter => executionType == ExecutionType.Write,
             _ => false
         };
     }

@@ -10,7 +10,7 @@
 //   * ReleaseConnection() - Return/dispose connection based on policy
 //   * HandleDialectDetection() - Strategy-specific dialect initialization
 // - Implementations: StandardConnectionStrategy, KeepAliveConnectionStrategy,
-//   SingleWriterConnectionStrategy, SingleConnectionStrategy.
+//   SingleConnectionStrategy.
 // - DatabaseContext delegates all connection decisions to the active strategy.
 // =============================================================================
 

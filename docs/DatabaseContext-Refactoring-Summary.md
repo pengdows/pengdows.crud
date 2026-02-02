@@ -70,7 +70,6 @@ DatabaseContext.ConnectionLifecycle.cs (396 lines)
 ├── ApplyPersistentConnectionSessionSettings
 ├── GetStandardConnection
 ├── GetSingleConnection
-├── GetSingleWriterConnection
 ├── SetPersistentConnection
 ├── SanitizeConnectionString
 └── UpdateMaxConnectionCount

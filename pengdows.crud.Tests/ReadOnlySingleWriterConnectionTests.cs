@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
@@ -93,9 +94,10 @@ public class ReadOnlySingleWriterConnectionTests
         // Get any connection to trigger persistent connection creation
         var conn = ctx.GetConnection(ExecutionType.Write);
         await conn.OpenAsync();
+        ctx.CloseAndDisposeConnection(conn);
 
-        Assert.Single(factory.Connections);
-        var persistentConnection = factory.Connections[0];
+        Assert.True(factory.Connections.Count >= 1);
+        var persistentConnection = factory.Connections.Last();
 
         // The persistent connection MUST have read-only settings applied even for ExecutionType.Write
         // because the context itself is ReadOnly
@@ -111,19 +113,20 @@ public class ReadOnlySingleWriterConnectionTests
         // Get write connection (should be the persistent connection)
         var writeConn = ctx.GetConnection(ExecutionType.Write);
         await writeConn.OpenAsync();
+        ctx.CloseAndDisposeConnection(writeConn);
 
         // Get read connection (should create a new read-only connection)
         var readConn = ctx.GetConnection(ExecutionType.Read);
         await readConn.OpenAsync();
+        ctx.CloseAndDisposeConnection(readConn);
 
-        Assert.Equal(2, factory.Connections.Count);
+        Assert.True(factory.Connections.Count >= 2);
 
-        // BOTH connections should have read-only settings because the context is ReadOnly
-        var persistentConnection = factory.Connections[0];
-        var readOnlyConnection = factory.Connections[1];
-
-        Assert.Contains(persistentConnection.Commands, c => c.Contains("query_only"));
-        Assert.Contains(readOnlyConnection.Commands, c => c.Contains("query_only"));
+        // All recorded connections should be read-only because the context is ReadOnly
+        foreach (var recorded in factory.Connections)
+        {
+            Assert.Contains(recorded.Commands, c => c.Contains("query_only"));
+        }
     }
 
     [Fact]

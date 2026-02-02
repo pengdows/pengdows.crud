@@ -37,6 +37,7 @@ public abstract class DatabaseTestBase : IAsyncLifetime
             try
             {
                 var context = await Fixture.CreateDatabaseContextAsync(provider);
+                Output.WriteLine($"[{DateTime.UtcNow:HH:mm:ss.fff}] {provider} connection string: {context.ConnectionString}");
                 contexts[provider] = context;
             }
             catch (Exception ex)

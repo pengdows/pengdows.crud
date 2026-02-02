@@ -166,8 +166,9 @@ public partial class DatabaseContext
             _poolAcquireTimeout = configuration.PoolAcquireTimeout;
             _modeLockTimeout = configuration.ModeLockTimeout;
             _enablePoolGovernor = configuration.EnablePoolGovernor;
-            _configuredReadPoolSize = configuration.ReadPoolSize;
-            _configuredWritePoolSize = configuration.WritePoolSize;
+            _enableWriterPreference = configuration.EnableWriterPreference;
+            _configuredReadPoolSize = configuration.MaxConcurrentReads;
+            _configuredWritePoolSize = configuration.MaxConcurrentWrites;
             if (configuration.EnableMetrics)
             {
                 var options = configuration.MetricsOptions ?? MetricsOptions.Default;
@@ -341,8 +342,9 @@ public partial class DatabaseContext
             _poolAcquireTimeout = configuration.PoolAcquireTimeout;
             _modeLockTimeout = configuration.ModeLockTimeout;
             _enablePoolGovernor = configuration.EnablePoolGovernor;
-            _configuredReadPoolSize = configuration.ReadPoolSize;
-            _configuredWritePoolSize = configuration.WritePoolSize;
+            _enableWriterPreference = configuration.EnableWriterPreference;
+            _configuredReadPoolSize = configuration.MaxConcurrentReads;
+            _configuredWritePoolSize = configuration.MaxConcurrentWrites;
             if (configuration.EnableMetrics)
             {
                 var options = configuration.MetricsOptions ?? MetricsOptions.Default;
@@ -590,7 +592,9 @@ public partial class DatabaseContext
             // 5) Apply provider/session settings according to final mode
             if (initConn != null)
             {
-                if (ConnectionMode is DbMode.KeepAlive or DbMode.SingleConnection or DbMode.SingleWriter)
+                // Note: SingleWriter no longer uses persistent connections - it uses
+                // Standard lifecycle with governor policy (WriteSlots=1 + turnstile fairness)
+                if (ConnectionMode is DbMode.KeepAlive or DbMode.SingleConnection)
                 {
                     ApplyPersistentConnectionSessionSettings(initConn);
                     SetPersistentConnection(initConn);
@@ -598,7 +602,7 @@ public partial class DatabaseContext
                 }
                 else
                 {
-                    // Standard: no persistent connection to configure here
+                    // Standard and SingleWriter: no persistent connection to configure here
                 }
             }
 
@@ -741,12 +745,22 @@ public partial class DatabaseContext
             sharedSemaphore = new SemaphoreSlim(sharedMax.Value, sharedMax.Value);
         }
 
+        // SingleWriter mode: create turnstile for writer-preference fairness
+        // This prevents reader floods from starving writers
+        SemaphoreSlim? turnstile = null;
+        if (ConnectionMode == DbMode.SingleWriter && _enableWriterPreference)
+        {
+            turnstile = new SemaphoreSlim(1, 1);
+        }
+
         _writerGovernor = CreateGovernor(
             PoolLabel.Writer,
             writerKey,
             sharedMax ?? writerLabelMax,
             sharedSemaphore,
-            disableWriterGovernor);
+            disableWriterGovernor,
+            turnstile: turnstile,
+            holdTurnstile: true); // Writers hold turnstile until permit released
 
         var readerGovernorDisabled = readerDisabled || disableReaderGovernor;
         _readerGovernor = readerGovernorDisabled
@@ -756,9 +770,12 @@ public partial class DatabaseContext
                 readerKey,
                 sharedMax ?? readerLabelMax,
                 sharedSemaphore,
-                false);
+                false,
+                turnstile: turnstile,
+                holdTurnstile: false); // Readers touch-and-release turnstile
 
-        if (ConnectionMode is DbMode.SingleConnection or DbMode.SingleWriter or DbMode.KeepAlive)
+        // Attach permit for modes with persistent connections (not SingleWriter anymore)
+        if (ConnectionMode is DbMode.SingleConnection or DbMode.KeepAlive)
         {
             AttachPinnedPermitIfNeeded();
         }
@@ -863,7 +880,9 @@ public partial class DatabaseContext
         string poolKey,
         int? maxPermits,
         SemaphoreSlim? sharedSemaphore,
-        bool disabled = false)
+        bool disabled = false,
+        SemaphoreSlim? turnstile = null,
+        bool holdTurnstile = false)
     {
         if (disabled || !maxPermits.HasValue || maxPermits.Value <= 0)
         {
@@ -876,7 +895,9 @@ public partial class DatabaseContext
             maxPermits.Value,
             _poolAcquireTimeout,
             false,
-            sharedSemaphore);
+            sharedSemaphore,
+            turnstile,
+            holdTurnstile);
     }
 
     private static int? ResolveSharedMax(int? writerMax, int? readerMax)

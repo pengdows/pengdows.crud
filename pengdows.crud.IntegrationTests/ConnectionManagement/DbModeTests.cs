@@ -45,17 +45,8 @@ public class DbModeTests : DatabaseTestBase
             // Act - Perform operation
             await helper.CreateAsync(entity, context);
 
-            // Assert - Connection behavior depends on mode
-            if (provider is SupportedDatabase.Sqlite or SupportedDatabase.DuckDB)
-            {
-                // SingleWriter mode keeps one connection open
-                Assert.Equal(1, context.NumberOfOpenConnections);
-            }
-            else
-            {
-                // Standard mode closes connections after use
-                Assert.Equal(initialConnCount, context.NumberOfOpenConnections);
-            }
+            // Assert - Every mode should return to the baseline open count after the operation
+            Assert.Equal(initialConnCount, context.NumberOfOpenConnections);
         });
     }
 

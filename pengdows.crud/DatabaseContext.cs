@@ -14,7 +14,7 @@
 // - Connection modes (DbMode):
 //   * Standard - ephemeral connections per operation (recommended for production)
 //   * KeepAlive - sentinel connection + ephemeral work connections
-//   * SingleWriter - pinned writer + ephemeral readers (for SQLite file mode)
+//   * SingleWriter - governor-based single writer policy with ephemeral connections (for SQLite file mode)
 //   * SingleConnection - all work through one connection (for :memory: SQLite)
 // - Thread-safe: concurrent operations are supported in all modes.
 // - Singleton per connection string: register in DI as singleton.
@@ -59,13 +59,13 @@ namespace pengdows.crud;
 /// <para>
 /// <strong>Concurrent callers are supported:</strong>
 /// Standard mode: parallel operations using ephemeral connections.
-/// KeepAlive/SingleWriter/SingleConnection modes: operations serialize on shared connection lock.
+/// KeepAlive/SingleConnection modes: operations serialize on shared connection lock. SingleWriter uses the governor to serialize writes without a persistent connection.
 /// APIs returning <see cref="wrappers.ITrackedReader"/> hold a connection lease until disposed.
 /// </para>
 /// <para><strong>Lifetime:</strong></para>
 /// <para>
 /// Register <c>DatabaseContext</c> as a <b>singleton per unique connection string</b>.
-/// This is required for modes that maintain persistent connections (e.g. SingleWriter/SingleConnection).
+/// This is required for modes that maintain persistent connections (e.g. KeepAlive, SingleConnection).
 /// </para>
 ///
 /// <para><strong>Concurrency contract:</strong></para>
@@ -83,8 +83,7 @@ namespace pengdows.crud;
 ///   </item>
 ///   <item>
 ///     <description>
-///     <b>SingleWriter:</b> writes serialize on the pinned writer connection; non-transactional reads use ephemeral
-///     read-only connections.
+///     <b>SingleWriter:</b> Standard lifecycle with a governor that allows many readers but only one writer at a time; reads still use ephemeral connections.
 ///     </description>
 ///   </item>
 ///   <item>
@@ -154,6 +153,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private TimeSpan? _modeLockTimeout = TimeSpan.FromSeconds(30);
     private bool _enablePoolGovernor = true;
     private bool _effectivePoolGovernorEnabled = true;
+    private bool _enableWriterPreference = true;
     private int? _configuredReadPoolSize;
     private int? _configuredWritePoolSize;
     private const string ReadOnlyApplicationNameSuffix = ":ro";

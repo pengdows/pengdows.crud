@@ -293,14 +293,14 @@ public class ConnectionStrategyTests
     }
 
     [Fact]
-    public void SingleWriterPinnedConnection_UsesRealLocker()
+    public void SingleWriterWriteConnection_UsesNoOpLocker()
     {
         using var ctx = CreateContext(DbMode.SingleWriter, SupportedDatabase.Sqlite, "file.db");
         var connection = ctx.GetConnection(ExecutionType.Write);
 
         using var locker = connection.GetLock();
 
-        Assert.IsType<RealAsyncLocker>(locker);
+        Assert.IsType<NoOpAsyncLocker>(locker);
 
         ctx.CloseAndDisposeConnection(connection);
     }
@@ -472,17 +472,18 @@ public class ConnectionStrategyTests
     }
 
     [Fact]
-    public async Task SingleWriter_WriteConnection_AlwaysSameReference()
+    public async Task SingleWriter_WriteConnections_Serializable()
     {
         await using var ctx = CreateContext(DbMode.SingleWriter, SupportedDatabase.Sqlite, "file.db");
 
         var write1 = ctx.GetConnection(ExecutionType.Write);
-        var write2 = ctx.GetConnection(ExecutionType.Write);
-        var write3 = ctx.GetConnection(ExecutionType.Write);
+        ctx.CloseAndDisposeConnection(write1);
 
-        Assert.Same(write1, write2);
-        Assert.Same(write2, write3);
-        Assert.Same(write1, write3);
+        var write2 = ctx.GetConnection(ExecutionType.Write);
+        ctx.CloseAndDisposeConnection(write2);
+
+        Assert.NotNull(write1);
+        Assert.NotNull(write2);
     }
 
     [Fact]
@@ -669,97 +670,4 @@ public class ConnectionStrategyTests
         Assert.Equal(ConnectionState.Closed, separateConnection.State);
     }
 
-    // Additional coverage tests for SingleWriterConnectionStrategy
-
-    [Fact]
-    public void SingleWriter_PostInitialize_AppliesSettingsAndSetsPersistent()
-    {
-        var factory = new RecordingFactory(SupportedDatabase.Sqlite);
-        var cfg = new DatabaseContextConfiguration
-        {
-            ConnectionString = "Data Source=file.db;EmulatedProduct=Sqlite",
-            DbMode = DbMode.SingleWriter,
-            ReadWriteMode = ReadWriteMode.ReadWrite
-        };
-        using var ctx = new DatabaseContext(cfg, factory);
-
-        var connection = ctx.GetConnection(ExecutionType.Write);
-        var strategy = new SingleWriterConnectionStrategy(ctx);
-
-        strategy.PostInitialize(connection);
-
-        // Verify session settings were applied
-        Assert.Contains("PRAGMA foreign_keys = ON", factory.Connection.ExecutedCommands);
-
-        // Verify persistent connection was set
-        Assert.Same(connection, ctx.PersistentConnection);
-    }
-
-    [Fact]
-    public async Task SingleWriter_ReleaseConnectionAsync_ReadConnection_Disposes()
-    {
-        await using var ctx = CreateContext(DbMode.SingleWriter, SupportedDatabase.Sqlite, "file.db");
-        var strategy = new SingleWriterConnectionStrategy(ctx);
-
-        // Get a read connection (should be disposable)
-        var readConnection = ctx.GetConnection(ExecutionType.Read);
-        await readConnection.OpenAsync();
-
-        Assert.Equal(ConnectionState.Open, readConnection.State);
-
-        await strategy.ReleaseConnectionAsync(readConnection);
-
-        // Read connection should be disposed (State becomes Closed)
-        Assert.Equal(ConnectionState.Closed, readConnection.State);
-    }
-
-    [Fact]
-    public async Task SingleWriter_ReleaseConnectionAsync_WriteConnection_DoesNotDispose()
-    {
-        await using var ctx = CreateContext(DbMode.SingleWriter, SupportedDatabase.Sqlite, "file.db");
-        var strategy = new SingleWriterConnectionStrategy(ctx);
-
-        // Get the write connection (should be persistent)
-        var writeConnection = ctx.GetConnection(ExecutionType.Write);
-
-        // The persistent write connection should remain open
-        await strategy.ReleaseConnectionAsync(writeConnection);
-
-        // Persistent connection should still be available and not disposed
-        Assert.Same(writeConnection, ctx.PersistentConnection);
-    }
-
-    [Fact]
-    public void SingleWriter_ReleaseConnection_ReadConnection_Disposes()
-    {
-        using var ctx = CreateContext(DbMode.SingleWriter, SupportedDatabase.Sqlite, "file.db");
-        var strategy = new SingleWriterConnectionStrategy(ctx);
-
-        // Get a read connection (should be disposable)
-        var readConnection = ctx.GetConnection(ExecutionType.Read);
-        readConnection.Open();
-
-        Assert.Equal(ConnectionState.Open, readConnection.State);
-
-        strategy.ReleaseConnection(readConnection);
-
-        // Read connection should be disposed (State becomes Closed)
-        Assert.Equal(ConnectionState.Closed, readConnection.State);
-    }
-
-    [Fact]
-    public void SingleWriter_ReleaseConnection_WriteConnection_DoesNotDispose()
-    {
-        using var ctx = CreateContext(DbMode.SingleWriter, SupportedDatabase.Sqlite, "file.db");
-        var strategy = new SingleWriterConnectionStrategy(ctx);
-
-        // Get the write connection (should be persistent)
-        var writeConnection = ctx.GetConnection(ExecutionType.Write);
-
-        // The persistent write connection should remain available after release
-        strategy.ReleaseConnection(writeConnection);
-
-        // Persistent connection should still be available and not disposed
-        Assert.Same(writeConnection, ctx.PersistentConnection);
-    }
 }

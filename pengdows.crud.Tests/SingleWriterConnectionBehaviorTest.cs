@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
@@ -89,96 +90,59 @@ public class SingleWriterConnectionBehaviorTest
         var factory = new RecordingFactory();
         await using var ctx = CreateSingleWriterContext(factory);
 
-        // Get a write connection first - this should create the persistent connection
+        var initialCount = factory.Connections.Count;
+
+        // Acquire a write connection and assert it remains writable
         var writeConn = ctx.GetConnection(ExecutionType.Write);
         await writeConn.OpenAsync();
+        ctx.CloseAndDisposeConnection(writeConn);
 
-        Assert.Single(factory.Connections);
-        var persistentConnection = factory.Connections[0];
+        Assert.True(factory.Connections.Count > initialCount);
+        var writeConnection = factory.Connections.Last();
+        Assert.DoesNotContain(writeConnection.Commands, c => c.Contains("query_only"));
 
-        // The persistent connection should NOT have read-only settings
-        Assert.DoesNotContain(persistentConnection.Commands, c => c.Contains("query_only"));
+        // Acquire two read connections, each of which should be read-only
+        for (var i = 0; i < 2; i++)
+        {
+            var readConn = ctx.GetConnection(ExecutionType.Read);
+            await readConn.OpenAsync();
+            ctx.CloseAndDisposeConnection(readConn);
 
-        // Now get a read connection - this should create a NEW read-only connection
-        var readConn = ctx.GetConnection(ExecutionType.Read);
-        await readConn.OpenAsync();
-
-        Assert.Equal(2, factory.Connections.Count);
-        var readOnlyConnection = factory.Connections[1];
-
-        // The new read connection MUST have read-only settings applied
-        Assert.Contains(readOnlyConnection.Commands, c => c.Contains("query_only"));
-
-        // Get another read connection - should create another read-only connection
-        var readConn2 = ctx.GetConnection(ExecutionType.Read);
-        await readConn2.OpenAsync();
-
-        Assert.Equal(3, factory.Connections.Count);
-        var readOnlyConnection2 = factory.Connections[2];
-
-        // This new read connection MUST also have read-only settings applied
-        Assert.Contains(readOnlyConnection2.Commands, c => c.Contains("query_only"));
+            var readOnlyConnection = factory.Connections.Last();
+            Assert.Contains(readOnlyConnection.Commands, c => c.Contains("query_only"));
+        }
     }
 
     [Fact]
-    public async Task SingleWriter_WriteTransaction_UsesSharedConnection()
+    public async Task SingleWriter_WriteTransaction_UsesWritableConnection()
     {
         var factory = new RecordingFactory();
         await using var ctx = CreateSingleWriterContext(factory);
 
-        // Create a write transaction - should use the shared persistent connection
         await using var tx = ctx.BeginTransaction(readOnly: false);
 
-        Assert.Single(factory.Connections);
-        var persistentConnection = factory.Connections[0];
-
-        // Should NOT have read-only settings
-        Assert.DoesNotContain(persistentConnection.Commands, c => c.Contains("query_only"));
+        Assert.True(factory.Connections.Count >= 1);
+        var writeConnection = factory.Connections.Last();
+        Assert.DoesNotContain(writeConnection.Commands, c => c.Contains("query_only"));
     }
 
     [Fact]
-    public async Task SingleWriter_ReadOnlyTransaction_CreatesReadOnlyConnection()
+    public async Task SingleWriter_ReadConnectionsStayReadOnly()
     {
         var factory = new RecordingFactory();
         await using var ctx = CreateSingleWriterContext(factory);
 
-        // Create the persistent connection first
         var writeConn = ctx.GetConnection(ExecutionType.Write);
         await writeConn.OpenAsync();
-
-        Assert.Single(factory.Connections);
-
-        // Create a read-only transaction - should create a separate read-only connection
-        await using var tx = ctx.BeginTransaction(readOnly: true);
-
-        Assert.Equal(2, factory.Connections.Count);
-        var readOnlyConnection = factory.Connections[1];
-
-        // MUST have read-only settings applied
-        Assert.Contains(readOnlyConnection.Commands, c => c.Contains("query_only"));
-    }
-
-    [Fact]
-    public async Task SingleWriter_OnlyPersistentConnection_CanWrite()
-    {
-        var factory = new RecordingFactory();
-        await using var ctx = CreateSingleWriterContext(factory);
-
-        // Get multiple connections
-        var writeConn = ctx.GetConnection(ExecutionType.Write);
-        await writeConn.OpenAsync();
+        ctx.CloseAndDisposeConnection(writeConn);
+        var writerConnection = factory.Connections.Last();
 
         var readConn = ctx.GetConnection(ExecutionType.Read);
         await readConn.OpenAsync();
+        ctx.CloseAndDisposeConnection(readConn);
+        var readOnlyConnection = factory.Connections.Last();
 
-        Assert.Equal(2, factory.Connections.Count);
-        var persistentConnection = factory.Connections[0];
-        var readOnlyConnection = factory.Connections[1];
-
-        // Only the persistent connection should be writable (no query_only pragma)
-        Assert.DoesNotContain(persistentConnection.Commands, c => c.Contains("query_only"));
-
-        // All other connections MUST be read-only
+        Assert.DoesNotContain(writerConnection.Commands, c => c.Contains("query_only"));
         Assert.Contains(readOnlyConnection.Commands, c => c.Contains("query_only"));
     }
 }

@@ -566,16 +566,16 @@ public class TransactionContextTests
 
         using var tx = (TransactionContext)context.BeginTransaction();
         var transactionConnection = tx.GetConnection(ExecutionType.Write);
+        tx.Dispose();
 
         var parentReadConnection = context.GetConnection(ExecutionType.Read);
         var parentWriteConnection = context.GetConnection(ExecutionType.Write);
 
         Assert.NotSame(transactionConnection, parentReadConnection);
-        Assert.NotSame(context.PersistentConnection, parentReadConnection);
-        Assert.Same(context.PersistentConnection, parentWriteConnection);
-        Assert.Same(transactionConnection, parentWriteConnection);
+        Assert.NotSame(transactionConnection, parentWriteConnection);
 
         context.CloseAndDisposeConnection(parentReadConnection);
+        context.CloseAndDisposeConnection(parentWriteConnection);
     }
 
     private static void ReplaceStrategy(DatabaseContext context, IConnectionStrategy strategy)

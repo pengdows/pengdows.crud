@@ -115,38 +115,6 @@ public partial class DatabaseContext
     }
 
     /// <summary>
-    /// Gets a connection for SingleWriter mode.
-    /// </summary>
-    internal ITrackedConnection GetSingleWriterConnection(ExecutionType type, bool isShared = false)
-    {
-        if (ExecutionType.Read == type)
-        {
-            // Embedded in-memory providers: distinguish isolated vs shared memory
-            if (Product == SupportedDatabase.Sqlite || Product == SupportedDatabase.DuckDB)
-            {
-                var memKind = DetectInMemoryKind(Product, _connectionString);
-                if (memKind == InMemoryKind.Isolated)
-                {
-                    // Isolated memory: reuse pinned connection for all reads
-                    return GetSingleConnection();
-                }
-
-                // Shared memory: ephemeral read-only connections using the same CS
-                return isShared
-                    ? GetSingleConnection()
-                    : GetStandardConnectionWithExecutionType(ExecutionType.Read, isShared, true);
-            }
-
-            // Non-embedded: ephemeral read connection (unless shared within a transaction)
-            return isShared
-                ? GetSingleConnection()
-                : GetStandardConnectionWithExecutionType(ExecutionType.Read, isShared, true);
-        }
-
-        return GetSingleConnection();
-    }
-
-    /// <summary>
     /// Applies connection session settings for non-Standard modes.
     /// </summary>
     internal void ApplyConnectionSessionSettings(IDbConnection connection)
@@ -281,6 +249,17 @@ public partial class DatabaseContext
         var activeConnectionString = string.IsNullOrWhiteSpace(connectionString)
             ? _connectionString
             : connectionString;
+        if (!string.IsNullOrWhiteSpace(activeConnectionString) &&
+            activeConnectionString.IndexOf("password", StringComparison.OrdinalIgnoreCase) < 0)
+        {
+            _logger.LogWarning("Connection string missing password for {Name}: {ConnectionString}", Name,
+                activeConnectionString);
+        }
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug("Preparing connection for {ExecutionType} with string: {ConnectionString}", executionType,
+                activeConnectionString);
+        }
         var dataSource = ResolveDataSource(readOnly);
 
         // Prefer DataSource over Factory for better performance (shared prepared statement cache)

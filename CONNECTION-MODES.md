@@ -29,13 +29,12 @@ It resolves ambiguities so future contributors cannot bikeshed these rules.
 
 ### SingleWriter
 
-- Semantics: One pinned connection for writes.
+- Semantics: Standard lifecycle plus a governor profile that enforces `MaxConcurrentWrites = 1` and `MaxConcurrentReads = N`.
 - Reads:
-  - Non-transactional → ephemeral read-only connections.
-  - Read-only transactions → ephemeral read-only connection.
-  - Write transactions → writer connection.
-- Used for: SQLite/DuckDB file-based databases.
-- Threadsafe for pinned writer via `RealAsyncLocker`.
+  - Non-transactional → ephemeral read-only connections that use the read-only preamble.
+  - Read-only transactions → ephemeral read-only connections (reader concurrency pauses while writers wait).
+  - Write transactions → serialize through the write permit while retaining the connection for the transaction's duration.
+- Used for: SQLite/DuckDB file-based and shared caches where writers must serialize without pinning a connection.
 
 ### Best
 
@@ -95,16 +94,15 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 - All commands inside a transaction (read or write) share the same physical connection.
 - Rules by mode:
   - Standard / KeepAlive: `BeginTransaction()` creates a pinned connection for that scope.
-  - SingleWriter:
-    - Write tx → writer connection.
-    - Read-only tx → ephemeral read-only connection.
+  - Write tx → acquires the single write permit and reuses the transaction connection for the scope.
+  - Read-only tx → ephemeral read-only connection that still respects governor fairness when writes queue.
   - SingleConnection: all tx use the single pinned connection.
 
 ## 6. Failure Behavior
 
 - Non-transactional ephemeral connections: errors bubble at `Execute…` (open-late / close-early).
 - Transaction start: `BeginTransaction()` eagerly opens the connection and errors surface immediately.
-- Persistent modes (KeepAlive/SingleWriter/SingleConnection): if pinned connection fails to open at ctor, error bubbles immediately.
+- Persistent modes (KeepAlive/SingleConnection): if pinned connection fails to open at ctor, error bubbles immediately.
 - No silent deferrals beyond SQL-92 fallback when dialect is unknown.
 
 ## 7. Heuristics & Tests
@@ -142,4 +140,3 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 ---
 
 This contract is authoritative — implement according to these rules, and contributors must not deviate.
-

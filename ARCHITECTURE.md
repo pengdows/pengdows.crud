@@ -459,10 +459,11 @@ app.Use(async (context, next) =>
 - Prevents database unload (LocalDB, embedded SQLite)
 - All work uses ephemeral connections (like Standard)
 
-**SingleWriter mode** (`SingleWriterConnectionStrategy`):
-- One persistent **write** connection (held open)
-- Ephemeral **read** connections (created per read)
-- Optimal for SQLite files (WAL enables many readers + one writer)
+**SingleWriter mode** (`StandardConnectionStrategy` + governor policy):
+- Per-operation connections for both reads and writes
+- Governor enforces `MaxConcurrentWrites = 1`, `MaxConcurrentReads = N`
+- Turnstile fairness gate prevents reader starvation (writer-preference)
+- Ideal for file-based SQLite/DuckDB when writes must serialize
 
 **SingleConnection mode** (`SingleConnectionStrategy`):
 - One persistent connection for **all** operations
@@ -486,7 +487,7 @@ public static IConnectionStrategy Create(DbMode mode, IDatabaseContext context)
     {
         DbMode.Standard => new StandardConnectionStrategy(context),
         DbMode.KeepAlive => new KeepAliveConnectionStrategy(context),
-        DbMode.SingleWriter => new SingleWriterConnectionStrategy(context),
+        DbMode.SingleWriter => new StandardConnectionStrategy(context),
         DbMode.SingleConnection => new SingleConnectionStrategy(context),
         _ => new StandardConnectionStrategy(context)
     };

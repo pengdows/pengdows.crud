@@ -1417,7 +1417,7 @@ Override image or pass custom arguments:
 - **Reader mapping**: 5.7x faster than pure reflection (compiled property setters)
 - **Set-valued parameters**: 1 parameter instead of 1000 on PostgreSQL/SQL Server
 - **Prepared statement caching**: Eliminates repeated SQL parsing
-- **Zero allocation** in hot paths via StringBuilderPool and BoundedCache
+- **Zero allocation** in hot paths via `StringBuilderLite` and BoundedCache
 - **Streaming**: Process millions of rows with constant memory usage
 
 Benchmark suite included: `benchmarks/CrudBenchmarks/`

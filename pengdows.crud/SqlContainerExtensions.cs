@@ -159,7 +159,7 @@ public static class SqlContainerExtensions
     /// </para>
     /// <list type="bullet">
     /// <item><description>Databases with read replicas (ensures write goes to primary)</description></item>
-    /// <item><description>SingleWriter mode (uses the pinned writer connection)</description></item>
+    /// <item><description>SingleWriter mode (enforces a single write permit via the governor instead of a pinned connection)</description></item>
     /// </list>
     /// <para>
     /// Common use cases: INSERT ... RETURNING id (PostgreSQL), INSERT ... OUTPUT (SQL Server).

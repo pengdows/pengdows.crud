@@ -231,7 +231,7 @@ public class SessionSettingsEnforcementTests
     }
 
     [Fact]
-    public void DatabaseContext_SingleWriterMode_AppliesSessionSettingsToPinnedWriter()
+    public void DatabaseContext_SingleWriterMode_AppliesSessionSettingsToWriterConnection()
     {
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
@@ -242,7 +242,7 @@ public class SessionSettingsEnforcementTests
         };
         var context = new DatabaseContext(config, factory);
 
-        // Act - Get pinned writer connection (may already be open)
+        // Act - Get a write connection (per-operation)
         using var writerConnection = context.GetConnection(ExecutionType.Write);
         if (writerConnection.State != ConnectionState.Open)
         {

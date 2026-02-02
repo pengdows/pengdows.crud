@@ -17,6 +17,10 @@
 //   * OwnsSemaphore: true if governor created its own semaphore
 //   * When using shared semaphore, caller must ensure maxPermits matches actual capacity
 //   * Telemetry uses maxPermits as reported capacity (not verified at runtime)
+// - Turnstile fairness support (optional):
+//   * Prevents writer starvation under reader pressure
+//   * Writers (holdTurnstile=true): acquire turnstile before slot, release on permit dispose
+//   * Readers (holdTurnstile=false): touch-and-release turnstile, then acquire slot
 // - PoolPermit: RAII struct ensuring permit release on dispose.
 // =============================================================================
 
@@ -36,6 +40,10 @@ internal sealed class PoolGovernor
     private readonly bool _disabled;
     private readonly bool _ownsSemaphore;
 
+    // Turnstile fairness support: prevents writer starvation under reader pressure
+    private readonly SemaphoreSlim? _turnstile;
+    private readonly bool _holdTurnstile;
+
     private long _inUse;
     private long _peakInUse;
     private long _queued;
@@ -49,12 +57,16 @@ internal sealed class PoolGovernor
         int maxPermits,
         TimeSpan acquireTimeout,
         bool disabled = false,
-        SemaphoreSlim? sharedSemaphore = null)
+        SemaphoreSlim? sharedSemaphore = null,
+        SemaphoreSlim? turnstile = null,
+        bool holdTurnstile = false)
     {
         _label = label;
         _poolKeyHash = poolKeyHash;
         _acquireTimeout = acquireTimeout;
         _disabled = disabled;
+        _turnstile = turnstile;
+        _holdTurnstile = holdTurnstile;
 
         if (disabled)
         {
@@ -108,37 +120,70 @@ internal sealed class PoolGovernor
             throw new InvalidOperationException("Pool governor is not initialized.");
         }
 
-        if (_semaphore.Wait(0, cancellationToken))
+        // Turnstile fairness: acquire turnstile first to prevent starvation
+        var turnstileAcquired = false;
+        if (_turnstile != null)
         {
-            return OnAcquired();
-        }
+            if (!_turnstile.Wait(_acquireTimeout, cancellationToken))
+            {
+                Interlocked.Increment(ref _totalTimeouts);
+                throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
+            }
 
-        var waitStart = Stopwatch.GetTimestamp();
-        Interlocked.Increment(ref _queued);
+            turnstileAcquired = true;
+
+            // Readers touch-and-release; writers hold until permit released
+            if (!_holdTurnstile)
+            {
+                _turnstile.Release();
+                turnstileAcquired = false;
+            }
+        }
 
         try
         {
-            try
+            if (_semaphore.Wait(0, cancellationToken))
             {
-                var acquired = _semaphore.Wait(_acquireTimeout, cancellationToken);
-                if (!acquired)
-                {
-                    Interlocked.Increment(ref _totalTimeouts);
-                    throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
-                }
-
                 return OnAcquired();
             }
-            catch (OperationCanceledException)
+
+            var waitStart = Stopwatch.GetTimestamp();
+            Interlocked.Increment(ref _queued);
+
+            try
             {
-                Interlocked.Increment(ref _totalCanceledWaits);
-                throw;
+                try
+                {
+                    var acquired = _semaphore.Wait(_acquireTimeout, cancellationToken);
+                    if (!acquired)
+                    {
+                        Interlocked.Increment(ref _totalTimeouts);
+                        throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
+                    }
+
+                    return OnAcquired();
+                }
+                catch (OperationCanceledException)
+                {
+                    Interlocked.Increment(ref _totalCanceledWaits);
+                    throw;
+                }
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _queued);
+                _ = waitStart; // keep for parity with async; no extra metrics today
             }
         }
-        finally
+        catch
         {
-            Interlocked.Decrement(ref _queued);
-            _ = waitStart; // keep for parity with async; no extra metrics today
+            // On failure, release turnstile if we're still holding it (writers only)
+            if (turnstileAcquired && _turnstile != null)
+            {
+                _turnstile.Release();
+            }
+
+            throw;
         }
     }
 
@@ -154,39 +199,72 @@ internal sealed class PoolGovernor
             throw new InvalidOperationException("Pool governor is not initialized.");
         }
 
-        // Use WaitAsync even for zero-timeout to maintain consistent async behavior
-        // (Wait(0, ct) can throw OperationCanceledException synchronously)
-        if (await _semaphore.WaitAsync(0, cancellationToken).ConfigureAwait(false))
+        // Turnstile fairness: acquire turnstile first to prevent starvation
+        var turnstileAcquired = false;
+        if (_turnstile != null)
         {
-            return OnAcquired();
-        }
+            if (!await _turnstile.WaitAsync(_acquireTimeout, cancellationToken).ConfigureAwait(false))
+            {
+                Interlocked.Increment(ref _totalTimeouts);
+                throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
+            }
 
-        var waitStart = Stopwatch.GetTimestamp();
-        Interlocked.Increment(ref _queued);
+            turnstileAcquired = true;
+
+            // Readers touch-and-release; writers hold until permit released
+            if (!_holdTurnstile)
+            {
+                _turnstile.Release();
+                turnstileAcquired = false;
+            }
+        }
 
         try
         {
-            try
+            // Use WaitAsync even for zero-timeout to maintain consistent async behavior
+            // (Wait(0, ct) can throw OperationCanceledException synchronously)
+            if (await _semaphore.WaitAsync(0, cancellationToken).ConfigureAwait(false))
             {
-                var acquired = await _semaphore.WaitAsync(_acquireTimeout, cancellationToken).ConfigureAwait(false);
-                if (!acquired)
-                {
-                    Interlocked.Increment(ref _totalTimeouts);
-                    throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
-                }
-
                 return OnAcquired();
             }
-            catch (OperationCanceledException)
+
+            var waitStart = Stopwatch.GetTimestamp();
+            Interlocked.Increment(ref _queued);
+
+            try
             {
-                Interlocked.Increment(ref _totalCanceledWaits);
-                throw;
+                try
+                {
+                    var acquired = await _semaphore.WaitAsync(_acquireTimeout, cancellationToken).ConfigureAwait(false);
+                    if (!acquired)
+                    {
+                        Interlocked.Increment(ref _totalTimeouts);
+                        throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
+                    }
+
+                    return OnAcquired();
+                }
+                catch (OperationCanceledException)
+                {
+                    Interlocked.Increment(ref _totalCanceledWaits);
+                    throw;
+                }
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _queued);
+                _ = waitStart; // keep for parity with sync path
             }
         }
-        finally
+        catch
         {
-            Interlocked.Decrement(ref _queued);
-            _ = waitStart; // keep for parity with sync path
+            // On failure, release turnstile if we're still holding it (writers only)
+            if (turnstileAcquired && _turnstile != null)
+            {
+                _turnstile.Release();
+            }
+
+            throw;
         }
     }
 
@@ -202,6 +280,12 @@ internal sealed class PoolGovernor
     {
         Interlocked.Decrement(ref _inUse);
         _semaphore?.Release();
+
+        // Writers release turnstile when permit is released
+        if (_holdTurnstile && _turnstile != null)
+        {
+            _turnstile.Release();
+        }
     }
 
     public PoolStatisticsSnapshot GetSnapshot()

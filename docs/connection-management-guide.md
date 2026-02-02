@@ -23,7 +23,7 @@ public enum DbMode
 {
     Standard = 0,       // Recommended for production
     KeepAlive = 1,      // Keeps one sentinel connection open
-    SingleWriter = 2,   // One pinned writer, concurrent ephemeral readers
+    SingleWriter = 2,   // Standard lifecycle + single-write-slot governor
     SingleConnection = 4, // All work goes through one pinned connection
     Best = 15
 }
@@ -43,9 +43,9 @@ Use the lowest number (closest to Standard) possible for best results. Best, wil
 * Otherwise behaves like `Standard`.
 
 ### SingleWriter
-* Holds one persistent write connection open.
-* Acquires ephemeral read-only connections as needed.
-* Used automatically for file-based SQLite/DuckDB and for named in-memory databases that use `Mode=Memory;Cache=Shared` so multiple connections share the same database (see Connection Pooling).
+* Uses the Standard lifecycle (no pinned connections) but adds a governor profile that enforces `MaxConcurrentWrites = 1` and `MaxConcurrentReads = N`.
+* A writer-preference turnstile pauses new readers when a writer is queued, guaranteeing fairness for SQLite/DuckDB workloads.
+* Triggered automatically for file-based SQLite/DuckDB and shared in-memory pools so writers serialize safely without blocking the entire process (see Connection Pooling).
 
 ### SingleConnection
 * All work — reads and writes — is funneled through a single pinned connection.
@@ -60,11 +60,11 @@ se (see Connection Pooling).
 
 ## Shared connection locking & timeouts
 
-Persistent connections (KeepAlive's sentinel, the SingleWriter writer connection, and the SingleConnection pin) rely on `RealAsyncLocker` instances that serialize operations through a shared `SemaphoreSlim`. The lock includes a default `ModeLockTimeout` of 30 seconds (`DatabaseContextConfiguration.ModeLockTimeout` / `IDatabaseContextConfiguration.ModeLockTimeout`); exhausting that window throws `ModeContentionException`, which embeds a `ModeContentionSnapshot` describing the number of waiters and timeouts. Tune the timeout (or set it to `null`) to trade between waiting for transient contention and failing fast when the pool is saturated, and monitor `ModeContentionStats` through logs/metrics if you need to understand which operations are queuing.
+Persistent connections (KeepAlive's sentinel and the SingleConnection pin) rely on `RealAsyncLocker` instances that serialize operations through a shared `SemaphoreSlim`. The lock includes a default `ModeLockTimeout` of 30 seconds (`DatabaseContextConfiguration.ModeLockTimeout` / `IDatabaseContextConfiguration.ModeLockTimeout`); exhausting that window throws `ModeContentionException`, which includes a `ModeContentionSnapshot` describing the number of waiters and timeouts. Tune the timeout (or set it to `null`) to trade between waiting for transient contention and failing fast when the pool is saturated, and monitor `ModeContentionStats` through logs/metrics if you need to understand which operations are queuing.
 
 ## Pool governors & acquisition windows
 
-The context also installs read and write `PoolGovernor` instances (enabled by `EnablePoolGovernor`/`DatabaseContextConfiguration.EnablePoolGovernor`) that gate access to each database provider’s connection pool. Each governor issues `PoolPermit` tokens with a default `PoolAcquireTimeout` of 5 seconds (`DatabaseContextConfiguration.PoolAcquireTimeout`) before opening a connection; shared connections grab their permit during initialization so the pool account for the pinned connection, and `SingleWriter`/`SingleConnection` adjust the permit counts to prevent writer-starvation (`AttachPinnedPermitIfNeeded`). If a governor cannot deliver a permit within the timeout, a `PoolSaturatedException` is raised along with statistics for the queue depth and permit usage so you can scale the pool or reduce concurrency. Override `ReadPoolSize`/`WritePoolSize` to clamp the governors to your desired limits or disable the governor entirely for experiments.
+The context also installs read and write `PoolGovernor` instances (enabled by `EnablePoolGovernor`/`DatabaseContextConfiguration.EnablePoolGovernor`) that gate access to each database provider’s connection pool. Each governor issues `PoolPermit` tokens with a default `PoolAcquireTimeout` of 5 seconds (`DatabaseContextConfiguration.PoolAcquireTimeout`) before opening a connection. Shared connections grab their permit during initialization so the pool accounts for the pinned connection (KeepAlive/SingleConnection). SingleWriter mode enforces `MaxConcurrentWrites = 1`, `MaxConcurrentReads = N`, and, when configured, a writer-preference turnstile so readers stop entering while a writer waits. If a governor cannot deliver a permit within the timeout, a `PoolSaturatedException` is raised along with statistics for the queue depth and permit usage so you can scale the pool or reduce concurrency. Override `MaxConcurrentReads`/`MaxConcurrentWrites` (legacy `ReadPoolSize`/`WritePoolSize`) to clamp the governors to your desired limits or disable the governor entirely for experiments.
 
 ## Benefits
 

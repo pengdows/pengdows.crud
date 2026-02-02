@@ -10,12 +10,12 @@ namespace pengdows.crud.Tests;
 public class DatabaseContextLifecycleCoverageTests
 {
     [Fact]
-    public void SingleWriter_GetSingleWriterConnection_CoverBranches()
+    public void SingleWriter_UsesStandardLifecycle()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var config = new DatabaseContextConfiguration
         {
-            ConnectionString = "Data Source=:memory:;Mode=Memory;Cache=Shared",
+            ConnectionString = "Data Source=file.db;EmulatedProduct=Sqlite",
             DbMode = DbMode.SingleWriter,
             ProviderName = "fake",
             EnableMetrics = true
@@ -23,21 +23,12 @@ public class DatabaseContextLifecycleCoverageTests
 
         using var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
 
-        // Write connection should reuse the persistent connection
-        var writer = context.GetSingleWriterConnection(ExecutionType.Write);
-        Assert.NotNull(writer);
+        var writer1 = context.GetConnection(ExecutionType.Write);
+        context.CloseAndDisposeConnection(writer1);
 
-        // Read connection in shared mode should reuse the same connection
-        var sharedRead = context.GetSingleWriterConnection(ExecutionType.Read, true);
-        Assert.Same(writer, sharedRead);
-
-        // Read connection without shared should return the persistent connection for isolated memory
-        var readOnly = context.GetSingleWriterConnection(ExecutionType.Read);
-        Assert.Same(writer, readOnly);
-
-        context.CloseAndDisposeConnection(readOnly);
-        context.CloseAndDisposeConnection(writer);
-        context.CloseAndDisposeConnection(sharedRead);
+        var writer2 = context.GetConnection(ExecutionType.Write);
+        Assert.NotSame(writer1, writer2); // per-operation connections
+        context.CloseAndDisposeConnection(writer2);
     }
 
     [Fact]
@@ -71,16 +62,13 @@ public class DatabaseContextLifecycleCoverageTests
         };
 
         using var sharedContext = new DatabaseContext(sharedConfig, factory, NullLoggerFactory.Instance);
-        var sharedWriter = sharedContext.GetSingleWriterConnection(ExecutionType.Write);
-        var sharedReadOnly = sharedContext.GetSingleWriterConnection(ExecutionType.Read);
-        Assert.NotSame(sharedWriter, sharedReadOnly);
-
-        var sharedSharedRead = sharedContext.GetSingleWriterConnection(ExecutionType.Read, true);
-        Assert.Same(sharedWriter, sharedSharedRead);
-
-        sharedContext.CloseAndDisposeConnection(sharedReadOnly);
-        sharedContext.CloseAndDisposeConnection(sharedSharedRead);
+        var sharedWriter = sharedContext.GetConnection(ExecutionType.Write);
+        Assert.NotNull(sharedWriter);
         sharedContext.CloseAndDisposeConnection(sharedWriter);
+
+        var sharedReader = sharedContext.GetConnection(ExecutionType.Read);
+        Assert.NotNull(sharedReader);
+        sharedContext.CloseAndDisposeConnection(sharedReader);
     }
 
     [Fact]

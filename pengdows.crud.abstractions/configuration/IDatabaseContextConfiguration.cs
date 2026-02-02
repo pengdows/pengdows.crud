@@ -1,5 +1,6 @@
 #region
 
+using System;
 using pengdows.crud.enums;
 using pengdows.crud.metrics;
 
@@ -56,13 +57,25 @@ public interface IDatabaseContextConfiguration
     MetricsOptions MetricsOptions { get; set; }
 
     /// <summary>
+    /// Governor-driven limit for concurrent write operations.
+    /// </summary>
+    int? MaxConcurrentWrites { get; set; }
+
+    /// <summary>
+    /// Governor-driven limit for concurrent read operations.
+    /// </summary>
+    int? MaxConcurrentReads { get; set; }
+
+    /// <summary>
     /// Explicit maximum pool size for write connections. Overrides connection string/dialect defaults.
     /// </summary>
+    [Obsolete("Use MaxConcurrentWrites instead.")]
     int? WritePoolSize { get; set; }
 
     /// <summary>
     /// Explicit maximum pool size for read connections. Overrides connection string/dialect defaults.
     /// </summary>
+    [Obsolete("Use MaxConcurrentReads instead.")]
     int? ReadPoolSize { get; set; }
 
     /// <summary>
@@ -84,4 +97,9 @@ public interface IDatabaseContextConfiguration
     /// Optional value passed to the provider (Application Name / Client Info) used for telemetry/connection tagging.
     /// </summary>
     string ApplicationName { get; set; }
+
+    /// <summary>
+    /// When true, enables the writer-preference turnstile during SingleWriter mode.
+    /// </summary>
+    bool EnableWriterPreference { get; set; }
 }

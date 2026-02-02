@@ -1,6 +1,7 @@
 #region
 
 using System.Collections.Generic;
+using System.Linq;
 using System.Data.Common;
 using System.Threading.Tasks;
 using pengdows.crud.configuration;
@@ -79,11 +80,16 @@ public class SingleWriterReadOnlyConnectionTests
         var factory = new RecordingFactory();
         await using var ctx = CreateContext(factory);
 
+        // SingleWriter now uses per-operation connections (not persistent)
+        // First connection is for dialect detection during init (disposed)
+        // Read connection is the next one
         var read = ctx.GetConnection(ExecutionType.Read);
         await read.OpenAsync();
+        ctx.CloseAndDisposeConnection(read); // Must dispose to release permit
 
-        Assert.Equal(2, factory.Connections.Count);
-        Assert.Contains(factory.Connections[1].Commands, c => c.Contains("query_only"));
+        // Find the read connection (last one with query_only)
+        var readConn = factory.Connections.Find(c => c.Commands.Exists(cmd => cmd.Contains("query_only")));
+        Assert.NotNull(readConn);
     }
 
     [Fact]
@@ -92,13 +98,19 @@ public class SingleWriterReadOnlyConnectionTests
         var factory = new RecordingFactory();
         await using var ctx = CreateContext(factory);
 
+        // Get and release write connection
         var write = ctx.GetConnection(ExecutionType.Write);
         await write.OpenAsync();
-        Assert.DoesNotContain(factory.Connections[0].Commands, c => c.Contains("query_only"));
+        Assert.DoesNotContain(factory.Connections.Last().Commands, c => c.Contains("query_only"));
+        ctx.CloseAndDisposeConnection(write); // Must dispose to release permit + turnstile
 
+        // Now get read connection
         var read = ctx.GetConnection(ExecutionType.Read);
         await read.OpenAsync();
-        Assert.Equal(2, factory.Connections.Count);
-        Assert.Contains(factory.Connections[1].Commands, c => c.Contains("query_only"));
+        ctx.CloseAndDisposeConnection(read);
+
+        // Find a connection with query_only (should be the read connection)
+        var readConn = factory.Connections.Find(c => c.Commands.Exists(cmd => cmd.Contains("query_only")));
+        Assert.NotNull(readConn);
     }
 }

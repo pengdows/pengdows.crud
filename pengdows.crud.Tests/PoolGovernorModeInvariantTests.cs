@@ -30,8 +30,13 @@ public sealed class PoolGovernorModeInvariantTests
     }
 
     [Fact]
-    public void SingleWriter_SharedPool_ReservesCapacityForPinnedWriter()
+    public void SingleWriter_UsesStandardLifecycle_WithSingleWriteSlot()
     {
+        // SingleWriter mode now uses Standard lifecycle with governor policy:
+        // - Each write acquires/releases a permit (no pinned connection)
+        // - WriteSlots = 1 enforces single-writer rule
+        // - Turnstile provides writer preference fairness
+
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = "Data Source=test;EmulatedProduct=MySql",
@@ -39,7 +44,7 @@ public sealed class PoolGovernorModeInvariantTests
             DbMode = DbMode.SingleWriter,
             EnablePoolGovernor = true,
             ReadPoolSize = 10,
-            WritePoolSize = 10
+            WritePoolSize = 10 // Will be overridden to 1 for SingleWriter
         };
 
         using var ctx = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.MySql));
@@ -48,14 +53,24 @@ public sealed class PoolGovernorModeInvariantTests
         var writer = ctx.GetPoolStatisticsSnapshot(PoolLabel.Writer);
 
         Assert.False(reader.Disabled);
+        Assert.Equal(1, writer.MaxPermits); // SingleWriter enforces single write slot
+        Assert.Equal(0, writer.TotalAcquired); // No pre-acquired pinned permit
 
-        var before = writer.TotalAcquired;
-        _ = ctx.GetConnection(ExecutionType.Write);
-        _ = ctx.GetConnection(ExecutionType.Write);
-        var after = ctx.GetPoolStatisticsSnapshot(PoolLabel.Writer).TotalAcquired;
+        // Acquire and release a write connection
+        var writeConn1 = ctx.GetConnection(ExecutionType.Write);
+        Assert.Equal(1, ctx.GetPoolStatisticsSnapshot(PoolLabel.Writer).InUse);
+        ctx.CloseAndDisposeConnection(writeConn1);
+        Assert.Equal(0, ctx.GetPoolStatisticsSnapshot(PoolLabel.Writer).InUse);
 
-        Assert.Equal(before, after);
+        // Acquire another write connection (proves per-operation lifecycle)
+        var writeConn2 = ctx.GetConnection(ExecutionType.Write);
+        Assert.Equal(1, ctx.GetPoolStatisticsSnapshot(PoolLabel.Writer).InUse);
+        ctx.CloseAndDisposeConnection(writeConn2);
 
+        // Total write permits acquired should be 2 (one per connection)
+        Assert.Equal(2, ctx.GetPoolStatisticsSnapshot(PoolLabel.Writer).TotalAcquired);
+
+        // Reads also work
         var readConn = ctx.GetConnection(ExecutionType.Read);
         ctx.CloseAndDisposeConnection(readConn);
 
