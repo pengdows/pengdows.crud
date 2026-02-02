@@ -643,7 +643,18 @@ public partial class DatabaseContext
                 return connectionString;
             }
 
-            return builder.ConnectionString;
+            var normalized = builder.ConnectionString;
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return connectionString;
+            }
+
+            if (SensitiveValuesStripped(connectionString, normalized))
+            {
+                return connectionString;
+            }
+
+            return normalized;
         }
         catch
         {
@@ -1052,6 +1063,86 @@ public partial class DatabaseContext
             _ => lowered.Contains("password", StringComparison.OrdinalIgnoreCase)
                  || lowered.Contains("secret", StringComparison.OrdinalIgnoreCase)
         };
+    }
+
+    private static bool SensitiveValuesStripped(string original, string normalized)
+    {
+        if (string.IsNullOrWhiteSpace(original))
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return true;
+        }
+
+        if (string.Equals(original, normalized, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        if (!TryExtractSensitiveValues(original, out var originalSensitive) ||
+            originalSensitive.Count == 0)
+        {
+            return false;
+        }
+
+        if (!TryExtractSensitiveValues(normalized, out var normalizedSensitive))
+        {
+            return true;
+        }
+
+        foreach (var entry in originalSensitive)
+        {
+            if (!normalizedSensitive.TryGetValue(entry.Key, out var value) ||
+                string.IsNullOrWhiteSpace(value))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TryExtractSensitiveValues(
+        string connectionString,
+        out Dictionary<string, string> sensitiveValues)
+    {
+        sensitiveValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        DbConnectionStringBuilder builder;
+        try
+        {
+            builder = new DbConnectionStringBuilder { ConnectionString = connectionString };
+        }
+        catch
+        {
+            return false;
+        }
+
+        foreach (var keyObj in builder.Keys)
+        {
+            var key = keyObj?.ToString() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                continue;
+            }
+
+            if (!ShouldIgnoreKey(key))
+            {
+                continue;
+            }
+
+            var value = builder[key]?.ToString() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                continue;
+            }
+
+            sensitiveValues[key] = value;
+        }
+
+        return true;
     }
 
     private static bool TryParseReadOnlyParameter(
