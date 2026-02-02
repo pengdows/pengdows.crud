@@ -215,7 +215,21 @@ internal static class ConnectionPoolingConfiguration
                 }
             }
 
-            return modified ? builder.ConnectionString : connectionString;
+            if (!modified)
+            {
+                return connectionString;
+            }
+
+            var result = builder.ConnectionString;
+
+            // Check if the builder stripped sensitive values (e.g., PersistSecurityInfo=false)
+            if (SensitiveValuesStripped(connectionString, result))
+            {
+                // Re-apply the modifications to a generic builder that preserves all values
+                return ReapplyModifications(connectionString, builder);
+            }
+
+            return result;
         }
         catch
         {
@@ -272,7 +286,16 @@ internal static class ConnectionPoolingConfiguration
             }
 
             builder[applicationNameSettingName] = applicationName;
-            return builder.ConnectionString;
+            var result = builder.ConnectionString;
+
+            // Check if the builder stripped sensitive values (e.g., PersistSecurityInfo=false)
+            if (SensitiveValuesStripped(connectionString, result))
+            {
+                // Re-apply the modifications to a generic builder that preserves all values
+                return ReapplyModifications(connectionString, builder);
+            }
+
+            return result;
         }
         catch
         {
@@ -323,7 +346,15 @@ internal static class ConnectionPoolingConfiguration
                 if (!current.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
                 {
                     builder[applicationNameSettingName] = current + suffix;
-                    return builder.ConnectionString;
+                    var result = builder.ConnectionString;
+
+                    // Check if the builder stripped sensitive values
+                    if (SensitiveValuesStripped(connectionString, result))
+                    {
+                        return ReapplyModifications(connectionString, builder);
+                    }
+
+                    return result;
                 }
 
                 return connectionString;
@@ -332,7 +363,15 @@ internal static class ConnectionPoolingConfiguration
             if (!string.IsNullOrWhiteSpace(fallbackApplicationName))
             {
                 builder[applicationNameSettingName] = $"{fallbackApplicationName}{suffix}";
-                return builder.ConnectionString;
+                var result = builder.ConnectionString;
+
+                // Check if the builder stripped sensitive values
+                if (SensitiveValuesStripped(connectionString, result))
+                {
+                    return ReapplyModifications(connectionString, builder);
+                }
+
+                return result;
             }
 
             return connectionString;
@@ -403,5 +442,108 @@ internal static class ConnectionPoolingConfiguration
         }
 
         return string.Equals(Convert.ToString(raw), original, StringComparison.Ordinal);
+    }
+
+    private static readonly string[] SensitiveKeys =
+    {
+        "password", "pwd", "user id", "uid", "user", "username"
+    };
+
+    /// <summary>
+    /// Checks if sensitive values (like password) were stripped when converting the connection string.
+    /// Many providers have PersistSecurityInfo=false by default, stripping passwords on read.
+    /// </summary>
+    private static bool SensitiveValuesStripped(string original, string modified)
+    {
+        if (string.IsNullOrWhiteSpace(original) || string.IsNullOrWhiteSpace(modified))
+        {
+            return false;
+        }
+
+        if (string.Equals(original, modified, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        try
+        {
+            var originalBuilder = new DbConnectionStringBuilder { ConnectionString = original };
+            var modifiedBuilder = new DbConnectionStringBuilder { ConnectionString = modified };
+
+            foreach (var sensitiveKey in SensitiveKeys)
+            {
+                // Check if original had this sensitive key with a value
+                if (originalBuilder.TryGetValue(sensitiveKey, out var originalValue) &&
+                    !string.IsNullOrWhiteSpace(originalValue?.ToString()))
+                {
+                    // Check if it was stripped or emptied in the modified version
+                    if (!modifiedBuilder.TryGetValue(sensitiveKey, out var modifiedValue) ||
+                        string.IsNullOrWhiteSpace(modifiedValue?.ToString()))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+        catch
+        {
+            // If we can't parse, assume potential stripping for safety
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Re-applies modifications from a provider-specific builder to a generic builder
+    /// that preserves all values including sensitive ones.
+    /// </summary>
+    private static string ReapplyModifications(string original, DbConnectionStringBuilder providerBuilder)
+    {
+        try
+        {
+            // Start with the original connection string (which has all values)
+            var genericBuilder = new DbConnectionStringBuilder { ConnectionString = original };
+
+            // Apply all values from the provider builder that may have been added/modified
+            foreach (var keyObj in providerBuilder.Keys)
+            {
+                var key = keyObj?.ToString();
+                if (string.IsNullOrEmpty(key))
+                {
+                    continue;
+                }
+
+                // Skip sensitive keys - we want to keep the originals
+                var lowerKey = key.ToLowerInvariant();
+                var isSensitive = false;
+                foreach (var sensitiveKey in SensitiveKeys)
+                {
+                    if (lowerKey == sensitiveKey || lowerKey.Contains("password") || lowerKey.Contains("secret"))
+                    {
+                        isSensitive = true;
+                        break;
+                    }
+                }
+
+                if (isSensitive)
+                {
+                    continue;
+                }
+
+                // Copy non-sensitive values that may have been added (Pooling, MinPoolSize, Application Name, etc.)
+                if (providerBuilder.TryGetValue(key, out var value))
+                {
+                    genericBuilder[key] = value;
+                }
+            }
+
+            return genericBuilder.ConnectionString;
+        }
+        catch
+        {
+            // If re-application fails, return original to preserve credentials
+            return original;
+        }
     }
 }
