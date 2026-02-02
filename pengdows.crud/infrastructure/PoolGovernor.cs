@@ -30,7 +30,7 @@ using pengdows.crud.metrics;
 
 namespace pengdows.crud.infrastructure;
 
-internal sealed class PoolGovernor
+internal sealed class PoolGovernor : IDisposable
 {
     private readonly PoolLabel _label;
     private readonly string _poolKeyHash;
@@ -39,6 +39,9 @@ internal sealed class PoolGovernor
     private readonly int _maxPermits;
     private readonly bool _disabled;
     private readonly bool _ownsSemaphore;
+    private readonly bool _ownsTurnstile;
+    private readonly object _drainLock = new();
+    private TaskCompletionSource<bool> _drainSignal;
 
     // Turnstile fairness support: prevents writer starvation under reader pressure
     private readonly SemaphoreSlim? _turnstile;
@@ -59,7 +62,8 @@ internal sealed class PoolGovernor
         bool disabled = false,
         SemaphoreSlim? sharedSemaphore = null,
         SemaphoreSlim? turnstile = null,
-        bool holdTurnstile = false)
+        bool holdTurnstile = false,
+        bool ownsTurnstile = false)
     {
         _label = label;
         _poolKeyHash = poolKeyHash;
@@ -67,6 +71,8 @@ internal sealed class PoolGovernor
         _disabled = disabled;
         _turnstile = turnstile;
         _holdTurnstile = holdTurnstile;
+        _ownsTurnstile = ownsTurnstile;
+        _drainSignal = CreateDrainSignal(completed: true);
 
         if (disabled)
         {
@@ -187,6 +193,52 @@ internal sealed class PoolGovernor
         }
     }
 
+    public bool TryAcquire(out PoolPermit permit, CancellationToken cancellationToken = default)
+    {
+        if (_disabled)
+        {
+            permit = default;
+            return true;
+        }
+
+        if (_semaphore == null)
+        {
+            throw new InvalidOperationException("Pool governor is not initialized.");
+        }
+
+        var turnstileAcquired = false;
+        if (_turnstile != null)
+        {
+            if (!_turnstile.Wait(0, cancellationToken))
+            {
+                permit = default;
+                return false;
+            }
+
+            turnstileAcquired = true;
+
+            if (!_holdTurnstile)
+            {
+                _turnstile.Release();
+                turnstileAcquired = false;
+            }
+        }
+
+        if (_semaphore.Wait(0, cancellationToken))
+        {
+            permit = OnAcquired();
+            return true;
+        }
+
+        if (turnstileAcquired && _turnstile != null)
+        {
+            _turnstile.Release();
+        }
+
+        permit = default;
+        return false;
+    }
+
     public async Task<PoolPermit> AcquireAsync(CancellationToken cancellationToken = default)
     {
         if (_disabled)
@@ -268,9 +320,105 @@ internal sealed class PoolGovernor
         }
     }
 
+    public async Task<(bool Success, PoolPermit Permit)> TryAcquireAsync(CancellationToken cancellationToken = default)
+    {
+        if (_disabled)
+        {
+            return (true, default);
+        }
+
+        if (_semaphore == null)
+        {
+            throw new InvalidOperationException("Pool governor is not initialized.");
+        }
+
+        var turnstileAcquired = false;
+        if (_turnstile != null)
+        {
+            if (!await _turnstile.WaitAsync(0, cancellationToken).ConfigureAwait(false))
+            {
+                return (false, default);
+            }
+
+            turnstileAcquired = true;
+
+            if (!_holdTurnstile)
+            {
+                _turnstile.Release();
+                turnstileAcquired = false;
+            }
+        }
+
+        if (await _semaphore.WaitAsync(0, cancellationToken).ConfigureAwait(false))
+        {
+            return (true, OnAcquired());
+        }
+
+        if (turnstileAcquired && _turnstile != null)
+        {
+            _turnstile.Release();
+        }
+
+        return (false, default);
+    }
+
+    public Task WaitForDrainAsync(CancellationToken cancellationToken = default)
+    {
+        return WaitForDrainAsync(null, cancellationToken);
+    }
+
+    public async Task WaitForDrainAsync(TimeSpan? timeout, CancellationToken cancellationToken = default)
+    {
+        if (_disabled)
+        {
+            return;
+        }
+
+        if (Interlocked.Read(ref _inUse) == 0)
+        {
+            return;
+        }
+
+        var deadline = timeout.HasValue ? DateTime.UtcNow + timeout.Value : DateTime.MaxValue;
+        var signal = GetCurrentDrainSignal();
+
+        for (;;)
+        {
+            if (signal.Task.IsCompleted)
+            {
+                return;
+            }
+
+            if (DateTime.UtcNow > deadline)
+            {
+                throw new TimeoutException("Drain timeout");
+            }
+
+            try
+            {
+                await signal.Task.WaitAsync(TimeSpan.FromMilliseconds(500), cancellationToken).ConfigureAwait(false);
+                return;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (TimeoutException)
+            {
+                if (Interlocked.Read(ref _inUse) == 0)
+                {
+                    return;
+                }
+
+                signal = GetCurrentDrainSignal();
+            }
+        }
+    }
+
     private PoolPermit OnAcquired()
     {
         var inUse = Interlocked.Increment(ref _inUse);
+        ResetDrainSignalIfNeeded();
         UpdatePeak(ref _peakInUse, inUse);
         Interlocked.Increment(ref _totalAcquired);
         return new PoolPermit(new PoolPermit.PoolPermitToken(this));
@@ -278,7 +426,18 @@ internal sealed class PoolGovernor
 
     internal void Release()
     {
-        Interlocked.Decrement(ref _inUse);
+        var inUse = Interlocked.Decrement(ref _inUse);
+        if (inUse == 1)
+        {
+            ResetDrainSignalIfNeeded();
+        }
+
+        if (inUse == 0)
+        {
+            var signal = GetCurrentDrainSignal();
+            signal.TrySetResult(true);
+        }
+
         _semaphore?.Release();
 
         // Writers release turnstile when permit is released
@@ -317,6 +476,49 @@ internal sealed class PoolGovernor
             {
                 return;
             }
+        }
+    }
+
+    private static TaskCompletionSource<bool> CreateDrainSignal(bool completed)
+    {
+        var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (completed)
+        {
+            tcs.TrySetResult(true);
+        }
+
+        return tcs;
+    }
+
+    private void ResetDrainSignalIfNeeded()
+    {
+        lock (_drainLock)
+        {
+            if (_drainSignal.Task.IsCompleted)
+            {
+                _drainSignal = CreateDrainSignal(completed: false);
+            }
+        }
+    }
+
+    private TaskCompletionSource<bool> GetCurrentDrainSignal()
+    {
+        lock (_drainLock)
+        {
+            return _drainSignal;
+        }
+    }
+
+    public void Dispose()
+    {
+        if (_ownsSemaphore)
+        {
+            _semaphore?.Dispose();
+        }
+
+        if (_ownsTurnstile)
+        {
+            _turnstile?.Dispose();
         }
     }
 }
