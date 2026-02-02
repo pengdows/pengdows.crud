@@ -30,7 +30,7 @@ using pengdows.crud.metrics;
 
 namespace pengdows.crud.infrastructure;
 
-internal sealed class PoolGovernor
+internal sealed class PoolGovernor : IDisposable
 {
     private readonly PoolLabel _label;
     private readonly string _poolKeyHash;
@@ -39,6 +39,7 @@ internal sealed class PoolGovernor
     private readonly int _maxPermits;
     private readonly bool _disabled;
     private readonly bool _ownsSemaphore;
+    private readonly bool _ownsTurnstile;
     private readonly object _drainLock = new();
     private TaskCompletionSource<bool> _drainSignal;
 
@@ -61,7 +62,8 @@ internal sealed class PoolGovernor
         bool disabled = false,
         SemaphoreSlim? sharedSemaphore = null,
         SemaphoreSlim? turnstile = null,
-        bool holdTurnstile = false)
+        bool holdTurnstile = false,
+        bool ownsTurnstile = false)
     {
         _label = label;
         _poolKeyHash = poolKeyHash;
@@ -69,6 +71,7 @@ internal sealed class PoolGovernor
         _disabled = disabled;
         _turnstile = turnstile;
         _holdTurnstile = holdTurnstile;
+        _ownsTurnstile = ownsTurnstile;
         _drainSignal = CreateDrainSignal(completed: true);
 
         if (disabled)
@@ -361,29 +364,61 @@ internal sealed class PoolGovernor
 
     public Task WaitForDrainAsync(CancellationToken cancellationToken = default)
     {
+        return WaitForDrainAsync(null, cancellationToken);
+    }
+
+    public async Task WaitForDrainAsync(TimeSpan? timeout, CancellationToken cancellationToken = default)
+    {
         if (_disabled)
         {
-            return Task.CompletedTask;
+            return;
         }
 
         if (Interlocked.Read(ref _inUse) == 0)
         {
-            return Task.CompletedTask;
+            return;
         }
 
-        TaskCompletionSource<bool> signal;
-        lock (_drainLock)
+        var deadline = timeout.HasValue ? DateTime.UtcNow + timeout.Value : DateTime.MaxValue;
+        var signal = GetCurrentDrainSignal();
+
+        for (;;)
         {
-            signal = _drainSignal;
-        }
+            if (signal.Task.IsCompleted)
+            {
+                return;
+            }
 
-        return signal.Task.WaitAsync(cancellationToken);
+            if (DateTime.UtcNow > deadline)
+            {
+                throw new TimeoutException("Drain timeout");
+            }
+
+            try
+            {
+                await signal.Task.WaitAsync(TimeSpan.FromMilliseconds(500), cancellationToken).ConfigureAwait(false);
+                return;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (TimeoutException)
+            {
+                if (Interlocked.Read(ref _inUse) == 0)
+                {
+                    return;
+                }
+
+                signal = GetCurrentDrainSignal();
+            }
+        }
     }
 
     private PoolPermit OnAcquired()
     {
         var inUse = Interlocked.Increment(ref _inUse);
-        ResetDrainSignalIfNeeded(inUse);
+        ResetDrainSignalIfNeeded();
         UpdatePeak(ref _peakInUse, inUse);
         Interlocked.Increment(ref _totalAcquired);
         return new PoolPermit(new PoolPermit.PoolPermitToken(this));
@@ -392,14 +427,14 @@ internal sealed class PoolGovernor
     internal void Release()
     {
         var inUse = Interlocked.Decrement(ref _inUse);
+        if (inUse == 1)
+        {
+            ResetDrainSignalIfNeeded();
+        }
+
         if (inUse == 0)
         {
-            TaskCompletionSource<bool> signal;
-            lock (_drainLock)
-            {
-                signal = _drainSignal;
-            }
-
+            var signal = GetCurrentDrainSignal();
             signal.TrySetResult(true);
         }
 
@@ -455,19 +490,35 @@ internal sealed class PoolGovernor
         return tcs;
     }
 
-    private void ResetDrainSignalIfNeeded(long inUse)
+    private void ResetDrainSignalIfNeeded()
     {
-        if (inUse != 1)
-        {
-            return;
-        }
-
         lock (_drainLock)
         {
             if (_drainSignal.Task.IsCompleted)
             {
                 _drainSignal = CreateDrainSignal(completed: false);
             }
+        }
+    }
+
+    private TaskCompletionSource<bool> GetCurrentDrainSignal()
+    {
+        lock (_drainLock)
+        {
+            return _drainSignal;
+        }
+    }
+
+    public void Dispose()
+    {
+        if (_ownsSemaphore)
+        {
+            _semaphore?.Dispose();
+        }
+
+        if (_ownsTurnstile)
+        {
+            _turnstile?.Dispose();
         }
     }
 }

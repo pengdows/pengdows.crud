@@ -171,6 +171,24 @@ public class PoolGovernorAdditionalTests
         using var permit = governor.Acquire();
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(20));
 
-        await Assert.ThrowsAsync<OperationCanceledException>(() => governor.WaitForDrainAsync(cts.Token));
+        await Assert.ThrowsAsync<OperationCanceledException>(() => governor.WaitForDrainAsync(null, cts.Token));
+    }
+
+    [Fact]
+    public async Task WaitForDrainAsync_WhenTimedOut_Throws()
+    {
+        var governor = new PoolGovernor(PoolLabel.Reader, "drain-timeout", 1, TimeSpan.FromMilliseconds(50));
+        using var permit = governor.Acquire();
+
+        await Assert.ThrowsAsync<TimeoutException>(() => governor.WaitForDrainAsync(TimeSpan.FromMilliseconds(25)));
+    }
+
+    [Fact]
+    public void Dispose_Twice_DoesNotThrow()
+    {
+        var governor = new PoolGovernor(PoolLabel.Reader, "dispose", 1, TimeSpan.FromMilliseconds(50));
+
+        governor.Dispose();
+        governor.Dispose();
     }
 }

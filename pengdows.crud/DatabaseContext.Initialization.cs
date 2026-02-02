@@ -771,7 +771,8 @@ public partial class DatabaseContext
             sharedSemaphore,
             disableWriterGovernor,
             turnstile: turnstile,
-            holdTurnstile: true); // Writers hold turnstile until permit released
+            holdTurnstile: true,
+            ownsTurnstile: turnstile != null); // Writers hold turnstile until permit released
 
         var readerGovernorDisabled = readerDisabled || disableReaderGovernor;
         _readerGovernor = readerGovernorDisabled
@@ -783,7 +784,8 @@ public partial class DatabaseContext
                 sharedSemaphore,
                 false,
                 turnstile: turnstile,
-                holdTurnstile: false); // Readers touch-and-release turnstile
+                holdTurnstile: false,
+                ownsTurnstile: false); // Readers touch-and-release turnstile
 
         // Attach permit for modes with persistent connections (not SingleWriter anymore)
         if (ConnectionMode is DbMode.SingleConnection or DbMode.KeepAlive)
@@ -893,7 +895,8 @@ public partial class DatabaseContext
         SemaphoreSlim? sharedSemaphore,
         bool disabled = false,
         SemaphoreSlim? turnstile = null,
-        bool holdTurnstile = false)
+        bool holdTurnstile = false,
+        bool ownsTurnstile = false)
     {
         if (disabled || !maxPermits.HasValue || maxPermits.Value <= 0)
         {
@@ -908,7 +911,8 @@ public partial class DatabaseContext
             false,
             sharedSemaphore,
             turnstile,
-            holdTurnstile);
+            holdTurnstile,
+            ownsTurnstile);
     }
 
     private static int? ResolveSharedMax(int? writerMax, int? readerMax)
