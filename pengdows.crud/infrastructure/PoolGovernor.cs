@@ -401,7 +401,7 @@ internal sealed class PoolGovernor : IDisposable
             }
             catch (OperationCanceledException)
             {
-                throw;
+                throw new OperationCanceledException(cancellationToken);
             }
             catch (TimeoutException)
             {
@@ -427,10 +427,6 @@ internal sealed class PoolGovernor : IDisposable
     internal void Release()
     {
         var inUse = Interlocked.Decrement(ref _inUse);
-        if (inUse == 1)
-        {
-            ResetDrainSignalIfNeeded();
-        }
 
         if (inUse == 0)
         {

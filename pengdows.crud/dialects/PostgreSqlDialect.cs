@@ -293,64 +293,73 @@ internal class PostgreSqlDialect : SqlDialect
 SET client_min_messages = warning;";
     }
 
+    /// <summary>
+    /// Bakes Npgsql-specific settings (auto-prepare, multiplexing) into the connection
+    /// string before the DataSource is created.  Must be called while the connection
+    /// string still carries credentials; NpgsqlConnectionStringBuilder preserves them on
+    /// round-trip, unlike connection.ConnectionString on a DataSource-created connection.
+    /// </summary>
+    internal override string PrepareConnectionStringForDataSource(string connectionString)
+    {
+        try
+        {
+            ConnectionStringBuilder.ConnectionString = connectionString;
+            var builder = ConnectionStringBuilder;
+            var modified = false;
+
+            if (!builder.ContainsKey("MaxAutoPrepare") || (int)builder["MaxAutoPrepare"] == 0)
+            {
+                builder["MaxAutoPrepare"] = 64;
+                modified = true;
+            }
+
+            if (!builder.ContainsKey("AutoPrepareMinUsages") || (int)builder["AutoPrepareMinUsages"] == 0)
+            {
+                builder["AutoPrepareMinUsages"] = 2;
+                modified = true;
+            }
+
+            if (!builder.ContainsKey("Multiplexing") || (bool)builder["Multiplexing"])
+            {
+                builder["Multiplexing"] = false;
+                modified = true;
+            }
+
+            return modified ? builder.ConnectionString : connectionString;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "Failed to prepare connection string for DataSource.");
+            return connectionString;
+        }
+    }
+
     public override void ConfigureProviderSpecificSettings(IDbConnection connection, IDatabaseContext context,
         bool readOnly)
     {
-        // Apply Npgsql-specific prepare settings if this is an Npgsql connection
+        // Npgsql: all provider-specific settings are baked into the connection string
+        // before DataSource creation (via PrepareConnectionStringForDataSource).
+        // Do NOT read/write connection.ConnectionString here — on DataSource-created
+        // connections Npgsql strips credentials (PersistSecurityInfo behaviour) and
+        // writing it back would silently drop the password.
         if (connection.GetType().FullName?.StartsWith("Npgsql.") == true)
         {
-            try
+            return;
+        }
+
+        // For non-Npgsql connections in tests, normalize case so assertions using lower-case substrings succeed
+        try
+        {
+            var typeName = connection.GetType().Name;
+            var isTestConn = string.Equals(typeName, "TestConnection", StringComparison.Ordinal);
+            var isFakeDb = connection.GetType().FullName?.Contains("fakeDb.") == true;
+            if (isTestConn && !string.IsNullOrEmpty(connection.ConnectionString) && !isFakeDb)
             {
-                // Use the inherited ConnectionStringBuilder property instead of reflection
-                ConnectionStringBuilder.ConnectionString = connection.ConnectionString;
-                var builder = ConnectionStringBuilder;
-
-                // Configure auto-prepare settings for optimal prepared statement performance
-                if (builder.ContainsKey("MaxAutoPrepare") && (int)builder["MaxAutoPrepare"] == 0)
-                {
-                    builder["MaxAutoPrepare"] = 64;
-                }
-                else if (!builder.ContainsKey("MaxAutoPrepare"))
-                {
-                    builder["MaxAutoPrepare"] = 64;
-                }
-
-                if (builder.ContainsKey("AutoPrepareMinUsages") && (int)builder["AutoPrepareMinUsages"] == 0)
-                {
-                    builder["AutoPrepareMinUsages"] = 2;
-                }
-                else if (!builder.ContainsKey("AutoPrepareMinUsages"))
-                {
-                    builder["AutoPrepareMinUsages"] = 2;
-                }
-
-                // Multiplexing must be disabled for prepare to work properly
-                builder["Multiplexing"] = false;
-
-                connection.ConnectionString = builder.ToString();
-            }
-            catch (Exception ex)
-            {
-                Logger.LogDebug(ex,
-                    "Failed to configure Npgsql connection string settings, using original connection string");
+                connection.ConnectionString = connection.ConnectionString.ToLowerInvariant();
             }
         }
-        else
-        {
-            // For non-Npgsql connections in tests, normalize case so assertions using lower-case substrings succeed
-            try
-            {
-                var typeName = connection.GetType().Name;
-                var isTestConn = string.Equals(typeName, "TestConnection", StringComparison.Ordinal);
-                var isFakeDb = connection.GetType().FullName?.Contains("fakeDb.") == true;
-                if (isTestConn && !string.IsNullOrEmpty(connection.ConnectionString) && !isFakeDb)
-                {
-                    connection.ConnectionString = connection.ConnectionString.ToLowerInvariant();
-                }
-            }
-            catch
-            { /* ignore */
-            }
+        catch
+        { /* ignore */
         }
     }
 

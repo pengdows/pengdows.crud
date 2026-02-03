@@ -152,8 +152,8 @@ internal static class ConnectionPoolingConfiguration
         string? minPoolSizeSettingName = null,
         DbConnectionStringBuilder? builder = null)
     {
-        // Only apply to Standard and KeepAlive modes
-        if (mode is not (DbMode.Standard or DbMode.KeepAlive))
+        // Only apply to modes that use provider-managed connection pooling
+        if (mode is not (DbMode.Standard or DbMode.KeepAlive or DbMode.SingleWriter))
         {
             return connectionString;
         }
@@ -375,6 +375,59 @@ internal static class ConnectionPoolingConfiguration
             }
 
             return connectionString;
+        }
+        catch
+        {
+            return connectionString;
+        }
+    }
+
+    /// <summary>
+    /// Sets the maximum pool size on a connection string.
+    /// When <paramref name="overrideExisting"/> is false the call is a no-op if the setting
+    /// is already present; when true it overwrites unconditionally (used by SingleWriter to
+    /// force the writer pool to 1).
+    /// </summary>
+    public static string ApplyMaxPoolSize(
+        string connectionString,
+        int maxPoolSize,
+        string? maxPoolSizeSettingName,
+        bool overrideExisting = false,
+        DbConnectionStringBuilder? builder = null)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString) || string.IsNullOrWhiteSpace(maxPoolSizeSettingName))
+        {
+            return connectionString;
+        }
+
+        if (maxPoolSize <= 0)
+        {
+            return connectionString;
+        }
+
+        try
+        {
+            builder ??= new DbConnectionStringBuilder { ConnectionString = connectionString };
+
+            if (RepresentsRawConnectionString(builder, connectionString))
+            {
+                return connectionString;
+            }
+
+            if (!overrideExisting && builder.ContainsKey(maxPoolSizeSettingName))
+            {
+                return connectionString;
+            }
+
+            builder[maxPoolSizeSettingName] = maxPoolSize;
+            var result = builder.ConnectionString;
+
+            if (SensitiveValuesStripped(connectionString, result))
+            {
+                return ReapplyModifications(connectionString, builder);
+            }
+
+            return result;
         }
         catch
         {

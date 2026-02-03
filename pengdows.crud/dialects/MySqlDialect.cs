@@ -172,7 +172,10 @@ internal class MySqlDialect : SqlDialect
             return $"{baseSettings}\nSET SESSION TRANSACTION READ ONLY;";
         }
 
-        return baseSettings;
+        // Explicitly reset read-only state: provider-pooled connections retain SESSION
+        // variables across checkouts, so a prior read connection's
+        // "SET SESSION TRANSACTION READ ONLY" persists until cleared.
+        return $"{baseSettings}\nSET SESSION TRANSACTION READ WRITE;";
     }
 
     [Obsolete]

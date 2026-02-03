@@ -89,8 +89,8 @@ public class MinPoolSizeBehaviorTests
     }
 
     /// <summary>
-    /// Tests that databases supporting pooling do NOT get MinPoolSize for SingleWriter mode
-    /// SingleWriter mode maintains a persistent writer connection and is designed for embedded databases
+    /// SingleWriter uses Standard lifecycle with provider pooling (governor enforces
+    /// WriteSlots=1 + turnstile).  Pooling defaults including MinPoolSize ARE applied.
     /// </summary>
     [Theory]
     [InlineData(SupportedDatabase.SqlServer)]
@@ -99,7 +99,7 @@ public class MinPoolSizeBehaviorTests
     [InlineData(SupportedDatabase.MariaDb)]
     [InlineData(SupportedDatabase.Oracle)]
     [InlineData(SupportedDatabase.Firebird)]
-    public void PoolingSupportingDatabases_SingleWriterMode_DoesNotSetMinPoolSize(SupportedDatabase database)
+    public void PoolingSupportingDatabases_SingleWriterMode_SetsMinPoolSize(SupportedDatabase database)
     {
         // Arrange
         var factory = new fakeDbFactory(database);
@@ -120,8 +120,7 @@ public class MinPoolSizeBehaviorTests
         var dialect = context.Dialect;
         if (!string.IsNullOrEmpty(dialect.MinPoolSizeSettingName))
         {
-            // Should not contain MinPoolSize for SingleWriter mode
-            Assert.False(builder.ContainsKey(dialect.MinPoolSizeSettingName));
+            Assert.True(builder.ContainsKey(dialect.MinPoolSizeSettingName));
         }
     }
 

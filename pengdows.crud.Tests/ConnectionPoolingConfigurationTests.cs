@@ -193,7 +193,7 @@ public class ConnectionPoolingConfigurationTests
     }
 
     [Fact]
-    public void ApplyPoolingDefaults_SingleWriterMode_NoChanges()
+    public void ApplyPoolingDefaults_SingleWriterMode_AppliesDefaults()
     {
         var connectionString = "Server=localhost;Database=test";
         var product = SupportedDatabase.Sqlite;
@@ -202,7 +202,9 @@ public class ConnectionPoolingConfigurationTests
         var result = ConnectionPoolingConfiguration.ApplyPoolingDefaults(
             connectionString, product, mode, true);
 
-        Assert.Equal(connectionString, result);
+        // SingleWriter uses Standard lifecycle with provider pooling — defaults are applied
+        Assert.NotEqual(connectionString, result);
+        Assert.Contains("Pooling", result);
     }
 
     [Fact]

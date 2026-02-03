@@ -157,6 +157,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private int? _configuredReadPoolSize;
     private int? _configuredWritePoolSize;
     private const string ReadOnlyApplicationNameSuffix = ":ro";
+    private const string WriteApplicationNameSuffix = ":rw";
 
     /// <inheritdoc/>
     public Guid RootId { get; } = Guid.NewGuid();

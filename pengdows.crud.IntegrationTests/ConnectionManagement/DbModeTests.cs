@@ -182,48 +182,52 @@ public class DbModeTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            // Arrange & Act - Get write connection explicitly
-            await using var writeConnection = context.GetConnection(ExecutionType.Write);
-            if (writeConnection.State != ConnectionState.Open)
-            {
-                await writeConnection.OpenAsync();
-            }
-
             var entity = CreateTestEntity(NameEnum.Test, 600);
+            int rowsAffected;
 
-            var tableName = context.WrapObjectName("test_table");
-            var idColumn = context.WrapObjectName("id");
-            var nameColumn = context.WrapObjectName("name");
-            var valueColumn = context.WrapObjectName("value");
-            var activeColumn = context.WrapObjectName("is_active");
-            var createdColumn = context.WrapObjectName("created_at");
+            // Scope write connection so the permit (and turnstile in SingleWriter mode)
+            // is released before the verification read below.
+            {
+                await using var writeConnection = context.GetConnection(ExecutionType.Write);
+                if (writeConnection.State != ConnectionState.Open)
+                {
+                    await writeConnection.OpenAsync();
+                }
 
-            await using var container = context.CreateSqlContainer();
-            container.Query.Append("INSERT INTO ").Append(tableName).Append(" (");
-            container.Query.Append(idColumn).Append(", ");
-            container.Query.Append(nameColumn).Append(", ");
-            container.Query.Append(valueColumn).Append(", ");
-            container.Query.Append(activeColumn).Append(", ");
-            container.Query.Append(createdColumn).Append(") VALUES (");
-            container.Query.Append(container.MakeParameterName("id")).Append(", ");
-            container.Query.Append(container.MakeParameterName("name")).Append(", ");
-            container.Query.Append(container.MakeParameterName("value")).Append(", ");
-            container.Query.Append(container.MakeParameterName("active")).Append(", ");
-            container.Query.Append(container.MakeParameterName("created")).Append(")");
+                var tableName = context.WrapObjectName("test_table");
+                var idColumn = context.WrapObjectName("id");
+                var nameColumn = context.WrapObjectName("name");
+                var valueColumn = context.WrapObjectName("value");
+                var activeColumn = context.WrapObjectName("is_active");
+                var createdColumn = context.WrapObjectName("created_at");
 
-            container.AddParameterWithValue("id", DbType.Int64, entity.Id);
-            container.AddParameterWithValue("name", DbType.String, entity.Name.ToString());
-            container.AddParameterWithValue("value", DbType.Int32, entity.Value);
-            container.AddParameterWithValue("active", GetBooleanDbType(provider), entity.IsActive);
-            container.AddParameterWithValue("created", DbType.DateTime, entity.CreatedOn);
+                await using var container = context.CreateSqlContainer();
+                container.Query.Append("INSERT INTO ").Append(tableName).Append(" (");
+                container.Query.Append(idColumn).Append(", ");
+                container.Query.Append(nameColumn).Append(", ");
+                container.Query.Append(valueColumn).Append(", ");
+                container.Query.Append(activeColumn).Append(", ");
+                container.Query.Append(createdColumn).Append(") VALUES (");
+                container.Query.Append(container.MakeParameterName("id")).Append(", ");
+                container.Query.Append(container.MakeParameterName("name")).Append(", ");
+                container.Query.Append(container.MakeParameterName("value")).Append(", ");
+                container.Query.Append(container.MakeParameterName("active")).Append(", ");
+                container.Query.Append(container.MakeParameterName("created")).Append(")");
 
-            await using var command = container.CreateCommand(writeConnection);
-            var rowsAffected = await command.ExecuteNonQueryAsync();
+                container.AddParameterWithValue("id", DbType.Int64, entity.Id);
+                container.AddParameterWithValue("name", DbType.String, entity.Name.ToString());
+                container.AddParameterWithValue("value", DbType.Int32, entity.Value);
+                container.AddParameterWithValue("active", GetBooleanDbType(provider), entity.IsActive);
+                container.AddParameterWithValue("created", DbType.DateTime, entity.CreatedOn);
+
+                await using var command = container.CreateCommand(writeConnection);
+                rowsAffected = await command.ExecuteNonQueryAsync();
+            }
 
             // Assert
             Assert.Equal(1, rowsAffected);
 
-            // Verify it was actually inserted
+            // Verify it was actually inserted (write permit released, safe to read)
             var helper = CreateEntityHelper(context);
             var retrieved = await helper.RetrieveOneAsync(entity.Id, context);
             Assert.NotNull(retrieved);

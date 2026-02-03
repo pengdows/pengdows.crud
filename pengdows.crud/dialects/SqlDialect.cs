@@ -1201,6 +1201,16 @@ internal abstract class SqlDialect : ISqlDialect
         // Default implementation does nothing - override in derived classes
     }
 
+    /// <summary>
+    /// Prepares a connection string with provider-specific settings that must be present
+    /// before the DataSource is created (e.g. auto-prepare, multiplexing).
+    /// Override in dialect subclasses; base is a no-op.
+    /// </summary>
+    internal virtual string PrepareConnectionStringForDataSource(string connectionString)
+    {
+        return connectionString;
+    }
+
     // Async convenience for tests; default is no-op
     public virtual Task ConfigureProviderSpecificSettingsAsync(IDbConnection connection)
     {

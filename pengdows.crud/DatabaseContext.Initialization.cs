@@ -796,6 +796,8 @@ public partial class DatabaseContext
 
     private void InitializeReadOnlyConnectionResources(IDatabaseContextConfiguration configuration)
     {
+        // 1. Derive reader connection string BEFORE adding :rw to writer so the reader
+        //    does not inherit the write suffix.
         _readerConnectionString = BuildReaderConnectionString(configuration);
 
         if (UsesReadOnlyConnectionStringForReads())
@@ -803,6 +805,58 @@ public partial class DatabaseContext
             _logger.LogDebug("Read-only connection string differs from writer connection string; skipping equivalence validation.");
         }
 
+        // 2. Finalize reader connection string: apply MaxPoolSize + provider-specific
+        //    DataSource settings while it still differs from the writer.
+        if (_dialect != null && UsesReadOnlyConnectionStringForReads() &&
+            !string.Equals(_readerConnectionString, _connectionString, StringComparison.OrdinalIgnoreCase))
+        {
+            var readMaxPoolSize = ResolveEffectiveMaxPoolSize(_configuredReadPoolSize, _readerConnectionString);
+            var readerBuilder = GetFactoryConnectionStringBuilder(_readerConnectionString);
+            _readerConnectionString = ConnectionPoolingConfiguration.ApplyMaxPoolSize(
+                _readerConnectionString,
+                readMaxPoolSize,
+                _dialect.MaxPoolSizeSettingName,
+                false,
+                readerBuilder);
+            _readerConnectionString = _dialect.PrepareConnectionStringForDataSource(_readerConnectionString);
+        }
+
+        // 3. Finalize writer connection string: :rw suffix → MaxPoolSize → provider
+        //    DataSource settings.  Must happen AFTER reader derivation so the reader
+        //    is not polluted with :rw.
+        _connectionString = ConnectionPoolingConfiguration.ApplyApplicationNameSuffix(
+            _connectionString,
+            _dialect?.ApplicationNameSettingName,
+            WriteApplicationNameSuffix,
+            configuration.ApplicationName);
+
+        var writeMaxPoolSize = ResolveEffectiveMaxPoolSize(_configuredWritePoolSize, _connectionString);
+        if (ConnectionMode == DbMode.SingleWriter)
+        {
+            writeMaxPoolSize = 1;
+        }
+        var writerBuilder = GetFactoryConnectionStringBuilder(_connectionString);
+        _connectionString = ConnectionPoolingConfiguration.ApplyMaxPoolSize(
+            _connectionString,
+            writeMaxPoolSize,
+            _dialect?.MaxPoolSizeSettingName,
+            overrideExisting: ConnectionMode == DbMode.SingleWriter,
+            writerBuilder);
+
+        if (_dialect != null)
+        {
+            _connectionString = _dialect.PrepareConnectionStringForDataSource(_connectionString);
+        }
+
+        // Standard mode: reader and writer share the same connection string.
+        // _readerConnectionString was captured before writer finalisation; sync it
+        // so governor pool-key hashing sees a single pool.
+        if (!UsesReadOnlyConnectionStringForReads())
+        {
+            _readerConnectionString = _connectionString;
+        }
+
+        // 4. Both connection strings are now complete — create DataSources.
         if (!_dataSourceProvided && _factory != null && _dataSource == null)
         {
             _dataSource = TryCreateDataSource(_factory, _connectionString);
@@ -841,6 +895,48 @@ public partial class DatabaseContext
             _logger.LogWarning(
                 "Read-only connection string differs, but no provider factory is available. Read-only operations will reuse the provided DbDataSource.");
         }
+    }
+
+    /// <summary>
+    /// Resolves the effective max-pool-size for a connection string following the
+    /// priority chain: explicit value already in the CS → context configuration →
+    /// dialect default.
+    /// </summary>
+    private int ResolveEffectiveMaxPoolSize(int? configuredMax, string connectionString)
+    {
+        // 1. Already present in the connection string?
+        if (_dialect?.MaxPoolSizeSettingName != null)
+        {
+            try
+            {
+                var builder = GetFactoryConnectionStringBuilder(connectionString);
+                if (builder.ContainsKey(_dialect.MaxPoolSizeSettingName))
+                {
+                    var raw = builder[_dialect.MaxPoolSizeSettingName];
+                    if (raw is int existing && existing > 0)
+                    {
+                        return existing;
+                    }
+
+                    if (raw != null && int.TryParse(raw.ToString(), out var parsed) && parsed > 0)
+                    {
+                        return parsed;
+                    }
+                }
+            }
+            catch
+            { /* fall through */
+            }
+        }
+
+        // 2. Caller-supplied context configuration
+        if (configuredMax.HasValue && configuredMax.Value > 0)
+        {
+            return configuredMax.Value;
+        }
+
+        // 3. Dialect default
+        return _dialect?.DefaultMaxPoolSize ?? 100;
     }
 
     private string BuildReaderConnectionString(IDatabaseContextConfiguration configuration)
