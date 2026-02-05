@@ -26,7 +26,7 @@ public class ValidateRowIdTypeTests : SqlLiteContextTestBase
     [InlineData(typeof(Guid?))]
     public void Constructor_SupportedTypes_DoesNotThrow(Type idType)
     {
-        var helperType = typeof(EntityHelper<,>).MakeGenericType(typeof(SimpleEntity), idType);
+        var helperType = typeof(TableGateway<,>).MakeGenericType(typeof(SimpleEntity), idType);
         var helper = Activator.CreateInstance(helperType, Context);
         Assert.NotNull(helper);
     }*/
@@ -34,7 +34,7 @@ public class ValidateRowIdTypeTests : SqlLiteContextTestBase
     [Fact]
     public void Constructor_UnsupportedType_Throws()
     {
-        Assert.Throws<TypeInitializationException>(() => new EntityHelper<SimpleEntity, DateTime>(Context));
+        Assert.Throws<TypeInitializationException>(() => new TableGateway<SimpleEntity, DateTime>(Context));
     }
 
     [Table("Simple")]

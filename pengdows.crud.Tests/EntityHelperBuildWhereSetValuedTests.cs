@@ -10,7 +10,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class EntityHelperBuildWhereSetValuedTests : SqlLiteContextTestBase
+public class TableGatewayBuildWhereSetValuedTests : SqlLiteContextTestBase
 {
     [Table("WhereTest")]
     private class WhereEntity
@@ -22,7 +22,7 @@ public class EntityHelperBuildWhereSetValuedTests : SqlLiteContextTestBase
         [Column("Name", DbType.String)] public string Name { get; set; } = string.Empty;
     }
 
-    public EntityHelperBuildWhereSetValuedTests()
+    public TableGatewayBuildWhereSetValuedTests()
     {
         TypeMap.Register<WhereEntity>();
     }
@@ -32,7 +32,7 @@ public class EntityHelperBuildWhereSetValuedTests : SqlLiteContextTestBase
     {
         using var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.PostgreSql}",
             new fakeDbFactory(SupportedDatabase.PostgreSql));
-        var helper = new EntityHelper<WhereEntity, int>(ctx);
+        var helper = new TableGateway<WhereEntity, int>(ctx);
 
         using var sc = ctx.CreateSqlContainer("SELECT * FROM " + ctx.WrapObjectName("WhereTest"));
         var wrapped = ctx.WrapObjectName("Id");
@@ -46,7 +46,7 @@ public class EntityHelperBuildWhereSetValuedTests : SqlLiteContextTestBase
     {
         using var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}",
             new fakeDbFactory(SupportedDatabase.Sqlite));
-        var helper = new EntityHelper<WhereEntity, int>(ctx);
+        var helper = new TableGateway<WhereEntity, int>(ctx);
 
         using var sc = ctx.CreateSqlContainer("SELECT * FROM " + ctx.WrapObjectName("WhereTest"));
         var wrapped = ctx.WrapObjectName("Id");

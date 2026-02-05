@@ -26,7 +26,6 @@ using System.Collections.Concurrent;
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics;
-using System.Reflection;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
@@ -73,9 +72,6 @@ internal abstract class SqlDialect : ISqlDialect
 
     private readonly ConcurrentDictionary<string, string> _wrappedNameCache = new(StringComparer.Ordinal);
 
-    // Pre-compiled parameter marker trimming for faster string operations
-    private static readonly char[] _parameterMarkers = { '@', ':', '?', '$' };
-
     // Performance: Static parameter name pool to avoid allocations
     private static readonly char[] ValidNameChars =
         "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_".ToCharArray();
@@ -120,10 +116,6 @@ internal abstract class SqlDialect : ISqlDialect
     // Simple parameter pool - avoid repeated factory calls for hot paths
     private readonly ConcurrentQueue<DbParameter> _parameterPool = new();
     private const int MaxPoolSize = 100; // Prevent unbounded growth
-
-    internal static bool ParameterDiagnosticsEnabled =>
-        string.Equals(Environment.GetEnvironmentVariable("PENGDOWS_PARAM_DIAGNOSTICS"), "1",
-            StringComparison.OrdinalIgnoreCase);
 
     protected static AdvancedTypeRegistry AdvancedTypes { get; } = AdvancedTypeRegistry.Shared;
 
@@ -588,177 +580,12 @@ internal abstract class SqlDialect : ISqlDialect
     /// </summary>
     internal void ReturnParameterToPool(DbParameter parameter)
     {
-        TryDetachParameter(parameter);
-
-        if (ParameterDiagnosticsEnabled)
-        {
-            var owner = TryDescribeParameterOwner(parameter);
-            if (owner != null)
-            {
-                Logger.LogWarning(
-                    "Returning parameter to pool while still attached: {Owner}. Name={Name}, Type={Type}, Hash={Hash}",
-                    owner,
-                    parameter.ParameterName,
-                    parameter.GetType().FullName,
-                    parameter.GetHashCode());
-            }
-        }
-
         if (_parameterPool.Count < MaxPoolSize)
         {
             _parameterPool.Enqueue(parameter);
         }
         // If pool is full, let it get garbage collected
     }
-
-    internal static string? TryDescribeParameterOwner(DbParameter parameter)
-    {
-        try
-        {
-            var type = parameter.GetType();
-            var props = type.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-            foreach (var prop in props)
-            {
-                object? value;
-                try
-                {
-                    value = prop.GetValue(parameter);
-                }
-                catch
-                {
-                    continue;
-                }
-
-                if (value is DbParameterCollection collection)
-                {
-                    return $"{prop.Name}:{collection.GetType().FullName}";
-                }
-            }
-
-            var fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-            foreach (var field in fields)
-            {
-                object? value;
-                try
-                {
-                    value = field.GetValue(parameter);
-                }
-                catch
-                {
-                    continue;
-                }
-
-                if (value is DbParameterCollection collection)
-                {
-                    return $"{field.Name}:{collection.GetType().FullName}";
-                }
-            }
-        }
-        catch
-        {
-            // Diagnostics only.
-        }
-
-        return null;
-    }
-
-    internal static DbParameterCollection? TryGetParameterCollection(DbParameter parameter)
-    {
-        try
-        {
-            var type = parameter.GetType();
-            var props = type.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-            foreach (var prop in props)
-            {
-                object? value;
-                try
-                {
-                    value = prop.GetValue(parameter);
-                }
-                catch
-                {
-                    continue;
-                }
-
-                if (value is DbParameterCollection collection)
-                {
-                    return collection;
-                }
-            }
-
-            var fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-            foreach (var field in fields)
-            {
-                object? value;
-                try
-                {
-                    value = field.GetValue(parameter);
-                }
-                catch
-                {
-                    continue;
-                }
-
-                if (value is DbParameterCollection collection)
-                {
-                    return collection;
-                }
-            }
-        }
-        catch
-        {
-            // Diagnostics only.
-        }
-
-        return null;
-    }
-
-    internal static bool TryDetachParameter(DbParameter parameter)
-    {
-        var detached = false;
-        try
-        {
-            var collection = TryGetParameterCollection(parameter);
-            if (collection != null)
-            {
-                collection.Remove(parameter);
-                detached = true;
-            }
-
-            var type = parameter.GetType();
-            var props = type.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-            foreach (var prop in props)
-            {
-                if (!prop.CanWrite)
-                {
-                    continue;
-                }
-
-                if (typeof(DbParameterCollection).IsAssignableFrom(prop.PropertyType))
-                {
-                    prop.SetValue(parameter, null);
-                    detached = true;
-                }
-            }
-
-            var fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-            foreach (var field in fields)
-            {
-                if (typeof(DbParameterCollection).IsAssignableFrom(field.FieldType))
-                {
-                    field.SetValue(parameter, null);
-                    detached = true;
-                }
-            }
-        }
-        catch
-        {
-            // Best-effort.
-        }
-
-        return detached;
-    }
-
 
     public virtual DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
@@ -1740,7 +1567,8 @@ internal abstract class SqlDialect : ISqlDialect
     // Dialect defaults used when pool settings are not discoverable from the connection string.
     // These are intentionally internal (not part of the public API surface).
     internal virtual int DefaultMinPoolSize => ConnectionPoolingConfiguration.DefaultMinPoolSize;
-    internal virtual int DefaultMaxPoolSize => 100;
+    internal const int FallbackMaxPoolSize = 100;
+    internal virtual int DefaultMaxPoolSize => FallbackMaxPoolSize;
 
     // ---- Legacy utility helpers (kept for test compatibility) ----
     public virtual bool SupportsIdentityColumns => false;

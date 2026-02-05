@@ -12,7 +12,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class EntityHelperAdditionalBranchTests : SqlLiteContextTestBase
+public class TableGatewayAdditionalBranchTests : SqlLiteContextTestBase
 {
     [Table("BranchTest")]
     private sealed class BranchEntity
@@ -52,7 +52,7 @@ public class EntityHelperAdditionalBranchTests : SqlLiteContextTestBase
         public DateTime LastUpdatedOn { get; set; }
     }
 
-    public EntityHelperAdditionalBranchTests()
+    public TableGatewayAdditionalBranchTests()
     {
         TypeMap.Register<BranchEntity>();
         TypeMap.Register<GuidBranchEntity>();
@@ -87,7 +87,7 @@ public class EntityHelperAdditionalBranchTests : SqlLiteContextTestBase
     [Fact]
     public async Task BuildUpdateAsync_NoChanges_Throws()
     {
-        var helper = new EntityHelper<BranchEntity, int>(Context, AuditValueResolver);
+        var helper = new TableGateway<BranchEntity, int>(Context, AuditValueResolver);
         var loaded = await helper.RetrieveOneAsync(1);
         Assert.NotNull(loaded);
 
@@ -99,7 +99,7 @@ public class EntityHelperAdditionalBranchTests : SqlLiteContextTestBase
     public void BuildUpdateAsync_LoadOriginal_IdConversionFail_Throws()
     {
         var ex = Assert.Throws<TypeInitializationException>(() =>
-            new EntityHelper<BranchEntity, DateTime>(Context, AuditValueResolver));
+            new TableGateway<BranchEntity, DateTime>(Context, AuditValueResolver));
         Assert.NotNull(ex.InnerException);
         Assert.IsType<NotSupportedException>(ex.InnerException);
         Assert.Contains("TRowID type 'System.DateTime' is not supported", ex.InnerException.Message);
@@ -111,7 +111,7 @@ public class EntityHelperAdditionalBranchTests : SqlLiteContextTestBase
         // Create a context whose commands fail (DbException) to trigger the null path in LoadOriginalAsync
         var dbException = ConnectionFailureHelper.CommonExceptions.CreateDbException("Simulated database error");
         await using var failing = ConnectionFailureHelper.CreateFailOnCommandContext(customException: dbException);
-        var helper = new EntityHelper<BranchEntity, int>((IDatabaseContext)failing, AuditValueResolver);
+        var helper = new TableGateway<BranchEntity, int>((IDatabaseContext)failing, AuditValueResolver);
         var e = new BranchEntity { Id = 1, Name = "x" };
         var ex = await Record.ExceptionAsync(() => helper.BuildUpdateAsync(e, true));
         Assert.NotNull(ex);
@@ -122,7 +122,7 @@ public class EntityHelperAdditionalBranchTests : SqlLiteContextTestBase
     [Fact]
     public async Task BuildUpdateAsync_LoadOriginal_GuidId_UsesGuidValue()
     {
-        var helper = new EntityHelper<GuidBranchEntity, Guid>(Context, AuditValueResolver);
+        var helper = new TableGateway<GuidBranchEntity, Guid>(Context, AuditValueResolver);
         var id = Guid.NewGuid();
         var qp = Context.QuotePrefix;
         var qs = Context.QuoteSuffix;
@@ -140,7 +140,7 @@ public class EntityHelperAdditionalBranchTests : SqlLiteContextTestBase
     [Fact]
     public async Task BuildUpdateAsync_AuditOnlyChange_IncludesAuditColumns()
     {
-        var helper = new EntityHelper<AuditBranchEntity, int>(Context, AuditValueResolver);
+        var helper = new TableGateway<AuditBranchEntity, int>(Context, AuditValueResolver);
         var qp = Context.QuotePrefix;
         var qs = Context.QuoteSuffix;
         var insert = Context.CreateSqlContainer(
@@ -159,7 +159,7 @@ public class EntityHelperAdditionalBranchTests : SqlLiteContextTestBase
     [Fact]
     public async Task BuildUpdateAsync_AuditWithBusinessChange_Succeeds()
     {
-        var helper = new EntityHelper<AuditBranchEntity, int>(Context, AuditValueResolver);
+        var helper = new TableGateway<AuditBranchEntity, int>(Context, AuditValueResolver);
         var qp = Context.QuotePrefix;
         var qs = Context.QuoteSuffix;
         var insert = Context.CreateSqlContainer(

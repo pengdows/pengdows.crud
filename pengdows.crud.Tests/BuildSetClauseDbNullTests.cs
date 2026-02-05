@@ -10,12 +10,12 @@ namespace pengdows.crud.Tests;
 
 public class BuildSetClauseDbNullTests : SqlLiteContextTestBase
 {
-    private readonly EntityHelper<DbNullEntity, int> _helper;
+    private readonly TableGateway<DbNullEntity, int> _helper;
 
     public BuildSetClauseDbNullTests()
     {
         TypeMap.Register<DbNullEntity>();
-        _helper = new EntityHelper<DbNullEntity, int>(Context);
+        _helper = new TableGateway<DbNullEntity, int>(Context);
     }
 
     [Fact]

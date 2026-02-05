@@ -1,6 +1,6 @@
 # pengdows.crud Parameter Naming Convention
 
-This document describes the predictable parameter naming patterns used throughout pengdows.crud's EntityHelper operations.
+This document describes the predictable parameter naming patterns used throughout pengdows.crud's TableGateway operations.
 
 ## Overview
 

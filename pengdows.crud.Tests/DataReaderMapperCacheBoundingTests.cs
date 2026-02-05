@@ -143,8 +143,12 @@ public class DataReaderMapperCacheBoundingTests
         var cacheField = typeof(DataReaderMapper).GetField("_planCache", BindingFlags.Static | BindingFlags.NonPublic);
         var cache = cacheField!.GetValue(null)!;
 
-        var countField = cache.GetType().GetField("_count", BindingFlags.Instance | BindingFlags.NonPublic);
-        return countField != null ? (int)countField.GetValue(cache)! : -1;
+        var mapField = cache.GetType().GetField("_map", BindingFlags.Instance | BindingFlags.NonPublic)
+                       ?? throw new InvalidOperationException("_map field not found on BoundedCache");
+        var map = mapField.GetValue(cache)!;
+        var countProp = map.GetType().GetProperty("Count")
+                        ?? throw new InvalidOperationException("Count property not found on _map");
+        return (int)countProp.GetValue(map)!;
     }
 
     private static void ClearPlanCache()
@@ -163,7 +167,7 @@ public class DataReaderMapperCacheBoundingTests
                                    BindingFlags.NonPublic | BindingFlags.Static)
                                ?? throw new InvalidOperationException("BuildSchemaHash not found");
 
-        var schemaHash = (string)schemaHashMethod.Invoke(null, new object[] { templateReader, options })!;
+        var schemaHash = (long)schemaHashMethod.Invoke(null, new object[] { templateReader, options })!;
 
         var planKeyType = typeof(DataReaderMapper)
                               .GetNestedType("PlanCacheKey", BindingFlags.NonPublic)
@@ -188,7 +192,13 @@ public class DataReaderMapperCacheBoundingTests
         var tryGetValue = map.GetType().GetMethod("TryGetValue")!;
         var args = new object?[] { planCacheKey, null };
         var found = (bool)tryGetValue.Invoke(map, args)!;
-        return found ? args[1] : null;
+        if (!found) return null;
+
+        // args[1] is a CacheEntry — unwrap via its public Value property
+        var entry = args[1]!;
+        var valueProp = entry.GetType().GetProperty("Value")
+                        ?? throw new InvalidOperationException("Value property not found on CacheEntry");
+        return valueProp.GetValue(entry);
     }
 
     private class DynamicEntity

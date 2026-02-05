@@ -24,15 +24,14 @@
 
 #region
 
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics;
 using System.Data.Common;
 using System.Globalization;
 using System.Linq;
-using System.Reflection;
 using System.Text;
+using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using System.Threading;
 using Microsoft.Extensions.Logging;
@@ -103,8 +102,6 @@ namespace pengdows.crud;
 public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectProvider, IReaderLifetimeListener
 {
     private static readonly Regex ParamPlaceholderRegex = new(@"\{P\}([A-Za-z_][A-Za-z0-9_]*)", RegexOptions.Compiled);
-    private static readonly ConcurrentDictionary<Type, Action<DbParameter>?> ParameterDetachActions = new();
-
     private readonly IDatabaseContext _context;
     private readonly ISqlDialect _dialect;
 
@@ -112,6 +109,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
     private readonly IDictionary<string, DbParameter> _parameters =
         new pengdows.crud.collections.OrderedDictionary<string, DbParameter>();
+    private readonly Dictionary<DbParameter, DbParameterCollection?> _parameterOwners =
+        new(ParameterReferenceComparer.Instance);
 
     private int _outputParameterCount;
     private int _nextParameterId = -1;
@@ -476,6 +475,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 }
 
                 dbCommand.Parameters.Add(param);
+                RegisterParameterOwner(param, dbCommand.Parameters);
             }
 
             return;
@@ -486,6 +486,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             foreach (var param in _parameters.Values)
             {
                 dbCommand.Parameters.Add(param);
+                RegisterParameterOwner(param, dbCommand.Parameters);
             }
 
             return;
@@ -496,8 +497,47 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             if (_parameters.TryGetValue(name, out var param))
             {
                 dbCommand.Parameters.Add(param);
+                RegisterParameterOwner(param, dbCommand.Parameters);
             }
         }
+    }
+
+    private void RegisterParameterOwner(DbParameter parameter, DbParameterCollection owner)
+    {
+        _parameterOwners[parameter] = owner;
+    }
+
+    private void RemoveParameterFromOwner(DbParameter parameter)
+    {
+        if (!_parameterOwners.TryGetValue(parameter, out var owner))
+        {
+            return;
+        }
+
+        try
+        {
+            if (owner?.Contains(parameter) == true)
+            {
+                owner.Remove(parameter);
+            }
+        }
+        catch (Exception ex) when (ex is ArgumentException || ex is InvalidOperationException)
+        {
+            // Already removed or not owned, ignore.
+        }
+        finally
+        {
+            _parameterOwners.Remove(parameter);
+        }
+    }
+
+    private sealed class ParameterReferenceComparer : IEqualityComparer<DbParameter>
+    {
+        public static ParameterReferenceComparer Instance { get; } = new();
+
+        public bool Equals(DbParameter? x, DbParameter? y) => ReferenceEquals(x, y);
+
+        public int GetHashCode(DbParameter obj) => RuntimeHelpers.GetHashCode(obj);
     }
 
     public void Clear()
@@ -1399,6 +1439,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         if (_parameters.Count == 0)
         {
             _parameters.Clear();
+            _parameterOwners.Clear();
             return;
         }
 
@@ -1411,15 +1452,17 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             return;
         }
 
-        if (_dialect is SqlDialect sqlDialect)
+        foreach (var parameter in _parameters.Values)
         {
-            foreach (var parameter in _parameters.Values)
+            RemoveParameterFromOwner(parameter);
+            if (_dialect is SqlDialect sqlDialect)
             {
                 sqlDialect.ReturnParameterToPool(parameter);
             }
         }
 
         _parameters.Clear();
+        _parameterOwners.Clear();
         Volatile.Write(ref _deferParameterPooling, 0);
     }
 

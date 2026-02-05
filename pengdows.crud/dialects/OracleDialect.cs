@@ -109,22 +109,20 @@ internal class OracleDialect : SqlDialect
         return $"{query.TrimEnd()} FETCH FIRST 1 ROWS ONLY";
     }
 
+    private const string NlsDateFormatSetting = "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD';";
+    private const string ReadOnlySessionSetting = "ALTER SESSION SET READ ONLY;";
+
     public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
     {
-        const string baseSettings = "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD';";
-
-        if (readOnly)
-        {
-            return $"{baseSettings}\nALTER SESSION SET READ ONLY;";
-        }
-
-        return baseSettings;
+        return readOnly
+            ? $"{NlsDateFormatSetting}\n{ReadOnlySessionSetting}"
+            : NlsDateFormatSetting;
     }
 
     [Obsolete]
     public override string GetConnectionSessionSettings()
     {
-        return "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD';";
+        return NlsDateFormatSetting;
     }
 
     internal override void ApplyConnectionSettingsCore(
@@ -183,7 +181,7 @@ internal class OracleDialect : SqlDialect
     {
         try
         {
-            using var sc = transaction.CreateSqlContainer("ALTER SESSION SET READ ONLY;");
+            using var sc = transaction.CreateSqlContainer(ReadOnlySessionSetting);
             sc.ExecuteNonQueryAsync().GetAwaiter().GetResult();
         }
         catch (Exception ex)

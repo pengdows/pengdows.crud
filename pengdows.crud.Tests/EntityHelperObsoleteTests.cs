@@ -4,29 +4,19 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class EntityHelperObsoleteTests
+public class TableGatewayObsoleteTests
 {
     [Fact]
-    public void EntityHelper_IsMarkedObsolete_WithTableGatewayMessage()
+    public void TableGateway_IsNotObsolete()
     {
         var attr = GetObsoleteAttribute();
 
-        Assert.NotNull(attr);
-        Assert.Contains("TableGateway", attr!.Message, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public void EntityHelper_ObsoleteAttribute_DoesNotBlockCompilation()
-    {
-        var attr = GetObsoleteAttribute();
-
-        Assert.NotNull(attr);
-        Assert.False(attr!.IsError);
+        Assert.Null(attr);
     }
 
     private static ObsoleteAttribute? GetObsoleteAttribute()
     {
-        return typeof(EntityHelper<DummyEntity, int>).GetCustomAttribute<ObsoleteAttribute>();
+        return typeof(TableGateway<DummyEntity, int>).GetCustomAttribute<ObsoleteAttribute>();
     }
 
     private sealed class DummyEntity

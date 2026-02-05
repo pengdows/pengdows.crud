@@ -53,13 +53,6 @@ public class DatabaseContextTests
         Assert.True(schema.Rows.Count > 0);
     }
 
-    // [Fact]
-    // public void Constructor_WithNullFactory_Throws()
-    // {
-    //     Assert.Throws<NullReferenceException>(() =>
-    //         new DatabaseContext("fake", (string)null!));
-    // }
-
     [Theory]
     [MemberData(nameof(AllSupportedProviders))]
     public void WrapObjectName_SplitsAndWrapsCorrectly(SupportedDatabase product)

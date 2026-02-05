@@ -95,9 +95,16 @@ internal class FirebirdDialect : SqlDialect
             "Firebird requires generator-specific syntax. Use RETURNING clause or GEN_ID(generator_name, 0) instead.");
     }
 
+    private const string EngineVersionQuery =
+        "SELECT rdb$get_context('SYSTEM', 'ENGINE_VERSION') FROM rdb$database";
+    private const string DatabaseInfoQuery = "SELECT * FROM rdb$database";
+    private const string MonitorVersionQuery = "SELECT mon$server_version FROM mon$database";
+    private const string DefaultSessionSettings =
+        "SET TRANSACTION ISOLATION LEVEL READ COMMITTED;\nSET SQL DIALECT 3;";
+
     public override string GetVersionQuery()
     {
-        return "SELECT rdb$get_context('SYSTEM', 'ENGINE_VERSION') FROM rdb$database";
+        return EngineVersionQuery;
     }
 
     public override string GetNaturalKeyLookupQuery(string tableName, string idColumnName,
@@ -110,13 +117,13 @@ internal class FirebirdDialect : SqlDialect
     public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
     {
         // Firebird doesn't have separate read-only session settings like other databases
-        return "SET TRANSACTION ISOLATION LEVEL READ COMMITTED;\nSET SQL DIALECT 3;";
+        return DefaultSessionSettings;
     }
 
     [Obsolete]
     public override string GetConnectionSessionSettings()
     {
-        return "SET TRANSACTION ISOLATION LEVEL READ COMMITTED;\nSET SQL DIALECT 3;";
+        return DefaultSessionSettings;
     }
 
 
@@ -126,7 +133,7 @@ internal class FirebirdDialect : SqlDialect
         try
         {
             await using var cmd = (DbCommand)connection.CreateCommand();
-            cmd.CommandText = "SELECT rdb$get_context('SYSTEM', 'ENGINE_VERSION') FROM rdb$database";
+            cmd.CommandText = EngineVersionQuery;
             var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
             if (result != null)
             {
@@ -138,7 +145,7 @@ internal class FirebirdDialect : SqlDialect
             try
             {
                 await using var cmd = (DbCommand)connection.CreateCommand();
-                cmd.CommandText = "SELECT * FROM rdb$database";
+                cmd.CommandText = DatabaseInfoQuery;
                 var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
                 if (result != null)
                 {
@@ -219,7 +226,7 @@ internal class FirebirdDialect : SqlDialect
         try
         {
             await using var cmd = (DbCommand)connection.CreateCommand();
-            cmd.CommandText = "SELECT rdb$get_context('SYSTEM', 'ENGINE_VERSION') FROM rdb$database";
+            cmd.CommandText = EngineVersionQuery;
             var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
             var s = result?.ToString() ?? string.Empty;
             if (!string.IsNullOrEmpty(s))
@@ -239,7 +246,7 @@ internal class FirebirdDialect : SqlDialect
         try
         {
             await using var cmd = (DbCommand)connection.CreateCommand();
-            cmd.CommandText = "SELECT mon$server_version FROM mon$database";
+            cmd.CommandText = MonitorVersionQuery;
             var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
             var s = result?.ToString() ?? string.Empty;
             if (!string.IsNullOrEmpty(s))

@@ -51,7 +51,7 @@ public class DbModeTests
         await using var context = new DatabaseContext(cfg, SqliteFactory.Instance, NullLoggerFactory.Instance, typeMap);
         await BuildUsersTableAsync(context);
 
-        var helper = new EntityHelper<User, int>(context, null);
+        var helper = new TableGateway<User, int>(context, null);
         var users = Enumerable.Range(1, 20)
             .Select(i => new User { Email = $"test{i}@example.com", Name = $"Test{i}", Version = 1 })
             .ToList();
@@ -86,7 +86,7 @@ public class DbModeTests
         await using var context = new DatabaseContext(cfg, SqliteFactory.Instance, NullLoggerFactory.Instance, typeMap);
         await BuildUsersTableAsync(context);
 
-        var helper = new EntityHelper<User, int>(context, null);
+        var helper = new TableGateway<User, int>(context, null);
         var users = Enumerable.Range(1, 20)
             .Select(i => new User { Email = $"test{i}@example.com", Name = $"Test{i}", Version = 1 })
             .ToList();

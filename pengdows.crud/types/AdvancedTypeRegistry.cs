@@ -79,6 +79,48 @@ internal readonly struct CachedParameterConfig
 /// </summary>
 public class AdvancedTypeRegistry
 {
+    // Provider-specific reflection property names.  Typos here fail silently at
+    // runtime; centralising makes them grep-able and keeps them in sync.
+    private static class NpgsqlNames
+    {
+        public const string DbTypeProperty  = "NpgsqlDbType";
+        public const string DataTypeName    = "DataTypeName";
+        public const string Jsonb           = "Jsonb";
+        public const string Integer         = "Integer";
+        public const string Text            = "Text";
+        public const string Array           = "Array";
+        public const string Int4Range       = "Int4Range";
+        public const string TsRange         = "TsRange";
+        public const string Inet            = "Inet";
+        public const string Cidr            = "Cidr";
+        public const string MacAddr         = "MacAddr";
+        public const string Interval        = "Interval";
+        public const string Uuid            = "Uuid";
+    }
+
+    private static class OracleNames
+    {
+        public const string DbTypeProperty  = "OracleDbType";
+        public const string IntervalYM      = "IntervalYM";
+        public const string IntervalDS      = "IntervalDS";
+        public const string Blob            = "Blob";
+        public const string Clob            = "Clob";
+    }
+
+    private static class SqlServerNames
+    {
+        public const string DbTypeProperty  = "SqlDbType";
+        public const string Udt             = "Udt";
+        public const string UdtTypeName     = "UdtTypeName";
+        public const string Timestamp       = "Timestamp";
+    }
+
+    private static class MySqlNames
+    {
+        public const string DbTypeProperty  = "MySqlDbType";
+        public const string Json            = "JSON";
+    }
+
     public static AdvancedTypeRegistry Shared { get; } = new(true);
 
     private readonly Dictionary<MappingKey, ProviderTypeMapping> _mappings = new();
@@ -311,8 +353,8 @@ public class AdvancedTypeRegistry
             ConfigureParameter = (param, value) =>
             {
                 param.DbType = DbType.String;
-                param.GetType().GetProperty("DataTypeName")?.SetValue(param, "jsonb");
-                SetEnumProperty(param, "NpgsqlDbType", "Jsonb");
+                param.GetType().GetProperty(NpgsqlNames.DataTypeName)?.SetValue(param, "jsonb");
+                SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Jsonb);
             }
         });
 
@@ -320,7 +362,7 @@ public class AdvancedTypeRegistry
         RegisterMapping<JsonDocument>(SupportedDatabase.MySql, new ProviderTypeMapping
         {
             DbType = DbType.String,
-            ConfigureParameter = (param, value) => { SetEnumProperty(param, "MySqlDbType", "JSON"); }
+            ConfigureParameter = (param, value) => { SetEnumProperty(param, MySqlNames.DbTypeProperty, MySqlNames.Json); }
         });
 
         // SQL Server JSON (stored as NVARCHAR(MAX))
@@ -343,8 +385,8 @@ public class AdvancedTypeRegistry
             DbType = DbType.Object,
             ConfigureParameter = (param, value) =>
             {
-                SetEnumProperty(param, "SqlDbType", "Udt");
-                param.GetType().GetProperty("UdtTypeName")?.SetValue(param, "geometry");
+                SetEnumProperty(param, SqlServerNames.DbTypeProperty, SqlServerNames.Udt);
+                param.GetType().GetProperty(SqlServerNames.UdtTypeName)?.SetValue(param, "geometry");
             }
         });
 
@@ -354,8 +396,8 @@ public class AdvancedTypeRegistry
             DbType = DbType.Object,
             ConfigureParameter = (param, value) =>
             {
-                SetEnumProperty(param, "SqlDbType", "Udt");
-                param.GetType().GetProperty("UdtTypeName")?.SetValue(param, "geography");
+                SetEnumProperty(param, SqlServerNames.DbTypeProperty, SqlServerNames.Udt);
+                param.GetType().GetProperty(SqlServerNames.UdtTypeName)?.SetValue(param, "geography");
             }
         });
 
@@ -377,14 +419,14 @@ public class AdvancedTypeRegistry
         RegisterMapping<int[]>(SupportedDatabase.PostgreSql, new ProviderTypeMapping
         {
             DbType = DbType.Object,
-            ConfigureParameter = (param, value) => { SetEnumProperty(param, "NpgsqlDbType", "Array", "Integer"); }
+            ConfigureParameter = (param, value) => { SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Array, NpgsqlNames.Integer); }
         });
 
         // PostgreSQL text[] arrays
         RegisterMapping<string[]>(SupportedDatabase.PostgreSql, new ProviderTypeMapping
         {
             DbType = DbType.Object,
-            ConfigureParameter = (param, value) => { SetEnumProperty(param, "NpgsqlDbType", "Array", "Text"); }
+            ConfigureParameter = (param, value) => { SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Array, NpgsqlNames.Text); }
         });
     }
 
@@ -394,14 +436,14 @@ public class AdvancedTypeRegistry
         RegisterMapping<Range<int>>(SupportedDatabase.PostgreSql, new ProviderTypeMapping
         {
             DbType = DbType.String,
-            ConfigureParameter = (param, value) => { SetEnumProperty(param, "NpgsqlDbType", "Int4Range"); }
+            ConfigureParameter = (param, value) => { SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Int4Range); }
         });
 
         // PostgreSQL tsrange
         RegisterMapping<Range<DateTime>>(SupportedDatabase.PostgreSql, new ProviderTypeMapping
         {
             DbType = DbType.String,
-            ConfigureParameter = (param, value) => { SetEnumProperty(param, "NpgsqlDbType", "TsRange"); }
+            ConfigureParameter = (param, value) => { SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.TsRange); }
         });
     }
 
@@ -411,21 +453,21 @@ public class AdvancedTypeRegistry
         RegisterMapping<Inet>(SupportedDatabase.PostgreSql, new ProviderTypeMapping
         {
             DbType = DbType.String,
-            ConfigureParameter = (param, value) => { SetEnumProperty(param, "NpgsqlDbType", "Inet"); }
+            ConfigureParameter = (param, value) => { SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Inet); }
         });
 
         // PostgreSQL cidr
         RegisterMapping<Cidr>(SupportedDatabase.PostgreSql, new ProviderTypeMapping
         {
             DbType = DbType.String,
-            ConfigureParameter = (param, value) => { SetEnumProperty(param, "NpgsqlDbType", "Cidr"); }
+            ConfigureParameter = (param, value) => { SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Cidr); }
         });
 
         // PostgreSQL macaddr
         RegisterMapping<MacAddress>(SupportedDatabase.PostgreSql, new ProviderTypeMapping
         {
             DbType = DbType.String,
-            ConfigureParameter = (param, value) => { SetEnumProperty(param, "NpgsqlDbType", "MacAddr"); }
+            ConfigureParameter = (param, value) => { SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.MacAddr); }
         });
     }
 
@@ -435,19 +477,19 @@ public class AdvancedTypeRegistry
         RegisterMapping<PostgreSqlInterval>(SupportedDatabase.PostgreSql, new ProviderTypeMapping
         {
             DbType = DbType.Object,
-            ConfigureParameter = (param, value) => { SetEnumProperty(param, "NpgsqlDbType", "Interval"); }
+            ConfigureParameter = (param, value) => { SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Interval); }
         });
 
         RegisterMapping<IntervalYearMonth>(SupportedDatabase.Oracle, new ProviderTypeMapping
         {
             DbType = DbType.Object,
-            ConfigureParameter = (param, value) => { SetEnumProperty(param, "OracleDbType", "IntervalYM"); }
+            ConfigureParameter = (param, value) => { SetEnumProperty(param, OracleNames.DbTypeProperty, OracleNames.IntervalYM); }
         });
 
         RegisterMapping<IntervalDaySecond>(SupportedDatabase.Oracle, new ProviderTypeMapping
         {
             DbType = DbType.Object,
-            ConfigureParameter = (param, value) => { SetEnumProperty(param, "OracleDbType", "IntervalDS"); }
+            ConfigureParameter = (param, value) => { SetEnumProperty(param, OracleNames.DbTypeProperty, OracleNames.IntervalDS); }
         });
 
         // SQL Server DateTimeOffset (UTC policy)
@@ -502,7 +544,7 @@ public class AdvancedTypeRegistry
             ConfigureParameter = (param, value) =>
             {
                 param.DbType = DbType.String;
-                SetEnumProperty(param, "NpgsqlDbType", "Text");
+                SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Text);
             }
         });
 
@@ -510,13 +552,13 @@ public class AdvancedTypeRegistry
         RegisterMapping<Stream>(SupportedDatabase.Oracle, new ProviderTypeMapping
         {
             DbType = DbType.Binary,
-            ConfigureParameter = (param, value) => { SetEnumProperty(param, "OracleDbType", "Blob"); }
+            ConfigureParameter = (param, value) => { SetEnumProperty(param, OracleNames.DbTypeProperty, OracleNames.Blob); }
         });
 
         RegisterMapping<TextReader>(SupportedDatabase.Oracle, new ProviderTypeMapping
         {
             DbType = DbType.String,
-            ConfigureParameter = (param, value) => { SetEnumProperty(param, "OracleDbType", "Clob"); }
+            ConfigureParameter = (param, value) => { SetEnumProperty(param, OracleNames.DbTypeProperty, OracleNames.Clob); }
         });
     }
 
@@ -530,7 +572,7 @@ public class AdvancedTypeRegistry
             {
                 param.DbType = DbType.Binary;
                 param.Size = 8;
-                SetEnumProperty(param, "SqlDbType", "Timestamp");
+                SetEnumProperty(param, SqlServerNames.DbTypeProperty, SqlServerNames.Timestamp);
             }
         });
 
@@ -538,7 +580,7 @@ public class AdvancedTypeRegistry
         RegisterMapping<Guid>(SupportedDatabase.PostgreSql, new ProviderTypeMapping
         {
             DbType = DbType.Guid,
-            ConfigureParameter = (param, value) => { SetEnumProperty(param, "NpgsqlDbType", "Uuid"); }
+            ConfigureParameter = (param, value) => { SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Uuid); }
         });
     }
 

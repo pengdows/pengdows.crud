@@ -602,16 +602,12 @@ public class DataReaderMapperTests
         var cacheField = typeof(DataReaderMapper).GetField("_planCache", BindingFlags.Static | BindingFlags.NonPublic);
         var cache = cacheField!.GetValue(null)!;
 
-        // BoundedCache uses a private _count field, not a public Count property
-        var countField = cache.GetType().GetField("_count", BindingFlags.Instance | BindingFlags.NonPublic);
-        if (countField != null)
-        {
-            return (int)countField.GetValue(cache)!;
-        }
-
-        // Fallback for ConcurrentDictionary (legacy)
-        var countProperty = cache.GetType().GetProperty("Count");
-        return (int)countProperty!.GetValue(cache)!;
+        var mapField = cache.GetType().GetField("_map", BindingFlags.Instance | BindingFlags.NonPublic)
+                       ?? throw new InvalidOperationException("_map field not found on BoundedCache");
+        var map = mapField.GetValue(cache)!;
+        var countProp = map.GetType().GetProperty("Count")
+                        ?? throw new InvalidOperationException("Count property not found on _map");
+        return (int)countProp.GetValue(map)!;
     }
 
     private class SampleEntity

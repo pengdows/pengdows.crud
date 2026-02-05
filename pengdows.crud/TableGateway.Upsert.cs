@@ -62,7 +62,7 @@ public partial class TableGateway<TEntity, TRowID>
         var ctx = context ?? _context;
         if (_idColumn == null && _tableInfo.PrimaryKeys.Count == 0)
         {
-            throw new NotSupportedException("Upsert requires an Id or a composite primary key.");
+            throw new NotSupportedException(UpsertNoKeyMessage);
         }
 
         if (ctx.DataSourceInfo.IsUsingFallbackDialect)
@@ -101,7 +101,7 @@ public partial class TableGateway<TEntity, TRowID>
             return keys;
         }
 
-        throw new NotSupportedException("Upsert requires client-assigned Id or [PrimaryKey] attributes.");
+        throw new NotSupportedException(UpsertNoWritableKeyMessage);
     }
 
     private void PrepareForInsertOrUpsert(TEntity e)
@@ -196,7 +196,7 @@ public partial class TableGateway<TEntity, TRowID>
         var keys = _tableInfo.PrimaryKeys;
         if (_idColumn == null && keys.Count == 0)
         {
-            throw new NotSupportedException("Upsert requires an Id or a composite primary key.");
+            throw new NotSupportedException(UpsertNoKeyMessage);
         }
 
         var conflictCols = keys.Count > 0 ? keys : new List<IColumnInfo> { _idColumn! };
@@ -351,7 +351,7 @@ public partial class TableGateway<TEntity, TRowID>
         var keys = _tableInfo.PrimaryKeys;
         if (_idColumn == null && keys.Count == 0)
         {
-            throw new NotSupportedException("Upsert requires an Id or a composite primary key.");
+            throw new NotSupportedException(UpsertNoKeyMessage);
         }
 
         var sc = ctx.CreateSqlContainer();
@@ -477,7 +477,7 @@ public partial class TableGateway<TEntity, TRowID>
         var keys = _tableInfo.PrimaryKeys;
         if (_idColumn == null && keys.Count == 0)
         {
-            throw new NotSupportedException("Upsert requires an Id or a composite primary key.");
+            throw new NotSupportedException(UpsertNoKeyMessage);
         }
 
         var joinCols = keys.Count > 0 ? keys : new List<IColumnInfo> { _idColumn! };
@@ -601,7 +601,7 @@ public partial class TableGateway<TEntity, TRowID>
         var keys = _tableInfo.PrimaryKeys;
         if (_idColumn == null && keys.Count == 0)
         {
-            throw new NotSupportedException("Upsert requires an Id or a composite primary key.");
+            throw new NotSupportedException(UpsertNoKeyMessage);
         }
 
         var joinCols = keys.Count > 0 ? keys : new List<IColumnInfo> { _idColumn! };

@@ -37,7 +37,7 @@ public class DbModeTests : DatabaseTestBase
                 : DbMode.Standard;
             Assert.Equal(expectedMode, context.ConnectionMode);
 
-            var helper = CreateEntityHelper(context);
+            var helper = CreateTableGateway(context);
             var entity = CreateTestEntity(NameEnum.Test, 100);
 
             var initialConnCount = context.NumberOfOpenConnections;
@@ -56,7 +56,7 @@ public class DbModeTests : DatabaseTestBase
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
             // Arrange
-            var helper = CreateEntityHelper(context);
+            var helper = CreateTableGateway(context);
             var entities = new[]
             {
                 CreateTestEntity(NameEnum.Test, 200),
@@ -91,7 +91,7 @@ public class DbModeTests : DatabaseTestBase
 
             // Act - Within transaction, connection should stay open
             await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
-            var helper = CreateEntityHelper(transaction);
+            var helper = CreateTableGateway(transaction);
 
             var connCountInTransaction = transaction.NumberOfOpenConnections;
             Assert.True(connCountInTransaction > 0, "Transaction should have at least one connection open");
@@ -105,7 +105,7 @@ public class DbModeTests : DatabaseTestBase
             transaction.Commit();
 
             // Assert - After commit, verify data persisted
-            var baseHelper = CreateEntityHelper(context);
+            var baseHelper = CreateTableGateway(context);
             var retrieved1 = await baseHelper.RetrieveOneAsync(entity1.Id, context);
             var retrieved2 = await baseHelper.RetrieveOneAsync(entity2.Id, context);
 
@@ -127,7 +127,7 @@ public class DbModeTests : DatabaseTestBase
             // Act - Parallel operations should each get independent connections
             var tasks = entities.Select(async entity =>
             {
-                var helper = CreateEntityHelper(context);
+                var helper = CreateTableGateway(context);
                 return await helper.CreateAsync(entity, context);
             });
 
@@ -137,7 +137,7 @@ public class DbModeTests : DatabaseTestBase
             Assert.All(results, r => Assert.True(r));
 
             // Verify all persisted
-            var helper = CreateEntityHelper(context);
+            var helper = CreateTableGateway(context);
             var retrieved = await helper.RetrieveAsync(entities.Select(e => e.Id).ToList(), context);
             Assert.Equal(entities.Count, retrieved.Count);
         });
@@ -150,7 +150,7 @@ public class DbModeTests : DatabaseTestBase
         {
             // Arrange
             var entity = CreateTestEntity(NameEnum.Test, 500);
-            await CreateEntityHelper(context).CreateAsync(entity, context);
+            await CreateTableGateway(context).CreateAsync(entity, context);
 
             // Act - Use ExecuteReaderAsync which uses ExecutionType.Read
             var tableName = context.WrapObjectName("test_table");
@@ -228,7 +228,7 @@ public class DbModeTests : DatabaseTestBase
             Assert.Equal(1, rowsAffected);
 
             // Verify it was actually inserted (write permit released, safe to read)
-            var helper = CreateEntityHelper(context);
+            var helper = CreateTableGateway(context);
             var retrieved = await helper.RetrieveOneAsync(entity.Id, context);
             Assert.NotNull(retrieved);
         });
@@ -248,7 +248,7 @@ public class DbModeTests : DatabaseTestBase
 
             // Arrange - Create data first
             var entity = CreateTestEntity(NameEnum.Test, 700);
-            await CreateEntityHelper(context).CreateAsync(entity, context);
+            await CreateTableGateway(context).CreateAsync(entity, context);
 
             // Act - Begin read-only transaction
             await using var readTransaction = context.BeginTransaction(
@@ -256,7 +256,7 @@ public class DbModeTests : DatabaseTestBase
                 ExecutionType.Read,
                 true);
 
-            var helper = CreateEntityHelper(readTransaction);
+            var helper = CreateTableGateway(readTransaction);
 
             // Assert - Reads should work
             var retrieved = await helper.RetrieveOneAsync(entity.Id, readTransaction);
@@ -340,14 +340,14 @@ public class DbModeTests : DatabaseTestBase
             foreach (var entity in entities)
             {
                 await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
-                var helper = CreateEntityHelper(transaction);
+                var helper = CreateTableGateway(transaction);
 
                 await helper.CreateAsync(entity, transaction);
                 transaction.Commit();
             }
 
             // Assert
-            var baseHelper = CreateEntityHelper(context);
+            var baseHelper = CreateTableGateway(context);
             var retrieved = await baseHelper.RetrieveAsync(entities.Select(e => e.Id).ToList(), context);
             Assert.Equal(entities.Length, retrieved.Count);
         });
@@ -363,7 +363,7 @@ public class DbModeTests : DatabaseTestBase
             Output.WriteLine($"Initial connection count: {initialCount}");
 
             // Act - Perform some operations
-            var helper = CreateEntityHelper(context);
+            var helper = CreateTableGateway(context);
             var entity = CreateTestEntity(NameEnum.Test, 900);
 
             await helper.CreateAsync(entity, context);
@@ -410,18 +410,18 @@ public class DbModeTests : DatabaseTestBase
 
             // Arrange
             var entity = CreateTestEntity(NameEnum.Test, 1000);
-            await CreateEntityHelper(context).CreateAsync(entity, context);
+            await CreateTableGateway(context).CreateAsync(entity, context);
 
             // Act - Transaction 1: Read the entity
             await using var tx1 = context.BeginTransaction(IsolationLevel.ReadCommitted);
-            var helper1 = CreateEntityHelper(tx1);
+            var helper1 = CreateTableGateway(tx1);
             var read1 = await helper1.RetrieveOneAsync(entity.Id, tx1);
             Assert.NotNull(read1);
             Assert.Equal(entity.Value, read1!.Value);
 
             // Transaction 2: Update but don't commit
             await using var tx2 = context.BeginTransaction(IsolationLevel.ReadCommitted);
-            var helper2 = CreateEntityHelper(tx2);
+            var helper2 = CreateTableGateway(tx2);
             var read2 = await helper2.RetrieveOneAsync(entity.Id, tx2);
             read2!.Value = 2000;
             await helper2.UpdateAsync(read2, tx2);
@@ -436,15 +436,15 @@ public class DbModeTests : DatabaseTestBase
             tx1.Commit();
 
             // Assert - Original value should be preserved
-            var final = await CreateEntityHelper(context).RetrieveOneAsync(entity.Id, context);
+            var final = await CreateTableGateway(context).RetrieveOneAsync(entity.Id, context);
             Assert.Equal(entity.Value, final!.Value);
         });
     }
 
-    private EntityHelper<TestTable, long> CreateEntityHelper(IDatabaseContext context)
+    private TableGateway<TestTable, long> CreateTableGateway(IDatabaseContext context)
     {
         var auditResolver = GetAuditResolver();
-        return new EntityHelper<TestTable, long>(context, auditResolver);
+        return new TableGateway<TestTable, long>(context, auditResolver);
     }
 
     private static TestTable CreateTestEntity(NameEnum name, int value)

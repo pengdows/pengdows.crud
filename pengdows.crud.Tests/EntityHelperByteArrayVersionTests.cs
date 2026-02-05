@@ -10,7 +10,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class EntityHelperByteArrayVersionTests : SqlLiteContextTestBase
+public class TableGatewayByteArrayVersionTests : SqlLiteContextTestBase
 {
     [Table("RowVer")]
     private sealed class ByteVerEntity
@@ -26,7 +26,7 @@ public class EntityHelperByteArrayVersionTests : SqlLiteContextTestBase
         public byte[] Version { get; set; } = Array.Empty<byte>();
     }
 
-    public EntityHelperByteArrayVersionTests()
+    public TableGatewayByteArrayVersionTests()
     {
         TypeMap.Register<ByteVerEntity>();
         var qp = Context.QuotePrefix;
@@ -42,7 +42,7 @@ public class EntityHelperByteArrayVersionTests : SqlLiteContextTestBase
     [Fact]
     public async Task Update_WithByteArrayVersion_DoesNotIncrement()
     {
-        var helper = new EntityHelper<ByteVerEntity, int>(Context, AuditValueResolver);
+        var helper = new TableGateway<ByteVerEntity, int>(Context, AuditValueResolver);
         var e = new ByteVerEntity { Name = "x", Version = new byte[] { 1, 2, 3 } };
         await helper.CreateAsync(e, Context);
         e.Name = "y";

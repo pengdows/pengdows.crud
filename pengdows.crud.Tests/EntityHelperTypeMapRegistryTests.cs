@@ -5,7 +5,7 @@ using Xunit;
 namespace pengdows.crud.Tests;
 
 [Collection("TypeRegistry")]
-public class EntityHelperTypeMapRegistryTests
+public class TableGatewayTypeMapRegistryTests
 {
     private sealed class CustomTypeMapRegistry : ITypeMapRegistry
     {
@@ -41,7 +41,7 @@ public class EntityHelperTypeMapRegistryTests
     {
         using var ctx =
             new DatabaseContext("Data Source=:memory:", SqliteFactory.Instance, new CustomTypeMapRegistry());
-        var helper = new EntityHelper<TestTable, long>(ctx);
+        var helper = new TableGateway<TestTable, long>(ctx);
         var sc = helper.BuildDelete(1, ctx);
         Assert.Contains("custom_test_table", sc.Query.ToString(), StringComparison.OrdinalIgnoreCase);
     }
@@ -50,6 +50,6 @@ public class EntityHelperTypeMapRegistryTests
     public void Constructor_MissingTableInfo_Throws()
     {
         using var ctx = new DatabaseContext("Data Source=:memory:", SqliteFactory.Instance, new NullTypeMapRegistry());
-        Assert.Throws<InvalidOperationException>(() => new EntityHelper<TestTable, long>(ctx));
+        Assert.Throws<InvalidOperationException>(() => new TableGateway<TestTable, long>(ctx));
     }
 }

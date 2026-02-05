@@ -10,9 +10,9 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class EntityHelperRecordsetPlanTests : SqlLiteContextTestBase
+public class TableGatewayRecordsetPlanTests : SqlLiteContextTestBase
 {
-    public EntityHelperRecordsetPlanTests()
+    public TableGatewayRecordsetPlanTests()
     {
         TypeMap.Register<NameEntity>();
     }
@@ -20,7 +20,7 @@ public class EntityHelperRecordsetPlanTests : SqlLiteContextTestBase
     [Fact]
     public void MapReaderToObject_DifferentFieldTypes_BuildsSeparatePlans()
     {
-        var helper = new EntityHelper<NameEntity, int>(Context);
+        var helper = new TableGateway<NameEntity, int>(Context);
 
         var rows1 = new[]
         {

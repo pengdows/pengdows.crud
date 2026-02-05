@@ -74,7 +74,7 @@ public sealed class PoolGovernorFairnessTests
 
         // Act: Multiple readers acquire concurrently
         var permits = new List<PoolPermit>();
-        for (int i = 0; i < 5; i++)
+        for (var i = 0; i < 5; i++)
         {
             permits.Add(await readerGovernor.AcquireAsync());
         }
@@ -121,7 +121,7 @@ public sealed class PoolGovernorFairnessTests
 
         // Start continuous reader pressure
         var readerTasks = new List<Task>();
-        for (int i = 0; i < 3; i++)
+        for (var i = 0; i < 3; i++)
         {
             readerTasks.Add(Task.Run(async () =>
             {
@@ -195,7 +195,7 @@ public sealed class PoolGovernorFairnessTests
 
         // After writer releases, readers should be able to acquire
         var permits = new List<PoolPermit>();
-        for (int i = 0; i < 3; i++)
+        for (var i = 0; i < 3; i++)
         {
             permits.Add(await readerGovernor.AcquireAsync());
         }

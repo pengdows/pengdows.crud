@@ -3,7 +3,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class EntityHelperDialectOverrideTests
+public class TableGatewayDialectOverrideTests
 {
     [Fact]
     public void BuildCreate_WithPostgresOverride_UsesColonMarker()
@@ -16,7 +16,7 @@ public class EntityHelperDialectOverrideTests
         using var overrideCtx = new DatabaseContext("Data Source=test;EmulatedProduct=PostgreSql",
             new fakeDbFactory(SupportedDatabase.PostgreSql), typeMap);
 
-        var helper = new EntityHelper<TestEntity, int>(baseCtx, new StubAuditValueResolver("tester"));
+        var helper = new TableGateway<TestEntity, int>(baseCtx, new StubAuditValueResolver("tester"));
         var entity = new TestEntity { Name = "foo" };
 
         var sc = helper.BuildCreate(entity, overrideCtx);
@@ -38,7 +38,7 @@ public class EntityHelperDialectOverrideTests
         using var overrideCtx = new DatabaseContext("Data Source=test;EmulatedProduct=PostgreSql",
             new fakeDbFactory(SupportedDatabase.PostgreSql), typeMap);
 
-        var helper = new EntityHelper<TestEntity, int>(baseCtx, new StubAuditValueResolver("tester"));
+        var helper = new TableGateway<TestEntity, int>(baseCtx, new StubAuditValueResolver("tester"));
         var sc = helper.BuildDelete(42, overrideCtx);
         var sql = sc.Query.ToString();
 
@@ -58,7 +58,7 @@ public class EntityHelperDialectOverrideTests
         using var overrideCtx = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite",
             new fakeDbFactory(SupportedDatabase.Sqlite), typeMap);
 
-        var helper = new EntityHelper<TestEntity, int>(baseCtx, new StubAuditValueResolver("tester"));
+        var helper = new TableGateway<TestEntity, int>(baseCtx, new StubAuditValueResolver("tester"));
         var sc = helper.BuildRetrieve(new[] { 1, 2, 3 }, overrideCtx);
         var sql = sc.Query.ToString();
 

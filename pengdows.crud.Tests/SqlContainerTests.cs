@@ -18,7 +18,7 @@ namespace pengdows.crud.Tests;
 
 public class SqlContainerTests : SqlLiteContextTestBase, IDisposable
 {
-    private readonly EntityHelper<TestEntity, int> entityHelper;
+    private readonly TableGateway<TestEntity, int> entityHelper;
 
     public SqlContainerTests()
     {
@@ -26,7 +26,7 @@ public class SqlContainerTests : SqlLiteContextTestBase, IDisposable
         // _connection = new SqliteConnection("Data Source=:memory:");
         // _connection.Open();
         TypeMap.Register<TestEntity>();
-        entityHelper = new EntityHelper<TestEntity, int>(Context);
+        entityHelper = new TableGateway<TestEntity, int>(Context);
         Assert.Equal(DbMode.SingleConnection, Context.ConnectionMode);
         BuildTestTable().GetAwaiter().GetResult();
     }

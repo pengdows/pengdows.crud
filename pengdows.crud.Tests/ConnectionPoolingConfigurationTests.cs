@@ -264,6 +264,52 @@ public class ConnectionPoolingConfigurationTests
 
     #endregion
 
+    #region ApplyMaxPoolSize Tests
+
+    [Fact]
+    public void ApplyMaxPoolSize_AddsValueWhenMissing()
+    {
+        var connectionString = "Server=localhost";
+
+        var result = ConnectionPoolingConfiguration.ApplyMaxPoolSize(
+            connectionString,
+            20,
+            "Max Pool Size");
+
+        var builder = new DbConnectionStringBuilder { ConnectionString = result };
+        Assert.Equal("20", builder["Max Pool Size"].ToString());
+    }
+
+    [Fact]
+    public void ApplyMaxPoolSize_OverrideExisting_ReplacesValue()
+    {
+        var connectionString = "Server=localhost;Max Pool Size=5";
+
+        var result = ConnectionPoolingConfiguration.ApplyMaxPoolSize(
+            connectionString,
+            10,
+            "Max Pool Size",
+            overrideExisting: true);
+
+        var builder = new DbConnectionStringBuilder { ConnectionString = result };
+        Assert.Equal("10", builder["Max Pool Size"].ToString());
+    }
+
+    [Fact]
+    public void ApplyMaxPoolSize_RawConnectionString_NoChanges()
+    {
+        var connectionString = ":memory:";
+
+        var result = ConnectionPoolingConfiguration.ApplyMaxPoolSize(
+            connectionString,
+            5,
+            "Max Pool Size");
+
+        Assert.Equal(connectionString, result);
+    }
+
+    #endregion
+
     #region GetDefaultMinPoolSize Tests
 
     [Fact]

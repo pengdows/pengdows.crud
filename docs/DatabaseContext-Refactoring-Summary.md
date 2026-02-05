@@ -180,7 +180,7 @@ After completing the planned phases, further improvements were made:
 - **Zero errors**: Clean build with only pre-existing warnings
 - **100% backward compatibility**: Public API unchanged
 - **No performance regression**: All benchmarks still valid
-- **Consistent patterns**: Followed existing EntityHelper partial class pattern
+- **Consistent patterns**: Followed existing TableGateway partial class pattern
 
 ### ✅ Risk Mitigation
 - **Comprehensive testing**: 2,951+ unit tests + 85 integration tests
@@ -205,7 +205,7 @@ This refactoring pattern can be applied to other large classes:
 
 **Estimated timeline**: 2-3 weeks using this proven pattern
 
-### Later: EntityHelper (1,179+ lines across 8 partials)
+### Later: TableGateway (1,179+ lines across 8 partials)
 Already partially split, but could benefit from:
 - EntityReaderMapper (row-to-object mapping)
 - SqlTemplateCache (template caching)
@@ -264,7 +264,7 @@ Already partially split, but could benefit from:
 
 The DatabaseContext refactoring was completed successfully within the planned timeline. The codebase is now significantly more maintainable, with clear separation of concerns and improved testability. All quality gates passed, and 100% backward compatibility was maintained.
 
-The refactoring pattern established here serves as a template for future work on other large classes (SqlDialect, EntityHelper), demonstrating that complex refactoring can be done safely and efficiently with proper planning, testing, and incremental validation.
+The refactoring pattern established here serves as a template for future work on other large classes (SqlDialect, TableGateway), demonstrating that complex refactoring can be done safely and efficiently with proper planning, testing, and incremental validation.
 
 ---
 

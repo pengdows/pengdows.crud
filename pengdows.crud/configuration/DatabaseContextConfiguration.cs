@@ -33,6 +33,9 @@ namespace pengdows.crud.configuration;
 /// </summary>
 public class DatabaseContextConfiguration : IDatabaseContextConfiguration
 {
+    internal const int DefaultPoolAcquireSeconds = 5;
+    internal const int DefaultModeLockSeconds = 30;
+
     /// <summary>
     /// Database connection string.
     /// </summary>
@@ -133,8 +136,8 @@ public class DatabaseContextConfiguration : IDatabaseContextConfiguration
     /// When true, the governor enforces writer-preference gates (turnstile) for SingleWriter mode.
     /// </summary>
     public bool EnableWriterPreference { get; set; } = true;
-    public TimeSpan PoolAcquireTimeout { get; set; } = TimeSpan.FromSeconds(5);
-    public TimeSpan? ModeLockTimeout { get; set; } = TimeSpan.FromSeconds(30);
+    public TimeSpan PoolAcquireTimeout { get; set; } = TimeSpan.FromSeconds(DefaultPoolAcquireSeconds);
+    public TimeSpan? ModeLockTimeout { get; set; } = TimeSpan.FromSeconds(DefaultModeLockSeconds);
     public bool EnablePoolGovernor { get; set; } = true;
     
     public string ApplicationName { get; set; } = string.Empty;

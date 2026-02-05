@@ -9,7 +9,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class EntityHelperJsonEgressTests
+public class TableGatewayJsonEgressTests
 {
     [Fact]
     public void BuildCreate_PostgresJsonColumn_AppendsJsonCast()
@@ -19,7 +19,7 @@ public class EntityHelperJsonEgressTests
 
         using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=PostgreSql",
             new fakeDbFactory(SupportedDatabase.PostgreSql), registry);
-        var helper = new EntityHelper<JsonEntity, int>(ctx, new StubAuditValueResolver("tester"));
+        var helper = new TableGateway<JsonEntity, int>(ctx, new StubAuditValueResolver("tester"));
         var entity = new JsonEntity { Payload = new SamplePayload { Message = "hi" } };
 
         var container = helper.BuildCreate(entity, ctx);
@@ -40,7 +40,7 @@ public class EntityHelperJsonEgressTests
 
         using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer",
             new fakeDbFactory(SupportedDatabase.SqlServer), registry);
-        var helper = new EntityHelper<JsonEntity, int>(ctx, new StubAuditValueResolver("tester"));
+        var helper = new TableGateway<JsonEntity, int>(ctx, new StubAuditValueResolver("tester"));
         var entity = new JsonEntity { Payload = new SamplePayload { Message = "hi" } };
 
         var container = helper.BuildCreate(entity, ctx);

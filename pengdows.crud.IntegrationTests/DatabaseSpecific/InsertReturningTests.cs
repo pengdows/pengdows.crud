@@ -71,7 +71,7 @@ public class InsertReturningTests : DatabaseTestBase
             }
 
             ((TypeMapRegistry)context.TypeMapRegistry).Register<ReturningEntity>();
-            var helper = new EntityHelper<ReturningEntity, long>(context);
+            var helper = new TableGateway<ReturningEntity, long>(context);
             var entity = new ReturningEntity
             {
                 Name = $"returning-{provider}-{Guid.NewGuid():N}"
@@ -103,7 +103,7 @@ public class InsertReturningTests : DatabaseTestBase
             }
 
             ((TypeMapRegistry)context.TypeMapRegistry).Register<ReturningEntity>();
-            var helper = new EntityHelper<ReturningEntity, long>(context);
+            var helper = new TableGateway<ReturningEntity, long>(context);
             var uniqueName = $"noreturning-{provider}-{Guid.NewGuid():N}";
             var entity = new ReturningEntity
             {

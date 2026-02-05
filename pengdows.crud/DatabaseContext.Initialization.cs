@@ -936,7 +936,7 @@ public partial class DatabaseContext
         }
 
         // 3. Dialect default
-        return _dialect?.DefaultMaxPoolSize ?? 100;
+        return _dialect?.DefaultMaxPoolSize ?? SqlDialect.FallbackMaxPoolSize;
     }
 
     private string BuildReaderConnectionString(IDatabaseContextConfiguration configuration)
@@ -1336,7 +1336,7 @@ public partial class DatabaseContext
             return true;
         }
 
-        if (!builder.TryGetValue("Data Source", out var raw) || builder.Count != 1)
+        if (!builder.TryGetValue(ConnectionStringHelper.DataSourceKey, out var raw) || builder.Count != 1)
         {
             return false;
         }
@@ -1349,9 +1349,9 @@ public partial class DatabaseContext
         try
         {
             var csb = new DbConnectionStringBuilder { ConnectionString = connectionString };
-            if (csb.ContainsKey("Data Source"))
+            if (csb.ContainsKey(ConnectionStringHelper.DataSourceKey))
             {
-                return csb["Data Source"]?.ToString();
+                return csb[ConnectionStringHelper.DataSourceKey]?.ToString();
             }
         }
         catch

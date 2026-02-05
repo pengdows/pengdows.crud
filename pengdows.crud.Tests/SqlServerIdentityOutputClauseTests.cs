@@ -13,7 +13,7 @@ namespace pengdows.crud.Tests;
 /// Tests for INSERT identity population across different scenarios and dialects.
 /// Includes SQL Server OUTPUT clause positioning (regression test for GitHub issue #137).
 /// </summary>
-#pragma warning disable CS0618 // EntityHelper is obsolete
+#pragma warning disable CS0618 // TableGateway is obsolete
 public class SqlServerIdentityOutputClauseTests
 {
     private readonly ITypeMapRegistry _typeMap;
@@ -69,7 +69,7 @@ public class SqlServerIdentityOutputClauseTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory, _typeMap);
-        var helper = new EntityHelper<UserInfoEntity, int>(context);
+        var helper = new TableGateway<UserInfoEntity, int>(context);
 
         var entity = new UserInfoEntity
         {
@@ -119,7 +119,7 @@ public class SqlServerIdentityOutputClauseTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory, _typeMap);
-        var helper = new EntityHelper<UserInfoEntity, int>(context);
+        var helper = new TableGateway<UserInfoEntity, int>(context);
 
         var entity = new UserInfoEntity
         {
@@ -154,7 +154,7 @@ public class SqlServerIdentityOutputClauseTests
         factory.SetIdPopulationResult(42, 1); // Set the generated ID to return
 
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory, _typeMap);
-        var helper = new EntityHelper<UserInfoEntity, int>(context);
+        var helper = new TableGateway<UserInfoEntity, int>(context);
 
         var entity = new UserInfoEntity
         {
@@ -191,7 +191,7 @@ public class SqlServerIdentityOutputClauseTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory, _typeMap);
-        var helper = new EntityHelper<UserInfoEntity, int>(context);
+        var helper = new TableGateway<UserInfoEntity, int>(context);
 
         var entity = new UserInfoEntity
         {
@@ -223,7 +223,7 @@ public class SqlServerIdentityOutputClauseTests
     }
 
     // ============================================================================
-    // Broader ID Population Tests (ported from 1.0 EntityHelperIdPopulationTests)
+    // Broader ID Population Tests (ported from 1.0 TableGatewayIdPopulationTests)
     // ============================================================================
 
     [Fact]
@@ -234,7 +234,7 @@ public class SqlServerIdentityOutputClauseTests
         factory.SetIdPopulationResult(42, rowsAffected: 1);
 
         var context = new DatabaseContext("test", factory, _typeMap);
-        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+        var helper = new TableGateway<TestEntityWithAutoId, int>(context);
         var entity = new TestEntityWithAutoId { Name = "Test Entity" };
 
         // Act
@@ -251,7 +251,7 @@ public class SqlServerIdentityOutputClauseTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var context = new DatabaseContext("test", factory, _typeMap);
-        var helper = new EntityHelper<TestEntityWithWritableId, int>(context);
+        var helper = new TableGateway<TestEntityWithWritableId, int>(context);
 
         factory.SetNonQueryResult(1);
 
@@ -273,7 +273,7 @@ public class SqlServerIdentityOutputClauseTests
         var context = new DatabaseContext("test", factory, _typeMap);
 
         // Assert: constructing helper should fail due to missing [Id]/[PrimaryKey]
-        Assert.Throws<InvalidOperationException>(() => new EntityHelper<TestEntityWithoutId, int>(context));
+        Assert.Throws<InvalidOperationException>(() => new TableGateway<TestEntityWithoutId, int>(context));
     }
 
     [Fact]
@@ -282,7 +282,7 @@ public class SqlServerIdentityOutputClauseTests
         // Arrange - Use Sqlite which uses RETURNING clause
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory, _typeMap);
-        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+        var helper = new TableGateway<TestEntityWithAutoId, int>(context);
 
         factory.SetNonQueryResult(1);
         factory.SetScalarResult(42);
@@ -303,7 +303,7 @@ public class SqlServerIdentityOutputClauseTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         var context = new DatabaseContext("test", factory, _typeMap);
-        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+        var helper = new TableGateway<TestEntityWithAutoId, int>(context);
 
         factory.SetNonQueryResult(1);
         factory.SetScalarResult(null);
@@ -326,7 +326,7 @@ public class SqlServerIdentityOutputClauseTests
         factory.SetException(new InvalidOperationException("Database connection lost"));
 
         var context = new DatabaseContext("test", factory, _typeMap);
-        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+        var helper = new TableGateway<TestEntityWithAutoId, int>(context);
 
         factory.SetNonQueryResult(1);
 
@@ -342,7 +342,7 @@ public class SqlServerIdentityOutputClauseTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=Unknown", factory, _typeMap);
-        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+        var helper = new TableGateway<TestEntityWithAutoId, int>(context);
 
         factory.SetNonQueryResult(0); // Insert fails
 
@@ -362,7 +362,7 @@ public class SqlServerIdentityOutputClauseTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=Unknown", factory, _typeMap);
-        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+        var helper = new TableGateway<TestEntityWithAutoId, int>(context);
 
         factory.SetNonQueryResult(2); // Multiple rows affected
 
@@ -381,7 +381,7 @@ public class SqlServerIdentityOutputClauseTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory, _typeMap);
-        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+        var helper = new TableGateway<TestEntityWithAutoId, int>(context);
 
         var sc = helper.BuildCreateWithReturning(new TestEntityWithAutoId { Name = "Test Entity" }, true, context);
         var sql = sc.Query.ToString();
@@ -398,7 +398,7 @@ public class SqlServerIdentityOutputClauseTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory, _typeMap);
-        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+        var helper = new TableGateway<TestEntityWithAutoId, int>(context);
 
         var sc = helper.BuildCreateWithReturning(new TestEntityWithAutoId { Name = "Test Entity" }, true, context);
         var sql = sc.Query.ToString();
@@ -419,7 +419,7 @@ public class SqlServerIdentityOutputClauseTests
         factory.SetNonQueryResult(1);
 
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory, _typeMap);
-        var helper = new EntityHelper<TestEntityWithGuidId, Guid>(context);
+        var helper = new TableGateway<TestEntityWithGuidId, Guid>(context);
         var entity = new TestEntityWithGuidId { Name = "Guid Entity" };
 
         var result = await helper.CreateAsync(entity);
@@ -436,7 +436,7 @@ public class SqlServerIdentityOutputClauseTests
         factory.SetNonQueryResult(1);
 
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory, _typeMap);
-        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+        var helper = new TableGateway<TestEntityWithAutoId, int>(context);
         var entity = new TestEntityWithAutoId { Name = "Cancellation Test" };
 
         var result = await helper.CreateAsync(entity, context, CancellationToken.None);
@@ -459,7 +459,7 @@ public class SqlServerIdentityOutputClauseTests
     {
         var factory = new fakeDbFactory(provider);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={provider}", factory, _typeMap);
-        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+        var helper = new TableGateway<TestEntityWithAutoId, int>(context);
 
         var sc = helper.BuildCreateWithReturning(new TestEntityWithAutoId { Name = "Test" }, true, context);
         var sql = sc.Query.ToString();
@@ -490,7 +490,7 @@ public class SqlServerIdentityOutputClauseTests
     {
         var factory = new fakeDbFactory(provider);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={provider}", factory, _typeMap);
-        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+        var helper = new TableGateway<TestEntityWithAutoId, int>(context);
 
         var sc = helper.BuildCreateWithReturning(new TestEntityWithAutoId { Name = "Test" }, true, context);
         var sql = sc.Query.ToString();
@@ -513,7 +513,7 @@ public class SqlServerIdentityOutputClauseTests
         {
             var factory = new fakeDbFactory(provider);
             var context = new DatabaseContext($"Data Source=test;EmulatedProduct={provider}", factory, _typeMap);
-            var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+            var helper = new TableGateway<TestEntityWithAutoId, int>(context);
 
             var sc = helper.BuildCreate(new TestEntityWithAutoId { Name = "Test" }, context);
             var sql = sc.Query.ToString();
@@ -535,7 +535,7 @@ public class SqlServerIdentityOutputClauseTests
         factory.SetNonQueryResult(1);
 
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=MySql", factory, _typeMap);
-        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+        var helper = new TableGateway<TestEntityWithAutoId, int>(context);
         var entity = new TestEntityWithAutoId { Name = "MySQL Test" };
 
         var result = await helper.CreateAsync(entity, context);
@@ -554,7 +554,7 @@ public class SqlServerIdentityOutputClauseTests
         factory.SetNonQueryResult(1);
 
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=Unknown", factory, _typeMap);
-        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+        var helper = new TableGateway<TestEntityWithAutoId, int>(context);
         var entity = new TestEntityWithAutoId { Name = "Unknown DB Test" };
 
         var result = await helper.CreateAsync(entity, context);

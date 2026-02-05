@@ -5,8 +5,6 @@
         <IsPackable>false</IsPackable>
         <Nullable>enable</Nullable>
         <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-        <!-- Allow testing obsolete EntityHelper - it's a compatibility shim for TableGateway -->
-        <NoWarn>CS0618</NoWarn>
     </PropertyGroup>
 
     <PropertyGroup>

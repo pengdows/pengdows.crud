@@ -146,7 +146,7 @@ public partial class TableGateway<TEntity, TRowID>
 
             var targetType = typeof(TRowID);
             var underlying = Nullable.GetUnderlyingType(targetType) ?? targetType;
-            object? converted = underlying switch
+            var converted = underlying switch
             {
                 _ when underlying == typeof(Guid) => ConvertToGuid(idValue),
                 _ => Convert.ChangeType(idValue!, underlying, CultureInfo.InvariantCulture)

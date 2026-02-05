@@ -30,7 +30,7 @@ public class MergeConflictTests : DatabaseTestBase
         {
             await RecreateTableAsync(context, "versioned_entities", BuildVersionedEntityTableSql(provider, context));
 
-            var helper = new EntityHelper<VersionedEntity, long>(context);
+            var helper = new TableGateway<VersionedEntity, long>(context);
             var initial = new VersionedEntity
             {
                 Id = 1,
@@ -42,7 +42,7 @@ public class MergeConflictTests : DatabaseTestBase
 
             await using var concurrentContext = await CreateAdditionalContextAsync(provider);
             concurrentContext.TypeMapRegistry.Register<VersionedEntity>();
-            var concurrentHelper = new EntityHelper<VersionedEntity, long>(concurrentContext);
+            var concurrentHelper = new TableGateway<VersionedEntity, long>(concurrentContext);
 
             var firstCopy = await helper.RetrieveOneAsync(initial.Id, context);
             var secondCopy = await concurrentHelper.RetrieveOneAsync(initial.Id, concurrentContext);
@@ -69,7 +69,7 @@ public class MergeConflictTests : DatabaseTestBase
         {
             await RecreateTableAsync(context, "merge_records", BuildMergeRecordTableSql(provider, context));
 
-            var helper = new EntityHelper<MergeRecord, long>(context);
+            var helper = new TableGateway<MergeRecord, long>(context);
             var baseRecord = new MergeRecord
             {
                 Id = 1,
@@ -82,7 +82,7 @@ public class MergeConflictTests : DatabaseTestBase
 
             await using var remoteContext = await CreateAdditionalContextAsync(provider);
             remoteContext.TypeMapRegistry.Register<MergeRecord>();
-            var remoteHelper = new EntityHelper<MergeRecord, long>(remoteContext);
+            var remoteHelper = new TableGateway<MergeRecord, long>(remoteContext);
             var remoteCopy =
                 await remoteHelper.RetrieveOneAsync(new MergeRecord { RecordKey = baseRecord.RecordKey },
                     remoteContext);

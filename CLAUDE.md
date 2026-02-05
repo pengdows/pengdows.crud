@@ -28,7 +28,7 @@ cd benchmarks/CrudBenchmarks && dotnet run -c Release
 
 pengdows.crud is a SQL-first, strongly-typed, testable data access layer for .NET 8. It's designed for developers who want full control over SQL without ORM magic. The project consists of multiple components:
 
-- `pengdows.crud` - Core library with EntityHelper, DatabaseContext, and SQL dialects
+- `pengdows.crud` - Core library with TableGateway, DatabaseContext, and SQL dialects
 - `pengdows.crud.abstractions` - Interfaces and enums
 - `pengdows.crud.fakeDb` - a complete .net DbProvider for mocking low level calls
 - `pengdows.crud.Tests` - Comprehensive unit test suite
@@ -47,7 +47,7 @@ The library follows a layered architecture with these key components:
 
 ### Main Entry Points
 - **DatabaseContext**: Primary connection management class that wraps ADO.NET DbProviderFactory
-- **EntityHelper<TEntity, TRowID>**: Generic CRUD operations for entities with strongly-typed row IDs
+- **TableGateway<TEntity, TRowID>**: Generic CRUD operations for entities with strongly-typed row IDs
 - **SqlContainer**: SQL query builder with parameterization support
 
 ### Key Patterns
@@ -120,8 +120,8 @@ pengdows.crud distinguishes between two types of keys:
 #### Pseudo Key / Row ID (`[Id]` attribute)
 - **What it is**: A surrogate identifier for the row itself, typically auto-increment or GUID
 - **Always single column** - never composite
-- **Purpose**: Easy lookup, foreign key references, EntityHelper operations
-- **Required by EntityHelper** for `CreateAsync`, `UpdateAsync`, `DeleteAsync(TRowID)`, etc.
+- **Purpose**: Easy lookup, foreign key references, TableGateway operations
+- **Required by TableGateway** for `CreateAsync`, `UpdateAsync`, `DeleteAsync(TRowID)`, etc.
 - **Attribute**: `[Id]` or `[Id(false)]` for DB-generated (autoincrement)
 
 #### Primary Key / Business Key (`[PrimaryKey]` attribute)
@@ -136,7 +136,7 @@ pengdows.crud distinguishes between two types of keys:
 [Table("order_items")]
 public class OrderItem
 {
-    [Id(false)]  // Pseudo key - DB-generated, used by EntityHelper
+    [Id(false)]  // Pseudo key - DB-generated, used by TableGateway
     [Column("id", DbType.Int64)]
     public long Id { get; set; }
 
@@ -166,7 +166,7 @@ CREATE TABLE order_items (
 
 **Key Rules:**
 1. `[Id]` and `[PrimaryKey]` are MUTUALLY EXCLUSIVE - never both on the same column
-2. EntityHelper REQUIRES an `[Id]` column for CRUD operations
+2. TableGateway REQUIRES an `[Id]` column for CRUD operations
 3. `[PrimaryKey]` defines business uniqueness, enforced via UNIQUE constraint
 4. Both can coexist on DIFFERENT columns - pseudo key for operations, business key for domain integrity
 5. `RetrieveOneAsync(TEntity)` uses `[PrimaryKey]` columns for lookup
@@ -233,18 +233,18 @@ In `SingleWriter` mode, this determines whether you get the pinned write connect
 // These are equivalent:
 typeMap.Register<MyEntity>();           // Explicit pre-registration
 typeMap.GetTableInfo<MyEntity>();       // Auto-registers on first call
-new EntityHelper<MyEntity, long>(ctx);  // Also triggers auto-registration
+new TableGateway<MyEntity, long>(ctx);  // Also triggers auto-registration
 ```
 
 **When to register explicitly:** pre-registering at startup can help catch mapping errors early and slightly reduce on-demand reflection for high-volume hot paths, but it is optional in most scenarios.
 
 ### Parallel Operations with `pengdows.threading`
 
-When you need bulk inserts, updates, or random reads with throttled concurrency, combine `EntityHelper` with `pengdows.threading` helpers:
+When you need bulk inserts, updates, or random reads with throttled concurrency, combine `TableGateway` with `pengdows.threading` helpers:
 
 ```csharp
 using var converge = new ConvergeWait(maxConcurrency: 10);
-var helper = new EntityHelper<MyEntity, long>(context);
+var helper = new TableGateway<MyEntity, long>(context);
 
 foreach (var entity in entities)
 {
@@ -323,7 +323,7 @@ public class Order
 }
 
 // MUST provide resolver when using user audit fields
-var helper = new EntityHelper<Order, long>(context, auditValueResolver: myResolver);
+var helper = new TableGateway<Order, long>(context, auditValueResolver: myResolver);
 ```
 
 ### Project Structure
@@ -374,7 +374,7 @@ cd testbed && dotnet run
 dotnet test --filter "MethodName=TestMethodName"
 
 # Run tests for specific class
-dotnet test --filter "ClassName=EntityHelperTests"
+dotnet test --filter "ClassName=TableGatewayTests"
 
 # Build with Release configuration
 dotnet build -c Release
@@ -621,7 +621,7 @@ await tx.Commit(); // Order is committed, risky item is not (if it failed)
 
 **IMPORTANT:** All interfaces in `pengdows.crud.abstractions` now include comprehensive XML documentation with detailed descriptions, parameter explanations, usage examples, and code samples. When working with these interfaces, refer to the XML comments for complete API documentation and implementation guidance.
 
-### EntityHelper<TEntity, TRowID> Key Methods
+### TableGateway<TEntity, TRowID> Key Methods
 
 **CRUD Operations (All async, return Task):**
 - `DeleteAsync(TRowID id, IDatabaseContext? context = null)` - Delete by ID, returns affected row count
@@ -759,7 +759,7 @@ Extends IDataReader with async support:
 ```csharp
 var factory = new FakeDbFactory(SupportedDatabase.Sqlite);
 var context = new DatabaseContext($"Data Source=test;EmulatedProduct=Sqlite", factory);
-using var helper = new EntityHelper<TestEntity, long>(context);
+using var helper = new TableGateway<TestEntity, long>(context);
 ```
 
 **Creating Test Context with Real SQLite:**
@@ -782,7 +782,7 @@ var result = await container.ExecuteScalarAsync<int>();
 
 **Testing CRUD Operations:**
 ```csharp
-var helper = new EntityHelper<TestEntity, int>(context);
+var helper = new TableGateway<TestEntity, int>(context);
 var entity = new TestEntity { Name = "Test" };
 
 // Insert

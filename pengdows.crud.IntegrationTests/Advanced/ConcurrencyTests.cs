@@ -33,12 +33,12 @@ public class ConcurrencyTests : DatabaseTestBase
         {
             // Arrange
             var entity = CreateTestEntity(NameEnum.Test, 100);
-            await CreateEntityHelper(context).CreateAsync(entity, context);
+            await CreateTableGateway(context).CreateAsync(entity, context);
 
             // Act - 10 parallel reads of the same record
             var tasks = Enumerable.Range(0, 10).Select(async _ =>
             {
-                var helper = CreateEntityHelper(context);
+                var helper = CreateTableGateway(context);
                 return await helper.RetrieveOneAsync(entity.Id, context);
             });
 
@@ -67,7 +67,7 @@ public class ConcurrencyTests : DatabaseTestBase
             // Act - Insert them all in parallel
             var tasks = entities.Select(async entity =>
             {
-                var helper = CreateEntityHelper(context);
+                var helper = CreateTableGateway(context);
                 return await helper.CreateAsync(entity, context);
             });
 
@@ -77,7 +77,7 @@ public class ConcurrencyTests : DatabaseTestBase
             Assert.All(results, r => Assert.True(r));
 
             // Verify all entities exist
-            var helper = CreateEntityHelper(context);
+            var helper = CreateTableGateway(context);
             var retrieved = await helper.RetrieveAsync(entities.Select(e => e.Id).ToList(), context);
             Assert.Equal(entities.Count, retrieved.Count);
         });
@@ -93,7 +93,7 @@ public class ConcurrencyTests : DatabaseTestBase
                 .Select(i => CreateTestEntity(NameEnum.Test, 300 + i))
                 .ToList();
 
-            var helper = CreateEntityHelper(context);
+            var helper = CreateTableGateway(context);
             foreach (var entity in entities)
             {
                 await helper.CreateAsync(entity, context);
@@ -102,7 +102,7 @@ public class ConcurrencyTests : DatabaseTestBase
             // Act - Update them all in parallel with different values
             var tasks = entities.Select(async (entity, index) =>
             {
-                var updateHelper = CreateEntityHelper(context);
+                var updateHelper = CreateTableGateway(context);
                 entity.Value = 3000 + index;
                 return await updateHelper.UpdateAsync(entity, context);
             });
@@ -132,7 +132,7 @@ public class ConcurrencyTests : DatabaseTestBase
                 .Select(i => CreateTestEntity(NameEnum.Test, 400 + i))
                 .ToList();
 
-            var helper = CreateEntityHelper(context);
+            var helper = CreateTableGateway(context);
             foreach (var entity in entities)
             {
                 await helper.CreateAsync(entity, context);
@@ -141,7 +141,7 @@ public class ConcurrencyTests : DatabaseTestBase
             // Act - Delete in parallel
             var tasks = entities.Select(async entity =>
             {
-                var deleteHelper = CreateEntityHelper(context);
+                var deleteHelper = CreateTableGateway(context);
                 return await deleteHelper.DeleteAsync(entity.Id, context);
             });
 
@@ -170,7 +170,7 @@ public class ConcurrencyTests : DatabaseTestBase
             var tasks = entities.Select(async entity =>
             {
                 await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
-                var helper = CreateEntityHelper(transaction);
+                var helper = CreateTableGateway(transaction);
 
                 await helper.CreateAsync(entity, transaction);
                 transaction.Commit();
@@ -181,7 +181,7 @@ public class ConcurrencyTests : DatabaseTestBase
             var ids = await Task.WhenAll(tasks);
 
             // Assert
-            var helper = CreateEntityHelper(context);
+            var helper = CreateTableGateway(context);
             foreach (var id in ids)
             {
                 var retrieved = await helper.RetrieveOneAsync(id, context);
@@ -200,7 +200,7 @@ public class ConcurrencyTests : DatabaseTestBase
                 .Select(i => CreateTestEntity(NameEnum.Test, 600 + i))
                 .ToArray();
 
-            var helper = CreateEntityHelper(context);
+            var helper = CreateTableGateway(context);
             foreach (var e in entities)
             {
                 await helper.CreateAsync(e, context);
@@ -213,7 +213,7 @@ public class ConcurrencyTests : DatabaseTestBase
             var readTasks = Enumerable.Range(0, 20).Select(async _ =>
             {
                 await Task.Delay(Random.Shared.Next(1, 10)); // Random delay
-                var helper = CreateEntityHelper(context);
+                var helper = CreateTableGateway(context);
                 var id = entities[Random.Shared.Next(0, entities.Length)].Id;
                 var result = await helper.RetrieveOneAsync(id, context);
                 readResults.Add(result);
@@ -222,7 +222,7 @@ public class ConcurrencyTests : DatabaseTestBase
             var writeTasks = Enumerable.Range(0, 5).Select(async i =>
             {
                 await Task.Delay(Random.Shared.Next(1, 10)); // Random delay
-                var helper = CreateEntityHelper(context);
+                var helper = CreateTableGateway(context);
                 var id = entities[i].Id;
                 var retrieved = await helper.RetrieveOneAsync(id, context);
                 if (retrieved != null)
@@ -241,7 +241,7 @@ public class ConcurrencyTests : DatabaseTestBase
 
             foreach (var (entity, i) in entities.Select((e, i) => (e, i)))
             {
-                var final = await CreateEntityHelper(context).RetrieveOneAsync(entity.Id, context);
+                var final = await CreateTableGateway(context).RetrieveOneAsync(entity.Id, context);
                 Assert.NotNull(final);
                 Assert.True(final!.Value == 600 + i || final.Value == 6000 + i);
             }
@@ -267,7 +267,7 @@ public class ConcurrencyTests : DatabaseTestBase
             var tasks = entities.Select(async entity =>
             {
                 // Each iteration uses the same DatabaseContext but gets its own connection
-                var helper = CreateEntityHelper(context);
+                var helper = CreateTableGateway(context);
                 var created = await helper.CreateAsync(entity, context);
                 var retrieved = await helper.RetrieveOneAsync(entity.Id, context);
                 return (created, retrieved);
@@ -294,7 +294,7 @@ public class ConcurrencyTests : DatabaseTestBase
                 .Select(i => CreateTestEntity(NameEnum.Test, 800 + i))
                 .ToList();
 
-            var helper = CreateEntityHelper(context);
+            var helper = CreateTableGateway(context);
             foreach (var entity in existingEntities)
             {
                 await helper.CreateAsync(entity, context);
@@ -303,7 +303,7 @@ public class ConcurrencyTests : DatabaseTestBase
             // Act - Concurrent bulk operations
             var readTask = Task.Run(async () =>
             {
-                var readHelper = CreateEntityHelper(context);
+                var readHelper = CreateTableGateway(context);
                 var results = new List<TestTable>();
 
                 for (var i = 0; i < 10; i++)
@@ -320,7 +320,7 @@ public class ConcurrencyTests : DatabaseTestBase
 
             var writeTask = Task.Run(async () =>
             {
-                var writeHelper = CreateEntityHelper(context);
+                var writeHelper = CreateTableGateway(context);
                 var newEntities = Enumerable.Range(0, 25)
                     .Select(i => CreateTestEntity(NameEnum.Test2, 850 + i))
                     .ToList();
@@ -357,7 +357,7 @@ public class ConcurrencyTests : DatabaseTestBase
 
             // Arrange
             var entity = CreateTestEntity(NameEnum.Test, 900);
-            await CreateEntityHelper(context).CreateAsync(entity, context);
+            await CreateTableGateway(context).CreateAsync(entity, context);
 
             var successCount = 0;
             var conflictCount = 0;
@@ -368,7 +368,7 @@ public class ConcurrencyTests : DatabaseTestBase
                 try
                 {
                     await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
-                    var helper = CreateEntityHelper(transaction);
+                    var helper = CreateTableGateway(transaction);
 
                     var retrieved = await helper.RetrieveOneAsync(entity.Id, transaction);
                     if (retrieved != null)
@@ -398,7 +398,7 @@ public class ConcurrencyTests : DatabaseTestBase
             Assert.True(successCount > 0, "At least one transaction should succeed");
 
             // Final record should exist with one of the update values
-            var final = await CreateEntityHelper(context).RetrieveOneAsync(entity.Id, context);
+            var final = await CreateTableGateway(context).RetrieveOneAsync(entity.Id, context);
             Assert.NotNull(final);
             Assert.InRange(final!.Value, 9000, 9009);
         });
@@ -415,7 +415,7 @@ public class ConcurrencyTests : DatabaseTestBase
                 var entity = CreateTestEntity(NameEnum.Test, 1000 + i);
 
                 await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
-                var helper = CreateEntityHelper(transaction);
+                var helper = CreateTableGateway(transaction);
 
                 await helper.CreateAsync(entity, transaction);
                 transaction.Commit();
@@ -429,17 +429,17 @@ public class ConcurrencyTests : DatabaseTestBase
             Assert.Equal(100, ids.Length);
 
             // Sample check some records
-            var helper = CreateEntityHelper(context);
+            var helper = CreateTableGateway(context);
             var sampleIds = ids.Take(10).ToList();
             var retrieved = await helper.RetrieveAsync(sampleIds, context);
             Assert.Equal(sampleIds.Count, retrieved.Count);
         });
     }
 
-    private EntityHelper<TestTable, long> CreateEntityHelper(IDatabaseContext context)
+    private TableGateway<TestTable, long> CreateTableGateway(IDatabaseContext context)
     {
         var auditResolver = GetAuditResolver();
-        return new EntityHelper<TestTable, long>(context, auditResolver);
+        return new TableGateway<TestTable, long>(context, auditResolver);
     }
 
     private static TestTable CreateTestEntity(NameEnum name, int value)

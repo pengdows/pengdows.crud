@@ -15,7 +15,7 @@
 - Extensive documentation and conventions enforcing parameterization, UTC auditing, and rigorous transaction handling.
 
 ## Key Artifacts
-- **Core Library** (`pengdows.crud/`): Contains `DatabaseContext`, `EntityHelper`, SQL container utilities, dialect implementations, and type coercion helpers.
+- **Core Library** (`pengdows.crud/`): Contains `DatabaseContext`, `TableGateway`, SQL container utilities, dialect implementations, and type coercion helpers.
 - **Abstractions** (`pengdows.crud.abstractions/`): Interface definitions enabling consumer customization and external provider support.
 - **Fake Database Provider** (`pengdows.crud.fakeDb/`): In-memory provider for fast, deterministic unit testing without real connections.
 - **Tests** (`pengdows.crud.Tests/`): xUnit-based suite with positive and negative coverage expectations.
@@ -30,7 +30,7 @@
 ## Usage Snapshot
 ```csharp
 var context = new DatabaseContext("your-connection-string", SqlClientFactory.Instance);
-var helper = new EntityHelper<TestTable, long>(context);
+var helper = new TableGateway<TestTable, long>(context);
 var insert = helper.BuildCreate(row);
 await insert.ExecuteNonQueryAsync();
 var found = await helper.RetrieveOneAsync(row.Id);

@@ -85,7 +85,7 @@ public class CustomerOrderSummary
 }
 
 // Usage - treats view exactly like a table
-var helper = new EntityHelper<CustomerOrderSummary, int>(context);
+var helper = new TableGateway<CustomerOrderSummary, int>(context);
 var summary = await helper.RetrieveOneAsync(customerId);
 ```
 

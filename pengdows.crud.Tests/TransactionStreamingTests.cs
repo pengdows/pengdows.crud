@@ -29,7 +29,7 @@ public class TransactionStreamingTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         using var transaction = context.BeginTransaction();
 
@@ -54,7 +54,7 @@ public class TransactionStreamingTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         using var transaction = context.BeginTransaction();
 
@@ -80,7 +80,7 @@ public class TransactionStreamingTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         using var transaction = context.BeginTransaction();
 
@@ -113,7 +113,7 @@ public class TransactionStreamingTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         using var transaction = context.BeginTransaction();
 
@@ -139,7 +139,7 @@ public class TransactionStreamingTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         using var transaction = context.BeginTransaction();
 
@@ -165,7 +165,7 @@ public class TransactionStreamingTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         await using var context = new DatabaseContext("Host=localhost;Database=test", factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         using var transaction = context.BeginTransaction();
 
@@ -208,7 +208,7 @@ public class TransactionStreamingTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         using var transaction = context.BeginTransaction();
 
@@ -241,7 +241,7 @@ public class TransactionStreamingTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         using var transaction = context.BeginTransaction();
 
@@ -269,7 +269,7 @@ public class TransactionStreamingTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         using var transaction = context.BeginTransaction();
 
@@ -297,7 +297,7 @@ public class TransactionStreamingTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         var container = helper.BuildBaseRetrieve("t");
         IAsyncEnumerable<TestEntity> stream;

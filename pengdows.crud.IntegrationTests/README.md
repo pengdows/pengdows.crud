@@ -156,7 +156,7 @@ public class MyIntegrationTests : DatabaseTestBase
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
             // Test implementation that runs against each database
-            var helper = new EntityHelper<MyEntity, long>(context);
+            var helper = new TableGateway<MyEntity, long>(context);
             // ... test logic
         });
     }
@@ -188,7 +188,7 @@ public async Task CRUD_Operations_WorkConsistently()
     await RunTestAgainstAllProvidersAsync(async (provider, context) =>
     {
         // Test runs against SQLite, PostgreSQL, SQL Server, MySQL, etc.
-        var helper = new EntityHelper<TestEntity, long>(context);
+        var helper = new TableGateway<TestEntity, long>(context);
 
         var entity = new TestEntity { Name = $"Test-{provider}" };
         await helper.CreateAsync(entity, context);
@@ -275,7 +275,7 @@ public async Task Connection_Failure_HandledGracefully()
     await Assert.ThrowsAsync<InvalidOperationException>(async () =>
     {
         // This should fail due to simulated connection failure
-        var helper = new EntityHelper<TestTable, long>(context);
+        var helper = new TableGateway<TestTable, long>(context);
         await helper.CreateAsync(new TestTable(), context);
     });
 }

@@ -22,6 +22,8 @@ namespace pengdows.crud.@internal;
 
 internal static class ConnectionStringHelper
 {
+    internal const string DataSourceKey = "Data Source";
+
     public static DbConnectionStringBuilder Create(DbProviderFactory factory, string? connectionString)
     {
         var preferred = factory?.CreateConnectionStringBuilder();
@@ -82,7 +84,7 @@ internal static class ConnectionStringHelper
     {
         try
         {
-            builder["Data Source"] = value;
+            builder[DataSourceKey] = value;
             return true;
         }
         catch

@@ -41,7 +41,7 @@
 - `IDatabaseContext`: entry point. Create via DI or `new DatabaseContext(connStr, DbProviderFactory)`. Builds `ISqlContainer`, formats names/params, and controls connections/transactions.
 - `ISqlContainer`: compose SQL safely and execute.
   Example: `var sc = ctx.CreateSqlContainer("SELECT 1"); var v = await sc.ExecuteScalarAsync<int>();`
-- `IEntityHelper<TEntity, TRowID>`: SQL-first CRUD with inspectable containers.
+- `ITableGateway<TEntity, TRowID>`: SQL-first CRUD with inspectable containers.
   Example: `var sc = helper.BuildRetrieve(new[] { id }); var e = await helper.LoadSingleAsync(sc);`
 - `ITransactionContext`: `using var tx = ctx.BeginTransaction(); ... tx.Commit();` Pass `tx` to helper methods when you want execution inside the transaction.
 - `IAuditValueResolver`: implement to supply user/time; register in DI so audit fields populate consistently.
@@ -53,12 +53,12 @@
 
 | Concept | Attribute | Columns | Purpose |
 |---------|-----------|---------|---------|
-| **Pseudo Key / Row ID** | `[Id]` | Always single | Surrogate identifier for EntityHelper operations, FKs, easy lookup |
+| **Pseudo Key / Row ID** | `[Id]` | Always single | Surrogate identifier for TableGateway operations, FKs, easy lookup |
 | **Primary Key / Business Key** | `[PrimaryKey(n)]` | Can be composite | Natural key - why the row exists in business terms |
 
 **Key Rules:**
 1. `[Id]` and `[PrimaryKey]` are MUTUALLY EXCLUSIVE on a column - never both on the same property
-2. EntityHelper REQUIRES `[Id]` for `CreateAsync`, `UpdateAsync`, `DeleteAsync(TRowID)`
+2. TableGateway REQUIRES `[Id]` for `CreateAsync`, `UpdateAsync`, `DeleteAsync(TRowID)`
 3. `[Id(false)]` = DB-generated (autoincrement); `[Id]` or `[Id(true)]` = client-provided
 4. `[PrimaryKey]` defines business uniqueness, enforced via UNIQUE constraint in DDL
 5. Both can coexist on different columns: pseudo key for operations, business key for domain integrity
@@ -141,7 +141,7 @@ In `SingleWriter` mode, this determines whether you get the pinned write connect
 // These are equivalent:
 typeMap.Register<MyEntity>();           // Explicit pre-registration
 typeMap.GetTableInfo<MyEntity>();       // Auto-registers on first call
-new EntityHelper<MyEntity, long>(ctx);  // Also triggers auto-registration
+new TableGateway<MyEntity, long>(ctx);  // Also triggers auto-registration
 ```
 
 ## Enum Storage

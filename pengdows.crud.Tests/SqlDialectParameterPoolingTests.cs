@@ -40,6 +40,7 @@ public class SqlDialectParameterPoolingTests
         using (var cmd = new SqlCommand())
         {
             cmd.Parameters.Add(param);
+            cmd.Parameters.Clear();
         }
 
         dialect.ReturnParameterToPool(param);

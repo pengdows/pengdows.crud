@@ -7,7 +7,7 @@
 // - Single method: GetConnection(ExecutionType, isShared).
 // - ExecutionType: Read or Write determines connection selection.
 // - isShared: Hints connection may be shared (affects pooling behavior).
-// - Implemented by DatabaseContext, used by SqlContainer and EntityHelper.
+// - Implemented by DatabaseContext, used by SqlContainer and TableGateway.
 // - Keeps IDatabaseContext public API clean of connection management.
 // - Returns ITrackedConnection with locking and lifecycle tracking.
 // =============================================================================

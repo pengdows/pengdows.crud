@@ -11,7 +11,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class EntityHelperCriticalPathTests
+public class TableGatewayCriticalPathTests
 {
     [Table("TestEntity")]
     private class TestEntity
@@ -53,7 +53,7 @@ public class EntityHelperCriticalPathTests
         using var context = CreateContext();
 
         Assert.Throws<InvalidOperationException>(() =>
-            new EntityHelper<EntityWithoutId, int>(context));
+            new TableGateway<EntityWithoutId, int>(context));
     }
 
     [Fact]
@@ -62,7 +62,7 @@ public class EntityHelperCriticalPathTests
         using var context = CreateContext();
 
         var ex = Assert.Throws<TypeInitializationException>(() =>
-            new EntityHelper<TestEntity, DateTime>(context));
+            new TableGateway<TestEntity, DateTime>(context));
 
         Assert.IsType<NotSupportedException>(ex.InnerException);
         Assert.Contains("TRowID type 'System.DateTime' is not supported", ex.InnerException!.Message);
@@ -82,7 +82,7 @@ public class EntityHelperCriticalPathTests
 
         var typeMap = new TypeMapRegistry();
         using var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance, typeMap);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
         var entity = new TestEntity
         {
             Name = "widget",
@@ -97,7 +97,7 @@ public class EntityHelperCriticalPathTests
     public async Task BuildUpdateAsync_IncludesBinaryVersionInWhere()
     {
         using var context = CreateContext();
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
         var entity = new TestEntity
         {
             Id = 1,
@@ -123,7 +123,7 @@ public class EntityHelperCriticalPathTests
     public void BuildUpsert_ForSqliteFallsBackToInsert()
     {
         using var context = CreateContext();
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
         var entity = new TestEntity { Id = 1, Name = "widget" };
 
         var container = helper.BuildUpsert(entity);
@@ -137,7 +137,7 @@ public class EntityHelperCriticalPathTests
     public async Task RetrieveAsync_WithEmptyIds_ThrowsArgumentException()
     {
         using var context = CreateContext();
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         await Assert.ThrowsAsync<ArgumentException>(async () =>
             await helper.RetrieveAsync(Array.Empty<int>()));
@@ -147,7 +147,7 @@ public class EntityHelperCriticalPathTests
     public async Task RetrieveAsync_WithNullIds_ThrowsArgumentNullException()
     {
         using var context = CreateContext();
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         await Assert.ThrowsAsync<ArgumentNullException>(async () =>
             await helper.RetrieveAsync((IEnumerable<int>)null!));

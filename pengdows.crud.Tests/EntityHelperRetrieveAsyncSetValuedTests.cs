@@ -12,7 +12,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class EntityHelperRetrieveAsyncSetValuedTests
+public class TableGatewayRetrieveAsyncSetValuedTests
 {
     private readonly TypeMapRegistry _typeMap;
 
@@ -28,7 +28,7 @@ public class EntityHelperRetrieveAsyncSetValuedTests
         public string Name { get; set; } = string.Empty;
     }
 
-    public EntityHelperRetrieveAsyncSetValuedTests()
+    public TableGatewayRetrieveAsyncSetValuedTests()
     {
         _typeMap = new TypeMapRegistry();
         _typeMap.Register<RetEntity>();
@@ -50,7 +50,7 @@ public class EntityHelperRetrieveAsyncSetValuedTests
         factory.Connections.Add(execConn);
 
         using var ctx = new DatabaseContext("Data Source=pg;EmulatedProduct=PostgreSql", factory, _typeMap);
-        var helper = new EntityHelper<RetEntity, int>(ctx);
+        var helper = new TableGateway<RetEntity, int>(ctx);
 
         var result = await helper.RetrieveAsync(new[] { 1, 2, 3 });
         Assert.Equal(2, result.Count);
@@ -73,7 +73,7 @@ public class EntityHelperRetrieveAsyncSetValuedTests
         factory.Connections.Add(execConn);
 
         using var ctx = new DatabaseContext("Data Source=sqlite;EmulatedProduct=Sqlite", factory, _typeMap);
-        var helper = new EntityHelper<RetEntity, int>(ctx);
+        var helper = new TableGateway<RetEntity, int>(ctx);
 
         var result = await helper.RetrieveAsync(new[] { 1, 2, 3 });
         Assert.Equal(2, result.Count);

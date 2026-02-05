@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Data;
+using System.Text;
 using BenchmarkDotNet.Attributes;
 using Dapper;
 using DotNet.Testcontainers.Builders;
@@ -578,9 +579,9 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
     /// Dapper querying base tables - opens/closes connection each call for fair comparison.
     /// Shows that raw SQL still requires runtime aggregation when not querying views directly.
     /// </summary>
-    [Benchmark]
-    public async Task<List<dynamic>> CustomerAggregation_Dapper_WithSessionMgmt()
-    {
+[Benchmark]
+public async Task<List<dynamic>> CustomerAggregation_Dapper_WithSessionMgmt()
+{
         return await ExecuteWithTracking("CustomerAggregation_Dapper_WithSessionMgmt", async () =>
         {
             // Fair comparison: open and close connection each call, just like pengdows.crud Standard mode
@@ -596,6 +597,55 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
 
             return results.ToList();
         });
+    }
+
+    [Benchmark]
+    public async Task<string> CustomerAggregation_Dapper_NoViewMatching_ShowPlan()
+    {
+        var sql = BuildCustomerAggregationSql(param => $"@{param}");
+        return await CaptureShowplanAsync(
+            sql,
+            cmd =>
+            {
+                cmd.Parameters.AddWithValue("startId", 1);
+                cmd.Parameters.AddWithValue("endId", 50);
+            },
+            applySessionSettings: false);
+    }
+
+    [Benchmark]
+    public async Task<string> CustomerAggregation_Dapper_WithSessionMgmt_ShowPlan()
+    {
+        var sql = BuildCustomerAggregationSql(param => $"@{param}");
+        return await CaptureShowplanAsync(
+            sql,
+            cmd =>
+            {
+                cmd.Parameters.AddWithValue("startId", 1);
+                cmd.Parameters.AddWithValue("endId", 50);
+            },
+            applySessionSettings: true);
+    }
+
+    [Benchmark]
+    public async Task<string> CustomerAggregation_DirectViewQuery_ShowPlan()
+    {
+        const string sql = """
+            SELECT customer_id, company_name, order_count, total_revenue,
+                   (sum_order_value / NULLIF(count_for_avg, 0)) as avg_order_value
+            FROM dbo.vw_CustomerOrderSummary WITH (NOEXPAND)
+            WHERE customer_id BETWEEN @startId AND @endId
+            ORDER BY total_revenue DESC
+            """;
+
+        return await CaptureShowplanAsync(
+            sql,
+            cmd =>
+            {
+                cmd.Parameters.AddWithValue("startId", 1);
+                cmd.Parameters.AddWithValue("endId", 50);
+            },
+            applySessionSettings: true);
     }
 
     /// <summary>
@@ -631,6 +681,43 @@ public class AutomaticViewMatchingBenchmarks : IAsyncDisposable
 
             return results;
         });
+    }
+
+    private async Task<string> CaptureShowplanAsync(string sql, Action<SqlCommand> configureParameters, bool applySessionSettings)
+    {
+        await using var conn = new SqlConnection(_dapperConnStr);
+        await conn.OpenAsync();
+
+        if (applySessionSettings)
+        {
+            await BenchmarkSessionSettings.ApplyAsync(conn, BenchmarkSessionSettings.SqlServerSessionSettings);
+        }
+
+        await using var enableCmd = conn.CreateCommand();
+        enableCmd.CommandText = "SET SHOWPLAN_XML ON";
+        await enableCmd.ExecuteNonQueryAsync();
+
+        try
+        {
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = sql;
+            configureParameters?.Invoke(cmd);
+
+            var builder = new StringBuilder();
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                builder.Append(reader.GetString(0));
+            }
+
+            return builder.ToString();
+        }
+        finally
+        {
+            await using var disableCmd = conn.CreateCommand();
+            disableCmd.CommandText = "SET SHOWPLAN_XML OFF";
+            await disableCmd.ExecuteNonQueryAsync();
+        }
     }
 
     /// <summary>

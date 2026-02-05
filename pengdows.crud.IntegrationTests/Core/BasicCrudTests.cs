@@ -31,7 +31,7 @@ public class BasicCrudTests : DatabaseTestBase
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
             // Arrange
-            var helper = CreateEntityHelper(context);
+            var helper = CreateTableGateway(context);
             var entity = CreateTestEntity(NameEnum.Test, 42);
 
             // Act
@@ -55,7 +55,7 @@ public class BasicCrudTests : DatabaseTestBase
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
             // Arrange
-            var helper = CreateEntityHelper(context);
+            var helper = CreateTableGateway(context);
             var entity = CreateTestEntity(NameEnum.Test, 99);
             await helper.CreateAsync(entity, context);
 
@@ -76,7 +76,7 @@ public class BasicCrudTests : DatabaseTestBase
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
             // Arrange
-            var helper = CreateEntityHelper(context);
+            var helper = CreateTableGateway(context);
             var nonExistentId = -999999L;
 
             // Act
@@ -93,7 +93,7 @@ public class BasicCrudTests : DatabaseTestBase
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
             // Arrange
-            var helper = CreateEntityHelper(context);
+            var helper = CreateTableGateway(context);
             var entities = new[]
             {
                 CreateTestEntity(NameEnum.Test, 10),
@@ -124,7 +124,7 @@ public class BasicCrudTests : DatabaseTestBase
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
             // Arrange
-            var helper = CreateEntityHelper(context);
+            var helper = CreateTableGateway(context);
             var entity = CreateTestEntity(NameEnum.Test, 100);
             await helper.CreateAsync(entity, context);
 
@@ -150,7 +150,7 @@ public class BasicCrudTests : DatabaseTestBase
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
             // Arrange
-            var helper = CreateEntityHelper(context);
+            var helper = CreateTableGateway(context);
             var entity = CreateTestEntity(NameEnum.Test, 500);
             entity.Id = -999999; // Non-existent ID
 
@@ -168,7 +168,7 @@ public class BasicCrudTests : DatabaseTestBase
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
             // Arrange
-            var helper = CreateEntityHelper(context);
+            var helper = CreateTableGateway(context);
             var entity = CreateTestEntity(NameEnum.Test, 200);
             await helper.CreateAsync(entity, context);
 
@@ -190,7 +190,7 @@ public class BasicCrudTests : DatabaseTestBase
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
             // Arrange
-            var helper = CreateEntityHelper(context);
+            var helper = CreateTableGateway(context);
             var entities = new[]
             {
                 CreateTestEntity(NameEnum.Test, 301),
@@ -223,7 +223,7 @@ public class BasicCrudTests : DatabaseTestBase
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
             // Arrange
-            var helper = CreateEntityHelper(context);
+            var helper = CreateTableGateway(context);
             var entity = CreateTestEntity(NameEnum.Test, 400);
 
             // Act
@@ -253,7 +253,7 @@ public class BasicCrudTests : DatabaseTestBase
             }
 
             // Arrange
-            var helper = CreateEntityHelper(context);
+            var helper = CreateTableGateway(context);
             var entity = CreateTestEntity(NameEnum.Test, 500);
             await helper.CreateAsync(entity, context);
 
@@ -273,10 +273,10 @@ public class BasicCrudTests : DatabaseTestBase
         });
     }
 
-    private EntityHelper<TestTable, long> CreateEntityHelper(IDatabaseContext context)
+    private TableGateway<TestTable, long> CreateTableGateway(IDatabaseContext context)
     {
         var auditResolver = GetAuditResolver();
-        return new EntityHelper<TestTable, long>(context, auditResolver);
+        return new TableGateway<TestTable, long>(context, auditResolver);
     }
 
     private static TestTable CreateTestEntity(NameEnum name, int value)

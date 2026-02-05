@@ -5,12 +5,12 @@ namespace pengdows.crud.Tests;
 
 public class BuildWhereBucketingTests : SqlLiteContextTestBase
 {
-    private readonly EntityHelper<TestEntity, int> _helper;
+    private readonly TableGateway<TestEntity, int> _helper;
 
     public BuildWhereBucketingTests()
     {
         TypeMap.Register<TestEntity>();
-        _helper = new EntityHelper<TestEntity, int>(Context);
+        _helper = new TableGateway<TestEntity, int>(Context);
     }
 
     [Fact]
@@ -50,7 +50,7 @@ public class BuildWhereBucketingTests : SqlLiteContextTestBase
         typeMap.Register<TestEntity>();
         using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=PostgreSql",
             new fakeDbFactory(SupportedDatabase.PostgreSql), typeMap);
-        var helper = new EntityHelper<TestEntity, int>(ctx);
+        var helper = new TableGateway<TestEntity, int>(ctx);
 
         var sc = ctx.CreateSqlContainer("SELECT 1");
         helper.BuildWhere(ctx.WrapObjectName("Id"), new[] { 1, 2, 3 }, sc);

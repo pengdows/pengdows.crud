@@ -879,7 +879,14 @@ public class TypeCoercionHelperExtensiveTests : IDisposable
 
             var message = formatter(state, exception);
             Messages.Add(message);
-            _output.WriteLine($"[{logLevel}] {message}");
+            try
+            {
+                _output.WriteLine($"[{logLevel}] {message}");
+            }
+            catch (InvalidOperationException)
+            {
+                // Some runners (coverage) may not expose the active test context; swallow.
+            }
         }
 
         private sealed class NullScope : IDisposable

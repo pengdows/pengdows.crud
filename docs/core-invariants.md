@@ -52,7 +52,7 @@ This is a compact, high-signal guide for maintainers and AI assistants. It captu
 - **Dialect selection is immutable post-initialization.**
 - **MySQL/MariaDB upserts depend on the `incoming` alias when the server supports it.**
   - `ISqlDialect.UpsertIncomingAlias` defaults to `null` but dialects can override it (MySQL/MariaDB do for modern versions).
-  - `EntityHelper` only injects `AS incoming` when the alias is provided so keep the property around even if you don’t use it.
+  - `TableGateway` only injects `AS incoming` when the alias is provided so keep the property around even if you don’t use it.
   - Tests should cover both alias-enabled and legacy (fallback to `VALUES(...)`) behaviors.
 
 ## Safe Change Checklist

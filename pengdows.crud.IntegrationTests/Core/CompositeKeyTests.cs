@@ -35,7 +35,7 @@ public class CompositeKeyTests : DatabaseTestBase
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            var helper = new EntityHelper<OrderItem, long>(context);
+            var helper = new TableGateway<OrderItem, long>(context);
             var item = CreateOrderItem(100, 200, 5, 19.99m);
 
             var result = await helper.CreateAsync(item, context);
@@ -50,7 +50,7 @@ public class CompositeKeyTests : DatabaseTestBase
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            var helper = new EntityHelper<OrderItem, long>(context);
+            var helper = new TableGateway<OrderItem, long>(context);
             var item = CreateOrderItem(101, 201, 3, 29.99m);
             await helper.CreateAsync(item, context);
 
@@ -72,7 +72,7 @@ public class CompositeKeyTests : DatabaseTestBase
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            var helper = new EntityHelper<OrderItem, long>(context);
+            var helper = new TableGateway<OrderItem, long>(context);
             var keyObject = new OrderItem { OrderId = 999, ProductId = 999 };
             var retrieved = await helper.RetrieveOneAsync(keyObject, context);
             Assert.Null(retrieved);
@@ -85,7 +85,7 @@ public class CompositeKeyTests : DatabaseTestBase
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            var helper = new EntityHelper<OrderItem, long>(context);
+            var helper = new TableGateway<OrderItem, long>(context);
             var item = CreateOrderItem(102, 202, 10, 5.99m);
             await helper.CreateAsync(item, context);
 
@@ -110,7 +110,7 @@ public class CompositeKeyTests : DatabaseTestBase
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            var helper = new EntityHelper<OrderItem, long>(context);
+            var helper = new TableGateway<OrderItem, long>(context);
             var item1 = CreateOrderItem(103, 301, 1, 10m);
             var item2 = CreateOrderItem(103, 302, 2, 20m);
             var item3 = CreateOrderItem(103, 303, 3, 30m);
@@ -140,7 +140,7 @@ public class CompositeKeyTests : DatabaseTestBase
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            var helper = new EntityHelper<OrderItem, long>(context);
+            var helper = new TableGateway<OrderItem, long>(context);
             var item = CreateOrderItem(104, 204, 1, 9.99m);
             await helper.CreateAsync(item, context);
 
@@ -161,7 +161,7 @@ public class CompositeKeyTests : DatabaseTestBase
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            var helper = new EntityHelper<UserRole, long>(context);
+            var helper = new TableGateway<UserRole, long>(context);
             var role = CreateUserRole(1, 100, 10, "admin");
 
             var result = await helper.CreateAsync(role, context);
@@ -177,7 +177,7 @@ public class CompositeKeyTests : DatabaseTestBase
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            var helper = new EntityHelper<UserRole, long>(context);
+            var helper = new TableGateway<UserRole, long>(context);
             var grantedTime = DateTime.UtcNow;
             var role = CreateUserRole(2, 200, 20, "superadmin", grantedTime);
             await helper.CreateAsync(role, context);
@@ -201,7 +201,7 @@ public class CompositeKeyTests : DatabaseTestBase
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            var helper = new EntityHelper<UserRole, long>(context);
+            var helper = new TableGateway<UserRole, long>(context);
             var role = CreateUserRole(3, 300, 30, "old_admin");
             await helper.CreateAsync(role, context);
 
@@ -224,7 +224,7 @@ public class CompositeKeyTests : DatabaseTestBase
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            var helper = new EntityHelper<UserRole, long>(context);
+            var helper = new TableGateway<UserRole, long>(context);
             var role1 = CreateUserRole(4, 400, 1, "admin");
             var role2 = CreateUserRole(4, 400, 2, "admin");
             var role3 = CreateUserRole(4, 400, 3, "admin");
@@ -261,7 +261,7 @@ public class CompositeKeyTests : DatabaseTestBase
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            var helper = new EntityHelper<OrderItem, long>(context);
+            var helper = new TableGateway<OrderItem, long>(context);
             var items = new[]
             {
                 CreateOrderItem(500, 1, 1, 1m),
@@ -293,7 +293,7 @@ public class CompositeKeyTests : DatabaseTestBase
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            var helper = new EntityHelper<OrderItem, long>(context);
+            var helper = new TableGateway<OrderItem, long>(context);
             var item = CreateOrderItem(600, 601, 10, 100m);
             await helper.CreateAsync(item, context);
 

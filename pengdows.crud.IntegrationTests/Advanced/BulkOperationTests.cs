@@ -40,7 +40,7 @@ public class BulkOperationTests : DatabaseTestBase
 
             // Act - Insert in transaction for better performance
             await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
-            var helper = CreateEntityHelper(transaction);
+            var helper = CreateTableGateway(transaction);
 
             foreach (var entity in entities)
             {
@@ -53,7 +53,7 @@ public class BulkOperationTests : DatabaseTestBase
             Output.WriteLine($"{provider}: Inserted {entities.Count} records in {sw.ElapsedMilliseconds}ms");
 
             // Assert
-            var retrieved = await CreateEntityHelper(context).RetrieveAsync(
+            var retrieved = await CreateTableGateway(context).RetrieveAsync(
                 entities.Select(e => e.Id).ToList(),
                 context);
 
@@ -71,7 +71,7 @@ public class BulkOperationTests : DatabaseTestBase
                 .Select(i => CreateTestEntity(NameEnum.Test, 2000 + i))
                 .ToList();
 
-            var helper = CreateEntityHelper(context);
+            var helper = CreateTableGateway(context);
             foreach (var entity in entities)
             {
                 await helper.CreateAsync(entity, context);
@@ -88,7 +88,7 @@ public class BulkOperationTests : DatabaseTestBase
 
             // Act - Bulk update in transaction
             await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
-            var txHelper = CreateEntityHelper(transaction);
+            var txHelper = CreateTableGateway(transaction);
 
             var totalUpdated = 0;
             foreach (var entity in entities)
@@ -128,7 +128,7 @@ public class BulkOperationTests : DatabaseTestBase
                 .Select(i => CreateTestEntity(NameEnum.Test, 3000 + i))
                 .ToList();
 
-            var helper = CreateEntityHelper(context);
+            var helper = CreateTableGateway(context);
             foreach (var entity in entities)
             {
                 await helper.CreateAsync(entity, context);
@@ -164,7 +164,7 @@ public class BulkOperationTests : DatabaseTestBase
                 .Select(i => CreateTestEntity(NameEnum.Test, 4000 + i))
                 .ToList();
 
-            var helper = CreateEntityHelper(context);
+            var helper = CreateTableGateway(context);
             foreach (var entity in entities)
             {
                 await helper.CreateAsync(entity, context);
@@ -195,7 +195,7 @@ public class BulkOperationTests : DatabaseTestBase
                 .Select(i => CreateTestEntity(NameEnum.Test, 5000 + i))
                 .ToList();
 
-            var helper = CreateEntityHelper(context);
+            var helper = CreateTableGateway(context);
             foreach (var entity in entities)
             {
                 await helper.CreateAsync(entity, context);
@@ -221,7 +221,7 @@ public class BulkOperationTests : DatabaseTestBase
                 }
 
                 await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
-                var txHelper = CreateEntityHelper(transaction);
+                var txHelper = CreateTableGateway(transaction);
 
                 foreach (var entity in retrieved)
                 {
@@ -266,7 +266,7 @@ public class BulkOperationTests : DatabaseTestBase
 
             // Act - Single large transaction with 5000 inserts
             await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
-            var helper = CreateEntityHelper(transaction);
+            var helper = CreateTableGateway(transaction);
 
             var insertedIds = new List<long>();
 
@@ -289,7 +289,7 @@ public class BulkOperationTests : DatabaseTestBase
 
             // Assert - Verify sample of inserted records
             var sampleIds = insertedIds.Take(100).ToList();
-            var retrieved = await CreateEntityHelper(context).RetrieveAsync(sampleIds, context);
+            var retrieved = await CreateTableGateway(context).RetrieveAsync(sampleIds, context);
             Assert.Equal(sampleIds.Count, retrieved.Count);
         });
     }
@@ -311,7 +311,7 @@ public class BulkOperationTests : DatabaseTestBase
                 .Select(i => CreateTestEntity(NameEnum.Test, 7000 + i))
                 .ToList();
 
-            var helper = CreateEntityHelper(context);
+            var helper = CreateTableGateway(context);
             foreach (var entity in existingEntities)
             {
                 await helper.CreateAsync(entity, context);
@@ -332,7 +332,7 @@ public class BulkOperationTests : DatabaseTestBase
 
             // Act - Upsert all (mix of updates and inserts)
             await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
-            var txHelper = CreateEntityHelper(transaction);
+            var txHelper = CreateTableGateway(transaction);
 
             var totalUpserted = 0;
             foreach (var entity in allEntities)
@@ -371,7 +371,7 @@ public class BulkOperationTests : DatabaseTestBase
                     .ToList();
 
                 await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
-                var helper = CreateEntityHelper(transaction);
+                var helper = CreateTableGateway(transaction);
 
                 foreach (var entity in entities)
                 {
@@ -389,7 +389,7 @@ public class BulkOperationTests : DatabaseTestBase
             // Assert
             Assert.Equal(1000, allIds.Count); // 5 batches * 200 entities
 
-            var helper = CreateEntityHelper(context);
+            var helper = CreateTableGateway(context);
             var retrieved = await helper.RetrieveAsync(allIds, context);
             Assert.Equal(allIds.Count, retrieved.Count);
         });
@@ -405,7 +405,7 @@ public class BulkOperationTests : DatabaseTestBase
                 .Select(i => CreateTestEntity(NameEnum.Test, 9000 + i))
                 .ToList();
 
-            var helper = CreateEntityHelper(context);
+            var helper = CreateTableGateway(context);
             foreach (var entity in entities)
             {
                 await helper.CreateAsync(entity, context);
@@ -448,7 +448,7 @@ public class BulkOperationTests : DatabaseTestBase
             // Act - Insert in transaction but rollback
             {
                 await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
-                var helper = CreateEntityHelper(transaction);
+                var helper = CreateTableGateway(transaction);
 
                 foreach (var entity in entities)
                 {
@@ -459,7 +459,7 @@ public class BulkOperationTests : DatabaseTestBase
             }
 
             // Assert - No data should exist
-            var helper2 = CreateEntityHelper(context);
+            var helper2 = CreateTableGateway(context);
             var retrieved = await helper2.RetrieveAsync(
                 entities.Select(e => e.Id).ToList(),
                 context);
@@ -468,10 +468,10 @@ public class BulkOperationTests : DatabaseTestBase
         });
     }
 
-    private EntityHelper<TestTable, long> CreateEntityHelper(IDatabaseContext context)
+    private TableGateway<TestTable, long> CreateTableGateway(IDatabaseContext context)
     {
         var auditResolver = GetAuditResolver();
-        return new EntityHelper<TestTable, long>(context, auditResolver);
+        return new TableGateway<TestTable, long>(context, auditResolver);
     }
 
     private static TestTable CreateTestEntity(NameEnum name, int value)

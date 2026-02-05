@@ -36,8 +36,8 @@ public sealed class DatabaseContextPoolGovernorSettingsTests
             ProviderName = SupportedDatabase.SqlServer.ToString(),
             DbMode = DbMode.Standard,
             EnablePoolGovernor = true,
-            ReadPoolSize = 3,
-            WritePoolSize = 4
+            MaxConcurrentReads = 3,
+            MaxConcurrentWrites = 4
         };
 
         using var ctx = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.SqlServer));
@@ -60,8 +60,8 @@ public sealed class DatabaseContextPoolGovernorSettingsTests
             ProviderName = SupportedDatabase.SqlServer.ToString(),
             DbMode = DbMode.Standard,
             EnablePoolGovernor = true,
-            ReadPoolSize = 5,
-            WritePoolSize = 10
+            MaxConcurrentReads = 5,
+            MaxConcurrentWrites = 10
         };
 
         using var ctx = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.SqlServer));
@@ -104,8 +104,8 @@ public sealed class DatabaseContextPoolGovernorSettingsTests
             ProviderName = SupportedDatabase.SqlServer.ToString(),
             DbMode = DbMode.Standard,
             EnablePoolGovernor = false,
-            ReadPoolSize = 4,
-            WritePoolSize = 6
+            MaxConcurrentReads = 4,
+            MaxConcurrentWrites = 6
         };
 
         using var ctx = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.SqlServer));
@@ -126,8 +126,8 @@ public sealed class DatabaseContextPoolGovernorSettingsTests
             ProviderName = SupportedDatabase.SqlServer.ToString(),
             DbMode = DbMode.SingleWriter,
             EnablePoolGovernor = true,
-            ReadPoolSize = 5,
-            WritePoolSize = 10
+            MaxConcurrentReads = 5,
+            MaxConcurrentWrites = 10
         };
 
         using var ctx = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.SqlServer));

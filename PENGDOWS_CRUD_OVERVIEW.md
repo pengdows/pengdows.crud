@@ -69,7 +69,7 @@ Unlike Entity Framework or other ORMs, pengdows.crud follows these core principl
 ┌─────────────────────────────────────────────────────────────┐
 │  pengdows.crud Layer                                        │
 │  ┌──────────────────┐  ┌──────────────────┐                │
-│  │ EntityHelper<T>  │  │ DatabaseContext  │                │
+│  │ TableGateway<T>  │  │ DatabaseContext  │                │
 │  │ - CRUD ops       │  │ - Connection mgmt│                │
 │  │ - SQL building   │  │ - Transactions   │                │
 │  │ - Mapping        │  │ - Pooling        │                │
@@ -92,7 +92,7 @@ Unlike Entity Framework or other ORMs, pengdows.crud follows these core principl
 
 ### Key Components
 
-#### **1. EntityHelper<TEntity, TRowID>**
+#### **1. TableGateway<TEntity, TRowID>**
 The workhorse class for entity operations.
 
 ```csharp
@@ -117,7 +117,7 @@ public class Customer
 
 // Use it
 var context = new DatabaseContext(connectionString, SqlClientFactory.Instance);
-var helper = new EntityHelper<Customer, int>(context);
+var helper = new TableGateway<Customer, int>(context);
 
 // CRUD operations
 var customer = await helper.RetrieveOneAsync(42);
@@ -574,7 +574,7 @@ public class CustomerServiceTests
         // Arrange - No database needed!
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<Customer, int>(context);
+        var helper = new TableGateway<Customer, int>(context);
 
         var customer = new Customer { Name = "Test", Email = "test@example.com" };
 
@@ -591,7 +591,7 @@ public class CustomerServiceTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         var context = new DatabaseContext("Host=fake", factory);
-        var helper = new EntityHelper<Customer, int>(context);
+        var helper = new TableGateway<Customer, int>(context);
 
         var customer = new Customer { Name = "Acme" };
 
@@ -636,7 +636,7 @@ public class CustomerIntegrationTests : IAsyncLifetime
     public async Task CreateAndRetrieve_Customer_Roundtrips()
     {
         // Arrange
-        var helper = new EntityHelper<Customer, int>(_context);
+        var helper = new TableGateway<Customer, int>(_context);
         var customer = new Customer { Name = "Test", Email = "test@example.com" };
 
         // Act - Real database operations
@@ -681,7 +681,7 @@ public async Task CreateCustomer_WhenConnectionBreaks_HandlesGracefully()
     );
 
     var context = new DatabaseContext("Host=fake", factory);
-    var helper = new EntityHelper<Customer, int>(context);
+    var helper = new TableGateway<Customer, int>(context);
 
     // Act & Assert - Verify error handling
     await Assert.ThrowsAsync<InvalidOperationException>(
@@ -810,7 +810,7 @@ public class TenantOrderService
     public async Task<Order?> GetOrderAsync(string tenantId, int id)
     {
         var ctx = _registry.GetContext(tenantId);
-        var helper = new EntityHelper<Order, int>(ctx);
+        var helper = new TableGateway<Order, int>(ctx);
         return await helper.RetrieveOneAsync(id);
     }
 }
@@ -982,22 +982,22 @@ public void ConfigureServices(IServiceCollection services)
     services.AddScoped<IAuditValueResolver, UserAuditResolver>();
 
     // Register entity helpers
-    services.AddScoped<IEntityHelper<Customer, int>>(sp =>
+    services.AddScoped<ITableGateway<Customer, int>>(sp =>
     {
         var context = sp.GetRequiredService<IDatabaseContext>();
         var audit = sp.GetRequiredService<IAuditValueResolver>();
-        return new EntityHelper<Customer, int>(context, audit);
+        return new TableGateway<Customer, int>(context, audit);
     });
 }
 
 // Service Layer
 public class CustomerService
 {
-    private readonly IEntityHelper<Customer, int> _helper;
+    private readonly ITableGateway<Customer, int> _helper;
     private readonly IDatabaseContext _context;
 
     public CustomerService(
-        IEntityHelper<Customer, int> helper,
+        ITableGateway<Customer, int> helper,
         IDatabaseContext context)
     {
         _helper = helper;
@@ -1141,7 +1141,7 @@ var context = new DatabaseContext(
     SqlClientFactory.Instance
 );
 
-var helper = new EntityHelper<Product, int>(context);
+var helper = new TableGateway<Product, int>(context);
 ```
 
 ### 4. Use It

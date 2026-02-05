@@ -1,5 +1,8 @@
 using BenchmarkDotNet.Configs;
+using BenchmarkDotNet.Exporters;
+using BenchmarkDotNet.Exporters.Csv;
 using BenchmarkDotNet.Jobs;
+using BenchmarkDotNet.Loggers;
 using BenchmarkDotNet.Running;
 using BenchmarkDotNet.Toolchains.InProcess.NoEmit;
 
@@ -9,9 +12,9 @@ public class Program
 {
     public static void Main(string[] args)
     {
-        var config = ShouldUseInProcess()
+        IConfig config = ShouldUseInProcess()
             ? new InProcessConfig()
-            : null;
+            : new BenchmarkConfig();
 
         BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args, config);
     }
@@ -27,9 +30,22 @@ public class Program
     {
         public InProcessConfig()
         {
+            AddLogger(ConsoleLogger.Default);
             AddJob(Job.Default
                 .WithToolchain(InProcessNoEmitToolchain.Instance)
                 .WithId("InProcess"));
+        }
+    }
+
+    private sealed class BenchmarkConfig : ManualConfig
+    {
+        public BenchmarkConfig()
+        {
+            AddLogger(ConsoleLogger.Default);
+            AddJob(Job.Default);
+            AddExporter(MarkdownExporter.GitHub);
+            AddExporter(CsvExporter.Default);
+            AddExporter(HtmlExporter.Default);
         }
     }
 }

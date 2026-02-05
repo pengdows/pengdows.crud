@@ -11,11 +11,11 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class EntityHelperCreateAsyncErrorTests
+public class TableGatewayCreateAsyncErrorTests
 {
     private readonly TypeMapRegistry _typeMap;
 
-    public EntityHelperCreateAsyncErrorTests()
+    public TableGatewayCreateAsyncErrorTests()
     {
         _typeMap = new TypeMapRegistry();
         _typeMap.Register<TestEntity>();
@@ -32,7 +32,7 @@ public class EntityHelperCreateAsyncErrorTests
         factory.SetNonQueryResult(0); // No rows affected
 
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=Unknown", factory, _typeMap);
-        var helper = new EntityHelper<TestEntitySimple, int>(context);
+        var helper = new TableGateway<TestEntitySimple, int>(context);
 
         var entity = new TestEntitySimple { Name = "Test" };
 
@@ -51,7 +51,7 @@ public class EntityHelperCreateAsyncErrorTests
         factory.SetNonQueryResult(2); // Multiple rows affected (unexpected)
 
         var context = new DatabaseContext("test", factory, _typeMap);
-        var helper = new EntityHelper<TestEntitySimple, int>(context);
+        var helper = new TableGateway<TestEntitySimple, int>(context);
 
         var entity = new TestEntitySimple { Name = "Test" };
 
@@ -70,7 +70,7 @@ public class EntityHelperCreateAsyncErrorTests
         factory.SetException(new InvalidOperationException("Connection timeout"));
 
         var context = new DatabaseContext("test", factory, _typeMap);
-        var helper = new EntityHelper<TestEntitySimple, int>(context);
+        var helper = new TableGateway<TestEntitySimple, int>(context);
 
         var entity = new TestEntitySimple { Name = "Test" };
 
@@ -89,7 +89,7 @@ public class EntityHelperCreateAsyncErrorTests
         factory.SetException(new InvalidOperationException("Violation of UNIQUE KEY constraint"));
 
         var context = new DatabaseContext("test", factory, _typeMap);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         var entity = new TestEntity { Name = "Duplicate" };
 
@@ -103,7 +103,7 @@ public class EntityHelperCreateAsyncErrorTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var context = new DatabaseContext("test", factory, _typeMap);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         // Act & Assert
         await Assert.ThrowsAsync<ArgumentNullException>(() => helper.CreateAsync(null!));
@@ -117,7 +117,7 @@ public class EntityHelperCreateAsyncErrorTests
         factory.SetIdPopulationResult(100, 1);
 
         var context = new DatabaseContext("test", factory, _typeMap);
-        var helper = new EntityHelper<TestEntityWithDefaultId, int>(context);
+        var helper = new TableGateway<TestEntityWithDefaultId, int>(context);
 
         var entity = new TestEntityWithDefaultId(); // All default values
 
@@ -140,7 +140,7 @@ public class EntityHelperCreateAsyncErrorTests
         factory.SetScalarResult(expectedGuid.ToString());
 
         var context = new DatabaseContext("test", factory, _typeMap);
-        var helper = new EntityHelper<TestEntityWithGuid, Guid>(context);
+        var helper = new TableGateway<TestEntityWithGuid, Guid>(context);
 
         var entity = new TestEntityWithGuid { Name = "Test" };
 
@@ -161,7 +161,7 @@ public class EntityHelperCreateAsyncErrorTests
         factory.SetScalarResult("not-a-valid-int"); // Wrong type for int ID
 
         var context = new DatabaseContext("test", factory, _typeMap);
-        var helper = new EntityHelper<TestEntitySimple, int>(context);
+        var helper = new TableGateway<TestEntitySimple, int>(context);
 
         var entity = new TestEntitySimple { Name = "Test" };
 
@@ -189,7 +189,7 @@ public class EntityHelperCreateAsyncErrorTests
         factory.SetException(new ArgumentException("Invalid SQL syntax"));
 
         var context = new DatabaseContext("test", factory, _typeMap);
-        var helper = new EntityHelper<TestEntitySimple, int>(context);
+        var helper = new TableGateway<TestEntitySimple, int>(context);
 
         var entity = new TestEntitySimple { Name = "Test" };
 
@@ -217,7 +217,7 @@ public class EntityHelperCreateAsyncErrorTests
         factory.SetNonQueryResult(1);
 
         var context = new DatabaseContext("test", factory, _typeMap);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         var entity = new TestEntity
         {
@@ -243,7 +243,7 @@ public class EntityHelperCreateAsyncErrorTests
 
         // Act & Assert - Test within transaction context
         using var transaction = context.BeginTransaction();
-        var helper = new EntityHelper<TestEntity, int>(transaction);
+        var helper = new TableGateway<TestEntity, int>(transaction);
         var entity = new TestEntity { Name = "Test in Transaction" };
 
         var result = await helper.CreateAsync(entity);

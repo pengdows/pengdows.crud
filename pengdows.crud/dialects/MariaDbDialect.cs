@@ -111,7 +111,7 @@ internal class MariaDbDialect : MySqlDialect
     {
         try
         {
-            using var sc = transaction.CreateSqlContainer("SET SESSION TRANSACTION READ ONLY;");
+            using var sc = transaction.CreateSqlContainer(SetSessionTransactionReadOnlySql);
             sc.ExecuteNonQueryAsync().GetAwaiter().GetResult();
         }
         catch (Exception ex)

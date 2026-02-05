@@ -13,6 +13,10 @@
 //   * Caches execution plans per (Type, schema shape, options) tuple
 //   * Caches compiled setters per (Type, PropertyInfo) tuple
 //   * Bounded LRU caches prevent unbounded memory growth
+//   * BuildSchemaHash returns a long computed via pure arithmetic — zero string
+//     or AssemblyQualifiedName allocations on the hot path
+//   * LoadInternalAsync uses a direct while(ReadAsync) loop with the plan
+//     hoisted outside; per-row mapping is a simple delegate call (MapSingleRow)
 // - Column matching:
 //   * By default matches columns to properties by name (case-insensitive)
 //   * With ColumnsOnly=true, only maps [Column]-attributed properties
@@ -96,7 +100,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
     private readonly record struct PlanCacheKey(
         Type Type,
-        string SchemaHash,
+        long SchemaHash,
         bool ColumnsOnly,
         EnumParseFailureMode EnumMode);
 
@@ -163,10 +167,24 @@ public sealed class DataReaderMapper : IDataReaderMapper
         CancellationToken cancellationToken)
         where T : class, new()
     {
-        var result = new List<T>();
-        await foreach (var item in StreamInternalAsync<T>(reader, options, cancellationToken))
+        ArgumentNullException.ThrowIfNull(reader);
+
+        if (reader is not DbDataReader rdr)
         {
-            result.Add(item);
+            throw new ArgumentException("reader must be DbDataReader", nameof(reader));
+        }
+
+        options ??= MapperOptions.Default;
+
+        var schemaHash = BuildSchemaHash(rdr, options);
+        var planKey = new PlanCacheKey(typeof(T), schemaHash, options.ColumnsOnly, options.EnumMode);
+        var plan = (MapperPlan<T>)_planCache.GetOrAdd(planKey, _ => BuildPlan<T>(rdr, options));
+
+        var result = new List<T>();
+
+        while (await rdr.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            result.Add(MapSingleRow(rdr, plan, options));
         }
 
         return result;
@@ -194,38 +212,49 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
         while (await rdr.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            var obj = new T();
-            for (var i = 0; i < plan.Ordinals.Length; i++)
+            yield return MapSingleRow(rdr, plan, options);
+        }
+    }
+
+    /// <summary>
+    /// Maps the current reader row to a single entity using a pre-built plan.
+    /// Called by both LoadInternalAsync (direct loop) and StreamInternalAsync
+    /// to keep per-row logic in one place.
+    /// </summary>
+    private static T MapSingleRow<T>(DbDataReader rdr, MapperPlan<T> plan, MapperOptions options)
+        where T : class, new()
+    {
+        var obj = new T();
+        for (var i = 0; i < plan.Ordinals.Length; i++)
+        {
+            var ordinal = plan.Ordinals[i];
+            if (rdr.IsDBNull(ordinal))
             {
-                var ordinal = plan.Ordinals[i];
-                if (rdr.IsDBNull(ordinal))
-                {
-                    continue;
-                }
-
-                try
-                {
-                    plan.Setters[i](obj, rdr);
-                }
-                catch (Exception ex)
-                {
-                    if (options.Strict)
-                    {
-                        throw new InvalidOperationException(
-                            $"Failed to map column '{rdr.GetName(ordinal)}' to property '{plan.Properties[i].Name}'.",
-                            ex);
-                    }
-
-                    TypeCoercionHelper.Logger.LogWarning(
-                        ex,
-                        "Failed to map column '{Column}' to property '{Property}'.",
-                        rdr.GetName(ordinal),
-                        plan.Properties[i].Name);
-                }
+                continue;
             }
 
-            yield return obj;
+            try
+            {
+                plan.Setters[i](obj, rdr);
+            }
+            catch (Exception ex)
+            {
+                if (options.Strict)
+                {
+                    throw new InvalidOperationException(
+                        $"Failed to map column '{rdr.GetName(ordinal)}' to property '{plan.Properties[i].Name}'.",
+                        ex);
+                }
+
+                TypeCoercionHelper.Logger.LogWarning(
+                    ex,
+                    "Failed to map column '{Column}' to property '{Property}'.",
+                    rdr.GetName(ordinal),
+                    plan.Properties[i].Name);
+            }
         }
+
+        return obj;
     }
 
     private static MapperPlan<T> BuildPlan<T>(DbDataReader reader, MapperOptions options)
@@ -262,41 +291,32 @@ public sealed class DataReaderMapper : IDataReaderMapper
             setters.ToArray());
     }
 
-    private static string BuildSchemaHash(DbDataReader reader, MapperOptions options)
+    /// <summary>
+    /// Computes a long hash over the reader schema and mapping options.
+    /// Pure arithmetic — no string allocations (AssemblyQualifiedName is gone).
+    /// </summary>
+    private static long BuildSchemaHash(DbDataReader reader, MapperOptions options)
     {
-        var builder = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+        var hash = reader.FieldCount * 397L;
+        hash = unchecked(hash * 31L + (options.ColumnsOnly ? 1 : 0));
+        hash = unchecked(hash * 31L + (int)options.EnumMode);
 
-        // Include options in the hash to ensure proper cache invalidation
-        builder.Append(options.ColumnsOnly ? '1' : '0');
-        builder.Append('\u001F');
-        builder.Append((int)options.EnumMode);
-        builder.Append('\u001F');
-
-        // Build schema with both field names and types
         for (var i = 0; i < reader.FieldCount; i++)
         {
-            if (i > 0)
-            {
-                builder.Append('|');
-            }
-
             var name = reader.GetName(i);
 
-            // Apply name policy if specified and not in ColumnsOnly mode
             if (!options.ColumnsOnly && options.NamePolicy != null)
             {
                 name = options.NamePolicy(name);
             }
 
-            builder.Append(name);
-            builder.Append(':');
+            hash = unchecked(hash * 31L + StringComparer.OrdinalIgnoreCase.GetHashCode(name));
 
-            // Include field type to ensure plans are rebuilt when column types change
             var fieldType = ResolveFieldType(reader, i);
-            builder.Append(fieldType.AssemblyQualifiedName ?? fieldType.FullName ?? fieldType.Name);
+            hash = unchecked(hash * 31L + fieldType.GetHashCode());
         }
 
-        return builder.ToString();
+        return hash;
     }
 
     private static Action<T, DbDataReader> GetOrCreateSetter<T>(

@@ -29,7 +29,7 @@ var cfg = new DatabaseContextConfiguration
 };
 
 var ctx = new DatabaseContext(cfg, SqlClientFactory.Instance, null, map);
-var helper = new EntityHelper<Film, int>(ctx);
+var helper = new TableGateway<Film, int>(ctx);
 
 // Generate the SQL for RetrieveOneAsync
 var container = helper.BuildRetrieve(new[] { 123 }, "f");

@@ -35,6 +35,10 @@ internal static class ConnectionPoolingConfiguration
     /// </summary>
     public const int DefaultMinPoolSize = 1;
 
+    // Fallback connection-string key names when the dialect does not expose its own.
+    private const string DefaultPoolingKey = "Pooling";
+    private const string DefaultMinPoolSizeKey = "Min Pool Size";
+
     private static readonly string[] MinPoolKeyCandidates =
     {
         "Min Pool Size",
@@ -59,7 +63,7 @@ internal static class ConnectionPoolingConfiguration
             return false;
         }
 
-        if (!builder.TryGetValue("Pooling", out var rawValue))
+        if (!builder.TryGetValue(DefaultPoolingKey, out var rawValue))
         {
             return false;
         }
@@ -170,8 +174,8 @@ internal static class ConnectionPoolingConfiguration
         }
 
         // Use common defaults if not specified
-        poolingSettingName ??= "Pooling";
-        minPoolSizeSettingName ??= "Min Pool Size";
+        poolingSettingName ??= DefaultPoolingKey;
+        minPoolSizeSettingName ??= DefaultMinPoolSizeKey;
 
         try
         {
@@ -489,7 +493,7 @@ internal static class ConnectionPoolingConfiguration
 
         // If the builder only contains "Data Source" and it matches the original,
         // this is likely a raw path like ":memory:" or "data.db"
-        if (!builder.TryGetValue("Data Source", out var raw) || builder.Count != 1)
+        if (!builder.TryGetValue(ConnectionStringHelper.DataSourceKey, out var raw) || builder.Count != 1)
         {
             return false;
         }

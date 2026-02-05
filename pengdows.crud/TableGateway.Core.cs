@@ -5,7 +5,7 @@
 //
 // AI SUMMARY:
 // - TableGateway<TEntity, TRowID> is the main API for entity CRUD operations.
-// - Replaces the older EntityHelper<> name (which is now a compatibility shim).
+// - Replaces the older TableGateway<> name (which is now a compatibility shim).
 // - This partial contains:
 //   * Static initialization and TRowID type validation
 //   * Constructor that takes DatabaseContext and optional AuditValueResolver
@@ -56,13 +56,17 @@ namespace pengdows.crud;
 /// <typeparam name="TRowID">The row ID type (must be primitive integer, Guid, or string).</typeparam>
 /// <remarks>
 /// <para>
-/// This is the primary table gateway API. The legacy <c>EntityHelper&lt;TEntity, TRowID&gt;</c>
+/// This is the primary table gateway API. The legacy <c>TableGateway&lt;TEntity, TRowID&gt;</c>
 /// type remains as a compatibility shim that inherits from this class.
 /// </para>
 /// </remarks>
 public partial class TableGateway<TEntity, TRowID> :
     ITableGateway<TEntity, TRowID> where TEntity : class, new()
 {
+    private const string EmptyIdListMessage = "List of IDs cannot be empty.";
+    private const string UpsertNoKeyMessage = "Upsert requires an Id or a composite primary key.";
+    private const string UpsertNoWritableKeyMessage = "Upsert requires client-assigned Id or [PrimaryKey] attributes.";
+
     // Cache for compiled property setters
     private static readonly ConcurrentDictionary<PropertyInfo, Action<object, object?>> _propertySetters = new();
 
@@ -88,7 +92,6 @@ public partial class TableGateway<TEntity, TRowID> :
 
     private IColumnInfo? _idColumn;
 
-    // private readonly IServiceProvider _serviceProvider;
     private ITableInfo _tableInfo = null!;
     private IReadOnlyDictionary<string, IColumnInfo> _columnsByNameCI = null!;
     private bool _hasAuditColumns;
@@ -103,8 +106,8 @@ public partial class TableGateway<TEntity, TRowID> :
 
     private readonly BoundedCache<string, string[]> _whereParameterNames = new(MaxCacheSize);
 
-    // Thread-safe cache for reader plans by recordset shape hash
-    private readonly BoundedCache<int, ColumnPlan[]> _readerPlans = new(MaxReaderPlans);
+    // Thread-safe cache for reader plans by recordset shape hash (long key avoids int-hash collisions)
+    private readonly BoundedCache<long, ColumnPlan[]> _readerPlans = new(MaxReaderPlans);
     private const int MaxReaderPlans = 32;
 
     // Optimized execution plan with pre-compiled delegates for blazing fast per-row execution
@@ -277,6 +280,46 @@ public partial class TableGateway<TEntity, TRowID> :
                 sb.Append(parameterMarker);
                 i += dialectMarker.Length - 1;
                 continue;
+            }
+
+            sb.Append(sql[i]);
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Replaces neutral tokens ({Q}/{q}/{S}) with dialect-specific quoting and parameter markers.
+    /// </summary>
+    public string ReplaceNeutralTokens(string sql)
+    {
+        if (sql == null)
+        {
+            throw new ArgumentNullException(nameof(sql));
+        }
+
+        var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+
+        for (var i = 0; i < sql.Length; i++)
+        {
+            if (sql[i] == '{' && i + 2 < sql.Length && sql[i + 2] == '}')
+            {
+                var token = sql[i + 1];
+                switch (token)
+                {
+                    case 'Q':
+                        sb.Append(_dialect.QuotePrefix);
+                        i += 2;
+                        continue;
+                    case 'q':
+                        sb.Append(_dialect.QuoteSuffix);
+                        i += 2;
+                        continue;
+                    case 'S':
+                        sb.Append(_dialect.ParameterMarker);
+                        i += 2;
+                        continue;
+                }
             }
 
             sb.Append(sql[i]);
@@ -645,8 +688,8 @@ public partial class TableGateway<TEntity, TRowID> :
     {
         var (sc, dialect) = PrepareInsertContainer(entity, context, stripPlaceholders: false);
 
-        string outputClause = string.Empty;
-        string returningClause = string.Empty;
+        var outputClause = string.Empty;
+        var returningClause = string.Empty;
 
         if (withReturning && _idColumn != null && !_idColumn.IsIdIsWritable && dialect.SupportsInsertReturning)
         {
@@ -670,7 +713,7 @@ public partial class TableGateway<TEntity, TRowID> :
         return sc;
     }
 
-    // moved to EntityHelper.Retrieve.cs
+    // moved to TableGateway.Retrieve.cs
 
     /// <inheritdoc/>
     public ISqlContainer BuildDelete(TRowID id, IDatabaseContext? context = null)
@@ -729,7 +772,7 @@ public partial class TableGateway<TEntity, TRowID> :
         var list = MaterializeDistinctIds(ids);
         if (list.Count == 0)
         {
-            throw new ArgumentException("List of IDs cannot be empty.", nameof(ids));
+            throw new ArgumentException(EmptyIdListMessage, nameof(ids));
         }
 
         var ctx = context ?? _context;
@@ -910,7 +953,7 @@ public partial class TableGateway<TEntity, TRowID> :
         var list = MaterializeDistinctIds(ids);
         if (list.Count == 0)
         {
-            throw new ArgumentException("List of IDs cannot be empty.", nameof(ids));
+            throw new ArgumentException(EmptyIdListMessage, nameof(ids));
         }
 
         var ctx = context ?? _context;
@@ -1164,21 +1207,21 @@ public partial class TableGateway<TEntity, TRowID> :
         }
     }
 
-    // moved to EntityHelper.Retrieve.cs
+    // moved to TableGateway.Retrieve.cs
 
-    // moved to EntityHelper.Retrieve.cs
+    // moved to TableGateway.Retrieve.cs
 
-    // moved to EntityHelper.Retrieve.cs
+    // moved to TableGateway.Retrieve.cs
 
-    // moved to EntityHelper.Retrieve.cs
+    // moved to TableGateway.Retrieve.cs
 
-    // moved to EntityHelper.Retrieve.cs
+    // moved to TableGateway.Retrieve.cs
 
-    // moved to EntityHelper.Retrieve.cs
+    // moved to TableGateway.Retrieve.cs
 
-    // moved to EntityHelper.Retrieve.cs
+    // moved to TableGateway.Retrieve.cs
 
-    // moved to EntityHelper.Retrieve.cs
+    // moved to TableGateway.Retrieve.cs
 
     internal IReadOnlyList<IColumnInfo> GetCachedInsertableColumns()
     {
@@ -1218,16 +1261,16 @@ public partial class TableGateway<TEntity, TRowID> :
         }
     }
 
-    // moved to EntityHelper.Retrieve.cs
+    // moved to TableGateway.Retrieve.cs
 
-    // moved to EntityHelper.Retrieve.cs
+    // moved to TableGateway.Retrieve.cs
 
-    // moved to EntityHelper.Retrieve.cs
+    // moved to TableGateway.Retrieve.cs
 
 
-    // moved to EntityHelper.Update.cs
+    // moved to TableGateway.Update.cs
 
-    // moved to EntityHelper.Update.cs
+    // moved to TableGateway.Update.cs
 
     /// <inheritdoc/>
     public Task<int> UpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null)
@@ -1265,15 +1308,15 @@ public partial class TableGateway<TEntity, TRowID> :
         }
     }
 
-    // moved to EntityHelper.Upsert.cs
+    // moved to TableGateway.Upsert.cs
 
-    // moved to EntityHelper.Upsert.cs
+    // moved to TableGateway.Upsert.cs
 
-    // moved to EntityHelper.Upsert.cs
+    // moved to TableGateway.Upsert.cs
 
-    // moved to EntityHelper.Upsert.cs
+    // moved to TableGateway.Upsert.cs
 
-// moved to EntityHelper.Upsert.cs
+// moved to TableGateway.Upsert.cs
     private IReadOnlyList<IColumnInfo> ResolveUpsertKey_MOVED()
     {
         if (_idColumn != null && _idColumn.IsIdIsWritable)
@@ -1287,7 +1330,7 @@ public partial class TableGateway<TEntity, TRowID> :
             return keys;
         }
 
-        throw new NotSupportedException("Upsert requires client-assigned Id or [PrimaryKey] attributes.");
+        throw new NotSupportedException(UpsertNoWritableKeyMessage);
     }
 
     private (string sql, List<DbParameter> parameters) BuildUpdateByKey(TEntity updated,
@@ -1341,25 +1384,25 @@ public partial class TableGateway<TEntity, TRowID> :
     }
 
 
-    // moved to EntityHelper.Update.cs
+    // moved to TableGateway.Update.cs
 
-    // moved to EntityHelper.Update.cs
+    // moved to TableGateway.Update.cs
 
-    // moved to EntityHelper.Update.cs
+    // moved to TableGateway.Update.cs
 
-    // moved to EntityHelper.Update.cs
+    // moved to TableGateway.Update.cs
 
-    // moved to EntityHelper.Upsert.cs
+    // moved to TableGateway.Upsert.cs
 
 
-    // moved to EntityHelper.Retrieve.cs
+    // moved to TableGateway.Retrieve.cs
 
     /// <summary>
     /// Type-safe coercion for audit field values (handles string to Guid, etc.)
     /// </summary>
-    // moved to EntityHelper.Audit.cs
+    // moved to TableGateway.Audit.cs
 
-    // moved to EntityHelper.Audit.cs
+    // moved to TableGateway.Audit.cs
     private string WrapObjectName(string objectName)
     {
         return _dialect.WrapObjectName(objectName);

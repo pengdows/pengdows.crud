@@ -27,6 +27,8 @@ namespace pengdows.crud.configuration;
 
 public class DbProviderLoader : IDbProviderLoader
 {
+    private const string DatabaseProvidersSection = "DatabaseProviders";
+
     private static readonly object _lock = new();
     private static readonly Dictionary<string, Assembly> _loadedAssemblies = new();
     private readonly IConfiguration _configuration;
@@ -41,7 +43,7 @@ public class DbProviderLoader : IDbProviderLoader
     public void LoadAndRegisterProviders(IServiceCollection services)
     {
         var providers = new Dictionary<string, DatabaseProviderConfig>();
-        _configuration.GetSection("DatabaseProviders").Bind(providers);
+        _configuration.GetSection(DatabaseProvidersSection).Bind(providers);
 
         foreach (var kvp in providers)
         {

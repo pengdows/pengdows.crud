@@ -31,8 +31,8 @@
 
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
+using pengdows.crud.configuration;
 using pengdows.crud.enums;
-// using pengdows.crud.strategies.connection; // superseded by strategies namespace
 using pengdows.crud.dialects;
 using pengdows.crud.@internal;
 using pengdows.crud.infrastructure;
@@ -149,8 +149,8 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private PoolGovernor? _writerGovernor;
     private readonly ModeContentionStats _modeContentionStats = new();
     private readonly AttributionStats _attributionStats = new();
-    private TimeSpan _poolAcquireTimeout = TimeSpan.FromSeconds(5);
-    private TimeSpan? _modeLockTimeout = TimeSpan.FromSeconds(30);
+    private TimeSpan _poolAcquireTimeout = TimeSpan.FromSeconds(DatabaseContextConfiguration.DefaultPoolAcquireSeconds);
+    private TimeSpan? _modeLockTimeout = TimeSpan.FromSeconds(DatabaseContextConfiguration.DefaultModeLockSeconds);
     private bool _enablePoolGovernor = true;
     private bool _effectivePoolGovernorEnabled = true;
     private bool _enableWriterPreference = true;
@@ -161,8 +161,6 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
 
     /// <inheritdoc/>
     public Guid RootId { get; } = Guid.NewGuid();
-
-    private static readonly char[] _parameterPrefixes = { '@', '?', ':' };
 
     [Obsolete("Use the constructor that takes DatabaseContextConfiguration instead.")]
     private ReadWriteMode _readWriteMode = ReadWriteMode.ReadWrite;
@@ -288,66 +286,6 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     }
 
     internal IProcWrappingStrategy ProcWrappingStrategy => _procWrappingStrategy;
-
-    // Duplicates removed; properties already exist earlier in the class
-
-    //
-    // private int _disposed; // 0=false, 1=true
-    //
-    //
-    // public void Dispose()
-    // {
-    //     Dispose(disposing: true);
-    // }
-    //
-    // public async ValueTask DisposeAsync()
-    // {
-    //     await DisposeAsyncCore().ConfigureAwait(false);
-    //     Dispose(disposing: false); // Finalizer path for unmanaged cleanup (if any)
-    // }
-    //
-    // protected virtual async ValueTask DisposeAsyncCore()
-    // {
-    //     if (Interlocked.Exchange(ref _disposed, 1) != 0)
-    //         return; // Already disposed
-    //
-    //     if (_connection is IAsyncDisposable asyncDisposable)
-    //     {
-    //         await asyncDisposable.DisposeAsync().ConfigureAwait(false);
-    //     }
-    //     else
-    //     {
-    //         _connection?.Dispose();
-    //     }
-    //
-    //     _connection = null;
-    // }
-    //
-    //
-    // protected virtual void Dispose(bool disposing)
-    // {
-    //     if (Interlocked.Exchange(ref _disposed, 1) != 0)
-    //         return; // Already disposed
-    //
-    //     if (disposing)
-    //     {
-    //         try
-    //         {
-    //             _connection?.Dispose();
-    //         }
-    //         catch
-    //         {
-    //             // Optional: log or suppress
-    //         }
-    //         finally
-    //         {
-    //             _connection = null;
-    //             GC.SuppressFinalize(this); // Suppress only here
-    //         }
-    //     }
-    //
-    //     // unmanaged cleanup if needed (none currently)
-    // }
 
     protected override void DisposeManaged()
     {

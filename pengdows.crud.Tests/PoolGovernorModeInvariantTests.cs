@@ -16,8 +16,8 @@ public sealed class PoolGovernorModeInvariantTests
             ProviderName = SupportedDatabase.SqlServer.ToString(),
             DbMode = DbMode.SingleConnection,
             EnablePoolGovernor = true,
-            ReadPoolSize = 10,
-            WritePoolSize = 10
+            MaxConcurrentReads = 10,
+            MaxConcurrentWrites = 10
         };
 
         using var ctx = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.SqlServer));
@@ -43,8 +43,8 @@ public sealed class PoolGovernorModeInvariantTests
             ProviderName = SupportedDatabase.MySql.ToString(),
             DbMode = DbMode.SingleWriter,
             EnablePoolGovernor = true,
-            ReadPoolSize = 10,
-            WritePoolSize = 10 // Will be overridden to 1 for SingleWriter
+            MaxConcurrentReads = 10,
+            MaxConcurrentWrites = 10 // Will be overridden to 1 for SingleWriter
         };
 
         using var ctx = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.MySql));

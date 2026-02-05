@@ -36,7 +36,7 @@ public class TransactionTests : DatabaseTestBase
 
             // Act
             await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
-            var helper = CreateEntityHelper(transaction);
+            var helper = CreateTableGateway(transaction);
 
             await helper.CreateAsync(entity, transaction);
             transaction.Commit();
@@ -47,7 +47,7 @@ public class TransactionTests : DatabaseTestBase
             Assert.True(transaction.IsCompleted);
 
             // Verify data persisted outside transaction
-            var retrieved = await CreateEntityHelper(context).RetrieveOneAsync(entity.Id, context);
+            var retrieved = await CreateTableGateway(context).RetrieveOneAsync(entity.Id, context);
             Assert.NotNull(retrieved);
             Assert.Equal(entity.Name, retrieved.Name);
         });
@@ -63,7 +63,7 @@ public class TransactionTests : DatabaseTestBase
 
             // Act
             await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
-            var helper = CreateEntityHelper(transaction);
+            var helper = CreateTableGateway(transaction);
 
             await helper.CreateAsync(entity, transaction);
             transaction.Rollback();
@@ -74,7 +74,7 @@ public class TransactionTests : DatabaseTestBase
             Assert.True(transaction.IsCompleted);
 
             // Verify data was not persisted
-            var retrieved = await CreateEntityHelper(context).RetrieveOneAsync(entity.Id, context);
+            var retrieved = await CreateTableGateway(context).RetrieveOneAsync(entity.Id, context);
             Assert.Null(retrieved);
         });
     }
@@ -86,11 +86,11 @@ public class TransactionTests : DatabaseTestBase
         {
             // Arrange - Create entity outside transaction
             var entity = CreateTestEntity(NameEnum.Test, 300);
-            await CreateEntityHelper(context).CreateAsync(entity, context);
+            await CreateTableGateway(context).CreateAsync(entity, context);
 
             // Act - Read within transaction
             await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
-            var helper = CreateEntityHelper(transaction);
+            var helper = CreateTableGateway(transaction);
             var retrieved = await helper.RetrieveOneAsync(entity.Id, transaction);
 
             // Assert
@@ -119,7 +119,7 @@ public class TransactionTests : DatabaseTestBase
 
             // Arrange - Create entity outside transaction
             var existingEntity = CreateTestEntity(NameEnum.Test, 400);
-            await CreateEntityHelper(context).CreateAsync(existingEntity, context);
+            await CreateTableGateway(context).CreateAsync(existingEntity, context);
 
             // Act - Read-only transaction
             await using var readOnlyTransaction = context.BeginTransaction(
@@ -127,7 +127,7 @@ public class TransactionTests : DatabaseTestBase
                 ExecutionType.Read,
                 true);
 
-            var helper = CreateEntityHelper(readOnlyTransaction);
+            var helper = CreateTableGateway(readOnlyTransaction);
 
             // Assert - Reads should work
             var retrieved = await helper.RetrieveOneAsync(existingEntity.Id, readOnlyTransaction);
@@ -156,11 +156,11 @@ public class TransactionTests : DatabaseTestBase
 
             // Arrange
             var entity = CreateTestEntity(NameEnum.Test, 500);
-            await CreateEntityHelper(context).CreateAsync(entity, context);
+            await CreateTableGateway(context).CreateAsync(entity, context);
 
             // Act
             await using var transaction = context.BeginTransaction(IsolationLevel.Serializable);
-            var helper = CreateEntityHelper(transaction);
+            var helper = CreateTableGateway(transaction);
 
             var retrieved = await helper.RetrieveOneAsync(entity.Id, transaction);
             retrieved!.Value = 999;
@@ -170,7 +170,7 @@ public class TransactionTests : DatabaseTestBase
 
             // Assert
             Assert.Equal(IsolationLevel.Serializable, transaction.IsolationLevel);
-            var updated = await CreateEntityHelper(context).RetrieveOneAsync(entity.Id, context);
+            var updated = await CreateTableGateway(context).RetrieveOneAsync(entity.Id, context);
             Assert.Equal(999, updated!.Value);
         });
     }
@@ -193,7 +193,7 @@ public class TransactionTests : DatabaseTestBase
 
             // Act
             await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
-            var helper = CreateEntityHelper(transaction);
+            var helper = CreateTableGateway(transaction);
 
             // Create first entity
             await helper.CreateAsync(entity1, transaction);
@@ -210,8 +210,8 @@ public class TransactionTests : DatabaseTestBase
             transaction.Commit();
 
             // Assert
-            var retrieved1 = await CreateEntityHelper(context).RetrieveOneAsync(entity1.Id, context);
-            var retrieved2 = await CreateEntityHelper(context).RetrieveOneAsync(entity2.Id, context);
+            var retrieved1 = await CreateTableGateway(context).RetrieveOneAsync(entity1.Id, context);
+            var retrieved2 = await CreateTableGateway(context).RetrieveOneAsync(entity2.Id, context);
 
             Assert.NotNull(retrieved1); // Should exist
             Assert.Null(retrieved2); // Should not exist
@@ -236,7 +236,7 @@ public class TransactionTests : DatabaseTestBase
 
             // Act
             await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
-            var helper = CreateEntityHelper(transaction);
+            var helper = CreateTableGateway(transaction);
 
             await helper.CreateAsync(entity1, transaction);
             await transaction.SavepointAsync("sp1");
@@ -252,9 +252,9 @@ public class TransactionTests : DatabaseTestBase
             transaction.Commit();
 
             // Assert
-            var retrieved1 = await CreateEntityHelper(context).RetrieveOneAsync(entity1.Id, context);
-            var retrieved2 = await CreateEntityHelper(context).RetrieveOneAsync(entity2.Id, context);
-            var retrieved3 = await CreateEntityHelper(context).RetrieveOneAsync(entity3.Id, context);
+            var retrieved1 = await CreateTableGateway(context).RetrieveOneAsync(entity1.Id, context);
+            var retrieved2 = await CreateTableGateway(context).RetrieveOneAsync(entity2.Id, context);
+            var retrieved3 = await CreateTableGateway(context).RetrieveOneAsync(entity3.Id, context);
 
             Assert.NotNull(retrieved1);
             Assert.Null(retrieved2);
@@ -273,13 +273,13 @@ public class TransactionTests : DatabaseTestBase
             // Act
             {
                 await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
-                var helper = CreateEntityHelper(transaction);
+                var helper = CreateTableGateway(transaction);
                 await helper.CreateAsync(entity, transaction);
                 // Dispose without commit
             }
 
             // Assert - Changes should be rolled back
-            var retrieved = await CreateEntityHelper(context).RetrieveOneAsync(entity.Id, context);
+            var retrieved = await CreateTableGateway(context).RetrieveOneAsync(entity.Id, context);
             Assert.Null(retrieved);
         });
     }
@@ -299,7 +299,7 @@ public class TransactionTests : DatabaseTestBase
 
             // Act
             await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
-            var helper = CreateEntityHelper(transaction);
+            var helper = CreateTableGateway(transaction);
 
             foreach (var entity in entities)
             {
@@ -309,7 +309,7 @@ public class TransactionTests : DatabaseTestBase
             transaction.Commit();
 
             // Assert - All entities should be persisted
-            var baseHelper = CreateEntityHelper(context);
+            var baseHelper = CreateTableGateway(context);
             foreach (var entity in entities)
             {
                 var retrieved = await baseHelper.RetrieveOneAsync(entity.Id, context);
@@ -326,11 +326,11 @@ public class TransactionTests : DatabaseTestBase
         {
             // Arrange
             var entity = CreateTestEntity(NameEnum.Test, 1000);
-            await CreateEntityHelper(context).CreateAsync(entity, context);
+            await CreateTableGateway(context).CreateAsync(entity, context);
 
             // Act
             await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
-            var helper = CreateEntityHelper(transaction);
+            var helper = CreateTableGateway(transaction);
 
             var retrieved = await helper.RetrieveOneAsync(entity.Id, transaction);
             retrieved!.Value = 2000;
@@ -344,7 +344,7 @@ public class TransactionTests : DatabaseTestBase
             // Assert
             Assert.Equal(2000, reretrieved!.Value);
 
-            var final = await CreateEntityHelper(context).RetrieveOneAsync(entity.Id, context);
+            var final = await CreateTableGateway(context).RetrieveOneAsync(entity.Id, context);
             Assert.Equal(2000, final!.Value);
         });
     }
@@ -356,17 +356,17 @@ public class TransactionTests : DatabaseTestBase
         {
             // Arrange
             var entity = CreateTestEntity(NameEnum.Test, 1100);
-            await CreateEntityHelper(context).CreateAsync(entity, context);
+            await CreateTableGateway(context).CreateAsync(entity, context);
 
             // Act
             await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
-            var helper = CreateEntityHelper(transaction);
+            var helper = CreateTableGateway(transaction);
 
             await helper.DeleteAsync(entity.Id, transaction);
             transaction.Rollback();
 
             // Assert - Entity should still exist after rollback
-            var retrieved = await CreateEntityHelper(context).RetrieveOneAsync(entity.Id, context);
+            var retrieved = await CreateTableGateway(context).RetrieveOneAsync(entity.Id, context);
             Assert.NotNull(retrieved);
         });
     }
@@ -396,20 +396,20 @@ public class TransactionTests : DatabaseTestBase
                 IsolationProfile.SafeNonBlockingReads,
                 ExecutionType.Write);
 
-            var helper = CreateEntityHelper(transaction);
+            var helper = CreateTableGateway(transaction);
             await helper.CreateAsync(entity, transaction);
             transaction.Commit();
 
             // Assert
-            var retrieved = await CreateEntityHelper(context).RetrieveOneAsync(entity.Id, context);
+            var retrieved = await CreateTableGateway(context).RetrieveOneAsync(entity.Id, context);
             Assert.NotNull(retrieved);
         });
     }
 
-    private EntityHelper<TestTable, long> CreateEntityHelper(IDatabaseContext context)
+    private TableGateway<TestTable, long> CreateTableGateway(IDatabaseContext context)
     {
         var auditResolver = GetAuditResolver();
-        return new EntityHelper<TestTable, long>(context, auditResolver);
+        return new TableGateway<TestTable, long>(context, auditResolver);
     }
 
     private static TestTable CreateTestEntity(NameEnum name, int value)

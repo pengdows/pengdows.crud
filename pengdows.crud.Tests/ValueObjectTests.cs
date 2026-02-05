@@ -78,6 +78,26 @@ public class ValueObjectTests
     }
 
     [Fact]
+    public void Cidr_CanonicalizesHostBits()
+    {
+        var cidr = new Cidr(IPAddress.Parse("192.168.1.5"), 24);
+        Assert.Equal("192.168.1.0/24", cidr.ToString());
+    }
+
+    [Fact]
+    public void Cidr_CanonicalizesIpv6HostBits()
+    {
+        var cidr = new Cidr(IPAddress.Parse("2001:db8::1234"), 64);
+        Assert.Equal("2001:db8::/64", cidr.ToString());
+    }
+
+    [Fact]
+    public void Cidr_Parse_InvalidFormat_Throws()
+    {
+        Assert.Throws<FormatException>(() => Cidr.Parse("192.168.0.0"));
+    }
+
+    [Fact]
     public void MacAddress_ShouldCreateFromPhysicalAddress()
     {
         var physical = new PhysicalAddress(new byte[] { 0x00, 0x11, 0x22, 0x33, 0x44, 0x55 });

@@ -149,14 +149,17 @@ internal class DuckDbDialect : SqlDialect
             : $"{connectionString};access_mode=READ_ONLY";
     }
 
+    private const string ReadOnlyConnectionParam = "access_mode=READ_ONLY";
+    private const string ReadOnlyPragma = "PRAGMA read_only = 1;";
+
     public override string? GetReadOnlyConnectionParameter()
     {
-        return "access_mode=READ_ONLY";
+        return ReadOnlyConnectionParam;
     }
 
     public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
     {
-        return readOnly ? "PRAGMA read_only = 1;" : string.Empty;
+        return readOnly ? ReadOnlyPragma : string.Empty;
     }
 
     [Obsolete]

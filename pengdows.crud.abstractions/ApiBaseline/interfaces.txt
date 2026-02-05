@@ -5,7 +5,6 @@ interface pengdows.crud.IColumnInfo
 interface pengdows.crud.IDataReaderMapper
 interface pengdows.crud.IDataSourceInformation
 interface pengdows.crud.IDatabaseContext : System.IAsyncDisposable, System.IDisposable, pengdows.crud.infrastructure.ISafeAsyncDisposableBase
-interface pengdows.crud.IEntityHelper`2<TEntity, TRowID> : pengdows.crud.ITableGateway`2<TEntity, TRowID><TEntity, TRowID>
 interface pengdows.crud.IEphemeralSecureString : System.IDisposable
 interface pengdows.crud.ISqlContainer : System.IAsyncDisposable, System.IDisposable, pengdows.crud.infrastructure.ISafeAsyncDisposableBase
 interface pengdows.crud.ITableGateway`2<TEntity, TRowID>

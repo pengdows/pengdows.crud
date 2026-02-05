@@ -84,7 +84,7 @@ internal static class fakeDbFactoryTestExtensions
     }
 
     /// <summary>
-    /// Sets up the factory to handle ID population scenarios for EntityHelper.CreateAsync.
+    /// Sets up the factory to handle ID population scenarios for TableGateway.CreateAsync.
     /// This accounts for the DatabaseContext connection lifecycle:
     /// 1. Initialization connection is used for database detection, version queries, session settings
     /// 2. For Standard mode: initialization connection is disposed, operations use new connections
@@ -98,7 +98,7 @@ internal static class fakeDbFactoryTestExtensions
         // Connection 1: Primary connection used for both initialization AND operations
         // This connection must handle:
         // - Database detection/version queries during DatabaseContext initialization
-        // - INSERT operations and ID population during EntityHelper.CreateAsync
+        // - INSERT operations and ID population during TableGateway.CreateAsync
         var primaryConnection = new fakeDbConnection();
         primaryConnection.EnableDataPersistence = factory.EnableDataPersistence;
 

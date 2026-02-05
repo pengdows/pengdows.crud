@@ -8,7 +8,7 @@
 // - Throws InvalidOperationException if context doesn't implement provider.
 // - Allows internal components to get connections via IDatabaseContext interface.
 // - Keeps implementation details hidden from public API consumers.
-// - Used by SqlContainer, EntityHelper for connection acquisition.
+// - Used by SqlContainer, TableGateway for connection acquisition.
 // =============================================================================
 
 using pengdows.crud.enums;

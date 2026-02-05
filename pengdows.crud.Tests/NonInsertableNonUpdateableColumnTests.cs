@@ -10,7 +10,7 @@ public class NonInsertableNonUpdateableColumnTests : SqlLiteContextTestBase
     public void BuildCreate_SkipsNonInsertableColumn()
     {
         TypeMap.Register<NonInsertableColumnEntity>();
-        var helper = new EntityHelper<NonInsertableColumnEntity, int>(Context);
+        var helper = new TableGateway<NonInsertableColumnEntity, int>(Context);
         var entity = new NonInsertableColumnEntity { Id = 1, Name = "Foo", Secret = "Bar" };
 
         var container = helper.BuildCreate(entity);
@@ -26,7 +26,7 @@ public class NonInsertableNonUpdateableColumnTests : SqlLiteContextTestBase
     public async Task BuildUpdate_SkipsNonUpdateableColumn()
     {
         TypeMap.Register<NonInsertableColumnEntity>();
-        var helper = new EntityHelper<NonInsertableColumnEntity, int>(Context);
+        var helper = new TableGateway<NonInsertableColumnEntity, int>(Context);
         var entity = new NonInsertableColumnEntity { Id = 1, Name = "Foo", Secret = "Bar" };
 
         var sc = await helper.BuildUpdateAsync(entity);
@@ -42,7 +42,7 @@ public class NonInsertableNonUpdateableColumnTests : SqlLiteContextTestBase
     public async Task BuildUpdateAsync_OnlyNonUpdateableChanged_Throws()
     {
         TypeMap.Register<NonInsertableColumnEntity>();
-        var helper = new EntityHelper<NonInsertableColumnEntity, int>(Context);
+        var helper = new TableGateway<NonInsertableColumnEntity, int>(Context);
 
         var qp = Context.QuotePrefix;
         var qs = Context.QuoteSuffix;

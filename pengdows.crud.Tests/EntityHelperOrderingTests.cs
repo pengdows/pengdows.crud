@@ -9,13 +9,13 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class EntityHelperOrderingTests : SqlLiteContextTestBase
+public class TableGatewayOrderingTests : SqlLiteContextTestBase
 {
     [Fact]
     public void BuildBaseRetrieve_ExactSql_NoAlias()
     {
         TypeMap.Register<OrderedEntity>();
-        var helper = new EntityHelper<OrderedEntity, int>(Context);
+        var helper = new TableGateway<OrderedEntity, int>(Context);
         var sc = helper.BuildBaseRetrieve(string.Empty);
         var wrappedA = Context.WrapObjectName("A");
         var wrappedB = Context.WrapObjectName("B");
@@ -28,7 +28,7 @@ public class EntityHelperOrderingTests : SqlLiteContextTestBase
     public void BuildBaseRetrieve_ExactSql_WithAlias()
     {
         TypeMap.Register<OrderedEntity>();
-        var helper = new EntityHelper<OrderedEntity, int>(Context);
+        var helper = new TableGateway<OrderedEntity, int>(Context);
         var alias = "a";
         var sc = helper.BuildBaseRetrieve(alias);
         var wrappedAlias = Context.WrapObjectName(alias);
@@ -44,7 +44,7 @@ public class EntityHelperOrderingTests : SqlLiteContextTestBase
     public void BuildBaseRetrieve_OrdersColumnsByOrdinal()
     {
         TypeMap.Register<OrderedEntity>();
-        var helper = new EntityHelper<OrderedEntity, int>(Context);
+        var helper = new TableGateway<OrderedEntity, int>(Context);
         var sc = helper.BuildBaseRetrieve(string.Empty);
         var query = sc.Query.ToString();
         Assert.Contains("SELECT \"A\", \"B\"", query);
@@ -54,7 +54,7 @@ public class EntityHelperOrderingTests : SqlLiteContextTestBase
     public void BuildBaseRetrieve_DefaultsToPropertyOrderWithoutOrdinals()
     {
         TypeMap.Register<DefaultEntity>();
-        var helper = new EntityHelper<DefaultEntity, int>(Context);
+        var helper = new TableGateway<DefaultEntity, int>(Context);
         var sc = helper.BuildBaseRetrieve(string.Empty);
         var query = sc.Query.ToString();
         Assert.Contains("SELECT \"B\", \"A\"", query);
@@ -64,7 +64,7 @@ public class EntityHelperOrderingTests : SqlLiteContextTestBase
     public void BuildWhereByPrimaryKey_OrdersByPkOrder()
     {
         TypeMap.Register<OrderedEntity>();
-        var helper = new EntityHelper<OrderedEntity, int>(Context);
+        var helper = new TableGateway<OrderedEntity, int>(Context);
         var sc = Context.CreateSqlContainer();
         helper.BuildWhereByPrimaryKey(new[] { new OrderedEntity { A = 1, B = 2 } }, sc);
         var query = sc.Query.ToString();
@@ -81,7 +81,7 @@ public class EntityHelperOrderingTests : SqlLiteContextTestBase
     public void BuildWhereByPrimaryKey_ExactSql_SingleCompositeKey()
     {
         TypeMap.Register<OrderedEntity>();
-        var helper = new EntityHelper<OrderedEntity, int>(Context);
+        var helper = new TableGateway<OrderedEntity, int>(Context);
         var sc = Context.CreateSqlContainer();
         helper.BuildWhereByPrimaryKey(new[] { new OrderedEntity { A = 1, B = 2 } }, sc);
         var expected = "\n WHERE (\"A\" = @k0 AND \"B\" = @k1)";
@@ -92,7 +92,7 @@ public class EntityHelperOrderingTests : SqlLiteContextTestBase
     public void BuildWhereByPrimaryKey_ExactSql_MultipleCompositeKeys()
     {
         TypeMap.Register<OrderedEntity>();
-        var helper = new EntityHelper<OrderedEntity, int>(Context);
+        var helper = new TableGateway<OrderedEntity, int>(Context);
         var sc = Context.CreateSqlContainer();
         var list = new[]
         {
@@ -108,7 +108,7 @@ public class EntityHelperOrderingTests : SqlLiteContextTestBase
     public void BuildWhereByPrimaryKey_MultipleCompositeKeys_GeneratesOr()
     {
         TypeMap.Register<OrderedEntity>();
-        var helper = new EntityHelper<OrderedEntity, int>(Context);
+        var helper = new TableGateway<OrderedEntity, int>(Context);
         var sc = Context.CreateSqlContainer();
         var list = new[]
         {

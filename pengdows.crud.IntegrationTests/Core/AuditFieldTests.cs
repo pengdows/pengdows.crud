@@ -46,7 +46,7 @@ public class AuditFieldTests : DatabaseTestBase
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            var helper = new EntityHelper<AuditedEntity, long>(context, GetAuditResolver());
+            var helper = new TableGateway<AuditedEntity, long>(context, GetAuditResolver());
             var entity = new AuditedEntity
             {
                 Id = Interlocked.Increment(ref _nextId),
@@ -75,7 +75,7 @@ public class AuditFieldTests : DatabaseTestBase
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            var helper = new EntityHelper<AuditedEntity, long>(context, GetAuditResolver());
+            var helper = new TableGateway<AuditedEntity, long>(context, GetAuditResolver());
             var entity = new AuditedEntity
             {
                 Id = Interlocked.Increment(ref _nextId),
@@ -103,7 +103,7 @@ public class AuditFieldTests : DatabaseTestBase
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            var helper = new EntityHelper<AuditedEntity, long>(context, GetAuditResolver());
+            var helper = new TableGateway<AuditedEntity, long>(context, GetAuditResolver());
             var entity = new AuditedEntity
             {
                 Id = Interlocked.Increment(ref _nextId),
@@ -137,7 +137,7 @@ public class AuditFieldTests : DatabaseTestBase
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            var helper = new EntityHelper<AuditedEntity, long>(context, GetAuditResolver());
+            var helper = new TableGateway<AuditedEntity, long>(context, GetAuditResolver());
             var entity = new AuditedEntity
             {
                 Id = Interlocked.Increment(ref _nextId),
@@ -170,7 +170,7 @@ public class AuditFieldTests : DatabaseTestBase
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            var helper = new EntityHelper<AuditedEntity, long>(context, GetAuditResolver());
+            var helper = new TableGateway<AuditedEntity, long>(context, GetAuditResolver());
             var entity = new AuditedEntity
             {
                 Id = Interlocked.Increment(ref _nextId),
@@ -204,7 +204,7 @@ public class AuditFieldTests : DatabaseTestBase
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            var helper = new EntityHelper<AuditedEntity, long>(context);
+            var helper = new TableGateway<AuditedEntity, long>(context);
             var entity = new AuditedEntity
             {
                 Id = Interlocked.Increment(ref _nextId),
@@ -226,7 +226,7 @@ public class AuditFieldTests : DatabaseTestBase
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            var helper = new EntityHelper<AuditedEntity, long>(context, GetAuditResolver());
+            var helper = new TableGateway<AuditedEntity, long>(context, GetAuditResolver());
             var entity = new AuditedEntity
             {
                 Id = Interlocked.Increment(ref _nextId),

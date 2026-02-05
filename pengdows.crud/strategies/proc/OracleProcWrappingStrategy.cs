@@ -40,7 +40,7 @@ internal class OracleProcWrappingStrategy : IProcWrappingStrategy
     {
         if (string.IsNullOrWhiteSpace(procName))
         {
-            throw new ArgumentException("Procedure name cannot be null or empty.", nameof(procName));
+            throw new ArgumentException(IProcWrappingStrategy.ProcNameNullOrEmptyMessage, nameof(procName));
         }
 
         var wrappedProcName = wrapObjectName?.Invoke(procName) ?? procName;

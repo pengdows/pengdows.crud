@@ -43,11 +43,18 @@ namespace pengdows.crud.dialects;
 /// </remarks>
 internal class MySqlDialect : SqlDialect
 {
-    private const string DefaultSqlMode =
-        "SET SESSION sql_mode = 'STRICT_ALL_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,ANSI_QUOTES,NO_BACKSLASH_ESCAPES';";
+    private const string SqlModeSettingName = "sql_mode";
 
-    private const string ExpectedSqlMode =
-        "STRICT_ALL_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,ANSI_QUOTES,NO_BACKSLASH_ESCAPES";
+    private const string RequiredSqlModeFlags =
+        "STRICT_ALL_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ZERO_IN_DATE," +
+        "ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,ANSI_QUOTES,NO_BACKSLASH_ESCAPES";
+
+    private const string DefaultSqlMode = $"SET SESSION {SqlModeSettingName} = '{RequiredSqlModeFlags}';";
+
+    // Alias kept for readability at call sites
+    private const string ExpectedSqlMode = RequiredSqlModeFlags;
+
+    protected const string SetSessionTransactionReadOnlySql = "SET SESSION TRANSACTION READ ONLY;";
 
     private static readonly Version UpsertAliasVersionThreshold = new(8, 0, 20);
 
@@ -131,12 +138,12 @@ internal class MySqlDialect : SqlDialect
             conn =>
             {
                 using var cmd = conn.CreateCommand();
-                cmd.CommandText = "SELECT @@sql_mode";
+                cmd.CommandText = $"SELECT @@{SqlModeSettingName}";
 
                 var currentSqlMode = cmd.ExecuteScalar()?.ToString() ?? string.Empty;
                 var snapshot = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                 {
-                    ["sql_mode"] = currentSqlMode
+                    [SqlModeSettingName] = currentSqlMode
                 };
 
                 var script = SqlModeContainsAll(currentSqlMode, ExpectedSqlMode)
@@ -222,7 +229,7 @@ internal class MySqlDialect : SqlDialect
     {
         try
         {
-            using var sc = transaction.CreateSqlContainer("SET SESSION TRANSACTION READ ONLY;");
+            using var sc = transaction.CreateSqlContainer(SetSessionTransactionReadOnlySql);
             sc.ExecuteNonQueryAsync().GetAwaiter().GetResult();
         }
         catch (Exception ex)

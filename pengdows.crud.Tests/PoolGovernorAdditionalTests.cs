@@ -183,6 +183,82 @@ public class PoolGovernorAdditionalTests
         await Assert.ThrowsAsync<TimeoutException>(() => governor.WaitForDrainAsync(TimeSpan.FromMilliseconds(25)));
     }
 
+    // ── drain-signal race regression ──────────────────────────────────────
+    // Release() decrements _inUse and calls TrySetResult on the drain signal
+    // non-atomically.  A concurrent Acquire that increments _inUse between
+    // those two steps can leave the signal completed while a permit is live.
+    //
+    // Setup (capacity 2):
+    //   1. Acquire A and B          (inUse=2, sem=0)
+    //   2. Dispose A                (inUse=1, sem=1  — frees one slot)
+    //   3. Concurrently: Dispose B  AND  TryAcquire C
+    //        B.Release: Decrement → inUse=0, enters signal block
+    //        C.Acquire: grabs A's freed slot, OnAcquired → inUse=1,
+    //                   ResetDrainSignalIfNeeded sees signal NOT yet completed
+    //                   → does nothing
+    //        B.Release: TrySetResult → signal completed, but inUse=1  ← bug
+    //
+    // Detection: a pre-cancelled CancellationToken lets us probe
+    // WaitForDrainAsync with zero polling delay.
+    //   • spuriously completed signal → method returns  (bug)
+    //   • signal correctly pending   → OperationCanceledException  (correct)
+    [Fact]
+    public async Task WaitForDrainAsync_NoSpuriousCompletion_ConcurrentReleaseAndAcquire()
+    {
+        using var governor = new PoolGovernor(PoolLabel.Reader, "drain-race", 2, TimeSpan.FromSeconds(5));
+        using var cancelledCts = new CancellationTokenSource();
+        cancelledCts.Cancel();
+
+        for (var i = 0; i < 50_000; i++)
+        {
+            var a = governor.Acquire();
+            var b = governor.Acquire();
+
+            // Release A first so its semaphore slot is available for C to
+            // grab during B's release window.
+            a.Dispose();
+
+            // Race B's release against C's acquire.
+            PoolPermit c = default;
+            await Task.WhenAll(
+                Task.Run(() => b.Dispose()),
+                Task.Run(() =>
+                {
+                    while (true)
+                    {
+                        if (governor.TryAcquire(out var local))
+                        {
+                            c = local;
+                            break;
+                        }
+                        Thread.Yield();
+                    }
+                })
+            );
+
+            // c is held (InUse == 1).  A spuriously completed drain signal
+            // causes WaitForDrainAsync to return instead of throwing OCE.
+            try
+            {
+                await governor.WaitForDrainAsync(null, cancelledCts.Token);
+
+                // If we reach here the signal completed.  Confirm it is
+                // spurious (InUse > 0) rather than a legitimate momentary
+                // drain that was already reset by C's OnAcquired.
+                var inUse = governor.GetSnapshot().InUse;
+                Assert.True(inUse == 0,
+                    $"WaitForDrainAsync returned while InUse={inUse} " +
+                    "(drain-signal race)");
+            }
+            catch (OperationCanceledException)
+            {
+                // Correct: signal pending, pre-cancelled token fired first.
+            }
+
+            c.Dispose();
+        }
+    }
+
     [Fact]
     public void Dispose_Twice_DoesNotThrow()
     {

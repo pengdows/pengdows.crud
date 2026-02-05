@@ -42,14 +42,23 @@ namespace pengdows.crud.dialects;
 /// </remarks>
 internal class PostgreSqlDialect : SqlDialect
 {
+    private const string StandardConformingStringsSetting = "standard_conforming_strings";
+    private const string ClientMinMessagesSetting = "client_min_messages";
+    private const string ReadOnlyTransactionSetting = "default_transaction_read_only";
+
+    // Reflection-based property/type names used to stamp NpgsqlDbType on JSON parameters
+    private const string DataTypeNameProperty = "DataTypeName";
+    private const string NpgsqlDbTypeProperty = "NpgsqlDbType";
+    private const string JsonbTypeName = "Jsonb";
+
     private const string DefaultSessionSettings =
-        "SET standard_conforming_strings = on;\nSET client_min_messages = warning;";
+        $"SET {StandardConformingStringsSetting} = on;\nSET {ClientMinMessagesSetting} = warning;";
 
     private static readonly IReadOnlyDictionary<string, string> ExpectedSessionSettings =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            ["standard_conforming_strings"] = "on",
-            ["client_min_messages"] = "warning"
+            [StandardConformingStringsSetting] = "on",
+            [ClientMinMessagesSetting] = "warning"
         };
 
     private string? _sessionSettings;
@@ -126,12 +135,12 @@ internal class PostgreSqlDialect : SqlDialect
         try
         {
             var type = parameter.GetType();
-            type.GetProperty("DataTypeName")?.SetValue(parameter, "jsonb");
+            type.GetProperty(DataTypeNameProperty)?.SetValue(parameter, "jsonb");
 
-            var npgsqlDbTypeProperty = type.GetProperty("NpgsqlDbType");
+            var npgsqlDbTypeProperty = type.GetProperty(NpgsqlDbTypeProperty);
             if (npgsqlDbTypeProperty != null && npgsqlDbTypeProperty.PropertyType.IsEnum)
             {
-                if (Enum.TryParse(npgsqlDbTypeProperty.PropertyType, "Jsonb", true, out var enumValue))
+                if (Enum.TryParse(npgsqlDbTypeProperty.PropertyType, JsonbTypeName, true, out var enumValue))
                 {
                     npgsqlDbTypeProperty.SetValue(parameter, enumValue);
                 }
@@ -196,7 +205,7 @@ internal class PostgreSqlDialect : SqlDialect
             {
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText =
-                    "SELECT name, setting FROM pg_settings WHERE name IN ('standard_conforming_strings', 'client_min_messages')";
+                    $"SELECT name, setting FROM pg_settings WHERE name IN ('{StandardConformingStringsSetting}', '{ClientMinMessagesSetting}')";
 
                 using var reader = cmd.ExecuteReader();
                 var currentSettings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -219,8 +228,8 @@ internal class PostgreSqlDialect : SqlDialect
                 DefaultSessionSettings,
                 new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                 {
-                    ["standard_conforming_strings"] = "unknown",
-                    ["client_min_messages"] = "unknown"
+                    [StandardConformingStringsSetting] = "unknown",
+                    [ClientMinMessagesSetting] = "unknown"
                 },
                 true),
             "Failed to check PostgreSQL session settings, applying default settings");
@@ -271,12 +280,12 @@ internal class PostgreSqlDialect : SqlDialect
 
     public override string GetReadOnlySessionSettings()
     {
-        return "SET default_transaction_read_only = on";
+        return $"SET {ReadOnlyTransactionSetting} = on";
     }
 
     public override string? GetReadOnlyConnectionParameter()
     {
-        return "Options='-c default_transaction_read_only=on'";
+        return $"Options='-c {ReadOnlyTransactionSetting}=on'";
     }
 
     public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)

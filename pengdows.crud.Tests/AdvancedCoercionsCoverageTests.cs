@@ -242,6 +242,18 @@ public class AdvancedCoercionsCoverageTests
     }
 
     [Fact]
+    public void BlobStreamCoercion_WriteNull_SetsDbNull()
+    {
+        var coercion = new BlobStreamCoercion();
+        var param = new Mock<DbParameter>();
+        param.SetupAllProperties();
+
+        Assert.True(coercion.TryWrite(null, param.Object));
+        param.VerifySet(p => p.Value = DBNull.Value, Times.Once);
+        param.VerifySet(p => p.DbType = DbType.Binary, Times.Once);
+    }
+
+    [Fact]
     public void ClobStreamCoercion_ReadsStringAndStream_AndWrites()
     {
         var coercion = new ClobStreamCoercion();
@@ -257,6 +269,17 @@ public class AdvancedCoercionsCoverageTests
         param.SetupAllProperties();
 
         Assert.True(coercion.TryWrite(new StringReader("value"), param.Object));
+        param.VerifySet(p => p.DbType = DbType.String, Times.Once);
+    }
+
+    [Fact]
+    public void ClobStreamCoercion_WriteNull_SetsDbType()
+    {
+        var coercion = new ClobStreamCoercion();
+        var param = new Mock<DbParameter>();
+        param.SetupAllProperties();
+
+        Assert.True(coercion.TryWrite(null, param.Object));
         param.VerifySet(p => p.DbType = DbType.String, Times.Once);
     }
 }

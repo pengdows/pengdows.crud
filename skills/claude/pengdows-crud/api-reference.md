@@ -4,7 +4,7 @@ Quick reference for pengdows.crud main interfaces and methods.
 
 ## ITableGateway<TEntity, TRowID>
 
-> **Note:** `EntityHelper` is an alias for `TableGateway` (1.0 compatibility).
+> **Note:** `TableGateway` is an alias for `TableGateway` (1.0 compatibility).
 
 ### CRUD Operations
 

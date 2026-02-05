@@ -12,6 +12,10 @@
 //   * Date/time conversions (DateOnly, TimeOnly, DateTimeOffset)
 //   * Guid from byte[] (for providers that return Guid as 16-byte array)
 //   * Numeric type conversions (respecting precision/overflow)
+// - ResolveCoercer() — plan-build-time factory that returns a single delegate
+//   for a given column.  Dispatches once to the correct path (enum, JSON,
+//   DateTime, DateTimeOffset, registered IDbCoercion, or full Coerce fallback)
+//   so that subsequent per-row calls skip all dispatch logic.
 // - GetJsonText() serializes objects to JSON strings for storage.
 // - Handles provider-specific quirks:
 //   * Some return TimeSpan as string
@@ -596,5 +600,68 @@ public static class TypeCoercionHelper
 
         using var reader = new StreamReader(stream, Encoding.UTF8, leaveOpen: true);
         return reader.ReadToEnd();
+    }
+
+    /// <summary>
+    /// Resolves the coercion delegate for a column at plan-build time so that the
+    /// hot per-row path skips registry lookups entirely.
+    /// </summary>
+    /// <param name="column">Column metadata (target type, enum type, JSON flag).</param>
+    /// <param name="provider">Database provider for registry dispatch.</param>
+    /// <param name="parseMode">Enum parse-failure behaviour.</param>
+    /// <param name="options">Provider-wide coercion options (time policy, etc.).</param>
+    internal static Func<object, object?> ResolveCoercer(
+        IColumnInfo column,
+        SupportedDatabase provider,
+        EnumParseFailureMode parseMode,
+        TypeCoercionOptions options)
+    {
+        var targetType = column.PropertyInfo.PropertyType;
+        var runtimeTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
+
+        // --- fast-path delegates, resolved once and captured in the closure ---
+
+        if (column.EnumType != null)
+        {
+            var enumType = column.EnumType;
+            return value => CoerceEnum(value, enumType, parseMode, targetType);
+        }
+
+        if (column.IsJsonType)
+        {
+            return value => CoerceJsonValue(value, targetType, column, options);
+        }
+
+        if (runtimeTarget == typeof(DateTimeOffset))
+        {
+            return value => CoerceDateTimeOffset(value, options);
+        }
+
+        if (runtimeTarget == typeof(DateTime))
+        {
+            return value => CoerceDateTime(value, options);
+        }
+
+        // Try to resolve a registered coercion once; if found, the returned
+        // delegate calls TryRead directly — no registry scan at runtime.
+        var coercion = types.coercion.CoercionRegistry.Shared.GetCoercion(runtimeTarget, provider);
+        if (coercion != null)
+        {
+            return value =>
+            {
+                var dbValue = new types.coercion.DbValue(value, value.GetType());
+                if (coercion.TryRead(in dbValue, runtimeTarget, out var result))
+                {
+                    return result;
+                }
+
+                return Convert.ChangeType(value, runtimeTarget, CultureInfo.InvariantCulture);
+            };
+        }
+
+        // Fallback: full Coerce dispatch covers char[]→string, AdvancedTypeRegistry,
+        // Convert.ChangeType, etc.  The registry lookups here are unavoidable for
+        // types that have no registered coercion.
+        return value => Coerce(value, value.GetType(), column, parseMode, options);
     }
 }

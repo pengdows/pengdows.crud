@@ -27,7 +27,7 @@ namespace pengdows.crud;
 /// </para>
 /// <para>
 /// <strong>Usage:</strong> Pass an instance of your implementation to
-/// <see cref="TableGateway{TEntity,TRowID}"/> or <see cref="EntityHelper{TEntity,TRowID}"/>
+/// <see cref="TableGateway{TEntity,TRowID}"/> or <see cref="TableGateway{TEntity,TRowID}"/>
 /// constructor when working with entities that have audit columns.
 /// </para>
 /// <example>

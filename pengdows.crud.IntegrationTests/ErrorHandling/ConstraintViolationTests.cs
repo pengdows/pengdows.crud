@@ -44,7 +44,7 @@ public class ConstraintViolationTests : DatabaseTestBase
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
             // Arrange
-            var helper = CreateEntityHelper(context);
+            var helper = CreateTableGateway(context);
             var entity1 = CreateTestEntity(NameEnum.Test, 100);
 
             // Create first entity
@@ -142,7 +142,7 @@ public class ConstraintViolationTests : DatabaseTestBase
             // Arrange - Add unique constraint on name field
             await AddUniqueConstraintAsync(provider, context);
 
-            var helper = CreateEntityHelper(context);
+            var helper = CreateTableGateway(context);
             var entity1 = CreateTestEntity(NameEnum.Test, 100);
             await helper.CreateAsync(entity1, context);
 
@@ -191,7 +191,7 @@ public class ConstraintViolationTests : DatabaseTestBase
             }
 
             // Arrange - Create parent record
-            var helper = CreateEntityHelper(context);
+            var helper = CreateTableGateway(context);
             var parent = CreateTestEntity(NameEnum.Test, 300);
             await helper.CreateAsync(parent, context);
 
@@ -302,14 +302,14 @@ public class ConstraintViolationTests : DatabaseTestBase
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
             // Arrange
-            var helper = CreateEntityHelper(context);
+            var helper = CreateTableGateway(context);
             var validEntity = CreateTestEntity(NameEnum.Test, 500);
 
             // Act
             try
             {
                 await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
-                var txHelper = CreateEntityHelper(transaction);
+                var txHelper = CreateTableGateway(transaction);
 
                 // Insert valid entity
                 await txHelper.CreateAsync(validEntity, transaction);
@@ -340,7 +340,7 @@ public class ConstraintViolationTests : DatabaseTestBase
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
             // Arrange
-            var helper = CreateEntityHelper(context);
+            var helper = CreateTableGateway(context);
             var validEntities = new[]
             {
                 CreateTestEntity(NameEnum.Test, 600),
@@ -381,10 +381,10 @@ public class ConstraintViolationTests : DatabaseTestBase
         });
     }
 
-    private EntityHelper<TestTable, long> CreateEntityHelper(IDatabaseContext context)
+    private TableGateway<TestTable, long> CreateTableGateway(IDatabaseContext context)
     {
         var auditResolver = GetAuditResolver();
-        return new EntityHelper<TestTable, long>(context, auditResolver);
+        return new TableGateway<TestTable, long>(context, auditResolver);
     }
 
     private static TestTable CreateTestEntity(NameEnum name, int value)

@@ -7,7 +7,10 @@
 // - Key features:
 //   * MERGE statement support for upserts
 //   * Parameter marker: @ (supports named parameters)
-//   * Identifier quoting: [name] (brackets)
+//   * Identifier quoting: "name" (ANSI double-quotes, NOT brackets)
+//     QUOTED_IDENTIFIER is forced ON via session settings; the base-class
+//     default of " is intentionally kept.  Do not add QuotePrefix/QuoteSuffix
+//     overrides here.
 //   * Max parameters: 2100 (sp_executesql limit)
 //   * Session settings: ANSI_NULLS, QUOTED_IDENTIFIER, etc.
 // - Session settings enforced for consistent behavior across connections.
@@ -19,6 +22,7 @@
 using System.Data;
 using System.Data.Common;
 using System.Globalization;
+using System.Linq;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.wrappers;
@@ -42,27 +46,29 @@ namespace pengdows.crud.dialects;
 /// </remarks>
 internal class SqlServerDialect : SqlDialect
 {
-    private const string DefaultSessionSettings =
-        // Minimal, individual SET statements; no NOCOUNT wrappers; semicolons used only as delimiters.
-        "SET ANSI_NULLS ON;\n" +
-        "SET ANSI_PADDING ON;\n" +
-        "SET ANSI_WARNINGS ON;\n" +
-        "SET ARITHABORT ON;\n" +
-        "SET CONCAT_NULL_YIELDS_NULL ON;\n" +
-        "SET QUOTED_IDENTIFIER ON;\n" +
-        "SET NUMERIC_ROUNDABORT OFF;";
+    private const string RcsiQuery =
+        "SELECT is_read_committed_snapshot_on FROM sys.databases WHERE name = DB_NAME()";
+    private const string SnapshotIsolationQuery =
+        "SELECT snapshot_isolation_state FROM sys.databases WHERE name = DB_NAME()";
+
+    // Single source of truth for session settings; both the SET script and the
+    // expected-state dictionary are derived from this array.
+    private static readonly (string Name, string Value)[] SessionSettingsDef =
+    {
+        ("ANSI_NULLS",              "ON"),
+        ("ANSI_PADDING",            "ON"),
+        ("ANSI_WARNINGS",           "ON"),
+        ("ARITHABORT",              "ON"),
+        ("CONCAT_NULL_YIELDS_NULL", "ON"),
+        ("QUOTED_IDENTIFIER",       "ON"),
+        ("NUMERIC_ROUNDABORT",      "OFF"),
+    };
+
+    private static readonly string DefaultSessionSettings =
+        string.Join(";\n", Array.ConvertAll(SessionSettingsDef, s => $"SET {s.Name} {s.Value}")) + ";";
 
     private static readonly IReadOnlyDictionary<string, string> ExpectedSessionSettings =
-        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["ANSI_NULLS"] = "ON",
-            ["ANSI_PADDING"] = "ON",
-            ["ANSI_WARNINGS"] = "ON",
-            ["ARITHABORT"] = "ON",
-            ["CONCAT_NULL_YIELDS_NULL"] = "ON",
-            ["QUOTED_IDENTIFIER"] = "ON",
-            ["NUMERIC_ROUNDABORT"] = "OFF"
-        };
+        SessionSettingsDef.ToDictionary(s => s.Name, s => s.Value, StringComparer.OrdinalIgnoreCase);
 
     private string? _sessionSettings;
 
@@ -73,6 +79,13 @@ internal class SqlServerDialect : SqlDialect
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.SqlServer;
     public override string ParameterMarker => "@";
+
+    // DO NOT override QuotePrefix / QuoteSuffix here.
+    // We enforce SET QUOTED_IDENTIFIER ON (see SessionSettingsDef) on every
+    // connection, so identifiers are quoted with ANSI double-quotes ("name").
+    // The base-class defaults (" / ") are exactly what we want.
+    // SQL Server also accepts [...] brackets, but this codebase deliberately
+    // uses the ANSI style for consistency across all dialects.
 
     public override bool SupportsNamedParameters => true;
 
@@ -164,8 +177,7 @@ internal class SqlServerDialect : SqlDialect
     public override bool IsReadCommittedSnapshotOn(ITrackedConnection conn)
     {
         using var cmd = conn.CreateCommand();
-        cmd.CommandText =
-            "SELECT is_read_committed_snapshot_on FROM sys.databases WHERE name = DB_NAME()";
+        cmd.CommandText = RcsiQuery;
         var val = cmd.ExecuteScalar();
         var v = val is int i ? i : Convert.ToInt32(val ?? 0);
         return v == 1;
@@ -174,7 +186,7 @@ internal class SqlServerDialect : SqlDialect
     public override bool IsSnapshotIsolationOn(ITrackedConnection conn)
     {
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT snapshot_isolation_state FROM sys.databases WHERE name = DB_NAME()";
+        cmd.CommandText = SnapshotIsolationQuery;
         var value = cmd.ExecuteScalar();
         var state = value is int i
             ? i

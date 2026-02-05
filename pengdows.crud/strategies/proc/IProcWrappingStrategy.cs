@@ -32,6 +32,9 @@ namespace pengdows.crud.strategies.proc;
 /// </remarks>
 internal interface IProcWrappingStrategy
 {
+    /// <summary>Shared validation message for null-or-empty procedure names.</summary>
+    const string ProcNameNullOrEmptyMessage = "Procedure name cannot be null or empty.";
+
     /// <summary>
     /// Wraps a stored procedure call in the appropriate database-specific syntax.
     /// </summary>

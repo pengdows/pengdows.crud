@@ -9,27 +9,27 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class EntityHelperIdPopulationDebugTest
+public class TableGatewayIdPopulationDebugTest
 {
     private readonly TypeMapRegistry _typeMap;
 
-    public EntityHelperIdPopulationDebugTest()
+    public TableGatewayIdPopulationDebugTest()
     {
         _typeMap = new TypeMapRegistry();
         _typeMap.Register<TestEntityWithAutoId>();
     }
 
     [Fact]
-    public async Task EntityHelper_Should_Recognize_AutoId_Entity_Configuration()
+    public async Task TableGateway_Should_Recognize_AutoId_Entity_Configuration()
     {
-        // Test that EntityHelper recognizes the entity as having an auto-generated ID
+        // Test that TableGateway recognizes the entity as having an auto-generated ID
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         factory.SetIdPopulationResult(42, 1);
 
         var context = new DatabaseContext("test", factory, _typeMap);
-        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+        var helper = new TableGateway<TestEntityWithAutoId, int>(context);
 
-        // Check if EntityHelper recognizes the ID column configuration
+        // Check if TableGateway recognizes the ID column configuration
         var tableInfo = _typeMap.GetTableInfo<TestEntityWithAutoId>();
         Assert.NotNull(tableInfo);
         Assert.NotNull(tableInfo.Id);
@@ -62,14 +62,14 @@ public class EntityHelperIdPopulationDebugTest
     }
 
     [Fact]
-    public async Task EntityHelper_Should_Work_With_Dialect_SupportsInsertReturning_True()
+    public async Task TableGateway_Should_Work_With_Dialect_SupportsInsertReturning_True()
     {
         // Test the SQLite path (SupportsInsertReturning = true)
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         factory.SetIdPopulationResult(99, 1);
 
         var context = new DatabaseContext("test", factory, _typeMap);
-        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+        var helper = new TableGateway<TestEntityWithAutoId, int>(context);
 
         var entity = new TestEntityWithAutoId { Name = "Test SQLite" };
         var result = await helper.CreateAsync(entity);
@@ -79,14 +79,14 @@ public class EntityHelperIdPopulationDebugTest
     }
 
     [Fact]
-    public async Task EntityHelper_Should_Work_With_Dialect_SupportsInsertReturning_False()
+    public async Task TableGateway_Should_Work_With_Dialect_SupportsInsertReturning_False()
     {
         // Test the SQL Server path (SupportsInsertReturning = true, uses OUTPUT INSERTED)  
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         factory.SetIdPopulationResult(77, 1);
 
         var context = new DatabaseContext("test", factory, _typeMap);
-        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+        var helper = new TableGateway<TestEntityWithAutoId, int>(context);
 
         var entity = new TestEntityWithAutoId { Name = "Test SQL Server" };
 

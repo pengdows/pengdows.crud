@@ -53,7 +53,7 @@ public class AuditFieldLogicTests : SqlLiteContextTestBase
     {
         // Arrange
         TypeMap.Register<TimeOnlyAuditEntity>();
-        var helper = new EntityHelper<TimeOnlyAuditEntity, int>(Context); // No audit resolver
+        var helper = new TableGateway<TimeOnlyAuditEntity, int>(Context); // No audit resolver
 
         await CreateTimeOnlyAuditTable();
 
@@ -71,7 +71,7 @@ public class AuditFieldLogicTests : SqlLiteContextTestBase
     {
         // Arrange
         TypeMap.Register<UserAuditEntity>();
-        var helper = new EntityHelper<UserAuditEntity, int>(Context); // No audit resolver
+        var helper = new TableGateway<UserAuditEntity, int>(Context); // No audit resolver
 
         await CreateUserAuditTable();
 
@@ -90,7 +90,7 @@ public class AuditFieldLogicTests : SqlLiteContextTestBase
     {
         // Arrange
         TypeMap.Register<UserAuditEntity>();
-        var helper = new EntityHelper<UserAuditEntity, int>(Context, AuditValueResolver);
+        var helper = new TableGateway<UserAuditEntity, int>(Context, AuditValueResolver);
 
         await CreateUserAuditTable();
 
@@ -108,7 +108,7 @@ public class AuditFieldLogicTests : SqlLiteContextTestBase
     {
         // Arrange - TestEntity has both time and user fields
         TypeMap.Register<TestEntity>();
-        var helper = new EntityHelper<TestEntity, int>(Context); // No audit resolver
+        var helper = new TableGateway<TestEntity, int>(Context); // No audit resolver
 
         await CreateTestTable();
 
@@ -127,8 +127,8 @@ public class AuditFieldLogicTests : SqlLiteContextTestBase
     {
         // Arrange
         TypeMap.Register<UserAuditEntity>();
-        var helperWithResolver = new EntityHelper<UserAuditEntity, int>(Context, AuditValueResolver);
-        var helperWithoutResolver = new EntityHelper<UserAuditEntity, int>(Context); // No resolver
+        var helperWithResolver = new TableGateway<UserAuditEntity, int>(Context, AuditValueResolver);
+        var helperWithoutResolver = new TableGateway<UserAuditEntity, int>(Context); // No resolver
 
         await CreateUserAuditTable();
 

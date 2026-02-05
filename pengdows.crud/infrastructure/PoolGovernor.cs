@@ -32,6 +32,8 @@ namespace pengdows.crud.infrastructure;
 
 internal sealed class PoolGovernor : IDisposable
 {
+    private const string NotInitializedMessage = "Pool governor is not initialized.";
+
     private readonly PoolLabel _label;
     private readonly string _poolKeyHash;
     private readonly SemaphoreSlim? _semaphore;
@@ -123,7 +125,7 @@ internal sealed class PoolGovernor : IDisposable
 
         if (_semaphore == null)
         {
-            throw new InvalidOperationException("Pool governor is not initialized.");
+            throw new InvalidOperationException(NotInitializedMessage);
         }
 
         // Turnstile fairness: acquire turnstile first to prevent starvation
@@ -203,7 +205,7 @@ internal sealed class PoolGovernor : IDisposable
 
         if (_semaphore == null)
         {
-            throw new InvalidOperationException("Pool governor is not initialized.");
+            throw new InvalidOperationException(NotInitializedMessage);
         }
 
         var turnstileAcquired = false;
@@ -248,7 +250,7 @@ internal sealed class PoolGovernor : IDisposable
 
         if (_semaphore == null)
         {
-            throw new InvalidOperationException("Pool governor is not initialized.");
+            throw new InvalidOperationException(NotInitializedMessage);
         }
 
         // Turnstile fairness: acquire turnstile first to prevent starvation
@@ -329,7 +331,7 @@ internal sealed class PoolGovernor : IDisposable
 
         if (_semaphore == null)
         {
-            throw new InvalidOperationException("Pool governor is not initialized.");
+            throw new InvalidOperationException(NotInitializedMessage);
         }
 
         var turnstileAcquired = false;
@@ -426,12 +428,20 @@ internal sealed class PoolGovernor : IDisposable
 
     internal void Release()
     {
-        var inUse = Interlocked.Decrement(ref _inUse);
+        Interlocked.Decrement(ref _inUse);
 
-        if (inUse == 0)
+        // Signal drain-waiters only if _inUse is still zero at the instant
+        // the signal is set.  The read and the TrySetResult must happen under
+        // the same lock that OnAcquired uses to reset the signal; otherwise a
+        // concurrent Acquire can increment _inUse without seeing (and
+        // resetting) the not-yet-completed signal, leaving it spuriously
+        // completed.
+        lock (_drainLock)
         {
-            var signal = GetCurrentDrainSignal();
-            signal.TrySetResult(true);
+            if (Interlocked.Read(ref _inUse) == 0 && !_drainSignal.Task.IsCompleted)
+            {
+                _drainSignal.TrySetResult(true);
+            }
         }
 
         _semaphore?.Release();

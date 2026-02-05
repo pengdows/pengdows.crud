@@ -81,6 +81,8 @@ namespace pengdows.crud;
 public class TransactionContext : ContextBase, ITransactionContext, IContextIdentity, ISqlDialectProvider,
     IMetricsCollectorAccessor, IInternalConnectionProvider
 {
+    private const int CompletionLockTimeoutSeconds = 30;
+
     private readonly ITrackedConnection _connection;
     private readonly IDatabaseContext _context;
     private readonly ISqlDialect _dialect;
@@ -452,7 +454,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     private void CompleteTransactionWithWait(Action action, bool markCommitted)
     {
         // Use internal completion lock only; do not contend with user lock
-        if (!_completionLock.Wait(TimeSpan.FromSeconds(30)))
+        if (!_completionLock.Wait(TimeSpan.FromSeconds(CompletionLockTimeoutSeconds)))
         {
             throw new InvalidOperationException("Transaction completion timed out waiting for internal lock.");
         }

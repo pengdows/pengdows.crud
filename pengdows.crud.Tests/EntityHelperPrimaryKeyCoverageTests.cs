@@ -9,9 +9,9 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class EntityHelperPrimaryKeyCoverageTests : SqlLiteContextTestBase
+public class TableGatewayPrimaryKeyCoverageTests : SqlLiteContextTestBase
 {
-    public EntityHelperPrimaryKeyCoverageTests()
+    public TableGatewayPrimaryKeyCoverageTests()
     {
         TypeMap.Register<PrimaryKeyEntity>();
         CreatePrimaryKeyTable();
@@ -20,7 +20,7 @@ public class EntityHelperPrimaryKeyCoverageTests : SqlLiteContextTestBase
     [Fact]
     public async Task Upsert_UsesPrimaryKeyWhenIdNotWritable()
     {
-        var helper = new EntityHelper<PrimaryKeyEntity, long>(Context);
+        var helper = new TableGateway<PrimaryKeyEntity, long>(Context);
         var entity = new PrimaryKeyEntity
         {
             Code = "PK-1",

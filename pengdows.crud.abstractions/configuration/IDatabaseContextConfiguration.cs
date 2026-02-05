@@ -67,18 +67,6 @@ public interface IDatabaseContextConfiguration
     int? MaxConcurrentReads { get; set; }
 
     /// <summary>
-    /// Explicit maximum pool size for write connections. Overrides connection string/dialect defaults.
-    /// </summary>
-    [Obsolete("Use MaxConcurrentWrites instead.")]
-    int? WritePoolSize { get; set; }
-
-    /// <summary>
-    /// Explicit maximum pool size for read connections. Overrides connection string/dialect defaults.
-    /// </summary>
-    [Obsolete("Use MaxConcurrentReads instead.")]
-    int? ReadPoolSize { get; set; }
-
-    /// <summary>
     /// Timeout for internal pool permit acquisition. Should be lower than provider connection timeout.
     /// </summary>
     TimeSpan PoolAcquireTimeout { get; set; }

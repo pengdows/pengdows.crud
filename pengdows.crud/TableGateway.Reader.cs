@@ -6,12 +6,15 @@
 // - MapReaderToObject() - Converts current DataReader row to TEntity.
 // - Uses ColumnPlan[] for compiled, cache-optimized mapping.
 // - GetOrBuildRecordsetPlan() - Caches plans by recordset shape hash:
-//   * Field count + names + types determine shape
-//   * Hash collision resistant via strong hashing
+//   * Hash key is long; computed in a single pass over field count + names + types
+//   * Names and field-type arrays are allocated once in that pass and reused
+//     by the plan-build loop — no duplicate GetName/GetFieldType calls
+//   * Plans cached in a BoundedCache<long, ColumnPlan[]> keyed by shape hash
 // - ColumnPlan struct contains:
 //   * Column ordinal for fast reader access
 //   * Compiled setter delegate for property assignment
-//   * Type coercion logic for conversions
+//   * Type coercion delegate, resolved once at plan-build time via
+//     TypeCoercionHelper.ResolveCoercer (no per-row registry lookups)
 // - Handles:
 //   * Enum columns (string or numeric storage)
 //   * JSON columns (deserialized via JsonSerializer)
@@ -63,43 +66,44 @@ public partial class TableGateway<TEntity, TRowID>
 
     private ColumnPlan[] GetOrBuildRecordsetPlan(ITrackedReader reader)
     {
-        // Compute a stronger hash for the recordset shape: field count + names + types
         var fieldCount = reader.FieldCount;
-        var hash = fieldCount * 397;
+
+        // Single pass: collect names and field-types into local arrays while
+        // computing the shape hash.  The plan-build loop below reuses these
+        // arrays, so GetName / GetFieldType are called exactly once per column
+        // regardless of whether the plan is already cached.
+        var names = new string[fieldCount];
+        var fieldTypes = new Type[fieldCount];
+        var hash = fieldCount * 397L;
+
         for (var i = 0; i < fieldCount; i++)
         {
-            var name = reader.GetName(i);
-            hash = unchecked(hash * 31 + StringComparer.OrdinalIgnoreCase.GetHashCode(name));
-
-            // Include field type to strengthen hash and avoid shape collisions
-            var fieldType = reader.GetFieldType(i);
-            hash = unchecked(hash * 31 + fieldType.GetHashCode());
+            names[i] = reader.GetName(i);
+            fieldTypes[i] = reader.GetFieldType(i);
+            hash = unchecked(hash * 31L + StringComparer.OrdinalIgnoreCase.GetHashCode(names[i]));
+            hash = unchecked(hash * 31L + fieldTypes[i].GetHashCode());
         }
 
-        // Try to get existing plan from thread-safe cache
         if (_readerPlans.TryGet(hash, out var existingPlan))
         {
             return existingPlan;
         }
 
-        // Build new optimized plan with pre-compiled delegates
+        // Build new plan — zero additional reader calls
         var list = new List<ColumnPlan>(fieldCount);
         for (var i = 0; i < fieldCount; i++)
         {
-            var colName = reader.GetName(i);
-            if (_columnsByNameCI.TryGetValue(colName, out var column))
+            if (_columnsByNameCI.TryGetValue(names[i], out var column))
             {
-                var ordinal = i;
-                var fieldType = reader.GetFieldType(ordinal);
+                var fieldType = fieldTypes[i];
                 var targetType = Nullable.GetUnderlyingType(column.PropertyInfo.PropertyType) ??
                                  column.PropertyInfo.PropertyType;
 
-                // Build optimized delegates
                 var valueExtractor = BuildValueExtractor(fieldType);
                 var coercer = BuildCoercer(column, fieldType, targetType);
                 var setter = GetOrCreateSetter(column.PropertyInfo);
 
-                list.Add(new ColumnPlan(ordinal, valueExtractor, coercer, setter, column.PropertyInfo.PropertyType));
+                list.Add(new ColumnPlan(i, valueExtractor, coercer, setter, column.PropertyInfo.PropertyType));
             }
         }
 
@@ -157,14 +161,18 @@ public partial class TableGateway<TEntity, TRowID>
         return buffer;
     }
 
-    // Pre-compiled coercers - null if no coercion needed
+    // Pre-compiled coercers — null if no coercion needed.
+    // The coercion path is resolved once at plan-build time via ResolveCoercer;
+    // the returned delegate skips registry lookups on every subsequent row.
     private Func<object?, object?>? BuildCoercer(IColumnInfo column, Type fieldType, Type targetType)
     {
-        // No coercion needed if types match and no special handling required
         if (targetType.IsAssignableFrom(fieldType) && !column.IsJsonType && column.EnumType == null)
         {
             return null;
         }
+
+        var resolved = TypeCoercionHelper.ResolveCoercer(
+            column, _coercionOptions.Provider, EnumParseBehavior, _coercionOptions);
 
         return value =>
         {
@@ -173,11 +181,9 @@ public partial class TableGateway<TEntity, TRowID>
                 return null;
             }
 
-            var runtimeType = value.GetType();
-
             try
             {
-                return TypeCoercionHelper.Coerce(value, runtimeType, column, EnumParseBehavior, _coercionOptions);
+                return resolved(value);
             }
             catch (JsonException ex)
             {

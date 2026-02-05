@@ -15,9 +15,7 @@ public sealed class VersioningTests
     public void InformationalVersion_UsesStandardSemVer_ForCoreAssemblies()
     {
         AssertSemVer(typeof(DatabaseContext).Assembly);
-#pragma warning disable CS0618
-        AssertSemVer(typeof(IEntityHelper<,>).Assembly);
-#pragma warning restore CS0618
+        AssertSemVer(typeof(TableGateway<,>).Assembly);
         AssertSemVer(typeof(fakeDbConnection).Assembly);
     }
 

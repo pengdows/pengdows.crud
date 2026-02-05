@@ -1,6 +1,7 @@
 #region
 
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Data;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -17,7 +18,7 @@ public class QueryCacheTests : SqlLiteContextTestBase
     public void BuildDelete_UsesCachedSql()
     {
         TypeMap.Register<CacheEntity>();
-        var helper = new EntityHelper<CacheEntity, int>(Context);
+        var helper = new TableGateway<CacheEntity, int>(Context);
 
         helper.BuildDelete(1);
         var cache = GetQueryCache(helper);
@@ -33,12 +34,12 @@ public class QueryCacheTests : SqlLiteContextTestBase
     public void BuildDelete_CacheScopedPerInstance()
     {
         TypeMap.Register<CacheEntity>();
-        var helper1 = new EntityHelper<CacheEntity, int>(Context);
+        var helper1 = new TableGateway<CacheEntity, int>(Context);
         helper1.BuildDelete(1);
         var cache1 = GetQueryCache(helper1);
         Assert.True(cache1.ContainsKey("DeleteById"));
 
-        var helper2 = new EntityHelper<CacheEntity, int>(Context);
+        var helper2 = new TableGateway<CacheEntity, int>(Context);
         var cache2 = GetQueryCache(helper2);
         Assert.False(cache2.ContainsKey("DeleteById"));
     }
@@ -47,7 +48,7 @@ public class QueryCacheTests : SqlLiteContextTestBase
     public void BuildBaseRetrieve_CachesPerAlias()
     {
         TypeMap.Register<CacheEntity>();
-        var helper = new EntityHelper<CacheEntity, int>(Context);
+        var helper = new TableGateway<CacheEntity, int>(Context);
 
         helper.BuildBaseRetrieve("a");
         var cache = GetQueryCache(helper);
@@ -63,7 +64,7 @@ public class QueryCacheTests : SqlLiteContextTestBase
     public void BuildBaseRetrieve_DifferentAlias_SeparatesCache()
     {
         TypeMap.Register<CacheEntity>();
-        var helper = new EntityHelper<CacheEntity, int>(Context);
+        var helper = new TableGateway<CacheEntity, int>(Context);
 
         helper.BuildBaseRetrieve("a");
         helper.BuildBaseRetrieve("b");
@@ -76,7 +77,7 @@ public class QueryCacheTests : SqlLiteContextTestBase
     public void BuildWhere_CachesByCount()
     {
         TypeMap.Register<CacheEntity>();
-        var helper = new EntityHelper<CacheEntity, int>(Context);
+        var helper = new TableGateway<CacheEntity, int>(Context);
         var wrapped = Context.WrapObjectName("Id");
 
         var sc1 = Context.CreateSqlContainer();
@@ -96,7 +97,7 @@ public class QueryCacheTests : SqlLiteContextTestBase
     public void BuildWhere_DifferentCount_SeparatesCache()
     {
         TypeMap.Register<CacheEntity>();
-        var helper = new EntityHelper<CacheEntity, int>(Context);
+        var helper = new TableGateway<CacheEntity, int>(Context);
         var wrapped = Context.WrapObjectName("Id");
 
         var sc1 = Context.CreateSqlContainer();
@@ -113,7 +114,7 @@ public class QueryCacheTests : SqlLiteContextTestBase
     public void BuildWhere_ReusesParameters_WhenContainerReused()
     {
         TypeMap.Register<CacheEntity>();
-        var helper = new EntityHelper<CacheEntity, int>(Context);
+        var helper = new TableGateway<CacheEntity, int>(Context);
         var wrapped = Context.WrapObjectName("Id");
 
         var sc = Context.CreateSqlContainer();
@@ -133,7 +134,7 @@ public class QueryCacheTests : SqlLiteContextTestBase
     public void BuildWhere_AddsParameters_WhenCountIncreases()
     {
         TypeMap.Register<CacheEntity>();
-        var helper = new EntityHelper<CacheEntity, int>(Context);
+        var helper = new TableGateway<CacheEntity, int>(Context);
         var wrapped = Context.WrapObjectName("Id");
 
         var sc = Context.CreateSqlContainer();
@@ -154,7 +155,7 @@ public class QueryCacheTests : SqlLiteContextTestBase
     public async Task BuildDelete_ConcurrentCalls_ShareCache()
     {
         TypeMap.Register<CacheEntity>();
-        var helper = new EntityHelper<CacheEntity, int>(Context);
+        var helper = new TableGateway<CacheEntity, int>(Context);
 
         await Task.WhenAll(
             Task.Run(() => helper.BuildDelete(1)),
@@ -169,7 +170,7 @@ public class QueryCacheTests : SqlLiteContextTestBase
     public async Task BuildWhere_ConcurrentDifferentCounts_SeparateCache()
     {
         TypeMap.Register<CacheEntity>();
-        var helper = new EntityHelper<CacheEntity, int>(Context);
+        var helper = new TableGateway<CacheEntity, int>(Context);
         var wrapped = Context.WrapObjectName("Id");
 
         await Task.WhenAll(
@@ -193,7 +194,7 @@ public class QueryCacheTests : SqlLiteContextTestBase
     public void BuildBaseRetrieve_WhenLimitExceeded_DropsOldEntries()
     {
         TypeMap.Register<CacheEntity>();
-        var helper = new EntityHelper<CacheEntity, int>(Context);
+        var helper = new TableGateway<CacheEntity, int>(Context);
 
         helper.BuildBaseRetrieve("a0");
         var cache = GetQueryCache(helper);
@@ -216,7 +217,7 @@ public class QueryCacheTests : SqlLiteContextTestBase
     public void ClearCaches_RemovesAllEntries()
     {
         TypeMap.Register<CacheEntity>();
-        var helper = new EntityHelper<CacheEntity, int>(Context);
+        var helper = new TableGateway<CacheEntity, int>(Context);
 
         helper.BuildDelete(1);
         var cache = GetQueryCache(helper);
@@ -231,14 +232,29 @@ public class QueryCacheTests : SqlLiteContextTestBase
         Assert.True(cache.ContainsKey("DeleteById"));
     }
 
-    private static ConcurrentDictionary<string, string> GetQueryCache<TEntity, TId>(TableGateway<TEntity, TId> helper)
+    private static Dictionary<string, string> GetQueryCache<TEntity, TId>(TableGateway<TEntity, TId> helper)
         where TEntity : class, new()
     {
         var field = typeof(TableGateway<TEntity, TId>)
             .GetField("_queryCache", BindingFlags.NonPublic | BindingFlags.Instance);
         var cache = field!.GetValue(helper)!;
         var mapField = cache.GetType().GetField("_map", BindingFlags.NonPublic | BindingFlags.Instance);
-        return (ConcurrentDictionary<string, string>)mapField!.GetValue(cache)!;
+        var rawMap = mapField!.GetValue(cache)!;
+
+        // _map is ConcurrentDictionary<TKey, CacheEntry> — unwrap each CacheEntry.Value
+        var entryType = rawMap.GetType().GetGenericArguments()[1];
+        var valueProp = entryType.GetProperty("Value")!;
+
+        var result = new Dictionary<string, string>();
+        foreach (var item in (System.Collections.IEnumerable)rawMap)
+        {
+            var itemType = item.GetType();
+            var key = (string)itemType.GetProperty("Key")!.GetValue(item)!;
+            var entry = itemType.GetProperty("Value")!.GetValue(item)!;
+            result[key] = (string)valueProp.GetValue(entry)!;
+        }
+
+        return result;
     }
 
     [Table("CacheEntity")]

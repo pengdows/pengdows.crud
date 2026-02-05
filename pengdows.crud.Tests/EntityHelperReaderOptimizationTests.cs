@@ -15,9 +15,9 @@ namespace pengdows.crud.Tests;
 /// <summary>
 /// Tests for reader optimization - verifying that plan building happens once per query, not once per row.
 /// </summary>
-public class EntityHelperReaderOptimizationTests : SqlLiteContextTestBase
+public class TableGatewayReaderOptimizationTests : SqlLiteContextTestBase
 {
-    public EntityHelperReaderOptimizationTests()
+    public TableGatewayReaderOptimizationTests()
     {
         TypeMap.Register<TestEntity>();
     }
@@ -28,7 +28,7 @@ public class EntityHelperReaderOptimizationTests : SqlLiteContextTestBase
         // This test verifies the OLD behavior when NOT using the optimized LoadListAsync path
         // When calling MapReaderToObject directly, it still does hash calculation on every row
 
-        var helper = new EntityHelper<TestEntity, int>(Context);
+        var helper = new TableGateway<TestEntity, int>(Context);
         var rowCount = 10;
         var rows = Enumerable.Range(1, rowCount).Select(i => new Dictionary<string, object>
         {
@@ -68,7 +68,7 @@ public class EntityHelperReaderOptimizationTests : SqlLiteContextTestBase
         // we test the optimization by verifying that calling MapReaderToObject with the SAME reader
         // multiple times will cache the plan
 
-        var helper = new EntityHelper<TestEntity, int>(Context);
+        var helper = new TableGateway<TestEntity, int>(Context);
         var rowCount = 100;
         var rows = Enumerable.Range(1, rowCount).Select(i => new Dictionary<string, object>
         {
@@ -110,7 +110,7 @@ public class EntityHelperReaderOptimizationTests : SqlLiteContextTestBase
         // This test establishes a performance baseline for MapReaderToObject
         // Used to verify that optimization actually improves performance
 
-        var helper = new EntityHelper<TestEntity, int>(Context);
+        var helper = new TableGateway<TestEntity, int>(Context);
         var rowCount = 100;
         var rows = Enumerable.Range(1, rowCount).Select(i => new Dictionary<string, object>
         {

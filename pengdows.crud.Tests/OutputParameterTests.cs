@@ -427,7 +427,7 @@ public class OutputParameterTests
         await using var context = new DatabaseContext(cfg, factory);
 
         // Convert string representations to actual types for DateTime and Guid
-        object actualExpected = expectedValue;
+        var actualExpected = expectedValue;
         if (dbType == DbType.DateTime && expectedValue is string dateStr)
         {
             actualExpected = DateTime.Parse(dateStr);
@@ -484,7 +484,7 @@ public class OutputParameterTests
         var factory = new fakeDbFactory(product);
         var connection = new fakeDbConnection();
         // Add multiple connections for multiple executions
-        for (int i = 0; i < 5; i++)
+        for (var i = 0; i < 5; i++)
         {
             factory.Connections.Add(connection);
         }
@@ -498,7 +498,7 @@ public class OutputParameterTests
         await using var context = new DatabaseContext(cfg, factory);
 
         // Queue multiple sets of output values for sequential executions
-        for (int i = 1; i <= 3; i++)
+        for (var i = 1; i <= 3; i++)
         {
             connection.EnqueueOutputParameterResult(new Dictionary<string, object?>
             {
@@ -512,7 +512,7 @@ public class OutputParameterTests
         var resultParam = container.AddParameterWithValue("result", DbType.Int32, 0, ParameterDirection.Output);
 
         var results = new List<int>();
-        for (int i = 0; i < 3; i++)
+        for (var i = 0; i < 3; i++)
         {
             await container.ExecuteNonQueryAsync();
             results.Add((int)resultParam.Value!);
@@ -534,7 +534,7 @@ public class OutputParameterTests
         // Arrange
         var factory = new fakeDbFactory(product);
         var connection = new fakeDbConnection();
-        for (int i = 0; i < 5; i++)
+        for (var i = 0; i < 5; i++)
         {
             factory.Connections.Add(connection);
         }

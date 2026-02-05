@@ -326,4 +326,86 @@ public class SqlContainerExtensionsTests : IAsyncLifetime
         await Assert.ThrowsAsync<TaskCanceledException>(() =>
             container.ExecuteScalarWriteAsync<int>(CommandType.Text, cts.Token));
     }
+
+    // ── Static-syntax calls to hit the shadowed extension methods ─────────
+    // The interface declares the same signatures, so normal dot-syntax
+    // resolves to the interface method.  Only explicit static invocation
+    // routes through SqlContainerExtensions and exercises the concrete/fallback branches.
+
+    [Fact]
+    public async Task StaticCall_ExecuteNonQueryAsync_Concrete_UsesConcretePath()
+    {
+        using var container = Context.CreateSqlContainer("SELECT 1");
+
+        var result = await SqlContainerExtensions.ExecuteNonQueryAsync(
+            container, CommandType.Text, CancellationToken.None);
+
+        Assert.Equal(1, result);
+    }
+
+    [Fact]
+    public async Task StaticCall_ExecuteNonQueryAsync_Mock_FallsBackToInterfaceMethod()
+    {
+        var mockContainer = new Mock<ISqlContainer>();
+        mockContainer.Setup(x => x.ExecuteNonQueryAsync(CommandType.Text))
+            .ReturnsAsync(7);
+
+        var result = await SqlContainerExtensions.ExecuteNonQueryAsync(
+            mockContainer.Object, CommandType.Text, CancellationToken.None);
+
+        Assert.Equal(7, result);
+        mockContainer.Verify(x => x.ExecuteNonQueryAsync(CommandType.Text), Times.Once);
+    }
+
+    [Fact]
+    public async Task StaticCall_ExecuteScalarAsync_Concrete_UsesConcretePath()
+    {
+        using var container = Context.CreateSqlContainer("SELECT 42");
+
+        // fakeDb scalar path throws when no rows — that's fine, we just
+        // need to confirm the concrete branch was taken (not the fallback).
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await SqlContainerExtensions.ExecuteScalarAsync<int>(
+                container, CommandType.Text, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task StaticCall_ExecuteScalarAsync_Mock_FallsBackToInterfaceMethod()
+    {
+        var mockContainer = new Mock<ISqlContainer>();
+        mockContainer.Setup(x => x.ExecuteScalarAsync<string>(CommandType.Text))
+            .ReturnsAsync("hello");
+
+        var result = await SqlContainerExtensions.ExecuteScalarAsync<string>(
+            mockContainer.Object, CommandType.Text, CancellationToken.None);
+
+        Assert.Equal("hello", result);
+        mockContainer.Verify(x => x.ExecuteScalarAsync<string>(CommandType.Text), Times.Once);
+    }
+
+    [Fact]
+    public async Task StaticCall_ExecuteReaderAsync_Concrete_UsesConcretePath()
+    {
+        using var container = Context.CreateSqlContainer("SELECT 1 as Value");
+
+        using var reader = await SqlContainerExtensions.ExecuteReaderAsync(
+            container, CommandType.Text, CancellationToken.None);
+
+        Assert.NotNull(reader);
+    }
+
+    [Fact]
+    public async Task StaticCall_ExecuteReaderAsync_Mock_FallsBackToInterfaceMethod()
+    {
+        var mockReader = new Mock<ITrackedReader>();
+        var mockContainer = new Mock<ISqlContainer>();
+        mockContainer.Setup(x => x.ExecuteReaderAsync(CommandType.Text))
+            .ReturnsAsync(mockReader.Object);
+
+        var result = await SqlContainerExtensions.ExecuteReaderAsync(
+            mockContainer.Object, CommandType.Text, CancellationToken.None);
+
+        Assert.Equal(mockReader.Object, result);
+        mockContainer.Verify(x => x.ExecuteReaderAsync(CommandType.Text), Times.Once);
+    }
 }

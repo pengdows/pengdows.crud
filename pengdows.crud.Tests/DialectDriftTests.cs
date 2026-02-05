@@ -5,11 +5,11 @@ namespace pengdows.crud.Tests;
 
 public class DialectDriftTests
 {
-    private static (DatabaseContext ctx, EntityHelper<TestEntity, int> helper) CreateHelper(SupportedDatabase db)
+    private static (DatabaseContext ctx, TableGateway<TestEntity, int> helper) CreateHelper(SupportedDatabase db)
     {
         var factory = new fakeDbFactory(db);
         var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={db}", factory);
-        var helper = new EntityHelper<TestEntity, int>(ctx);
+        var helper = new TableGateway<TestEntity, int>(ctx);
         return (ctx, helper);
     }
 

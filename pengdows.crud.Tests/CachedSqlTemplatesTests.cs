@@ -40,7 +40,7 @@ public class CachedSqlTemplatesTests : IAsyncLifetime
     public void BuildCreate_ReusesCachedTemplates()
     {
         TypeMap.Register<TestEntity>();
-        var helper1 = new EntityHelper<TestEntity, int>(Context, AuditValueResolver);
+        var helper1 = new TableGateway<TestEntity, int>(Context, AuditValueResolver);
         var entity1 = new TestEntity { Name = "one" };
         var entity2 = new TestEntity { Name = "two" };
 
@@ -64,7 +64,7 @@ public class CachedSqlTemplatesTests : IAsyncLifetime
     public void BuildCreate_UsesPredictableParameterNames()
     {
         TypeMap.Register<TestEntity>();
-        var helper = new EntityHelper<TestEntity, int>(Context, AuditValueResolver);
+        var helper = new TableGateway<TestEntity, int>(Context, AuditValueResolver);
         var entity = new TestEntity { Name = "foo" };
 
         var sc = helper.BuildCreate(entity);
@@ -83,7 +83,7 @@ public class CachedSqlTemplatesTests : IAsyncLifetime
     public async Task BuildUpdateAsync_ReusesCachedTemplates()
     {
         TypeMap.Register<TestEntity>();
-        var helper1 = new EntityHelper<TestEntity, int>(Context, AuditValueResolver);
+        var helper1 = new TableGateway<TestEntity, int>(Context, AuditValueResolver);
 
         var entity1 = new TestEntity { Id = 1, Name = "one" };
         var entity2 = new TestEntity { Id = 1, Name = "two" };
@@ -110,7 +110,7 @@ public class CachedSqlTemplatesTests : IAsyncLifetime
     public async Task BuildUpdateAsync_WhenLoadOriginalTrue_ThrowsIfTableMissing()
     {
         TypeMap.Register<TestEntity>();
-        var helper = new EntityHelper<TestEntity, int>(Context, AuditValueResolver);
+        var helper = new TableGateway<TestEntity, int>(Context, AuditValueResolver);
         var entity = new TestEntity { Id = 1, Name = "one" };
 
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>

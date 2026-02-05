@@ -9,14 +9,14 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class EntityHelperNegativeTests : SqlLiteContextTestBase
+public class TableGatewayNegativeTests : SqlLiteContextTestBase
 {
-    private readonly EntityHelper<TestEntity, int> helper;
+    private readonly TableGateway<TestEntity, int> helper;
 
-    public EntityHelperNegativeTests()
+    public TableGatewayNegativeTests()
     {
         TypeMap.Register<TestEntity>();
-        helper = new EntityHelper<TestEntity, int>(Context);
+        helper = new TableGateway<TestEntity, int>(Context);
     }
 
     [Fact]
@@ -44,7 +44,7 @@ public class EntityHelperNegativeTests : SqlLiteContextTestBase
         var typeMap = realContext.TypeMapRegistry;
         _ = typeMap.GetTableInfo<NoAuditEntity>();
 
-        var noAuditHelper = new EntityHelper<NoAuditEntity, int>(realContext);
+        var noAuditHelper = new TableGateway<NoAuditEntity, int>(realContext);
         await BuildNoAuditTableReal(realContext);
         var e = new NoAuditEntity { Name = Guid.NewGuid().ToString() };
         await noAuditHelper.CreateAsync(e, realContext);
@@ -102,7 +102,7 @@ public class EntityHelperNegativeTests : SqlLiteContextTestBase
         var context = new DatabaseContext("Data Source=:memory:;EmulatedProduct=Unknown", factory);
 
         // BuildUpsert should throw NotSupportedException for unknown database types
-        var entityHelper = new EntityHelper<TestEntity, int>(context);
+        var entityHelper = new TableGateway<TestEntity, int>(context);
         var testEntity = new TestEntity { Id = 1, Name = "Test" };
         Assert.Throws<NotSupportedException>(() =>
             entityHelper.BuildUpsert(testEntity));

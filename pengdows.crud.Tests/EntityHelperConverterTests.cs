@@ -11,9 +11,9 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class EntityHelperConverterTests : SqlLiteContextTestBase
+public class TableGatewayConverterTests : SqlLiteContextTestBase
 {
-    public EntityHelperConverterTests()
+    public TableGatewayConverterTests()
     {
         TypeMap.Register<EnumEntity>();
         TypeMap.Register<JsonEntity>();
@@ -23,7 +23,7 @@ public class EntityHelperConverterTests : SqlLiteContextTestBase
     [Fact]
     public void MapReaderToObject_ValidEnumString_SetsProperty()
     {
-        var helper = new EntityHelper<EnumEntity, int>(Context);
+        var helper = new TableGateway<EnumEntity, int>(Context);
         var rows = new[]
         {
             new Dictionary<string, object>
@@ -41,7 +41,7 @@ public class EntityHelperConverterTests : SqlLiteContextTestBase
     [Fact]
     public void MapReaderToObject_InvalidEnumString_Throws()
     {
-        var helper = new EntityHelper<EnumEntity, int>(Context);
+        var helper = new TableGateway<EnumEntity, int>(Context);
         var rows = new[]
         {
             new Dictionary<string, object>
@@ -58,7 +58,7 @@ public class EntityHelperConverterTests : SqlLiteContextTestBase
     [Fact]
     public void MapReaderToObject_ValidJson_Deserializes()
     {
-        var helper = new EntityHelper<JsonEntity, int>(Context);
+        var helper = new TableGateway<JsonEntity, int>(Context);
         var json = "{\"Name\":\"Bob\"}";
         var rows = new[]
         {
@@ -78,7 +78,7 @@ public class EntityHelperConverterTests : SqlLiteContextTestBase
     [Fact]
     public void MapReaderToObject_InvalidJson_ReturnsNull()
     {
-        var helper = new EntityHelper<JsonEntity, int>(Context);
+        var helper = new TableGateway<JsonEntity, int>(Context);
         var rows = new[]
         {
             new Dictionary<string, object>
@@ -96,7 +96,7 @@ public class EntityHelperConverterTests : SqlLiteContextTestBase
     [Fact]
     public void MapReaderToObject_ByteArray_UsesGetBytes()
     {
-        var helper = new EntityHelper<ByteArrayEntity, int>(Context);
+        var helper = new TableGateway<ByteArrayEntity, int>(Context);
         var bytes = new byte[] { 1, 2, 3, 4 };
         using var reader = CreateNonDbReader(bytes);
         reader.Read();
@@ -110,7 +110,7 @@ public class EntityHelperConverterTests : SqlLiteContextTestBase
     [Fact]
     public void MapReaderToObject_ByteArray_GetBytesFailure_Throws()
     {
-        var helper = new EntityHelper<ByteArrayEntity, int>(Context);
+        var helper = new TableGateway<ByteArrayEntity, int>(Context);
         using var reader = CreateThrowingReader(new byte[] { 1, 2, 3 });
         reader.Read();
 

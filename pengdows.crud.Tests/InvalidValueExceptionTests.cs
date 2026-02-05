@@ -15,7 +15,7 @@ public class InvalidValueExceptionTests
     {
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite",
             new fakeDbFactory(SupportedDatabase.Sqlite));
-        var helper = new EntityHelper<ThrowingEntity, int>(context);
+        var helper = new TableGateway<ThrowingEntity, int>(context);
 
         var reader = new Mock<DbDataReader>();
         reader.Setup(r => r.FieldCount).Returns(1);

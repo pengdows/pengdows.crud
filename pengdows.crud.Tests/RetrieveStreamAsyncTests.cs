@@ -32,7 +32,7 @@ public class RetrieveStreamAsyncTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         var ids = new[] { 1, 2, 3, 4, 5 };
 
@@ -53,7 +53,7 @@ public class RetrieveStreamAsyncTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         var ids = new[] { 1, 2, 3 };
         var cts = new CancellationTokenSource();
@@ -75,7 +75,7 @@ public class RetrieveStreamAsyncTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         var ids = Array.Empty<int>();
 
@@ -96,7 +96,7 @@ public class RetrieveStreamAsyncTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         // Act & Assert
         await Assert.ThrowsAsync<ArgumentNullException>(async () =>
@@ -113,7 +113,7 @@ public class RetrieveStreamAsyncTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         var ids = new[] { 42 };
 
@@ -134,7 +134,7 @@ public class RetrieveStreamAsyncTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         // Use only 10 IDs to stay within SQLite's parameter limits
         var ids = Enumerable.Range(1, 10).ToArray();
@@ -160,7 +160,7 @@ public class RetrieveStreamAsyncTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         var ids = new[] { 1, 2, 3 };
 
@@ -189,7 +189,7 @@ public class RetrieveStreamAsyncTests
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var context1 = new DatabaseContext("Data Source=:memory:", factory);
         await using var context2 = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<TestEntity, int>(context1);
+        var helper = new TableGateway<TestEntity, int>(context1);
 
         var ids = new[] { 1, 2 };
 
@@ -210,7 +210,7 @@ public class RetrieveStreamAsyncTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         var ids = new[] { 1, 2, 3 };
 
@@ -236,7 +236,7 @@ public class RetrieveStreamAsyncTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         var ids = new[] { 1, 2, 3 };
 
@@ -267,7 +267,7 @@ public class RetrieveStreamAsyncTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         // Use 20 IDs to stay within SQLite limits while still testing streaming behavior
         var ids = Enumerable.Range(1, 20).ToArray();
@@ -293,7 +293,7 @@ public class RetrieveStreamAsyncTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         var ids = new[] { 1 };
 
@@ -314,7 +314,7 @@ public class RetrieveStreamAsyncTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         var ids = new[] { 1, 2, 3 };
 

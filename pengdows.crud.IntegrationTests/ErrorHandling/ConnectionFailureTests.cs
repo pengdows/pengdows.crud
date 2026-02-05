@@ -56,7 +56,7 @@ public class ConnectionFailureTests
     }
 
     [Fact]
-    public async Task EntityHelper_FailOnOpen_HandlesGracefully()
+    public async Task TableGateway_FailOnOpen_HandlesGracefully()
     {
         // Arrange
         var factory = fakeDbFactory.CreateFailingFactory(
@@ -185,7 +185,7 @@ public class ConnectionFailureTests
     }
 
     [Fact]
-    public async Task ConnectionFailure_EntityHelperWithFailingConnection_PropagatesException()
+    public async Task ConnectionFailure_TableGatewayWithFailingConnection_PropagatesException()
     {
         // Arrange
         var factory = fakeDbFactory.CreateFailingFactory(

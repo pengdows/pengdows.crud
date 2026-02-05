@@ -255,9 +255,10 @@ var orders = await helper.RetrieveAsync(new[] { 1, 2, 3, ..., 1000 });
 
 ---
 
-## ✅ Core Features
+-## ✅ Core Features
 
-- **`EntityHelper<TEntity, TRowID>`**: Automatic CRUD with SQL customization points
+> **Note:** Version 2.0 removes the legacy compatibility alias; use `TableGateway<TEntity, TRowID>` directly for CRUD.
+- **`TableGateway<TEntity, TRowID>`**: Automatic CRUD with SQL customization points
 - **`SqlContainer`**: Safe SQL composition with parameterization
 - **Flexible audit tracking**: Choose which fields (CreatedBy/On, LastUpdatedBy/On), their types (string, int, Guid), and how to populate them
 - **Automatic optimistic locking**: Version fields with automatic increment and concurrency conflict detection
@@ -380,7 +381,7 @@ Topics include:
 - **Metrics**: Real-time observability and performance tracking
 - **Streaming**: Memory-efficient `IAsyncEnumerable<T>` operations
 - **Connection strategies**: Standard, KeepAlive, SingleWriter, SingleConnection
-- **EntityHelper**: CRUD operations with SQL customization
+- **TableGateway**: CRUD operations with SQL customization (replaces the older TableGateway alias)
 - **SqlContainer**: Safe SQL composition and parameterization
 - **DbMode**: Connection lifecycle management
 - **Audit tracking**: Automatic CreatedBy/On, LastUpdatedBy/On
@@ -456,7 +457,7 @@ public class User
 public enum UserStatus { Active, Inactive, Suspended }
 
 var context = new DatabaseContext("connection-string", SqlClientFactory.Instance);
-var helper = new EntityHelper<User, long>(context);
+var helper = new TableGateway<User, long>(context);
 
 // Create
 var user = new User { Email = "john@example.com", Name = "John", Status = UserStatus.Active };
@@ -655,8 +656,8 @@ public class HttpAuditResolver : IAuditValueResolver
 // Register in DI
 builder.Services.AddScoped<IAuditValueResolver, HttpAuditResolver>();
 
-// EntityHelper uses it automatically
-var helper = new EntityHelper<Order, int>(context, auditResolver);
+// TableGateway uses it automatically
+var helper = new TableGateway<Order, int>(context, auditResolver);
 await helper.CreateAsync(order, context);
 // CreatedBy and LastUpdatedBy automatically populated from HTTP context!
 ```
@@ -715,7 +716,7 @@ if (rowsAffected == 0)
 public class OrderService
 {
     private readonly DatabaseContext _context;
-    private readonly IEntityHelper<Order, int> _orderHelper;
+    private readonly ITableGateway<Order, int> _orderHelper;
 
     public async Task ProcessOrderAsync(Order order)
     {
@@ -870,7 +871,7 @@ public class Order
 }
 
 // Create helper with enum failure mode
-var helper = new EntityHelper<Order, int>(context)
+var helper = new TableGateway<Order, int>(context)
 {
     EnumParseFailureMode = EnumParseFailureMode.SetNullAndLog  // Don't throw on unknown values
 };
@@ -979,7 +980,7 @@ var context = new DatabaseContext(connectionString, factory, options: new Databa
 **Real-world problem:** Added a column to database. Don't want to update every entity immediately.
 
 ```csharp
-var helper = new EntityHelper<User, long>(context)
+var helper = new TableGateway<User, long>(context)
 {
     MapperOptions = new MapperOptions
     {
@@ -1314,7 +1315,7 @@ using pengdows.crud.fakeDb;
 // fakeDb is a COMPLETE ADO.NET provider implementation
 var factory = new FakeDbFactory(SupportedDatabase.PostgreSql);
 var context = new DatabaseContext("Data Source=test;EmulatedProduct=PostgreSql", factory);
-var helper = new EntityHelper<Order, int>(context);
+var helper = new TableGateway<Order, int>(context);
 
 // Test SQL generation
 var container = helper.BuildCreate(order);
@@ -1350,7 +1351,7 @@ var ctx = new DatabaseContext(postgres.GetConnectionString(),
     NpgsqlDataSource.Create(postgres.GetConnectionString()));
 
 // Test against REAL PostgreSQL
-var helper = new EntityHelper<Order, int>(ctx);
+var helper = new TableGateway<Order, int>(ctx);
 await helper.CreateAsync(order, ctx);
 
 var retrieved = await helper.RetrieveOneAsync(order.Id, ctx);

@@ -50,7 +50,7 @@ CREATE TABLE [dbo].[user_info_temp] (
         await RunTestAgainstProviderAsync(SupportedDatabase.SqlServer, async context =>
         {
             context.TypeMapRegistry.Register<UserInfoEntity>();
-            var helper = new EntityHelper<UserInfoEntity, int>(context);
+            var helper = new TableGateway<UserInfoEntity, int>(context);
 
             var entity = new UserInfoEntity
             {

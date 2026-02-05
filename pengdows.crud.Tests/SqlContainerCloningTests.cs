@@ -289,12 +289,12 @@ public class SqlContainerCloningTests : IDisposable
     [Fact]
     public void Clone_CachedTemplateScenario_WorksWithDifferentTenants()
     {
-        // Arrange - Simulate an EntityHelper cached template built with PostgreSQL context (: parameter marker)
+        // Arrange - Simulate an TableGateway cached template built with PostgreSQL context (: parameter marker)
         using var cachedTemplate = _postgresContext.CreateSqlContainer(
             "SELECT id, name, email FROM users WHERE id = ");
         cachedTemplate.AddParameterWithValue("p0", DbType.Int32, 0); // Placeholder value
 
-        // Act - Clone for different tenant contexts (simulates EntityHelper fast path)
+        // Act - Clone for different tenant contexts (simulates TableGateway fast path)
         using var tenant1Container = cachedTemplate.Clone(_sqliteContext); // @ parameter marker
         using var tenant2Container = cachedTemplate.Clone(_duckDbContext); // $ parameter marker
 

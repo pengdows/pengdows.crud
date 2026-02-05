@@ -82,11 +82,11 @@ public class ConnectionBreakingExamples
     }
 
     [Fact]
-    public async Task Example_EntityHelperWithConnectionFailures()
+    public async Task Example_TableGatewayWithConnectionFailures()
     {
-        // Test how EntityHelper handles connection failures
+        // Test how TableGateway handles connection failures
         await using var context = ConnectionFailureHelper.CreateFailOnOpenContext();
-        var helper = new EntityHelper<TestEntity, long>(context);
+        var helper = new TableGateway<TestEntity, long>(context);
 
         // Operations will fail due to connection issues
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>

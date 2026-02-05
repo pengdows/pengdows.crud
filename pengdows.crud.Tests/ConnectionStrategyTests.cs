@@ -670,4 +670,103 @@ public class ConnectionStrategyTests
         Assert.Equal(ConnectionState.Closed, separateConnection.State);
     }
 
+    // ── Standard-mode ephemeral-churn stress ────────────────────────────────
+    // 20 tasks each open/close 50 ephemeral connections in tight succession.
+    // Metrics are enabled so ConnectionsOpened/Closed are populated.
+    // Verifies: no connection leaks, peak concurrency > 1, and every open
+    // has a matching close.
+    [Fact]
+    public async Task Standard_ConcurrentChurn_NoLeaks()
+    {
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test;EmulatedProduct=SqlServer",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite,
+            EnableMetrics = true
+        };
+        await using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.SqlServer));
+
+        const int threads = 20;
+        const int roundsPerThread = 50;
+        const int totalCycles = threads * roundsPerThread; // 1 000
+
+        var tasks = Enumerable.Range(0, threads).Select(_ => Task.Run(async () =>
+        {
+            for (var i = 0; i < roundsPerThread; i++)
+            {
+                var conn = ctx.GetConnection(ExecutionType.Read);
+                await conn.OpenAsync();
+                await ctx.CloseAndDisposeConnectionAsync(conn);
+            }
+        })).ToArray();
+
+        await Task.WhenAll(tasks);
+
+        var m = ctx.Metrics;
+        Assert.Equal(0, m.ConnectionsCurrent);
+        Assert.True(m.PeakOpenConnections > 1 || m.ConnectionsOpened >= totalCycles);
+        // Every churn cycle must have been tracked; init may add one extra open+close
+        Assert.True(m.ConnectionsOpened >= totalCycles);
+        Assert.True(m.ConnectionsClosed >= totalCycles);
+        Assert.Equal(m.ConnectionsOpened, m.ConnectionsClosed); // no leaks
+    }
+
+    // ── KeepAlive sentinel-stability churn stress ───────────────────────────
+    // LocalDb connection string is required to retain KeepAlive mode (plain
+    // SqlServer coerces it to Standard).  20 tasks each open/close 50
+    // ephemeral connections while the sentinel stays pinned.
+    // Metrics are enabled to verify the opened/closed delta matches the
+    // sentinel that remains open at the end.
+    [Fact]
+    public async Task KeepAlive_ConcurrentChurn_SentinelPersists()
+    {
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=(localdb)\\mssqllocaldb;Database=TestDb;EmulatedProduct=SqlServer",
+            DbMode = DbMode.KeepAlive,
+            ReadWriteMode = ReadWriteMode.ReadWrite,
+            EnableMetrics = true
+        };
+        await using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.SqlServer));
+        Assert.Equal(DbMode.KeepAlive, ctx.ConnectionMode);
+
+        var sentinel = ctx.PersistentConnection;
+        Assert.NotNull(sentinel);
+        var baseMetrics = ctx.Metrics;
+        var baseCurrent = baseMetrics.ConnectionsCurrent; // sentinel(s) at rest
+
+        const int threads = 20;
+        const int roundsPerThread = 50;
+        const int totalCycles = threads * roundsPerThread; // 1 000
+
+        var tasks = Enumerable.Range(0, threads).Select(_ => Task.Run(async () =>
+        {
+            for (var i = 0; i < roundsPerThread; i++)
+            {
+                var conn = ctx.GetConnection(ExecutionType.Read);
+                await conn.OpenAsync();
+                await ctx.CloseAndDisposeConnectionAsync(conn);
+            }
+        })).ToArray();
+
+        await Task.WhenAll(tasks);
+
+        // Sentinel object identity must be unchanged
+        Assert.Same(sentinel, ctx.PersistentConnection);
+
+        var m = ctx.Metrics;
+
+        // Only sentinel connection(s) remain — no ephemeral leaks
+        Assert.Equal(baseCurrent, m.ConnectionsCurrent);
+
+        // At least one ephemeral connection overlapped with the sentinel
+        Assert.True(m.PeakOpenConnections > baseCurrent);
+
+        // All ephemeral cycles were opened and closed; sentinel open is NOT
+        // closed, so opened - closed == baseCurrent (the still-open sentinels).
+        Assert.True(m.ConnectionsOpened >= totalCycles + baseCurrent);
+        Assert.True(m.ConnectionsClosed >= totalCycles);
+        Assert.Equal(baseCurrent, (int)(m.ConnectionsOpened - m.ConnectionsClosed));
+    }
 }

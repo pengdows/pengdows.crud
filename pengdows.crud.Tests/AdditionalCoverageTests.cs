@@ -83,11 +83,11 @@ public class AdditionalCoverageTests : SqlLiteContextTestBase
     }
 
     [Fact]
-    public async Task EntityHelper_LoadOperations_ExerciseValueExtractors()
+    public async Task TableGateway_LoadOperations_ExerciseValueExtractors()
     {
         // This test exercises the compiled value extractor and coercer methods
         // Arrange
-        var helper = new EntityHelper<SimpleCoverageEntity, long>(Context, AuditValueResolver);
+        var helper = new TableGateway<SimpleCoverageEntity, long>(Context, AuditValueResolver);
 
         // Act - Create SQL that returns data requiring type coercion
         var container = Context.CreateSqlContainer();
@@ -103,11 +103,11 @@ public class AdditionalCoverageTests : SqlLiteContextTestBase
     }
 
     [Fact]
-    public void EntityHelper_BuildUpsert_ExercisesUpsertLogic()
+    public void TableGateway_BuildUpsert_ExercisesUpsertLogic()
     {
         // This exercises the upsert key resolution methods
         // Arrange
-        var helper = new EntityHelper<SimpleCoverageEntity, long>(Context, AuditValueResolver);
+        var helper = new TableGateway<SimpleCoverageEntity, long>(Context, AuditValueResolver);
         var entity = new SimpleCoverageEntity { Name = "Test", Value = 100 };
 
         // Act

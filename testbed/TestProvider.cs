@@ -13,14 +13,14 @@ public class TestProvider : IAsyncTestProvider
     private static long _nextId;
 
     private readonly IDatabaseContext _context;
-    private readonly EntityHelper<TestTable, long> _helper;
+    private readonly TableGateway<TestTable, long> _helper;
 
     public TestProvider(IDatabaseContext databaseContext, IServiceProvider serviceProvider)
     {
         _context = databaseContext;
         var resolver = serviceProvider.GetService<IAuditValueResolver>() ??
                        new TestAuditValueResolver("system");
-        _helper = new EntityHelper<TestTable, long>(databaseContext, resolver);
+        _helper = new TableGateway<TestTable, long>(databaseContext, resolver);
     }
 
 

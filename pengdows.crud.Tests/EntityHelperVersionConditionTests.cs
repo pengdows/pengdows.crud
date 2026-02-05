@@ -9,7 +9,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class EntityHelperVersionConditionTests : SqlLiteContextTestBase
+public class TableGatewayVersionConditionTests : SqlLiteContextTestBase
 {
     [Table("VerNull")]
     private sealed class VerNullEntity
@@ -39,7 +39,7 @@ public class EntityHelperVersionConditionTests : SqlLiteContextTestBase
         public int Version { get; set; }
     }
 
-    public EntityHelperVersionConditionTests()
+    public TableGatewayVersionConditionTests()
     {
         TypeMap.Register<VerNullEntity>();
         TypeMap.Register<VerIntEntity>();
@@ -65,7 +65,7 @@ public class EntityHelperVersionConditionTests : SqlLiteContextTestBase
     [Fact]
     public async Task BuildUpdate_WithNullableVersionNull_AppendsIsNullCondition()
     {
-        var helper = new EntityHelper<VerNullEntity, int>(Context, AuditValueResolver);
+        var helper = new TableGateway<VerNullEntity, int>(Context, AuditValueResolver);
         var e = new VerNullEntity { Id = 1, Name = "n", Version = null };
         var sc = await helper.BuildUpdateAsync(e, false);
         var sql = sc.Query.ToString();
@@ -77,7 +77,7 @@ public class EntityHelperVersionConditionTests : SqlLiteContextTestBase
     [Fact]
     public async Task BuildUpdate_WithVersionValue_AppendsParamAndIncrements()
     {
-        var helper = new EntityHelper<VerIntEntity, int>(Context, AuditValueResolver);
+        var helper = new TableGateway<VerIntEntity, int>(Context, AuditValueResolver);
         var e = new VerIntEntity { Id = 1, Name = "n", Version = 5 };
         var sc = await helper.BuildUpdateAsync(e, false);
         var sql = sc.Query.ToString();

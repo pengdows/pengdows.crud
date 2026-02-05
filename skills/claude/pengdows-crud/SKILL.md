@@ -289,7 +289,7 @@ public class OrderItem
 
 ### TableGateway Methods
 
-> **Note:** `EntityHelper` is an alias for `TableGateway` (kept for 1.0 compatibility).
+> **Note:** `TableGateway` is an alias for `TableGateway` (kept for 1.0 compatibility).
 
 | Method | Purpose |
 |--------|---------|

@@ -11,11 +11,11 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class EntityHelperIdPopulationTests
+public class TableGatewayIdPopulationTests
 {
     private readonly TypeMapRegistry _typeMap;
 
-    public EntityHelperIdPopulationTests()
+    public TableGatewayIdPopulationTests()
     {
         _typeMap = new TypeMapRegistry();
         _typeMap.Register<TestEntityWithAutoId>();
@@ -33,7 +33,7 @@ public class EntityHelperIdPopulationTests
         factory.SetIdPopulationResult(42, 1);
 
         var context = new DatabaseContext("test", factory, _typeMap);
-        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+        var helper = new TableGateway<TestEntityWithAutoId, int>(context);
         var entity = new TestEntityWithAutoId { Name = "Test Entity" };
 
         // Act
@@ -50,7 +50,7 @@ public class EntityHelperIdPopulationTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var context = new DatabaseContext("test", factory, _typeMap);
-        var helper = new EntityHelper<TestEntityWithWritableId, int>(context);
+        var helper = new TableGateway<TestEntityWithWritableId, int>(context);
 
         factory.SetNonQueryResult(1);
 
@@ -72,7 +72,7 @@ public class EntityHelperIdPopulationTests
         var context = new DatabaseContext("test", factory, _typeMap);
 
         // Assert: constructing helper should fail due to missing [Id]/[PrimaryKey]
-        Assert.Throws<InvalidOperationException>(() => new EntityHelper<TestEntityWithoutId, int>(context));
+        Assert.Throws<InvalidOperationException>(() => new TableGateway<TestEntityWithoutId, int>(context));
     }
 
     [Fact]
@@ -81,7 +81,7 @@ public class EntityHelperIdPopulationTests
         // Arrange - Use a dialect with RETURNING to populate ID (Sqlite)
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory, _typeMap);
-        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+        var helper = new TableGateway<TestEntityWithAutoId, int>(context);
 
         factory.SetNonQueryResult(1);
         factory.SetScalarResult(42);
@@ -103,7 +103,7 @@ public class EntityHelperIdPopulationTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         var context = new DatabaseContext("test", factory, _typeMap);
-        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+        var helper = new TableGateway<TestEntityWithAutoId, int>(context);
 
         factory.SetNonQueryResult(1);
         factory.SetScalarResult(null); // Simulate null result from LASTVAL()
@@ -126,7 +126,7 @@ public class EntityHelperIdPopulationTests
         factory.SetException(new InvalidOperationException("Database connection lost"));
 
         var context = new DatabaseContext("test", factory, _typeMap);
-        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+        var helper = new TableGateway<TestEntityWithAutoId, int>(context);
 
         factory.SetNonQueryResult(1); // Insert succeeds
 
@@ -142,7 +142,7 @@ public class EntityHelperIdPopulationTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=Unknown", factory, _typeMap);
-        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+        var helper = new TableGateway<TestEntityWithAutoId, int>(context);
 
         factory.SetNonQueryResult(0); // Insert fails - no rows affected
 
@@ -162,7 +162,7 @@ public class EntityHelperIdPopulationTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=Unknown", factory, _typeMap);
-        var helper = new EntityHelper<TestEntityWithAutoId, int>(context);
+        var helper = new TableGateway<TestEntityWithAutoId, int>(context);
 
         factory.SetNonQueryResult(2); // Multiple rows affected (unusual but possible)
 

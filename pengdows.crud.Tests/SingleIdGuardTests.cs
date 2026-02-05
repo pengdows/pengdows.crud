@@ -12,7 +12,7 @@ public class SingleIdGuardTests : SqlLiteContextTestBase
     public void BuildRetrieve_NoIdColumn_Throws()
     {
         TypeMap.Register<CompositeEntity>();
-        var helper = new EntityHelper<CompositeEntity, int>(Context);
+        var helper = new TableGateway<CompositeEntity, int>(Context);
         Assert.Throws<InvalidOperationException>(() => helper.BuildRetrieve(new List<int> { 1 }));
     }
 
@@ -20,7 +20,7 @@ public class SingleIdGuardTests : SqlLiteContextTestBase
     public void BuildRetrieve_WithIdColumn_Succeeds()
     {
         TypeMap.Register<TestEntity>();
-        var helper = new EntityHelper<TestEntity, int>(Context);
+        var helper = new TableGateway<TestEntity, int>(Context);
         IReadOnlyCollection<int>? ids = new List<int> { 1 }.AsReadOnly();
         var sc = helper.BuildRetrieve(ids);
         Assert.Contains("WHERE", sc.Query.ToString(), StringComparison.OrdinalIgnoreCase);

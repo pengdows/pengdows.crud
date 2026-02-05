@@ -10,17 +10,17 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class EntityHelper_IntegrationTests : RealSqliteContextTestBase, IAsyncLifetime
+public class TableGateway_IntegrationTests : RealSqliteContextTestBase, IAsyncLifetime
 {
-    private readonly EntityHelper<TestEntity, int> entityHelper;
+    private readonly TableGateway<TestEntity, int> entityHelper;
 
-    public EntityHelper_IntegrationTests()
+    public TableGateway_IntegrationTests()
     {
         // Create an in-memory SQLite connection
         // _connection = new SqliteConnection("Data Source=:memory:");
         // _connection.Open();
         TypeMap.Register<TestEntity>();
-        entityHelper = new EntityHelper<TestEntity, int>(Context, AuditValueResolver);
+        entityHelper = new TableGateway<TestEntity, int>(Context, AuditValueResolver);
 
         Assert.Equal(DbMode.SingleConnection, Context.ConnectionMode);
     }
@@ -106,7 +106,7 @@ public class EntityHelper_IntegrationTests : RealSqliteContextTestBase, IAsyncLi
         var typeMap = new TypeMapRegistry();
         typeMap.Register<IdentityTestEntity>(); // assumes you auto-build TableInfo from attributes
 
-        var helper = new EntityHelper<IdentityTestEntity, int>(Context, new StubAuditValueResolver("fred"));
+        var helper = new TableGateway<IdentityTestEntity, int>(Context, new StubAuditValueResolver("fred"));
 
         var entity = new IdentityTestEntity { Id = 42, Name = "Hello" };
 
@@ -128,7 +128,7 @@ public class EntityHelper_IntegrationTests : RealSqliteContextTestBase, IAsyncLi
         var typeMap = new TypeMapRegistry();
         typeMap.Register<NonInsertableIdEntity>();
 
-        var helper = new EntityHelper<NonInsertableIdEntity, int>(Context, new StubAuditValueResolver("fred"));
+        var helper = new TableGateway<NonInsertableIdEntity, int>(Context, new StubAuditValueResolver("fred"));
 
         var entity = new NonInsertableIdEntity { Id = 1, Name = "Hello" };
 
@@ -147,7 +147,7 @@ public class EntityHelper_IntegrationTests : RealSqliteContextTestBase, IAsyncLi
         var typeMap = new TypeMapRegistry();
         typeMap.Register<AuditOnOnlyEntity>();
 
-        var helper = new EntityHelper<AuditOnOnlyEntity, int>(Context, new StubAuditValueResolver("fred"));
+        var helper = new TableGateway<AuditOnOnlyEntity, int>(Context, new StubAuditValueResolver("fred"));
 
         var entity = new AuditOnOnlyEntity { Name = "Hello" };
 

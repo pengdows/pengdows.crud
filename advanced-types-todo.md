@@ -74,7 +74,7 @@ These are **non-blocking** code quality improvements for future iterations:
 2. **TypeCoercionOptions Provider Propagation** (Enhancement):
    - Current implementation works correctly
    - Could be enhanced to ensure provider is explicitly propagated at all call sites
-   - Files to review: SqlContainer.cs, DataReaderMapper.cs, EntityHelper.Reader.cs
+   - Files to review: SqlContainer.cs, DataReaderMapper.cs, TableGateway.Reader.cs
 
 3. **Documentation**:
    - Add XML documentation comments to converter public methods

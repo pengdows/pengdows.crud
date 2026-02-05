@@ -10,12 +10,12 @@ namespace pengdows.crud.Tests;
 
 public class UpsertPortableTests : SqlLiteContextTestBase, IAsyncLifetime
 {
-    private readonly EntityHelper<TestEntity, int> _helper;
+    private readonly TableGateway<TestEntity, int> _helper;
 
     public UpsertPortableTests()
     {
         TypeMap.Register<TestEntity>();
-        _helper = new EntityHelper<TestEntity, int>(Context, AuditValueResolver);
+        _helper = new TableGateway<TestEntity, int>(Context, AuditValueResolver);
     }
 
     public new async Task InitializeAsync()

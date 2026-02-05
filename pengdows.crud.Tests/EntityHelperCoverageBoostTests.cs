@@ -7,10 +7,10 @@ using Xunit;
 namespace pengdows.crud.Tests;
 
 /// <summary>
-/// Simple focused tests to cover specific EntityHelper methods and reach 84% coverage
+/// Simple focused tests to cover specific TableGateway methods and reach 84% coverage
 /// </summary>
 [Collection("SqlLiteContext")]
-public class EntityHelperCoverageBoostTests : SqlLiteContextTestBase
+public class TableGatewayCoverageBoostTests : SqlLiteContextTestBase
 {
     [Fact]
     public async Task CreateAsync_WithNonWritableGuidId_ExercisesIdGeneration()
@@ -18,7 +18,7 @@ public class EntityHelperCoverageBoostTests : SqlLiteContextTestBase
         // Register entity with GUID ID
         await BuildGuidTestTable();
         TypeMap.Register<GuidTestEntity>();
-        var helper = new EntityHelper<GuidTestEntity, Guid>(Context);
+        var helper = new TableGateway<GuidTestEntity, Guid>(Context);
 
         var entity = new GuidTestEntity { Name = "Test", Value = 123 };
 
@@ -34,7 +34,7 @@ public class EntityHelperCoverageBoostTests : SqlLiteContextTestBase
     {
         await BuildSimpleTestTable();
         TypeMap.Register<TestEntitySimple>();
-        var helper = new EntityHelper<TestEntitySimple, int>(Context);
+        var helper = new TableGateway<TestEntitySimple, int>(Context);
 
         // Create entity
         var entity = new TestEntitySimple { Name = "Original" };
@@ -53,7 +53,7 @@ public class EntityHelperCoverageBoostTests : SqlLiteContextTestBase
     {
         await BuildSimpleTestTable();
         TypeMap.Register<TestEntitySimple>();
-        var helper = new EntityHelper<TestEntitySimple, int>(Context);
+        var helper = new TableGateway<TestEntitySimple, int>(Context);
 
         // Create entity first
         var entity = new TestEntitySimple { Name = "Original" };
@@ -76,11 +76,11 @@ public class EntityHelperCoverageBoostTests : SqlLiteContextTestBase
     }
 
     [Fact]
-    public async Task EntityHelper_WithByteArrays_ExercisesByteComparison()
+    public async Task TableGateway_WithByteArrays_ExercisesByteComparison()
     {
         await BuildByteTestTable();
         TypeMap.Register<ByteTestEntity>();
-        var helper = new EntityHelper<ByteTestEntity, int>(Context);
+        var helper = new TableGateway<ByteTestEntity, int>(Context);
 
         // Create entity with byte array
         var entity = new ByteTestEntity { Name = "Test", Data = new byte[] { 1, 2, 3 } };
@@ -101,11 +101,11 @@ public class EntityHelperCoverageBoostTests : SqlLiteContextTestBase
     }
 
     [Fact]
-    public async Task EntityHelper_WithDecimalTypes_ExercisesDecimalComparison()
+    public async Task TableGateway_WithDecimalTypes_ExercisesDecimalComparison()
     {
         await BuildDecimalTestTable();
         TypeMap.Register<DecimalTestEntity>();
-        var helper = new EntityHelper<DecimalTestEntity, int>(Context);
+        var helper = new TableGateway<DecimalTestEntity, int>(Context);
 
         // Create entity with decimal
         var entity = new DecimalTestEntity { Name = "Test", Amount = 123.45m };
@@ -126,11 +126,11 @@ public class EntityHelperCoverageBoostTests : SqlLiteContextTestBase
     }
 
     [Fact]
-    public async Task EntityHelper_WithDateTimes_ExercisesDateTimeComparison()
+    public async Task TableGateway_WithDateTimes_ExercisesDateTimeComparison()
     {
         await BuildDateTimeTestTable();
         TypeMap.Register<DateTimeTestEntity>();
-        var helper = new EntityHelper<DateTimeTestEntity, int>(Context);
+        var helper = new TableGateway<DateTimeTestEntity, int>(Context);
 
         // Create entity with DateTime
         var entity = new DateTimeTestEntity { Name = "Test", Created = DateTime.Now };
@@ -151,11 +151,11 @@ public class EntityHelperCoverageBoostTests : SqlLiteContextTestBase
     }
 
     [Fact]
-    public void EntityHelper_ReflectionTest_ExercisesBuildValueExtractor()
+    public void TableGateway_ReflectionTest_ExercisesBuildValueExtractor()
     {
         // This exercises the reflection-based BuildValueExtractor path
         TypeMap.Register<TestEntitySimple>();
-        var helper = new EntityHelper<TestEntitySimple, int>(Context);
+        var helper = new TableGateway<TestEntitySimple, int>(Context);
 
         // Just creating the helper exercises various reflection paths
         Assert.NotNull(helper);

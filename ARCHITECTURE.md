@@ -1034,7 +1034,7 @@ This section documents **contracts between internal components** that aren't vis
 3. Compile to delegate (cached)
 4. Subsequent queries: Direct delegate invocation (no reflection)
 
-**Code**: `pengdows.crud/EntityHelper.Mapping.cs:BuildReaderPlan()`
+**Code**: `pengdows.crud/TableGateway.Mapping.cs:BuildReaderPlan()`
 
 ### SQL Template Caching
 

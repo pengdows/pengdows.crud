@@ -20,7 +20,7 @@ public class FirebirdUpsertSqlTests
         using var context = new DatabaseContext("Data Source=test;EmulatedProduct=Firebird", factory, typeMap);
         context.TypeMapRegistry.Register<FirebirdMergeEntity>();
 
-        var helper = new EntityHelper<FirebirdMergeEntity, int>(context);
+        var helper = new TableGateway<FirebirdMergeEntity, int>(context);
         var entity = new FirebirdMergeEntity { Id = 1, Name = "sa", Counter = 5 };
 
         using var container = helper.BuildUpsert(entity);

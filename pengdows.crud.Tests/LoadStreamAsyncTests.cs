@@ -31,7 +31,7 @@ public class LoadStreamAsyncTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         var container = helper.BuildBaseRetrieve("t");
         container.Query.Append(" WHERE t.id IN (1, 2, 3)");
@@ -53,7 +53,7 @@ public class LoadStreamAsyncTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         var container = helper.BuildBaseRetrieve("t");
         var cts = new CancellationTokenSource();
@@ -75,7 +75,7 @@ public class LoadStreamAsyncTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         var container = helper.BuildBaseRetrieve("t");
         container.Query.Append(" WHERE 1=0"); // Empty result
@@ -97,7 +97,7 @@ public class LoadStreamAsyncTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         // Act & Assert
         await Assert.ThrowsAsync<ArgumentNullException>(async () =>
@@ -114,7 +114,7 @@ public class LoadStreamAsyncTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         var container = helper.BuildBaseRetrieve("t");
 
@@ -139,7 +139,7 @@ public class LoadStreamAsyncTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         var container = helper.BuildBaseRetrieve("t");
 
@@ -167,7 +167,7 @@ public class LoadStreamAsyncTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         var container = helper.BuildBaseRetrieve("t");
         container.Query.Append(" WHERE t.id = 1");
@@ -191,7 +191,7 @@ public class LoadStreamAsyncTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         var container = helper.BuildBaseRetrieve("t");
 
@@ -211,7 +211,7 @@ public class LoadStreamAsyncTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         var container = helper.BuildBaseRetrieve("t");
 
@@ -238,7 +238,7 @@ public class LoadStreamAsyncTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         var container = helper.BuildBaseRetrieve("t");
 
@@ -270,7 +270,7 @@ public class LoadStreamAsyncTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         var container = helper.BuildBaseRetrieve("t");
 
@@ -291,7 +291,7 @@ public class LoadStreamAsyncTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context);
 
         var container = helper.BuildBaseRetrieve("t");
 

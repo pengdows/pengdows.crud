@@ -10,7 +10,7 @@ public class AuditValidationTest : RealSqliteContextTestBase
     public async Task VerifyAuditFieldsArePopulated()
     {
         TypeMap.Register<TestEntity>();
-        var helper = new EntityHelper<TestEntity, int>(Context, AuditValueResolver);
+        var helper = new TableGateway<TestEntity, int>(Context, AuditValueResolver);
 
         var qp = Context.QuotePrefix;
         var qs = Context.QuoteSuffix;

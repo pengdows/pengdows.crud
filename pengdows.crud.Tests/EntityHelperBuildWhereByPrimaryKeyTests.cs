@@ -4,14 +4,14 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class EntityHelperBuildWhereByPrimaryKeyTests : SqlLiteContextTestBase
+public class TableGatewayBuildWhereByPrimaryKeyTests : SqlLiteContextTestBase
 {
-    private readonly EntityHelper<TestEntity, int> _helper;
+    private readonly TableGateway<TestEntity, int> _helper;
 
-    public EntityHelperBuildWhereByPrimaryKeyTests()
+    public TableGatewayBuildWhereByPrimaryKeyTests()
     {
         TypeMap.Register<TestEntity>();
-        _helper = new EntityHelper<TestEntity, int>(Context);
+        _helper = new TableGateway<TestEntity, int>(Context);
     }
 
     [Fact]
