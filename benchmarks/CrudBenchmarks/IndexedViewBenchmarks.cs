@@ -22,6 +22,12 @@ namespace CrudBenchmarks;
 [SimpleJob(warmupCount: 3, iterationCount: 5, invocationCount: 50)]
 public class IndexedViewBenchmarks : IAsyncDisposable
 {
+    // WITH (NOEXPAND) is mandatory for EF and Dapper: neither framework manages
+    // SQL Server session settings (ARITHABORT ON, etc.), so automatic indexed-
+    // view matching is unavailable to them.  pengdows.crud applies those
+    // settings automatically and could auto-match without the hint, but we use
+    // the same SQL for all three paths so the benchmark isolates framework
+    // overhead, not optimizer behaviour.  Do not remove WITH (NOEXPAND).
     private const string CustomerSummaryViewSqlTemplate = """
         SELECT customer_id as CustomerId,
                order_count as OrderCount,
@@ -308,6 +314,8 @@ public class IndexedViewBenchmarks : IAsyncDisposable
     /// <summary>
     /// pengdows.crud querying indexed view directly - guaranteed fast path to pre-aggregated data.
     /// This is the key advantage: strongly-typed entity mapping to indexed views.
+    /// Session settings (ARITHABORT ON, etc.) are managed automatically by
+    /// DatabaseContext — no manual SET statements, no raw-SQL ceremony.
     /// </summary>
     [Benchmark]
     public async Task<CustomerOrderSummary?> GetCustomerSummary_pengdows_IndexedView()
@@ -320,8 +328,12 @@ public class IndexedViewBenchmarks : IAsyncDisposable
     }
 
     /// <summary>
-    /// Entity Framework querying base tables - must aggregate at runtime.
-    /// EF cannot directly map entities to indexed views like pengdows.crud can.
+    /// EF cannot map entities to indexed views natively — it must use FromSqlRaw
+    /// with hand-written SQL (including WITH (NOEXPAND)) to hit the view at all.
+    /// Named "_Aggregation" because the default EF path (LINQ against base tables)
+    /// would force a runtime GROUP BY.  Even in this best-case scenario EF still
+    /// carries more overhead than pengdows.  Do not replace FromSqlRaw with LINQ —
+    /// that IS the limitation being measured.
     /// </summary>
     [Benchmark]
     public async Task<EfCustomerOrderSummary?> GetCustomerSummary_EntityFramework_Aggregation()
@@ -351,8 +363,12 @@ public class IndexedViewBenchmarks : IAsyncDisposable
     // Intentionally no EF workaround benchmark here.
 
     /// <summary>
-    /// Direct SQL querying indexed view - opens/closes connection each call for fair comparison.
-    /// This is a true apples-to-apples benchmark against pengdows.crud's Standard mode.
+    /// Dapper (DirectSQL): like EF, Dapper has no session-settings lifecycle so
+    /// WITH (NOEXPAND) is required to guarantee indexed-view usage.  pengdows.crud
+    /// does not need this hint when its automatic session settings are active.
+    /// Opens/closes connection each call for apples-to-apples comparison against
+    /// pengdows Standard mode.  Do not add session-settings setup here — that
+    /// would change what is being measured.
     /// </summary>
     [Benchmark]
     public async Task<CustomerOrderSummary?> GetCustomerSummary_DirectSQL_IndexedView()

@@ -35,6 +35,10 @@ internal sealed record SqlServerValidationResult(
 internal static class SqlServerBenchmarkValidation
 {
     private const string ValidationRoot = "BenchmarkDotNet.Artifacts";
+    // SHOWPLAN XML nests every element inside this namespace.  Descendants("Object")
+    // without it silently returns empty and all plan assertions pass vacuously.
+    // Do not remove.
+    private static readonly XNamespace ShowPlanNs = "http://schemas.microsoft.com/sqlserver/2004/02/showplan";
 
     public static async Task<SqlServerValidationResult> ValidateAsync(SqlServerValidationConfig config)
     {
@@ -160,7 +164,7 @@ internal static class SqlServerBenchmarkValidation
 
     private static void ValidatePlanObjects(XDocument planDoc, SqlServerValidationConfig config, string expectedIndex, string planPath)
     {
-        var objects = planDoc.Descendants("Object")
+        var objects = planDoc.Descendants(ShowPlanNs + "Object")
             .Select(o => new
             {
                 Schema = (string?)o.Attribute("Schema"),

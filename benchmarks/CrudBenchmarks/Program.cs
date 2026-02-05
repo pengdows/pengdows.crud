@@ -1,3 +1,4 @@
+using BenchmarkDotNet.Columns;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Exporters;
 using BenchmarkDotNet.Exporters.Csv;
@@ -31,6 +32,7 @@ public class Program
         public InProcessConfig()
         {
             AddLogger(ConsoleLogger.Default);
+            AddColumnProvider(DefaultColumnProviders.Instance);
             AddJob(Job.Default
                 .WithToolchain(InProcessNoEmitToolchain.Instance)
                 .WithId("InProcess"));
@@ -42,6 +44,7 @@ public class Program
         public BenchmarkConfig()
         {
             AddLogger(ConsoleLogger.Default);
+            AddColumnProvider(DefaultColumnProviders.Instance);
             AddJob(Job.Default);
             AddExporter(MarkdownExporter.GitHub);
             AddExporter(CsvExporter.Default);

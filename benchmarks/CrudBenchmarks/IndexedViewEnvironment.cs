@@ -190,7 +190,9 @@ internal sealed class IndexedViewEnvironment : IAsyncDisposable
             );
         ");
 
-        await conn.ExecuteAsync($@"
+        // SQL Server requires CREATE VIEW to be the sole statement in its batch.
+        // Do not merge this back into the index-creation call below.
+        await conn.ExecuteAsync(@"
             CREATE VIEW dbo.vw_CustomerOrderSummary WITH SCHEMABINDING AS
             SELECT
                 customer_id,
@@ -200,13 +202,13 @@ internal sealed class IndexedViewEnvironment : IAsyncDisposable
                 COUNT_BIG(*) AS count_for_avg
             FROM dbo.Orders
             WHERE status = 'Active'
-            GROUP BY customer_id;
+            GROUP BY customer_id");
 
+        await conn.ExecuteAsync(@"
             CREATE UNIQUE CLUSTERED INDEX IX_CustomerOrderSummary_CustomerID
                 ON dbo.vw_CustomerOrderSummary(customer_id);
 
-            CREATE INDEX IX_Orders_CustomerID_Status ON dbo.Orders(customer_id, status);
-        ");
+            CREATE INDEX IX_Orders_CustomerID_Status ON dbo.Orders(customer_id, status)");
     }
 
     private async Task SeedDataAsync(int customerCount, int ordersPerCustomer)
