@@ -3,9 +3,9 @@
         <!-- Skip verification when .NET 8 is not available -->
         <SkipVerifyNoVendor>true</SkipVerifyNoVendor>
         <SkipInterfaceValidation>true</SkipInterfaceValidation>
-        <Version>1.1.0</Version>
+        <Version>2.0.0</Version>
         <InformationalVersion>$(Version)</InformationalVersion>
-        <AssemblyVersion>1.1.0.0</AssemblyVersion>
-        <FileVersion>1.1.0.0</FileVersion>
+        <AssemblyVersion>2.0.0.0</AssemblyVersion>
+        <FileVersion>2.0.0.0</FileVersion>
     </PropertyGroup>
 </Project>
