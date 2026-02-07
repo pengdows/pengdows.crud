@@ -51,7 +51,7 @@ public class SqlContainerCommandDisposalTests
 
         factory.SetCommandFailure("SELECT 1", new InvalidOperationException("fail"));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => container.ExecuteReaderAsync());
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await container.ExecuteReaderAsync());
 
         var command = connection.LastCreatedCommand;
 

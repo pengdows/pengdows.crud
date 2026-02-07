@@ -54,7 +54,7 @@ public class ExternalOracleTestContainer : TestContainer
 
     public override Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)
     {
-        var context = new DatabaseContext(_connectionString, OracleClientFactory.Instance, null!);
+        var context = new DatabaseContext(_connectionString, OracleClientFactory.Instance);
         return Task.FromResult<IDatabaseContext>(context);
     }
 

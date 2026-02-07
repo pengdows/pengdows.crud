@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.configuration;
 using pengdows.crud.dialects;
+using pengdows.crud.@internal;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.strategies.connection;
@@ -536,8 +537,8 @@ public class TransactionContextTests
         Assert.Equal(context.MaxParameterLimit, tx.MaxParameterLimit);
         Assert.NotEqual(0, tx.MaxParameterLimit);
         Assert.Equal(context.ConnectionMode, tx.ConnectionMode);
-        Assert.Equal(context.TypeMapRegistry, tx.TypeMapRegistry);
-        Assert.NotNull(tx.TypeMapRegistry);
+        Assert.Equal(context.GetInternalTypeMapRegistry(), tx.GetInternalTypeMapRegistry());
+        Assert.NotNull(tx.GetInternalTypeMapRegistry());
         Assert.Equal(context.DataSourceInfo, tx.DataSourceInfo);
         Assert.NotNull(tx.DataSourceInfo);
         Assert.Equal(context.SessionSettingsPreamble, tx.SessionSettingsPreamble);

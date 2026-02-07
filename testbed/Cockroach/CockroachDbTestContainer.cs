@@ -50,7 +50,7 @@ public class CockroachDbTestContainer : TestContainer
     public override Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)
     {
         var cs = $"Host=localhost;Port={_sqlPort};Username=root;Database=testdb;SSL Mode=disable;";
-        var ctx = new DatabaseContext(cs, NpgsqlFactory.Instance, null!);
+        var ctx = new DatabaseContext(cs, NpgsqlFactory.Instance);
         return Task.FromResult<IDatabaseContext>(ctx);
     }
 

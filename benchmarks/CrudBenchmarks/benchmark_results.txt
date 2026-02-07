@@ -1,0 +1,30 @@
+/home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/ReaderMappingBenchmark.cs(48,20): warning CS0618: 'DatabaseContext.DatabaseContext(string, DbProviderFactory, ITypeMapRegistry, DbMode, ReadWriteMode, ILoggerFactory?)' is obsolete: 'Use the constructor that takes DatabaseContextConfiguration instead.' [/home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/CrudBenchmarks.csproj]
+Available Benchmarks:
+  #0  AdvancedTypeBenchmarks
+  #1  AutomaticViewMatchingBenchmarks
+  #2  AutoSubstitutionBenchmarks
+  #3  CloningPerformanceTest
+  #4  DatabaseSpecificFeatureBenchmarks
+  #5  DirectViewBenchmarks
+  #6  IndexedViewBenchmarks
+  #7  IsolationBenchmarks
+  #8  MaterializedViewBenchmarks
+  #9  MixedLoadFairnessBenchmarks
+  #10 PagilaBenchmarks
+  #11 ParameterCreationBenchmark
+  #12 ProcWrappingStrategyLookupBenchmarks
+  #13 ReaderMappingBenchmark
+  #14 RealWorldScenarioBenchmarks
+  #15 SqlGenerationBenchmark
+  #16 SqlServerBenchmarks
+  #17 SqlServerPoolSaturationBenchmarks
+  #18 TableGatewayClientOnlyBenchmarks
+  #19 WeirdTypeCoercionBenchmarks
+
+
+You should select the target benchmark(s). Please, print a number of a benchmark (e.g. `0`) or a contained benchmark caption (e.g. `AdvancedTypeBenchmarks`).
+If you want to select few, please separate them with space ` ` (e.g. `1 2 3`).
+You can also provide the class name in console arguments by using --filter. (e.g. `--filter '*AdvancedTypeBenchmarks*'`).
+Enter the asterisk `*` to select all.
+To print all available benchmarks use `--list flat` or `--list tree`.
+To learn more about filtering use `--help`.

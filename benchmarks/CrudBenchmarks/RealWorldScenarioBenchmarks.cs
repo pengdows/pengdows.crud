@@ -57,7 +57,7 @@ public class RealWorldScenarioBenchmarks : IAsyncDisposable
                tags,
                created_at,
                updated_at,
-               search_vector
+               search_vector::text AS search_vector
         FROM transactions
         WHERE status = {status}::transaction_status
           AND (metadata->>'risk_score')::int > {riskScore}

@@ -230,6 +230,8 @@ public class Order
 
 ## Multi-Tenancy
 
+### Pattern 1: TenantContextRegistry
+
 Use `TenantContextRegistry` as singleton to manage per-tenant DatabaseContext instances:
 
 ```csharp
@@ -249,6 +251,90 @@ public class TenantService
     public IDatabaseContext GetContextForTenant(string tenantId)
     {
         return _registry.GetContext(tenantId);
+    }
+}
+```
+
+### Pattern 2: Per-Tenant Database Contexts (Different Database Types)
+
+**How the optional context parameter works:**
+- **Without context parameter:** Uses the default context from constructor (simple single-database apps)
+- **With context parameter:** Uses the passed context instead (multi-tenant scenarios)
+
+**CRITICAL:** Each tenant can use a **different database type** (SQL Server, PostgreSQL, SQLite, etc.). Pass the tenant's context to **CRUD methods** to route operations to the tenant's database:
+
+```csharp
+// 1. Register TableGateway as singleton in DI
+services.AddSingleton<ITableGateway<Order, long>>(sp =>
+    new OrderGateway(defaultContext));  // Used when context param is omitted
+
+// 2. Non-multi-tenant: Use default context (no parameter needed)
+var order = await gateway.RetrieveOneAsync(orderId);  // Uses defaultContext
+
+// 3. Multi-tenant: Resolve tenant context and pass to methods
+var registry = services.GetRequiredService<ITenantContextRegistry>();
+var tenantCtx = registry.GetContext("enterprise-client");  // Could be PostgreSQL, SQL Server, etc.
+
+// 3. Get gateway from DI and pass tenant context to CRUD methods
+var gateway = services.GetRequiredService<ITableGateway<Order, long>>();
+var order = await gateway.RetrieveOneAsync(orderId, tenantCtx);  // Uses tenant's database
+await gateway.CreateAsync(newOrder, tenantCtx);                  // Inserts to tenant's database
+await gateway.UpdateAsync(order, tenantCtx);                     // Updates tenant's database
+await gateway.DeleteAsync(orderId, tenantCtx);                   // Deletes from tenant's database
+```
+
+**All CRUD methods accept optional context parameter:**
+- `CreateAsync(entity, tenantContext)` - Insert to tenant's database
+- `RetrieveOneAsync(id, tenantContext)` - Select from tenant's database
+- `RetrieveAsync(ids, tenantContext)` - Select multiple from tenant's database
+- `UpdateAsync(entity, tenantContext)` - Update in tenant's database
+- `DeleteAsync(id, tenantContext)` - Delete from tenant's database
+- `UpsertAsync(entity, tenantContext)` - Upsert to tenant's database
+
+**This pattern enables:**
+- ✅ Single TableGateway instance (singleton) for all tenants
+- ✅ Each tenant uses different database type (PostgreSQL, SQL Server, MySQL, etc.)
+- ✅ SQL automatically generated with tenant's dialect (parameter markers, quoting)
+- ✅ Connection pooling per tenant context
+- ✅ **No tenant_id filtering needed** - physical database separation
+
+**Example: Multi-Tenant Controller**
+
+```csharp
+public class OrdersController : ControllerBase
+{
+    private readonly ITableGateway<Order, long> _orderGateway;
+    private readonly ITenantContextRegistry _tenantRegistry;
+
+    public OrdersController(
+        ITableGateway<Order, long> orderGateway,
+        ITenantContextRegistry tenantRegistry)
+    {
+        _orderGateway = orderGateway;
+        _tenantRegistry = tenantRegistry;
+    }
+
+    [HttpGet("{id}")]
+    public async Task<IActionResult> Get(long id)
+    {
+        // Resolve tenant from request (header, claim, etc.)
+        var tenantId = User.FindFirst("tenant_id")?.Value;
+        var tenantCtx = _tenantRegistry.GetContext(tenantId);
+
+        // Pass tenant context - retrieves from tenant's database
+        var order = await _orderGateway.RetrieveOneAsync(id, tenantCtx);
+        return order is null ? NotFound() : Ok(order);
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> Create([FromBody] Order order)
+    {
+        var tenantId = User.FindFirst("tenant_id")?.Value;
+        var tenantCtx = _tenantRegistry.GetContext(tenantId);
+
+        // Pass tenant context - inserts to tenant's database
+        await _orderGateway.CreateAsync(order, tenantCtx);
+        return CreatedAtAction(nameof(Get), new { id = order.Id }, order);
     }
 }
 ```

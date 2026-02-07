@@ -47,7 +47,7 @@ public class SqlContainerBranchTests
         using var ctx = CreateContext(SupportedDatabase.Sqlite, connection);
         var container = ctx.CreateSqlContainer("SELECT 1");
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => container.ExecuteScalarAsync<int>());
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await container.ExecuteScalarAsync<int>());
     }
 
     [Fact]
@@ -95,7 +95,7 @@ public class SqlContainerBranchTests
         using var ctx = CreateContext(SupportedDatabase.Sqlite, connection);
         var container = ctx.CreateSqlContainer("SELECT scalar_test");
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => container.ExecuteScalarWriteAsync<int>());
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await container.ExecuteScalarWriteAsync<int>());
     }
 
     [Fact]
@@ -143,7 +143,7 @@ public class SqlContainerBranchTests
         using var ctx = CreateContext(SupportedDatabase.PostgreSql, null, ReadWriteMode.ReadOnly);
         var container = ctx.CreateSqlContainer("SELECT 1");
 
-        await Assert.ThrowsAsync<NotSupportedException>(() => container.ExecuteNonQueryAsync());
+        await Assert.ThrowsAsync<NotSupportedException>(async () => await container.ExecuteNonQueryAsync());
     }
 
     [Fact]
@@ -152,7 +152,7 @@ public class SqlContainerBranchTests
         using var ctx = CreateContext(SupportedDatabase.PostgreSql);
         var container = ctx.CreateSqlContainer("SELECT 1");
 
-        await Assert.ThrowsAsync<NotSupportedException>(() => container.ExecuteNonQueryAsync(CommandType.TableDirect));
+        await Assert.ThrowsAsync<NotSupportedException>(async () => await container.ExecuteNonQueryAsync(CommandType.TableDirect));
     }
 
     [Fact]
@@ -161,7 +161,7 @@ public class SqlContainerBranchTests
         using var ctx = CreateContext(SupportedDatabase.PostgreSql);
         var container = ctx.CreateSqlContainer();
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => container.ExecuteNonQueryAsync());
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await container.ExecuteNonQueryAsync());
     }
 
     private static DatabaseContext CreateContext(

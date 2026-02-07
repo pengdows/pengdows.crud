@@ -89,7 +89,7 @@ public class DatabaseContextInitializationAdditionalTests
         };
         var factory = new fakeDbFactory(SupportedDatabase.MySql);
 
-        using var ctx = new DatabaseContext(configuration, factory, NullLoggerFactory.Instance, null);
+        using var ctx = new DatabaseContext(configuration, factory, NullLoggerFactory.Instance);
 
         var field = typeof(DatabaseContext).GetField("_readerConnectionString",
             BindingFlags.NonPublic | BindingFlags.Instance);

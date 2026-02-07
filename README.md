@@ -1142,7 +1142,7 @@ var clonedQuery = pgQuery.Clone(mysqlContext);  // BROKEN!
 
 ```csharp
 // Register custom converter for PostgreSQL point type
-context.TypeMapRegistry.AdvancedTypeRegistry.RegisterConverter<Point>(
+pengdows.crud.types.AdvancedTypeRegistry.Shared.RegisterConverter<Point>(
     from: (dbValue) => {
         if (dbValue is string str)
         {

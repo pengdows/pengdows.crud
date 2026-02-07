@@ -219,7 +219,7 @@ public interface IAuditValues
 
 ## TenantContextRegistry
 
-For multi-tenancy:
+For multi-tenancy with **different database types per tenant**:
 
 ```csharp
 public class TenantContextRegistry
@@ -228,3 +228,47 @@ public class TenantContextRegistry
     void RegisterContext(string tenantId, IDatabaseContext context);
 }
 ```
+
+**How the optional context parameter works:**
+- **Omit context:** Uses the default context from TableGateway constructor
+- **Pass context:** Uses that context instead
+
+**Usage Pattern - Different Databases Per Tenant:**
+
+```csharp
+// DI registration - single TableGateway instance for all tenants
+services.AddSingleton<ITableGateway<Order, long>>(sp =>
+    new OrderGateway(defaultContext));  // Used when context param omitted
+
+// Non-multi-tenant: omit context parameter (uses defaultContext)
+var order = await gateway.RetrieveOneAsync(orderId);
+
+// Multi-tenant: resolve tenant context and pass to CRUD methods
+var registry = services.GetRequiredService<ITenantContextRegistry>();
+var tenantCtx = registry.GetContext("enterprise-client");  // Any database type
+
+// Get gateway from DI and pass tenant context to methods
+var gateway = services.GetRequiredService<ITableGateway<Order, long>>();
+
+// All operations use tenant's database
+var order = await gateway.RetrieveOneAsync(orderId, tenantCtx);
+await gateway.CreateAsync(newOrder, tenantCtx);
+await gateway.UpdateAsync(order, tenantCtx);
+await gateway.DeleteAsync(orderId, tenantCtx);
+```
+
+**All CRUD methods accept optional context parameter:**
+- `CreateAsync(entity, tenantContext)` - Inserts to tenant's database
+- `RetrieveOneAsync(id, tenantContext)` - Selects from tenant's database
+- `RetrieveAsync(ids, tenantContext)` - Selects multiple from tenant's database
+- `UpdateAsync(entity, tenantContext)` - Updates in tenant's database
+- `DeleteAsync(id, tenantContext)` - Deletes from tenant's database
+- `UpsertAsync(entity, tenantContext)` - Upserts to tenant's database
+
+**This enables:**
+- ✅ Physical database separation (no tenant_id WHERE filtering needed)
+- ✅ Single TableGateway instance for all tenants (singleton-safe)
+- ✅ Each tenant uses different database type (PostgreSQL, SQL Server, MySQL, etc.)
+- ✅ SQL automatically generated with tenant's dialect (parameter markers, quoting)
+- ✅ Connection pooling per tenant context
+- ✅ Type safety across all database types

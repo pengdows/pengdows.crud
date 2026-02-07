@@ -3,6 +3,7 @@
 using System.Data;
 using System.Data.Common;
 using System.Text;
+using System.Threading.Tasks;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
@@ -155,7 +156,7 @@ public interface ISqlContainer : ISafeAsyncDisposableBase
     /// </summary>
     /// <param name="commandType">Type of command to execute.</param>
     /// <returns>The number of rows affected.</returns>
-    Task<int> ExecuteNonQueryAsync(CommandType commandType = CommandType.Text);
+    ValueTask<int> ExecuteNonQueryAsync(CommandType commandType = CommandType.Text);
 
     /// <summary>
     /// Executes the current query as a non-query command with cancellation support.
@@ -163,7 +164,7 @@ public interface ISqlContainer : ISafeAsyncDisposableBase
     /// <param name="commandType">Type of command to execute.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <returns>The number of rows affected.</returns>
-    Task<int> ExecuteNonQueryAsync(CommandType commandType, CancellationToken cancellationToken);
+    ValueTask<int> ExecuteNonQueryAsync(CommandType commandType, CancellationToken cancellationToken);
 
     /// <summary>
     /// Executes the query and returns the first column of the first row in the result set.
@@ -171,7 +172,7 @@ public interface ISqlContainer : ISafeAsyncDisposableBase
     /// <typeparam name="T">The expected return type.</typeparam>
     /// <param name="commandType">Type of command to execute.</param>
     /// <returns>The scalar value or <c>null</c> if no results.</returns>
-    Task<T?> ExecuteScalarAsync<T>(CommandType commandType = CommandType.Text);
+    ValueTask<T?> ExecuteScalarAsync<T>(CommandType commandType = CommandType.Text);
 
     /// <summary>
     /// Executes the query and returns the first column of the first row with cancellation support.
@@ -180,7 +181,7 @@ public interface ISqlContainer : ISafeAsyncDisposableBase
     /// <param name="commandType">Type of command to execute.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <returns>The scalar value or <c>null</c> if no results.</returns>
-    Task<T?> ExecuteScalarAsync<T>(CommandType commandType, CancellationToken cancellationToken);
+    ValueTask<T?> ExecuteScalarAsync<T>(CommandType commandType, CancellationToken cancellationToken);
 
     /// <summary>
     /// Executes the query and returns a tracked data reader.
@@ -214,7 +215,7 @@ public interface ISqlContainer : ISafeAsyncDisposableBase
     /// </code>
     /// </example>
     /// </remarks>
-    Task<ITrackedReader> ExecuteReaderAsync(CommandType commandType = CommandType.Text);
+    ValueTask<ITrackedReader> ExecuteReaderAsync(CommandType commandType = CommandType.Text);
 
     /// <summary>
     /// Executes the query and returns a tracked data reader with cancellation support.
@@ -233,7 +234,7 @@ public interface ISqlContainer : ISafeAsyncDisposableBase
     /// In transaction contexts, dispose the reader before issuing additional commands on the same transaction connection.
     /// </para>
     /// </remarks>
-    Task<ITrackedReader> ExecuteReaderAsync(CommandType commandType, CancellationToken cancellationToken);
+    ValueTask<ITrackedReader> ExecuteReaderAsync(CommandType commandType, CancellationToken cancellationToken);
 
     /// <summary>
     /// Adds multiple parameters to the container.

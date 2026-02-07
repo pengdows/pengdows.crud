@@ -56,7 +56,7 @@ public class DatabaseMetricsTests
 
         var container = context.CreateSqlContainer("SELECT 1");
 
-        await Assert.ThrowsAsync<TimeoutException>(() => container.ExecuteScalarAsync<int>());
+        await Assert.ThrowsAsync<TimeoutException>(async () => await container.ExecuteScalarAsync<int>());
 
         var metrics = context.Metrics;
         Assert.Equal(1, metrics.CommandsFailed);

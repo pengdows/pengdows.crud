@@ -17,6 +17,8 @@
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using pengdows.crud;
 
 namespace pengdows.crud.tenant;
 
@@ -44,6 +46,7 @@ public static class TenantServiceCollectionExtensions
         resolver.Register(options);
 
         services.AddSingleton<ITenantConnectionResolver>(resolver);
+        services.TryAddSingleton<IDatabaseContextFactory, DefaultDatabaseContextFactory>();
         services.AddSingleton<ITenantContextRegistry, TenantContextRegistry>();
 
         return services;

@@ -57,7 +57,8 @@ public class SqlContainerConnectionSharingTests
         Assert.False(context.LastIsShared.Value);
     }
 
-    private sealed class RecordingContext : IDatabaseContext, ISqlDialectProvider, IInternalConnectionProvider
+private sealed class RecordingContext : IDatabaseContext, ISqlDialectProvider, IInternalConnectionProvider,
+    ITypeMapAccessor
     {
         private readonly DatabaseContext _context;
 
@@ -80,7 +81,9 @@ public class SqlContainerConnectionSharingTests
             set => _context.Name = value;
         }
         public DbDataSource? DataSource => _context.DataSource;
-        public ITypeMapRegistry TypeMapRegistry => _context.TypeMapRegistry;
+        ITypeMapRegistry ITypeMapAccessor.TypeMapRegistry =>
+            (_context as ITypeMapAccessor)?.TypeMapRegistry ??
+            throw new InvalidOperationException("IDatabaseContext must expose an internal TypeMapRegistry.");
         public IDataSourceInformation DataSourceInfo => _context.DataSourceInfo;
         public string SessionSettingsPreamble => _context.SessionSettingsPreamble;
         public ProcWrappingStyle ProcWrappingStyle => _context.ProcWrappingStyle;

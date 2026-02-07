@@ -321,6 +321,27 @@ public class SqlContainerCloningTests : IDisposable
         Assert.Equal(0, cachedTemplate.GetParameterValue<int>("p0"));
     }
 
+    [Fact]
+    public void Clone_OptimizedParameterCloning_SkipsDefaultProperties()
+    {
+        // TDD: Verify that parameter cloning only copies non-default properties (optimization)
+        using var originalContainer = _sqliteContext.CreateSqlContainer("SELECT * FROM users WHERE id = ");
+
+        // Add a simple parameter with just name, type, and value (no Size/Scale/Precision)
+        var param = originalContainer.AddParameterWithValue("id", DbType.Int32, 123);
+        // Verify defaults
+        Assert.Equal(0, param.Size);
+        Assert.Equal(0, param.Scale);
+        Assert.Equal(0, param.Precision);
+
+        // Act
+        using var clonedContainer = originalContainer.Clone(_postgresContext);
+
+        // Assert - cloned parameter should work correctly
+        Assert.Equal(123, clonedContainer.GetParameterValue<int>("id"));
+        Assert.Equal(1, clonedContainer.ParameterCount);
+    }
+
     public void Dispose()
     {
         _sqliteContext?.Dispose();

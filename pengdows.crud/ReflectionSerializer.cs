@@ -160,7 +160,7 @@ public static class ReflectionSerializer
 
         if (IsSimpleType(targetType))
         {
-            return Convert.ChangeType(data, Nullable.GetUnderlyingType(targetType) ?? targetType);
+            return TypeCoercionHelper.ConvertWithCache(data, Nullable.GetUnderlyingType(targetType) ?? targetType);
         }
 
         if (typeof(string) == targetType)

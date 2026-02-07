@@ -453,7 +453,7 @@ internal static class ConnectionPoolingConfiguration
             var targetType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
             try
             {
-                var converted = Convert.ChangeType(minPoolSize, targetType, CultureInfo.InvariantCulture);
+                var converted = TypeCoercionHelper.ConvertWithCache(minPoolSize, targetType);
                 property.SetValue(builder, converted);
                 return true;
             }

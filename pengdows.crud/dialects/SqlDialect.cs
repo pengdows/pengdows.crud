@@ -91,7 +91,11 @@ internal abstract class SqlDialect : ISqlDialect
                 p.DbType = DbType.String;
                 if (v is Guid guid)
                 {
-                    p.Value = guid.ToString();
+                    // Use string.Create with Guid.TryFormat to avoid allocations
+                    p.Value = string.Create(36, guid, static (span, g) =>
+                    {
+                        g.TryFormat(span, out _, "D"); // "D" format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+                    });
                     p.Size = 36;
                 }
             },

@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using pengdows.crud;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.tenant;
@@ -28,6 +29,15 @@ public class TenantTests
         }
     }
 
+    private sealed class StubContextFactory : IDatabaseContextFactory
+    {
+        public IDatabaseContext Create(IDatabaseContextConfiguration configuration, DbProviderFactory factory,
+            ILoggerFactory loggerFactory)
+        {
+            return new DatabaseContext(configuration, factory, loggerFactory);
+        }
+    }
+
     [Fact]
     public async Task TenantContextRegistry_ResolvesContextFromKeyedFactory()
     {
@@ -44,7 +54,7 @@ public class TenantTests
 
         using var provider = services.BuildServiceProvider();
         using var registry = new TenantContextRegistry(provider, new StubResolver(cfg),
-            provider.GetRequiredService<ILoggerFactory>());
+            new StubContextFactory(), provider.GetRequiredService<ILoggerFactory>());
 
         using var ctx = registry.GetContext("tenant1");
         using var sc = ctx.CreateSqlContainer("SELECT 1");

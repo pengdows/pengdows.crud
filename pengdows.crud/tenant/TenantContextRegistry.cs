@@ -18,6 +18,7 @@
 
 using System.Collections.Concurrent;
 using System.Data.Common;
+using System;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.infrastructure;
@@ -31,15 +32,18 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
     private readonly ITenantConnectionResolver _resolver;
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger _logger;
+    private readonly IDatabaseContextFactory _contextFactory;
 
     public TenantContextRegistry(
         IServiceProvider serviceProvider,
         ITenantConnectionResolver resolver,
+        IDatabaseContextFactory contextFactory,
         ILoggerFactory loggerFactory)
     {
-        _serviceProvider = serviceProvider;
-        _resolver = resolver;
-        _loggerFactory = loggerFactory;
+        _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
+        _resolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
+        _contextFactory = contextFactory ?? throw new ArgumentNullException(nameof(contextFactory));
+        _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
         _logger = loggerFactory.CreateLogger<TenantContextRegistry>();
     }
 
@@ -55,7 +59,7 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
 
         var factory = _serviceProvider.GetKeyedService<DbProviderFactory>(config.ProviderName)
                       ?? throw new InvalidOperationException($"No factory registered for {config.ProviderName}");
-        return new DatabaseContext(config, factory, _loggerFactory);
+        return _contextFactory.Create(config, factory, _loggerFactory);
     }
 
     protected override void DisposeManaged()

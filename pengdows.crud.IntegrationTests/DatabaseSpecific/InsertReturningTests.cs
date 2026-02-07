@@ -4,6 +4,7 @@ using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
 using pengdows.crud;
+using pengdows.crud.@internal;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
 using pengdows.crud.IntegrationTests.Infrastructure;
@@ -70,7 +71,7 @@ public class InsertReturningTests : DatabaseTestBase
                 return;
             }
 
-            ((TypeMapRegistry)context.TypeMapRegistry).Register<ReturningEntity>();
+            ((TypeMapRegistry)context.GetInternalTypeMapRegistry()).Register<ReturningEntity>();
             var helper = new TableGateway<ReturningEntity, long>(context);
             var entity = new ReturningEntity
             {
@@ -102,7 +103,7 @@ public class InsertReturningTests : DatabaseTestBase
                 return;
             }
 
-            ((TypeMapRegistry)context.TypeMapRegistry).Register<ReturningEntity>();
+            ((TypeMapRegistry)context.GetInternalTypeMapRegistry()).Register<ReturningEntity>();
             var helper = new TableGateway<ReturningEntity, long>(context);
             var uniqueName = $"noreturning-{provider}-{Guid.NewGuid():N}";
             var entity = new ReturningEntity

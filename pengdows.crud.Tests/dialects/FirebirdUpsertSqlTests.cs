@@ -2,6 +2,7 @@
 
 using System;
 using System.Data;
+using pengdows.crud.@internal;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
 using Xunit;
@@ -18,7 +19,7 @@ public class FirebirdUpsertSqlTests
         var factory = new fakeDbFactory(SupportedDatabase.Firebird);
         var typeMap = new TypeMapRegistry();
         using var context = new DatabaseContext("Data Source=test;EmulatedProduct=Firebird", factory, typeMap);
-        context.TypeMapRegistry.Register<FirebirdMergeEntity>();
+        context.RegisterEntity<FirebirdMergeEntity>();
 
         var helper = new TableGateway<FirebirdMergeEntity, int>(context);
         var entity = new FirebirdMergeEntity { Id = 1, Name = "sa", Counter = 5 };

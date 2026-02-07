@@ -1,4 +1,5 @@
 using System.Data;
+using pengdows.crud.@internal;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
 using pengdows.crud.IntegrationTests.Infrastructure;
@@ -26,7 +27,7 @@ public class AuditFieldTests : DatabaseTestBase
 
     protected override async Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)
     {
-        context.TypeMapRegistry.Register<AuditedEntity>();
+        context.RegisterEntity<AuditedEntity>();
 
         if (provider == SupportedDatabase.Firebird)
         {

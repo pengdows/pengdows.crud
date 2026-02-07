@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
@@ -182,6 +183,34 @@ public class SqlContainerTests : SqlLiteContextTestBase, IDisposable
     }
 
     [Fact]
+    public void SetParameterValue_AllPrefixesNormalize()
+    {
+        var container = Context.CreateSqlContainer();
+        var param = container.AddParameterWithValue(DbType.Int32, 1);
+
+        container.SetParameterValue("@" + param.ParameterName, 2);
+        container.SetParameterValue(":" + param.ParameterName, 3);
+        container.SetParameterValue("?" + param.ParameterName, 4);
+        container.SetParameterValue("$" + param.ParameterName, 5);
+
+        var value = container.GetParameterValue<int>(param.ParameterName);
+        Assert.Equal(5, value);
+    }
+
+    [Fact]
+    public void SetParameterValue_AlternatePrefixFallbacks()
+    {
+        var container = Context.CreateSqlContainer();
+        var param = container.AddParameterWithValue(DbType.Int32, 1);
+
+        var alternate = (param.ParameterName[0] == 'p' ? 'w' : 'p') + param.ParameterName.Substring(1);
+        container.SetParameterValue(alternate, 7);
+
+        var value = container.GetParameterValue<int>(param.ParameterName);
+        Assert.Equal(7, value);
+    }
+
+    [Fact]
     public void GetParameterValue_Object_ReturnsValue()
     {
         var container = Context.CreateSqlContainer();
@@ -292,6 +321,46 @@ public class SqlContainerTests : SqlLiteContextTestBase, IDisposable
     }
 
     [Fact]
+    public async Task ExecuteNonQueryAsync_ReturnsValueTaskResult()
+    {
+        var qp = Context.QuotePrefix;
+        var qs = Context.QuoteSuffix;
+        await BuildTestTable();
+        var container = Context.CreateSqlContainer();
+        AssertProperNumberOfConnectionsForMode();
+        var p = container.AddParameterWithValue(DbType.String, "Named");
+        container.Query.AppendFormat("INSERT INTO {0}Test{1} ({0}Name{1}) VALUES ({2})", qp, qs,
+            Context.MakeParameterName(p));
+
+        ValueTask<int> valueTask = container.ExecuteNonQueryAsync();
+
+        var result = await valueTask;
+
+        Assert.Equal(1, result);
+    }
+
+    [Fact]
+    public async Task ExecuteScalarAsync_ValueTaskCanBeAwaited()
+    {
+        var qp = Context.QuotePrefix;
+        var qs = Context.QuoteSuffix;
+        await BuildTestTable();
+        var container = Context.CreateSqlContainer();
+        AssertProperNumberOfConnectionsForMode();
+        var insertParam = container.AddParameterWithValue(DbType.String, "TestName");
+        container.Query.AppendFormat("INSERT INTO {0}Test{1} ({0}Name{1}) VALUES ({2})", qp, qs,
+            Context.MakeParameterName(insertParam));
+        await container.ExecuteNonQueryAsync();
+        container.Clear();
+        container.Query.AppendFormat("SELECT {0}Name{1} FROM {0}Test{1} WHERE {0}Id{1} = 1", qp, qs);
+
+        ValueTask<string?> valueTask = container.ExecuteScalarAsync<string>();
+
+        var result = await valueTask;
+        Assert.Equal("TestName", result);
+    }
+
+    [Fact]
     public async Task ExecuteScalarAsync_ThrowsException_WhenNoRowsForNonNullableType()
     {
         var qp = Context.QuotePrefix;
@@ -301,7 +370,7 @@ public class SqlContainerTests : SqlLiteContextTestBase, IDisposable
 
         container.Query.AppendFormat("SELECT {0}Id{1} FROM {0}Test{1} WHERE {0}Id{1} = -1", qp, qs);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => container.ExecuteScalarAsync<int>());
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await container.ExecuteScalarAsync<int>());
         AssertProperNumberOfConnectionsForMode();
     }
 
@@ -611,8 +680,8 @@ public class SqlContainerTests : SqlLiteContextTestBase, IDisposable
         await using var container = context.CreateSqlContainer("MyStoredProc");
         container.AddParameterWithValue("param1", DbType.String, "value1");
 
-        await Assert.ThrowsAsync<NotSupportedException>(() =>
-            container.ExecuteNonQueryAsync(CommandType.StoredProcedure));
+        await Assert.ThrowsAsync<NotSupportedException>(async () =>
+            await container.ExecuteNonQueryAsync(CommandType.StoredProcedure));
     }
 
     [Fact]

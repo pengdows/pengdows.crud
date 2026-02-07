@@ -136,10 +136,10 @@ public class ReadOnlySingleWriterConnectionTests
         await using var ctx = CreateReadOnlySingleWriterContext(factory);
 
         // Attempting to create a write transaction on a read-only context should throw
-        await Assert.ThrowsAsync<NotSupportedException>(() =>
+        await Assert.ThrowsAsync<NotSupportedException>(async () =>
         {
             var tx = ctx.BeginTransaction(readOnly: false);
-            return tx.DisposeAsync().AsTask();
+            await tx.DisposeAsync();
         });
     }
 
@@ -156,7 +156,7 @@ public class ReadOnlySingleWriterConnectionTests
         await using var container = ctx.CreateSqlContainer("INSERT INTO t VALUES (1)");
 
         // Should fail because context is read-only
-        await Assert.ThrowsAsync<NotSupportedException>(() => container.ExecuteNonQueryAsync());
+        await Assert.ThrowsAsync<NotSupportedException>(async () => await container.ExecuteNonQueryAsync());
     }
 
     [Theory]

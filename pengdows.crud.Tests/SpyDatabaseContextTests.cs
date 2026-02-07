@@ -1,5 +1,6 @@
 using System;
 using Moq;
+using pengdows.crud.@internal;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -13,7 +14,7 @@ public class SpyDatabaseContextTests : SqlLiteContextTestBase
         map.Register<NullableIdEntity>();
 
         var mockCtx = new Mock<IDatabaseContext>();
-        mockCtx.SetupGet(c => c.TypeMapRegistry).Returns(map);
+        mockCtx.As<ITypeMapAccessor>().SetupGet(a => a.TypeMapRegistry).Returns(map);
         mockCtx.As<IContextIdentity>().SetupGet(i => i.RootId).Returns(Guid.NewGuid());
 
         Assert.Throws<InvalidOperationException>(() => new TableGateway<NullableIdEntity, int?>(mockCtx.Object));

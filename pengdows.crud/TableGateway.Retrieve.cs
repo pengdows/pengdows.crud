@@ -167,7 +167,7 @@ public partial class TableGateway<TEntity, TRowID>
         var keys = GetPrimaryKeys();
         CheckParameterLimit(sc, listOfObjects!.Count * keys.Count);
 
-        var parameters = new List<DbParameter>();
+        var parameters = new List<DbParameter>(listOfObjects.Count * keys.Count);
         var wrappedAlias = BuildAliasPrefix(alias, dialect);
         var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
         var counters = new ClauseCounters();
@@ -177,7 +177,7 @@ public partial class TableGateway<TEntity, TRowID>
         {
             if (index++ > 0)
             {
-                sb.Append(" OR ");
+                sb.Append(SqlFragments.Or);
             }
 
             sb.Append(BuildPrimaryKeyClause(entity, keys, wrappedAlias, parameters, dialect, counters));
@@ -231,7 +231,7 @@ public partial class TableGateway<TEntity, TRowID>
         {
             if (i > 0)
             {
-                clause.Append(" AND ");
+                clause.Append(SqlFragments.And);
             }
 
             var pk = keys[i];
@@ -262,12 +262,14 @@ public partial class TableGateway<TEntity, TRowID>
     {
         if (!sc.HasWhereAppended)
         {
-            sc.Query.Append("\n WHERE ");
+            sc.Query.Append('\n');
+            sc.Query.Append(SqlFragments.Where);
             sc.HasWhereAppended = true;
         }
         else
         {
-            sc.Query.Append("\n AND ");
+            sc.Query.Append('\n');
+            sc.Query.Append(SqlFragments.And);
         }
     }
 
@@ -332,14 +334,14 @@ public partial class TableGateway<TEntity, TRowID>
                           ?? SupportedDatabase.Unknown;
             var key = $"WhereEquals:{wrappedColumnName}:{product}{(hasNull ? ":Null" : string.Empty)}";
             var equalityCore = GetCachedQuery(key, () => string.Concat(wrappedColumnName, " = ", paramName));
-            _queryCache.GetOrAdd($"Where:{wrappedColumnName}:1", _ => equalityCore);
+            _queryCache.GetOrAdd($"WhereQuery:{wrappedColumnName}:1", _ => equalityCore);
 
             AppendWherePrefix(sqlContainer);
             if (hasNull)
             {
                 sqlContainer.Query.Append('(')
                     .Append(equalityCore)
-                    .Append(" OR ")
+                    .Append(SqlFragments.Or)
                     .Append(wrappedColumnName)
                     .Append(" IS NULL)");
             }
@@ -365,7 +367,7 @@ public partial class TableGateway<TEntity, TRowID>
             {
                 sqlContainer.Query.Append('(')
                     .Append(anyCore)
-                    .Append(" OR ")
+                    .Append(SqlFragments.Or)
                     .Append(wrappedColumnName)
                     .Append(" IS NULL)");
             }
@@ -379,14 +381,15 @@ public partial class TableGateway<TEntity, TRowID>
             return sqlContainer;
         }
 
-        // IN-list with bucketing
-        var bucket = 1;
-        for (; bucket < nonNullIds.Count; bucket <<= 1)
-        {
-        }
+        // IN-list with bucketing (round up to power of 2 for cache efficiency)
+        var bucket = nonNullIds.Count <= 1
+            ? 1
+            : (int)System.Numerics.BitOperations.RoundUpToPowerOf2((uint)nonNullIds.Count);
 
-        var keyIn = $"Where:{wrappedColumnName}:{bucket}";
-        if (!_whereParameterNames.TryGet(keyIn, out var names))
+        // Cache parameter names by bucket size only (not column name) since names are position-based
+        // This improves cache hit rate - w0, w1, w2 are reused across all columns
+        var paramNamesKey = $"WhereParams:{bucket}";
+        if (!_whereParameterNames.TryGet(paramNamesKey, out var names))
         {
             names = new string[bucket];
             for (var i = 0; i < bucket; i++)
@@ -394,25 +397,27 @@ public partial class TableGateway<TEntity, TRowID>
                 names[i] = sqlContainer.MakeParameterName($"w{i}");
             }
 
-            _whereParameterNames.GetOrAdd(keyIn, _ => names);
+            _whereParameterNames.GetOrAdd(paramNamesKey, _ => names);
         }
 
-        var inCore = GetCachedQuery(keyIn, () =>
+        // Query cache must include column name since it generates "columnName IN (w0, w1, w2)"
+        var queryKey = $"WhereQuery:{wrappedColumnName}:{bucket}";
+        var inCore = GetCachedQuery(queryKey, () =>
         {
             var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
             sb.Append(wrappedColumnName);
-            sb.Append(" IN (");
+            sb.Append(SqlFragments.In);
             for (var i = 0; i < names.Length; i++)
             {
                 if (i > 0)
                 {
-                    sb.Append(", ");
+                    sb.Append(SqlFragments.Comma);
                 }
 
                 sb.Append(names[i]);
             }
 
-            sb.Append(')');
+            sb.Append(SqlFragments.CloseParen);
             return sb.ToString();
         });
 
@@ -421,7 +426,7 @@ public partial class TableGateway<TEntity, TRowID>
         {
             sqlContainer.Query.Append('(')
                 .Append(inCore)
-                .Append(" OR ")
+                .Append(SqlFragments.Or)
                 .Append(wrappedColumnName)
                 .Append(" IS NULL)");
         }

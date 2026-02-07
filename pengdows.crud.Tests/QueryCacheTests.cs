@@ -83,7 +83,7 @@ public class QueryCacheTests : SqlLiteContextTestBase
         var sc1 = Context.CreateSqlContainer();
         helper.BuildWhere(wrapped, new[] { 1, 2 }, sc1);
         var cache = GetQueryCache(helper);
-        var key = $"Where:{wrapped}:2";
+        var key = $"WhereQuery:{wrapped}:2";
         var first = cache[key];
 
         var sc2 = Context.CreateSqlContainer();
@@ -107,7 +107,7 @@ public class QueryCacheTests : SqlLiteContextTestBase
         helper.BuildWhere(wrapped, new[] { 1, 2 }, sc2);
 
         var cache = GetQueryCache(helper);
-        Assert.NotSame(cache[$"Where:{wrapped}:1"], cache[$"Where:{wrapped}:2"]);
+        Assert.NotSame(cache[$"WhereQuery:{wrapped}:1"], cache[$"WhereQuery:{wrapped}:2"]);
     }
 
     [Fact]
@@ -187,7 +187,10 @@ public class QueryCacheTests : SqlLiteContextTestBase
         );
 
         var cache = GetQueryCache(helper);
-        Assert.NotSame(cache[$"Where:{wrapped}:1"], cache[$"Where:{wrapped}:2"]);
+        // Verify both cache entries exist before comparing
+        Assert.True(cache.ContainsKey($"WhereQuery:{wrapped}:1"), $"Cache should contain key WhereQuery:{wrapped}:1");
+        Assert.True(cache.ContainsKey($"WhereQuery:{wrapped}:2"), $"Cache should contain key WhereQuery:{wrapped}:2");
+        Assert.NotSame(cache[$"WhereQuery:{wrapped}:1"], cache[$"WhereQuery:{wrapped}:2"]);
     }
 
     [Fact]

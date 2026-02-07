@@ -1,4 +1,5 @@
 using System.Data;
+using pengdows.crud.@internal;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
 using pengdows.crud.IntegrationTests.Infrastructure;
@@ -18,8 +19,8 @@ public class MergeConflictTests : DatabaseTestBase
 
     protected override Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)
     {
-        context.TypeMapRegistry.Register<VersionedEntity>();
-        context.TypeMapRegistry.Register<MergeRecord>();
+        context.RegisterEntity<VersionedEntity>();
+        context.RegisterEntity<MergeRecord>();
         return Task.CompletedTask;
     }
 
@@ -41,7 +42,7 @@ public class MergeConflictTests : DatabaseTestBase
             await helper.CreateAsync(initial, context);
 
             await using var concurrentContext = await CreateAdditionalContextAsync(provider);
-            concurrentContext.TypeMapRegistry.Register<VersionedEntity>();
+            concurrentContext.RegisterEntity<VersionedEntity>();
             var concurrentHelper = new TableGateway<VersionedEntity, long>(concurrentContext);
 
             var firstCopy = await helper.RetrieveOneAsync(initial.Id, context);
@@ -81,7 +82,7 @@ public class MergeConflictTests : DatabaseTestBase
             await helper.CreateAsync(baseRecord, context);
 
             await using var remoteContext = await CreateAdditionalContextAsync(provider);
-            remoteContext.TypeMapRegistry.Register<MergeRecord>();
+            remoteContext.RegisterEntity<MergeRecord>();
             var remoteHelper = new TableGateway<MergeRecord, long>(remoteContext);
             var remoteCopy =
                 await remoteHelper.RetrieveOneAsync(new MergeRecord { RecordKey = baseRecord.RecordKey },

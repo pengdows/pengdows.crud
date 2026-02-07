@@ -28,7 +28,9 @@
 
 #region
 
+using System.Collections.Concurrent;
 using System.Globalization;
+using System.Linq.Expressions;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -70,12 +72,115 @@ public static class TypeCoercionHelper
     private static readonly Type ReadOnlyMemoryOfByteType = typeof(ReadOnlyMemory<byte>);
     private static readonly Type ArraySegmentOfByteType = typeof(ArraySegment<byte>);
 
+    /// <summary>
+    /// Cache of compiled type conversion delegates for faster Convert.ChangeType operations.
+    /// Key: (sourceType, targetType), Value: compiled converter function.
+    /// </summary>
+    private static readonly ConcurrentDictionary<(Type source, Type target), Func<object, object>> _conversionCache = new();
+
     private static ILogger _logger = NullLogger.Instance;
 
     public static ILogger Logger
     {
         get => _logger;
         set => _logger = value ?? NullLogger.Instance;
+    }
+
+    /// <summary>
+    /// Converts a value to the specified target type using a cached compiled delegate.
+    /// This is significantly faster than Convert.ChangeType for repeated conversions.
+    /// </summary>
+    /// <param name="value">The value to convert (must not be null).</param>
+    /// <param name="targetType">The type to convert to.</param>
+    /// <returns>The converted value.</returns>
+    /// <exception cref="InvalidCastException">Thrown when the conversion fails.</exception>
+    public static object ConvertWithCache(object value, Type targetType)
+    {
+        if (value == null)
+        {
+            throw new ArgumentNullException(nameof(value), "Value cannot be null for type conversion");
+        }
+
+        var sourceType = value.GetType();
+        var actualTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
+
+        // Fast path: already correct type
+        if (sourceType == actualTarget)
+        {
+            return value;
+        }
+
+        // Get or create compiled converter
+        var converter = _conversionCache.GetOrAdd(
+            (sourceType, actualTarget),
+            static key => CompileConverter(key.source, key.target)
+        );
+
+        try
+        {
+            return converter(value);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidCastException(
+                $"Cannot convert value '{value}' from {sourceType.Name} to {actualTarget.Name}.",
+                ex);
+        }
+    }
+
+    /// <summary>
+    /// Compiles a fast type converter delegate using expression trees.
+    /// </summary>
+    private static Func<object, object> CompileConverter(Type sourceType, Type targetType)
+    {
+        // Parameter: object value
+        var param = Expression.Parameter(typeof(object), "value");
+
+        // Cast input: (TSource)value
+        var typedInput = Expression.Convert(param, sourceType);
+
+        Expression conversion;
+
+        // Special cases that Convert.ChangeType doesn't handle
+        if (sourceType == typeof(string) && targetType == typeof(Guid))
+        {
+            // Guid.Parse(stringValue)
+            var parseMethod = typeof(Guid).GetMethod(nameof(Guid.Parse), new[] { typeof(string) })!;
+            conversion = Expression.Call(parseMethod, typedInput);
+        }
+        else if (sourceType == typeof(DateTime) && targetType == typeof(DateTimeOffset))
+        {
+            // new DateTimeOffset(dateTimeValue)
+            var constructor = typeof(DateTimeOffset).GetConstructor(new[] { typeof(DateTime) })!;
+            conversion = Expression.New(constructor, typedInput);
+        }
+        else if (sourceType == typeof(DateTimeOffset) && targetType == typeof(DateTime))
+        {
+            // dateTimeOffsetValue.DateTime
+            var property = typeof(DateTimeOffset).GetProperty(nameof(DateTimeOffset.DateTime))!;
+            conversion = Expression.Property(typedInput, property);
+        }
+        else
+        {
+            // Use ChangeType method with InvariantCulture for standard conversions
+            var changeTypeMethod = typeof(Convert).GetMethod(
+                nameof(Convert.ChangeType),
+                new[] { typeof(object), typeof(Type), typeof(IFormatProvider) })!;
+
+            conversion = Expression.Call(
+                changeTypeMethod,
+                Expression.Convert(typedInput, typeof(object)),
+                Expression.Constant(targetType),
+                Expression.Constant(CultureInfo.InvariantCulture)
+            );
+        }
+
+        // Cast result: (object)result
+        var boxedResult = Expression.Convert(conversion, typeof(object));
+
+        // Compile the lambda
+        var lambda = Expression.Lambda<Func<object, object>>(boxedResult, param);
+        return lambda.Compile();
     }
 
     public static object? Coerce(
@@ -190,10 +295,10 @@ public static class TypeCoercionHelper
             }
         }
 
-        // Final fallback: Convert.ChangeType
+        // Final fallback: Use cached compiled converter for better performance
         try
         {
-            return Convert.ChangeType(value, underlyingTarget, CultureInfo.InvariantCulture);
+            return ConvertWithCache(value, underlyingTarget);
         }
         catch (Exception ex)
         {
@@ -614,10 +719,12 @@ public static class TypeCoercionHelper
         IColumnInfo column,
         SupportedDatabase provider,
         EnumParseFailureMode parseMode,
-        TypeCoercionOptions options)
+        TypeCoercionOptions options,
+        Type? fieldType = null)
     {
         var targetType = column.PropertyInfo.PropertyType;
         var runtimeTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
+        var sourceType = fieldType;
 
         // --- fast-path delegates, resolved once and captured in the closure ---
 
@@ -649,7 +756,7 @@ public static class TypeCoercionHelper
         {
             return value =>
             {
-                var dbValue = new types.coercion.DbValue(value, value.GetType());
+                var dbValue = new types.coercion.DbValue(value, sourceType ?? value.GetType());
                 if (coercion.TryRead(in dbValue, runtimeTarget, out var result))
                 {
                     return result;
@@ -662,6 +769,6 @@ public static class TypeCoercionHelper
         // Fallback: full Coerce dispatch covers char[]→string, AdvancedTypeRegistry,
         // Convert.ChangeType, etc.  The registry lookups here are unavoidable for
         // types that have no registered coercion.
-        return value => Coerce(value, value.GetType(), column, parseMode, options);
+        return value => Coerce(value, sourceType ?? value.GetType(), column, parseMode, options);
     }
 }

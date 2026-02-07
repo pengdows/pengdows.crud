@@ -51,8 +51,8 @@ public class SqlContainerStoredProcedureWrappingTests
         await using var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory, typeMap);
         await using var container = context.CreateSqlContainer("my_proc");
 
-        var exception = await Assert.ThrowsAsync<NotSupportedException>(
-            () => container.ExecuteReaderAsync(CommandType.StoredProcedure));
+        var exception = await Assert.ThrowsAsync<NotSupportedException>(async () =>
+            await container.ExecuteReaderAsync(CommandType.StoredProcedure));
 
         Assert.Contains("Stored procedures are not supported", exception.Message);
     }

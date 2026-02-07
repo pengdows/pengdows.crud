@@ -335,7 +335,11 @@ internal class DuckDbDialect : SqlDialect
         {
             // DuckDB handles GUIDs as strings in UUID format
             parameter.DbType = DbType.String;
-            parameter.Value = guidValue.ToString();
+            // Use string.Create with Guid.TryFormat to avoid allocations
+            parameter.Value = string.Create(36, guidValue, static (span, guid) =>
+            {
+                guid.TryFormat(span, out _, "D");
+            });
         }
         else if (type == DbType.Boolean && value is bool boolValue)
         {

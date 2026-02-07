@@ -106,7 +106,7 @@ namespace pengdows.crud;
 ///
 /// </remarks>
 public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextIdentity, ISqlDialectProvider,
-    IMetricsCollectorAccessor, IInternalConnectionProvider
+    IMetricsCollectorAccessor, IInternalConnectionProvider, ITypeMapAccessor
 {
     private readonly DbProviderFactory? _factory;
     private DbDataSource? _dataSource;
@@ -227,8 +227,9 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     public DbMode ConnectionMode { get; private set; }
 
 
-    /// <inheritdoc/>
-    public ITypeMapRegistry TypeMapRegistry { get; }
+    internal ITypeMapRegistry TypeMapRegistry { get; }
+
+    ITypeMapRegistry ITypeMapAccessor.TypeMapRegistry => TypeMapRegistry;
 
     /// <inheritdoc/>
     public IDataSourceInformation DataSourceInfo => _dataSourceInfo;

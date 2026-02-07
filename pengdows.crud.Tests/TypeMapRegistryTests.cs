@@ -14,25 +14,6 @@ namespace pengdows.crud.Tests;
 
 public class TypeMapRegistryTests
 {
-    [Fact]
-    public void Instance_ReturnsSameRegistry()
-    {
-        TypeMapRegistry.Instance.Clear();
-        var first = TypeMapRegistry.Instance;
-        var second = TypeMapRegistry.Instance;
-        Assert.Same(first, second);
-    }
-
-    [Fact]
-    public void NewInstance_DoesNotAffectSingleton()
-    {
-        TypeMapRegistry.Instance.Clear();
-        var custom = new TypeMapRegistry();
-        var customInfo = custom.GetTableInfo<MyEntity>();
-        customInfo.Name = "Changed";
-        var singletonInfo = TypeMapRegistry.Instance.GetTableInfo<MyEntity>();
-        Assert.Equal("MyEntity", singletonInfo.Name);
-    }
 
     [Fact]
     public void Register_AddsAndRetrievesTableInfo()
@@ -281,6 +262,46 @@ public class TypeMapRegistryTests
 
         Assert.Equal("Changed", info1.Name);
         Assert.Equal("MyEntity", info2.Name);
+    }
+
+    [Fact]
+    public void GetTableInfo_CompiledFastGetterNeverNull()
+    {
+        // Arrange
+        var registry = new TypeMapRegistry();
+
+        // Act
+        var info = registry.GetTableInfo<MyEntity>();
+
+        // Assert - All readable, non-JSON columns should have compiled FastGetter
+        foreach (var column in info.Columns.Values)
+        {
+            if (column.PropertyInfo.CanRead && !column.IsJsonType)
+            {
+                var columnInfo = (ColumnInfo)column;
+                Assert.NotNull(columnInfo.FastGetter);
+            }
+        }
+    }
+
+    [Fact]
+    public void GetTableInfo_EnumUnderlyingTypeAlwaysCached()
+    {
+        // Arrange
+        var registry = new TypeMapRegistry();
+
+        // Act
+        var info = registry.GetTableInfo<EnumValidEntity>();
+
+        // Assert - Enum columns should have EnumUnderlyingType cached to avoid reflection
+        foreach (var column in info.Columns.Values)
+        {
+            if (column.IsEnum && column.EnumType != null)
+            {
+                Assert.NotNull(column.EnumUnderlyingType);
+                Assert.Equal(Enum.GetUnderlyingType(column.EnumType), column.EnumUnderlyingType);
+            }
+        }
     }
 
     [Table("MultipleVersions")]

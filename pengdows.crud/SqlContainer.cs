@@ -24,6 +24,7 @@
 
 #region
 
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics;
@@ -34,6 +35,7 @@ using System.Text;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.collections;
@@ -108,9 +110,60 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     private readonly ILogger<ISqlContainer> _logger;
 
     private readonly IDictionary<string, DbParameter> _parameters =
-        new pengdows.crud.collections.OrderedDictionary<string, DbParameter>();
+        new pengdows.crud.collections.OrderedDictionary<string, DbParameter>(ParameterNameComparer.Instance);
     private readonly Dictionary<DbParameter, DbParameterCollection?> _parameterOwners =
         new(ParameterReferenceComparer.Instance);
+
+    private sealed class ParameterNameComparer : IEqualityComparer<string>
+    {
+        public static ParameterNameComparer Instance { get; } = new();
+
+        public bool Equals(string? x, string? y)
+        {
+            if (ReferenceEquals(x, y))
+            {
+                return true;
+            }
+
+            if (x is null || y is null)
+            {
+                return false;
+            }
+
+            return NormalizedSpan(x).SequenceEqual(NormalizedSpan(y));
+        }
+
+        public int GetHashCode(string obj)
+        {
+            var normalized = NormalizedSpan(obj);
+            var hash = new HashCode();
+            foreach (var ch in normalized)
+            {
+                hash.Add(ch);
+            }
+
+            return hash.ToHashCode();
+        }
+
+        private static ReadOnlySpan<char> NormalizedSpan(string value)
+        {
+            return StripParameterPrefix(value);
+        }
+    }
+
+    private static ReadOnlySpan<char> StripParameterPrefix(string parameterName)
+    {
+        if (parameterName.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        return parameterName[0] switch
+        {
+            '@' or ':' or '?' or '$' => parameterName.AsSpan(1),
+            _ => parameterName.AsSpan()
+        };
+    }
 
     private int _outputParameterCount;
     private int _nextParameterId = -1;
@@ -308,44 +361,24 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         return AddParameterWithValue(name, type, value, ParameterDirection.Input);
     }
 
-    private string NormalizeParameterName(string parameterName)
+    private static bool TryBuildAlternateParameterName(string parameterName, out string alternateName)
     {
-        // Normalize so lookups work with or without a leading marker
-        // (e.g., @p0, :p0, ?p0, $p0 -> p0) for named providers.
-        if (!_dialect.SupportsNamedParameters)
-        {
-            return parameterName;
-        }
-
-        // Span-based optimization: only allocate if we need to strip a prefix
-        if (parameterName.Length > 0)
-        {
-            var firstChar = parameterName[0];
-            if (firstChar == '@' || firstChar == ':' || firstChar == '?' || firstChar == '$')
-            {
-                return parameterName.Substring(1);
-            }
-        }
-
-        return parameterName;
-    }
-
-    private static bool TryBuildAlternateParameterName(string normalizedName, out string alternateName)
-    {
-        if (normalizedName.Length < 2)
+        var normalizedSpan = StripParameterPrefix(parameterName);
+        var normalized = normalizedSpan.ToString();
+        if (normalized.Length < 2)
         {
             alternateName = string.Empty;
             return false;
         }
 
-        var prefix = normalizedName[0];
+        var prefix = normalized[0];
         if (prefix != 'p' && prefix != 'w')
         {
             alternateName = string.Empty;
             return false;
         }
 
-        alternateName = string.Create(normalizedName.Length, normalizedName, static (span, source) =>
+        alternateName = string.Create(normalized.Length, normalized, static (span, source) =>
         {
             span[0] = source[0] == 'p' ? 'w' : 'p';
             source.AsSpan(1).CopyTo(span.Slice(1));
@@ -356,13 +389,12 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
     public void SetParameterValue(string parameterName, object? newValue)
     {
-        var normalizedName = NormalizeParameterName(parameterName);
-        if (!_parameters.TryGetValue(normalizedName, out var parameter))
+        if (!_parameters.TryGetValue(parameterName, out var parameter))
         {
             // Allow cross-prefix lookup between pN and wN for tests that use a different
             // prefix when asserting parameter values vs where they were created.
             if (_dialect.SupportsNamedParameters &&
-                TryBuildAlternateParameterName(normalizedName, out var alternate) &&
+                TryBuildAlternateParameterName(parameterName, out var alternate) &&
                 _parameters.TryGetValue(alternate, out parameter))
             {
                 // proceed with found alternate
@@ -386,11 +418,10 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
     public object? GetParameterValue(string parameterName)
     {
-        var normalizedName = NormalizeParameterName(parameterName);
-        if (!_parameters.TryGetValue(normalizedName, out var parameter))
+        if (!_parameters.TryGetValue(parameterName, out var parameter))
         {
             if (_dialect.SupportsNamedParameters &&
-                TryBuildAlternateParameterName(normalizedName, out var alternate) &&
+                TryBuildAlternateParameterName(parameterName, out var alternate) &&
                 _parameters.TryGetValue(alternate, out parameter))
             {
                 // proceed with found alternate
@@ -464,24 +495,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             return;
         }
 
-        if (_context.SupportsNamedParameters)
-        {
-            var unique = new HashSet<DbParameter>();
-            foreach (var param in _parameters.Values)
-            {
-                if (!unique.Add(param))
-                {
-                    continue;
-                }
-
-                dbCommand.Parameters.Add(param);
-                RegisterParameterOwner(param, dbCommand.Parameters);
-            }
-
-            return;
-        }
-
-        if (ParamSequence.Count == 0)
+        if (_context.SupportsNamedParameters || ParamSequence.Count == 0)
         {
             foreach (var param in _parameters.Values)
             {
@@ -660,35 +674,54 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     {
         var maxLength = Math.Max(1, _context.DataSourceInfo.ParameterNameMaxLength);
         const string basePrefix = "p";
-        var prefix = basePrefix;
 
-        if (maxLength <= prefix.Length)
+        if (maxLength <= basePrefix.Length)
         {
-            return prefix[..maxLength];
+            return basePrefix[..maxLength];
         }
 
-        var available = maxLength - prefix.Length;
+        var available = maxLength - basePrefix.Length;
         var next = Interlocked.Increment(ref _nextParameterId);
-        var suffix = next.ToString("x", CultureInfo.InvariantCulture);
 
-        if (suffix.Length > available)
+        // Use string.Create to avoid allocations
+        return string.Create(maxLength, (next, available, basePrefix.Length), static (span, state) =>
         {
-            suffix = suffix[^available..];
-        }
-        else if (suffix.Length < available)
-        {
-            suffix = suffix.PadLeft(available, '0');
-        }
+            var (counter, availableSpace, prefixLen) = state;
 
-        return prefix + suffix;
+            // Write prefix
+            "p".AsSpan().CopyTo(span);
+
+            // Format counter as hex into stack buffer
+            Span<char> hexBuffer = stackalloc char[16]; // Max hex digits for long
+            counter.TryFormat(hexBuffer, out var written, "x", CultureInfo.InvariantCulture);
+            var hexSpan = hexBuffer[..written];
+
+            if (hexSpan.Length > availableSpace)
+            {
+                // Truncate from left (take last N chars)
+                hexSpan[(hexSpan.Length - availableSpace)..].CopyTo(span[prefixLen..]);
+            }
+            else if (hexSpan.Length < availableSpace)
+            {
+                // Pad with zeros on the left
+                var paddingCount = availableSpace - hexSpan.Length;
+                span.Slice(prefixLen, paddingCount).Fill('0');
+                hexSpan.CopyTo(span[(prefixLen + paddingCount)..]);
+            }
+            else
+            {
+                // Exact fit
+                hexSpan.CopyTo(span[prefixLen..]);
+            }
+        });
     }
 
-    public async Task<int> ExecuteNonQueryAsync(CommandType commandType = CommandType.Text)
+    public ValueTask<int> ExecuteNonQueryAsync(CommandType commandType = CommandType.Text)
     {
-        return await ExecuteNonQueryAsync(commandType, CancellationToken.None).ConfigureAwait(false);
+        return ExecuteNonQueryAsync(commandType, CancellationToken.None);
     }
 
-    public async Task<int> ExecuteNonQueryAsync(CommandType commandType, CancellationToken cancellationToken)
+    public async ValueTask<int> ExecuteNonQueryAsync(CommandType commandType, CancellationToken cancellationToken)
     {
         // Check if context is configured as read-only (exactly ReadWriteMode.ReadOnly, not ReadWrite)
         if (_context is DatabaseContext dbContext &&
@@ -741,12 +774,12 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }
     }
 
-    public async Task<T?> ExecuteScalarAsync<T>(CommandType commandType = CommandType.Text)
+    public ValueTask<T?> ExecuteScalarAsync<T>(CommandType commandType = CommandType.Text)
     {
-        return await ExecuteScalarAsync<T>(commandType, CancellationToken.None).ConfigureAwait(false);
+        return ExecuteScalarAsync<T>(commandType, CancellationToken.None);
     }
 
-    public async Task<T?> ExecuteScalarAsync<T>(CommandType commandType, CancellationToken cancellationToken)
+    public async ValueTask<T?> ExecuteScalarAsync<T>(CommandType commandType, CancellationToken cancellationToken)
     {
         _context.AssertIsReadConnection();
 
@@ -774,12 +807,12 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     }
 
     // Write-path scalar execution (e.g., INSERT ... RETURNING / OUTPUT)
-    public async Task<T?> ExecuteScalarWriteAsync<T>(CommandType commandType = CommandType.Text)
+    public ValueTask<T?> ExecuteScalarWriteAsync<T>(CommandType commandType = CommandType.Text)
     {
-        return await ExecuteScalarWriteAsync<T>(commandType, CancellationToken.None).ConfigureAwait(false);
+        return ExecuteScalarWriteAsync<T>(commandType, CancellationToken.None);
     }
 
-    public async Task<T?> ExecuteScalarWriteAsync<T>(CommandType commandType, CancellationToken cancellationToken)
+    public async ValueTask<T?> ExecuteScalarWriteAsync<T>(CommandType commandType, CancellationToken cancellationToken)
     {
         // Check for explicit read-only mode
         if (_context is DatabaseContext dbContext && dbContext.ReadWriteMode == ReadWriteMode.ReadOnly)
@@ -854,12 +887,12 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }
     }
 
-    public async Task<ITrackedReader> ExecuteReaderAsync(CommandType commandType = CommandType.Text)
+    public ValueTask<ITrackedReader> ExecuteReaderAsync(CommandType commandType = CommandType.Text)
     {
-        return await ExecuteReaderAsync(commandType, CancellationToken.None).ConfigureAwait(false);
+        return ExecuteReaderAsync(commandType, CancellationToken.None);
     }
 
-    public async Task<ITrackedReader> ExecuteReaderAsync(CommandType commandType, CancellationToken cancellationToken)
+    public async ValueTask<ITrackedReader> ExecuteReaderAsync(CommandType commandType, CancellationToken cancellationToken)
     {
         _context.AssertIsReadConnection();
 
@@ -947,7 +980,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     }
 
     // Optimized single-row reader to hint providers/ADO.NET for minimal result shape
-    public async Task<ITrackedReader> ExecuteReaderSingleRowAsync(CancellationToken cancellationToken = default)
+    public async ValueTask<ITrackedReader> ExecuteReaderSingleRowAsync(CancellationToken cancellationToken = default)
     {
         _context.AssertIsReadConnection();
 
@@ -1407,10 +1440,29 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     private static DbParameter CloneParameter(DbParameter param, ISqlDialect dialect)
     {
         var cloned = dialect.CreateDbParameter(param.ParameterName, param.DbType, param.Value);
-        cloned.Direction = param.Direction;
-        cloned.Size = param.Size;
-        cloned.Scale = param.Scale;
-        cloned.Precision = param.Precision;
+
+        // Only set non-default properties to avoid unnecessary provider overhead
+        // This is especially important for high-volume template cloning scenarios
+        if (param.Direction != ParameterDirection.Input)
+        {
+            cloned.Direction = param.Direction;
+        }
+
+        if (param.Size > 0)
+        {
+            cloned.Size = param.Size;
+        }
+
+        if (param.Scale > 0)
+        {
+            cloned.Scale = param.Scale;
+        }
+
+        if (param.Precision > 0)
+        {
+            cloned.Precision = param.Precision;
+        }
+
         return cloned;
     }
 

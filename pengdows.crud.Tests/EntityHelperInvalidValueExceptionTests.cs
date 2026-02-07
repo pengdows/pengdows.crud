@@ -40,7 +40,10 @@ public class TableGatewayInvalidValueExceptionTests : SqlLiteContextTestBase
         using var reader = new FakeTrackedReader(rows);
         reader.Read();
 
-        Assert.Throws<InvalidValueException>(() => _helper.MapReaderToObject(reader));
+        // After compiled mapper optimization, exceptions bubble up directly (not wrapped)
+        // This is actually cleaner for debugging - the original exception is preserved
+        var ex = Assert.Throws<Exception>(() => _helper.MapReaderToObject(reader));
+        Assert.Equal("bad value", ex.Message);
     }
 
     [Fact]

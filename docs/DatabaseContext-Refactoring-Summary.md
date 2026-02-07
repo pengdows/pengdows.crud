@@ -79,9 +79,10 @@ DatabaseContext.Initialization.cs (848 lines)
 │   ├── (connectionString, providerFactory, ...)
 │   ├── (connectionString, factory, ...) [Obsolete]
 │   ├── (connectionString, factory) [Convenience]
-│   ├── (connectionString, factory, typeMapRegistry)
 │   ├── (configuration, factory, ...)
 │   └── (configuration, dataSource, factory, ...)
+
+ℹ️ Internal overloads that accept `ITypeMapRegistry` remain available to friend assemblies (tests/bench/testbed) via `InternalsVisibleTo`; the public constructors always create a per-context registry.
 ├── InitializeInternals
 ├── NormalizeConnectionString
 ├── CoerceMode (DbMode selection logic)

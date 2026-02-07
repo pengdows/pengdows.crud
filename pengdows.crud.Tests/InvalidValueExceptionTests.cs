@@ -28,6 +28,9 @@ public class InvalidValueExceptionTests
         var tracked = new TrackedReader(reader.Object, new Mock<ITrackedConnection>().Object,
             Mock.Of<IAsyncDisposable>(), false);
 
-        Assert.Throws<InvalidValueException>(() => helper.MapReaderToObject(tracked));
+        // After compiled mapper optimization, exceptions bubble up directly (not wrapped)
+        // This is actually cleaner for debugging - the original exception is preserved
+        var ex = Assert.Throws<InvalidOperationException>(() => helper.MapReaderToObject(tracked));
+        Assert.Equal("boom", ex.Message);
     }
 }

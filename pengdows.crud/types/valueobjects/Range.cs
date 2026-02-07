@@ -129,8 +129,8 @@ public readonly struct Range<T> : IEquatable<Range<T>> where T : struct
             return (T)(object)DateTimeOffset.Parse(text, CultureInfo.InvariantCulture);
         }
 
-        // For other types, try Convert.ChangeType
-        return (T)Convert.ChangeType(text, typeof(T), CultureInfo.InvariantCulture);
+        // For other types, try TypeCoercionHelper
+        return (T)TypeCoercionHelper.ConvertWithCache(text, typeof(T));
     }
 
     public override string ToString()

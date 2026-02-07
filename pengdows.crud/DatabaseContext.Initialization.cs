@@ -58,7 +58,6 @@ public partial class DatabaseContext
     public DatabaseContext(
         string connectionString,
         string providerFactory,
-        ITypeMapRegistry? typeMapRegistry = null,
         DbMode mode = DbMode.Best,
         ReadWriteMode readWriteMode = ReadWriteMode.ReadWrite,
         ILoggerFactory? loggerFactory = null)
@@ -72,7 +71,30 @@ public partial class DatabaseContext
             },
             DbProviderFactories.GetFactory(providerFactory ?? throw new ArgumentNullException(nameof(providerFactory))),
             loggerFactory ?? NullLoggerFactory.Instance,
-            typeMapRegistry)
+            new TypeMapRegistry(),
+            null)
+    {
+    }
+
+    internal DatabaseContext(
+        string connectionString,
+        string providerFactory,
+        ITypeMapRegistry typeMapRegistry,
+        DbMode mode = DbMode.Best,
+        ReadWriteMode readWriteMode = ReadWriteMode.ReadWrite,
+        ILoggerFactory? loggerFactory = null)
+        : this(
+            new DatabaseContextConfiguration
+            {
+                ProviderName = providerFactory,
+                ConnectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString)),
+                ReadWriteMode = readWriteMode,
+                DbMode = mode
+            },
+            DbProviderFactories.GetFactory(providerFactory ?? throw new ArgumentNullException(nameof(providerFactory))),
+            loggerFactory ?? NullLoggerFactory.Instance,
+            typeMapRegistry,
+            null)
     {
     }
 
@@ -80,7 +102,6 @@ public partial class DatabaseContext
     public DatabaseContext(
         string connectionString,
         DbProviderFactory factory,
-        ITypeMapRegistry? typeMapRegistry = null,
         DbMode mode = DbMode.Best,
         ReadWriteMode readWriteMode = ReadWriteMode.ReadWrite,
         ILoggerFactory? loggerFactory = null)
@@ -93,7 +114,30 @@ public partial class DatabaseContext
             },
             factory,
             loggerFactory ?? NullLoggerFactory.Instance,
-            typeMapRegistry)
+            new TypeMapRegistry(),
+            null)
+    {
+    }
+
+    [Obsolete("Use the constructor that takes DatabaseContextConfiguration instead.")]
+    internal DatabaseContext(
+        string connectionString,
+        DbProviderFactory factory,
+        ITypeMapRegistry typeMapRegistry,
+        DbMode mode = DbMode.Best,
+        ReadWriteMode readWriteMode = ReadWriteMode.ReadWrite,
+        ILoggerFactory? loggerFactory = null)
+        : this(
+            new DatabaseContextConfiguration
+            {
+                ConnectionString = connectionString,
+                ReadWriteMode = readWriteMode,
+                DbMode = mode
+            },
+            factory,
+            loggerFactory ?? NullLoggerFactory.Instance,
+            typeMapRegistry,
+            null)
     {
     }
 
@@ -107,11 +151,12 @@ public partial class DatabaseContext
             },
             factory,
             NullLoggerFactory.Instance,
+            new TypeMapRegistry(),
             null)
     {
     }
 
-    public DatabaseContext(string connectionString, DbProviderFactory factory, ITypeMapRegistry typeMapRegistry)
+    internal DatabaseContext(string connectionString, DbProviderFactory factory, ITypeMapRegistry typeMapRegistry)
         : this(new DatabaseContextConfiguration
             {
                 ConnectionString = connectionString,
@@ -120,15 +165,34 @@ public partial class DatabaseContext
             },
             factory,
             NullLoggerFactory.Instance,
-            typeMapRegistry)
+            typeMapRegistry,
+            null)
     {
     }
 
     public DatabaseContext(
         IDatabaseContextConfiguration configuration,
         DbProviderFactory factory,
-        ILoggerFactory? loggerFactory = null,
-        ITypeMapRegistry? typeMapRegistry = null)
+        ILoggerFactory? loggerFactory = null)
+        : this(configuration, factory, loggerFactory, new TypeMapRegistry(), null)
+    {
+    }
+
+    internal DatabaseContext(
+        IDatabaseContextConfiguration configuration,
+        DbProviderFactory factory,
+        ILoggerFactory? loggerFactory,
+        ITypeMapRegistry typeMapRegistry)
+        : this(configuration, factory, loggerFactory, typeMapRegistry, null)
+    {
+    }
+
+    private DatabaseContext(
+        IDatabaseContextConfiguration configuration,
+        DbProviderFactory factory,
+        ILoggerFactory? loggerFactory,
+        ITypeMapRegistry typeMapRegistry,
+        DbDataSource? dataSource)
     {
         ILockerAsync? initLocker = null;
         try
@@ -155,12 +219,12 @@ public partial class DatabaseContext
             }
 
             ReadWriteMode = configuration.ReadWriteMode;
-            TypeMapRegistry = typeMapRegistry ?? global::pengdows.crud.TypeMapRegistry.Instance;
+            TypeMapRegistry = typeMapRegistry ?? throw new ArgumentNullException(nameof(typeMapRegistry));
             ConnectionMode = configuration.DbMode;
             _factory = factory ?? throw new ArgumentNullException(nameof(factory));
-            _dataSource = null;
-            _readerDataSource = null;
-            _dataSourceProvided = false;
+            _dataSource = dataSource;
+            _readerDataSource = dataSource;
+            _dataSourceProvided = dataSource != null;
             _forceManualPrepare = configuration.ForceManualPrepare;
             _disablePrepare = configuration.DisablePrepare;
             _poolAcquireTimeout = configuration.PoolAcquireTimeout;
@@ -298,167 +362,25 @@ public partial class DatabaseContext
     /// <param name="dataSource">Data source for creating connections (e.g., NpgsqlDataSource)</param>
     /// <param name="factory">Provider factory for creating parameters and other objects</param>
     /// <param name="loggerFactory">Optional logger factory</param>
-    /// <param name="typeMapRegistry">Optional type map registry</param>
-    public DatabaseContext(
+        public DatabaseContext(
         IDatabaseContextConfiguration configuration,
         DbDataSource dataSource,
         DbProviderFactory factory,
-        ILoggerFactory? loggerFactory = null,
-        ITypeMapRegistry? typeMapRegistry = null)
+        ILoggerFactory? loggerFactory = null)
+        : this(configuration, factory, loggerFactory, new TypeMapRegistry(), dataSource ??
+            throw new ArgumentNullException(nameof(dataSource)))
     {
-        ILockerAsync? initLocker = null;
-        try
-        {
-            initLocker = GetLock();
-            initLocker.Lock();
-            Interlocked.Exchange(ref _initializing, 1);
-            if (configuration is null)
-            {
-                throw new ArgumentNullException(nameof(configuration));
-            }
+    }
 
-            if (string.IsNullOrWhiteSpace(configuration.ConnectionString))
-            {
-                throw new ArgumentException("ConnectionString is required.", nameof(configuration.ConnectionString));
-            }
-
-            _loggerFactory = loggerFactory ?? NullLoggerFactory.Instance;
-            _logger = _loggerFactory.CreateLogger<IDatabaseContext>();
-            if (TypeCoercionHelper.Logger is NullLogger)
-            {
-                TypeCoercionHelper.Logger =
-                    _loggerFactory.CreateLogger(nameof(TypeCoercionHelper));
-            }
-
-            ReadWriteMode = configuration.ReadWriteMode;
-            TypeMapRegistry = typeMapRegistry ?? global::pengdows.crud.TypeMapRegistry.Instance;
-            ConnectionMode = configuration.DbMode;
-            _dataSource = dataSource ?? throw new ArgumentNullException(nameof(dataSource));
-            _readerDataSource = _dataSource;
-            _dataSourceProvided = true;
-            _factory = factory ?? throw new ArgumentNullException(nameof(factory));
-            _forceManualPrepare = configuration.ForceManualPrepare;
-            _disablePrepare = configuration.DisablePrepare;
-            _poolAcquireTimeout = configuration.PoolAcquireTimeout;
-            _modeLockTimeout = configuration.ModeLockTimeout;
-            _enablePoolGovernor = configuration.EnablePoolGovernor;
-            _enableWriterPreference = configuration.EnableWriterPreference;
-            _configuredReadPoolSize = configuration.MaxConcurrentReads;
-            _configuredWritePoolSize = configuration.MaxConcurrentWrites;
-            if (configuration.EnableMetrics)
-            {
-                var options = configuration.MetricsOptions ?? MetricsOptions.Default;
-                _metricsCollector = new MetricsCollector(options);
-                _readerMetricsCollector = new MetricsCollector(options, _metricsCollector);
-                _writerMetricsCollector = new MetricsCollector(options, _metricsCollector);
-                _metricsCollector.MetricsChanged += OnMetricsCollectorUpdated;
-            }
-
-            var initialConnection = InitializeInternals(configuration);
-
-            // Build strategies now that mode is final (moved from InitializeInternals)
-            _connectionStrategy = ConnectionStrategyFactory.Create(this, ConnectionMode);
-            _procWrappingStrategy = ProcWrappingStrategyFactory.Create(_procWrappingStyle);
-
-            // Delegate dialect detection to the strategy
-            var (dialect, dataSourceInfo) =
-                _connectionStrategy.HandleDialectDetection(initialConnection, _factory, _loggerFactory);
-
-            if (dialect != null && dataSourceInfo != null)
-            {
-                _dialect = (SqlDialect)dialect;
-                _dataSourceInfo = (DataSourceInformation)dataSourceInfo;
-            }
-            else
-            {
-                // Fall back to a safe SQL-92 dialect when detection fails
-                var logger = _loggerFactory.CreateLogger<SqlDialect>();
-                _dialect = new Sql92Dialect(_factory, logger);
-                _dialect.InitializeUnknownProductInfo();
-                _dataSourceInfo = new DataSourceInformation(_dialect);
-            }
-
-            _sessionSettingsDetectionCompleted = true;
-
-            Name = _dataSourceInfo.DatabaseProductName;
-            _procWrappingStyle = _dataSourceInfo.ProcWrappingStyle;
-
-            // Apply pooling defaults now that we have the final mode and dialect
-            var builder = GetFactoryConnectionStringBuilder(_connectionString);
-            _connectionString = ConnectionPoolingConfiguration.ApplyPoolingDefaults(
-                _connectionString,
-                Product,
-                ConnectionMode,
-                _dialect?.SupportsExternalPooling ?? false,
-                _dialect?.PoolingSettingName,
-                _dialect?.MinPoolSizeSettingName,
-                builder);
-
-            // Apply application name if configured
-            _connectionString = ConnectionPoolingConfiguration.ApplyApplicationName(
-                _connectionString,
-                configuration.ApplicationName,
-                _dialect?.ApplicationNameSettingName,
-                builder);
-
-            InitializeReadOnlyConnectionResources(configuration);
-            InitializePoolGovernors();
-
-            if (initialConnection != null)
-            {
-                RCSIEnabled = _rcsiPrefetch ?? _dialect!.IsReadCommittedSnapshotOn(initialConnection);
-                SnapshotIsolationEnabled =
-                    _snapshotIsolationPrefetch ?? _dialect!.IsSnapshotIsolationOn(initialConnection);
-            }
-            else
-            {
-                RCSIEnabled = false;
-                SnapshotIsolationEnabled = false;
-            }
-
-            // Apply session settings for persistent connections now that dialect is initialized
-            if (ConnectionMode != DbMode.Standard)
-            {
-                if (initialConnection != null)
-                {
-                    ApplyPersistentConnectionSessionSettings(initialConnection);
-                }
-                else if (PersistentConnection is not null)
-                {
-                    ApplyPersistentConnectionSessionSettings(PersistentConnection);
-                }
-            }
-
-            // For Standard mode, dispose the connection after dialect initialization is complete
-            if (ConnectionMode == DbMode.Standard && initialConnection != null)
-            {
-                initialConnection.Dispose();
-                // Reset counters to "fresh" state after initialization probe
-                Interlocked.Exchange(ref _connectionCount, 0);
-                Interlocked.Exchange(ref _peakOpenConnections, 0);
-            }
-
-            _isolationResolver = new IsolationResolver(Product, RCSIEnabled, SnapshotIsolationEnabled);
-
-            // Connection strategy is created in InitializeInternals(finally) via ConnectionStrategyFactory
-        }
-        catch (Exception e)
-        {
-            _logger?.LogError(e.Message);
-            throw;
-        }
-        finally
-        {
-            Interlocked.Exchange(ref _initializing, 0);
-            if (initLocker is IAsyncDisposable iad)
-            {
-                iad.DisposeAsync().GetAwaiter().GetResult();
-            }
-            else if (initLocker is IDisposable id)
-            {
-                id.Dispose();
-            }
-        }
+    internal DatabaseContext(
+        IDatabaseContextConfiguration configuration,
+        DbDataSource dataSource,
+        DbProviderFactory factory,
+        ILoggerFactory? loggerFactory,
+        ITypeMapRegistry typeMapRegistry)
+        : this(configuration, factory, loggerFactory, typeMapRegistry, dataSource ??
+            throw new ArgumentNullException(nameof(dataSource)))
+    {
     }
 
     #endregion
@@ -1104,6 +1026,11 @@ public partial class DatabaseContext
         string readOnlySuffix,
         out Dictionary<string, string> normalized)
     {
+        if (ConnectionStringNormalizationCache.TryGet(connectionString, out normalized))
+        {
+            return true;
+        }
+
         normalized = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         DbConnectionStringBuilder builder;
         try
@@ -1146,6 +1073,7 @@ public partial class DatabaseContext
             normalized[key] = value;
         }
 
+        _ = ConnectionStringNormalizationCache.TryAdd(connectionString, normalized);
         return true;
     }
 

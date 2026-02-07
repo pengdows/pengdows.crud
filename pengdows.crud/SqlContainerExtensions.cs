@@ -17,6 +17,8 @@
 // =============================================================================
 
 using System.Data;
+using System.Threading;
+using System.Threading.Tasks;
 using pengdows.crud.wrappers;
 
 namespace pengdows.crud;
@@ -67,7 +69,7 @@ public static class SqlContainerExtensions
     /// <param name="commandType">The type of command (Text, StoredProcedure, TableDirect).</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <returns>The number of rows affected.</returns>
-    public static Task<int> ExecuteNonQueryAsync(
+    public static ValueTask<int> ExecuteNonQueryAsync(
         this ISqlContainer container,
         CommandType commandType,
         CancellationToken cancellationToken)
@@ -89,7 +91,7 @@ public static class SqlContainerExtensions
     /// <param name="commandType">The type of command.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <returns>The first column of the first row, or default if no results.</returns>
-    public static Task<T?> ExecuteScalarAsync<T>(
+    public static ValueTask<T?> ExecuteScalarAsync<T>(
         this ISqlContainer container,
         CommandType commandType,
         CancellationToken cancellationToken)
@@ -109,7 +111,7 @@ public static class SqlContainerExtensions
     /// <param name="commandType">The type of command.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <returns>A tracked data reader for result iteration.</returns>
-    public static Task<ITrackedReader> ExecuteReaderAsync(
+    public static ValueTask<ITrackedReader> ExecuteReaderAsync(
         this ISqlContainer container,
         CommandType commandType,
         CancellationToken cancellationToken)
@@ -132,7 +134,7 @@ public static class SqlContainerExtensions
     /// Uses <see cref="CommandBehavior.SingleRow"/> hint for potential performance optimization.
     /// Falls back to normal reader if the container doesn't support the optimization.
     /// </remarks>
-    public static Task<ITrackedReader> ExecuteReaderSingleRowAsync(
+    public static ValueTask<ITrackedReader> ExecuteReaderSingleRowAsync(
         this ISqlContainer container,
         CancellationToken cancellationToken = default)
     {
@@ -165,7 +167,7 @@ public static class SqlContainerExtensions
     /// Common use cases: INSERT ... RETURNING id (PostgreSQL), INSERT ... OUTPUT (SQL Server).
     /// </para>
     /// </remarks>
-    public static Task<T?> ExecuteScalarWriteAsync<T>(
+    public static ValueTask<T?> ExecuteScalarWriteAsync<T>(
         this ISqlContainer container,
         CommandType commandType = CommandType.Text,
         CancellationToken cancellationToken = default)

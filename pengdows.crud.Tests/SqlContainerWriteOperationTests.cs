@@ -67,8 +67,8 @@ public class SqlContainerWriteOperationTests
         container.AddParameterWithValue("p1", DbType.String, "value");
 
         // Act & Assert
-        var exception = await Assert.ThrowsAsync<NotSupportedException>(() =>
-            container.ExecuteScalarWriteAsync<int>());
+        var exception = await Assert.ThrowsAsync<NotSupportedException>(async () =>
+            await container.ExecuteScalarWriteAsync<int>());
 
         Assert.Contains("read-only mode", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
@@ -119,8 +119,8 @@ public class SqlContainerWriteOperationTests
         container.AddParameterWithValue("p1", DbType.String, "value");
 
         // Act & Assert
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            container.ExecuteScalarWriteAsync<int>());
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await container.ExecuteScalarWriteAsync<int>());
 
         Assert.Contains("expected a value but found none", exception.Message);
     }
@@ -136,8 +136,8 @@ public class SqlContainerWriteOperationTests
         var container = context.CreateSqlContainer("INSERT INTO test RETURNING null_column");
 
         // Act & Assert
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            container.ExecuteScalarWriteAsync<int>());
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await container.ExecuteScalarWriteAsync<int>());
 
         Assert.Contains("expected a value but found none", exception.Message);
     }
@@ -273,8 +273,8 @@ public class SqlContainerWriteOperationTests
         var container = context.CreateSqlContainer("INVALID SQL SYNTAX");
 
         // Act & Assert
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            container.ExecuteScalarWriteAsync<int>());
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await container.ExecuteScalarWriteAsync<int>());
     }
 
     [Fact]

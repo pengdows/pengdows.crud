@@ -70,7 +70,53 @@ Reference: `references/api-reference.md` and `references/sql-container.md`.
 
 Reference: `references/api-reference.md` and `references/connections.md`.
 
-### 6) Unit tests with FakeDb
+### 6) Multi-tenancy with different database types
+
+**How the optional context parameter works:**
+- Omit context parameter → uses default context from constructor (single-database apps)
+- Pass context parameter → uses that context instead (multi-tenant scenarios)
+
+**Critical:** Each tenant can use a **different database type**. Pass the tenant's context to **CRUD methods** to route operations to the tenant's database.
+
+Pattern:
+- Register `TableGateway` as singleton in DI
+- Resolve tenant context from `ITenantContextRegistry`
+- Pass **tenant context** to CRUD methods (RetrieveOneAsync, CreateAsync, etc.)
+
+```csharp
+// DI registration - single gateway instance
+services.AddSingleton<ITableGateway<Order, long>>(sp =>
+    new OrderGateway(defaultContext));  // Used when context param omitted
+
+// Non-multi-tenant: omit context parameter
+var order = await gateway.RetrieveOneAsync(orderId);  // Uses defaultContext
+
+// Multi-tenant: resolve and pass tenant context
+var registry = services.GetRequiredService<ITenantContextRegistry>();
+var tenantCtx = registry.GetContext("enterprise-client");  // Any DB type
+
+var gateway = services.GetRequiredService<ITableGateway<Order, long>>();
+var order = await gateway.RetrieveOneAsync(orderId, tenantCtx);  // Tenant's DB
+await gateway.CreateAsync(newOrder, tenantCtx);                  // Tenant's DB
+```
+
+**All CRUD methods accept optional context:**
+- `CreateAsync(entity, tenantContext)`
+- `RetrieveOneAsync(id, tenantContext)`
+- `RetrieveAsync(ids, tenantContext)`
+- `UpdateAsync(entity, tenantContext)`
+- `DeleteAsync(id, tenantContext)`
+- `UpsertAsync(entity, tenantContext)`
+
+**This enables:**
+- Physical database separation (no tenant_id filtering)
+- Different database types per tenant (PostgreSQL, SQL Server, MySQL, etc.)
+- Automatic dialect-specific SQL generation
+- Connection pooling per tenant
+
+Reference: `references/api-reference.md` (see method signatures).
+
+### 7) Unit tests with FakeDb
 
 - Use `fakeDbFactory(SupportedDatabase.X)` to emulate provider behavior.
 - Test SQL generation and error paths deterministically.

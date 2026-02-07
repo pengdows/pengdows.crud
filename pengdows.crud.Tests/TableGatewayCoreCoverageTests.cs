@@ -26,6 +26,57 @@ public class TableGatewayCoreCoverageTests : SqlLiteContextTestBase
     }
 
     [Fact]
+    public void BuildWrappedTableName_CachesSameDialect()
+    {
+        // TDD: Verify that BuildWrappedTableName caches results per dialect
+        TypeMap.Register<CoreCoverageEntity>();
+        var gateway = new TableGateway<CoreCoverageEntity, int>(Context);
+
+        var method = typeof(TableGateway<CoreCoverageEntity, int>).GetMethod(
+            "BuildWrappedTableName",
+            BindingFlags.NonPublic | BindingFlags.Instance) ??
+                     throw new InvalidOperationException("Missing helper");
+
+        var dialect = ((ISqlDialectProvider)Context).Dialect;
+
+        // Call twice with same dialect
+        var result1 = (string)method.Invoke(gateway, new object[] { dialect })!;
+        var result2 = (string)method.Invoke(gateway, new object[] { dialect })!;
+
+        // Should return same cached instance
+        Assert.Equal(result1, result2);
+        Assert.True(ReferenceEquals(result1, result2),
+            "Expected same dialect to return cached string instance");
+    }
+
+    [Fact]
+    public void BuildWrappedTableName_WithSchema_CachesCorrectly()
+    {
+        // TDD: Verify caching works for schema-qualified names
+        TypeMap.Register<SchemaEntity>();
+        var gateway = new TableGateway<SchemaEntity, int>(Context);
+
+        var method = typeof(TableGateway<SchemaEntity, int>).GetMethod(
+            "BuildWrappedTableName",
+            BindingFlags.NonPublic | BindingFlags.Instance) ??
+                     throw new InvalidOperationException("Missing helper");
+
+        var dialect = ((ISqlDialectProvider)Context).Dialect;
+
+        // Call twice with same dialect
+        var result1 = (string)method.Invoke(gateway, new object[] { dialect })!;
+        var result2 = (string)method.Invoke(gateway, new object[] { dialect })!;
+
+        // Should return same cached instance
+        Assert.Equal(result1, result2);
+        Assert.True(ReferenceEquals(result1, result2),
+            "Expected schema-qualified name to be cached");
+
+        // Verify it contains the schema separator
+        Assert.Contains(dialect.CompositeIdentifierSeparator, result1);
+    }
+
+    [Fact]
     public void MaterializeDistinctIds_RemovesDuplicatesInOrder()
     {
         var method = typeof(TableGateway<CoreCoverageEntity, int>).GetMethod(
@@ -37,6 +88,72 @@ public class TableGatewayCoreCoverageTests : SqlLiteContextTestBase
         var result = (System.Collections.Generic.List<int>)method.Invoke(null, new object?[] {input})!;
 
         Assert.Equal(new[] {1, 2, 3}, result);
+    }
+
+    [Fact]
+    public void MaterializeDistinctIds_SingleElementList_ReturnsInputDirectly()
+    {
+        // TDD: Verify single-element collections use fast path without allocation
+        var method = typeof(TableGateway<CoreCoverageEntity, int>).GetMethod(
+            "MaterializeDistinctIds",
+            BindingFlags.NonPublic | BindingFlags.Static) ??
+                     throw new InvalidOperationException("Missing helper");
+
+        var input = new System.Collections.Generic.List<int> { 42 };
+        var result = (System.Collections.Generic.List<int>)method.Invoke(null, new object?[] { input })!;
+
+        // Should return a list with the single element
+        Assert.Single(result);
+        Assert.Equal(42, result[0]);
+    }
+
+    [Fact]
+    public void MaterializeDistinctIds_SingleElementArray_ReturnsOptimized()
+    {
+        // TDD: Verify single-element arrays use fast path
+        var method = typeof(TableGateway<CoreCoverageEntity, int>).GetMethod(
+            "MaterializeDistinctIds",
+            BindingFlags.NonPublic | BindingFlags.Static) ??
+                     throw new InvalidOperationException("Missing helper");
+
+        var input = new[] { 99 };
+        var result = (System.Collections.Generic.List<int>)method.Invoke(null, new object?[] { input })!;
+
+        // Should return a list with the single element
+        Assert.Single(result);
+        Assert.Equal(99, result[0]);
+    }
+
+    [Fact]
+    public void MaterializeDistinctIds_EmptyCollection_ReturnsEmpty()
+    {
+        // TDD: Verify empty collections work correctly
+        var method = typeof(TableGateway<CoreCoverageEntity, int>).GetMethod(
+            "MaterializeDistinctIds",
+            BindingFlags.NonPublic | BindingFlags.Static) ??
+                     throw new InvalidOperationException("Missing helper");
+
+        var input = new int[] { };
+        var result = (System.Collections.Generic.List<int>)method.Invoke(null, new object?[] { input })!;
+
+        // Should return empty list
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void MaterializeDistinctIds_TwoDistinctElements_WorksCorrectly()
+    {
+        // TDD: Verify two-element case (common for composite keys)
+        var method = typeof(TableGateway<CoreCoverageEntity, int>).GetMethod(
+            "MaterializeDistinctIds",
+            BindingFlags.NonPublic | BindingFlags.Static) ??
+                     throw new InvalidOperationException("Missing helper");
+
+        var input = new[] { 1, 2 };
+        var result = (System.Collections.Generic.List<int>)method.Invoke(null, new object?[] { input })!;
+
+        Assert.Equal(2, result.Count);
+        Assert.Equal(new[] { 1, 2 }, result);
     }
 
     [Fact]

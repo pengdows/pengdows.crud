@@ -45,7 +45,7 @@ public partial class TableGateway<TEntity, TRowID>
             return Guid.Parse(s);
         }
 
-        return Convert.ChangeType(value, t, CultureInfo.InvariantCulture);
+        return TypeCoercionHelper.ConvertWithCache(value, t);
     }
 
     private void SetAuditFields(TEntity obj, bool updateOnly)

@@ -1,4 +1,5 @@
 using System.Data;
+using pengdows.crud.@internal;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
 using pengdows.crud.IntegrationTests.Infrastructure;
@@ -21,8 +22,8 @@ public class CompositeKeyTests : DatabaseTestBase
 
     protected override async Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)
     {
-        context.TypeMapRegistry.Register<OrderItem>();
-        context.TypeMapRegistry.Register<UserRole>();
+        context.RegisterEntity<OrderItem>();
+        context.RegisterEntity<UserRole>();
 
         await RecreateTableAsync(context, "order_items", BuildOrderItemsTableSql(provider, context));
         await RecreateTableAsync(context, "user_roles", BuildUserRolesTableSql(provider, context));

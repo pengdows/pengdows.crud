@@ -79,7 +79,7 @@ namespace pengdows.crud;
 /// <seealso cref="ITransactionContext"/>
 /// <seealso cref="IDatabaseContext.BeginTransaction"/>
 public class TransactionContext : ContextBase, ITransactionContext, IContextIdentity, ISqlDialectProvider,
-    IMetricsCollectorAccessor, IInternalConnectionProvider
+    IMetricsCollectorAccessor, IInternalConnectionProvider, ITypeMapAccessor
 {
     private const int CompletionLockTimeoutSeconds = 30;
 
@@ -227,8 +227,9 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     /// <inheritdoc/>
     public DbMode ConnectionMode => _context.ConnectionMode;
 
-    /// <inheritdoc/>
-    public ITypeMapRegistry TypeMapRegistry => _context.TypeMapRegistry;
+    ITypeMapRegistry ITypeMapAccessor.TypeMapRegistry =>
+        (_context as ITypeMapAccessor)?.TypeMapRegistry ??
+        throw new InvalidOperationException("IDatabaseContext must expose a TypeMapRegistry.");
 
     /// <inheritdoc/>
     public IDataSourceInformation DataSourceInfo => _context.DataSourceInfo;

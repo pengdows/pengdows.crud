@@ -1,6 +1,7 @@
 using System;
 using System.Data;
 using pengdows.crud;
+using pengdows.crud.@internal;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
 using pengdows.crud.IntegrationTests.Infrastructure;
@@ -49,7 +50,7 @@ CREATE TABLE [dbo].[user_info_temp] (
     {
         await RunTestAgainstProviderAsync(SupportedDatabase.SqlServer, async context =>
         {
-            context.TypeMapRegistry.Register<UserInfoEntity>();
+            context.RegisterEntity<UserInfoEntity>();
             var helper = new TableGateway<UserInfoEntity, int>(context);
 
             var entity = new UserInfoEntity

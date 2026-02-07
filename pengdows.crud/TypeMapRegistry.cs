@@ -54,17 +54,18 @@ namespace pengdows.crud;
 /// <see cref="GetTableInfo{T}"/> are safe and will not duplicate metadata building.
 /// </para>
 /// <para>
-/// <strong>Singleton vs Instance:</strong> Use <see cref="Instance"/> for typical applications.
-/// Create separate instances for isolated testing scenarios.
+/// <strong>Instance scope:</strong> Create a new <see cref="TypeMapRegistry"/> per <see cref="IDatabaseContext"/>
+/// so each tenant or connection string maintains its own metadata cache.
 /// </para>
 /// </remarks>
 /// <example>
 /// <code>
 /// // Automatic registration on first use (recommended)
-/// var tableInfo = TypeMapRegistry.Instance.GetTableInfo&lt;MyEntity&gt;();
+/// var typeMap = new TypeMapRegistry();
+/// var tableInfo = typeMap.GetTableInfo&lt;MyEntity&gt;();
 ///
 /// // Explicit pre-registration for early validation
-/// TypeMapRegistry.Instance.Register&lt;MyEntity&gt;();
+/// typeMap.Register&lt;MyEntity&gt;();
 /// </code>
 /// </example>
 /// <seealso cref="ITypeMapRegistry"/>
@@ -73,8 +74,6 @@ namespace pengdows.crud;
 public sealed class TypeMapRegistry : ITypeMapRegistry
 {
     private readonly ConcurrentDictionary<Type, TableInfo> _typeMap = new();
-
-    public static TypeMapRegistry Instance { get; } = new();
 
     public void Clear()
     {
@@ -237,6 +236,7 @@ public sealed class TypeMapRegistry : ITypeMapRegistry
         }
 
         // Compile a fast getter delegate for this column: (object o) => (object)((TEntity)o).Prop
+        // This must succeed to avoid reflection fallback in hot paths
         try
         {
             var objParam = Expression.Parameter(typeof(object), "o");
@@ -246,10 +246,14 @@ public sealed class TypeMapRegistry : ITypeMapRegistry
             var lambda = Expression.Lambda<Func<object, object?>>(box, objParam);
             ci.FastGetter = lambda.Compile();
         }
-        catch
+        catch (Exception ex)
         {
-            // Fallback to reflection when expression compilation is not possible
-            ci.FastGetter = null;
+            // FastGetter compilation failure would force expensive reflection fallback
+            // in MakeParameterValueFromField - fail fast to surface the issue immediately
+            throw new InvalidOperationException(
+                $"Failed to compile FastGetter for property '{prop.Name}' on type '{entityType.Name}'. " +
+                $"This would cause performance degradation due to reflection fallback in CRUD operations.",
+                ex);
         }
 
         ConfigureEnumColumn(entityType, prop, ci);

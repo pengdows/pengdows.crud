@@ -761,7 +761,7 @@ CREATE TABLE film_actor (
         insertContainer.Query.Append(insertSql);
         insertContainer.AddParameterWithValue("title", DbType.String, title);
         insertContainer.AddParameterWithValue("length", DbType.Int32, 123);
-        var id = await insertContainer.ExecuteScalarAsync<int>(CommandType.Text);
+        var id = await insertContainer.ExecuteScalarWriteAsync<int>(CommandType.Text);
 
         await using var deleteContainer = _ctx.CreateSqlContainer();
         var deleteSql = BuildFilmDeleteSql(param => deleteContainer.MakeParameterName(param));

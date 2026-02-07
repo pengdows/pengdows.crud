@@ -13,7 +13,7 @@ public class ReadOnlyTransactionTests
         await using var context = new DatabaseContext("Data Source=:memory:", SqliteFactory.Instance);
         await using var tx = context.BeginTransaction(readOnly: true);
         await using var container = tx.CreateSqlContainer("INSERT INTO t VALUES (1)");
-        await Assert.ThrowsAsync<InvalidOperationException>(() => container.ExecuteNonQueryAsync());
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await container.ExecuteNonQueryAsync());
     }
 
     [Fact]

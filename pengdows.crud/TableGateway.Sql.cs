@@ -122,14 +122,14 @@ public partial class TableGateway<TEntity, TRowID>
             .Where(c => _auditValueResolver != null || (!c.IsCreatedBy && !c.IsLastUpdatedBy))
             .ToList();
 
-        var wrappedCols = new List<string>();
+        var wrappedCols = new List<string>(insertColumns.Count);
         for (var i = 0; i < insertColumns.Count; i++)
         {
             wrappedCols.Add(dialect.WrapObjectName(insertColumns[i].Name));
         }
 
-        var paramNames = new List<string>();
-        var valuePlaceholders = new List<string>();
+        var paramNames = new List<string>(insertColumns.Count);
+        var valuePlaceholders = new List<string>(insertColumns.Count);
         for (var i = 0; i < insertColumns.Count; i++)
         {
             var name = $"i{i}";

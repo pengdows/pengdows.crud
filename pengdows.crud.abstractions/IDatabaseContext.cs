@@ -52,11 +52,6 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     DbDataSource? DataSource { get; }
 
     /// <summary>
-    /// Type mapping registry for compiled accessors, enum coercions, and JSON handlers.
-    /// </summary>
-    ITypeMapRegistry TypeMapRegistry { get; }
-
-    /// <summary>
     /// Metadata gathered from connection.GetSchema and provider heuristics.
     /// </summary>
     IDataSourceInformation DataSourceInfo { get; }

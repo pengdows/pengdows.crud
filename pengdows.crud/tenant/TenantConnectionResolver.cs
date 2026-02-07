@@ -23,7 +23,7 @@ namespace pengdows.crud.tenant;
 
 public class TenantConnectionResolver : ITenantConnectionResolver
 {
-    private readonly ConcurrentDictionary<string, DatabaseContextConfiguration> _configurations;
+    private readonly ConcurrentDictionary<string, IDatabaseContextConfiguration> _configurations;
 
     public TenantConnectionResolver()
         : this(Enumerable.Empty<TenantConfiguration>())
@@ -33,7 +33,7 @@ public class TenantConnectionResolver : ITenantConnectionResolver
     public TenantConnectionResolver(IEnumerable<TenantConfiguration>? tenants)
     {
         _configurations =
-            new ConcurrentDictionary<string, DatabaseContextConfiguration>(StringComparer.OrdinalIgnoreCase);
+            new ConcurrentDictionary<string, IDatabaseContextConfiguration>(StringComparer.OrdinalIgnoreCase);
 
         if (tenants != null)
         {
