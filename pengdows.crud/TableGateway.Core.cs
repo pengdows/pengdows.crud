@@ -111,9 +111,36 @@ public partial class TableGateway<TEntity, TRowID> :
     // Expected 3-5% reduction in SQL generation when the same TableGateway is used with different contexts/dialects
     private readonly ConcurrentDictionary<ISqlDialect, string> _wrappedTableNameCache = new();
 
+    // Cache for wrapped column names (per dialect + column name)
+    // Expected 10-15% reduction in SQL generation for complex queries with many columns
+    private readonly BoundedCache<ColumnCacheKey, string> _wrappedColumnNameCache = new(128);
+
     // Thread-safe cache for hybrid reader plans by recordset shape hash (long key avoids int-hash collisions)
     private readonly BoundedCache<long, HybridRecordsetPlan> _readerPlans = new(MaxReaderPlans);
     private const int MaxReaderPlans = 32;
+
+    // Cache key for wrapped column names: dialect + column name
+    // Uses value-type struct to avoid tuple allocation on cache misses
+    private readonly struct ColumnCacheKey : IEquatable<ColumnCacheKey>
+    {
+        public readonly ISqlDialect Dialect;
+        public readonly string Name;
+
+        public ColumnCacheKey(ISqlDialect dialect, string name)
+        {
+            Dialect = dialect;
+            Name = name;
+        }
+
+        public bool Equals(ColumnCacheKey other) =>
+            ReferenceEquals(Dialect, other.Dialect) && Name == other.Name;
+
+        public override bool Equals(object? obj) =>
+            obj is ColumnCacheKey other && Equals(other);
+
+        public override int GetHashCode() =>
+            HashCode.Combine(Dialect, Name);
+    }
 
     // Hybrid plan: Compiled expression for direct columns + delegates for coercion columns
     // Decision made once at plan-build time for maximum performance
@@ -1592,6 +1619,18 @@ public partial class TableGateway<TEntity, TRowID> :
             sb.Append(d.WrapObjectName(_tableInfo.Name));
             return sb.ToString();
         });
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private string BuildWrappedColumnName(ISqlDialect dialect, string columnName)
+    {
+        var key = new ColumnCacheKey(dialect, columnName);
+        if (_wrappedColumnNameCache.TryGet(key, out var cached))
+        {
+            return cached;
+        }
+
+        return _wrappedColumnNameCache.GetOrAdd(key, static k => k.Dialect.WrapObjectName(k.Name));
     }
 
     private static ISqlDialect GetDialect(IDatabaseContext ctx)

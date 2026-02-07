@@ -76,70 +76,50 @@ public partial class DatabaseContext
     {
     }
 
-    internal DatabaseContext(
-        string connectionString,
-        string providerFactory,
-        ITypeMapRegistry typeMapRegistry,
-        DbMode mode = DbMode.Best,
-        ReadWriteMode readWriteMode = ReadWriteMode.ReadWrite,
-        ILoggerFactory? loggerFactory = null)
-        : this(
-            new DatabaseContextConfiguration
-            {
-                ProviderName = providerFactory,
-                ConnectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString)),
-                ReadWriteMode = readWriteMode,
-                DbMode = mode
-            },
-            DbProviderFactories.GetFactory(providerFactory ?? throw new ArgumentNullException(nameof(providerFactory))),
-            loggerFactory ?? NullLoggerFactory.Instance,
-            typeMapRegistry,
-            null)
-    {
-    }
 
-    [Obsolete("Use the constructor that takes DatabaseContextConfiguration instead.")]
-    public DatabaseContext(
-        string connectionString,
-        DbProviderFactory factory,
-        DbMode mode = DbMode.Best,
-        ReadWriteMode readWriteMode = ReadWriteMode.ReadWrite,
-        ILoggerFactory? loggerFactory = null)
-        : this(
-            new DatabaseContextConfiguration
-            {
-                ConnectionString = connectionString,
-                ReadWriteMode = readWriteMode,
-                DbMode = mode
-            },
-            factory,
-            loggerFactory ?? NullLoggerFactory.Instance,
-            new TypeMapRegistry(),
-            null)
-    {
-    }
 
-    [Obsolete("Use the constructor that takes DatabaseContextConfiguration instead.")]
-    internal DatabaseContext(
-        string connectionString,
-        DbProviderFactory factory,
-        ITypeMapRegistry typeMapRegistry,
-        DbMode mode = DbMode.Best,
-        ReadWriteMode readWriteMode = ReadWriteMode.ReadWrite,
-        ILoggerFactory? loggerFactory = null)
-        : this(
-            new DatabaseContextConfiguration
-            {
-                ConnectionString = connectionString,
-                ReadWriteMode = readWriteMode,
-                DbMode = mode
-            },
-            factory,
-            loggerFactory ?? NullLoggerFactory.Instance,
-            typeMapRegistry,
-            null)
-    {
-    }
+    // [Obsolete("Use the constructor that takes DatabaseContextConfiguration instead.")]
+    // public DatabaseContext(
+    //     string connectionString,
+    //     DbProviderFactory factory,
+    //     DbMode mode = DbMode.Best,
+    //     ReadWriteMode readWriteMode = ReadWriteMode.ReadWrite,
+    //     ILoggerFactory? loggerFactory = null)
+    //     : this(
+    //         new DatabaseContextConfiguration
+    //         {
+    //             ConnectionString = connectionString,
+    //             ReadWriteMode = readWriteMode,
+    //             DbMode = mode
+    //         },
+    //         factory,
+    //         loggerFactory ?? NullLoggerFactory.Instance,
+    //         new TypeMapRegistry(),
+    //         null)
+    // {
+    // }
+    //
+    // [Obsolete("Use the constructor that takes DatabaseContextConfiguration instead.")]
+    // internal DatabaseContext(
+    //     string connectionString,
+    //     DbProviderFactory factory,
+    //     ITypeMapRegistry typeMapRegistry,
+    //     DbMode mode = DbMode.Best,
+    //     ReadWriteMode readWriteMode = ReadWriteMode.ReadWrite,
+    //     ILoggerFactory? loggerFactory = null)
+    //     : this(
+    //         new DatabaseContextConfiguration
+    //         {
+    //             ConnectionString = connectionString,
+    //             ReadWriteMode = readWriteMode,
+    //             DbMode = mode
+    //         },
+    //         factory,
+    //         loggerFactory ?? NullLoggerFactory.Instance,
+    //         typeMapRegistry,
+    //         null)
+    // {
+    // }
 
     // Convenience overloads for reflection-based tests and ease of use
     public DatabaseContext(string connectionString, DbProviderFactory factory)

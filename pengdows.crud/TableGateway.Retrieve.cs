@@ -59,7 +59,7 @@ public partial class TableGateway<TEntity, TRowID>
                     sb.Append(dialect.CompositeIdentifierSeparator);
                 }
 
-                sb.Append(dialect.WrapObjectName(_tableInfo.OrderedColumns[i].Name));
+                sb.Append(BuildWrappedColumnName(dialect, _tableInfo.OrderedColumns[i].Name));
             }
 
             sb.Append("\nFROM ");
@@ -95,13 +95,14 @@ public partial class TableGateway<TEntity, TRowID>
         }
 
         var sc = BuildBaseRetrieve(alias, ctx);
+        var dialect = ((ISqlDialectProvider)sc).Dialect;
         var wrappedAlias = "";
         if (!string.IsNullOrWhiteSpace(alias))
         {
             wrappedAlias = sc.WrapObjectName(alias) + sc.CompositeIdentifierSeparator;
         }
 
-        var wrappedColumnName = wrappedAlias + sc.WrapObjectName(_idColumn.Name);
+        var wrappedColumnName = wrappedAlias + BuildWrappedColumnName(dialect, _idColumn.Name);
 
         if (listOfIds == null || listOfIds.Count == 0)
         {
@@ -240,7 +241,7 @@ public partial class TableGateway<TEntity, TRowID>
             var parameter = dialect.CreateDbParameter(name, pk.DbType, value);
 
             clause.Append(alias);
-            clause.Append(dialect.WrapObjectName(pk.Name));
+            clause.Append(BuildWrappedColumnName(dialect, pk.Name));
 
             if (Utils.IsNullOrDbNull(value))
             {

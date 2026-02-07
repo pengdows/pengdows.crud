@@ -5,6 +5,7 @@ using Dapper;
 using DuckDB.NET.Data;
 using pengdows.crud;
 using pengdows.crud.attributes;
+using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 using pengdows.crud.wrappers;
@@ -46,10 +47,12 @@ public class ReaderMappingBenchmark
         _typeMap = new TypeMapRegistry();
         _typeMap.Register<TestEntity>();
         _context = new DatabaseContext(
-            _connectionString,
-            DuckDBClientFactory.Instance,
-            _typeMap,
-            mode: DbMode.SingleConnection
+            new DatabaseContextConfiguration
+            {
+                ConnectionString = _connectionString,
+                DbMode = DbMode.SingleConnection
+            },
+            DuckDBClientFactory.Instance
         );
         _helper = new TableGateway<TestEntity, int>(_context);
 
