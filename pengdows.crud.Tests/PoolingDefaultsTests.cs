@@ -8,7 +8,7 @@ namespace pengdows.crud.Tests;
 public class PoolingDefaultsTests
 {
     /// <summary>
-    /// Tests that SQL Server gets correct pooling defaults: Pooling=true, Min Pool Size=1
+    /// Tests that SQL Server gets correct pooling defaults for pooling settings
     /// </summary>
     [Fact]
     public void SqlServerDialect_HasCorrectPoolingDefaults()
@@ -24,7 +24,7 @@ public class PoolingDefaultsTests
     }
 
     /// <summary>
-    /// Tests that PostgreSQL gets correct pooling defaults: Pooling=true, Minimum Pool Size=1
+    /// Tests that PostgreSQL gets correct pooling defaults for pooling settings
     /// </summary>
     [Fact]
     public void PostgreSqlDialect_HasCorrectPoolingDefaults()

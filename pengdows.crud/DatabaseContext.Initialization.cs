@@ -259,7 +259,6 @@ public partial class DatabaseContext
                 ConnectionMode,
                 _dialect?.SupportsExternalPooling ?? false,
                 _dialect?.PoolingSettingName,
-                _dialect?.MinPoolSizeSettingName,
                 builder);
 
             // Apply application name if configured
@@ -1197,7 +1196,6 @@ public partial class DatabaseContext
             ConnectionMode,
             _dialect?.SupportsExternalPooling ?? false,
             _dialect?.PoolingSettingName,
-            _dialect?.MinPoolSizeSettingName,
             builder);
 
         return processed;

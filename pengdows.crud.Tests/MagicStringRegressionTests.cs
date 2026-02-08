@@ -282,7 +282,7 @@ public class MagicStringRegressionTests
     }
 
     [Fact]
-    public void ConnectionPoolingConfiguration_ApplyPoolingDefaults_InjectsPoolingAndMinPool()
+    public void ConnectionPoolingConfiguration_ApplyPoolingDefaults_InjectsPoolingOnly()
     {
         var result = ConnectionPoolingConfiguration.ApplyPoolingDefaults(
             "Server=localhost;Database=test",
@@ -291,7 +291,7 @@ public class MagicStringRegressionTests
             supportsExternalPooling: true);
 
         Assert.Contains("Pooling", result);
-        Assert.Contains("Min Pool Size", result);
+        Assert.DoesNotContain("Min Pool Size", result);
     }
 
     // ── helpers ───────────────────────────────────────────────────────────

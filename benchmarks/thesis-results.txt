@@ -1,0 +1,91 @@
+=========================================================================
+PENGDOWS.CRUD THESIS PROOF BENCHMARK SUITE
+=========================================================================
+
+This suite will prove:
+
+  1. CONNECTION POOL SUPERIORITY
+     - Standard mode handles high concurrency better than EF/Dapper
+     - Resists pool exhaustion under pressure
+     - 'Open late, close early' strategy is safer
+
+  2. SQL GENERATION PERFECTION
+     - Handles column names with spaces ('Fred Flintstone')
+     - Handles reserved keywords ('select', 'from')
+     - Automatic, correct quoting via dialect system
+     - EF requires configuration, Dapper requires manual quoting
+
+  3. RAW PERFORMANCE PARITY
+     - Very close to Dapper (within 5-15%)
+     - Much faster than Entity Framework
+     - Optimizations: compiled setters, plan caching, StringBuilderLite
+
+=========================================================================
+
+Running benchmarks... (this will take ~10-15 minutes)
+
+The filter '*ConnectionPoolStressBenchmarks*,*SqlGenerationSafetyBenchmarks*,*RawPerformanceComparison*' that you have provided returned 0 benchmarks.
+Please remember that the filter is applied to full benchmark name: `namespace.typeName.methodName`.
+	CrudBenchmarks.AutomaticViewMatchingBenchmarks.CustomerAggregation_pengdows(OrderCount: 10000, OrderDetailCount: 50000, Parallelism: 16, OperationsPerRun: 64)
+	CrudBenchmarks.AutomaticViewMatchingBenchmarks.CustomerAggregation_EntityFramework(OrderCount: 10000, OrderDetailCount: 50000, Parallelism: 16, OperationsPerRun: 64)
+	CrudBenchmarks.AutomaticViewMatchingBenchmarks.CustomerAggregation_Dapper_NoViewMatching(OrderCount: 10000, OrderDetailCount: 50000, Parallelism: 16, OperationsPerRun: 64)
+	CrudBenchmarks.AutomaticViewMatchingBenchmarks.CustomerAggregation_Dapper_WithSessionMgmt(OrderCount: 10000, OrderDetailCount: 50000, Parallelism: 16, OperationsPerRun: 64)
+	CrudBenchmarks.AutomaticViewMatchingBenchmarks.CustomerAggregation_Dapper_NoViewMatching_ShowPlan(OrderCount: 10000, OrderDetailCount: 50000, Parallelism: 16, OperationsPerRun: 64)
+	CrudBenchmarks.AutomaticViewMatchingBenchmarks.CustomerAggregation_Dapper_WithSessionMgmt_ShowPlan(OrderCount: 10000, OrderDetailCount: 50000, Parallelism: 16, OperationsPerRun: 64)
+	CrudBenchmarks.AutomaticViewMatchingBenchmarks.CustomerAggregation_DirectViewQuery_ShowPlan(OrderCount: 10000, OrderDetailCount: 50000, Parallelism: 16, OperationsPerRun: 64)
+	CrudBenchmarks.AutomaticViewMatchingBenchmarks.CustomerAggregation_DirectViewQuery(OrderCount: 10000, OrderDetailCount: 50000, Parallelism: 16, OperationsPerRun: 64)
+	CrudBenchmarks.AutomaticViewMatchingBenchmarks.ProductSales_pengdows(OrderCount: 10000, OrderDetailCount: 50000, Parallelism: 16, OperationsPerRun: 64)
+	CrudBenchmarks.AutomaticViewMatchingBenchmarks.ProductSales_EntityFramework(OrderCount: 10000, OrderDetailCount: 50000, Parallelism: 16, OperationsPerRun: 64)
+	CrudBenchmarks.AutomaticViewMatchingBenchmarks.MonthlyRevenue_pengdows(OrderCount: 10000, OrderDetailCount: 50000, Parallelism: 16, OperationsPerRun: 64)
+	CrudBenchmarks.AutomaticViewMatchingBenchmarks.MonthlyRevenue_EntityFramework(OrderCount: 10000, OrderDetailCount: 50000, Parallelism: 16, OperationsPerRun: 64)
+	CrudBenchmarks.AutomaticViewMatchingBenchmarks.CustomerAggregation_pengdows_Concurrent(OrderCount: 10000, OrderDetailCount: 50000, Parallelism: 16, OperationsPerRun: 64)
+	CrudBenchmarks.AutomaticViewMatchingBenchmarks.CustomerAggregation_EntityFramework_Concurrent(OrderCount: 10000, OrderDetailCount: 50000, Parallelism: 16, OperationsPerRun: 64)
+	CrudBenchmarks.AutomaticViewMatchingBenchmarks.CustomerAggregation_Dapper_NoViewMatching_Concurrent(OrderCount: 10000, OrderDetailCount: 50000, Parallelism: 16, OperationsPerRun: 64)
+	CrudBenchmarks.AutomaticViewMatchingBenchmarks.CustomerAggregation_Dapper_WithSessionMgmt_Concurrent(OrderCount: 10000, OrderDetailCount: 50000, Parallelism: 16, OperationsPerRun: 64)
+	CrudBenchmarks.AutomaticViewMatchingBenchmarks.CustomerAggregation_DirectViewQuery_Concurrent(OrderCount: 10000, OrderDetailCount: 50000, Parallelism: 16, OperationsPerRun: 64)
+	CrudBenchmarks.AutomaticViewMatchingBenchmarks.ProductSales_pengdows_Concurrent(OrderCount: 10000, OrderDetailCount: 50000, Parallelism: 16, OperationsPerRun: 64)
+	CrudBenchmarks.AutomaticViewMatchingBenchmarks.ProductSales_EntityFramework_Concurrent(OrderCount: 10000, OrderDetailCount: 50000, Parallelism: 16, OperationsPerRun: 64)
+	CrudBenchmarks.AutomaticViewMatchingBenchmarks.MonthlyRevenue_pengdows_Concurrent(OrderCount: 10000, OrderDetailCount: 50000, Parallelism: 16, OperationsPerRun: 64)
+	CrudBenchmarks.AutomaticViewMatchingBenchmarks.MonthlyRevenue_EntityFramework_Concurrent(OrderCount: 10000, OrderDetailCount: 50000, Parallelism: 16, OperationsPerRun: 64)
+	CrudBenchmarks.AutoSubstitutionBenchmarks.NoSetup_Cold
+	CrudBenchmarks.AutoSubstitutionBenchmarks.NoSetup_Hot
+	CrudBenchmarks.AutoSubstitutionBenchmarks.ManualSetup_Cold
+	CrudBenchmarks.AutoSubstitutionBenchmarks.ManualSetup_Hot
+	CrudBenchmarks.AutoSubstitutionBenchmarks.PengdowsAuto_Cold
+	CrudBenchmarks.AutoSubstitutionBenchmarks.PengdowsAuto_Hot
+	CrudBenchmarks.CloningPerformanceTest.BuildRetrieve_Traditional
+	CrudBenchmarks.CloningPerformanceTest.BuildRetrieve_WithCloning
+	CrudBenchmarks.CloningPerformanceTest.BasicSqlContainer
+	CrudBenchmarks.ConnectionPoolStressBenchmarks.PoolExhaustion_Pengdows_Succeeds
+	CrudBenchmarks.ConnectionPoolStressBenchmarks.PoolExhaustion_Dapper_Typical_Fails
+	CrudBenchmarks.ConnectionPoolStressBenchmarks.PoolExhaustion_EntityFramework_Typical_Fails
+	CrudBenchmarks.ConnectionPoolStressBenchmarks.HighConcurrency_Pengdows_MixedOps
+	CrudBenchmarks.ConnectionPoolStressBenchmarks.HighConcurrency_Dapper_MixedOps
+	CrudBenchmarks.ConnectionPoolStressBenchmarks.HighConcurrency_EntityFramework_MixedOps
+	CrudBenchmarks.ConnectionPoolStressBenchmarks.SustainedPressure_Pengdows
+	CrudBenchmarks.ConnectionPoolStressBenchmarks.SustainedPressure_Dapper
+	CrudBenchmarks.ConnectionPoolStressBenchmarks.SustainedPressure_EntityFramework
+	CrudBenchmarks.ConnectionStringNormalizationBenchmarks.Normalize_NoCache
+To print all available benchmarks use `--list flat` or `--list tree`.
+To learn more about filtering use `--help`.
+
+=========================================================================
+BENCHMARK COMPLETE
+=========================================================================
+
+Key metrics to look for:
+
+CONNECTION POOL TESTS:
+  - pengdows.crud should complete all operations without exceptions
+  - Dapper/EF may show pool timeout exceptions or slower performance
+
+SQL SAFETY TESTS:
+  - pengdows.crud should handle weird names automatically
+  - Note the simplicity vs Dapper's manual quoting
+  - Note EF's extensive configuration requirements
+
+RAW PERFORMANCE TESTS:
+  - pengdows.crud should be within 1.05x-1.15x of Dapper baseline
+  - EF should be 2x-10x slower depending on operation
+
+=========================================================================

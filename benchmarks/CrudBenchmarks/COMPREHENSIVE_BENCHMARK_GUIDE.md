@@ -96,7 +96,7 @@ SET ARITHABORT OFF;  -- Breaks indexed view matching!
 
 ```csharp
 // pengdows.crud automatically applies:
-// Standard mode: Pooling=true, MinPoolSize=1 (if absent)
+// Standard mode: Pooling=true (if absent)
 // SQLite file: SingleWriter mode
 // SQLite memory: SingleConnection mode
 

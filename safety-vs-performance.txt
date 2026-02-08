@@ -1,0 +1,1156 @@
+// Validating benchmarks:
+// ***** BenchmarkRunner: Start   *****
+// ***** Found 20 benchmark(s) in total *****
+// ***** Building 1 exe(s) in Parallel: Start   *****
+// start dotnet  restore /p:UseSharedCompilation=false /p:BuildInParallel=false /m:1 /p:Deterministic=true /p:Optimize=true /p:IntermediateOutputPath="/home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/obj/Release/net8.0/" /p:OutDir="/home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/bin/Release/net8.0/" /p:OutputPath="/home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/bin/Release/net8.0/" in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60
+// command took 2.34 sec and exited with 0
+// start dotnet  build -c Release --no-restore /p:UseSharedCompilation=false /p:BuildInParallel=false /m:1 /p:Deterministic=true /p:Optimize=true /p:IntermediateOutputPath="/home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/obj/Release/net8.0/" /p:OutDir="/home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/bin/Release/net8.0/" /p:OutputPath="/home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/bin/Release/net8.0/" --output "/home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/bin/Release/net8.0/" in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60
+// command took 12.2 sec and exited with 0
+// ***** Done, took 00:00:14 (14.7 sec)   *****
+// Found 20 benchmarks:
+//   SafetyVsPerformance.'SAFE: pengdows.crud (explicit types, proper connection mgmt)': DefaultJob
+//   SafetyVsPerformance.'SAFE: pengdows.crud INSERT (explicit types, proper connection mgmt)': DefaultJob
+//   SafetyVsPerformance.'TYPICAL DAPPER: Type inference + connection stays open': DefaultJob
+//   SafetyVsPerformance.'TYPICAL DAPPER: INSERT with type inference + open connection': DefaultJob
+//   SafetyVsPerformance.'PROPER DAPPER: Open/close per operation (same as pengdows)': DefaultJob
+//   SafetyVsPerformance.'PROPER DAPPER: INSERT with open/close per operation': DefaultJob
+//   SafetyVsPerformance.'SAFETY: pengdows handles decimals correctly': DefaultJob
+//   SafetyVsPerformance.'SAFETY: Dapper type inference on decimal': DefaultJob
+//   SafetyVsPerformance.'REALISTIC: 100 operations with pengdows (releases connections)': DefaultJob
+//   SafetyVsPerformance.'REALISTIC: 100 operations with Dapper (holds connections longer)': DefaultJob
+//   SafetyVsPerformance.'SAFE: pengdows.crud (explicit types, proper connection mgmt)': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+//   SafetyVsPerformance.'SAFE: pengdows.crud INSERT (explicit types, proper connection mgmt)': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+//   SafetyVsPerformance.'TYPICAL DAPPER: Type inference + connection stays open': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+//   SafetyVsPerformance.'TYPICAL DAPPER: INSERT with type inference + open connection': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+//   SafetyVsPerformance.'PROPER DAPPER: Open/close per operation (same as pengdows)': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+//   SafetyVsPerformance.'PROPER DAPPER: INSERT with open/close per operation': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+//   SafetyVsPerformance.'SAFETY: pengdows handles decimals correctly': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+//   SafetyVsPerformance.'SAFETY: Dapper type inference on decimal': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+//   SafetyVsPerformance.'REALISTIC: 100 operations with pengdows (releases connections)': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+//   SafetyVsPerformance.'REALISTIC: 100 operations with Dapper (holds connections longer)': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+
+// **************************
+// Benchmark: SafetyVsPerformance.'SAFE: pengdows.crud (explicit types, proper connection mgmt)': DefaultJob
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet 5a275160-ec9c-46e7-a773-7504ad80fa60.dll --anonymousPipes 163 164 --benchmarkName CrudBenchmarks.SafetyVsPerformance.Safe_Pengdows_ProperConnectionMgmt --job Default --benchmarkId 0 in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/bin/Release/net8.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.14.0
+// Runtime=.NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2
+// GC=Concurrent Workstation
+// HardwareIntrinsics=AVX2,AES,BMI1,BMI2,FMA,LZCNT,PCLMUL,POPCNT VectorSize=256
+// Job: DefaultJob
+
+OverheadJitting  1: 1 op, 327521.00 ns, 327.5210 us/op
+
+System.Reflection.TargetInvocationException: Exception has been thrown by the target of an invocation.
+ ---> Microsoft.Data.Sqlite.SqliteException (0x80004005): SQLite Error 1: 'no such table: products'.
+   at Microsoft.Data.Sqlite.SqliteException.ThrowExceptionForRC(Int32 rc, sqlite3 db)
+   at Microsoft.Data.Sqlite.SqliteCommand.PrepareAndEnumerateStatements()+MoveNext()
+   at Microsoft.Data.Sqlite.SqliteCommand.Prepare()
+   at pengdows.crud.SqlContainer.MaybePrepareCommand(DbCommand cmd, ITrackedConnection conn, ExecutionType executionType) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 1240
+   at pengdows.crud.SqlContainer.PrepareAndCreateCommandAsync(ITrackedConnection conn, CommandType commandType, ExecutionType executionType, CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 1189
+   at pengdows.crud.SqlContainer.ExecuteReaderSingleRowAsync(CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 1002
+   at pengdows.crud.SqlContainer.ExecuteReaderSingleRowAsync(CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 1023
+   at pengdows.crud.SqlContainer.ExecuteReaderSingleRowAsync(CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 1056
+   at pengdows.crud.TableGateway`2.LoadSingleAsync(ISqlContainer sc, CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/TableGateway.Core.cs:line 1223
+   at pengdows.crud.TableGateway`2.RetrieveOneAsync(TRowID id, IDatabaseContext context, CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/TableGateway.Core.cs:line 1205
+   at CrudBenchmarks.SafetyVsPerformance.Safe_Pengdows_ProperConnectionMgmt() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/SafetyVsPerformance.cs:line 97
+   at BenchmarkDotNet.Helpers.AwaitHelper.GetResult[T](Task`1 task)
+   at BenchmarkDotNet.Autogenerated.Runnable_0.<.ctor>b__3_2() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 197
+   at BenchmarkDotNet.Autogenerated.Runnable_0.WorkloadActionNoUnroll(Int64 invokeCount) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 313
+   at BenchmarkDotNet.Engines.Engine.Measure(Action`1 action, Int64 invokeCount)
+   at BenchmarkDotNet.Engines.Engine.RunIteration(IterationData data)
+   at BenchmarkDotNet.Engines.EngineFactory.Jit(Engine engine, Int32 jitIndex, Int32 invokeCount, Int32 unrollFactor)
+   at BenchmarkDotNet.Engines.EngineFactory.CreateReadyToRun(EngineParameters engineParameters)
+   at BenchmarkDotNet.Autogenerated.Runnable_0.Run(IHost host, String benchmarkName) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 176
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   --- End of inner exception stack trace ---
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+   at BenchmarkDotNet.Autogenerated.UniqueProgramName.AfterAssemblyLoadingAttached(String[] args) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 57
+// AfterAll
+No Workload Results were obtained from the run.
+// Benchmark Process 637298 has exited with code 255.
+
+// ** Remained 19 (95.0%) benchmark(s) to run. Estimated finish 2026-02-07 19:37 (0h 0m from now) **
+// **************************
+// Benchmark: SafetyVsPerformance.'SAFE: pengdows.crud INSERT (explicit types, proper connection mgmt)': DefaultJob
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet 5a275160-ec9c-46e7-a773-7504ad80fa60.dll --anonymousPipes 163 164 --benchmarkName CrudBenchmarks.SafetyVsPerformance.Safe_Pengdows_Insert --job Default --benchmarkId 1 in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/bin/Release/net8.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.14.0
+// Runtime=.NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2
+// GC=Concurrent Workstation
+// HardwareIntrinsics=AVX2,AES,BMI1,BMI2,FMA,LZCNT,PCLMUL,POPCNT VectorSize=256
+// Job: DefaultJob
+
+OverheadJitting  1: 1 op, 254722.00 ns, 254.7220 us/op
+
+System.Reflection.TargetInvocationException: Exception has been thrown by the target of an invocation.
+ ---> Microsoft.Data.Sqlite.SqliteException (0x80004005): SQLite Error 1: 'no such table: products'.
+   at Microsoft.Data.Sqlite.SqliteException.ThrowExceptionForRC(Int32 rc, sqlite3 db)
+   at Microsoft.Data.Sqlite.SqliteCommand.PrepareAndEnumerateStatements()+MoveNext()
+   at Microsoft.Data.Sqlite.SqliteCommand.Prepare()
+   at pengdows.crud.SqlContainer.MaybePrepareCommand(DbCommand cmd, ITrackedConnection conn, ExecutionType executionType) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 1240
+   at pengdows.crud.SqlContainer.PrepareAndCreateCommandAsync(ITrackedConnection conn, CommandType commandType, ExecutionType executionType, CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 1189
+   at pengdows.crud.SqlContainer.ExecuteScalarWriteAsync[T](CommandType commandType, CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 839
+   at pengdows.crud.SqlContainer.ExecuteScalarWriteAsync[T](CommandType commandType, CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 867
+   at pengdows.crud.SqlContainer.ExecuteScalarWriteAsync[T](CommandType commandType, CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 867
+   at pengdows.crud.TableGateway`2.CreateAsync(TEntity entity, IDatabaseContext context) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/TableGateway.Core.cs:line 475
+   at CrudBenchmarks.SafetyVsPerformance.Safe_Pengdows_Insert() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/SafetyVsPerformance.cs:line 113
+   at BenchmarkDotNet.Helpers.AwaitHelper.GetResult[T](Task`1 task)
+   at BenchmarkDotNet.Autogenerated.Runnable_1.<.ctor>b__3_2() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 394
+   at BenchmarkDotNet.Autogenerated.Runnable_1.WorkloadActionNoUnroll(Int64 invokeCount) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 510
+   at BenchmarkDotNet.Engines.Engine.Measure(Action`1 action, Int64 invokeCount)
+   at BenchmarkDotNet.Engines.Engine.RunIteration(IterationData data)
+   at BenchmarkDotNet.Engines.EngineFactory.Jit(Engine engine, Int32 jitIndex, Int32 invokeCount, Int32 unrollFactor)
+   at BenchmarkDotNet.Engines.EngineFactory.CreateReadyToRun(EngineParameters engineParameters)
+   at BenchmarkDotNet.Autogenerated.Runnable_1.Run(IHost host, String benchmarkName) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 373
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   --- End of inner exception stack trace ---
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+   at BenchmarkDotNet.Autogenerated.UniqueProgramName.AfterAssemblyLoadingAttached(String[] args) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 57
+// AfterAll
+No Workload Results were obtained from the run.
+// Benchmark Process 637309 has exited with code 255.
+
+// ** Remained 18 (90.0%) benchmark(s) to run. Estimated finish 2026-02-07 19:37 (0h 0m from now) **
+// **************************
+// Benchmark: SafetyVsPerformance.'TYPICAL DAPPER: Type inference + connection stays open': DefaultJob
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet 5a275160-ec9c-46e7-a773-7504ad80fa60.dll --anonymousPipes 163 164 --benchmarkName CrudBenchmarks.SafetyVsPerformance.TypicalDapper_FastButOpenConnection --job Default --benchmarkId 2 in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/bin/Release/net8.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.14.0
+// Runtime=.NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2
+// GC=Concurrent Workstation
+// HardwareIntrinsics=AVX2,AES,BMI1,BMI2,FMA,LZCNT,PCLMUL,POPCNT VectorSize=256
+// Job: DefaultJob
+
+OverheadJitting  1: 1 op, 283528.00 ns, 283.5280 us/op
+
+System.Reflection.TargetInvocationException: Exception has been thrown by the target of an invocation.
+ ---> Microsoft.Data.Sqlite.SqliteException (0x80004005): SQLite Error 1: 'no such table: products'.
+   at Microsoft.Data.Sqlite.SqliteException.ThrowExceptionForRC(Int32 rc, sqlite3 db)
+   at Microsoft.Data.Sqlite.SqliteCommand.PrepareAndEnumerateStatements()+MoveNext()
+   at Microsoft.Data.Sqlite.SqliteCommand.GetStatements()+MoveNext()
+   at Microsoft.Data.Sqlite.SqliteDataReader.NextResult()
+   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteReader(CommandBehavior behavior)
+   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken)
+   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken)
+   at Dapper.SqlMapper.QueryRowAsync[T](IDbConnection cnn, Row row, Type effectiveType, CommandDefinition command) in /_/Dapper/SqlMapper.Async.cs:line 489
+   at CrudBenchmarks.SafetyVsPerformance.TypicalDapper_FastButOpenConnection() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/SafetyVsPerformance.cs:line 131
+   at BenchmarkDotNet.Helpers.AwaitHelper.GetResult[T](Task`1 task)
+   at BenchmarkDotNet.Autogenerated.Runnable_2.<.ctor>b__3_2() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 591
+   at BenchmarkDotNet.Autogenerated.Runnable_2.WorkloadActionNoUnroll(Int64 invokeCount) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 707
+   at BenchmarkDotNet.Engines.Engine.Measure(Action`1 action, Int64 invokeCount)
+   at BenchmarkDotNet.Engines.Engine.RunIteration(IterationData data)
+   at BenchmarkDotNet.Engines.EngineFactory.Jit(Engine engine, Int32 jitIndex, Int32 invokeCount, Int32 unrollFactor)
+   at BenchmarkDotNet.Engines.EngineFactory.CreateReadyToRun(EngineParameters engineParameters)
+   at BenchmarkDotNet.Autogenerated.Runnable_2.Run(IHost host, String benchmarkName) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 570
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   --- End of inner exception stack trace ---
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+   at BenchmarkDotNet.Autogenerated.UniqueProgramName.AfterAssemblyLoadingAttached(String[] args) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 57
+// AfterAll
+No Workload Results were obtained from the run.
+// Benchmark Process 637319 has exited with code 255.
+
+// ** Remained 17 (85.0%) benchmark(s) to run. Estimated finish 2026-02-07 19:37 (0h 0m from now) **
+// **************************
+// Benchmark: SafetyVsPerformance.'TYPICAL DAPPER: INSERT with type inference + open connection': DefaultJob
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet 5a275160-ec9c-46e7-a773-7504ad80fa60.dll --anonymousPipes 163 164 --benchmarkName CrudBenchmarks.SafetyVsPerformance.TypicalDapper_Insert --job Default --benchmarkId 3 in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/bin/Release/net8.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.14.0
+// Runtime=.NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2
+// GC=Concurrent Workstation
+// HardwareIntrinsics=AVX2,AES,BMI1,BMI2,FMA,LZCNT,PCLMUL,POPCNT VectorSize=256
+// Job: DefaultJob
+
+OverheadJitting  1: 1 op, 276114.00 ns, 276.1140 us/op
+
+System.Reflection.TargetInvocationException: Exception has been thrown by the target of an invocation.
+ ---> Microsoft.Data.Sqlite.SqliteException (0x80004005): SQLite Error 1: 'no such table: products'.
+   at Microsoft.Data.Sqlite.SqliteException.ThrowExceptionForRC(Int32 rc, sqlite3 db)
+   at Microsoft.Data.Sqlite.SqliteCommand.PrepareAndEnumerateStatements()+MoveNext()
+   at Microsoft.Data.Sqlite.SqliteCommand.GetStatements()+MoveNext()
+   at Microsoft.Data.Sqlite.SqliteDataReader.NextResult()
+   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteReader(CommandBehavior behavior)
+   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteReader()
+   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteNonQuery()
+   at System.Data.Common.DbCommand.ExecuteNonQueryAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at Dapper.SqlMapper.ExecuteImplAsync(IDbConnection cnn, CommandDefinition command, Object param) in /_/Dapper/SqlMapper.Async.cs:line 662
+   at CrudBenchmarks.SafetyVsPerformance.TypicalDapper_Insert() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/SafetyVsPerformance.cs:line 144
+   at BenchmarkDotNet.Helpers.AwaitHelper.GetResult[T](Task`1 task)
+   at BenchmarkDotNet.Autogenerated.Runnable_3.<.ctor>b__3_2() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 788
+   at BenchmarkDotNet.Autogenerated.Runnable_3.WorkloadActionNoUnroll(Int64 invokeCount) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 904
+   at BenchmarkDotNet.Engines.Engine.Measure(Action`1 action, Int64 invokeCount)
+   at BenchmarkDotNet.Engines.Engine.RunIteration(IterationData data)
+   at BenchmarkDotNet.Engines.EngineFactory.Jit(Engine engine, Int32 jitIndex, Int32 invokeCount, Int32 unrollFactor)
+   at BenchmarkDotNet.Engines.EngineFactory.CreateReadyToRun(EngineParameters engineParameters)
+   at BenchmarkDotNet.Autogenerated.Runnable_3.Run(IHost host, String benchmarkName) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 767
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   --- End of inner exception stack trace ---
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+   at BenchmarkDotNet.Autogenerated.UniqueProgramName.AfterAssemblyLoadingAttached(String[] args) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 57
+// AfterAll
+No Workload Results were obtained from the run.
+// Benchmark Process 637330 has exited with code 255.
+
+// ** Remained 16 (80.0%) benchmark(s) to run. Estimated finish 2026-02-07 19:37 (0h 0m from now) **
+// **************************
+// Benchmark: SafetyVsPerformance.'PROPER DAPPER: Open/close per operation (same as pengdows)': DefaultJob
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet 5a275160-ec9c-46e7-a773-7504ad80fa60.dll --anonymousPipes 163 164 --benchmarkName CrudBenchmarks.SafetyVsPerformance.ProperDapper_SameConnectionPattern --job Default --benchmarkId 4 in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/bin/Release/net8.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.14.0
+// Runtime=.NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2
+// GC=Concurrent Workstation
+// HardwareIntrinsics=AVX2,AES,BMI1,BMI2,FMA,LZCNT,PCLMUL,POPCNT VectorSize=256
+// Job: DefaultJob
+
+OverheadJitting  1: 1 op, 290691.00 ns, 290.6910 us/op
+
+System.Reflection.TargetInvocationException: Exception has been thrown by the target of an invocation.
+ ---> Microsoft.Data.Sqlite.SqliteException (0x80004005): SQLite Error 1: 'no such table: products'.
+   at Microsoft.Data.Sqlite.SqliteException.ThrowExceptionForRC(Int32 rc, sqlite3 db)
+   at Microsoft.Data.Sqlite.SqliteCommand.PrepareAndEnumerateStatements()+MoveNext()
+   at Microsoft.Data.Sqlite.SqliteCommand.GetStatements()+MoveNext()
+   at Microsoft.Data.Sqlite.SqliteDataReader.NextResult()
+   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteReader(CommandBehavior behavior)
+   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken)
+   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken)
+   at Dapper.SqlMapper.QueryRowAsync[T](IDbConnection cnn, Row row, Type effectiveType, CommandDefinition command) in /_/Dapper/SqlMapper.Async.cs:line 489
+   at CrudBenchmarks.SafetyVsPerformance.ProperDapper_SameConnectionPattern() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/SafetyVsPerformance.cs:line 167
+   at BenchmarkDotNet.Helpers.AwaitHelper.GetResult[T](Task`1 task)
+   at BenchmarkDotNet.Autogenerated.Runnable_4.<.ctor>b__3_2() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 985
+   at BenchmarkDotNet.Autogenerated.Runnable_4.WorkloadActionNoUnroll(Int64 invokeCount) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 1101
+   at BenchmarkDotNet.Engines.Engine.Measure(Action`1 action, Int64 invokeCount)
+   at BenchmarkDotNet.Engines.Engine.RunIteration(IterationData data)
+   at BenchmarkDotNet.Engines.EngineFactory.Jit(Engine engine, Int32 jitIndex, Int32 invokeCount, Int32 unrollFactor)
+   at BenchmarkDotNet.Engines.EngineFactory.CreateReadyToRun(EngineParameters engineParameters)
+   at BenchmarkDotNet.Autogenerated.Runnable_4.Run(IHost host, String benchmarkName) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 964
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   --- End of inner exception stack trace ---
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+   at BenchmarkDotNet.Autogenerated.UniqueProgramName.AfterAssemblyLoadingAttached(String[] args) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 57
+// AfterAll
+No Workload Results were obtained from the run.
+// Benchmark Process 637340 has exited with code 255.
+
+// ** Remained 15 (75.0%) benchmark(s) to run. Estimated finish 2026-02-07 19:37 (0h 0m from now) **
+// **************************
+// Benchmark: SafetyVsPerformance.'PROPER DAPPER: INSERT with open/close per operation': DefaultJob
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet 5a275160-ec9c-46e7-a773-7504ad80fa60.dll --anonymousPipes 163 164 --benchmarkName CrudBenchmarks.SafetyVsPerformance.ProperDapper_Insert --job Default --benchmarkId 5 in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/bin/Release/net8.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.14.0
+// Runtime=.NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2
+// GC=Concurrent Workstation
+// HardwareIntrinsics=AVX2,AES,BMI1,BMI2,FMA,LZCNT,PCLMUL,POPCNT VectorSize=256
+// Job: DefaultJob
+
+OverheadJitting  1: 1 op, 283738.00 ns, 283.7380 us/op
+
+System.Reflection.TargetInvocationException: Exception has been thrown by the target of an invocation.
+ ---> Microsoft.Data.Sqlite.SqliteException (0x80004005): SQLite Error 1: 'no such table: products'.
+   at Microsoft.Data.Sqlite.SqliteException.ThrowExceptionForRC(Int32 rc, sqlite3 db)
+   at Microsoft.Data.Sqlite.SqliteCommand.PrepareAndEnumerateStatements()+MoveNext()
+   at Microsoft.Data.Sqlite.SqliteCommand.GetStatements()+MoveNext()
+   at Microsoft.Data.Sqlite.SqliteDataReader.NextResult()
+   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteReader(CommandBehavior behavior)
+   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteReader()
+   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteNonQuery()
+   at System.Data.Common.DbCommand.ExecuteNonQueryAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at Dapper.SqlMapper.ExecuteImplAsync(IDbConnection cnn, CommandDefinition command, Object param) in /_/Dapper/SqlMapper.Async.cs:line 662
+   at CrudBenchmarks.SafetyVsPerformance.ProperDapper_Insert() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/SafetyVsPerformance.cs:line 180
+   at BenchmarkDotNet.Helpers.AwaitHelper.GetResult[T](Task`1 task)
+   at BenchmarkDotNet.Autogenerated.Runnable_5.<.ctor>b__3_2() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 1182
+   at BenchmarkDotNet.Autogenerated.Runnable_5.WorkloadActionNoUnroll(Int64 invokeCount) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 1298
+   at BenchmarkDotNet.Engines.Engine.Measure(Action`1 action, Int64 invokeCount)
+   at BenchmarkDotNet.Engines.Engine.RunIteration(IterationData data)
+   at BenchmarkDotNet.Engines.EngineFactory.Jit(Engine engine, Int32 jitIndex, Int32 invokeCount, Int32 unrollFactor)
+   at BenchmarkDotNet.Engines.EngineFactory.CreateReadyToRun(EngineParameters engineParameters)
+   at BenchmarkDotNet.Autogenerated.Runnable_5.Run(IHost host, String benchmarkName) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 1161
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   --- End of inner exception stack trace ---
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+   at BenchmarkDotNet.Autogenerated.UniqueProgramName.AfterAssemblyLoadingAttached(String[] args) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 57
+// AfterAll
+No Workload Results were obtained from the run.
+// Benchmark Process 637350 has exited with code 255.
+
+// ** Remained 14 (70.0%) benchmark(s) to run. Estimated finish 2026-02-07 19:37 (0h 0m from now) **
+// **************************
+// Benchmark: SafetyVsPerformance.'SAFETY: pengdows handles decimals correctly': DefaultJob
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet 5a275160-ec9c-46e7-a773-7504ad80fa60.dll --anonymousPipes 163 164 --benchmarkName CrudBenchmarks.SafetyVsPerformance.Safety_Pengdows_DecimalPrecision --job Default --benchmarkId 6 in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/bin/Release/net8.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.14.0
+// Runtime=.NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2
+// GC=Concurrent Workstation
+// HardwareIntrinsics=AVX2,AES,BMI1,BMI2,FMA,LZCNT,PCLMUL,POPCNT VectorSize=256
+// Job: DefaultJob
+
+OverheadJitting  1: 1 op, 249042.00 ns, 249.0420 us/op
+
+System.Reflection.TargetInvocationException: Exception has been thrown by the target of an invocation.
+ ---> Microsoft.Data.Sqlite.SqliteException (0x80004005): SQLite Error 1: 'no such table: products'.
+   at Microsoft.Data.Sqlite.SqliteException.ThrowExceptionForRC(Int32 rc, sqlite3 db)
+   at Microsoft.Data.Sqlite.SqliteCommand.PrepareAndEnumerateStatements()+MoveNext()
+   at Microsoft.Data.Sqlite.SqliteCommand.Prepare()
+   at pengdows.crud.SqlContainer.MaybePrepareCommand(DbCommand cmd, ITrackedConnection conn, ExecutionType executionType) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 1240
+   at pengdows.crud.SqlContainer.PrepareAndCreateCommandAsync(ITrackedConnection conn, CommandType commandType, ExecutionType executionType, CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 1189
+   at pengdows.crud.SqlContainer.ExecuteScalarWriteAsync[T](CommandType commandType, CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 839
+   at pengdows.crud.SqlContainer.ExecuteScalarWriteAsync[T](CommandType commandType, CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 867
+   at pengdows.crud.SqlContainer.ExecuteScalarWriteAsync[T](CommandType commandType, CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 867
+   at pengdows.crud.TableGateway`2.CreateAsync(TEntity entity, IDatabaseContext context) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/TableGateway.Core.cs:line 475
+   at CrudBenchmarks.SafetyVsPerformance.Safety_Pengdows_DecimalPrecision() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/SafetyVsPerformance.cs:line 209
+   at BenchmarkDotNet.Helpers.AwaitHelper.GetResult[T](Task`1 task)
+   at BenchmarkDotNet.Autogenerated.Runnable_6.<.ctor>b__3_2() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 1379
+   at BenchmarkDotNet.Autogenerated.Runnable_6.WorkloadActionNoUnroll(Int64 invokeCount) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 1495
+   at BenchmarkDotNet.Engines.Engine.Measure(Action`1 action, Int64 invokeCount)
+   at BenchmarkDotNet.Engines.Engine.RunIteration(IterationData data)
+   at BenchmarkDotNet.Engines.EngineFactory.Jit(Engine engine, Int32 jitIndex, Int32 invokeCount, Int32 unrollFactor)
+   at BenchmarkDotNet.Engines.EngineFactory.CreateReadyToRun(EngineParameters engineParameters)
+   at BenchmarkDotNet.Autogenerated.Runnable_6.Run(IHost host, String benchmarkName) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 1358
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   --- End of inner exception stack trace ---
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+   at BenchmarkDotNet.Autogenerated.UniqueProgramName.AfterAssemblyLoadingAttached(String[] args) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 57
+// AfterAll
+No Workload Results were obtained from the run.
+// Benchmark Process 637361 has exited with code 255.
+
+// ** Remained 13 (65.0%) benchmark(s) to run. Estimated finish 2026-02-07 19:37 (0h 0m from now) **
+// **************************
+// Benchmark: SafetyVsPerformance.'SAFETY: Dapper type inference on decimal': DefaultJob
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet 5a275160-ec9c-46e7-a773-7504ad80fa60.dll --anonymousPipes 163 164 --benchmarkName CrudBenchmarks.SafetyVsPerformance.Safety_Dapper_DecimalInference --job Default --benchmarkId 7 in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/bin/Release/net8.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.14.0
+// Runtime=.NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2
+// GC=Concurrent Workstation
+// HardwareIntrinsics=AVX2,AES,BMI1,BMI2,FMA,LZCNT,PCLMUL,POPCNT VectorSize=256
+// Job: DefaultJob
+
+OverheadJitting  1: 1 op, 259181.00 ns, 259.1810 us/op
+
+System.Reflection.TargetInvocationException: Exception has been thrown by the target of an invocation.
+ ---> Microsoft.Data.Sqlite.SqliteException (0x80004005): SQLite Error 1: 'no such table: products'.
+   at Microsoft.Data.Sqlite.SqliteException.ThrowExceptionForRC(Int32 rc, sqlite3 db)
+   at Microsoft.Data.Sqlite.SqliteCommand.PrepareAndEnumerateStatements()+MoveNext()
+   at Microsoft.Data.Sqlite.SqliteCommand.GetStatements()+MoveNext()
+   at Microsoft.Data.Sqlite.SqliteDataReader.NextResult()
+   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteReader(CommandBehavior behavior)
+   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteReader()
+   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteNonQuery()
+   at System.Data.Common.DbCommand.ExecuteNonQueryAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at Dapper.SqlMapper.ExecuteImplAsync(IDbConnection cnn, CommandDefinition command, Object param) in /_/Dapper/SqlMapper.Async.cs:line 662
+   at CrudBenchmarks.SafetyVsPerformance.Safety_Dapper_DecimalInference() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/SafetyVsPerformance.cs:line 222
+   at BenchmarkDotNet.Helpers.AwaitHelper.GetResult[T](Task`1 task)
+   at BenchmarkDotNet.Autogenerated.Runnable_7.<.ctor>b__3_2() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 1576
+   at BenchmarkDotNet.Autogenerated.Runnable_7.WorkloadActionNoUnroll(Int64 invokeCount) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 1692
+   at BenchmarkDotNet.Engines.Engine.Measure(Action`1 action, Int64 invokeCount)
+   at BenchmarkDotNet.Engines.Engine.RunIteration(IterationData data)
+   at BenchmarkDotNet.Engines.EngineFactory.Jit(Engine engine, Int32 jitIndex, Int32 invokeCount, Int32 unrollFactor)
+   at BenchmarkDotNet.Engines.EngineFactory.CreateReadyToRun(EngineParameters engineParameters)
+   at BenchmarkDotNet.Autogenerated.Runnable_7.Run(IHost host, String benchmarkName) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 1555
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   --- End of inner exception stack trace ---
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+   at BenchmarkDotNet.Autogenerated.UniqueProgramName.AfterAssemblyLoadingAttached(String[] args) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 57
+// AfterAll
+No Workload Results were obtained from the run.
+// Benchmark Process 637371 has exited with code 255.
+
+// ** Remained 12 (60.0%) benchmark(s) to run. Estimated finish 2026-02-07 19:37 (0h 0m from now) **
+// **************************
+// Benchmark: SafetyVsPerformance.'REALISTIC: 100 operations with pengdows (releases connections)': DefaultJob
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet 5a275160-ec9c-46e7-a773-7504ad80fa60.dll --anonymousPipes 163 164 --benchmarkName CrudBenchmarks.SafetyVsPerformance.Realistic_Pengdows_ConnectionPoolFriendly --job Default --benchmarkId 8 in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/bin/Release/net8.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.14.0
+// Runtime=.NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2
+// GC=Concurrent Workstation
+// HardwareIntrinsics=AVX2,AES,BMI1,BMI2,FMA,LZCNT,PCLMUL,POPCNT VectorSize=256
+// Job: DefaultJob
+
+OverheadJitting  1: 1 op, 233753.00 ns, 233.7530 us/op
+
+System.Reflection.TargetInvocationException: Exception has been thrown by the target of an invocation.
+ ---> Microsoft.Data.Sqlite.SqliteException (0x80004005): SQLite Error 1: 'no such table: products'.
+   at Microsoft.Data.Sqlite.SqliteException.ThrowExceptionForRC(Int32 rc, sqlite3 db)
+   at Microsoft.Data.Sqlite.SqliteCommand.PrepareAndEnumerateStatements()+MoveNext()
+   at Microsoft.Data.Sqlite.SqliteCommand.Prepare()
+   at pengdows.crud.SqlContainer.MaybePrepareCommand(DbCommand cmd, ITrackedConnection conn, ExecutionType executionType) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 1240
+   at pengdows.crud.SqlContainer.PrepareAndCreateCommandAsync(ITrackedConnection conn, CommandType commandType, ExecutionType executionType, CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 1189
+   at pengdows.crud.SqlContainer.ExecuteReaderSingleRowAsync(CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 1002
+   at pengdows.crud.SqlContainer.ExecuteReaderSingleRowAsync(CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 1023
+   at pengdows.crud.SqlContainer.ExecuteReaderSingleRowAsync(CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 1056
+   at pengdows.crud.TableGateway`2.LoadSingleAsync(ISqlContainer sc, CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/TableGateway.Core.cs:line 1223
+   at pengdows.crud.TableGateway`2.RetrieveOneAsync(TRowID id, IDatabaseContext context, CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/TableGateway.Core.cs:line 1205
+   at CrudBenchmarks.SafetyVsPerformance.Realistic_Pengdows_ConnectionPoolFriendly() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/SafetyVsPerformance.cs:line 248
+   at BenchmarkDotNet.Helpers.AwaitHelper.GetResult[T](Task`1 task)
+   at BenchmarkDotNet.Autogenerated.Runnable_8.<.ctor>b__3_2() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 1773
+   at BenchmarkDotNet.Autogenerated.Runnable_8.WorkloadActionNoUnroll(Int64 invokeCount) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 1889
+   at BenchmarkDotNet.Engines.Engine.Measure(Action`1 action, Int64 invokeCount)
+   at BenchmarkDotNet.Engines.Engine.RunIteration(IterationData data)
+   at BenchmarkDotNet.Engines.EngineFactory.Jit(Engine engine, Int32 jitIndex, Int32 invokeCount, Int32 unrollFactor)
+   at BenchmarkDotNet.Engines.EngineFactory.CreateReadyToRun(EngineParameters engineParameters)
+   at BenchmarkDotNet.Autogenerated.Runnable_8.Run(IHost host, String benchmarkName) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 1752
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   --- End of inner exception stack trace ---
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+   at BenchmarkDotNet.Autogenerated.UniqueProgramName.AfterAssemblyLoadingAttached(String[] args) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 57
+// AfterAll
+No Workload Results were obtained from the run.
+// Benchmark Process 637381 has exited with code 255.
+
+// ** Remained 11 (55.0%) benchmark(s) to run. Estimated finish 2026-02-07 19:37 (0h 0m from now) **
+// **************************
+// Benchmark: SafetyVsPerformance.'REALISTIC: 100 operations with Dapper (holds connections longer)': DefaultJob
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet 5a275160-ec9c-46e7-a773-7504ad80fa60.dll --anonymousPipes 163 164 --benchmarkName CrudBenchmarks.SafetyVsPerformance.Realistic_Dapper_ConnectionPoolStress --job Default --benchmarkId 9 in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/bin/Release/net8.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.14.0
+// Runtime=.NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2
+// GC=Concurrent Workstation
+// HardwareIntrinsics=AVX2,AES,BMI1,BMI2,FMA,LZCNT,PCLMUL,POPCNT VectorSize=256
+// Job: DefaultJob
+
+OverheadJitting  1: 1 op, 252639.00 ns, 252.6390 us/op
+
+System.Reflection.TargetInvocationException: Exception has been thrown by the target of an invocation.
+ ---> Microsoft.Data.Sqlite.SqliteException (0x80004005): SQLite Error 1: 'no such table: products'.
+   at Microsoft.Data.Sqlite.SqliteException.ThrowExceptionForRC(Int32 rc, sqlite3 db)
+   at Microsoft.Data.Sqlite.SqliteCommand.PrepareAndEnumerateStatements()+MoveNext()
+   at Microsoft.Data.Sqlite.SqliteCommand.GetStatements()+MoveNext()
+   at Microsoft.Data.Sqlite.SqliteDataReader.NextResult()
+   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteReader(CommandBehavior behavior)
+   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken)
+   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken)
+   at Dapper.SqlMapper.QueryRowAsync[T](IDbConnection cnn, Row row, Type effectiveType, CommandDefinition command) in /_/Dapper/SqlMapper.Async.cs:line 489
+   at CrudBenchmarks.SafetyVsPerformance.Realistic_Dapper_ConnectionPoolStress() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/SafetyVsPerformance.cs:line 269
+   at BenchmarkDotNet.Helpers.AwaitHelper.GetResult[T](Task`1 task)
+   at BenchmarkDotNet.Autogenerated.Runnable_9.<.ctor>b__3_2() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 1970
+   at BenchmarkDotNet.Autogenerated.Runnable_9.WorkloadActionNoUnroll(Int64 invokeCount) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 2086
+   at BenchmarkDotNet.Engines.Engine.Measure(Action`1 action, Int64 invokeCount)
+   at BenchmarkDotNet.Engines.Engine.RunIteration(IterationData data)
+   at BenchmarkDotNet.Engines.EngineFactory.Jit(Engine engine, Int32 jitIndex, Int32 invokeCount, Int32 unrollFactor)
+   at BenchmarkDotNet.Engines.EngineFactory.CreateReadyToRun(EngineParameters engineParameters)
+   at BenchmarkDotNet.Autogenerated.Runnable_9.Run(IHost host, String benchmarkName) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 1949
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   --- End of inner exception stack trace ---
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+   at BenchmarkDotNet.Autogenerated.UniqueProgramName.AfterAssemblyLoadingAttached(String[] args) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 57
+// AfterAll
+No Workload Results were obtained from the run.
+// Benchmark Process 637391 has exited with code 255.
+
+// ** Remained 10 (50.0%) benchmark(s) to run. Estimated finish 2026-02-07 19:37 (0h 0m from now) **
+// **************************
+// Benchmark: SafetyVsPerformance.'SAFE: pengdows.crud (explicit types, proper connection mgmt)': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet 5a275160-ec9c-46e7-a773-7504ad80fa60.dll --anonymousPipes 163 164 --benchmarkName CrudBenchmarks.SafetyVsPerformance.Safe_Pengdows_ProperConnectionMgmt --job "IterationCount=10, WarmupCount=3" --benchmarkId 10 in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/bin/Release/net8.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.14.0
+// Runtime=.NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2
+// GC=Concurrent Workstation
+// HardwareIntrinsics=AVX2,AES,BMI1,BMI2,FMA,LZCNT,PCLMUL,POPCNT VectorSize=256
+// Job: Job-XRWCDJ(IterationCount=10, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 268329.00 ns, 268.3290 us/op
+
+System.Reflection.TargetInvocationException: Exception has been thrown by the target of an invocation.
+ ---> Microsoft.Data.Sqlite.SqliteException (0x80004005): SQLite Error 1: 'no such table: products'.
+   at Microsoft.Data.Sqlite.SqliteException.ThrowExceptionForRC(Int32 rc, sqlite3 db)
+   at Microsoft.Data.Sqlite.SqliteCommand.PrepareAndEnumerateStatements()+MoveNext()
+   at Microsoft.Data.Sqlite.SqliteCommand.Prepare()
+   at pengdows.crud.SqlContainer.MaybePrepareCommand(DbCommand cmd, ITrackedConnection conn, ExecutionType executionType) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 1240
+   at pengdows.crud.SqlContainer.PrepareAndCreateCommandAsync(ITrackedConnection conn, CommandType commandType, ExecutionType executionType, CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 1189
+   at pengdows.crud.SqlContainer.ExecuteReaderSingleRowAsync(CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 1002
+   at pengdows.crud.SqlContainer.ExecuteReaderSingleRowAsync(CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 1023
+   at pengdows.crud.SqlContainer.ExecuteReaderSingleRowAsync(CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 1056
+   at pengdows.crud.TableGateway`2.LoadSingleAsync(ISqlContainer sc, CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/TableGateway.Core.cs:line 1223
+   at pengdows.crud.TableGateway`2.RetrieveOneAsync(TRowID id, IDatabaseContext context, CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/TableGateway.Core.cs:line 1205
+   at CrudBenchmarks.SafetyVsPerformance.Safe_Pengdows_ProperConnectionMgmt() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/SafetyVsPerformance.cs:line 97
+   at BenchmarkDotNet.Helpers.AwaitHelper.GetResult[T](Task`1 task)
+   at BenchmarkDotNet.Autogenerated.Runnable_10.<.ctor>b__3_2() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 2168
+   at BenchmarkDotNet.Autogenerated.Runnable_10.WorkloadActionNoUnroll(Int64 invokeCount) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 2284
+   at BenchmarkDotNet.Engines.Engine.Measure(Action`1 action, Int64 invokeCount)
+   at BenchmarkDotNet.Engines.Engine.RunIteration(IterationData data)
+   at BenchmarkDotNet.Engines.EngineFactory.Jit(Engine engine, Int32 jitIndex, Int32 invokeCount, Int32 unrollFactor)
+   at BenchmarkDotNet.Engines.EngineFactory.CreateReadyToRun(EngineParameters engineParameters)
+   at BenchmarkDotNet.Autogenerated.Runnable_10.Run(IHost host, String benchmarkName) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 2147
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   --- End of inner exception stack trace ---
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+   at BenchmarkDotNet.Autogenerated.UniqueProgramName.AfterAssemblyLoadingAttached(String[] args) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 57
+// AfterAll
+No Workload Results were obtained from the run.
+// Benchmark Process 637402 has exited with code 255.
+
+// ** Remained 9 (45.0%) benchmark(s) to run. Estimated finish 2026-02-07 19:37 (0h 0m from now) **
+// **************************
+// Benchmark: SafetyVsPerformance.'SAFE: pengdows.crud INSERT (explicit types, proper connection mgmt)': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet 5a275160-ec9c-46e7-a773-7504ad80fa60.dll --anonymousPipes 163 164 --benchmarkName CrudBenchmarks.SafetyVsPerformance.Safe_Pengdows_Insert --job "IterationCount=10, WarmupCount=3" --benchmarkId 11 in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/bin/Release/net8.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.14.0
+// Runtime=.NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2
+// GC=Concurrent Workstation
+// HardwareIntrinsics=AVX2,AES,BMI1,BMI2,FMA,LZCNT,PCLMUL,POPCNT VectorSize=256
+// Job: Job-ZYCDOW(IterationCount=10, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 231959.00 ns, 231.9590 us/op
+
+System.Reflection.TargetInvocationException: Exception has been thrown by the target of an invocation.
+ ---> Microsoft.Data.Sqlite.SqliteException (0x80004005): SQLite Error 1: 'no such table: products'.
+   at Microsoft.Data.Sqlite.SqliteException.ThrowExceptionForRC(Int32 rc, sqlite3 db)
+   at Microsoft.Data.Sqlite.SqliteCommand.PrepareAndEnumerateStatements()+MoveNext()
+   at Microsoft.Data.Sqlite.SqliteCommand.Prepare()
+   at pengdows.crud.SqlContainer.MaybePrepareCommand(DbCommand cmd, ITrackedConnection conn, ExecutionType executionType) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 1240
+   at pengdows.crud.SqlContainer.PrepareAndCreateCommandAsync(ITrackedConnection conn, CommandType commandType, ExecutionType executionType, CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 1189
+   at pengdows.crud.SqlContainer.ExecuteScalarWriteAsync[T](CommandType commandType, CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 839
+   at pengdows.crud.SqlContainer.ExecuteScalarWriteAsync[T](CommandType commandType, CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 867
+   at pengdows.crud.SqlContainer.ExecuteScalarWriteAsync[T](CommandType commandType, CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 867
+   at pengdows.crud.TableGateway`2.CreateAsync(TEntity entity, IDatabaseContext context) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/TableGateway.Core.cs:line 475
+   at CrudBenchmarks.SafetyVsPerformance.Safe_Pengdows_Insert() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/SafetyVsPerformance.cs:line 113
+   at BenchmarkDotNet.Helpers.AwaitHelper.GetResult[T](Task`1 task)
+   at BenchmarkDotNet.Autogenerated.Runnable_11.<.ctor>b__3_2() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 2366
+   at BenchmarkDotNet.Autogenerated.Runnable_11.WorkloadActionNoUnroll(Int64 invokeCount) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 2482
+   at BenchmarkDotNet.Engines.Engine.Measure(Action`1 action, Int64 invokeCount)
+   at BenchmarkDotNet.Engines.Engine.RunIteration(IterationData data)
+   at BenchmarkDotNet.Engines.EngineFactory.Jit(Engine engine, Int32 jitIndex, Int32 invokeCount, Int32 unrollFactor)
+   at BenchmarkDotNet.Engines.EngineFactory.CreateReadyToRun(EngineParameters engineParameters)
+   at BenchmarkDotNet.Autogenerated.Runnable_11.Run(IHost host, String benchmarkName) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 2345
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   --- End of inner exception stack trace ---
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+   at BenchmarkDotNet.Autogenerated.UniqueProgramName.AfterAssemblyLoadingAttached(String[] args) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 57
+// AfterAll
+No Workload Results were obtained from the run.
+// Benchmark Process 637412 has exited with code 255.
+
+// ** Remained 8 (40.0%) benchmark(s) to run. Estimated finish 2026-02-07 19:37 (0h 0m from now) **
+// **************************
+// Benchmark: SafetyVsPerformance.'TYPICAL DAPPER: Type inference + connection stays open': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet 5a275160-ec9c-46e7-a773-7504ad80fa60.dll --anonymousPipes 163 164 --benchmarkName CrudBenchmarks.SafetyVsPerformance.TypicalDapper_FastButOpenConnection --job "IterationCount=10, WarmupCount=3" --benchmarkId 12 in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/bin/Release/net8.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.14.0
+// Runtime=.NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2
+// GC=Concurrent Workstation
+// HardwareIntrinsics=AVX2,AES,BMI1,BMI2,FMA,LZCNT,PCLMUL,POPCNT VectorSize=256
+// Job: Job-LENZST(IterationCount=10, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 267136.00 ns, 267.1360 us/op
+
+System.Reflection.TargetInvocationException: Exception has been thrown by the target of an invocation.
+ ---> Microsoft.Data.Sqlite.SqliteException (0x80004005): SQLite Error 1: 'no such table: products'.
+   at Microsoft.Data.Sqlite.SqliteException.ThrowExceptionForRC(Int32 rc, sqlite3 db)
+   at Microsoft.Data.Sqlite.SqliteCommand.PrepareAndEnumerateStatements()+MoveNext()
+   at Microsoft.Data.Sqlite.SqliteCommand.GetStatements()+MoveNext()
+   at Microsoft.Data.Sqlite.SqliteDataReader.NextResult()
+   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteReader(CommandBehavior behavior)
+   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken)
+   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken)
+   at Dapper.SqlMapper.QueryRowAsync[T](IDbConnection cnn, Row row, Type effectiveType, CommandDefinition command) in /_/Dapper/SqlMapper.Async.cs:line 489
+   at CrudBenchmarks.SafetyVsPerformance.TypicalDapper_FastButOpenConnection() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/SafetyVsPerformance.cs:line 131
+   at BenchmarkDotNet.Helpers.AwaitHelper.GetResult[T](Task`1 task)
+   at BenchmarkDotNet.Autogenerated.Runnable_12.<.ctor>b__3_2() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 2564
+   at BenchmarkDotNet.Autogenerated.Runnable_12.WorkloadActionNoUnroll(Int64 invokeCount) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 2680
+   at BenchmarkDotNet.Engines.Engine.Measure(Action`1 action, Int64 invokeCount)
+   at BenchmarkDotNet.Engines.Engine.RunIteration(IterationData data)
+   at BenchmarkDotNet.Engines.EngineFactory.Jit(Engine engine, Int32 jitIndex, Int32 invokeCount, Int32 unrollFactor)
+   at BenchmarkDotNet.Engines.EngineFactory.CreateReadyToRun(EngineParameters engineParameters)
+   at BenchmarkDotNet.Autogenerated.Runnable_12.Run(IHost host, String benchmarkName) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 2543
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   --- End of inner exception stack trace ---
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+   at BenchmarkDotNet.Autogenerated.UniqueProgramName.AfterAssemblyLoadingAttached(String[] args) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 57
+// AfterAll
+No Workload Results were obtained from the run.
+// Benchmark Process 637423 has exited with code 255.
+
+// ** Remained 7 (35.0%) benchmark(s) to run. Estimated finish 2026-02-07 19:37 (0h 0m from now) **
+// **************************
+// Benchmark: SafetyVsPerformance.'TYPICAL DAPPER: INSERT with type inference + open connection': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet 5a275160-ec9c-46e7-a773-7504ad80fa60.dll --anonymousPipes 163 164 --benchmarkName CrudBenchmarks.SafetyVsPerformance.TypicalDapper_Insert --job "IterationCount=10, WarmupCount=3" --benchmarkId 13 in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/bin/Release/net8.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.14.0
+// Runtime=.NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2
+// GC=Concurrent Workstation
+// HardwareIntrinsics=AVX2,AES,BMI1,BMI2,FMA,LZCNT,PCLMUL,POPCNT VectorSize=256
+// Job: Job-EASQXQ(IterationCount=10, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 233052.00 ns, 233.0520 us/op
+
+System.Reflection.TargetInvocationException: Exception has been thrown by the target of an invocation.
+ ---> Microsoft.Data.Sqlite.SqliteException (0x80004005): SQLite Error 1: 'no such table: products'.
+   at Microsoft.Data.Sqlite.SqliteException.ThrowExceptionForRC(Int32 rc, sqlite3 db)
+   at Microsoft.Data.Sqlite.SqliteCommand.PrepareAndEnumerateStatements()+MoveNext()
+   at Microsoft.Data.Sqlite.SqliteCommand.GetStatements()+MoveNext()
+   at Microsoft.Data.Sqlite.SqliteDataReader.NextResult()
+   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteReader(CommandBehavior behavior)
+   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteReader()
+   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteNonQuery()
+   at System.Data.Common.DbCommand.ExecuteNonQueryAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at Dapper.SqlMapper.ExecuteImplAsync(IDbConnection cnn, CommandDefinition command, Object param) in /_/Dapper/SqlMapper.Async.cs:line 662
+   at CrudBenchmarks.SafetyVsPerformance.TypicalDapper_Insert() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/SafetyVsPerformance.cs:line 144
+   at BenchmarkDotNet.Helpers.AwaitHelper.GetResult[T](Task`1 task)
+   at BenchmarkDotNet.Autogenerated.Runnable_13.<.ctor>b__3_2() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 2762
+   at BenchmarkDotNet.Autogenerated.Runnable_13.WorkloadActionNoUnroll(Int64 invokeCount) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 2878
+   at BenchmarkDotNet.Engines.Engine.Measure(Action`1 action, Int64 invokeCount)
+   at BenchmarkDotNet.Engines.Engine.RunIteration(IterationData data)
+   at BenchmarkDotNet.Engines.EngineFactory.Jit(Engine engine, Int32 jitIndex, Int32 invokeCount, Int32 unrollFactor)
+   at BenchmarkDotNet.Engines.EngineFactory.CreateReadyToRun(EngineParameters engineParameters)
+   at BenchmarkDotNet.Autogenerated.Runnable_13.Run(IHost host, String benchmarkName) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 2741
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   --- End of inner exception stack trace ---
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+   at BenchmarkDotNet.Autogenerated.UniqueProgramName.AfterAssemblyLoadingAttached(String[] args) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 57
+// AfterAll
+No Workload Results were obtained from the run.
+// Benchmark Process 637438 has exited with code 255.
+
+// ** Remained 6 (30.0%) benchmark(s) to run. Estimated finish 2026-02-07 19:37 (0h 0m from now) **
+// **************************
+// Benchmark: SafetyVsPerformance.'PROPER DAPPER: Open/close per operation (same as pengdows)': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet 5a275160-ec9c-46e7-a773-7504ad80fa60.dll --anonymousPipes 163 164 --benchmarkName CrudBenchmarks.SafetyVsPerformance.ProperDapper_SameConnectionPattern --job "IterationCount=10, WarmupCount=3" --benchmarkId 14 in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/bin/Release/net8.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.14.0
+// Runtime=.NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2
+// GC=Concurrent Workstation
+// HardwareIntrinsics=AVX2,AES,BMI1,BMI2,FMA,LZCNT,PCLMUL,POPCNT VectorSize=256
+// Job: Job-FHJVRH(IterationCount=10, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 259572.00 ns, 259.5720 us/op
+
+System.Reflection.TargetInvocationException: Exception has been thrown by the target of an invocation.
+ ---> Microsoft.Data.Sqlite.SqliteException (0x80004005): SQLite Error 1: 'no such table: products'.
+   at Microsoft.Data.Sqlite.SqliteException.ThrowExceptionForRC(Int32 rc, sqlite3 db)
+   at Microsoft.Data.Sqlite.SqliteCommand.PrepareAndEnumerateStatements()+MoveNext()
+   at Microsoft.Data.Sqlite.SqliteCommand.GetStatements()+MoveNext()
+   at Microsoft.Data.Sqlite.SqliteDataReader.NextResult()
+   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteReader(CommandBehavior behavior)
+   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken)
+   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken)
+   at Dapper.SqlMapper.QueryRowAsync[T](IDbConnection cnn, Row row, Type effectiveType, CommandDefinition command) in /_/Dapper/SqlMapper.Async.cs:line 489
+   at CrudBenchmarks.SafetyVsPerformance.ProperDapper_SameConnectionPattern() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/SafetyVsPerformance.cs:line 167
+   at BenchmarkDotNet.Helpers.AwaitHelper.GetResult[T](Task`1 task)
+   at BenchmarkDotNet.Autogenerated.Runnable_14.<.ctor>b__3_2() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 2960
+   at BenchmarkDotNet.Autogenerated.Runnable_14.WorkloadActionNoUnroll(Int64 invokeCount) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 3076
+   at BenchmarkDotNet.Engines.Engine.Measure(Action`1 action, Int64 invokeCount)
+   at BenchmarkDotNet.Engines.Engine.RunIteration(IterationData data)
+   at BenchmarkDotNet.Engines.EngineFactory.Jit(Engine engine, Int32 jitIndex, Int32 invokeCount, Int32 unrollFactor)
+   at BenchmarkDotNet.Engines.EngineFactory.CreateReadyToRun(EngineParameters engineParameters)
+   at BenchmarkDotNet.Autogenerated.Runnable_14.Run(IHost host, String benchmarkName) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 2939
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   --- End of inner exception stack trace ---
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+   at BenchmarkDotNet.Autogenerated.UniqueProgramName.AfterAssemblyLoadingAttached(String[] args) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 57
+// AfterAll
+No Workload Results were obtained from the run.
+// Benchmark Process 637536 has exited with code 255.
+
+// ** Remained 5 (25.0%) benchmark(s) to run. Estimated finish 2026-02-07 19:37 (0h 0m from now) **
+// **************************
+// Benchmark: SafetyVsPerformance.'PROPER DAPPER: INSERT with open/close per operation': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet 5a275160-ec9c-46e7-a773-7504ad80fa60.dll --anonymousPipes 163 164 --benchmarkName CrudBenchmarks.SafetyVsPerformance.ProperDapper_Insert --job "IterationCount=10, WarmupCount=3" --benchmarkId 15 in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/bin/Release/net8.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.14.0
+// Runtime=.NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2
+// GC=Concurrent Workstation
+// HardwareIntrinsics=AVX2,AES,BMI1,BMI2,FMA,LZCNT,PCLMUL,POPCNT VectorSize=256
+// Job: Job-CGUBRW(IterationCount=10, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 244172.00 ns, 244.1720 us/op
+
+System.Reflection.TargetInvocationException: Exception has been thrown by the target of an invocation.
+ ---> Microsoft.Data.Sqlite.SqliteException (0x80004005): SQLite Error 1: 'no such table: products'.
+   at Microsoft.Data.Sqlite.SqliteException.ThrowExceptionForRC(Int32 rc, sqlite3 db)
+   at Microsoft.Data.Sqlite.SqliteCommand.PrepareAndEnumerateStatements()+MoveNext()
+   at Microsoft.Data.Sqlite.SqliteCommand.GetStatements()+MoveNext()
+   at Microsoft.Data.Sqlite.SqliteDataReader.NextResult()
+   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteReader(CommandBehavior behavior)
+   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteReader()
+   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteNonQuery()
+   at System.Data.Common.DbCommand.ExecuteNonQueryAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at Dapper.SqlMapper.ExecuteImplAsync(IDbConnection cnn, CommandDefinition command, Object param) in /_/Dapper/SqlMapper.Async.cs:line 662
+   at CrudBenchmarks.SafetyVsPerformance.ProperDapper_Insert() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/SafetyVsPerformance.cs:line 180
+   at BenchmarkDotNet.Helpers.AwaitHelper.GetResult[T](Task`1 task)
+   at BenchmarkDotNet.Autogenerated.Runnable_15.<.ctor>b__3_2() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 3158
+   at BenchmarkDotNet.Autogenerated.Runnable_15.WorkloadActionNoUnroll(Int64 invokeCount) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 3274
+   at BenchmarkDotNet.Engines.Engine.Measure(Action`1 action, Int64 invokeCount)
+   at BenchmarkDotNet.Engines.Engine.RunIteration(IterationData data)
+   at BenchmarkDotNet.Engines.EngineFactory.Jit(Engine engine, Int32 jitIndex, Int32 invokeCount, Int32 unrollFactor)
+   at BenchmarkDotNet.Engines.EngineFactory.CreateReadyToRun(EngineParameters engineParameters)
+   at BenchmarkDotNet.Autogenerated.Runnable_15.Run(IHost host, String benchmarkName) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 3137
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   --- End of inner exception stack trace ---
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+   at BenchmarkDotNet.Autogenerated.UniqueProgramName.AfterAssemblyLoadingAttached(String[] args) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 57
+// AfterAll
+No Workload Results were obtained from the run.
+// Benchmark Process 637546 has exited with code 255.
+
+// ** Remained 4 (20.0%) benchmark(s) to run. Estimated finish 2026-02-07 19:37 (0h 0m from now) **
+// **************************
+// Benchmark: SafetyVsPerformance.'SAFETY: pengdows handles decimals correctly': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet 5a275160-ec9c-46e7-a773-7504ad80fa60.dll --anonymousPipes 163 164 --benchmarkName CrudBenchmarks.SafetyVsPerformance.Safety_Pengdows_DecimalPrecision --job "IterationCount=10, WarmupCount=3" --benchmarkId 16 in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/bin/Release/net8.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.14.0
+// Runtime=.NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2
+// GC=Concurrent Workstation
+// HardwareIntrinsics=AVX2,AES,BMI1,BMI2,FMA,LZCNT,PCLMUL,POPCNT VectorSize=256
+// Job: Job-HWFABZ(IterationCount=10, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 256737.00 ns, 256.7370 us/op
+
+System.Reflection.TargetInvocationException: Exception has been thrown by the target of an invocation.
+ ---> Microsoft.Data.Sqlite.SqliteException (0x80004005): SQLite Error 1: 'no such table: products'.
+   at Microsoft.Data.Sqlite.SqliteException.ThrowExceptionForRC(Int32 rc, sqlite3 db)
+   at Microsoft.Data.Sqlite.SqliteCommand.PrepareAndEnumerateStatements()+MoveNext()
+   at Microsoft.Data.Sqlite.SqliteCommand.Prepare()
+   at pengdows.crud.SqlContainer.MaybePrepareCommand(DbCommand cmd, ITrackedConnection conn, ExecutionType executionType) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 1240
+   at pengdows.crud.SqlContainer.PrepareAndCreateCommandAsync(ITrackedConnection conn, CommandType commandType, ExecutionType executionType, CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 1189
+   at pengdows.crud.SqlContainer.ExecuteScalarWriteAsync[T](CommandType commandType, CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 839
+   at pengdows.crud.SqlContainer.ExecuteScalarWriteAsync[T](CommandType commandType, CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 867
+   at pengdows.crud.SqlContainer.ExecuteScalarWriteAsync[T](CommandType commandType, CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 867
+   at pengdows.crud.TableGateway`2.CreateAsync(TEntity entity, IDatabaseContext context) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/TableGateway.Core.cs:line 475
+   at CrudBenchmarks.SafetyVsPerformance.Safety_Pengdows_DecimalPrecision() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/SafetyVsPerformance.cs:line 209
+   at BenchmarkDotNet.Helpers.AwaitHelper.GetResult[T](Task`1 task)
+   at BenchmarkDotNet.Autogenerated.Runnable_16.<.ctor>b__3_2() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 3356
+   at BenchmarkDotNet.Autogenerated.Runnable_16.WorkloadActionNoUnroll(Int64 invokeCount) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 3472
+   at BenchmarkDotNet.Engines.Engine.Measure(Action`1 action, Int64 invokeCount)
+   at BenchmarkDotNet.Engines.Engine.RunIteration(IterationData data)
+   at BenchmarkDotNet.Engines.EngineFactory.Jit(Engine engine, Int32 jitIndex, Int32 invokeCount, Int32 unrollFactor)
+   at BenchmarkDotNet.Engines.EngineFactory.CreateReadyToRun(EngineParameters engineParameters)
+   at BenchmarkDotNet.Autogenerated.Runnable_16.Run(IHost host, String benchmarkName) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 3335
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   --- End of inner exception stack trace ---
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+   at BenchmarkDotNet.Autogenerated.UniqueProgramName.AfterAssemblyLoadingAttached(String[] args) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 57
+// AfterAll
+No Workload Results were obtained from the run.
+// Benchmark Process 637570 has exited with code 255.
+
+// ** Remained 3 (15.0%) benchmark(s) to run. Estimated finish 2026-02-07 19:37 (0h 0m from now) **
+// **************************
+// Benchmark: SafetyVsPerformance.'SAFETY: Dapper type inference on decimal': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet 5a275160-ec9c-46e7-a773-7504ad80fa60.dll --anonymousPipes 163 164 --benchmarkName CrudBenchmarks.SafetyVsPerformance.Safety_Dapper_DecimalInference --job "IterationCount=10, WarmupCount=3" --benchmarkId 17 in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/bin/Release/net8.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.14.0
+// Runtime=.NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2
+// GC=Concurrent Workstation
+// HardwareIntrinsics=AVX2,AES,BMI1,BMI2,FMA,LZCNT,PCLMUL,POPCNT VectorSize=256
+// Job: Job-UAIJMZ(IterationCount=10, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 267497.00 ns, 267.4970 us/op
+
+System.Reflection.TargetInvocationException: Exception has been thrown by the target of an invocation.
+ ---> Microsoft.Data.Sqlite.SqliteException (0x80004005): SQLite Error 1: 'no such table: products'.
+   at Microsoft.Data.Sqlite.SqliteException.ThrowExceptionForRC(Int32 rc, sqlite3 db)
+   at Microsoft.Data.Sqlite.SqliteCommand.PrepareAndEnumerateStatements()+MoveNext()
+   at Microsoft.Data.Sqlite.SqliteCommand.GetStatements()+MoveNext()
+   at Microsoft.Data.Sqlite.SqliteDataReader.NextResult()
+   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteReader(CommandBehavior behavior)
+   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteReader()
+   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteNonQuery()
+   at System.Data.Common.DbCommand.ExecuteNonQueryAsync(CancellationToken cancellationToken)
+--- End of stack trace from previous location ---
+   at Dapper.SqlMapper.ExecuteImplAsync(IDbConnection cnn, CommandDefinition command, Object param) in /_/Dapper/SqlMapper.Async.cs:line 662
+   at CrudBenchmarks.SafetyVsPerformance.Safety_Dapper_DecimalInference() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/SafetyVsPerformance.cs:line 222
+   at BenchmarkDotNet.Helpers.AwaitHelper.GetResult[T](Task`1 task)
+   at BenchmarkDotNet.Autogenerated.Runnable_17.<.ctor>b__3_2() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 3554
+   at BenchmarkDotNet.Autogenerated.Runnable_17.WorkloadActionNoUnroll(Int64 invokeCount) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 3670
+   at BenchmarkDotNet.Engines.Engine.Measure(Action`1 action, Int64 invokeCount)
+   at BenchmarkDotNet.Engines.Engine.RunIteration(IterationData data)
+   at BenchmarkDotNet.Engines.EngineFactory.Jit(Engine engine, Int32 jitIndex, Int32 invokeCount, Int32 unrollFactor)
+   at BenchmarkDotNet.Engines.EngineFactory.CreateReadyToRun(EngineParameters engineParameters)
+   at BenchmarkDotNet.Autogenerated.Runnable_17.Run(IHost host, String benchmarkName) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 3533
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   --- End of inner exception stack trace ---
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+   at BenchmarkDotNet.Autogenerated.UniqueProgramName.AfterAssemblyLoadingAttached(String[] args) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 57
+// AfterAll
+No Workload Results were obtained from the run.
+// Benchmark Process 637581 has exited with code 255.
+
+// ** Remained 2 (10.0%) benchmark(s) to run. Estimated finish 2026-02-07 19:37 (0h 0m from now) **
+// **************************
+// Benchmark: SafetyVsPerformance.'REALISTIC: 100 operations with pengdows (releases connections)': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet 5a275160-ec9c-46e7-a773-7504ad80fa60.dll --anonymousPipes 163 164 --benchmarkName CrudBenchmarks.SafetyVsPerformance.Realistic_Pengdows_ConnectionPoolFriendly --job "IterationCount=10, WarmupCount=3" --benchmarkId 18 in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/bin/Release/net8.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.14.0
+// Runtime=.NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2
+// GC=Concurrent Workstation
+// HardwareIntrinsics=AVX2,AES,BMI1,BMI2,FMA,LZCNT,PCLMUL,POPCNT VectorSize=256
+// Job: Job-SGNAXQ(IterationCount=10, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 262668.00 ns, 262.6680 us/op
+
+System.Reflection.TargetInvocationException: Exception has been thrown by the target of an invocation.
+ ---> Microsoft.Data.Sqlite.SqliteException (0x80004005): SQLite Error 1: 'no such table: products'.
+   at Microsoft.Data.Sqlite.SqliteException.ThrowExceptionForRC(Int32 rc, sqlite3 db)
+   at Microsoft.Data.Sqlite.SqliteCommand.PrepareAndEnumerateStatements()+MoveNext()
+   at Microsoft.Data.Sqlite.SqliteCommand.Prepare()
+   at pengdows.crud.SqlContainer.MaybePrepareCommand(DbCommand cmd, ITrackedConnection conn, ExecutionType executionType) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 1240
+   at pengdows.crud.SqlContainer.PrepareAndCreateCommandAsync(ITrackedConnection conn, CommandType commandType, ExecutionType executionType, CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 1189
+   at pengdows.crud.SqlContainer.ExecuteReaderSingleRowAsync(CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 1002
+   at pengdows.crud.SqlContainer.ExecuteReaderSingleRowAsync(CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 1023
+   at pengdows.crud.SqlContainer.ExecuteReaderSingleRowAsync(CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/SqlContainer.cs:line 1056
+   at pengdows.crud.TableGateway`2.LoadSingleAsync(ISqlContainer sc, CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/TableGateway.Core.cs:line 1223
+   at pengdows.crud.TableGateway`2.RetrieveOneAsync(TRowID id, IDatabaseContext context, CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/2.0/pengdows.crud/TableGateway.Core.cs:line 1205
+   at CrudBenchmarks.SafetyVsPerformance.Realistic_Pengdows_ConnectionPoolFriendly() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/SafetyVsPerformance.cs:line 248
+   at BenchmarkDotNet.Helpers.AwaitHelper.GetResult[T](Task`1 task)
+   at BenchmarkDotNet.Autogenerated.Runnable_18.<.ctor>b__3_2() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 3752
+   at BenchmarkDotNet.Autogenerated.Runnable_18.WorkloadActionNoUnroll(Int64 invokeCount) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 3868
+   at BenchmarkDotNet.Engines.Engine.Measure(Action`1 action, Int64 invokeCount)
+   at BenchmarkDotNet.Engines.Engine.RunIteration(IterationData data)
+   at BenchmarkDotNet.Engines.EngineFactory.Jit(Engine engine, Int32 jitIndex, Int32 invokeCount, Int32 unrollFactor)
+   at BenchmarkDotNet.Engines.EngineFactory.CreateReadyToRun(EngineParameters engineParameters)
+   at BenchmarkDotNet.Autogenerated.Runnable_18.Run(IHost host, String benchmarkName) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 3731
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   --- End of inner exception stack trace ---
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+   at BenchmarkDotNet.Autogenerated.UniqueProgramName.AfterAssemblyLoadingAttached(String[] args) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 57
+// AfterAll
+No Workload Results were obtained from the run.
+// Benchmark Process 637591 has exited with code 255.
+
+// ** Remained 1 (5.0%) benchmark(s) to run. Estimated finish 2026-02-07 19:37 (0h 0m from now) **
+// **************************
+// Benchmark: SafetyVsPerformance.'REALISTIC: 100 operations with Dapper (holds connections longer)': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet 5a275160-ec9c-46e7-a773-7504ad80fa60.dll --anonymousPipes 163 164 --benchmarkName CrudBenchmarks.SafetyVsPerformance.Realistic_Dapper_ConnectionPoolStress --job "IterationCount=10, WarmupCount=3" --benchmarkId 19 in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/bin/Release/net8.0
+// Failed to set up high priority (Permission denied). In order to run benchmarks with high priority, make sure you have the right permissions.
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.14.0
+// Runtime=.NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2
+// GC=Concurrent Workstation
+// HardwareIntrinsics=AVX2,AES,BMI1,BMI2,FMA,LZCNT,PCLMUL,POPCNT VectorSize=256
+// Job: Job-WRKZRJ(IterationCount=10, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 251156.00 ns, 251.1560 us/op
+
+System.Reflection.TargetInvocationException: Exception has been thrown by the target of an invocation.
+ ---> Microsoft.Data.Sqlite.SqliteException (0x80004005): SQLite Error 1: 'no such table: products'.
+   at Microsoft.Data.Sqlite.SqliteException.ThrowExceptionForRC(Int32 rc, sqlite3 db)
+   at Microsoft.Data.Sqlite.SqliteCommand.PrepareAndEnumerateStatements()+MoveNext()
+   at Microsoft.Data.Sqlite.SqliteCommand.GetStatements()+MoveNext()
+   at Microsoft.Data.Sqlite.SqliteDataReader.NextResult()
+   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteReader(CommandBehavior behavior)
+   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken)
+   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken)
+   at Dapper.SqlMapper.QueryRowAsync[T](IDbConnection cnn, Row row, Type effectiveType, CommandDefinition command) in /_/Dapper/SqlMapper.Async.cs:line 489
+   at CrudBenchmarks.SafetyVsPerformance.Realistic_Dapper_ConnectionPoolStress() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/SafetyVsPerformance.cs:line 269
+   at BenchmarkDotNet.Helpers.AwaitHelper.GetResult[T](Task`1 task)
+   at BenchmarkDotNet.Autogenerated.Runnable_19.<.ctor>b__3_2() in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 3950
+   at BenchmarkDotNet.Autogenerated.Runnable_19.WorkloadActionNoUnroll(Int64 invokeCount) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 4066
+   at BenchmarkDotNet.Engines.Engine.Measure(Action`1 action, Int64 invokeCount)
+   at BenchmarkDotNet.Engines.Engine.RunIteration(IterationData data)
+   at BenchmarkDotNet.Engines.EngineFactory.Jit(Engine engine, Int32 jitIndex, Int32 invokeCount, Int32 unrollFactor)
+   at BenchmarkDotNet.Engines.EngineFactory.CreateReadyToRun(EngineParameters engineParameters)
+   at BenchmarkDotNet.Autogenerated.Runnable_19.Run(IHost host, String benchmarkName) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 3929
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   --- End of inner exception stack trace ---
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+   at BenchmarkDotNet.Autogenerated.UniqueProgramName.AfterAssemblyLoadingAttached(String[] args) in /home/alaricd/prj/pengdows/2.0/benchmarks/CrudBenchmarks/bin/Release/net8.0/5a275160-ec9c-46e7-a773-7504ad80fa60/5a275160-ec9c-46e7-a773-7504ad80fa60.notcs:line 57
+// AfterAll
+No Workload Results were obtained from the run.
+// Benchmark Process 637606 has exited with code 255.
+
+// ** Remained 0 (0.0%) benchmark(s) to run. Estimated finish 2026-02-07 19:37 (0h 0m from now) **
+// ***** BenchmarkRunner: Finish  *****
+
+// * Export *
+  BenchmarkDotNet.Artifacts/results/CrudBenchmarks.SafetyVsPerformance-report-github.md
+  BenchmarkDotNet.Artifacts/results/CrudBenchmarks.SafetyVsPerformance-report.csv
+  BenchmarkDotNet.Artifacts/results/CrudBenchmarks.SafetyVsPerformance-report.html
+
+// * Detailed results *
+SafetyVsPerformance.'SAFE: pengdows.crud (explicit types, proper connection mgmt)': DefaultJob
+Runtime = .NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2; GC = Concurrent Workstation
+There are not any results runs
+
+SafetyVsPerformance.'SAFE: pengdows.crud INSERT (explicit types, proper connection mgmt)': DefaultJob
+Runtime = .NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2; GC = Concurrent Workstation
+There are not any results runs
+
+SafetyVsPerformance.'TYPICAL DAPPER: Type inference + connection stays open': DefaultJob
+Runtime = .NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2; GC = Concurrent Workstation
+There are not any results runs
+
+SafetyVsPerformance.'TYPICAL DAPPER: INSERT with type inference + open connection': DefaultJob
+Runtime = .NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2; GC = Concurrent Workstation
+There are not any results runs
+
+SafetyVsPerformance.'PROPER DAPPER: Open/close per operation (same as pengdows)': DefaultJob
+Runtime = .NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2; GC = Concurrent Workstation
+There are not any results runs
+
+SafetyVsPerformance.'PROPER DAPPER: INSERT with open/close per operation': DefaultJob
+Runtime = .NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2; GC = Concurrent Workstation
+There are not any results runs
+
+SafetyVsPerformance.'SAFETY: pengdows handles decimals correctly': DefaultJob
+Runtime = .NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2; GC = Concurrent Workstation
+There are not any results runs
+
+SafetyVsPerformance.'SAFETY: Dapper type inference on decimal': DefaultJob
+Runtime = .NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2; GC = Concurrent Workstation
+There are not any results runs
+
+SafetyVsPerformance.'REALISTIC: 100 operations with pengdows (releases connections)': DefaultJob
+Runtime = .NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2; GC = Concurrent Workstation
+There are not any results runs
+
+SafetyVsPerformance.'REALISTIC: 100 operations with Dapper (holds connections longer)': DefaultJob
+Runtime = .NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2; GC = Concurrent Workstation
+There are not any results runs
+
+SafetyVsPerformance.'SAFE: pengdows.crud (explicit types, proper connection mgmt)': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+Runtime = .NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2; GC = Concurrent Workstation
+There are not any results runs
+
+SafetyVsPerformance.'SAFE: pengdows.crud INSERT (explicit types, proper connection mgmt)': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+Runtime = .NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2; GC = Concurrent Workstation
+There are not any results runs
+
+SafetyVsPerformance.'TYPICAL DAPPER: Type inference + connection stays open': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+Runtime = .NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2; GC = Concurrent Workstation
+There are not any results runs
+
+SafetyVsPerformance.'TYPICAL DAPPER: INSERT with type inference + open connection': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+Runtime = .NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2; GC = Concurrent Workstation
+There are not any results runs
+
+SafetyVsPerformance.'PROPER DAPPER: Open/close per operation (same as pengdows)': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+Runtime = .NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2; GC = Concurrent Workstation
+There are not any results runs
+
+SafetyVsPerformance.'PROPER DAPPER: INSERT with open/close per operation': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+Runtime = .NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2; GC = Concurrent Workstation
+There are not any results runs
+
+SafetyVsPerformance.'SAFETY: pengdows handles decimals correctly': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+Runtime = .NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2; GC = Concurrent Workstation
+There are not any results runs
+
+SafetyVsPerformance.'SAFETY: Dapper type inference on decimal': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+Runtime = .NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2; GC = Concurrent Workstation
+There are not any results runs
+
+SafetyVsPerformance.'REALISTIC: 100 operations with pengdows (releases connections)': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+Runtime = .NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2; GC = Concurrent Workstation
+There are not any results runs
+
+SafetyVsPerformance.'REALISTIC: 100 operations with Dapper (holds connections longer)': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+Runtime = .NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2; GC = Concurrent Workstation
+There are not any results runs
+
+// * Summary *
+
+BenchmarkDotNet v0.14.0, Ubuntu 24.04.3 LTS (Noble Numbat)
+AMD Ryzen 9 5950X, 1 CPU, 8 logical and 8 physical cores
+.NET SDK 10.0.101
+  [Host]     : .NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2
+  DefaultJob : .NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2
+  Job-JCYNEI : .NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2
+
+
+| Method                                                                | Job        | IterationCount | WarmupCount | Mean | Error | Ratio | RatioSD | Alloc Ratio |
+|---------------------------------------------------------------------- |----------- |--------------- |------------ |-----:|------:|------:|--------:|------------:|
+| 'SAFE: pengdows.crud (explicit types, proper connection mgmt)'        | DefaultJob | Default        | Default     |   NA |    NA |     ? |       ? |           ? |
+| 'SAFE: pengdows.crud INSERT (explicit types, proper connection mgmt)' | DefaultJob | Default        | Default     |   NA |    NA |     ? |       ? |           ? |
+| 'TYPICAL DAPPER: Type inference + connection stays open'              | DefaultJob | Default        | Default     |   NA |    NA |     ? |       ? |           ? |
+| 'TYPICAL DAPPER: INSERT with type inference + open connection'        | DefaultJob | Default        | Default     |   NA |    NA |     ? |       ? |           ? |
+| 'PROPER DAPPER: Open/close per operation (same as pengdows)'          | DefaultJob | Default        | Default     |   NA |    NA |     ? |       ? |           ? |
+| 'PROPER DAPPER: INSERT with open/close per operation'                 | DefaultJob | Default        | Default     |   NA |    NA |     ? |       ? |           ? |
+| 'SAFETY: pengdows handles decimals correctly'                         | DefaultJob | Default        | Default     |   NA |    NA |     ? |       ? |           ? |
+| 'SAFETY: Dapper type inference on decimal'                            | DefaultJob | Default        | Default     |   NA |    NA |     ? |       ? |           ? |
+| 'REALISTIC: 100 operations with pengdows (releases connections)'      | DefaultJob | Default        | Default     |   NA |    NA |     ? |       ? |           ? |
+| 'REALISTIC: 100 operations with Dapper (holds connections longer)'    | DefaultJob | Default        | Default     |   NA |    NA |     ? |       ? |           ? |
+|                                                                       |            |                |             |      |       |       |         |             |
+| 'SAFE: pengdows.crud (explicit types, proper connection mgmt)'        | Job-JCYNEI | 10             | 3           |   NA |    NA |     ? |       ? |           ? |
+| 'SAFE: pengdows.crud INSERT (explicit types, proper connection mgmt)' | Job-JCYNEI | 10             | 3           |   NA |    NA |     ? |       ? |           ? |
+| 'TYPICAL DAPPER: Type inference + connection stays open'              | Job-JCYNEI | 10             | 3           |   NA |    NA |     ? |       ? |           ? |
+| 'TYPICAL DAPPER: INSERT with type inference + open connection'        | Job-JCYNEI | 10             | 3           |   NA |    NA |     ? |       ? |           ? |
+| 'PROPER DAPPER: Open/close per operation (same as pengdows)'          | Job-JCYNEI | 10             | 3           |   NA |    NA |     ? |       ? |           ? |
+| 'PROPER DAPPER: INSERT with open/close per operation'                 | Job-JCYNEI | 10             | 3           |   NA |    NA |     ? |       ? |           ? |
+| 'SAFETY: pengdows handles decimals correctly'                         | Job-JCYNEI | 10             | 3           |   NA |    NA |     ? |       ? |           ? |
+| 'SAFETY: Dapper type inference on decimal'                            | Job-JCYNEI | 10             | 3           |   NA |    NA |     ? |       ? |           ? |
+| 'REALISTIC: 100 operations with pengdows (releases connections)'      | Job-JCYNEI | 10             | 3           |   NA |    NA |     ? |       ? |           ? |
+| 'REALISTIC: 100 operations with Dapper (holds connections longer)'    | Job-JCYNEI | 10             | 3           |   NA |    NA |     ? |       ? |           ? |
+
+Benchmarks with issues:
+  SafetyVsPerformance.'SAFE: pengdows.crud (explicit types, proper connection mgmt)': DefaultJob
+  SafetyVsPerformance.'SAFE: pengdows.crud INSERT (explicit types, proper connection mgmt)': DefaultJob
+  SafetyVsPerformance.'TYPICAL DAPPER: Type inference + connection stays open': DefaultJob
+  SafetyVsPerformance.'TYPICAL DAPPER: INSERT with type inference + open connection': DefaultJob
+  SafetyVsPerformance.'PROPER DAPPER: Open/close per operation (same as pengdows)': DefaultJob
+  SafetyVsPerformance.'PROPER DAPPER: INSERT with open/close per operation': DefaultJob
+  SafetyVsPerformance.'SAFETY: pengdows handles decimals correctly': DefaultJob
+  SafetyVsPerformance.'SAFETY: Dapper type inference on decimal': DefaultJob
+  SafetyVsPerformance.'REALISTIC: 100 operations with pengdows (releases connections)': DefaultJob
+  SafetyVsPerformance.'REALISTIC: 100 operations with Dapper (holds connections longer)': DefaultJob
+  SafetyVsPerformance.'SAFE: pengdows.crud (explicit types, proper connection mgmt)': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+  SafetyVsPerformance.'SAFE: pengdows.crud INSERT (explicit types, proper connection mgmt)': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+  SafetyVsPerformance.'TYPICAL DAPPER: Type inference + connection stays open': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+  SafetyVsPerformance.'TYPICAL DAPPER: INSERT with type inference + open connection': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+  SafetyVsPerformance.'PROPER DAPPER: Open/close per operation (same as pengdows)': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+  SafetyVsPerformance.'PROPER DAPPER: INSERT with open/close per operation': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+  SafetyVsPerformance.'SAFETY: pengdows handles decimals correctly': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+  SafetyVsPerformance.'SAFETY: Dapper type inference on decimal': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+  SafetyVsPerformance.'REALISTIC: 100 operations with pengdows (releases connections)': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+  SafetyVsPerformance.'REALISTIC: 100 operations with Dapper (holds connections longer)': Job-JCYNEI(IterationCount=10, WarmupCount=3)
+
+// * Legends *
+  Mean        : Arithmetic mean of all measurements
+  Error       : Half of 99.9% confidence interval
+  Ratio       : Mean of the ratio distribution ([Current]/[Baseline])
+  RatioSD     : Standard deviation of the ratio distribution ([Current]/[Baseline])
+  Alloc Ratio : Allocated memory ratio distribution ([Current]/[Baseline])
+  1 ns        : 1 Nanosecond (0.000000001 sec)
+
+// * Diagnostic Output - MemoryDiagnoser *
+
+
+// ***** BenchmarkRunner: End *****
+Run time: 00:00:05 (5.6 sec), executed benchmarks: 20
+
+Global total time: 00:00:20 (20.37 sec), executed benchmarks: 20
+// * Artifacts cleanup *
+Artifacts cleanup is finished

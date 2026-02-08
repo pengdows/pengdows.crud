@@ -4,15 +4,15 @@
 //
 // AI SUMMARY:
 // - Manages connection pool settings for optimal performance.
-// - DefaultMinPoolSize (1): Ensures at least one pooled connection exists.
+// - DefaultMinPoolSize (1): Default suggestion for internal pool configuration.
 // - Key methods:
 //   * IsPoolingDisabled(): Checks if Pooling=false in connection string
 //   * HasMinPoolSize(): Detects if min pool size is already configured
 //   * TrySetMinPoolSize(): Sets minimum pool size via property or indexer
-//   * ApplyPoolingDefaults(): Adds Pooling=true and MinPoolSize if not present
+//   * ApplyPoolingDefaults(): Adds Pooling=true if not present
 //   * ApplyApplicationName(): Adds application name to connection string
 // - Handles multiple provider-specific aliases (Min Pool Size, MinPoolSize, etc.).
-// - Only applies to Standard and KeepAlive modes with external pooling.
+// - Only applies to Standard, KeepAlive, and SingleWriter modes with external pooling.
 // - Skips raw connection strings like ":memory:" or file paths.
 // - Uses reflection for strongly-typed builder properties as fallback.
 // =============================================================================
@@ -31,14 +31,12 @@ namespace pengdows.crud.@internal;
 internal static class ConnectionPoolingConfiguration
 {
     /// <summary>
-    /// Default minimum pool size to enforce pooling.
+    /// Default minimum pool size used as an internal fallback.
     /// </summary>
     public const int DefaultMinPoolSize = 1;
 
     // Fallback connection-string key names when the dialect does not expose its own.
     private const string DefaultPoolingKey = "Pooling";
-    private const string DefaultMinPoolSizeKey = "Min Pool Size";
-
     private static readonly string[] MinPoolKeyCandidates =
     {
         "Min Pool Size",
@@ -145,7 +143,7 @@ internal static class ConnectionPoolingConfiguration
 
     /// <summary>
     /// Applies default pooling settings to a connection string.
-    /// Only modifies connection strings for Standard and KeepAlive modes with external pooling support.
+    /// Only modifies connection strings for Standard, KeepAlive, and SingleWriter modes with external pooling support.
     /// </summary>
     public static string ApplyPoolingDefaults(
         string connectionString,
@@ -153,7 +151,6 @@ internal static class ConnectionPoolingConfiguration
         DbMode mode,
         bool supportsExternalPooling,
         string? poolingSettingName = null,
-        string? minPoolSizeSettingName = null,
         DbConnectionStringBuilder? builder = null)
     {
         // Only apply to modes that use provider-managed connection pooling
@@ -175,8 +172,6 @@ internal static class ConnectionPoolingConfiguration
 
         // Use common defaults if not specified
         poolingSettingName ??= DefaultPoolingKey;
-        minPoolSizeSettingName ??= DefaultMinPoolSizeKey;
-
         try
         {
             // Use provided builder or create a new one
@@ -199,24 +194,6 @@ internal static class ConnectionPoolingConfiguration
             {
                 builder[poolingSettingName] = true;
                 modified = true;
-            }
-
-            // Set MinPoolSize if not present and pooling is enabled
-            if (!string.IsNullOrEmpty(minPoolSizeSettingName) &&
-                !HasMinPoolSize(builder))
-            {
-                // Only add MinPoolSize if pooling is enabled
-                var poolingEnabled = string.IsNullOrEmpty(poolingSettingName) ||
-                                     !builder.ContainsKey(poolingSettingName) ||
-                                     (builder.ContainsKey(poolingSettingName) &&
-                                      bool.TryParse(builder[poolingSettingName]?.ToString(), out var pooling) &&
-                                      pooling);
-
-                if (poolingEnabled)
-                {
-                    builder[minPoolSizeSettingName] = DefaultMinPoolSize;
-                    modified = true;
-                }
             }
 
             if (!modified)

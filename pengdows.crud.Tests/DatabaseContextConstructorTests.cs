@@ -410,7 +410,7 @@ public class DatabaseContextConstructorTests
     }
 
     [Fact]
-    public void Constructor_Adds_Default_MinPoolSize_For_Standard_Mode_When_Missing()
+    public void Constructor_Does_Not_Add_Default_MinPoolSize_For_Standard_Mode_When_Missing()
     {
         // Arrange
         var config = new DatabaseContextConfiguration
@@ -427,8 +427,7 @@ public class DatabaseContextConstructorTests
 
         // Assert
         var builder = new DbConnectionStringBuilder { ConnectionString = context.ConnectionString };
-        Assert.True(builder.ContainsKey("Min Pool Size"));
-        Assert.Equal("1", builder["Min Pool Size"].ToString());
+        Assert.False(builder.ContainsKey("Min Pool Size"));
     }
 
     [Fact]

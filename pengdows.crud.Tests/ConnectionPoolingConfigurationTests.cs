@@ -151,7 +151,7 @@ public class ConnectionPoolingConfigurationTests
     #region ApplyPoolingDefaults Tests
 
     [Fact]
-    public void ApplyPoolingDefaults_StandardMode_AddsPoolingSettings()
+    public void ApplyPoolingDefaults_StandardMode_AddsPoolingSettingOnly()
     {
         var connectionString = "Server=localhost;Database=test";
         var product = SupportedDatabase.SqlServer;
@@ -163,7 +163,7 @@ public class ConnectionPoolingConfigurationTests
         Assert.NotEqual(connectionString, result);
         var builder = new DbConnectionStringBuilder { ConnectionString = result };
         Assert.True(builder.ContainsKey("Pooling"));
-        Assert.True(ConnectionPoolingConfiguration.HasMinPoolSize(builder));
+        Assert.False(ConnectionPoolingConfiguration.HasMinPoolSize(builder));
     }
 
     [Fact]

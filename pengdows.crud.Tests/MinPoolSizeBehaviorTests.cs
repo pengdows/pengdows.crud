@@ -11,8 +11,8 @@ namespace pengdows.crud.Tests;
 public class MinPoolSizeBehaviorTests
 {
     /// <summary>
-    /// Tests that databases supporting pooling get MinPoolSize=1 for Standard mode
-    /// (enforces pooling is enabled)
+    /// Tests that databases supporting pooling do not get a default MinPoolSize for Standard mode
+    /// (pooling is enabled without forcing a minimum)
     /// </summary>
     [Theory]
     [InlineData(SupportedDatabase.SqlServer)]
@@ -21,7 +21,8 @@ public class MinPoolSizeBehaviorTests
     [InlineData(SupportedDatabase.MariaDb)]
     [InlineData(SupportedDatabase.Oracle)]
     [InlineData(SupportedDatabase.Firebird)]
-    public void PoolingSupportingDatabases_StandardMode_SetsMinPoolSizeToOne(SupportedDatabase database)
+    public void PoolingSupportingDatabases_StandardMode_DoesNotSetMinPoolSizeByDefault(
+        SupportedDatabase database)
     {
         // Arrange
         var factory = new fakeDbFactory(database);
@@ -42,8 +43,7 @@ public class MinPoolSizeBehaviorTests
         var dialect = context.Dialect;
         if (!string.IsNullOrEmpty(dialect.MinPoolSizeSettingName))
         {
-            Assert.True(builder.ContainsKey(dialect.MinPoolSizeSettingName));
-            Assert.Equal("1", builder[dialect.MinPoolSizeSettingName]?.ToString());
+            Assert.False(builder.ContainsKey(dialect.MinPoolSizeSettingName));
         }
     }
 
@@ -58,7 +58,8 @@ public class MinPoolSizeBehaviorTests
     [InlineData(SupportedDatabase.MariaDb)]
     [InlineData(SupportedDatabase.Oracle)]
     [InlineData(SupportedDatabase.Firebird)]
-    public void PoolingSupportingDatabases_KeepAliveMode_CanBeForced(SupportedDatabase database)
+    public void PoolingSupportingDatabases_KeepAliveMode_DoesNotSetMinPoolSizeByDefault(
+        SupportedDatabase database)
     {
         // Arrange
         var factory = new fakeDbFactory(database);
@@ -82,15 +83,13 @@ public class MinPoolSizeBehaviorTests
         var dialect = context.Dialect;
         if (!string.IsNullOrEmpty(dialect.MinPoolSizeSettingName))
         {
-            Assert.True(builder.ContainsKey(dialect.MinPoolSizeSettingName));
-            // KeepAlive mode uses MinPoolSize=1
-            Assert.Equal("1", builder[dialect.MinPoolSizeSettingName]?.ToString());
+            Assert.False(builder.ContainsKey(dialect.MinPoolSizeSettingName));
         }
     }
 
     /// <summary>
     /// SingleWriter uses Standard lifecycle with provider pooling (governor enforces
-    /// WriteSlots=1 + turnstile).  Pooling defaults including MinPoolSize ARE applied.
+    /// WriteSlots=1 + turnstile). Pooling defaults do not force MinPoolSize.
     /// </summary>
     [Theory]
     [InlineData(SupportedDatabase.SqlServer)]
@@ -99,7 +98,8 @@ public class MinPoolSizeBehaviorTests
     [InlineData(SupportedDatabase.MariaDb)]
     [InlineData(SupportedDatabase.Oracle)]
     [InlineData(SupportedDatabase.Firebird)]
-    public void PoolingSupportingDatabases_SingleWriterMode_SetsMinPoolSize(SupportedDatabase database)
+    public void PoolingSupportingDatabases_SingleWriterMode_DoesNotSetMinPoolSizeByDefault(
+        SupportedDatabase database)
     {
         // Arrange
         var factory = new fakeDbFactory(database);
@@ -120,7 +120,7 @@ public class MinPoolSizeBehaviorTests
         var dialect = context.Dialect;
         if (!string.IsNullOrEmpty(dialect.MinPoolSizeSettingName))
         {
-            Assert.True(builder.ContainsKey(dialect.MinPoolSizeSettingName));
+            Assert.False(builder.ContainsKey(dialect.MinPoolSizeSettingName));
         }
     }
 
