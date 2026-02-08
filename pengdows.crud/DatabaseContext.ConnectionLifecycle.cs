@@ -92,10 +92,8 @@ public partial class DatabaseContext
         var permit = AcquirePermit(executionType);
         try
         {
-            var useReadOnly = readOnly && UsesReadOnlyConnectionStringForReads();
-            var connectionString = useReadOnly && !string.IsNullOrWhiteSpace(_readerConnectionString)
-                ? _readerConnectionString
-                : _connectionString;
+            var useReader = ShouldUseReaderConnectionString(readOnly);
+            var connectionString = useReader ? _readerConnectionString : _connectionString;
             var conn = FactoryCreateConnection(executionType, connectionString, isShared, readOnly, null, permit);
             return conn;
         }
@@ -407,14 +405,12 @@ public partial class DatabaseContext
             return null;
         }
 
-        if (readOnly && UsesReadOnlyConnectionStringForReads() && _readerDataSource != null)
+        if (ShouldUseReaderConnectionString(readOnly) && _readerDataSource != null)
         {
             return _readerDataSource;
         }
 
-        if (readOnly && UsesReadOnlyConnectionStringForReads() && _dataSourceProvided &&
-            _readerDataSource == null &&
-            !string.Equals(_readerConnectionString, _connectionString, StringComparison.OrdinalIgnoreCase))
+        if (ShouldUseReaderConnectionString(readOnly) && _dataSourceProvided && _readerDataSource == null)
         {
             return null;
         }

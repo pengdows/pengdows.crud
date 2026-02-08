@@ -109,10 +109,12 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
     private readonly ILogger<ISqlContainer> _logger;
 
-    private readonly IDictionary<string, DbParameter> _parameters =
-        new pengdows.crud.collections.OrderedDictionary<string, DbParameter>(ParameterNameComparer.Instance);
-    private readonly Dictionary<DbParameter, DbParameterCollection?> _parameterOwners =
-        new(ParameterReferenceComparer.Instance);
+    private readonly IDictionary<string, ParameterMetadata> _parameters =
+        new pengdows.crud.collections.OrderedDictionary<string, ParameterMetadata>(ParameterNameComparer.Instance);
+
+    // No longer needed with metadata approach - parameters are pooled at context level
+    // private readonly Dictionary<DbParameter, DbParameterCollection?> _parameterOwners =
+    //     new(ParameterReferenceComparer.Instance);
 
     private sealed class ParameterNameComparer : IEqualityComparer<string>
     {
@@ -261,6 +263,11 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         return _dialect.MakeParameterName(parameterName);
     }
 
+    public string MakeParameterName(ParameterMetadata metadata)
+    {
+        return _dialect.MakeParameterName(metadata.Name);
+    }
+
     internal string RenderParams(string sql)
     {
         ParamSequence.Clear();
@@ -319,7 +326,17 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             _outputParameterCount = next;
         }
 
-        _parameters.Add(parameter.ParameterName, parameter);
+        // Convert DbParameter to ParameterMetadata for storage
+        var metadata = new ParameterMetadata(
+            parameter.ParameterName,
+            parameter.DbType,
+            parameter.Value,
+            parameter.Direction);
+
+        _parameters.Add(parameter.ParameterName, metadata);
+
+        // Mark command text dirty since parameters changed
+        _commandTextDirty = true;
     }
 
     public DbParameter AddParameterWithValue<T>(DbType type, T value,
@@ -343,10 +360,36 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }
 
         name ??= GenerateParameterName();
+
+        // Check output parameter limit
+        var isOutput = direction == ParameterDirection.Output ||
+                       direction == ParameterDirection.InputOutput ||
+                       direction == ParameterDirection.ReturnValue;
+
+        if (isOutput)
+        {
+            var next = _outputParameterCount + 1;
+            var maxOut = _context.DataSourceInfo.MaxOutputParameters;
+            if (next > maxOut)
+            {
+                throw new InvalidOperationException(
+                    $"Query exceeds the maximum output parameter limit of {maxOut} for {_context.DatabaseProductName}.");
+            }
+
+            _outputParameterCount = next;
+        }
+
+        // Store as metadata instead of creating DbParameter immediately
+        var metadata = new ParameterMetadata(name, type, value, direction);
+        _parameters.Add(name, metadata);
+
+        // Mark command text dirty since parameters changed
+        _commandTextDirty = true;
+
+        // For API compatibility, return a temporary DbParameter
+        // This will be recreated from pooled parameters at execution time
         var parameter = _context.CreateDbParameter(name, type, value);
         parameter.Direction = direction;
-
-        AddParameter(parameter);
         return parameter;
     }
 
@@ -389,15 +432,15 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
     public void SetParameterValue(string parameterName, object? newValue)
     {
-        if (!_parameters.TryGetValue(parameterName, out var parameter))
+        if (!_parameters.TryGetValue(parameterName, out var metadata))
         {
             // Allow cross-prefix lookup between pN and wN for tests that use a different
             // prefix when asserting parameter values vs where they were created.
             if (_dialect.SupportsNamedParameters &&
                 TryBuildAlternateParameterName(parameterName, out var alternate) &&
-                _parameters.TryGetValue(alternate, out parameter))
+                _parameters.TryGetValue(alternate, out metadata))
             {
-                // proceed with found alternate
+                parameterName = alternate; // Use the found alternate name
             }
             else
             {
@@ -408,21 +451,32 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         // If switching to an array value on providers that support set-valued parameters
         // (e.g., PostgreSQL ANY(@p)), coerce DbType to Object so the provider
         // can infer the correct array type during preparation.
+        var dbType = metadata.DbType;
         if (newValue is Array && _dialect.SupportsSetValuedParameters)
         {
-            parameter.DbType = DbType.Object;
+            dbType = DbType.Object;
         }
 
-        parameter.Value = newValue;
+        // Update metadata with new value
+        var updatedMetadata = new ParameterMetadata(
+            metadata.Name,
+            dbType,
+            newValue,
+            metadata.Direction);
+
+        _parameters[parameterName] = updatedMetadata;
+
+        // Mark command text dirty since parameter values changed
+        _commandTextDirty = true;
     }
 
     public object? GetParameterValue(string parameterName)
     {
-        if (!_parameters.TryGetValue(parameterName, out var parameter))
+        if (!_parameters.TryGetValue(parameterName, out var metadata))
         {
             if (_dialect.SupportsNamedParameters &&
                 TryBuildAlternateParameterName(parameterName, out var alternate) &&
-                _parameters.TryGetValue(alternate, out parameter))
+                _parameters.TryGetValue(alternate, out metadata))
             {
                 // proceed with found alternate
             }
@@ -432,7 +486,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             }
         }
 
-        return parameter.Value;
+        return metadata.Value;
     }
 
     public T GetParameterValue<T>(string parameterName)
@@ -488,6 +542,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                ?? throw new InvalidOperationException("Command is not a DbCommand");
     }
 
+    private DbParameter[]? _rentedParameters; // Track rented parameters for later return
+
     private void AddParametersToCommand(DbCommand dbCommand)
     {
         if (_parameters.Count == 0)
@@ -495,71 +551,77 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             return;
         }
 
+        // Rent parameter array from context pool
+        if (_context is not IInternalConnectionProvider provider)
+        {
+            throw new InvalidOperationException("DatabaseContext must support parameter pooling");
+        }
+
+        var ctx = provider as DatabaseContext;
+        if (ctx == null)
+        {
+            throw new InvalidOperationException("Context must be DatabaseContext for parameter pooling");
+        }
+
+        _rentedParameters = ctx.RentParameters(_parameters.Count);
+
+        // Materialize parameters from metadata
+        var index = 0;
         if (_context.SupportsNamedParameters || ParamSequence.Count == 0)
         {
-            foreach (var param in _parameters.Values)
+            foreach (var kvp in _parameters)
             {
+                var metadata = kvp.Value;
+                var param = _rentedParameters[index++];
+
+                // Populate from metadata
+                param.ParameterName = metadata.Name;
+                param.DbType = metadata.DbType;
+                param.Value = metadata.Value ?? DBNull.Value;
+                param.Direction = metadata.Direction;
+
                 dbCommand.Parameters.Add(param);
-                RegisterParameterOwner(param, dbCommand.Parameters);
             }
 
             return;
         }
 
+        // Positional parameters - use ParamSequence order
         foreach (var name in ParamSequence)
         {
-            if (_parameters.TryGetValue(name, out var param))
+            if (_parameters.TryGetValue(name, out var metadata))
             {
+                var param = _rentedParameters[index++];
+
+                // Populate from metadata
+                param.ParameterName = metadata.Name;
+                param.DbType = metadata.DbType;
+                param.Value = metadata.Value ?? DBNull.Value;
+                param.Direction = metadata.Direction;
+
                 dbCommand.Parameters.Add(param);
-                RegisterParameterOwner(param, dbCommand.Parameters);
             }
         }
     }
 
-    private void RegisterParameterOwner(DbParameter parameter, DbParameterCollection owner)
-    {
-        _parameterOwners[parameter] = owner;
-    }
-
-    private void RemoveParameterFromOwner(DbParameter parameter)
-    {
-        if (!_parameterOwners.TryGetValue(parameter, out var owner))
-        {
-            return;
-        }
-
-        try
-        {
-            if (owner?.Contains(parameter) == true)
-            {
-                owner.Remove(parameter);
-            }
-        }
-        catch (Exception ex) when (ex is ArgumentException || ex is InvalidOperationException)
-        {
-            // Already removed or not owned, ignore.
-        }
-        finally
-        {
-            _parameterOwners.Remove(parameter);
-        }
-    }
-
-    private sealed class ParameterReferenceComparer : IEqualityComparer<DbParameter>
-    {
-        public static ParameterReferenceComparer Instance { get; } = new();
-
-        public bool Equals(DbParameter? x, DbParameter? y) => ReferenceEquals(x, y);
-
-        public int GetHashCode(DbParameter obj) => RuntimeHelpers.GetHashCode(obj);
-    }
+    // REMOVED: No longer needed with metadata approach - parameters are pooled at context level
+    // private void RegisterParameterOwner(DbParameter parameter, DbParameterCollection owner)
+    // private void RemoveParameterFromOwner(DbParameter parameter)
+    // private sealed class ParameterReferenceComparer : IEqualityComparer<DbParameter>
 
     public void Clear()
     {
         Query.Clear();
-        ReturnParametersToPool();
+
+        // Return any rented parameters to pool before clearing metadata
+        ReturnRentedParametersToPool();
+
+        // Clear metadata (no longer calling old ReturnParametersToPool)
+        _parameters.Clear();
+
         _outputParameterCount = 0;
         ParamSequence.Clear();
+
         // Invalidate cached command text when query is cleared
         _cachedCommandText = null;
         _commandTextDirty = true;
@@ -616,14 +678,14 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 // Trust that dev has set correct names
                 var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
                 var index = 0;
-                foreach (var param in _parameters.Values)
+                foreach (var metadata in _parameters.Values)
                 {
                     if (index++ > 0)
                     {
                         sb.Append(", ");
                     }
 
-                    sb.Append(_context.MakeParameterName(param));
+                    sb.Append(_context.MakeParameterName(metadata.Name));
                 }
 
                 return sb.ToString();
@@ -1154,22 +1216,20 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         if (_parameters.Count > 0 && _logger.IsEnabled(LogLevel.Debug))
         {
             // SECURITY: Never log parameter values - they may contain credentials, tokens, PII
-            // Log only metadata: name, type, size, direction
+            // Log only metadata: name, type, direction
             var paramDump = new StringBuilder();
             var index = 0;
-            foreach (var p in _parameters.Values)
+            foreach (var metadata in _parameters.Values)
             {
                 if (index++ > 0)
                 {
                     paramDump.Append(", ");
                 }
 
-                var sizeInfo = p.Size > 0 ? $"({p.Size})" : "";
-                var dirInfo = p.Direction != ParameterDirection.Input ? $" {p.Direction}" : "";
-                paramDump.Append(p.ParameterName);
+                var dirInfo = metadata.Direction != ParameterDirection.Input ? $" {metadata.Direction}" : "";
+                paramDump.Append(metadata.Name);
                 paramDump.Append(':');
-                paramDump.Append(p.DbType.ToString());
-                paramDump.Append(sizeInfo);
+                paramDump.Append(metadata.DbType.ToString());
                 paramDump.Append(dirInfo);
             }
 
@@ -1350,6 +1410,12 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         {
             try
             {
+                // IMPORTANT: Copy output parameter values back before returning to pool
+                if (_rentedParameters != null && _rentedParameters.Length > 0 && _outputParameterCount > 0)
+                {
+                    CopyOutputParameterValues(cmd.Parameters, _rentedParameters);
+                }
+
                 cmd.Parameters?.Clear();
                 try
                 {
@@ -1366,6 +1432,11 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 _logger.LogWarning($"Command disposal failed: {ex.Message}");
                 // We're intentionally not retrying here anymore — disposal failure is generally harmless in this case
             }
+            finally
+            {
+                // Return parameters to pool
+                ReturnRentedParametersToPool();
+            }
         }
 
         // Don't dispose read connections — they are left open until the reader disposes
@@ -1377,6 +1448,63 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         if (_context is not TransactionContext && conn is not null)
         {
             _context.CloseAndDisposeConnection(conn);
+        }
+    }
+
+    private void CopyOutputParameterValues(DbParameterCollection commandParams, DbParameter[] rentedParams)
+    {
+        // Copy output parameter values back to metadata
+        for (int i = 0; i < rentedParams.Length; i++)
+        {
+            var param = rentedParams[i];
+            if (param.Direction == ParameterDirection.Output ||
+                param.Direction == ParameterDirection.InputOutput ||
+                param.Direction == ParameterDirection.ReturnValue)
+            {
+                // Update metadata with output value
+                if (_parameters.TryGetValue(param.ParameterName, out var oldMetadata))
+                {
+                    var updatedMetadata = new ParameterMetadata(
+                        oldMetadata.Name,
+                        oldMetadata.DbType,
+                        param.Value, // Updated value from execution
+                        oldMetadata.Direction);
+
+                    _parameters[param.ParameterName] = updatedMetadata;
+                }
+            }
+        }
+    }
+
+    private void ReturnRentedParametersToPool()
+    {
+        if (_rentedParameters == null)
+        {
+            return;
+        }
+
+        if (_context is not IInternalConnectionProvider provider)
+        {
+            return;
+        }
+
+        var ctx = provider as DatabaseContext;
+        if (ctx == null)
+        {
+            return;
+        }
+
+        try
+        {
+            ctx.ReturnParameters(_rentedParameters);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning($"Failed to return parameters to pool: {ex.Message}");
+        }
+        finally
+        {
+            _rentedParameters = null;
         }
     }
 
@@ -1418,52 +1546,22 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         // Copy the WHERE flag
         clone.HasWhereAppended = HasWhereAppended;
 
-        // OPTIMIZATION: Reuse parameter objects when possible (provider pooling handles this)
-        // Clone all parameters with the same names and types but allow value updates
-        // Use the target context's dialect for parameter creation
+        // OPTIMIZATION: Clone metadata directly (much lighter than DbParameter objects)
+        // Metadata is immutable struct, so simple value copy is safe and fast
         foreach (var kvp in _parameters)
         {
-            clone.AddParameter(CloneParameter(kvp.Value, clone._dialect));
+            clone._parameters.Add(kvp.Key, kvp.Value); // Direct struct copy
         }
 
         // Copy parameter sequence for rendering (reuse cached if available)
         if (ParamSequence.Count > 0)
         {
-            clone.ParamSequence.AddRange(ParamSequence); 
+            clone.ParamSequence.AddRange(ParamSequence);
         }
 
         clone._outputParameterCount = _outputParameterCount;
 
         return clone;
-    }
-
-    private static DbParameter CloneParameter(DbParameter param, ISqlDialect dialect)
-    {
-        var cloned = dialect.CreateDbParameter(param.ParameterName, param.DbType, param.Value);
-
-        // Only set non-default properties to avoid unnecessary provider overhead
-        // This is especially important for high-volume template cloning scenarios
-        if (param.Direction != ParameterDirection.Input)
-        {
-            cloned.Direction = param.Direction;
-        }
-
-        if (param.Size > 0)
-        {
-            cloned.Size = param.Size;
-        }
-
-        if (param.Scale > 0)
-        {
-            cloned.Scale = param.Scale;
-        }
-
-        if (param.Precision > 0)
-        {
-            cloned.Precision = param.Precision;
-        }
-
-        return cloned;
     }
 
     /// <summary>
@@ -1486,44 +1584,17 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         Clear();
     }
 
-    private void ReturnParametersToPool()
-    {
-        if (_parameters.Count == 0)
-        {
-            _parameters.Clear();
-            _parameterOwners.Clear();
-            return;
-        }
-
-        if (_activeReaders > 0)
-        {
-            Volatile.Write(ref _deferParameterPooling, 1);
-            _logger.LogWarning(
-                "SqlContainer disposed while {ActiveReaders} reader(s) still active; skipping parameter pooling.",
-                _activeReaders);
-            return;
-        }
-
-        foreach (var parameter in _parameters.Values)
-        {
-            RemoveParameterFromOwner(parameter);
-            if (_dialect is SqlDialect sqlDialect)
-            {
-                sqlDialect.ReturnParameterToPool(parameter);
-            }
-        }
-
-        _parameters.Clear();
-        _parameterOwners.Clear();
-        Volatile.Write(ref _deferParameterPooling, 0);
-    }
+    // REMOVED: Old ReturnParametersToPool that used SqlDialect pooling
+    // Now we use ReturnRentedParametersToPool which returns to DatabaseContext pool
 
     void IReaderLifetimeListener.OnReaderDisposed()
     {
         var remaining = Interlocked.Decrement(ref _activeReaders);
         if (remaining == 0 && Volatile.Read(ref _deferParameterPooling) == 1)
         {
-            ReturnParametersToPool();
+            // Return rented parameters when last reader closes
+            ReturnRentedParametersToPool();
+            Volatile.Write(ref _deferParameterPooling, 0);
         }
     }
 }

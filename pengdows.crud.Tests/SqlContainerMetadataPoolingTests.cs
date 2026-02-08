@@ -27,10 +27,10 @@ public class SqlContainerMetadataPoolingTests : IDisposable
         _connection = new SqliteConnection(connStr);
         _connection.Open();
 
-        // Create test table
+        // Create test table (IF NOT EXISTS to handle shared database)
         using var cmd = _connection.CreateCommand();
         cmd.CommandText = @"
-            CREATE TABLE test_table (
+            CREATE TABLE IF NOT EXISTS test_table (
                 id INTEGER PRIMARY KEY,
                 name TEXT,
                 value INTEGER
@@ -204,7 +204,7 @@ public class SqlContainerMetadataPoolingTests : IDisposable
         container.Query.Append(")");
 
         container.AddParameterWithValue("id", DbType.Int32, 6);
-        container.AddParameterWithValue("name", DbType.String, null); // NULL
+        container.AddParameterWithValue<string?>("name", DbType.String, null); // NULL - explicit type for inference
         container.AddParameterWithValue("value", DbType.Int32, 123);
 
         // Act

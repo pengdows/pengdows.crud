@@ -709,7 +709,7 @@ public partial class DatabaseContext
 
         // 2. Finalize reader connection string: apply MaxPoolSize + provider-specific
         //    DataSource settings while it still differs from the writer.
-        if (_dialect != null && UsesReadOnlyConnectionStringForReads() &&
+        if (_dialect != null &&
             !string.Equals(_readerConnectionString, _connectionString, StringComparison.OrdinalIgnoreCase))
         {
             var readMaxPoolSize = ResolveEffectiveMaxPoolSize(_configuredReadPoolSize, _readerConnectionString);
@@ -750,10 +750,9 @@ public partial class DatabaseContext
             _connectionString = _dialect.PrepareConnectionStringForDataSource(_connectionString);
         }
 
-        // Standard mode: reader and writer share the same connection string.
-        // _readerConnectionString was captured before writer finalisation; sync it
-        // so governor pool-key hashing sees a single pool.
-        if (!UsesReadOnlyConnectionStringForReads())
+        // If suffix application was a no-op, keep reader/writer aligned so pool-key
+        // hashing and DataSource reuse remain consistent.
+        if (string.Equals(_readerConnectionString, _connectionString, StringComparison.OrdinalIgnoreCase))
         {
             _readerConnectionString = _connectionString;
         }
@@ -766,8 +765,7 @@ public partial class DatabaseContext
 
         _readerDataSource = _dataSource;
 
-        if (!UsesReadOnlyConnectionStringForReads() ||
-            string.Equals(_readerConnectionString, _connectionString, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(_readerConnectionString, _connectionString, StringComparison.OrdinalIgnoreCase))
         {
             return;
         }
@@ -843,17 +841,25 @@ public partial class DatabaseContext
 
     private string BuildReaderConnectionString(IDatabaseContextConfiguration configuration)
     {
-        if (_dialect == null || !UsesReadOnlyConnectionStringForReads())
+        if (_dialect == null)
         {
             return _connectionString;
         }
 
-        var readOnly = _dialect.GetReadOnlyConnectionString(_connectionString);
-        var usesOriginalValue = string.IsNullOrWhiteSpace(readOnly) ||
-                                string.Equals(readOnly, _connectionString, StringComparison.OrdinalIgnoreCase);
-        var baseReaderConnectionString = usesOriginalValue
-            ? BuildReadOnlyConnectionStringFromBase()
-            : readOnly;
+        string baseReaderConnectionString;
+        if (UsesReadOnlyConnectionStringForReads())
+        {
+            var readOnly = _dialect.GetReadOnlyConnectionString(_connectionString);
+            var usesOriginalValue = string.IsNullOrWhiteSpace(readOnly) ||
+                                    string.Equals(readOnly, _connectionString, StringComparison.OrdinalIgnoreCase);
+            baseReaderConnectionString = usesOriginalValue
+                ? BuildReadOnlyConnectionStringFromBase()
+                : readOnly;
+        }
+        else
+        {
+            baseReaderConnectionString = _connectionString;
+        }
 
         return ConnectionPoolingConfiguration.ApplyApplicationNameSuffix(
             baseReaderConnectionString,
@@ -870,6 +876,17 @@ public partial class DatabaseContext
         }
 
         return ConnectionMode == DbMode.SingleWriter;
+    }
+
+    private bool HasDedicatedReadConnectionString()
+    {
+        return !string.IsNullOrWhiteSpace(_readerConnectionString) &&
+               !string.Equals(_readerConnectionString, _connectionString, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool ShouldUseReaderConnectionString(bool readOnly)
+    {
+        return readOnly && HasDedicatedReadConnectionString();
     }
 
     private void AttachPinnedPermitIfNeeded()

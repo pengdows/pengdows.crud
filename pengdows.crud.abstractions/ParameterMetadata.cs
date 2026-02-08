@@ -1,6 +1,6 @@
 using System.Data;
 
-namespace pengdows.crud.@internal;
+namespace pengdows.crud;
 
 /// <summary>
 /// Lightweight struct for storing parameter metadata during SQL building.
@@ -16,7 +16,7 @@ namespace pengdows.crud.@internal;
 ///
 /// Compare to DbParameter: ~100+ bytes with property overhead
 /// </remarks>
-internal readonly struct ParameterMetadata
+public readonly struct ParameterMetadata
 {
     /// <summary>
     /// Parameter name (without dialect-specific prefix like @ or :)
