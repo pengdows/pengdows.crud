@@ -109,6 +109,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     IMetricsCollectorAccessor, IInternalConnectionProvider, ITypeMapAccessor
 {
     private readonly DbProviderFactory? _factory;
+    private readonly DbParameterPool? _parameterPool; // NEW: Parameter pooling for performance
     private DbDataSource? _dataSource;
     private DbDataSource? _readerDataSource;
     private readonly bool _dataSourceProvided;
@@ -288,6 +289,41 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
 
     internal IProcWrappingStrategy ProcWrappingStrategy => _procWrappingStrategy;
 
+    /// <summary>
+    /// Rent a parameter array from the context's parameter pool.
+    /// Parameters must be returned via ReturnParameters when done.
+    /// </summary>
+    /// <param name="count">Number of parameters needed</param>
+    /// <returns>Array of DbParameters (pooled if possible)</returns>
+    /// <remarks>
+    /// This is part of the parameter pooling optimization.
+    /// Callers MUST call ReturnParameters when done to avoid pool exhaustion.
+    /// </remarks>
+    internal DbParameter[] RentParameters(int count)
+    {
+        if (_parameterPool == null)
+            throw new InvalidOperationException("Parameter pool not initialized");
+
+        return _parameterPool.Rent(count);
+    }
+
+    /// <summary>
+    /// Return a parameter array to the pool.
+    /// Parameters are automatically cleared before being pooled.
+    /// </summary>
+    /// <param name="parameters">Parameters to return</param>
+    /// <remarks>
+    /// This is part of the parameter pooling optimization.
+    /// Parameters are cleared (values set to null) before returning to pool.
+    /// </remarks>
+    internal void ReturnParameters(DbParameter[] parameters)
+    {
+        if (_parameterPool == null)
+            throw new InvalidOperationException("Parameter pool not initialized");
+
+        _parameterPool.Return(parameters);
+    }
+
     protected override void DisposeManaged()
     {
         if (_metricsCollector != null)
@@ -307,6 +343,9 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
         {
             _connection = null;
         }
+
+        // Dispose parameter pool
+        _parameterPool?.Dispose();
 
         base.DisposeManaged();
     }
@@ -333,6 +372,9 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
         {
             _connection = null;
         }
+
+        // Dispose parameter pool
+        _parameterPool?.Dispose();
 
         await base.DisposeManagedAsync().ConfigureAwait(false);
     }
