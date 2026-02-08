@@ -46,14 +46,15 @@ public class ReaderMappingBenchmark
         // Setup pengdows.crud with DuckDB factory and SingleConnection mode (keeps connection open)
         _typeMap = new TypeMapRegistry();
         _typeMap.Register<TestEntity>();
-        _context = new DatabaseContext(
-            new DatabaseContextConfiguration
-            {
-                ConnectionString = _connectionString,
-                DbMode = DbMode.SingleConnection
-            },
-            DuckDBClientFactory.Instance
-        );
+        var duckFactory = DuckDBClientFactory.Instance;
+        var contextConfig = new DatabaseContextConfiguration
+        {
+            ConnectionString = _connectionString,
+            DbMode = DbMode.SingleConnection,
+            ReadWriteMode = ReadWriteMode.ReadWrite,
+            ProviderName = duckFactory.GetType().FullName ?? string.Empty
+        };
+        _context = new DatabaseContext(contextConfig, duckFactory);
         _helper = new TableGateway<TestEntity, int>(_context);
 
         // Verify the actual mode being used

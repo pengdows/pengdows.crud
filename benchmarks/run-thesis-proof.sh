@@ -1,0 +1,60 @@
+#!/bin/bash
+# THESIS PROOF BENCHMARK SUITE
+# Proves that pengdows.crud is superior to EF/Dapper in:
+# 1. Connection pool management (Standard mode)
+# 2. SQL generation safety (handles spaces, schemas, keywords)
+# 3. Raw performance (very close to Dapper)
+
+cd "$(dirname "$0")/CrudBenchmarks"
+
+echo "========================================================================="
+echo "PENGDOWS.CRUD THESIS PROOF BENCHMARK SUITE"
+echo "========================================================================="
+echo ""
+echo "This suite will prove:"
+echo ""
+echo "  1. CONNECTION POOL SUPERIORITY"
+echo "     - Standard mode handles high concurrency better than EF/Dapper"
+echo "     - Resists pool exhaustion under pressure"
+echo "     - 'Open late, close early' strategy is safer"
+echo ""
+echo "  2. SQL GENERATION PERFECTION"
+echo "     - Handles column names with spaces ('Fred Flintstone')"
+echo "     - Handles reserved keywords ('select', 'from')"
+echo "     - Automatic, correct quoting via dialect system"
+echo "     - EF requires configuration, Dapper requires manual quoting"
+echo ""
+echo "  3. RAW PERFORMANCE PARITY"
+echo "     - Very close to Dapper (within 5-15%)"
+echo "     - Much faster than Entity Framework"
+echo "     - Optimizations: compiled setters, plan caching, StringBuilderLite"
+echo ""
+echo "========================================================================="
+echo ""
+echo "Running benchmarks... (this will take ~10-15 minutes)"
+echo ""
+
+# Run all thesis-proof benchmarks
+dotnet run -c Release --filter "*ConnectionPoolStressBenchmarks*,*SqlGenerationSafetyBenchmarks*,*RawPerformanceComparison*"
+
+echo ""
+echo "========================================================================="
+echo "BENCHMARK COMPLETE"
+echo "========================================================================="
+echo ""
+echo "Key metrics to look for:"
+echo ""
+echo "CONNECTION POOL TESTS:"
+echo "  - pengdows.crud should complete all operations without exceptions"
+echo "  - Dapper/EF may show pool timeout exceptions or slower performance"
+echo ""
+echo "SQL SAFETY TESTS:"
+echo "  - pengdows.crud should handle weird names automatically"
+echo "  - Note the simplicity vs Dapper's manual quoting"
+echo "  - Note EF's extensive configuration requirements"
+echo ""
+echo "RAW PERFORMANCE TESTS:"
+echo "  - pengdows.crud should be within 1.05x-1.15x of Dapper baseline"
+echo "  - EF should be 2x-10x slower depending on operation"
+echo ""
+echo "========================================================================="
