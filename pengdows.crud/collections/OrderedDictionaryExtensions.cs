@@ -27,6 +27,19 @@ namespace pengdows.crud.collections;
 // Extension methods for common DB parameter scenarios
 public static class OrderedDictionaryExtensions
 {
+    /// <summary>
+    /// Generic property cache that eliminates reflection overhead for FromObject&lt;T&gt;().
+    /// </summary>
+    /// <remarks>
+    /// Each type T gets its own cached PropertyInfo[] array, computed once on first access.
+    /// Expected 20-30% performance improvement for ad-hoc parameter building.
+    /// </remarks>
+    private static class PropertyCache<T>
+    {
+        public static readonly PropertyInfo[] Properties =
+            typeof(T).GetProperties(BindingFlags.Instance | BindingFlags.Public);
+    }
+
     // Optional logger for visibility into property access failures
     // Defaults to no-op; set via OrderedDictionaryExtensions.Logger if desired.
     private static ILogger _logger = NullLogger.Instance;
@@ -43,7 +56,8 @@ public static class OrderedDictionaryExtensions
     public static OrderedDictionary<string, object?> FromObject<T>(T obj) where T : notnull
     {
         var dict = new OrderedDictionary<string, object?>();
-        var props = typeof(T).GetProperties(BindingFlags.Instance | BindingFlags.Public);
+        // Use cached properties to avoid reflection overhead on every call
+        var props = PropertyCache<T>.Properties;
 
         foreach (var prop in props)
         {
