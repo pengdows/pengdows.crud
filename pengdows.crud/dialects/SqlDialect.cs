@@ -26,6 +26,7 @@ using System.Collections.Concurrent;
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
@@ -117,6 +118,20 @@ internal abstract class SqlDialect : ISqlDialect
     // Simple parameter pool - avoid repeated factory calls for hot paths
     private readonly ConcurrentQueue<DbParameter> _parameterPool = new();
     private const int MaxPoolSize = 100; // Prevent unbounded growth
+
+    private static readonly string[] ProviderSpecificResetProperties =
+    {
+        "NpgsqlDbType",
+        "DataTypeName",
+        "SqlDbType",
+        "UdtTypeName",
+        "OracleDbType",
+        "MySqlDbType"
+    };
+
+    private static readonly ConcurrentDictionary<Type, Action<DbParameter>> ProviderSpecificResetters = new();
+
+    private static readonly Action<DbParameter> NoopReset = static _ => { };
 
     protected static AdvancedTypeRegistry AdvancedTypes { get; } = AdvancedTypeRegistry.Shared;
 
@@ -582,6 +597,64 @@ internal abstract class SqlDialect : ISqlDialect
     /// </summary>
     public virtual string? UpsertIncomingAlias => null;
 
+    private static void ResetProviderSpecificMetadata(DbParameter parameter)
+    {
+        var resetter = ProviderSpecificResetters.GetOrAdd(parameter.GetType(), BuildProviderSpecificResetter);
+        resetter(parameter);
+    }
+
+    private static Action<DbParameter> BuildProviderSpecificResetter(Type parameterType)
+    {
+        List<ProviderPropertyReset>? resets = null;
+        foreach (var propertyName in ProviderSpecificResetProperties)
+        {
+            var property = parameterType.GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public);
+            if (property == null || !property.CanWrite || property.GetIndexParameters().Length != 0)
+            {
+                continue;
+            }
+
+            resets ??= new List<ProviderPropertyReset>();
+            var defaultValue = property.PropertyType.IsValueType
+                ? Activator.CreateInstance(property.PropertyType)
+                : null;
+            resets.Add(new ProviderPropertyReset(property, defaultValue));
+        }
+
+        if (resets == null)
+        {
+            return NoopReset;
+        }
+
+        var resetArray = resets.ToArray();
+        return parameter =>
+        {
+            foreach (var reset in resetArray)
+            {
+                try
+                {
+                    reset.Property.SetValue(parameter, reset.DefaultValue);
+                }
+                catch
+                {
+                    // Ignore provider-specific reset failures; pooled parameters should remain usable.
+                }
+            }
+        };
+    }
+
+    private readonly struct ProviderPropertyReset
+    {
+        public ProviderPropertyReset(PropertyInfo property, object? defaultValue)
+        {
+            Property = property;
+            DefaultValue = defaultValue;
+        }
+
+        public PropertyInfo Property { get; }
+        public object? DefaultValue { get; }
+    }
+
     /// <summary>
     /// Get a parameter from the pool or create a new one. For internal use by hot paths.
     /// </summary>
@@ -591,6 +664,16 @@ internal abstract class SqlDialect : ISqlDialect
         {
             pooled = true;
             // Reset pooled parameter to clean state
+            try
+            {
+                param.ResetDbType();
+            }
+            catch
+            {
+                // Ignore providers that don't support ResetDbType.
+            }
+
+            ResetProviderSpecificMetadata(param);
             param.ParameterName = string.Empty;
             param.Value = null;
             param.DbType = DbType.Object;

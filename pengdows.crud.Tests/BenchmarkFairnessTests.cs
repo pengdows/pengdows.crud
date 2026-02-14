@@ -48,6 +48,25 @@ public class BenchmarkFairnessTests
             $"Indexed view hints found in: {string.Join(", ", offenders)}");
     }
 
+    [Fact]
+    public void ApplesToApplesBenchmarks_UsePrebuiltSqlAndFactoryConnections()
+    {
+        const string fileName = "ApplesToApplesDapperBenchmarks.cs";
+        var text = LoadBenchmarkText(fileName);
+
+        AssertAllPresent(fileName, text, new[]
+        {
+            "BuildSingleReadSql",
+            "_pengdowsSql",
+            "_dapperSql",
+            "CreateSqlContainer(_pengdowsSql)",
+            "CreateConnection",
+            "ConnectionString",
+            "OpenAsync",
+            "QuerySingleOrDefaultAsync"
+        });
+    }
+
     private static List<string> FindOffenders(IEnumerable<string> tokens, HashSet<string> excludedFiles)
     {
         var benchmarksDir = GetBenchmarksDirectory();

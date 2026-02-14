@@ -2,7 +2,6 @@
 
 using System.Data;
 using System.Data.Common;
-using System.Text;
 using System.Threading.Tasks;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
@@ -19,9 +18,9 @@ namespace pengdows.crud;
 public interface ISqlContainer : ISafeAsyncDisposableBase
 {
     /// <summary>
-    /// Gets the <see cref="StringBuilder"/> used to compose the SQL query.
+    /// Gets the query builder used to compose the SQL query.
     /// </summary>
-    StringBuilder Query { get; }
+    SqlQueryBuilder Query { get; }
 
     /// <summary>
     /// Gets the current count of parameters added to the container.

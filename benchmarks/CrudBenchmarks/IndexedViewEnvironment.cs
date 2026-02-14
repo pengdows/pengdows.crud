@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Dapper;
@@ -16,8 +17,8 @@ internal sealed class IndexedViewEnvironment : IAsyncDisposable
     private const string Database = "IndexedViewBenchmark";
     private const string Schema = "dbo";
     private const string ViewName = "vw_CustomerOrderSummary";
-    private const int DefaultCustomerCount = 1000;
-    private const int DefaultOrdersPerCustomer = 10;
+    private const int DefaultCustomerCount = 5000;
+    private const int DefaultOrdersPerCustomer = 50;
 
     private static readonly string ViewTemplate = $$"""
         SELECT customer_id as CustomerId,
@@ -29,6 +30,16 @@ internal sealed class IndexedViewEnvironment : IAsyncDisposable
         WHERE customer_id = {customerId}
         """;
 
+    private static readonly string InsertOrderTemplate = $$"""
+        INSERT INTO {{Schema}}.Orders (customer_id, total_amount, status)
+        OUTPUT INSERTED.order_id
+        VALUES ({customerId}, {amount}, 'Active')
+        """;
+
+    private static readonly string DeleteOrderTemplate = $$"""
+        DELETE FROM {{Schema}}.Orders WHERE order_id = {orderId}
+        """;
+
     private static readonly string BaseAggregateTemplate = $$"""
         SELECT customer_id as CustomerId,
                COUNT_BIG(*) as OrderCount,
@@ -38,6 +49,31 @@ internal sealed class IndexedViewEnvironment : IAsyncDisposable
         FROM {{Schema}}.Orders
         WHERE status = 'Active' AND customer_id = {customerId}
         GROUP BY customer_id
+        """;
+
+    // Full aggregate — no WHERE customer_id filter.
+    // Scans ALL orders grouped by customer_id. This matches the indexed view
+    // definition exactly, so with correct SET options the optimizer should
+    // substitute the indexed view (scan ~N pre-aggregated rows) instead of
+    // scanning the entire Orders table.
+    private static readonly string FullAggregateTemplate = $$"""
+        SELECT customer_id as CustomerId,
+               COUNT_BIG(*) as OrderCount,
+               SUM(total_amount) as TotalAmount,
+               SUM(total_amount) as SumOrderAmount,
+               COUNT_BIG(*) as CountForAvg
+        FROM {{Schema}}.Orders
+        WHERE status = 'Active'
+        GROUP BY customer_id
+        """;
+
+    private static readonly string FullViewTemplate = $$"""
+        SELECT customer_id as CustomerId,
+               order_count as OrderCount,
+               total_amount as TotalAmount,
+               sum_order_amount as SumOrderAmount,
+               count_for_avg as CountForAvg
+        FROM {{Schema}}.{{ViewName}}
         """;
 
     private readonly List<int> _customerIds = new();
@@ -216,36 +252,66 @@ internal sealed class IndexedViewEnvironment : IAsyncDisposable
         _customerIds.Clear();
         await using var conn = new SqlConnection(_connectionString);
         await conn.OpenAsync();
-        await using var tx = await conn.BeginTransactionAsync();
 
-        for (var i = 1; i <= customerCount; i++)
+        Console.WriteLine($"[BENCHMARK] Seeding {customerCount} customers...");
+
+        // Batch customer inserts (500 per batch for OUTPUT capture)
+        const int customerBatch = 500;
+        for (var batch = 0; batch < customerCount; batch += customerBatch)
         {
-            var customerId = await conn.ExecuteScalarAsync<int>(
-                "INSERT INTO dbo.Customers (company_name) OUTPUT INSERTED.customer_id VALUES (@name)",
-                new { name = $"Company {i:D6}" }, tx);
-            _customerIds.Add(customerId);
+            var batchEnd = Math.Min(batch + customerBatch, customerCount);
+            var sb = new StringBuilder();
+            for (var i = batch; i < batchEnd; i++)
+            {
+                sb.AppendLine(
+                    $"INSERT INTO dbo.Customers (company_name) OUTPUT INSERTED.customer_id VALUES ('Company {i + 1:D6}');");
+            }
+
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = sb.ToString();
+            await using var reader = await cmd.ExecuteReaderAsync();
+            do
+            {
+                while (await reader.ReadAsync())
+                    _customerIds.Add(reader.GetInt32(0));
+            } while (await reader.NextResultAsync());
         }
 
+        Console.WriteLine($"[BENCHMARK] Seeding ~{(long)customerCount * ordersPerCustomer} orders (batched)...");
+
+        // Batch order inserts (500 rows per VALUES list to stay within limits)
+        const int orderBatch = 500;
         var random = new Random(42);
+        var orderRows = new List<(int customerId, int amount, int daysAgo)>();
+
         foreach (var customerId in _customerIds)
         {
             var orderCount = Math.Max(1, random.Next(ordersPerCustomer / 2, ordersPerCustomer * 2));
             for (var i = 0; i < orderCount; i++)
             {
-                var amount = 100 + random.Next(1, 1000);
-                await conn.ExecuteAsync(@"
-                    INSERT INTO dbo.Orders (customer_id, total_amount, order_date)
-                    VALUES (@customerId, @amount, DATEADD(day, -@daysAgo, GETUTCDATE()))",
-                    new
-                    {
-                        customerId,
-                        amount,
-                        daysAgo = random.Next(1, 365)
-                    }, tx);
+                orderRows.Add((customerId, 100 + random.Next(1, 1000), random.Next(1, 365)));
             }
         }
 
-        await tx.CommitAsync();
+        for (var batch = 0; batch < orderRows.Count; batch += orderBatch)
+        {
+            var batchEnd = Math.Min(batch + orderBatch, orderRows.Count);
+            var sb = new StringBuilder();
+            sb.Append("INSERT INTO dbo.Orders (customer_id, total_amount, order_date) VALUES ");
+            for (var i = batch; i < batchEnd; i++)
+            {
+                if (i > batch) sb.Append(',');
+                var (cid, amt, days) = orderRows[i];
+                sb.Append($"({cid},{amt},DATEADD(day,-{days},GETUTCDATE()))");
+            }
+
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = sb.ToString();
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        Console.WriteLine($"[BENCHMARK] Seeded {_customerIds.Count} customers, {orderRows.Count} orders. Updating statistics...");
+
         await conn.ExecuteAsync(@"
             UPDATE STATISTICS dbo.Customers;
             UPDATE STATISTICS dbo.Orders;
@@ -278,6 +344,18 @@ internal sealed class IndexedViewEnvironment : IAsyncDisposable
 
     public string BuildBaseAggregateSql(Func<string, string> param) =>
         BaseAggregateTemplate.Replace("{customerId}", param("customerId"));
+
+    public string BuildFullAggregateSql() => FullAggregateTemplate;
+
+    public string BuildFullViewSql() => FullViewTemplate;
+
+    public string BuildInsertOrderSql(Func<string, string> param) =>
+        InsertOrderTemplate
+            .Replace("{customerId}", param("customerId"))
+            .Replace("{amount}", param("amount"));
+
+    public string BuildDeleteOrderSql(Func<string, string> param) =>
+        DeleteOrderTemplate.Replace("{orderId}", param("orderId"));
 
     public async ValueTask DisposeAsync()
     {

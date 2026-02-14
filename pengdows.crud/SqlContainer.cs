@@ -7,7 +7,7 @@
 // - This is the primary class for building and executing SQL statements.
 // - Created via IDatabaseContext.CreateSqlContainer() - not directly instantiated.
 // - Key features:
-//   * Query property (StringBuilder) for building SQL dynamically
+//   * Query property (SqlQueryBuilder) for building SQL dynamically
 //   * AddParameterWithValue/CreateDbParameter for safe parameterization
 //   * ExecuteNonQueryAsync/ExecuteScalarAsync/ExecuteReaderAsync for execution
 //   * WrapObjectName for dialect-specific identifier quoting
@@ -60,7 +60,7 @@ namespace pengdows.crud;
 /// rather than direct instantiation.
 /// </para>
 /// <para>
-/// <strong>Query Building:</strong> Use the <see cref="Query"/> property (StringBuilder) to build SQL
+/// <strong>Query Building:</strong> Use the <see cref="Query"/> property (SqlQueryBuilder) to build SQL
 /// dynamically. Use <see cref="AddParameterWithValue{T}"/> to add parameters safely.
 /// </para>
 /// <para>
@@ -182,7 +182,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
     // Performance optimization: cache rendered command text to avoid repeated Query.ToString() calls
     private string? _cachedCommandText;
-    private bool _commandTextDirty = true;
+    private int _cachedCommandTextVersion = -1;
+    private readonly SqlQueryBuilder _query;
     private int _activeReaders;
     private int _deferParameterPooling;
 
@@ -210,7 +211,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         _context = context;
         _dialect = dialect ?? throw new ArgumentNullException(nameof(dialect));
         _logger = logger ?? NullLogger<ISqlContainer>.Instance;
-        Query = new StringBuilder(query ?? string.Empty);
+        _query = new SqlQueryBuilder(query);
     }
 
 
@@ -245,7 +246,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         return new SqlContainer(context, dialect, query, logger);
     }
 
-    public StringBuilder Query { get; }
+    public SqlQueryBuilder Query => _query;
 
     public int ParameterCount => _parameters.Count;
 
@@ -337,8 +338,6 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
         _parameters.Add(parameter.ParameterName, parameter);
 
-        // Mark command text dirty since parameters changed
-        _commandTextDirty = true;
     }
 
     public DbParameter AddParameterWithValue<T>(DbType type, T value,
@@ -468,13 +467,13 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     {
         var dbCommand = CreateRawCommand(conn);
 
-        if (Query.Length == 0)
+        if (_query.Length == 0)
         {
             return dbCommand;
         }
 
         // Mirror the normal execution path so manually-created commands are usable.
-        var cmdText = Query.ToString();
+        var cmdText = _query.ToString();
         if (cmdText.Contains("{P}"))
         {
             cmdText = RenderParams(cmdText);
@@ -575,20 +574,20 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
     public void Clear()
     {
-        Query.Clear();
+        _query.Clear();
         ReturnParametersToPool();
         _outputParameterCount = 0;
         ParamSequence.Clear();
 
         // Invalidate cached command text when query is cleared
         _cachedCommandText = null;
-        _commandTextDirty = true;
+        _cachedCommandTextVersion = -1;
     }
 
     public string WrapForStoredProc(ExecutionType executionType, bool includeParameters = true,
         bool captureReturn = false)
     {
-        var procName = Query.ToString().Trim();
+        var procName = _query.ToString().Trim();
 
         if (string.IsNullOrWhiteSpace(procName))
         {
@@ -1111,7 +1110,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             throw new NotSupportedException("TableDirect isn't supported.");
         }
 
-        if (Query.Length == 0)
+        if (_query.Length == 0)
         {
             throw new InvalidOperationException("SQL query is empty.");
         }
@@ -1128,7 +1127,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         {
             cmdText = WrapForStoredProc(executionType, true);
         }
-        else if (_cachedCommandText != null && !_commandTextDirty)
+        else if (_cachedCommandText != null && _cachedCommandTextVersion == _query.Version)
         {
             // Reuse cached command text - huge win for template reuse patterns
             cmdText = _cachedCommandText;
@@ -1136,7 +1135,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         else
         {
             // Render and cache the command text
-            cmdText = Query.ToString();
+            cmdText = _query.ToString();
 
             // For non-stored-proc queries, render parameter placeholders
             // This is CRITICAL for positional-parameter providers (MySQL, SQLite, etc.)
@@ -1148,7 +1147,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
             // Cache the rendered command text for reuse
             _cachedCommandText = cmdText;
-            _commandTextDirty = false;
+            _cachedCommandTextVersion = _query.Version;
         }
 
         if (traceTimings)
@@ -1413,25 +1412,23 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                             ?? _dialect;
         var clone = new SqlContainer(targetContext, targetDialect, null, _logger);
 
-        // OPTIMIZATION: Share cached command text instead of copying StringBuilder
+        // OPTIMIZATION: Share cached command text instead of re-rendering
         // This is a massive win for template cloning patterns - avoids Query.ToString() on every clone
-        if (_cachedCommandText != null && !_commandTextDirty)
+        var canShareCache = _cachedCommandText != null && _cachedCommandTextVersion == _query.Version;
+        if (canShareCache)
         {
             // Template has been rendered - share the immutable command text
             clone._cachedCommandText = _cachedCommandText;
-            clone._commandTextDirty = false;
-
-            // Copy just the query length for validation (actual text is cached)
-            clone.Query.Clear();
-            clone.Query.Append(Query);
+            clone._cachedCommandTextVersion = _cachedCommandTextVersion;
         }
         else
         {
-            // Template not yet rendered or modified - copy StringBuilder content
-            clone.Query.Clear();
-            clone.Query.Append(Query);
-            clone._commandTextDirty = true;
+            clone._cachedCommandText = null;
+            clone._cachedCommandTextVersion = -1;
         }
+
+        // Copy query text and version
+        clone._query.CopyFrom(_query);
 
         // Copy the WHERE flag
         clone.HasWhereAppended = HasWhereAppended;
@@ -1499,6 +1496,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     protected override void DisposeManaged()
     {
         Clear();
+        _query.Dispose();
     }
 
     private void ReturnParametersToPool()

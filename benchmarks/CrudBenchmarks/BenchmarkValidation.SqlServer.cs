@@ -38,7 +38,7 @@ internal static class SqlServerBenchmarkValidation
     // SHOWPLAN XML nests every element inside this namespace.  Descendants("Object")
     // without it silently returns empty and all plan assertions pass vacuously.
     // Do not remove.
-    private static readonly XNamespace ShowPlanNs = "http://schemas.microsoft.com/sqlserver/2004/02/showplan";
+    private static readonly XNamespace ShowPlanNs = "http://schemas.microsoft.com/sqlserver/2004/07/showplan";
 
     public static async Task<SqlServerValidationResult> ValidateAsync(SqlServerValidationConfig config)
     {
@@ -162,14 +162,26 @@ internal static class SqlServerBenchmarkValidation
         }
     }
 
+    /// <summary>
+    /// Strip SQL Server bracket quoting from identifiers (e.g. "[dbo]" → "dbo").
+    /// SHOWPLAN XML uses bracketed identifiers while config uses unbracketed names.
+    /// </summary>
+    private static string StripBrackets(string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return string.Empty;
+        if (value.Length >= 2 && value[0] == '[' && value[^1] == ']')
+            return value[1..^1];
+        return value;
+    }
+
     private static void ValidatePlanObjects(XDocument planDoc, SqlServerValidationConfig config, string expectedIndex, string planPath)
     {
         var objects = planDoc.Descendants(ShowPlanNs + "Object")
             .Select(o => new
             {
-                Schema = (string?)o.Attribute("Schema"),
-                Table = (string?)o.Attribute("Table"),
-                Index = (string?)o.Attribute("Index")
+                Schema = StripBrackets((string?)o.Attribute("Schema")),
+                Table = StripBrackets((string?)o.Attribute("Table")),
+                Index = StripBrackets((string?)o.Attribute("Index"))
             })
             .Where(o => !string.IsNullOrEmpty(o.Table))
             .ToList();

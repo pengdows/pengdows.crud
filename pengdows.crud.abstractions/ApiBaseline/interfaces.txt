@@ -264,7 +264,7 @@ property pengdows.crud.IDatabaseContext::TypeMapRegistry : pengdows.crud.ITypeMa
 property pengdows.crud.ISqlContainer::CompositeIdentifierSeparator : string { get; }
 property pengdows.crud.ISqlContainer::HasWhereAppended : bool { get; set; }
 property pengdows.crud.ISqlContainer::ParameterCount : int { get; }
-property pengdows.crud.ISqlContainer::Query : System.Text.StringBuilder { get; }
+property pengdows.crud.ISqlContainer::Query : pengdows.crud.SqlQueryBuilder { get; }
 property pengdows.crud.ISqlContainer::QuotePrefix : string { get; }
 property pengdows.crud.ISqlContainer::QuoteSuffix : string { get; }
 property pengdows.crud.ITableGateway`2<TEntity, TRowID>::EnumParseBehavior : pengdows.crud.enums.EnumParseFailureMode { get; set; }

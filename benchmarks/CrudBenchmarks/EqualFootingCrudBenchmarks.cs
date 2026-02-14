@@ -20,6 +20,10 @@ namespace CrudBenchmarks;
 /// A sentinel connection keeps the database alive for the duration of the run.
 /// Each framework executes identical SQL against the same schema and seed data.
 ///
+/// IMPORTANT: All three frameworks open and close connections per operation,
+/// matching production-correct "open late, close early" behavior.
+/// No framework gets an unfair advantage from a pre-opened persistent connection.
+///
 /// Breakdown methods isolate query-build time from execution time for pengdows and Dapper,
 /// showing that the difference between frameworks is entirely in client-side overhead.
 /// </summary>
@@ -38,11 +42,8 @@ public class EqualFootingCrudBenchmarks : IDisposable
     private TableGateway<BenchEntity, int> _gateway = null!;
     private TypeMapRegistry _typeMap = null!;
 
-    // Dapper
-    private SqliteConnection _dapperConnection = null!;
-
-    // Entity Framework
-    private EfBenchContext _efContext = null!;
+    // Entity Framework options (DbContext created per operation)
+    private DbContextOptions<EfBenchContext> _efOptions = null!;
 
     // Counters for unique IDs in delete / create benchmarks
     private int _deleteIdSeed = 100_000;
@@ -101,23 +102,17 @@ public class EqualFootingCrudBenchmarks : IDisposable
         _pengdowsContext = new DatabaseContext(ConnStr, SqliteFactory.Instance, _typeMap);
         _gateway = new TableGateway<BenchEntity, int>(_pengdowsContext);
 
-        // Dapper
-        _dapperConnection = new SqliteConnection(ConnStr);
-        _dapperConnection.Open();
-
-        // Entity Framework
-        var efOptions = new DbContextOptionsBuilder<EfBenchContext>()
+        // Entity Framework options — DbContext created per operation
+        _efOptions = new DbContextOptionsBuilder<EfBenchContext>()
             .UseSqlite(ConnStr)
             .Options;
-        _efContext = new EfBenchContext(efOptions);
     }
 
     [GlobalCleanup]
     public void GlobalCleanup()
     {
+        DumpPengdowsMetrics();
         _pengdowsContext?.Dispose();
-        _dapperConnection?.Dispose();
-        _efContext?.Dispose();
         _sentinel?.Dispose();
     }
 
@@ -158,7 +153,9 @@ public class EqualFootingCrudBenchmarks : IDisposable
         var count = 0;
         for (var i = 0; i < RecordCount; i++)
         {
-            count += await _dapperConnection.ExecuteAsync(sql, new
+            await using var conn = new SqliteConnection(ConnStr);
+            await conn.OpenAsync();
+            count += await conn.ExecuteAsync(sql, new
             {
                 Name = $"Created {i}",
                 Age = 25,
@@ -179,7 +176,8 @@ public class EqualFootingCrudBenchmarks : IDisposable
         var count = 0;
         for (var i = 0; i < RecordCount; i++)
         {
-            count += await _efContext.Database.ExecuteSqlRawAsync(sql,
+            await using var ctx = new EfBenchContext(_efOptions);
+            count += await ctx.Database.ExecuteSqlRawAsync(sql,
                 new SqliteParameter("Name", $"Created {i}"),
                 new SqliteParameter("Age", 25),
                 new SqliteParameter("Salary", 50000.0),
@@ -219,7 +217,9 @@ public class EqualFootingCrudBenchmarks : IDisposable
             "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = @Id";
         for (var i = 0; i < RecordCount; i++)
         {
-            result = await _dapperConnection.QueryFirstOrDefaultAsync<DapperBenchEntity>(
+            await using var conn = new SqliteConnection(ConnStr);
+            await conn.OpenAsync();
+            result = await conn.QueryFirstOrDefaultAsync<DapperBenchEntity>(
                 sql, new { Id = (i % SeedRows) + 1 });
         }
 
@@ -234,7 +234,8 @@ public class EqualFootingCrudBenchmarks : IDisposable
             "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = @Id";
         for (var i = 0; i < RecordCount; i++)
         {
-            result = await _efContext.Benchmarks
+            await using var ctx = new EfBenchContext(_efOptions);
+            result = await ctx.Benchmarks
                 .FromSqlRaw(sql, new SqliteParameter("Id", (i % SeedRows) + 1))
                 .AsNoTracking()
                 .FirstOrDefaultAsync();
@@ -266,7 +267,9 @@ public class EqualFootingCrudBenchmarks : IDisposable
     {
         const string sql =
             "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE age > @Age LIMIT @Limit";
-        var rows = await _dapperConnection.QueryAsync<DapperBenchEntity>(
+        await using var conn = new SqliteConnection(ConnStr);
+        await conn.OpenAsync();
+        var rows = await conn.QueryAsync<DapperBenchEntity>(
             sql, new { Age = 30, Limit = RecordCount });
         return rows.ToList();
     }
@@ -276,7 +279,8 @@ public class EqualFootingCrudBenchmarks : IDisposable
     {
         const string sql =
             "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE age > @Age LIMIT @Limit";
-        return await _efContext.Benchmarks
+        await using var ctx = new EfBenchContext(_efOptions);
+        return await ctx.Benchmarks
             .FromSqlRaw(sql,
                 new SqliteParameter("Age", 30),
                 new SqliteParameter("Limit", RecordCount))
@@ -311,7 +315,9 @@ public class EqualFootingCrudBenchmarks : IDisposable
         var count = 0;
         for (var i = 0; i < RecordCount; i++)
         {
-            count += await _dapperConnection.ExecuteAsync(sql, new
+            await using var conn = new SqliteConnection(ConnStr);
+            await conn.OpenAsync();
+            count += await conn.ExecuteAsync(sql, new
             {
                 Salary = 60000.0 + i,
                 Id = (i % SeedRows) + 1
@@ -328,7 +334,8 @@ public class EqualFootingCrudBenchmarks : IDisposable
         var count = 0;
         for (var i = 0; i < RecordCount; i++)
         {
-            count += await _efContext.Database.ExecuteSqlRawAsync(sql,
+            await using var ctx = new EfBenchContext(_efOptions);
+            count += await ctx.Database.ExecuteSqlRawAsync(sql,
                 new SqliteParameter("Salary", 60000.0 + i),
                 new SqliteParameter("Id", (i % SeedRows) + 1));
         }
@@ -379,12 +386,21 @@ public class EqualFootingCrudBenchmarks : IDisposable
         for (var i = 0; i < RecordCount; i++)
         {
             var id = Interlocked.Increment(ref _deleteIdSeed);
-            await _dapperConnection.ExecuteAsync(insertSql, new
             {
-                Id = id, Name = "ToDelete", Age = 99, Salary = 1.0,
-                IsActive = false, CreatedAt = DateTime.UtcNow.ToString("O")
-            });
-            count += await _dapperConnection.ExecuteAsync(deleteSql, new { Id = id });
+                await using var conn = new SqliteConnection(ConnStr);
+                await conn.OpenAsync();
+                await conn.ExecuteAsync(insertSql, new
+                {
+                    Id = id, Name = "ToDelete", Age = 99, Salary = 1.0,
+                    IsActive = false, CreatedAt = DateTime.UtcNow.ToString("O")
+                });
+            }
+
+            {
+                await using var conn = new SqliteConnection(ConnStr);
+                await conn.OpenAsync();
+                count += await conn.ExecuteAsync(deleteSql, new { Id = id });
+            }
         }
 
         return count;
@@ -400,15 +416,22 @@ public class EqualFootingCrudBenchmarks : IDisposable
         for (var i = 0; i < RecordCount; i++)
         {
             var id = Interlocked.Increment(ref _deleteIdSeed);
-            await _efContext.Database.ExecuteSqlRawAsync(insertSql,
-                new SqliteParameter("Id", id),
-                new SqliteParameter("Name", "ToDelete"),
-                new SqliteParameter("Age", 99),
-                new SqliteParameter("Salary", 1.0),
-                new SqliteParameter("IsActive", false),
-                new SqliteParameter("CreatedAt", DateTime.UtcNow.ToString("O")));
-            count += await _efContext.Database.ExecuteSqlRawAsync(deleteSql,
-                new SqliteParameter("Id", id));
+            {
+                await using var ctx = new EfBenchContext(_efOptions);
+                await ctx.Database.ExecuteSqlRawAsync(insertSql,
+                    new SqliteParameter("Id", id),
+                    new SqliteParameter("Name", "ToDelete"),
+                    new SqliteParameter("Age", 99),
+                    new SqliteParameter("Salary", 1.0),
+                    new SqliteParameter("IsActive", false),
+                    new SqliteParameter("CreatedAt", DateTime.UtcNow.ToString("O")));
+            }
+
+            {
+                await using var ctx = new EfBenchContext(_efOptions);
+                count += await ctx.Database.ExecuteSqlRawAsync(deleteSql,
+                    new SqliteParameter("Id", id));
+            }
         }
 
         return count;
@@ -443,7 +466,9 @@ public class EqualFootingCrudBenchmarks : IDisposable
     {
         const string sql =
             "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE is_active = @IsActive AND age >= @MinAge AND age <= @MaxAge LIMIT @Limit";
-        var rows = await _dapperConnection.QueryAsync<DapperBenchEntity>(
+        await using var conn = new SqliteConnection(ConnStr);
+        await conn.OpenAsync();
+        var rows = await conn.QueryAsync<DapperBenchEntity>(
             sql, new { IsActive = true, MinAge = 25, MaxAge = 45, Limit = RecordCount });
         return rows.ToList();
     }
@@ -453,7 +478,8 @@ public class EqualFootingCrudBenchmarks : IDisposable
     {
         const string sql =
             "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE is_active = @IsActive AND age >= @MinAge AND age <= @MaxAge LIMIT @Limit";
-        return await _efContext.Benchmarks
+        await using var ctx = new EfBenchContext(_efOptions);
+        return await ctx.Benchmarks
             .FromSqlRaw(sql,
                 new SqliteParameter("IsActive", true),
                 new SqliteParameter("MinAge", 25),
@@ -487,7 +513,9 @@ public class EqualFootingCrudBenchmarks : IDisposable
         double result = 0;
         for (var i = 0; i < RecordCount; i++)
         {
-            result = await _dapperConnection.ExecuteScalarAsync<double>(
+            await using var conn = new SqliteConnection(ConnStr);
+            await conn.OpenAsync();
+            result = await conn.ExecuteScalarAsync<double>(
                 "SELECT AVG(salary) FROM benchmark WHERE is_active = 1");
         }
 
@@ -500,10 +528,11 @@ public class EqualFootingCrudBenchmarks : IDisposable
         double result = 0;
         for (var i = 0; i < RecordCount; i++)
         {
-            using var cmd = _efContext.Database.GetDbConnection().CreateCommand();
+            await using var ctx = new EfBenchContext(_efOptions);
+            var conn = ctx.Database.GetDbConnection();
+            await conn.OpenAsync();
+            await using var cmd = conn.CreateCommand();
             cmd.CommandText = "SELECT AVG(salary) FROM benchmark WHERE is_active = 1";
-            if (cmd.Connection!.State != System.Data.ConnectionState.Open)
-                await cmd.Connection.OpenAsync();
             var scalar = await cmd.ExecuteScalarAsync();
             result = Convert.ToDouble(scalar);
         }
@@ -546,7 +575,9 @@ public class EqualFootingCrudBenchmarks : IDisposable
         for (var i = 0; i < RecordCount; i++)
         {
             var id = Interlocked.Increment(ref _batchIdSeed);
-            count += await _dapperConnection.ExecuteAsync(sql, new
+            await using var conn = new SqliteConnection(ConnStr);
+            await conn.OpenAsync();
+            count += await conn.ExecuteAsync(sql, new
             {
                 Id = id, Name = $"Batch {id}", Age = 30, Salary = 55000.0,
                 IsActive = true, CreatedAt = DateTime.UtcNow.ToString("O")
@@ -565,7 +596,8 @@ public class EqualFootingCrudBenchmarks : IDisposable
         for (var i = 0; i < RecordCount; i++)
         {
             var id = Interlocked.Increment(ref _batchIdSeed);
-            count += await _efContext.Database.ExecuteSqlRawAsync(sql,
+            await using var ctx = new EfBenchContext(_efOptions);
+            count += await ctx.Database.ExecuteSqlRawAsync(sql,
                 new SqliteParameter("Id", id),
                 new SqliteParameter("Name", $"Batch {id}"),
                 new SqliteParameter("Age", 30),
@@ -624,7 +656,9 @@ public class EqualFootingCrudBenchmarks : IDisposable
 
         var sql = "INSERT INTO benchmark (name, age, salary, is_active, created_at) VALUES " +
                   string.Join(", ", valueClauses);
-        return await _dapperConnection.ExecuteAsync(sql, parameters);
+        await using var conn = new SqliteConnection(ConnStr);
+        await conn.OpenAsync();
+        return await conn.ExecuteAsync(sql, parameters);
     }
 
     [Benchmark]
@@ -647,7 +681,8 @@ public class EqualFootingCrudBenchmarks : IDisposable
 
         var sql = "INSERT INTO benchmark (name, age, salary, is_active, created_at) VALUES " +
                   string.Join(", ", valueClauses);
-        return await _efContext.Database.ExecuteSqlRawAsync(sql, efParams);
+        await using var ctx = new EfBenchContext(_efOptions);
+        return await ctx.Database.ExecuteSqlRawAsync(sql, efParams);
     }
 
     // ========================================================================
@@ -749,9 +784,11 @@ public class EqualFootingCrudBenchmarks : IDisposable
             sw.Stop();
             buildTicks += sw.ElapsedTicks;
 
-            // Measure execute phase
+            // Measure execute phase (includes open/close)
             sw.Restart();
-            await _dapperConnection.QueryFirstOrDefaultAsync<DapperBenchEntity>(sql, param);
+            await using var conn = new SqliteConnection(ConnStr);
+            await conn.OpenAsync();
+            await conn.QueryFirstOrDefaultAsync<DapperBenchEntity>(sql, param);
             sw.Stop();
             executeTicks += sw.ElapsedTicks;
         }
@@ -776,9 +813,10 @@ public class EqualFootingCrudBenchmarks : IDisposable
             sw.Stop();
             buildTicks += sw.ElapsedTicks;
 
-            // Measure execute phase
+            // Measure execute phase (includes context create/dispose)
             sw.Restart();
-            await _efContext.Benchmarks
+            await using var ctx = new EfBenchContext(_efOptions);
+            await ctx.Benchmarks
                 .FromSqlRaw(sql, param)
                 .AsNoTracking()
                 .FirstOrDefaultAsync();
@@ -787,6 +825,69 @@ public class EqualFootingCrudBenchmarks : IDisposable
         }
 
         return (buildTicks, executeTicks);
+    }
+
+    // ========================================================================
+    // CONNECTION HOLD TIME
+    // Measures how long each framework holds a database connection open
+    // for a single-row read operation (open → execute → close).
+    // ========================================================================
+
+    [Benchmark]
+    public async Task<long> ConnectionHoldTime_Pengdows()
+    {
+        var sw = Stopwatch.StartNew();
+        await using var container = _pengdowsContext.CreateSqlContainer();
+        container.Query.Append(
+            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = ");
+        container.Query.Append(container.MakeParameterName("Id"));
+        container.AddParameterWithValue("Id", DbType.Int32, 1);
+        await _gateway.LoadSingleAsync(container);
+        sw.Stop();
+        return sw.ElapsedTicks;
+    }
+
+    [Benchmark]
+    public async Task<long> ConnectionHoldTime_Dapper()
+    {
+        var sw = Stopwatch.StartNew();
+        await using var conn = new SqliteConnection(ConnStr);
+        await conn.OpenAsync();
+        await conn.QueryFirstOrDefaultAsync<DapperBenchEntity>(
+            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = @Id",
+            new { Id = 1 });
+        sw.Stop();
+        return sw.ElapsedTicks;
+    }
+
+    [Benchmark]
+    public async Task<long> ConnectionHoldTime_EntityFramework()
+    {
+        var sw = Stopwatch.StartNew();
+        await using var ctx = new EfBenchContext(_efOptions);
+        await ctx.Benchmarks
+            .FromSqlRaw(
+                "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = @Id",
+                new SqliteParameter("Id", 1))
+            .AsNoTracking()
+            .FirstOrDefaultAsync();
+        sw.Stop();
+        return sw.ElapsedTicks;
+    }
+
+    // ========================================================================
+    // HELPERS
+    // ========================================================================
+
+    private void DumpPengdowsMetrics()
+    {
+        var metrics = _pengdowsContext.Metrics;
+        Console.WriteLine(
+            $"[METRICS] EqualFooting " +
+            $"conn_hold_avg={metrics.AvgConnectionHoldMs:0.000}ms " +
+            $"cmd_avg={metrics.AvgCommandMs:0.000}ms " +
+            $"p95={metrics.P95CommandMs:0.000}ms p99={metrics.P99CommandMs:0.000}ms " +
+            $"conns_opened={metrics.ConnectionsOpened} conns_closed={metrics.ConnectionsClosed}");
     }
 
     // ========================================================================

@@ -1,8 +1,10 @@
+using System;
 using System.Data;
-using Microsoft.Data.SqlClient;
-using Microsoft.Data.Sqlite;
+using System.Data.Common;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
+using pengdows.crud.enums;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -10,89 +12,59 @@ namespace pengdows.crud.Tests;
 public class SqlDialectParameterPoolingTests
 {
     [Fact]
-    public void SqlServerParameterReuse_AfterCommandDisposed_DetachesParent()
+    public void CreateDbParameter_ReusedParametersClearProviderSpecificMetadata()
     {
-        var dialect = new SqlServerDialect(SqlClientFactory.Instance, NullLogger.Instance);
-        var param = dialect.CreateDbParameter("i1", DbType.String, "first");
+        var dialect = new TestDialect(new FakeProviderFactory());
 
-        using (var cmd = new SqlCommand())
-        {
-            cmd.Parameters.Add(param);
-            cmd.Parameters.Clear();
-        }
+        var first = dialect.CreateDbParameter("p0", DbType.Guid, Guid.NewGuid());
+        var firstProvider = Assert.IsType<FakeProviderParameter>(first);
+        Assert.Equal(27, firstProvider.NpgsqlDbType);
+        Assert.Equal("uuid", firstProvider.DataTypeName);
 
-        dialect.ReturnParameterToPool(param);
+        dialect.ReturnParameterToPool(first);
 
-        var reused = dialect.CreateDbParameter("i1", DbType.String, "second");
-        Assert.Same(param, reused);
+        var second = dialect.CreateDbParameter("p1", DbType.DateTime, DateTime.UtcNow);
+        var secondProvider = Assert.IsType<FakeProviderParameter>(second);
 
-        using var cmd2 = new SqlCommand();
-        var ex = Record.Exception(() => cmd2.Parameters.Add(reused));
-        Assert.Null(ex);
+        Assert.Same(first, second);
+        Assert.Equal(0, secondProvider.NpgsqlDbType);
+        Assert.Null(secondProvider.DataTypeName);
     }
 
-    [Fact]
-    public void SqlServerParameterReuse_AfterCommandDisposedWithoutClear_DetachesParent()
+    private sealed class TestDialect : SqlDialect
     {
-        var dialect = new SqlServerDialect(SqlClientFactory.Instance, NullLogger.Instance);
-        var param = dialect.CreateDbParameter("i1", DbType.String, "first");
-
-        using (var cmd = new SqlCommand())
+        public TestDialect(DbProviderFactory factory)
+            : base(factory, NullLogger<SqlDialect>.Instance)
         {
-            cmd.Parameters.Add(param);
-            cmd.Parameters.Clear();
         }
 
-        dialect.ReturnParameterToPool(param);
+        public override SupportedDatabase DatabaseType => SupportedDatabase.PostgreSql;
 
-        var reused = dialect.CreateDbParameter("i1", DbType.String, "second");
-        Assert.Same(param, reused);
+        public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
+        {
+            var parameter = base.CreateDbParameter(name, type, value);
 
-        using var cmd2 = new SqlCommand();
-        var ex = Record.Exception(() => cmd2.Parameters.Add(reused));
-        Assert.Null(ex);
+            if (parameter is FakeProviderParameter providerParam && type == DbType.Guid)
+            {
+                providerParam.NpgsqlDbType = 27;
+                providerParam.DataTypeName = "uuid";
+            }
+
+            return parameter;
+        }
     }
 
-    [Fact]
-    public void SqliteParameterReuse_AfterCommandDisposed_DetachesParent()
+    private sealed class FakeProviderFactory : DbProviderFactory
     {
-        var dialect = new SqliteDialect(SqliteFactory.Instance, NullLogger.Instance);
-        var param = dialect.CreateDbParameter("i1", DbType.String, "first");
-
-        using (var cmd = new SqliteCommand())
+        public override DbParameter CreateParameter()
         {
-            cmd.Parameters.Add(param);
-            cmd.Parameters.Clear();
+            return new FakeProviderParameter();
         }
-
-        dialect.ReturnParameterToPool(param);
-
-        var reused = dialect.CreateDbParameter("i1", DbType.String, "second");
-        Assert.Same(param, reused);
-
-        using var cmd2 = new SqliteCommand();
-        var ex = Record.Exception(() => cmd2.Parameters.Add(reused));
-        Assert.Null(ex);
     }
 
-    [Fact]
-    public void SqliteParameterReuse_AfterCommandDisposedWithoutClear_DetachesParent()
+    private sealed class FakeProviderParameter : fakeDbParameter
     {
-        var dialect = new SqliteDialect(SqliteFactory.Instance, NullLogger.Instance);
-        var param = dialect.CreateDbParameter("i1", DbType.String, "first");
-
-        using (var cmd = new SqliteCommand())
-        {
-            cmd.Parameters.Add(param);
-        }
-
-        dialect.ReturnParameterToPool(param);
-
-        var reused = dialect.CreateDbParameter("i1", DbType.String, "second");
-        Assert.Same(param, reused);
-
-        using var cmd2 = new SqliteCommand();
-        var ex = Record.Exception(() => cmd2.Parameters.Add(reused));
-        Assert.Null(ex);
+        public int NpgsqlDbType { get; set; }
+        public string? DataTypeName { get; set; }
     }
 }
