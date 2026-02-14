@@ -13,9 +13,23 @@
 namespace pengdows.crud.exceptions;
 
 public class ConnectionFailedException : Exception
-
 {
     public ConnectionFailedException(string message) : base(message)
     {
     }
+
+    public ConnectionFailedException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
+
+    /// <summary>
+    /// Initialization phase where the failure occurred (e.g., "InitConnect", "ReadOnlyValidation").
+    /// </summary>
+    public string? Phase { get; init; }
+
+    /// <summary>
+    /// Connection role that failed (e.g., "ReadWrite", "ReadOnly").
+    /// </summary>
+    public string? Role { get; init; }
 }

@@ -1,6 +1,7 @@
-using System;
 using System.Data.Common;
 using pengdows.crud.@internal;
+using pengdows.crud.enums;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -17,8 +18,11 @@ public class ConnectionStringHelperTests
     [Fact]
     public void Create_WithBuilderThatThrows_UsesFallBackBuilder()
     {
-        var builder = new ThrowingConnectionStringBuilder();
-        var result = ConnectionStringHelper.Create(builder, "Data Source=bar");
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite)
+        {
+            ConnectionStringBuilderBehavior = ConnectionStringBuilderBehavior.ThrowOnConnectionStringSet
+        };
+        var result = ConnectionStringHelper.Create(factory, "Data Source=bar");
 
         Assert.Equal("Data Source=bar", result["Data Source"]);
     }
@@ -26,20 +30,25 @@ public class ConnectionStringHelperTests
     [Fact]
     public void Create_WithBuilderThatThrowsAndMalformedInput_UsesRawDataSource()
     {
-        var builder = new ThrowingConnectionStringBuilder();
-        var result = ConnectionStringHelper.Create(builder, "just-a-string");
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite)
+        {
+            ConnectionStringBuilderBehavior = ConnectionStringBuilderBehavior.ThrowOnConnectionStringSet
+        };
+        var result = ConnectionStringHelper.Create(factory, "just-a-string");
 
         Assert.Equal("just-a-string", result["Data Source"]);
     }
 
-#nullable disable
-    private sealed class ThrowingConnectionStringBuilder : DbConnectionStringBuilder
+    [Fact]
+    public void Create_WithFactoryReturningNullBuilder_ParsesNormally()
     {
-        public override object this[string keyword]
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite)
         {
-            get => base[keyword];
-            set => throw new InvalidOperationException("boom");
-        }
+            ConnectionStringBuilderBehavior = ConnectionStringBuilderBehavior.ReturnNull
+        };
+
+        var result = ConnectionStringHelper.Create(factory, "Data Source=foo");
+
+        Assert.Equal("foo", result["Data Source"]);
     }
-#nullable restore
 }

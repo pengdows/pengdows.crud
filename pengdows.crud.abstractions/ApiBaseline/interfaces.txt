@@ -75,7 +75,13 @@ method pengdows.crud.ISqlContainer::MakeParameterName(string) -> string
 method pengdows.crud.ISqlContainer::SetParameterValue(string, object) -> void
 method pengdows.crud.ISqlContainer::WrapForStoredProc(pengdows.crud.enums.ExecutionType, bool, bool) -> string
 method pengdows.crud.ISqlContainer::WrapObjectName(string) -> string
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BatchCreateAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext) -> System.Threading.Tasks.Task`1<int>
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BatchCreateAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BatchUpsertAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext) -> System.Threading.Tasks.Task`1<int>
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BatchUpsertAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BuildBaseRetrieve(string, pengdows.crud.IDatabaseContext) -> pengdows.crud.ISqlContainer
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BuildBatchCreate(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext) -> System.Collections.Generic.IReadOnlyList`1<pengdows.crud.ISqlContainer>
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BuildBatchUpsert(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext) -> System.Collections.Generic.IReadOnlyList`1<pengdows.crud.ISqlContainer>
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BuildCreate(TEntity, pengdows.crud.IDatabaseContext) -> pengdows.crud.ISqlContainer
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BuildDelete(TRowID, pengdows.crud.IDatabaseContext) -> pengdows.crud.ISqlContainer
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BuildRetrieve(System.Collections.Generic.IReadOnlyCollection`1<TEntity>, pengdows.crud.IDatabaseContext) -> pengdows.crud.ISqlContainer
@@ -281,6 +287,7 @@ property pengdows.crud.ITransactionContext::TransactionId : System.Guid { get; }
 property pengdows.crud.ITransactionContext::WasCommitted : bool { get; }
 property pengdows.crud.ITransactionContext::WasRolledBack : bool { get; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::ConnectionString : string { get; set; }
+property pengdows.crud.configuration.IDatabaseContextConfiguration::ReadOnlyConnectionString : string { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::DbMode : pengdows.crud.enums.DbMode { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::DisablePrepare : System.Nullable`1<bool> { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::EnableMetrics : bool { get; set; }

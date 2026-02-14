@@ -80,7 +80,7 @@ public class DatabaseContextDataSourceTests
     }
 
     [Fact]
-    public void ReadWriteConnections_FromDataSource_DoNotApplyReadOnlyConnectionString()
+    public void ReadWriteConnections_FromDataSource_ApplyReadOnlyConnectionString()
     {
         var connectionString = "Data Source=test;EmulatedProduct=SqlServer;Application Name=Widget";
         var config = new DatabaseContextConfiguration
@@ -96,9 +96,8 @@ public class DatabaseContextDataSourceTests
         try
         {
             var inner = GetInnerConnection(tracked);
-            Assert.DoesNotContain("ApplicationIntent=ReadOnly", inner.ConnectionString,
-                StringComparison.OrdinalIgnoreCase);
-            Assert.DoesNotContain(":ro", inner.ConnectionString, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("ApplicationIntent=ReadOnly", inner.ConnectionString, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Application Name=Widget:ro", inner.ConnectionString, StringComparison.OrdinalIgnoreCase);
         }
         finally
         {

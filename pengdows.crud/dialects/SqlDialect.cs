@@ -67,9 +67,6 @@ internal abstract class SqlDialect : ISqlDialect
     protected DbConnectionStringBuilder ConnectionStringBuilder { get; init; }
     private IDatabaseProductInfo? _productInfo;
 
-    // Performance optimization: Cache frequently used parameter names to avoid repeated string operations
-    private readonly ConcurrentDictionary<string, string> _trimmedNameCache = new();
-
     private readonly ConcurrentDictionary<string, string> _wrappedNameCache = new(StringComparer.Ordinal);
 
     // Performance: Static parameter name pool to avoid allocations
@@ -446,6 +443,35 @@ internal abstract class SqlDialect : ISqlDialect
         string Settings,
         IReadOnlyDictionary<string, string> Snapshot,
         bool UsedFallback);
+
+    /// <summary>
+    /// Logs session settings detection results in a standardized format.
+    /// Called by dialect overrides after evaluating session settings.
+    /// </summary>
+    protected void LogSessionSettingsResult(in SessionSettingsResult result, string dialectName)
+    {
+        var snapshotParts = new string[result.Snapshot.Count];
+        var i = 0;
+        foreach (var kv in result.Snapshot)
+        {
+            snapshotParts[i++] = $"{kv.Key}={kv.Value}";
+        }
+
+        var snapshot = string.Join(", ", snapshotParts);
+
+        if (!string.IsNullOrWhiteSpace(result.Settings))
+        {
+            Logger.LogInformation(
+                "{Dialect} session settings detected: {CurrentSettings}. Applying changes:\n{Settings}",
+                dialectName, snapshot, result.Settings);
+        }
+        else
+        {
+            Logger.LogInformation(
+                "{Dialect} session settings detected: {CurrentSettings}. No changes required (already compliant)",
+                dialectName, snapshot);
+        }
+    }
 
     private static ReadOnlySpan<char> TrimWhitespace(ReadOnlySpan<char> span)
     {
@@ -830,6 +856,24 @@ internal abstract class SqlDialect : ISqlDialect
 
     public virtual void TryEnterReadOnlyTransaction(ITransactionContext transaction)
     {
+    }
+
+    /// <summary>
+    /// Attempts to execute a read-only SQL statement within a transaction context.
+    /// Swallows any exceptions and logs them at Debug level.
+    /// Used by Oracle and MariaDB to set read-only session state.
+    /// </summary>
+    protected void TryExecuteReadOnlySql(ITransactionContext transaction, string sql, string dialectName)
+    {
+        try
+        {
+            using var sc = transaction.CreateSqlContainer(sql);
+            sc.ExecuteNonQueryAsync().GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "Failed to apply {DialectName} read-only session settings", dialectName);
+        }
     }
 
     public virtual bool IsReadCommittedSnapshotOn(ITrackedConnection connection)

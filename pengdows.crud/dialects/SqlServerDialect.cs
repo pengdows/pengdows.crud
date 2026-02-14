@@ -296,10 +296,8 @@ internal class SqlServerDialect : SqlDialect
     }
 
     // Connection pooling properties for SQL Server
-    public override bool SupportsExternalPooling => true;
-    public override string? PoolingSettingName => "Pooling";
+    // SupportsExternalPooling, PoolingSettingName, DefaultMaxPoolSize inherited from base (true, "Pooling", 100)
     public override string? MinPoolSizeSettingName => "Min Pool Size";
     public override string? MaxPoolSizeSettingName => "Max Pool Size";
     public override string? ApplicationNameSettingName => "Application Name";
-    internal override int DefaultMaxPoolSize => 100;
 }

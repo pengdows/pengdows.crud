@@ -12,6 +12,7 @@
 //   * NextKey() → "k0", "k1", "k2"... (key/ID parameters)
 //   * NextVer() → "v0", "v1", "v2"... (version parameters)
 //   * NextIns() → "i0", "i1", "i2"... (INSERT parameters)
+//   * NextBatch() → "b0", "b1", "b2"... (batch INSERT/UPSERT parameters)
 // - Used by TableGateway and SQL builders for unique parameter naming.
 // - Instance per operation; not shared across contexts.
 // =============================================================================
@@ -26,6 +27,7 @@ internal sealed class ClauseCounters
     private int _key;
     private int _ver;
     private int _ins;
+    private int _batch;
 
     public string NextSet()
     {
@@ -55,5 +57,10 @@ internal sealed class ClauseCounters
     public string NextIns()
     {
         return $"i{_ins++}";
+    }
+
+    public string NextBatch()
+    {
+        return $"b{_batch++}";
     }
 }

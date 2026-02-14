@@ -81,6 +81,9 @@ public class DatabaseContextInitializationAdditionalTests
     [Fact]
     public void ReaderConnectionString_UsesBaseConnectionString_WhenNoReadOnlyParameter()
     {
+        // fakeDb is detected as Oracle MySql.Data (not MySqlConnector) because its
+        // namespace doesn't contain "MySqlConnector". Oracle MySql.Data doesn't
+        // support ApplicationName, so pool splitting uses Connection Timeout delta.
         var configuration = new DatabaseContextConfiguration
         {
             ConnectionString = "Server=test;",
@@ -96,7 +99,8 @@ public class DatabaseContextInitializationAdditionalTests
         var readerConnectionString = (string)field!.GetValue(ctx)!;
 
         Assert.Contains("Server=test", readerConnectionString, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Application Name=app:ro", readerConnectionString, StringComparison.OrdinalIgnoreCase);
+        // Oracle MySql.Data path: pool split via Connection Timeout delta, not Application Name
+        Assert.Contains("Connection Timeout", readerConnectionString, StringComparison.OrdinalIgnoreCase);
     }
 
     private sealed class StringDataSourceFactory : DbProviderFactory

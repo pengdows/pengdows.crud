@@ -2,8 +2,6 @@ namespace pengdows.crud.fakeDb;
 
 public sealed partial class fakeDbFactory
 {
-    public bool EmulateUnknownProvider { get; set; }
-
     public void SetGlobalFailureMode(ConnectionFailureMode mode, int? failAfterCount = null,
         Exception? customException = null)
     {

@@ -89,6 +89,8 @@ public sealed class ReadWriteConnectionStringSeparationTests
         Assert.Contains("Application Name", writeCs, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(":ro", readCs, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(":rw", writeCs, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ApplicationIntent=ReadOnly", readCs, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("ApplicationIntent=ReadOnly", writeCs, StringComparison.OrdinalIgnoreCase);
         Assert.NotEqual(readCs, writeCs);
     }
 }

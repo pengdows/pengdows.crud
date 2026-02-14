@@ -24,6 +24,8 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
     private readonly List<fakeDbConnection> _createdConnections = new();
     private Exception? _globalPersistentScalarException;
     public bool EnableDataPersistence { get; set; } = false;
+    internal ConnectionStringBuilderBehavior ConnectionStringBuilderBehavior { get; set; } =
+        ConnectionStringBuilderBehavior.None;
 
     // Shared data store across all connections from this factory
     private readonly FakeDataStore _sharedDataStore = new();
@@ -225,7 +227,12 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
     {
         // Return a connection string builder that supports provider-specific keys
         // based on which database we're emulating
-        return new fakeDbConnectionStringBuilder(_pretendToBe);
+        if (ConnectionStringBuilderBehavior.HasFlag(ConnectionStringBuilderBehavior.ReturnNull))
+        {
+            return null;
+        }
+
+        return new fakeDbConnectionStringBuilder(_pretendToBe, ConnectionStringBuilderBehavior);
     }
 }
 

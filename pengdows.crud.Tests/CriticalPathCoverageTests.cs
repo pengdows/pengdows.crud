@@ -22,7 +22,6 @@ public class CriticalPathCoverageTests
     [Fact]
     public void DatabaseContext_InitializationFailure_ThrowsAndCleansUp()
     {
-        // Test the catch/finally blocks in DatabaseContext constructor (lines 239-254)
         // Use factory that fails without skipping first open - this will fail during initialization
         var factory = fakeDbFactory.CreateFailingFactory(SupportedDatabase.Sqlite, ConnectionFailureMode.FailOnOpen);
 
@@ -37,17 +36,18 @@ public class CriticalPathCoverageTests
             new DatabaseContext(config, factory));
 
         Assert.Contains("Failed to open database connection", ex.Message);
+        Assert.Equal("InitConnect", ex.Phase);
+        Assert.Equal("ReadWrite", ex.Role);
+        Assert.NotNull(ex.InnerException);
     }
 
     /// <summary>
-    /// Test unknown provider fallback path for Standard mode
+    /// Test unknown provider in Standard mode now throws ConnectionFailedException (escape hatch removed)
     /// </summary>
     [Fact]
-    public void DatabaseContext_UnknownProvider_StandardMode_FallsBackGracefully()
+    public void DatabaseContext_UnknownProvider_StandardMode_ThrowsConnectionFailed()
     {
-        // Test the fallback path in lines 783-791
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite) { EmulateUnknownProvider = true };
-        factory.SetGlobalFailureMode(ConnectionFailureMode.FailOnOpen);
+        var factory = fakeDbFactory.CreateFailingFactory(SupportedDatabase.Sqlite, ConnectionFailureMode.FailOnOpen);
 
         var config = new DatabaseContextConfiguration
         {
@@ -55,9 +55,12 @@ public class CriticalPathCoverageTests
             DbMode = DbMode.Standard
         };
 
-        // Should succeed despite connection failure for unknown providers in Standard mode
-        using var context = new DatabaseContext(config, factory);
-        Assert.NotNull(context);
+        var ex = Assert.Throws<ConnectionFailedException>(() =>
+            new DatabaseContext(config, factory));
+
+        Assert.Equal("InitConnect", ex.Phase);
+        Assert.Equal("ReadWrite", ex.Role);
+        Assert.NotNull(ex.InnerException);
     }
 
     /// <summary>

@@ -173,11 +173,11 @@ public class MagicStringRegressionTests
     // ── DuckDB read-only pins ─────────────────────────────────────────────
 
     [Fact]
-    public void DuckDbDialect_ReadOnlySessionSettings_IsPragma()
+    public void DuckDbDialect_ReadOnlySessionSettings_IsSetAccessMode()
     {
         var d = CreateDuckDbDialect();
         using var ctx = CreateContext(SupportedDatabase.DuckDB);
-        Assert.Equal("PRAGMA read_only = 1;", d.GetConnectionSessionSettings(ctx, readOnly: true));
+        Assert.Equal("SET access_mode = 'read_only';", d.GetConnectionSessionSettings(ctx, readOnly: true));
     }
 
     [Fact]

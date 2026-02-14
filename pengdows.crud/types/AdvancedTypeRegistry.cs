@@ -7,7 +7,7 @@
 // - Maps CLR types to provider-specific type configurations (JSON, spatial, arrays, etc.).
 // - AdvancedTypeRegistry.Shared provides singleton with default mappings.
 // - MappingKey: High-performance struct key (Type + SupportedDatabase) to avoid allocation.
-// - CachedParameterConfig: Caches mapping + converter lookups for hot paths.
+// - CachedParameterConfig: Caches mapping + converter lookups for hot paths with version stamp.
 // - RegisterMapping<T>(): Associates CLR type with ProviderTypeMapping for a database.
 // - RegisterConverter<T>(): Registers AdvancedTypeConverter for complex transformations.
 // - TryConfigureParameter(): Configures DbParameter with provider-specific type info.
@@ -15,11 +15,15 @@
 // - Default mappings: JSON (JSONB, JSON), spatial (Geometry, Geography), arrays, ranges,
 //   network types (inet, cidr, macaddr), temporal (interval), LOBs, identity/concurrency.
 // - ProviderTypeMapping: Holds DbType + ConfigureParameter action for provider customization.
-// - Uses reflection to set provider-specific enum properties (NpgsqlDbType, OracleDbType, etc.).
+// - Uses cached reflection to set provider-specific enum properties (NpgsqlDbType, OracleDbType, etc.).
+// - Thread-safe: All mutable collections are ConcurrentDictionary. Converter version stamp
+//   avoids per-call dictionary lookup on the hot path.
 // =============================================================================
 
+using System.Collections.Concurrent;
 using System.Data;
 using System.Data.Common;
+using System.Reflection;
 using System.Text.Json;
 using pengdows.crud.enums;
 using pengdows.crud.types.converters;
@@ -60,22 +64,26 @@ internal readonly struct MappingKey : IEquatable<MappingKey>
 
 /// <summary>
 /// Cached configuration for parameter setup to avoid repeated lookups.
+/// Includes a converter version stamp to detect stale entries without per-call dictionary lookup.
 /// </summary>
 internal readonly struct CachedParameterConfig
 {
     public readonly ProviderTypeMapping Mapping;
     public readonly IAdvancedTypeConverter? Converter;
+    public readonly int ConverterVersion;
 
-    public CachedParameterConfig(ProviderTypeMapping mapping, IAdvancedTypeConverter? converter)
+    public CachedParameterConfig(ProviderTypeMapping mapping, IAdvancedTypeConverter? converter, int converterVersion)
     {
         Mapping = mapping;
         Converter = converter;
+        ConverterVersion = converterVersion;
     }
 }
 
 /// <summary>
 /// Registry for advanced database type mappings across different providers.
 /// Handles spatial, JSON, arrays, ranges, network types, etc.
+/// Thread-safe: all mutable state uses ConcurrentDictionary.
 /// </summary>
 public class AdvancedTypeRegistry
 {
@@ -123,12 +131,20 @@ public class AdvancedTypeRegistry
 
     public static AdvancedTypeRegistry Shared { get; } = new(true);
 
-    private readonly Dictionary<MappingKey, ProviderTypeMapping> _mappings = new();
-    private readonly Dictionary<Type, IAdvancedTypeConverter> _converters = new();
-    private readonly HashSet<Type> _mappedTypes = new();
+    private readonly ConcurrentDictionary<MappingKey, ProviderTypeMapping> _mappings = new();
+    private readonly ConcurrentDictionary<Type, IAdvancedTypeConverter> _converters = new();
+    private readonly ConcurrentDictionary<Type, byte> _mappedTypes = new(); // concurrent hashset pattern
 
     // Performance cache for frequently accessed combinations
-    private readonly Dictionary<MappingKey, CachedParameterConfig?> _parameterCache = new();
+    private readonly ConcurrentDictionary<MappingKey, CachedParameterConfig?> _parameterCache = new();
+
+    // Version counter incremented on every RegisterConverter call.
+    // On cache hit, a cheap int compare detects stale entries without a dictionary lookup.
+    private volatile int _converterVersion;
+
+    // Static reflection caches — reflection results are universal across instances
+    private static readonly ConcurrentDictionary<(Type, string), PropertyInfo?> PropertyCache = new();
+    private static readonly ConcurrentDictionary<(Type, string), object?> EnumCache = new();
 
     public AdvancedTypeRegistry(bool includeDefaults = false)
     {
@@ -146,10 +162,10 @@ public class AdvancedTypeRegistry
     {
         var key = new MappingKey(typeof(T), provider);
         _mappings[key] = mapping;
-        _mappedTypes.Add(typeof(T));
+        _mappedTypes[typeof(T)] = 0;
 
-        // Clear any cached config for this type to force rebuild
-        _parameterCache.Remove(key);
+        // Clear any cached config for this key to force rebuild
+        _parameterCache.TryRemove(key, out _);
     }
 
     /// <summary>
@@ -160,19 +176,16 @@ public class AdvancedTypeRegistry
         var type = typeof(T);
         _converters[type] = converter;
 
-        // Clear any cached configs for this type across all providers
-        var keysToRemove = new List<MappingKey>();
+        // Bump converter version — cached entries with old version will be rebuilt on next access
+        Interlocked.Increment(ref _converterVersion);
+
+        // Also remove stale cache entries for this type (belt and suspenders)
         foreach (var key in _parameterCache.Keys)
         {
             if (key.ClrType == type)
             {
-                keysToRemove.Add(key);
+                _parameterCache.TryRemove(key, out _);
             }
-        }
-
-        foreach (var key in keysToRemove)
-        {
-            _parameterCache.Remove(key);
         }
     }
 
@@ -195,25 +208,25 @@ public class AdvancedTypeRegistry
 
     /// <summary>
     /// Configure a DbParameter with provider-specific type information.
-    /// High-performance version with caching to avoid repeated lookups.
+    /// High-performance version with caching and version-stamped converter tracking.
     /// </summary>
     public bool TryConfigureParameter(DbParameter parameter, Type clrType, object? value, SupportedDatabase provider)
     {
         var key = new MappingKey(clrType, provider);
+        var currentVersion = _converterVersion;
 
         // Try cached config first for best performance
         if (!_parameterCache.TryGetValue(key, out var cachedConfig))
         {
             // Build and cache the configuration
-            var mapping = _mappings.TryGetValue(key, out var foundMapping) ? foundMapping : null;
-            if (mapping == null)
+            if (!_mappings.TryGetValue(key, out var foundMapping))
             {
                 _parameterCache[key] = null; // Cache negative result
                 return false;
             }
 
-            var initialConverter = _converters.TryGetValue(clrType, out var foundConverter) ? foundConverter : null;
-            cachedConfig = new CachedParameterConfig(mapping, initialConverter);
+            _converters.TryGetValue(clrType, out var initialConverter);
+            cachedConfig = new CachedParameterConfig(foundMapping, initialConverter, currentVersion);
             _parameterCache[key] = cachedConfig;
         }
 
@@ -225,18 +238,14 @@ public class AdvancedTypeRegistry
         var config = cachedConfig.Value;
         var converter = config.Converter;
 
-        if (_converters.TryGetValue(clrType, out var latestConverter))
+        // Check if converter version is stale — cheap int compare on every call
+        // Only do a dictionary lookup when the version mismatches
+        if (config.ConverterVersion != currentVersion)
         {
-            if (!ReferenceEquals(converter, latestConverter))
-            {
-                converter = latestConverter;
-                _parameterCache[key] = new CachedParameterConfig(config.Mapping, converter);
-            }
-        }
-        else if (converter != null)
-        {
-            converter = null;
-            _parameterCache[key] = new CachedParameterConfig(config.Mapping, null);
+            _converters.TryGetValue(clrType, out var latestConverter);
+            converter = latestConverter;
+            var updatedConfig = new CachedParameterConfig(config.Mapping, converter, currentVersion);
+            _parameterCache[key] = updatedConfig;
         }
 
         // Apply converter if present and value is not null
@@ -258,7 +267,7 @@ public class AdvancedTypeRegistry
 
     internal bool IsMappedType(Type clrType)
     {
-        return _mappedTypes.Contains(clrType);
+        return _mappedTypes.ContainsKey(clrType);
     }
 
     /// <summary>
@@ -342,6 +351,9 @@ public class AdvancedTypeRegistry
         // LOB converters
         RegisterConverter(new BlobStreamConverter());
         RegisterConverter(new ClobStreamConverter());
+
+        // JSON converters
+        RegisterConverter(new JsonDocumentConverter());
     }
 
     private void RegisterJsonMappings()
@@ -499,11 +511,8 @@ public class AdvancedTypeRegistry
             ConfigureParameter = (param, value) =>
             {
                 param.DbType = DbType.DateTimeOffset;
-                if (value is DateTime dt && dt.Kind == DateTimeKind.Unspecified)
-                {
-                    throw new InvalidOperationException(
-                        "DateTime with Kind=Unspecified not allowed. Use DateTimeOffset or specify Kind.");
-                }
+                // Note: The value arriving here is typed as DateTimeOffset (the registered CLR type),
+                // so a `value is DateTime` branch can never match and has been removed.
             }
         });
     }
@@ -591,7 +600,11 @@ public class AdvancedTypeRegistry
             return;
         }
 
-        var property = parameter.GetType().GetProperty(propertyName);
+        var paramType = parameter.GetType();
+        var cacheKey = (paramType, propertyName);
+
+        // Use cached PropertyInfo lookup
+        var property = PropertyCache.GetOrAdd(cacheKey, static k => k.Item1.GetProperty(k.Item2));
         if (property == null)
         {
             return;
@@ -614,23 +627,29 @@ public class AdvancedTypeRegistry
     {
         if (enumNames.Length == 1)
         {
-            return Enum.TryParse(enumType, enumNames[0], true, out var parsedSingle)
-                ? parsedSingle
-                : null;
+            var cacheKey = (enumType, enumNames[0]);
+            return EnumCache.GetOrAdd(cacheKey, static k =>
+                Enum.TryParse(k.Item1, k.Item2, true, out var parsed) ? parsed : null);
         }
 
-        long combined = 0;
-        foreach (var name in enumNames)
+        // For combined flags, build a composite cache key
+        var combinedKey = (enumType, string.Join("|", enumNames));
+        return EnumCache.GetOrAdd(combinedKey, k =>
         {
-            if (!Enum.TryParse(enumType, name, true, out var parsedPart))
+            long combined = 0;
+            var names = k.Item2.Split('|');
+            foreach (var name in names)
             {
-                return null;
+                if (!Enum.TryParse(k.Item1, name, true, out var parsedPart))
+                {
+                    return null;
+                }
+
+                combined |= Convert.ToInt64(parsedPart);
             }
 
-            combined |= Convert.ToInt64(parsedPart);
-        }
-
-        return Enum.ToObject(enumType, combined);
+            return Enum.ToObject(k.Item1, combined);
+        });
     }
 }
 

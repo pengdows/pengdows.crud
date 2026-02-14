@@ -562,7 +562,9 @@ public class DatabaseContextTests
 
         _ = new DatabaseContext(config, factory);
 
-        Assert.Contains("PRAGMA foreign_keys = ON", factory.Connection.ExecutedCommands);
+        // Settings are now sent as a single command (may include semicolons)
+        Assert.Contains(factory.Connection.ExecutedCommands,
+            cmd => cmd.Contains("PRAGMA foreign_keys = ON"));
     }
 
     [Fact]

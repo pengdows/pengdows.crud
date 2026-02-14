@@ -4,51 +4,104 @@ Quick reference for pengdows.crud main interfaces and methods.
 
 ## ITableGateway<TEntity, TRowID>
 
-> **Note:** `TableGateway` is an alias for `TableGateway` (1.0 compatibility).
+### Tier 1: Build Methods (return ISqlContainer, no execution)
 
-### CRUD Operations
-
-All async, return `Task`:
+All synchronous except `BuildUpdateAsync`:
 
 ```csharp
-// Create
-Task<bool> CreateAsync(TEntity entity, IDatabaseContext? context = null);
-
-// Retrieve
-Task<TEntity?> RetrieveOneAsync(TRowID id, IDatabaseContext? context = null);
-Task<TEntity?> RetrieveOneAsync(TEntity entity, IDatabaseContext? context = null);  // By [PrimaryKey]
-Task<IReadOnlyList<TEntity>> RetrieveAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null);
-
-// Update
-Task<int> UpdateAsync(TEntity entity, IDatabaseContext? context = null);
-Task<int> UpdateAsync(TEntity entity, bool loadOriginal, IDatabaseContext? context = null);
-
-// Delete
-Task<int> DeleteAsync(TRowID id, IDatabaseContext? context = null);
-Task<int> DeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null);
-
-// Upsert
-Task<int> UpsertAsync(TEntity entity, IDatabaseContext? context = null);
-```
-
-### Query Building
-
-Return `ISqlContainer` for composition:
-
-```csharp
+// INSERT statement
 ISqlContainer BuildCreate(TEntity entity, IDatabaseContext? context = null);
+
+// SELECT with no WHERE (starting point for custom queries)
 ISqlContainer BuildBaseRetrieve(string alias, IDatabaseContext? context = null);
+
+// SELECT with WHERE clause by IDs
 ISqlContainer BuildRetrieve(IReadOnlyCollection<TRowID>? ids, string alias, IDatabaseContext? context = null);
+ISqlContainer BuildRetrieve(IReadOnlyCollection<TRowID>? ids, IDatabaseContext? context = null);
+
+// SELECT with WHERE clause by entity primary keys
+ISqlContainer BuildRetrieve(IReadOnlyCollection<TEntity>? entities, string alias, IDatabaseContext? context = null);
+ISqlContainer BuildRetrieve(IReadOnlyCollection<TEntity>? entities, IDatabaseContext? context = null);
+
+// UPDATE statement (async because loadOriginal may need DB I/O)
 Task<ISqlContainer> BuildUpdateAsync(TEntity entity, IDatabaseContext? context = null);
+Task<ISqlContainer> BuildUpdateAsync(TEntity entity, bool loadOriginal, IDatabaseContext? context = null);
+Task<ISqlContainer> BuildUpdateAsync(TEntity entity, IDatabaseContext? context, CancellationToken ct);
+Task<ISqlContainer> BuildUpdateAsync(TEntity entity, bool loadOriginal, IDatabaseContext? context, CancellationToken ct);
+
+// DELETE statement
 ISqlContainer BuildDelete(TRowID id, IDatabaseContext? context = null);
+
+// Dialect-specific UPSERT
 ISqlContainer BuildUpsert(TEntity entity, IDatabaseContext? context = null);
 ```
 
-### Data Loading
+### WHERE Clause Helpers (modify existing container)
 
 ```csharp
-Task<TEntity?> LoadSingleAsync(ISqlContainer container);
-Task<List<TEntity>> LoadListAsync(ISqlContainer container);
+ISqlContainer BuildWhere(string wrappedColumnName, IEnumerable<TRowID> ids, ISqlContainer sc);
+void BuildWhereByPrimaryKey(IReadOnlyCollection<TEntity>? entities, ISqlContainer sc, string alias = "");
+```
+
+### Tier 2: Load Methods (execute pre-built ISqlContainer)
+
+```csharp
+Task<TEntity?> LoadSingleAsync(ISqlContainer sc);
+Task<TEntity?> LoadSingleAsync(ISqlContainer sc, CancellationToken ct);
+
+Task<List<TEntity>> LoadListAsync(ISqlContainer sc);
+Task<List<TEntity>> LoadListAsync(ISqlContainer sc, CancellationToken ct);
+
+IAsyncEnumerable<TEntity> LoadStreamAsync(ISqlContainer sc);
+IAsyncEnumerable<TEntity> LoadStreamAsync(ISqlContainer sc, CancellationToken ct);
+```
+
+### Tier 3: Convenience Methods (Build + Execute)
+
+```csharp
+// Create
+Task<bool> CreateAsync(TEntity entity, IDatabaseContext context);
+Task<bool> CreateAsync(TEntity entity, IDatabaseContext context, CancellationToken ct);
+
+// Retrieve single
+Task<TEntity?> RetrieveOneAsync(TRowID id, IDatabaseContext? context = null);
+Task<TEntity?> RetrieveOneAsync(TRowID id, IDatabaseContext? context, CancellationToken ct);
+Task<TEntity?> RetrieveOneAsync(TEntity entity, IDatabaseContext? context = null);  // By [PrimaryKey]
+Task<TEntity?> RetrieveOneAsync(TEntity entity, IDatabaseContext? context, CancellationToken ct);
+
+// Retrieve multiple
+Task<List<TEntity>> RetrieveAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null);
+Task<List<TEntity>> RetrieveAsync(IEnumerable<TRowID> ids, IDatabaseContext? context, CancellationToken ct);
+
+// Retrieve streamed (memory-efficient for large sets)
+IAsyncEnumerable<TEntity> RetrieveStreamAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null);
+IAsyncEnumerable<TEntity> RetrieveStreamAsync(IEnumerable<TRowID> ids, IDatabaseContext? context, CancellationToken ct);
+
+// Update
+Task<int> UpdateAsync(TEntity entity, IDatabaseContext? context = null);
+Task<int> UpdateAsync(TEntity entity, IDatabaseContext? context, CancellationToken ct);
+Task<int> UpdateAsync(TEntity entity, bool loadOriginal, IDatabaseContext? context = null);
+Task<int> UpdateAsync(TEntity entity, bool loadOriginal, IDatabaseContext? context, CancellationToken ct);
+
+// Delete
+Task<int> DeleteAsync(TRowID id, IDatabaseContext? context = null);
+Task<int> DeleteAsync(TRowID id, IDatabaseContext? context, CancellationToken ct);
+Task<int> DeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null);
+Task<int> DeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context, CancellationToken ct);
+
+// Upsert
+Task<int> UpsertAsync(TEntity entity, IDatabaseContext? context = null);
+Task<int> UpsertAsync(TEntity entity, IDatabaseContext? context, CancellationToken ct);
+```
+
+### Other Members
+
+```csharp
+string WrappedTableName { get; }                    // Fully qualified, quoted table name
+EnumParseFailureMode EnumParseBehavior { get; set; } // Enum parse failure handling
+string MakeParameterName(DbParameter p);             // Format parameter name per dialect
+Action<object, object?> GetOrCreateSetter(PropertyInfo prop); // Compiled setter
+TEntity MapReaderToObject(ITrackedReader reader);    // Row-to-entity mapping
 ```
 
 ## ISqlContainer
@@ -57,8 +110,11 @@ Task<List<TEntity>> LoadListAsync(ISqlContainer container);
 
 ```csharp
 StringBuilder Query { get; }              // SQL text builder
-bool HasWhereAppended { get; }            // Whether WHERE exists
+bool HasWhereAppended { get; set; }       // Whether WHERE exists
 int ParameterCount { get; }               // Current parameter count
+string QuotePrefix { get; }               // Dialect quote prefix
+string QuoteSuffix { get; }               // Dialect quote suffix
+string CompositeIdentifierSeparator { get; } // Identifier separator
 ```
 
 ### Identifier Handling
@@ -72,30 +128,57 @@ string MakeParameterName(DbParameter p);  // Format from parameter object
 ### Parameter Management
 
 ```csharp
+// Create without adding
+DbParameter CreateDbParameter<T>(string? name, DbType type, T value);
+DbParameter CreateDbParameter<T>(DbType type, T value);
+
+// Create and add
 DbParameter AddParameterWithValue<T>(DbType type, T value);
 DbParameter AddParameterWithValue<T>(string? name, DbType type, T value);
-DbParameter CreateDbParameter<T>(DbType type, T value);
-DbParameter CreateDbParameter<T>(string? name, DbType type, T value);
+DbParameter AddParameterWithValue<T>(DbType type, T value, ParameterDirection direction);
+DbParameter AddParameterWithValue<T>(string? name, DbType type, T value, ParameterDirection direction);
+
+// Add pre-constructed
 void AddParameter(DbParameter parameter);
 void AddParameters(IEnumerable<DbParameter> list);
+
+// Get/Set values
 void SetParameterValue(string name, object? value);
 object? GetParameterValue(string name);
-T? GetParameterValue<T>(string name);
+T GetParameterValue<T>(string name);
 ```
 
-### Query Execution
+### Query Execution (all return ValueTask)
 
 ```csharp
-Task<int> ExecuteNonQueryAsync(CommandType type = CommandType.Text);
-Task<T?> ExecuteScalarAsync<T>(CommandType type = CommandType.Text);
-Task<ITrackedReader> ExecuteReaderAsync(CommandType type = CommandType.Text);
+ValueTask<int> ExecuteNonQueryAsync(CommandType type = CommandType.Text);
+ValueTask<int> ExecuteNonQueryAsync(CommandType type, CancellationToken ct);
+
+ValueTask<T?> ExecuteScalarAsync<T>(CommandType type = CommandType.Text);
+ValueTask<T?> ExecuteScalarAsync<T>(CommandType type, CancellationToken ct);
+
+ValueTask<ITrackedReader> ExecuteReaderAsync(CommandType type = CommandType.Text);
+ValueTask<ITrackedReader> ExecuteReaderAsync(CommandType type, CancellationToken ct);
 ```
 
-### Other
+**Extension method (on SqlContainer):**
+```csharp
+ValueTask<T?> ExecuteScalarWriteAsync<T>(CommandType type = CommandType.Text, CancellationToken ct = default);
+```
+
+### Clone and Lifecycle
 
 ```csharp
-void Clear();                              // Clear query and parameters
-ISqlContainer WrapForStoredProc(ExecutionType type, bool includeParams = true);
+ISqlContainer Clone();                        // Clone with same context
+ISqlContainer Clone(IDatabaseContext? context); // Clone with different context
+void Clear();                                  // Clear query and parameters
+DbCommand CreateCommand(ITrackedConnection conn); // Create command for connection
+```
+
+### Stored Procedure Support
+
+```csharp
+string WrapForStoredProc(ExecutionType type, bool includeParameters = true, bool captureReturn = false);
 ```
 
 ## IDatabaseContext
@@ -112,8 +195,15 @@ Note: Direct connection access is internal-only; use `ISqlContainer` for executi
 ### Transaction Management
 
 ```csharp
-ITransactionContext BeginTransaction(IsolationLevel? level = null, ExecutionType type = ExecutionType.Write);
-ITransactionContext BeginTransaction(IsolationProfile profile, ExecutionType type = ExecutionType.Write);
+ITransactionContext BeginTransaction(
+    IsolationLevel? level = null,
+    ExecutionType type = ExecutionType.Write,
+    bool? readOnly = null);
+
+ITransactionContext BeginTransaction(
+    IsolationProfile profile,
+    ExecutionType type = ExecutionType.Write,
+    bool? readOnly = null);
 ```
 
 ### SQL Container Creation
@@ -219,7 +309,7 @@ public interface IAuditValues
 
 ## TenantContextRegistry
 
-For multi-tenancy with **different database types per tenant**:
+For multi-tenancy:
 
 ```csharp
 public class TenantContextRegistry
@@ -228,47 +318,3 @@ public class TenantContextRegistry
     void RegisterContext(string tenantId, IDatabaseContext context);
 }
 ```
-
-**How the optional context parameter works:**
-- **Omit context:** Uses the default context from TableGateway constructor
-- **Pass context:** Uses that context instead
-
-**Usage Pattern - Different Databases Per Tenant:**
-
-```csharp
-// DI registration - single TableGateway instance for all tenants
-services.AddSingleton<ITableGateway<Order, long>>(sp =>
-    new OrderGateway(defaultContext));  // Used when context param omitted
-
-// Non-multi-tenant: omit context parameter (uses defaultContext)
-var order = await gateway.RetrieveOneAsync(orderId);
-
-// Multi-tenant: resolve tenant context and pass to CRUD methods
-var registry = services.GetRequiredService<ITenantContextRegistry>();
-var tenantCtx = registry.GetContext("enterprise-client");  // Any database type
-
-// Get gateway from DI and pass tenant context to methods
-var gateway = services.GetRequiredService<ITableGateway<Order, long>>();
-
-// All operations use tenant's database
-var order = await gateway.RetrieveOneAsync(orderId, tenantCtx);
-await gateway.CreateAsync(newOrder, tenantCtx);
-await gateway.UpdateAsync(order, tenantCtx);
-await gateway.DeleteAsync(orderId, tenantCtx);
-```
-
-**All CRUD methods accept optional context parameter:**
-- `CreateAsync(entity, tenantContext)` - Inserts to tenant's database
-- `RetrieveOneAsync(id, tenantContext)` - Selects from tenant's database
-- `RetrieveAsync(ids, tenantContext)` - Selects multiple from tenant's database
-- `UpdateAsync(entity, tenantContext)` - Updates in tenant's database
-- `DeleteAsync(id, tenantContext)` - Deletes from tenant's database
-- `UpsertAsync(entity, tenantContext)` - Upserts to tenant's database
-
-**This enables:**
-- ✅ Physical database separation (no tenant_id WHERE filtering needed)
-- ✅ Single TableGateway instance for all tenants (singleton-safe)
-- ✅ Each tenant uses different database type (PostgreSQL, SQL Server, MySQL, etc.)
-- ✅ SQL automatically generated with tenant's dialect (parameter markers, quoting)
-- ✅ Connection pooling per tenant context
-- ✅ Type safety across all database types

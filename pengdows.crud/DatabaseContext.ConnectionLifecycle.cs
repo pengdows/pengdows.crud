@@ -27,7 +27,6 @@ using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.@internal;
 using pengdows.crud.infrastructure;
-using pengdows.crud.threading;
 using pengdows.crud.wrappers;
 
 namespace pengdows.crud;
@@ -113,11 +112,13 @@ public partial class DatabaseContext
     }
 
     /// <summary>
-    /// Applies connection session settings for non-Standard modes.
+    /// Executes session settings on the given connection as a single command.
+    /// Skips execution if detection has not completed, dialect is null,
+    /// or the connection has already had settings applied.
     /// </summary>
-    internal void ApplyConnectionSessionSettings(IDbConnection connection)
+    internal void ExecuteSessionSettings(IDbConnection connection, bool readOnly)
     {
-        if (ConnectionMode == DbMode.Standard || !_sessionSettingsDetectionCompleted || _dialect == null)
+        if (!_sessionSettingsDetectionCompleted || _dialect == null)
         {
             return;
         }
@@ -128,101 +129,20 @@ public partial class DatabaseContext
             return;
         }
 
-        _logger.LogInformation("Applying connection session settings");
-        var sessionSettings = _dialect.GetConnectionSessionSettings(this, IsReadOnlyConnection);
-        if (string.IsNullOrWhiteSpace(sessionSettings))
+        var settings = _dialect.GetConnectionSessionSettings(this, readOnly);
+        if (!string.IsNullOrWhiteSpace(settings))
         {
-            if (tracked != null)
-            {
-                tracked.LocalState.SessionSettingsApplied = true;
-            }
-
-            return;
-        }
-
-        foreach (var part in sessionSettings.Split(';'))
-        {
-            var stmt = part.Trim();
-            if (string.IsNullOrEmpty(stmt))
-            {
-                continue;
-            }
-
+            _logger.LogInformation("Applying session settings for {Name}", Name);
             try
             {
                 using var cmd = connection.CreateCommand();
-                cmd.CommandText = stmt; // no trailing ';'
+                cmd.CommandText = settings;
                 cmd.ExecuteNonQuery();
             }
             catch (Exception ex)
             {
-                _logger.LogError("Error setting session settings:" + ex.Message);
+                _logger.LogError(ex, "Failed to apply session settings for {Name}", Name);
             }
-        }
-
-        if (tracked != null)
-        {
-            tracked.LocalState.SessionSettingsApplied = true;
-        }
-    }
-
-    /// <summary>
-    /// Applies persistent connection session settings (for KeepAlive/SingleWriter/SingleConnection modes).
-    /// </summary>
-    public void ApplyPersistentConnectionSessionSettings(IDbConnection connection)
-    {
-        if (ConnectionMode == DbMode.Standard || !_sessionSettingsDetectionCompleted)
-        {
-            return;
-        }
-
-        // Skip if dialect hasn't been initialized yet (happens during constructor)
-        if (_dialect == null)
-        {
-            return;
-        }
-
-        var tracked = connection as ITrackedConnection;
-        if (tracked?.LocalState.SessionSettingsApplied == true)
-        {
-            return;
-        }
-
-        _logger.LogInformation("Applying persistent connection session settings");
-
-        // For persistent connections in SingleConnection/SingleWriter mode,
-        // use the dialect's session settings which include read-only settings when appropriate
-        var sessionSettings = _dialect.GetConnectionSessionSettings(this, IsReadOnlyConnection);
-
-        if (string.IsNullOrWhiteSpace(sessionSettings))
-        {
-            if (tracked != null)
-            {
-                tracked.LocalState.SessionSettingsApplied = true;
-            }
-
-            return;
-        }
-
-        try
-        {
-            var parts = sessionSettings.Split(';');
-            foreach (var part in parts)
-            {
-                var stmt = part.Trim();
-                if (string.IsNullOrEmpty(stmt))
-                {
-                    continue;
-                }
-
-                using var cmd = connection.CreateCommand();
-                cmd.CommandText = stmt; // no trailing ';'
-                cmd.ExecuteNonQuery();
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError("Error setting session settings:" + ex.Message);
         }
 
         if (tracked != null)
@@ -293,57 +213,20 @@ public partial class DatabaseContext
         // Ensure session settings from the active dialect are applied on first open for all modes.
         Action<DbConnection>? firstOpenHandler = conn =>
         {
-            ILockerAsync? guard = null;
             try
             {
-                guard = GetLock();
-                guard.Lock();
-                if (_sessionSettingsDetectionCompleted && _dialect != null)
+                if (trackedConnection != null)
                 {
-                    if (trackedConnection?.LocalState.SessionSettingsApplied != true)
-                    {
-                        _logger.LogInformation("Applying connection session settings");
-                        var settings = _dialect.GetConnectionSessionSettings(this, readOnly) ?? string.Empty;
-                        if (!string.IsNullOrWhiteSpace(settings))
-                        {
-                            // Execute one statement at a time. Do not auto-append semicolons.
-                            var parts = settings.Split(';');
-                            foreach (var part in parts)
-                            {
-                                var stmt = part.Trim();
-                                if (string.IsNullOrEmpty(stmt))
-                                {
-                                    continue;
-                                }
-
-                                using var cmd = conn.CreateCommand();
-                                cmd.CommandText = stmt; // no trailing ';'
-                                cmd.ExecuteNonQuery();
-                            }
-
-                        }
-
-                        if (trackedConnection != null)
-                        {
-                            trackedConnection.LocalState.SessionSettingsApplied = true;
-                        }
-                    }
+                    ExecuteSessionSettings(trackedConnection, readOnly);
+                }
+                else
+                {
+                    ExecuteSessionSettings(conn, readOnly);
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to apply session settings on first open for {Name}", Name);
-            }
-            finally
-            {
-                if (guard is IAsyncDisposable gad)
-                {
-                    gad.DisposeAsync().GetAwaiter().GetResult();
-                }
-                else if (guard is IDisposable gd)
-                {
-                    gd.Dispose();
-                }
             }
 
             // Invoke any additional callback provided by caller

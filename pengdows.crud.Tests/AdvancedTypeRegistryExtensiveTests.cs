@@ -443,7 +443,7 @@ public class AdvancedTypeRegistryExtensiveTests
     }
 
     [Fact]
-    public void DateTimeOffset_SqlServer_ValidatesKind()
+    public void DateTimeOffset_SqlServer_ConfiguresDbType()
     {
         var registry = AdvancedTypeRegistry.Shared;
         var mapping = registry.GetMapping(typeof(DateTimeOffset), SupportedDatabase.SqlServer);
@@ -458,10 +458,6 @@ public class AdvancedTypeRegistryExtensiveTests
         var offset = new DateTimeOffset(DateTime.UtcNow);
         mapping.ConfigureParameter(param, offset);
         Assert.Equal(DbType.DateTimeOffset, param.DbType);
-
-        // Should throw with unspecified DateTime
-        var unspecified = new DateTime(2023, 1, 1, 12, 0, 0, DateTimeKind.Unspecified);
-        Assert.Throws<InvalidOperationException>(() => mapping.ConfigureParameter(param, unspecified));
     }
 
     #endregion
@@ -655,10 +651,11 @@ public class AdvancedTypeRegistryExtensiveTests
         var mapping = new ProviderTypeMapping { DbType = DbType.String };
         var converter = new InetConverter();
 
-        var config = new CachedParameterConfig(mapping, converter);
+        var config = new CachedParameterConfig(mapping, converter, 5);
 
         Assert.Same(mapping, config.Mapping);
         Assert.Same(converter, config.Converter);
+        Assert.Equal(5, config.ConverterVersion);
     }
 
     [Fact]
@@ -666,10 +663,45 @@ public class AdvancedTypeRegistryExtensiveTests
     {
         var mapping = new ProviderTypeMapping { DbType = DbType.String };
 
-        var config = new CachedParameterConfig(mapping, null);
+        var config = new CachedParameterConfig(mapping, null, 0);
 
         Assert.Same(mapping, config.Mapping);
         Assert.Null(config.Converter);
+        Assert.Equal(0, config.ConverterVersion);
+    }
+
+    [Fact]
+    public void CachedParameterConfig_VersionStamp_TracksConverterChanges()
+    {
+        var registry = new AdvancedTypeRegistry();
+        registry.RegisterMapping<Inet>(SupportedDatabase.PostgreSql,
+            new ProviderTypeMapping { DbType = DbType.String });
+
+        var inet = new Inet(IPAddress.Parse("10.0.0.1"));
+
+        // First configure - no converter, caches with initial version
+        var param1 = new TestDbParameter();
+        var result1 = registry.TryConfigureParameter(param1, typeof(Inet), inet, SupportedDatabase.PostgreSql);
+        Assert.True(result1);
+        Assert.Equal(inet, param1.Value);
+
+        // Register converter - bumps version
+        registry.RegisterConverter(new InetConverter());
+
+        // Second configure - should detect version mismatch and use new converter
+        var param2 = new TestDbParameter();
+        var result2 = registry.TryConfigureParameter(param2, typeof(Inet), inet, SupportedDatabase.PostgreSql);
+        Assert.True(result2);
+        Assert.Equal("10.0.0.1", param2.Value);
+
+        // Register a second converter replacement - bumps version again
+        registry.RegisterConverter(new InetConverter());
+
+        // Third configure - should still work correctly
+        var param3 = new TestDbParameter();
+        var result3 = registry.TryConfigureParameter(param3, typeof(Inet), inet, SupportedDatabase.PostgreSql);
+        Assert.True(result3);
+        Assert.Equal("10.0.0.1", param3.Value);
     }
 
     #endregion

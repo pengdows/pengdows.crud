@@ -75,11 +75,6 @@ internal class SingleConnectionStrategy : SafeAsyncDisposableBase, IConnectionSt
 
     public void PostInitialize(ITrackedConnection? connection)
     {
-        if (connection != null)
-        {
-            _context.ApplyPersistentConnectionSessionSettings(connection);
-        }
-
         _context.SetPersistentConnection(connection);
     }
 
@@ -96,18 +91,8 @@ internal class SingleConnectionStrategy : SafeAsyncDisposableBase, IConnectionSt
 
     public ValueTask ReleaseConnectionAsync(ITrackedConnection? connection)
     {
-        if (connection == null || ReferenceEquals(connection, _context.PersistentConnection))
-        {
-            return ValueTask.CompletedTask;
-        }
-
-        if (connection is IAsyncDisposable asyncDisposable)
-        {
-            return asyncDisposable.DisposeAsync();
-        }
-
-        connection.Dispose();
-        return ValueTask.CompletedTask;
+        return StandardConnectionStrategy.ReleaseNonPersistentConnectionAsync(
+            connection, _context.PersistentConnection);
     }
 
     public (ISqlDialect? dialect, IDataSourceInformation? dataSourceInfo) HandleDialectDetection(

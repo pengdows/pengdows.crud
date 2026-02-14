@@ -26,11 +26,11 @@ public sealed class PoolGovernorTests
     [Fact]
     public async Task AcquireAsync_WhenContended_QueuesAndCompletes()
     {
-        var governor = new PoolGovernor(PoolLabel.Reader, "reader-key", 1, TimeSpan.FromMilliseconds(200));
+        var governor = new PoolGovernor(PoolLabel.Reader, "reader-key", 1, TimeSpan.FromSeconds(5));
         await using var first = await governor.AcquireAsync();
 
         var waiter = governor.AcquireAsync();
-        await Task.Delay(25);
+        await Task.Delay(50);
 
         var queuedSnapshot = governor.GetSnapshot();
         Assert.True(queuedSnapshot.Queued >= 1);

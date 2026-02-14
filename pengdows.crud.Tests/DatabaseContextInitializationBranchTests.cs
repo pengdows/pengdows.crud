@@ -27,21 +27,4 @@ public class DatabaseContextInitializationBranchTests
         Assert.Equal(expected, result!.ToString());
     }
 
-    [Theory]
-    [InlineData(null, false)]
-    [InlineData("", false)]
-    [InlineData("emulatedproduct=unknown", true)]
-    [InlineData("EmulatedProduct=Unknown;Other=Value", true)]
-    [InlineData("emulatedproduct=postgres", false)]
-    public void IsEmulatedUnknown_DetectsMarker(string? connectionString, bool expected)
-    {
-        var method = typeof(DatabaseContext).GetMethod(
-            "IsEmulatedUnknown",
-            BindingFlags.NonPublic | BindingFlags.Static);
-
-        Assert.NotNull(method);
-        var result = (bool)method!.Invoke(null, new object?[] { connectionString })!;
-
-        Assert.Equal(expected, result);
-    }
 }

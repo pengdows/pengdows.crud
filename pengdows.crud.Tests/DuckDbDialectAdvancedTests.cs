@@ -262,13 +262,13 @@ public class DuckDbDialectAdvancedTests
     }
 
     [Fact]
-    public void GetConnectionSessionSettings_Should_Return_Read_Only_Pragma_When_ReadOnly()
+    public void GetConnectionSessionSettings_Should_Return_SetAccessMode_When_ReadOnly()
     {
         var context = new DatabaseContext("test", _factory);
 
         var settings = _dialect.GetConnectionSessionSettings(context, true);
 
-        Assert.Equal("PRAGMA read_only = 1;", settings);
+        Assert.Equal("SET access_mode = 'read_only';", settings);
     }
 
     [Fact]
@@ -279,6 +279,14 @@ public class DuckDbDialectAdvancedTests
         var settings = _dialect.GetConnectionSessionSettings(context, false);
 
         Assert.Equal(string.Empty, settings);
+    }
+
+    [Fact]
+    public void GetReadOnlySessionSettings_Should_Return_SetAccessMode()
+    {
+        var settings = _dialect.GetReadOnlySessionSettings();
+
+        Assert.Equal("SET access_mode = 'read_only';", settings);
     }
 
     [Fact]

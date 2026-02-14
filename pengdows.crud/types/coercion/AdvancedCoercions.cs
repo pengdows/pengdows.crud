@@ -82,12 +82,6 @@ public class PostgreSqlIntervalCoercion : DbCoercion<PostgreSqlInterval>
             return false;
         }
 
-        if (src.RawValue is null)
-        {
-            value = default;
-            return false;
-        }
-
         var raw = src.RawValue;
         if (raw is null)
         {
@@ -125,12 +119,6 @@ public class IntervalYearMonthCoercion : DbCoercion<IntervalYearMonth>
     public override bool TryRead(in DbValue src, out IntervalYearMonth value)
     {
         if (src.IsNull)
-        {
-            value = default;
-            return false;
-        }
-
-        if (src.RawValue is null)
         {
             value = default;
             return false;
@@ -183,12 +171,6 @@ public class IntervalDaySecondCoercion : DbCoercion<IntervalDaySecond>
     public override bool TryRead(in DbValue src, out IntervalDaySecond value)
     {
         if (src.IsNull)
-        {
-            value = default;
-            return false;
-        }
-
-        if (src.RawValue is null)
         {
             value = default;
             return false;

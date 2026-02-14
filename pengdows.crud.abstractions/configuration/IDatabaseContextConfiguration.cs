@@ -19,6 +19,12 @@ public interface IDatabaseContextConfiguration
     string ConnectionString { get; set; }
 
     /// <summary>
+    /// Gets or sets the connection string used for read-only operations.
+    /// When empty, the write connection string is used as the base.
+    /// </summary>
+    string ReadOnlyConnectionString { get; set; }
+
+    /// <summary>
     /// Gets or sets the ADO.NET provider invariant name.
     /// </summary>
     string ProviderName { get; set; }

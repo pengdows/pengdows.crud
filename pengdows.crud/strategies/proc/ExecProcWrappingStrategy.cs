@@ -36,12 +36,7 @@ internal class ExecProcWrappingStrategy : IProcWrappingStrategy
     public string Wrap(string procName, ExecutionType executionType, string args,
         Func<string, string>? wrapObjectName = null)
     {
-        if (string.IsNullOrWhiteSpace(procName))
-        {
-            throw new ArgumentException(IProcWrappingStrategy.ProcNameNullOrEmptyMessage, nameof(procName));
-        }
-
-        var wrappedProcName = wrapObjectName?.Invoke(procName) ?? procName;
+        var wrappedProcName = IProcWrappingStrategy.ValidateAndWrap(procName, wrapObjectName);
         return string.IsNullOrWhiteSpace(args) ? $"EXEC {wrappedProcName}" : $"EXEC {wrappedProcName} {args}";
     }
 }

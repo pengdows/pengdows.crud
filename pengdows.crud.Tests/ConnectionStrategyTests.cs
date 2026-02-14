@@ -140,7 +140,9 @@ public class ConnectionStrategyTests
             ReadWriteMode = ReadWriteMode.ReadWrite
         };
         using var ctx = new DatabaseContext(cfg, factory);
-        Assert.Contains("PRAGMA foreign_keys = ON", factory.Connection.ExecutedCommands);
+        // Settings are now sent as a single command (may include semicolons)
+        Assert.Contains(factory.Connection.ExecutedCommands,
+            cmd => cmd.Contains("PRAGMA foreign_keys = ON"));
     }
 
     [Fact]
@@ -607,7 +609,7 @@ public class ConnectionStrategyTests
     // Additional coverage tests for SingleConnectionStrategy
 
     [Fact]
-    public void SingleConnection_PostInitialize_AppliesSettingsAndSetsPersistent()
+    public void SingleConnection_PostInitialize_SetsPersistentOnly()
     {
         var factory = new RecordingFactory(SupportedDatabase.Sqlite);
         var cfg = new DatabaseContextConfiguration
@@ -619,13 +621,14 @@ public class ConnectionStrategyTests
         using var ctx = new DatabaseContext(cfg, factory);
 
         var connection = ctx.GetConnection(ExecutionType.Read);
+        var commandCountBefore = factory.Connection.ExecutedCommands.Count;
         var strategy = new SingleConnectionStrategy(ctx);
 
-        // PostInitialize should apply settings and set persistent connection
+        // PostInitialize should only set persistent connection, not apply settings
         strategy.PostInitialize(connection);
 
-        // Verify session settings were applied (should have PRAGMA commands)
-        Assert.Contains("PRAGMA foreign_keys = ON", factory.Connection.ExecutedCommands);
+        // No additional commands should have been executed by PostInitialize itself
+        Assert.Equal(commandCountBefore, factory.Connection.ExecutedCommands.Count);
 
         // Verify persistent connection was set
         Assert.Same(connection, ctx.PersistentConnection);

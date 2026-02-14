@@ -88,6 +88,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     private readonly ISqlDialect _dialect;
     private readonly ILogger<TransactionContext> _logger;
     private readonly SemaphoreSlim _userLock;
+    private readonly ReusableAsyncLocker _reusableLocker;
     private readonly SemaphoreSlim _completionLock;
     private readonly IDbTransaction _transaction;
     private readonly IsolationLevel _resolvedIsolationLevel;
@@ -149,9 +150,13 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             throw new InvalidOperationException("IDatabaseContext must provide internal connection access.");
         }
 
-        _connection = connectionProvider.GetConnection(executionType.Value, true);
+        // isShared=false: The TransactionContext's own _userLock serializes all operations
+        // on this pinned connection. A second lock on the connection itself would be redundant
+        // double-locking that adds measurable overhead (e.g., WriteStorm scenarios).
+        _connection = connectionProvider.GetConnection(executionType.Value, false);
         EnsureConnectionIsOpen();
         _userLock = new SemaphoreSlim(1, 1);
+        _reusableLocker = new ReusableAsyncLocker(_userLock);
         _completionLock = new SemaphoreSlim(1, 1);
 
         _resolvedIsolationLevel = isolationLevel;
@@ -256,7 +261,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             throw new InvalidOperationException("Transaction already completed.");
         }
 
-        return new RealAsyncLocker(_userLock);
+        return _reusableLocker;
     }
 
     protected override void ValidateCanCreateContainer()

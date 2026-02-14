@@ -58,14 +58,27 @@ internal class MySqlDialect : SqlDialect
 
     private static readonly Version UpsertAliasVersionThreshold = new(8, 0, 20);
 
+    private const int DefaultMySqlConnectionTimeout = 15;
+
+    private static readonly string[] ConnectionTimeoutKeys =
+    {
+        "Connection Timeout", "ConnectionTimeout", "Connect Timeout"
+    };
+
     private string? _sessionSettings;
     private readonly bool _isMySqlConnector;
 
     internal MySqlDialect(DbProviderFactory factory, ILogger logger)
+        : this(factory, logger,
+            (factory.GetType().Namespace ?? string.Empty)
+                .Contains("MySqlConnector", StringComparison.OrdinalIgnoreCase))
+    {
+    }
+
+    internal MySqlDialect(DbProviderFactory factory, ILogger logger, bool isMySqlConnector)
         : base(factory, logger)
     {
-        var ns = factory.GetType().Namespace ?? string.Empty;
-        _isMySqlConnector = ns.Contains("MySqlConnector", StringComparison.OrdinalIgnoreCase);
+        _isMySqlConnector = isMySqlConnector;
     }
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.MySql;
@@ -227,22 +240,63 @@ internal class MySqlDialect : SqlDialect
 
     public override void TryEnterReadOnlyTransaction(ITransactionContext transaction)
     {
-        try
-        {
-            using var sc = transaction.CreateSqlContainer(SetSessionTransactionReadOnlySql);
-            sc.ExecuteNonQueryAsync().GetAwaiter().GetResult();
-        }
-        catch (Exception ex)
-        {
-            Logger.LogDebug(ex, "Failed to apply MySQL read-only session settings");
-        }
+        TryExecuteReadOnlySql(transaction, SetSessionTransactionReadOnlySql, "MySQL");
     }
 
     // Connection pooling properties for MySQL (provider-aware)
-    public override bool SupportsExternalPooling => true;
-    public override string? PoolingSettingName => "Pooling";
+    // SupportsExternalPooling, PoolingSettingName, DefaultMaxPoolSize inherited from base (true, "Pooling", 100)
     public override string? MinPoolSizeSettingName => _isMySqlConnector ? "MinimumPoolSize" : "Min Pool Size";
     public override string? MaxPoolSizeSettingName => _isMySqlConnector ? "MaximumPoolSize" : "Max Pool Size";
-    public override string? ApplicationNameSettingName => "Application Name";
-    internal override int DefaultMaxPoolSize => 100;
+    public override string? ApplicationNameSettingName =>
+        _isMySqlConnector ? "Application Name" : null;
+
+    internal override string GetReadOnlyConnectionString(string connectionString)
+    {
+        if (_isMySqlConnector)
+        {
+            // MySqlConnector supports ApplicationName; pool split handled by
+            // ApplyApplicationNameSuffix in BuildReaderConnectionString.
+            return connectionString;
+        }
+
+        // Oracle MySql.Data does not support ApplicationName.
+        // Use Connection Timeout delta (+1s) to create a distinct connection string
+        // that forces a separate connection pool for read-only connections.
+        return ApplyConnectionTimeoutDelta(connectionString);
+    }
+
+    private string ApplyConnectionTimeoutDelta(string connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            return connectionString;
+        }
+
+        try
+        {
+            var builder = Factory.CreateConnectionStringBuilder()
+                          ?? new DbConnectionStringBuilder();
+            builder.ConnectionString = connectionString;
+
+            var currentTimeout = DefaultMySqlConnectionTimeout;
+            foreach (var key in ConnectionTimeoutKeys)
+            {
+                if (builder.TryGetValue(key, out var value) &&
+                    int.TryParse(value?.ToString(), out var parsed) &&
+                    parsed > 0)
+                {
+                    currentTimeout = parsed;
+                    break;
+                }
+            }
+
+            builder["Connection Timeout"] = currentTimeout + 1;
+            return builder.ConnectionString;
+        }
+        catch
+        {
+            // Fallback: append directly
+            return $"{connectionString};Connection Timeout={DefaultMySqlConnectionTimeout + 1}";
+        }
+    }
 }

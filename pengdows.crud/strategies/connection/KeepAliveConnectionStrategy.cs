@@ -61,11 +61,6 @@ internal class KeepAliveConnectionStrategy : StandardConnectionStrategy
 
     public override void PostInitialize(ITrackedConnection? connection)
     {
-        if (connection != null)
-        {
-            _context.ApplyConnectionSessionSettings(connection);
-        }
-
         _context.SetPersistentConnection(connection);
     }
 
@@ -115,18 +110,7 @@ internal class KeepAliveConnectionStrategy : StandardConnectionStrategy
 
     public override ValueTask ReleaseConnectionAsync(ITrackedConnection? connection)
     {
-        if (connection == null || ReferenceEquals(connection, _context.PersistentConnection))
-        {
-            return ValueTask.CompletedTask;
-        }
-
-        if (connection is IAsyncDisposable asyncDisposable)
-        {
-            return asyncDisposable.DisposeAsync();
-        }
-
-        connection.Dispose();
-        return ValueTask.CompletedTask;
+        return ReleaseNonPersistentConnectionAsync(connection, _context.PersistentConnection);
     }
 
     public override (ISqlDialect? dialect, IDataSourceInformation? dataSourceInfo) HandleDialectDetection(

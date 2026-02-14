@@ -12,6 +12,7 @@ public class DatabaseContextConfigurationTests
         var config = new DatabaseContextConfiguration();
 
         Assert.Equal(string.Empty, config.ConnectionString);
+        Assert.Equal(string.Empty, config.ReadOnlyConnectionString);
         Assert.Equal(string.Empty, config.ProviderName);
         Assert.Equal(DbMode.Best, config.DbMode);
         Assert.Equal(ReadWriteMode.ReadWrite, config.ReadWriteMode);
@@ -26,6 +27,17 @@ public class DatabaseContextConfigurationTests
         config.ConnectionString = connectionString;
 
         Assert.Equal(connectionString, config.ConnectionString);
+    }
+
+    [Fact]
+    public void ReadOnlyConnectionString_CanBeSetAndRetrieved()
+    {
+        var config = new DatabaseContextConfiguration();
+        const string connectionString = "Server=localhost;Database=test;ApplicationIntent=ReadOnly;";
+
+        config.ReadOnlyConnectionString = connectionString;
+
+        Assert.Equal(connectionString, config.ReadOnlyConnectionString);
     }
 
     [Fact]
@@ -74,14 +86,17 @@ public class DatabaseContextConfigurationTests
     {
         var config = new DatabaseContextConfiguration();
         const string connectionString = "Server=localhost;Database=test;";
+        const string readOnlyConnectionString = "Server=localhost;Database=test;ApplicationIntent=ReadOnly;";
         const string providerName = "System.Data.SqlClient";
 
         config.ConnectionString = connectionString;
+        config.ReadOnlyConnectionString = readOnlyConnectionString;
         config.ProviderName = providerName;
         config.DbMode = DbMode.KeepAlive;
         config.ReadWriteMode = ReadWriteMode.WriteOnly;
 
         Assert.Equal(connectionString, config.ConnectionString);
+        Assert.Equal(readOnlyConnectionString, config.ReadOnlyConnectionString);
         Assert.Equal(providerName, config.ProviderName);
         Assert.Equal(DbMode.KeepAlive, config.DbMode);
         Assert.Equal(ReadWriteMode.ReadWrite, config.ReadWriteMode);

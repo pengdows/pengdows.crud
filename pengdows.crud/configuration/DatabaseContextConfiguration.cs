@@ -42,6 +42,11 @@ public class DatabaseContextConfiguration : IDatabaseContextConfiguration
     public string ConnectionString { get; set; } = string.Empty;
 
     /// <summary>
+    /// Read-only connection string. When empty, the write connection string is used as the base.
+    /// </summary>
+    public string ReadOnlyConnectionString { get; set; } = string.Empty;
+
+    /// <summary>
     /// Database provider name (e.g., "System.Data.SqlClient", "Npgsql").
     /// </summary>
     public string ProviderName { get; set; } = string.Empty;

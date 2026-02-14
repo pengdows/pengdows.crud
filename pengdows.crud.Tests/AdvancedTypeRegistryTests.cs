@@ -219,6 +219,7 @@ public class AdvancedTypeRegistryTests
         Assert.NotNull(registry.GetConverter(typeof(RowVersion)));
         Assert.NotNull(registry.GetConverter(typeof(Stream)));
         Assert.NotNull(registry.GetConverter(typeof(TextReader)));
+        Assert.NotNull(registry.GetConverter(typeof(JsonDocument)));
     }
 
     // Mock parameter class for testing

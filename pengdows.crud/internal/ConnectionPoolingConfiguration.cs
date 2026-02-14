@@ -45,6 +45,14 @@ internal static class ConnectionPoolingConfiguration
         "MinimumPoolSize"
     };
 
+    private static readonly string[] MaxPoolKeyCandidates =
+    {
+        "Max Pool Size",
+        "MaxPoolSize",
+        "Maximum Pool Size",
+        "MaximumPoolSize"
+    };
+
     private static readonly string[] MinPoolPropertyCandidates =
     {
         "MinPoolSize",
@@ -403,6 +411,58 @@ internal static class ConnectionPoolingConfiguration
             builder[maxPoolSizeSettingName] = maxPoolSize;
             var result = builder.ConnectionString;
 
+            if (SensitiveValuesStripped(connectionString, result))
+            {
+                return ReapplyModifications(connectionString, builder);
+            }
+
+            return result;
+        }
+        catch
+        {
+            return connectionString;
+        }
+    }
+
+    /// <summary>
+    /// Removes Max Pool Size settings when the provider does not support them.
+    /// Intended for providers like SQLite (Microsoft.Data.Sqlite) and DuckDB.
+    /// </summary>
+    public static string StripUnsupportedMaxPoolSize(
+        string connectionString,
+        string? maxPoolSizeSettingName,
+        DbConnectionStringBuilder? builder = null)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString) || !string.IsNullOrWhiteSpace(maxPoolSizeSettingName))
+        {
+            return connectionString;
+        }
+
+        try
+        {
+            builder ??= new DbConnectionStringBuilder { ConnectionString = connectionString };
+
+            if (RepresentsRawConnectionString(builder, connectionString))
+            {
+                return connectionString;
+            }
+
+            var modified = false;
+            foreach (var key in MaxPoolKeyCandidates)
+            {
+                if (builder.ContainsKey(key))
+                {
+                    builder.Remove(key);
+                    modified = true;
+                }
+            }
+
+            if (!modified)
+            {
+                return connectionString;
+            }
+
+            var result = builder.ConnectionString;
             if (SensitiveValuesStripped(connectionString, result))
             {
                 return ReapplyModifications(connectionString, builder);

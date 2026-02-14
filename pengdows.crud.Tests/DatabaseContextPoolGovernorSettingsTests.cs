@@ -47,12 +47,13 @@ public sealed class DatabaseContextPoolGovernorSettingsTests
 
         Assert.False(reader.Disabled);
         Assert.False(writer.Disabled);
+        // Reader and writer have independent governors with their own configured limits
         Assert.Equal(3, reader.MaxPermits);
-        Assert.Equal(3, writer.MaxPermits);
+        Assert.Equal(4, writer.MaxPermits);
     }
 
     [Fact]
-    public void SharedPools_UseLowerMaxWhenReadWriteLimitsDiffer()
+    public void IndependentPools_RetainConfiguredReadWriteLimits()
     {
         var config = new DatabaseContextConfiguration
         {
@@ -71,8 +72,9 @@ public sealed class DatabaseContextPoolGovernorSettingsTests
 
         Assert.False(reader.Disabled);
         Assert.False(writer.Disabled);
+        // Reader and writer have independent governors with their own configured limits
         Assert.Equal(5, reader.MaxPermits);
-        Assert.Equal(5, writer.MaxPermits);
+        Assert.Equal(10, writer.MaxPermits);
     }
 
     [Fact]

@@ -44,4 +44,21 @@ internal interface IProcWrappingStrategy
     /// <param name="wrapObjectName">Optional callback to quote identifiers properly for the target database.</param>
     /// <returns>Complete SQL statement to execute the stored procedure.</returns>
     string Wrap(string procName, ExecutionType executionType, string args, Func<string, string>? wrapObjectName = null);
+
+    /// <summary>
+    /// Validates that a procedure name is not null/empty and applies optional identifier wrapping.
+    /// Shared by all strategy implementations to eliminate duplicated validation logic.
+    /// </summary>
+    /// <param name="procName">The procedure name to validate.</param>
+    /// <param name="wrapObjectName">Optional callback to quote identifiers.</param>
+    /// <returns>The validated and optionally wrapped procedure name.</returns>
+    static string ValidateAndWrap(string procName, Func<string, string>? wrapObjectName)
+    {
+        if (string.IsNullOrWhiteSpace(procName))
+        {
+            throw new ArgumentException(ProcNameNullOrEmptyMessage, nameof(procName));
+        }
+
+        return wrapObjectName?.Invoke(procName) ?? procName;
+    }
 }

@@ -45,7 +45,6 @@ public class Program
         {
             AddLogger(ConsoleLogger.Default);
             AddColumnProvider(DefaultColumnProviders.Instance);
-            AddJob(Job.Default);
             AddExporter(MarkdownExporter.GitHub);
             AddExporter(CsvExporter.Default);
             AddExporter(HtmlExporter.Default);

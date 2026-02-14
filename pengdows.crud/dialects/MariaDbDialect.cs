@@ -44,6 +44,11 @@ internal class MariaDbDialect : MySqlDialect
     {
     }
 
+    internal MariaDbDialect(DbProviderFactory factory, ILogger logger, bool isMySqlConnector)
+        : base(factory, logger, isMySqlConnector)
+    {
+    }
+
     // Only override what's different from MySQL
     public override SupportedDatabase DatabaseType => SupportedDatabase.MariaDb;
 
@@ -109,15 +114,7 @@ internal class MariaDbDialect : MySqlDialect
 
     public override void TryEnterReadOnlyTransaction(ITransactionContext transaction)
     {
-        try
-        {
-            using var sc = transaction.CreateSqlContainer(SetSessionTransactionReadOnlySql);
-            sc.ExecuteNonQueryAsync().GetAwaiter().GetResult();
-        }
-        catch (Exception ex)
-        {
-            Logger.LogDebug(ex, "Failed to apply MariaDB read-only session settings");
-        }
+        TryExecuteReadOnlySql(transaction, SetSessionTransactionReadOnlySql, "MariaDB");
     }
 
     private bool IsAtLeast(int major, int minor)
@@ -132,9 +129,7 @@ internal class MariaDbDialect : MySqlDialect
     }
 
     // Connection pooling properties for MariaDB
-    public override bool SupportsExternalPooling => true;
-    public override string? PoolingSettingName => "Pooling";
+    // SupportsExternalPooling, PoolingSettingName inherited from MySqlDialect -> base (true, "Pooling")
     public override string? MinPoolSizeSettingName => "Min Pool Size";
     public override string? MaxPoolSizeSettingName => "Max Pool Size";
-    public override string? ApplicationNameSettingName => "Application Name";
 }

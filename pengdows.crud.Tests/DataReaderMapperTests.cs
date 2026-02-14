@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Data.Common;
 using System.Reflection;
 using System.Threading.Tasks;
 using pengdows.crud.attributes;
@@ -503,16 +504,18 @@ public class DataReaderMapperTests
             }
         });
 
-        // First load - may or may not increase count depending on cache capacity
-        await DataReaderMapper.LoadAsync<SampleEntity>(readerFactory(), new MapperOptions());
-        var afterFirstLoad = GetPlanCacheCount();
+        var options = MapperOptions.Default;
+        using var templateReader = readerFactory();
+        var planKey = BuildPlanCacheKey<SampleEntity>(templateReader, options);
 
-        // Second load with same schema - should reuse plan, count stays same
-        await DataReaderMapper.LoadAsync<SampleEntity>(readerFactory(), new MapperOptions());
-        var afterSecondLoad = GetPlanCacheCount();
+        await DataReaderMapper.LoadAsync<SampleEntity>(readerFactory(), options);
+        var firstPlan = GetPlanEntry(planKey);
+        Assert.NotNull(firstPlan);
 
-        // Key assertion: reusing the same plan doesn't change the count
-        Assert.Equal(afterFirstLoad, afterSecondLoad);
+        await DataReaderMapper.LoadAsync<SampleEntity>(readerFactory(), options);
+        var secondPlan = GetPlanEntry(planKey);
+
+        Assert.Same(firstPlan, secondPlan);
     }
 
     [Fact]
@@ -608,6 +611,46 @@ public class DataReaderMapperTests
         var countProp = map.GetType().GetProperty("Count")
                         ?? throw new InvalidOperationException("Count property not found on _map");
         return (int)countProp.GetValue(map)!;
+    }
+
+    private static object BuildPlanCacheKey<T>(DbDataReader templateReader, MapperOptions options)
+    {
+        var schemaHashMethod = typeof(DataReaderMapper).GetMethod(
+                                   "BuildSchemaHash",
+                                   BindingFlags.NonPublic | BindingFlags.Static)
+                               ?? throw new InvalidOperationException("BuildSchemaHash not found");
+
+        var schemaHash = (long)schemaHashMethod.Invoke(null, new object[] { templateReader, options })!;
+
+        var planKeyType = typeof(DataReaderMapper)
+                              .GetNestedType("PlanCacheKey", BindingFlags.NonPublic)
+                          ?? throw new InvalidOperationException("PlanCacheKey type not found");
+
+        return Activator.CreateInstance(
+            planKeyType,
+            new object[] { typeof(T), schemaHash, options.ColumnsOnly, options.EnumMode })!;
+    }
+
+    private static object? GetPlanEntry(object planCacheKey)
+    {
+        var planCacheField =
+            typeof(DataReaderMapper).GetField("_planCache", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("Plan cache field missing");
+
+        var planCache = planCacheField.GetValue(null)!;
+        var mapField = planCache.GetType().GetField("_map", BindingFlags.Instance | BindingFlags.NonPublic)
+                       ?? throw new InvalidOperationException("Plan cache map missing");
+
+        var map = mapField.GetValue(planCache)!;
+        var tryGetValue = map.GetType().GetMethod("TryGetValue")!;
+        var args = new object?[] { planCacheKey, null };
+        var found = (bool)tryGetValue.Invoke(map, args)!;
+        if (!found) return null;
+
+        var entry = args[1]!;
+        var valueProp = entry.GetType().GetProperty("Value")
+                        ?? throw new InvalidOperationException("Value property not found on CacheEntry");
+        return valueProp.GetValue(entry);
     }
 
     private class SampleEntity

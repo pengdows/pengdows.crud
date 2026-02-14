@@ -563,6 +563,91 @@ public interface ITableGateway<TEntity, TRowID>
     /// </summary>
     TEntity MapReaderToObject(ITrackedReader reader);
 
+    // =========================================================================
+    // Batch Operations
+    // =========================================================================
+
+    /// <summary>
+    /// Builds one or more multi-row INSERT statements for the given entities.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Generates <c>INSERT INTO t (cols) VALUES (...), (...), (...)</c> statements.
+    /// When the number of entities exceeds the dialect's parameter limit, the result
+    /// is automatically chunked into multiple containers.
+    /// </para>
+    /// <para>
+    /// Audit fields and version columns are set on each entity before SQL generation,
+    /// following the same rules as <see cref="BuildCreate"/>.
+    /// </para>
+    /// </remarks>
+    /// <param name="entities">The entities to insert. Must not be null.</param>
+    /// <param name="context">Optional database context override for transaction scenarios.</param>
+    /// <returns>One or more SQL containers, each representing a chunk of the batch.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="entities"/> is null.</exception>
+    /// <example>
+    /// <code>
+    /// var containers = helper.BuildBatchCreate(entities);
+    /// foreach (var sc in containers)
+    /// {
+    ///     await sc.ExecuteNonQueryAsync();
+    /// }
+    /// </code>
+    /// </example>
+    IReadOnlyList<ISqlContainer> BuildBatchCreate(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null);
+
+    /// <summary>
+    /// Executes a batch INSERT for the given entities and returns the total number of affected rows.
+    /// </summary>
+    /// <remarks>
+    /// Empty lists return 0. Single-entity lists delegate to <see cref="CreateAsync(TEntity, IDatabaseContext)"/>.
+    /// Multiple entities are chunked and executed sequentially.
+    /// </remarks>
+    /// <param name="entities">The entities to insert. Must not be null.</param>
+    /// <param name="context">Optional database context override for transaction scenarios.</param>
+    /// <returns>Total number of affected rows across all chunks.</returns>
+    Task<int> BatchCreateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null);
+
+    /// <summary>
+    /// Executes a batch INSERT for the given entities with cancellation support.
+    /// </summary>
+    Task<int> BatchCreateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Builds one or more provider-specific batch UPSERT statements for the given entities.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// SQL generated depends on the database dialect:
+    /// </para>
+    /// <list type="bullet">
+    /// <item><description>PostgreSQL/CockroachDB: Multi-row <c>INSERT ... ON CONFLICT DO UPDATE</c></description></item>
+    /// <item><description>MySQL/MariaDB: Multi-row <c>INSERT ... ON DUPLICATE KEY UPDATE</c></description></item>
+    /// <item><description>SQL Server/Oracle/Firebird: Falls back to individual <see cref="BuildUpsert"/> per entity</description></item>
+    /// </list>
+    /// <para>
+    /// Requires either <c>[PrimaryKey]</c> columns or a writable <c>[Id]</c> attribute for conflict detection.
+    /// </para>
+    /// </remarks>
+    /// <param name="entities">The entities to upsert. Must not be null.</param>
+    /// <param name="context">Optional database context override for transaction scenarios.</param>
+    /// <returns>One or more SQL containers.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="entities"/> is null.</exception>
+    /// <exception cref="NotSupportedException">Thrown when the entity has no suitable conflict key.</exception>
+    IReadOnlyList<ISqlContainer> BuildBatchUpsert(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null);
+
+    /// <summary>
+    /// Executes a batch UPSERT for the given entities and returns the total number of affected rows.
+    /// </summary>
+    Task<int> BatchUpsertAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null);
+
+    /// <summary>
+    /// Executes a batch UPSERT for the given entities with cancellation support.
+    /// </summary>
+    Task<int> BatchUpsertAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context,
+        CancellationToken cancellationToken);
+
     /// <summary>
     /// Appends a WHERE ... IN (...) clause to the SQL container for the given column.
     /// </summary>

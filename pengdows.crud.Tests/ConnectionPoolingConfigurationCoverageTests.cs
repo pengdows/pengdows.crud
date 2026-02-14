@@ -257,6 +257,43 @@ public sealed class ConnectionPoolingConfigurationCoverageTests
         Assert.Equal("file.db", result);
     }
 
+    // ── StripUnsupportedMaxPoolSize ───────────────────────────────────────
+
+    [Fact]
+    public void StripUnsupportedMaxPoolSize_UnsupportedProvider_RemovesMaxPoolSize()
+    {
+        var cs = "Data Source=test.db;Cache=Shared;Max Pool Size=10";
+
+        var result = ConnectionPoolingConfiguration.StripUnsupportedMaxPoolSize(cs, null);
+
+        var builder = new DbConnectionStringBuilder { ConnectionString = result };
+        Assert.False(builder.ContainsKey("Max Pool Size"));
+        Assert.True(builder.ContainsKey("Cache"));
+    }
+
+    [Fact]
+    public void StripUnsupportedMaxPoolSize_SupportedProvider_PreservesMaxPoolSize()
+    {
+        var cs = "Server=localhost;Max Pool Size=10";
+
+        var result = ConnectionPoolingConfiguration.StripUnsupportedMaxPoolSize(cs, "Max Pool Size");
+
+        var builder = new DbConnectionStringBuilder { ConnectionString = result };
+        Assert.Equal("10", builder["Max Pool Size"].ToString());
+    }
+
+    [Fact]
+    public void StripUnsupportedMaxPoolSize_RawString_ReturnsUnchanged()
+    {
+        var builder = new DbConnectionStringBuilder();
+        builder["Data Source"] = ":memory:";
+
+        var result = ConnectionPoolingConfiguration.StripUnsupportedMaxPoolSize(
+            ":memory:", null, builder: builder);
+
+        Assert.Equal(":memory:", result);
+    }
+
     // ── Credential-preserving path ────────────────────────────────────────
     // When a provider builder strips the password on .ConnectionString read,
     // Reapply* must re-merge changes onto a generic builder that keeps creds.

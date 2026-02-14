@@ -70,13 +70,6 @@ public interface ISqlContainer : ISafeAsyncDisposableBase
     string MakeParameterName(string parameterName);
 
     /// <summary>
-    /// Formats a parameter name from metadata using the container's dialect.
-    /// </summary>
-    /// <param name="metadata">The parameter metadata containing the name.</param>
-    /// <returns>The correctly formatted parameter name.</returns>
-    string MakeParameterName(ParameterMetadata metadata);
-
-    /// <summary>
     /// Creates a new <see cref="DbParameter"/> without adding it to the container.
     /// </summary>
     /// <typeparam name="T">The value type.</typeparam>

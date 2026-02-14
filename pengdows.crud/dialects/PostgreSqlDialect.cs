@@ -110,11 +110,6 @@ internal class PostgreSqlDialect : SqlDialect
 
     public override bool SupportsInsertReturning => true;
 
-    public override string GetInsertReturningClause(string idColumnName)
-    {
-        return $"RETURNING {WrapObjectName(idColumnName)}";
-    }
-
     public override string GetLastInsertedIdQuery()
     {
         // Fallback method - prefer RETURNING clause
@@ -402,10 +397,8 @@ SET client_min_messages = warning;";
     }
 
     // Connection pooling properties for PostgreSQL (Npgsql)
-    public override bool SupportsExternalPooling => true;
-    public override string? PoolingSettingName => "Pooling";
+    // SupportsExternalPooling, PoolingSettingName, DefaultMaxPoolSize inherited from base (true, "Pooling", 100)
     public override string? MinPoolSizeSettingName => "Minimum Pool Size";
     public override string? MaxPoolSizeSettingName => "Maximum Pool Size";
     public override string? ApplicationNameSettingName => "Application Name";
-    internal override int DefaultMaxPoolSize => 100;
 }

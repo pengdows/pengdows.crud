@@ -179,21 +179,11 @@ internal class OracleDialect : SqlDialect
 
     public override void TryEnterReadOnlyTransaction(ITransactionContext transaction)
     {
-        try
-        {
-            using var sc = transaction.CreateSqlContainer(ReadOnlySessionSetting);
-            sc.ExecuteNonQueryAsync().GetAwaiter().GetResult();
-        }
-        catch (Exception ex)
-        {
-            Logger.LogDebug(ex, "Failed to apply Oracle read-only session settings");
-        }
+        TryExecuteReadOnlySql(transaction, ReadOnlySessionSetting, "Oracle");
     }
 
     // Connection pooling properties for Oracle
-    public override bool SupportsExternalPooling => true;
-    public override string? PoolingSettingName => "Pooling";
+    // SupportsExternalPooling, PoolingSettingName, DefaultMaxPoolSize inherited from base (true, "Pooling", 100)
     public override string? MinPoolSizeSettingName => "Min Pool Size";
     public override string? MaxPoolSizeSettingName => "Max Pool Size";
-    internal override int DefaultMaxPoolSize => 100;
 }

@@ -3,7 +3,6 @@ using System.Data;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using pengdows.crud;
-using pengdows.crud.@internal;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -36,20 +35,6 @@ public class SqlContainerMetadataPoolingTests : IDisposable
                 value INTEGER
             )";
         cmd.ExecuteNonQuery();
-    }
-
-    [Fact]
-    public void MakeParameterName_WithParameterMetadata_FormatsCorrectly()
-    {
-        // Arrange
-        using var container = _context.CreateSqlContainer();
-        var metadata = new ParameterMetadata("testParam", DbType.String, "value");
-
-        // Act
-        var formattedName = container.MakeParameterName(metadata);
-
-        // Assert
-        Assert.Equal("@testParam", formattedName); // SQLite uses @
     }
 
     [Fact]
@@ -148,20 +133,16 @@ public class SqlContainerMetadataPoolingTests : IDisposable
         // Arrange
         using var container = _context.CreateSqlContainer("INSERT INTO test_table (id, name, value) VALUES (");
 
-        var metadata1 = new ParameterMetadata("id", DbType.Int32, 5);
-        var metadata2 = new ParameterMetadata("name", DbType.String, "multi");
-        var metadata3 = new ParameterMetadata("value", DbType.Int32, 999);
-
-        container.Query.Append(container.MakeParameterName(metadata1));
+        container.Query.Append(container.MakeParameterName("id"));
         container.Query.Append(", ");
-        container.Query.Append(container.MakeParameterName(metadata2));
+        container.Query.Append(container.MakeParameterName("name"));
         container.Query.Append(", ");
-        container.Query.Append(container.MakeParameterName(metadata3));
+        container.Query.Append(container.MakeParameterName("value"));
         container.Query.Append(")");
 
-        container.AddParameterWithValue("id", DbType.Int32, metadata1.Value);
-        container.AddParameterWithValue("name", DbType.String, metadata2.Value);
-        container.AddParameterWithValue("value", DbType.Int32, metadata3.Value);
+        container.AddParameterWithValue("id", DbType.Int32, 5);
+        container.AddParameterWithValue("name", DbType.String, "multi");
+        container.AddParameterWithValue("value", DbType.Int32, 999);
 
         // Act
         var result = await container.ExecuteNonQueryAsync();

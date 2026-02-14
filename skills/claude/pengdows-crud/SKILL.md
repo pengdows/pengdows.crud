@@ -102,6 +102,122 @@ public class OrdersController : ControllerBase
 }
 ```
 
+## SQL Building: The Three-Tier API
+
+TableGateway has three tiers of methods. Understanding which tier to use is key:
+
+### Tier 1: Build Methods (SQL generation only, no execution)
+
+`Build*` methods return an `ISqlContainer` holding generated SQL and parameters. Nothing is sent to the database. You inspect, modify, or execute the container yourself.
+
+```csharp
+// All synchronous except BuildUpdateAsync
+ISqlContainer BuildCreate(entity);            // INSERT statement
+ISqlContainer BuildBaseRetrieve("alias");     // SELECT with no WHERE (starting point for custom queries)
+ISqlContainer BuildRetrieve(ids, "alias");    // SELECT ... WHERE id IN (...)
+ISqlContainer BuildRetrieve(ids);             // SELECT ... WHERE id IN (...) (no alias)
+ISqlContainer BuildRetrieve(entities, "a");   // SELECT ... WHERE pk columns match
+ISqlContainer BuildRetrieve(entities);        // SELECT ... WHERE pk columns match (no alias)
+ISqlContainer BuildDelete(id);                // DELETE ... WHERE id = @id
+ISqlContainer BuildUpsert(entity);            // Dialect-specific INSERT-or-UPDATE
+
+// ONLY async Build method (needs DB I/O when loadOriginal: true)
+ISqlContainer sc = await BuildUpdateAsync(entity);                     // UPDATE statement
+ISqlContainer sc = await BuildUpdateAsync(entity, loadOriginal: true); // Loads current row first
+```
+
+**BuildBaseRetrieve vs BuildRetrieve:** `BuildBaseRetrieve` generates `SELECT columns FROM table` with NO WHERE clause - it's the starting point when you need to add your own custom filtering. `BuildRetrieve` generates a complete query with a WHERE clause filtering by IDs or primary key values.
+
+### Tier 2: Load Methods (execute a pre-built container, map results)
+
+`Load*` methods take an `ISqlContainer` you already have (from a Build method or custom SQL) and execute it, mapping rows to entities:
+
+```csharp
+TEntity? result      = await LoadSingleAsync(container);     // First row or null
+List<TEntity> list   = await LoadListAsync(container);       // All rows
+IAsyncEnumerable<TEntity> stream = LoadStreamAsync(container); // Streamed rows (memory-efficient)
+```
+
+### Tier 3: Convenience Methods (Build + Execute in one call)
+
+These combine Tier 1 + Tier 2 into a single call. Use when you don't need to customize the SQL:
+
+```csharp
+// Single-entity retrieval
+TEntity? order = await RetrieveOneAsync(id);           // By [Id] column
+TEntity? order = await RetrieveOneAsync(entityLookup); // By [PrimaryKey] columns
+
+// Multi-entity retrieval
+List<TEntity> orders = await RetrieveAsync(ids);                   // Returns list
+IAsyncEnumerable<TEntity> orders = RetrieveStreamAsync(ids);       // Returns stream
+
+// Write operations
+bool created  = await CreateAsync(entity, context);    // INSERT, returns true if 1 row
+int affected  = await UpdateAsync(entity);             // UPDATE, returns row count
+int affected  = await DeleteAsync(id);                 // DELETE single, returns row count
+int affected  = await DeleteAsync(ids);                // DELETE batch, returns row count
+int affected  = await UpsertAsync(entity);             // INSERT or UPDATE
+```
+
+### WHERE Clause Helpers (modify an existing container)
+
+These append WHERE clauses to a container you already have:
+
+```csharp
+// Appends WHERE column IN (@p0, @p1, ...) to an existing container
+BuildWhere("e.Id", ids, existingContainer);
+
+// Appends WHERE clause using [PrimaryKey] columns
+BuildWhereByPrimaryKey(entities, existingContainer, "e");
+```
+
+### Typical Workflow
+
+```csharp
+// Simple: Use convenience methods (Tier 3)
+var order = await RetrieveOneAsync(orderId);
+
+// Custom query: Build (Tier 1) -> modify -> Load (Tier 2)
+var sc = BuildBaseRetrieve("o");
+sc.Query.Append(" WHERE ");
+sc.Query.Append(sc.WrapObjectName("o.status"));
+sc.Query.Append(" = ");
+var p = sc.AddParameterWithValue("status", DbType.String, "Active");
+sc.Query.Append(sc.MakeParameterName(p));
+var results = await LoadListAsync(sc);
+
+// Stream large results: Build (Tier 1) -> Stream (Tier 2)
+var sc = BuildBaseRetrieve("o");
+sc.Query.Append(" ORDER BY ");
+sc.Query.Append(sc.WrapObjectName("o.created_at"));
+await foreach (var order in LoadStreamAsync(sc))
+{
+    await ProcessAsync(order);
+}
+```
+
+### ISqlContainer: Execution Methods
+
+All execution methods return `ValueTask` (not `Task`) for reduced allocations:
+
+```csharp
+ValueTask<int>            ExecuteNonQueryAsync(commandType);  // Row count
+ValueTask<T?>             ExecuteScalarAsync<T>(commandType); // Single value
+ValueTask<ITrackedReader> ExecuteReaderAsync(commandType);    // Data reader
+```
+
+All have `CancellationToken` overloads.
+
+### ISqlContainer: Clone for Reuse
+
+Clone a container to reuse its SQL structure with different parameter values or contexts:
+
+```csharp
+var template = BuildCreate(entity);
+var clone = template.Clone();                    // Same context, update param values
+var clone = template.Clone(transactionContext);  // Different context (e.g., transaction)
+```
+
 ## DI Lifetime Rules - CRITICAL
 
 | Component | Lifetime | Why |
@@ -275,7 +391,7 @@ var order = await gateway.RetrieveOneAsync(orderId);  // Uses defaultContext
 var registry = services.GetRequiredService<ITenantContextRegistry>();
 var tenantCtx = registry.GetContext("enterprise-client");  // Could be PostgreSQL, SQL Server, etc.
 
-// 3. Get gateway from DI and pass tenant context to CRUD methods
+// 4. Get gateway from DI and pass tenant context to CRUD methods
 var gateway = services.GetRequiredService<ITableGateway<Order, long>>();
 var order = await gateway.RetrieveOneAsync(orderId, tenantCtx);  // Uses tenant's database
 await gateway.CreateAsync(newOrder, tenantCtx);                  // Inserts to tenant's database
@@ -292,11 +408,11 @@ await gateway.DeleteAsync(orderId, tenantCtx);                   // Deletes from
 - `UpsertAsync(entity, tenantContext)` - Upsert to tenant's database
 
 **This pattern enables:**
-- ✅ Single TableGateway instance (singleton) for all tenants
-- ✅ Each tenant uses different database type (PostgreSQL, SQL Server, MySQL, etc.)
-- ✅ SQL automatically generated with tenant's dialect (parameter markers, quoting)
-- ✅ Connection pooling per tenant context
-- ✅ **No tenant_id filtering needed** - physical database separation
+- Single TableGateway instance (singleton) for all tenants
+- Each tenant uses different database type (PostgreSQL, SQL Server, MySQL, etc.)
+- SQL automatically generated with tenant's dialect (parameter markers, quoting)
+- Connection pooling per tenant context
+- **No tenant_id filtering needed** - physical database separation
 
 **Example: Multi-Tenant Controller**
 
@@ -371,35 +487,6 @@ public class OrderItem
     [Column("product_id")]
     public int ProductId { get; set; }
 }
-```
-
-### TableGateway Methods
-
-> **Note:** `TableGateway` is an alias for `TableGateway` (kept for 1.0 compatibility).
-
-| Method | Purpose |
-|--------|---------|
-| `CreateAsync(entity)` | INSERT, returns true if 1 row affected |
-| `RetrieveOneAsync(id)` | SELECT by [Id] column |
-| `RetrieveOneAsync(entity)` | SELECT by [PrimaryKey] columns |
-| `RetrieveAsync(ids)` | SELECT multiple by IDs |
-| `UpdateAsync(entity)` | UPDATE by [Id], returns rows affected |
-| `DeleteAsync(id)` | DELETE by [Id], returns rows affected |
-| `UpsertAsync(entity)` | INSERT or UPDATE, returns rows affected |
-
-### Query Building Methods
-
-```csharp
-// Build SQL without executing (use inside extended gateway)
-var container = BuildCreate(entity);
-var container = BuildBaseRetrieve("alias");
-var container = await BuildUpdateAsync(entity);
-var container = BuildDelete(id);
-var container = BuildUpsert(entity);
-
-// Execute and load
-var list = await LoadListAsync(container);
-var single = await LoadSingleAsync(container);
 ```
 
 ### Custom SQL with SqlContainer
@@ -493,6 +580,9 @@ public async Task<bool> CancelOrderAsync(long orderId)
 
 // With isolation level
 using var txn = Context.BeginTransaction(IsolationLevel.Serializable);
+
+// With read-only flag
+using var txn = Context.BeginTransaction(readOnly: true);
 
 // With savepoints
 await txn.SavepointAsync("checkpoint1");
@@ -607,3 +697,5 @@ Each uses optimal SQL syntax (MERGE vs ON CONFLICT vs ON DUPLICATE KEY UPDATE).
 8. **DbMode.Best auto-selects** - SQLite :memory: = SingleConnection
 9. **Always use WrapObjectName()** - for column names and aliases in custom SQL
 10. **NEVER use TransactionScope** - incompatible with connection management, use Context.BeginTransaction()
+11. **Execution methods return ValueTask** - not Task, for reduced allocations
+12. **All async methods have CancellationToken overloads** - pass tokens through for proper cancellation

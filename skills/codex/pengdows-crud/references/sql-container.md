@@ -38,26 +38,46 @@ Used to bind parameters to the command.
 - Automatically supports `@name`, `:name`, or positional `?`
 - Parameters are created using `DbProviderFactory`
 - `AddParameterWithValue` creates and adds parameter in one call
+- Overloads with `ParameterDirection` support output/return parameters
 
 ```csharp
 // Method 1: Create parameter, then add it
-var p = context.CreateDbParameter("email", DbType.String, email);
+var p = sc.CreateDbParameter("email", DbType.String, email);
 sc.AddParameter(p);
-sc.Query.Append(context.MakeParameterName(p));
+sc.Query.Append(sc.MakeParameterName(p));
 
 // Method 2: Create and add parameter in one call (preferred)
 var param = sc.AddParameterWithValue("email", DbType.String, email);
 sc.Query.Append(sc.MakeParameterName(param));
+
+// Method 3: With explicit direction (for stored procedure output parameters)
+var outParam = sc.AddParameterWithValue("result", DbType.Int32, 0, ParameterDirection.Output);
 ```
 
 ## Execution Methods
 
+All execution methods return `ValueTask` (not `Task`) for reduced allocations. All have `CancellationToken` overloads.
+
 | Method | Returns | Purpose |
 |--------|---------|---------|
-| `ExecuteReaderAsync(CommandType)` | `ITrackedReader` | Runs query, returns reader (extends IDataReader) |
-| `ExecuteNonQueryAsync(CommandType)` | `int` | Returns affected row count |
-| `ExecuteScalarAsync<T>(CommandType)` | `T?` | Returns single coerced value |
-| `ExecuteScalarWriteAsync<T>(CommandType)` | `T?` | Scalar on write connection (for INSERT...RETURNING) |
+| `ExecuteReaderAsync(CommandType)` | `ValueTask<ITrackedReader>` | Runs query, returns reader (extends IDataReader) |
+| `ExecuteNonQueryAsync(CommandType)` | `ValueTask<int>` | Returns affected row count |
+| `ExecuteScalarAsync<T>(CommandType)` | `ValueTask<T?>` | Returns single coerced value |
+| `ExecuteScalarWriteAsync<T>(CommandType)` | `ValueTask<T?>` | Extension: scalar on write connection (for INSERT...RETURNING) |
+
+## Clone for Reuse
+
+SqlContainer supports cloning for reusing SQL structure with different parameter values or contexts:
+
+```csharp
+// Clone with same context - update parameter values for batch operations
+var template = gateway.BuildCreate(entity);
+var clone = template.Clone();
+clone.SetParameterValue("i0", newValue);
+
+// Clone with different context - essential for transactions and multi-tenancy
+var clone = template.Clone(transactionContext);
+```
 
 ## Command Preparation
 
@@ -88,6 +108,14 @@ This library addresses that limitation:
 
 This ensures stored procedures work across all supported databases without requiring database-specific formatting.
 
+### WrapForStoredProc
+
+```csharp
+string WrapForStoredProc(ExecutionType type, bool includeParameters = true, bool captureReturn = false);
+```
+
+Returns the wrapped SQL string. The `captureReturn` parameter enables capturing the stored procedure return value when supported by the dialect.
+
 ### Procedure Wrapping Syntax by Database
 
 | Database | Syntax Used |
@@ -106,6 +134,7 @@ This ensures stored procedures work across all supported databases without requi
 
 - If in `TransactionContext` or `SingleConnection` mode, connection stays open
 - Otherwise, `CommandBehavior.CloseConnection` is used to auto-close
+- **ITrackedReader is a lease** — it pins the connection for its lifetime. Always use `await using` and dispose promptly.
 
 ## Logging
 
@@ -182,6 +211,22 @@ sc.Query.Append(sc.WrapObjectName("u.created_at"));
 sc.Query.Append(" DESC");
 
 var users = await gateway.LoadListAsync(sc);
+```
+
+## Streaming Large Result Sets
+
+For memory-efficient processing of large queries:
+
+```csharp
+var sc = gateway.BuildBaseRetrieve("u");
+sc.Query.Append(" ORDER BY ");
+sc.Query.Append(sc.WrapObjectName("u.id"));
+
+await foreach (var user in gateway.LoadStreamAsync(sc))
+{
+    await ProcessUserAsync(user);
+    // Can break early - reader is disposed automatically
+}
 ```
 
 ## Stored Procedure Example

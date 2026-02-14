@@ -84,11 +84,6 @@ internal class FirebirdDialect : SqlDialect
         return $"{prefix}{WrapObjectName(columnName)}";
     }
 
-    public override string GetInsertReturningClause(string idColumnName)
-    {
-        return $"RETURNING {WrapObjectName(idColumnName)}";
-    }
-
     public override string GetLastInsertedIdQuery()
     {
         throw new NotSupportedException(
@@ -116,7 +111,11 @@ internal class FirebirdDialect : SqlDialect
 
     public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
     {
-        // Firebird doesn't have separate read-only session settings like other databases
+        // Firebird has no session-level read-only enforcement mechanism.
+        // SET TRANSACTION READ ONLY starts a NEW transaction rather than modifying
+        // the current one, so it cannot be used after IDbConnection.BeginTransaction().
+        // Read-only enforcement would require provider-specific FbTransactionOptions,
+        // which is outside the generic ADO.NET abstraction.
         return DefaultSessionSettings;
     }
 
@@ -287,9 +286,7 @@ internal class FirebirdDialect : SqlDialect
     }
 
     // Connection pooling properties for Firebird
-    public override bool SupportsExternalPooling => true;
-    public override string? PoolingSettingName => "Pooling";
+    // SupportsExternalPooling, PoolingSettingName, DefaultMaxPoolSize inherited from base (true, "Pooling", 100)
     public override string? MinPoolSizeSettingName => "MinPoolSize";
     public override string? MaxPoolSizeSettingName => "MaxPoolSize";
-    internal override int DefaultMaxPoolSize => 100;
 }

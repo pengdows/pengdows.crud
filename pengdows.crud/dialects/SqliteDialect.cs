@@ -81,11 +81,6 @@ internal class SqliteDialect : SqlDialect
 
     public override bool SupportsInsertReturning => IsVersionAtLeast(3, 35);
 
-    public override string GetInsertReturningClause(string idColumnName)
-    {
-        return $"RETURNING {WrapObjectName(idColumnName)}";
-    }
-
     public override string GetLastInsertedIdQuery()
     {
         return "SELECT last_insert_rowid()";

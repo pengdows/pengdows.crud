@@ -31,22 +31,21 @@ public class DatabaseContextLoggingTests
         using var ctx = new DatabaseContext(cfg, factory, loggerFactory);
 
         // Should log applying when called explicitly
-        // var good = new fakeDb.fakeDbConnection();
         var good = factory.CreateConnection();
-        ctx.ApplyPersistentConnectionSessionSettings(good);
+        ctx.ExecuteSessionSettings(good, false);
 
         Assert.Contains(provider.Entries,
             e => e.Level == LogLevel.Information &&
-                 e.Message.Contains("Applying persistent connection session settings"));
+                 e.Message.Contains("Applying session settings"));
 
         // Now simulate failure on command to hit error path
         var badFactory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var bad = (fakeDbConnection)badFactory.CreateConnection();
         ConnectionFailureHelper.ConfigureConnectionFailure(bad, ConnectionFailureMode.FailOnCommand);
 
-        ctx.ApplyPersistentConnectionSessionSettings(bad);
+        ctx.ExecuteSessionSettings(bad, false);
 
         Assert.Contains(provider.Entries,
-            e => e.Level == LogLevel.Error && e.Message.Contains("Error setting session settings"));
+            e => e.Level == LogLevel.Error && e.Message.Contains("Failed to apply session settings"));
     }
 }

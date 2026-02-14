@@ -94,11 +94,6 @@ internal class DuckDbDialect : SqlDialect
     public virtual bool SupportsFillWindowFunction =>
         IsVersionAtLeast(1, 4); // FILL() window function for interpolation
 
-    public override string GetInsertReturningClause(string idColumnName)
-    {
-        return $"RETURNING {WrapObjectName(idColumnName)}";
-    }
-
     public override string GetLastInsertedIdQuery()
     {
         return "SELECT lastval()"; // DuckDB supports lastval() like PostgreSQL
@@ -124,7 +119,7 @@ internal class DuckDbDialect : SqlDialect
             ? context.ConnectionString
             : connectionStringOverride;
 
-        if (readOnly && !IsMemoryConnection(cs) &&
+        if (readOnly && !IsMemoryDatabase(cs) &&
             cs.IndexOf("access_mode=READ_ONLY", StringComparison.OrdinalIgnoreCase) < 0)
         {
             cs = $"{cs};access_mode=READ_ONLY";
@@ -144,38 +139,33 @@ internal class DuckDbDialect : SqlDialect
             return connectionString;
         }
 
-        return IsMemoryConnection(connectionString)
+        return IsMemoryDatabase(connectionString)
             ? connectionString
             : $"{connectionString};access_mode=READ_ONLY";
     }
 
     private const string ReadOnlyConnectionParam = "access_mode=READ_ONLY";
-    private const string ReadOnlyPragma = "PRAGMA read_only = 1;";
+    private const string ReadOnlySessionSetting = "SET access_mode = 'read_only';";
 
     public override string? GetReadOnlyConnectionParameter()
     {
         return ReadOnlyConnectionParam;
     }
 
+    public override string GetReadOnlySessionSettings()
+    {
+        return ReadOnlySessionSetting;
+    }
+
     public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
     {
-        return readOnly ? ReadOnlyPragma : string.Empty;
+        return BuildSessionSettings(GetBaseSessionSettings(), GetReadOnlySessionSettings(), readOnly);
     }
 
     [Obsolete]
     public override string GetConnectionSessionSettings()
     {
         return string.Empty;
-    }
-
-    private static bool IsMemoryConnection(string connectionString)
-    {
-        if (string.IsNullOrWhiteSpace(connectionString))
-        {
-            return false;
-        }
-
-        return connectionString.Contains(":memory:", StringComparison.OrdinalIgnoreCase);
     }
 
     public override async Task<string?> GetProductNameAsync(ITrackedConnection connection)

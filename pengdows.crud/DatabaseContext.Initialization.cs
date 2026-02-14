@@ -60,12 +60,14 @@ public partial class DatabaseContext
         string providerFactory,
         DbMode mode = DbMode.Best,
         ReadWriteMode readWriteMode = ReadWriteMode.ReadWrite,
-        ILoggerFactory? loggerFactory = null)
+        ILoggerFactory? loggerFactory = null,
+        string? readOnlyConnectionString = null)
         : this(
             new DatabaseContextConfiguration
             {
                 ProviderName = providerFactory,
                 ConnectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString)),
+                ReadOnlyConnectionString = readOnlyConnectionString ?? string.Empty,
                 ReadWriteMode = readWriteMode,
                 DbMode = mode
             },
@@ -122,10 +124,11 @@ public partial class DatabaseContext
     // }
 
     // Convenience overloads for reflection-based tests and ease of use
-    public DatabaseContext(string connectionString, DbProviderFactory factory)
+    public DatabaseContext(string connectionString, DbProviderFactory factory, string? readOnlyConnectionString = null)
         : this(new DatabaseContextConfiguration
             {
                 ConnectionString = connectionString,
+                ReadOnlyConnectionString = readOnlyConnectionString ?? string.Empty,
                 DbMode = DbMode.Best,
                 ReadWriteMode = ReadWriteMode.ReadWrite
             },
@@ -136,10 +139,12 @@ public partial class DatabaseContext
     {
     }
 
-    internal DatabaseContext(string connectionString, DbProviderFactory factory, ITypeMapRegistry typeMapRegistry)
+    internal DatabaseContext(string connectionString, DbProviderFactory factory, ITypeMapRegistry typeMapRegistry,
+        string? readOnlyConnectionString = null)
         : this(new DatabaseContextConfiguration
             {
                 ConnectionString = connectionString,
+                ReadOnlyConnectionString = readOnlyConnectionString ?? string.Empty,
                 DbMode = DbMode.Best,
                 ReadWriteMode = ReadWriteMode.ReadWrite
             },
@@ -202,7 +207,6 @@ public partial class DatabaseContext
             TypeMapRegistry = typeMapRegistry ?? throw new ArgumentNullException(nameof(typeMapRegistry));
             ConnectionMode = configuration.DbMode;
             _factory = factory ?? throw new ArgumentNullException(nameof(factory));
-            _parameterPool = new DbParameterPool(factory); // Initialize parameter pool
             _dataSource = dataSource;
             _readerDataSource = dataSource;
             _dataSourceProvided = dataSource != null;
@@ -270,6 +274,14 @@ public partial class DatabaseContext
                 builder);
 
             InitializeReadOnlyConnectionResources(configuration);
+
+            // Validate read-only connection if an explicit RO connection string was provided
+            if (!string.IsNullOrWhiteSpace(configuration.ReadOnlyConnectionString) &&
+                HasDedicatedReadConnectionString())
+            {
+                TestConnect(_readerConnectionString, "ReadOnlyValidation", "ReadOnly");
+            }
+
             InitializePoolGovernors();
 
             if (initialConnection != null)
@@ -284,16 +296,14 @@ public partial class DatabaseContext
                 SnapshotIsolationEnabled = false;
             }
 
-            // Apply session settings for persistent connections now that dialect is initialized
-            if (ConnectionMode != DbMode.Standard)
+            // Special case: SingleConnection's pinned connection opened before detection.
+            // KeepAlive sentinel doesn't need settings — it's never used for work.
+            if (ConnectionMode == DbMode.SingleConnection)
             {
-                if (initialConnection != null)
+                var target = initialConnection ?? PersistentConnection;
+                if (target != null)
                 {
-                    ApplyPersistentConnectionSessionSettings(initialConnection);
-                }
-                else if (PersistentConnection is not null)
-                {
-                    ApplyPersistentConnectionSessionSettings(PersistentConnection);
+                    ExecuteSessionSettings(target, IsReadOnlyConnection);
                 }
             }
 
@@ -395,27 +405,13 @@ public partial class DatabaseContext
             {
                 initConn.Open();
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // For Standard/Best with Unknown providers, allow constructor to proceed without an open
-                // connection so dialect falls back to SQL-92 and operations surface errors later.
-                if ((ConnectionMode == DbMode.Standard || ConnectionMode == DbMode.Best) &&
-                    IsEmulatedUnknown(_connectionString))
+                throw new ConnectionFailedException("Failed to open database connection.", ex)
                 {
-                    try
-                    {
-                        initConn.Dispose();
-                    }
-                    catch
-                    { /* ignore */
-                    }
-
-                    initConn = null;
-                }
-                else
-                {
-                    throw new ConnectionFailedException("Failed to open database connection.");
-                }
+                    Phase = "InitConnect",
+                    Role = "ReadWrite"
+                };
             }
 
             // 3) Detect product/capabilities once
@@ -498,7 +494,6 @@ public partial class DatabaseContext
                 // Standard lifecycle with governor policy (WriteSlots=1 + turnstile fairness)
                 if (ConnectionMode is DbMode.KeepAlive or DbMode.SingleConnection)
                 {
-                    ApplyPersistentConnectionSessionSettings(initConn);
                     SetPersistentConnection(initConn);
                     initConn = null; // context owns it now
                 }
@@ -696,16 +691,31 @@ public partial class DatabaseContext
         }
     }
 
+    private void TestConnect(string connectionString, string phase, string role)
+    {
+        var isReadOnly = role == "ReadOnly";
+        var executionType = isReadOnly ? ExecutionType.Read : ExecutionType.Write;
+        try
+        {
+            using var conn = FactoryCreateConnection(executionType, connectionString, true, isReadOnly, null);
+            conn.Open();
+        }
+        catch (Exception ex)
+        {
+            throw new ConnectionFailedException(
+                $"Failed to validate {role.ToLowerInvariant()} connection.", ex)
+            {
+                Phase = phase,
+                Role = role
+            };
+        }
+    }
+
     private void InitializeReadOnlyConnectionResources(IDatabaseContextConfiguration configuration)
     {
         // 1. Derive reader connection string BEFORE adding :rw to writer so the reader
         //    does not inherit the write suffix.
         _readerConnectionString = BuildReaderConnectionString(configuration);
-
-        if (UsesReadOnlyConnectionStringForReads())
-        {
-            _logger.LogDebug("Read-only connection string differs from writer connection string; skipping equivalence validation.");
-        }
 
         // 2. Finalize reader connection string: apply MaxPoolSize + provider-specific
         //    DataSource settings while it still differs from the writer.
@@ -846,36 +856,23 @@ public partial class DatabaseContext
             return _connectionString;
         }
 
-        string baseReaderConnectionString;
-        if (UsesReadOnlyConnectionStringForReads())
-        {
-            var readOnly = _dialect.GetReadOnlyConnectionString(_connectionString);
-            var usesOriginalValue = string.IsNullOrWhiteSpace(readOnly) ||
-                                    string.Equals(readOnly, _connectionString, StringComparison.OrdinalIgnoreCase);
-            baseReaderConnectionString = usesOriginalValue
-                ? BuildReadOnlyConnectionStringFromBase()
-                : readOnly;
-        }
-        else
-        {
-            baseReaderConnectionString = _connectionString;
-        }
+        var rawReadOnlyConnectionString = configuration.ReadOnlyConnectionString;
+        var baseReaderConnectionString = string.IsNullOrWhiteSpace(rawReadOnlyConnectionString)
+            ? _connectionString
+            : NormalizeConnectionString(rawReadOnlyConnectionString);
+
+        var readOnly = _dialect.GetReadOnlyConnectionString(baseReaderConnectionString);
+        var usesOriginalValue = string.IsNullOrWhiteSpace(readOnly) ||
+                                string.Equals(readOnly, baseReaderConnectionString, StringComparison.OrdinalIgnoreCase);
+        baseReaderConnectionString = usesOriginalValue
+            ? BuildReadOnlyConnectionStringFromBase(baseReaderConnectionString)
+            : readOnly;
 
         return ConnectionPoolingConfiguration.ApplyApplicationNameSuffix(
             baseReaderConnectionString,
             _dialect.ApplicationNameSettingName,
             ReadOnlyApplicationNameSuffix,
             configuration.ApplicationName);
-    }
-
-    private bool UsesReadOnlyConnectionStringForReads()
-    {
-        if (IsReadOnlyConnection)
-        {
-            return true;
-        }
-
-        return ConnectionMode == DbMode.SingleWriter;
     }
 
     private bool HasDedicatedReadConnectionString()
@@ -1205,11 +1202,11 @@ public partial class DatabaseContext
         return Convert.ToHexString(bytes).ToLowerInvariant();
     }
 
-    private string BuildReadOnlyConnectionStringFromBase()
+    private string BuildReadOnlyConnectionStringFromBase(string baseConnectionString)
     {
-        var builder = GetFactoryConnectionStringBuilder(_connectionString);
+        var builder = GetFactoryConnectionStringBuilder(baseConnectionString);
         var processed = ConnectionPoolingConfiguration.ApplyPoolingDefaults(
-            _connectionString,
+            baseConnectionString,
             Product,
             ConnectionMode,
             _dialect?.SupportsExternalPooling ?? false,
@@ -1533,16 +1530,6 @@ public partial class DatabaseContext
     {
         var ds = TryGetDataSourcePath(_connectionString) ?? string.Empty;
         return ds.IndexOf(":memory:", StringComparison.OrdinalIgnoreCase) >= 0;
-    }
-
-    private static bool IsEmulatedUnknown(string? connectionString)
-    {
-        if (string.IsNullOrWhiteSpace(connectionString))
-        {
-            return false;
-        }
-
-        return connectionString.IndexOf("emulatedproduct=unknown", StringComparison.OrdinalIgnoreCase) >= 0;
     }
 
     private DbConnectionStringBuilder GetFactoryConnectionStringBuilder(string connectionString)

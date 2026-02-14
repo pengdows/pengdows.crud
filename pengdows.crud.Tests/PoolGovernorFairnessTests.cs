@@ -42,18 +42,14 @@ public sealed class PoolGovernorFairnessTests
         // Act: Writer acquires (holds turnstile)
         var writerPermit = await writerGovernor.AcquireAsync();
 
-        // Reader tries to acquire - should block because writer holds turnstile
-        var readerTask = Task.Run(async () => await readerGovernor.AcquireAsync());
-        await Task.Delay(50); // Give reader time to attempt
-
-        // Assert: Reader should be blocked (task not completed)
-        Assert.False(readerTask.IsCompleted, "Reader should be blocked while writer holds turnstile");
+        // Reader tries to acquire - should remain blocked until cancellation
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => readerGovernor.AcquireAsync(cts.Token));
 
         // Release writer - now reader should complete
         await writerPermit.DisposeAsync();
-        var readerPermit = await readerTask;
-
-        // PoolPermit is a struct, so we just verify the task completed successfully
+        var readerPermit = await readerGovernor.AcquireAsync();
         await readerPermit.DisposeAsync();
     }
 

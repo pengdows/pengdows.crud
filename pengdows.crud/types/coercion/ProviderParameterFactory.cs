@@ -93,76 +93,104 @@ public static class ProviderParameterFactory
         }
     }
 
+    // Cached reflection state for Npgsql parameter optimization
+    private static Type? _cachedNpgsqlParamType;
+    private static System.Reflection.PropertyInfo? _cachedNpgsqlDbTypeProperty;
+
     private static void ApplyPostgreSqlOptimizations(DbParameter parameter, Type valueType)
     {
-        var paramTypeName = parameter.GetType().Name;
-        if (!paramTypeName.StartsWith("Npgsql"))
+        var paramType = parameter.GetType();
+
+        // Quick name check — avoids all reflection for non-Npgsql parameters
+        if (!paramType.Name.StartsWith("Npgsql"))
+        {
+            return;
+        }
+
+        // Cache PropertyInfo per exact type (re-resolve if type changes)
+        if (_cachedNpgsqlParamType != paramType)
+        {
+            _cachedNpgsqlParamType = paramType;
+            _cachedNpgsqlDbTypeProperty = paramType.GetProperty("NpgsqlDbType");
+        }
+
+        if (_cachedNpgsqlDbTypeProperty == null)
         {
             return;
         }
 
         try
         {
-            var npgsqlDbTypeProperty = parameter.GetType().GetProperty("NpgsqlDbType");
-            if (npgsqlDbTypeProperty == null)
-            {
-                return;
-            }
-
-            // Optimize common types for PostgreSQL
+            // Optimize common types for PostgreSQL using cached PropertyInfo
             if (valueType == typeof(Guid) || valueType == typeof(Guid?))
             {
                 // NpgsqlDbType.Uuid = 27
-                npgsqlDbTypeProperty.SetValue(parameter, 27);
+                _cachedNpgsqlDbTypeProperty.SetValue(parameter, 27);
             }
             else if (valueType == typeof(string[]))
             {
                 // NpgsqlDbType.Array | NpgsqlDbType.Text = (1 << 30) | 16
-                npgsqlDbTypeProperty.SetValue(parameter, (1 << 30) | 16);
+                _cachedNpgsqlDbTypeProperty.SetValue(parameter, (1 << 30) | 16);
             }
             else if (valueType == typeof(int[]))
             {
                 // NpgsqlDbType.Array | NpgsqlDbType.Integer = (1 << 30) | 1
-                npgsqlDbTypeProperty.SetValue(parameter, (1 << 30) | 1);
+                _cachedNpgsqlDbTypeProperty.SetValue(parameter, (1 << 30) | 1);
             }
-            else if (valueType.Name.Contains("JsonValue") || valueType.Name.Contains("JsonElement"))
+            else if (IsJsonType(valueType))
             {
                 // NpgsqlDbType.Jsonb = 14 (prefer JSONB for performance)
-                npgsqlDbTypeProperty.SetValue(parameter, 14);
+                _cachedNpgsqlDbTypeProperty.SetValue(parameter, 14);
             }
             else if (valueType.Name.Contains("HStore"))
             {
                 // NpgsqlDbType.Hstore = 37
-                npgsqlDbTypeProperty.SetValue(parameter, 37);
+                _cachedNpgsqlDbTypeProperty.SetValue(parameter, 37);
             }
-            else if (valueType.Name.Contains("Range"))
+            else if (valueType.IsGenericType && valueType.Name.Contains("Range"))
             {
-                // Determine range type based on generic parameter
-                if (valueType.IsGenericType)
-                {
-                    var genericArg = valueType.GetGenericArguments()[0];
-                    if (genericArg == typeof(int))
-                    {
-                        // NpgsqlDbType.IntegerRange = 33
-                        npgsqlDbTypeProperty.SetValue(parameter, 33);
-                    }
-                    else if (genericArg == typeof(decimal))
-                    {
-                        // NpgsqlDbType.NumericRange = 34
-                        npgsqlDbTypeProperty.SetValue(parameter, 34);
-                    }
-                    else if (genericArg == typeof(DateTime))
-                    {
-                        // NpgsqlDbType.TimestampRange = 35
-                        npgsqlDbTypeProperty.SetValue(parameter, 35);
-                    }
-                }
+                ApplyNpgsqlRangeType(parameter, valueType);
             }
         }
         catch
         {
             // Fall back to standard DbType if provider-specific setup fails
         }
+    }
+
+    private static void ApplyNpgsqlRangeType(DbParameter parameter, Type valueType)
+    {
+        var genericArg = valueType.GetGenericArguments()[0];
+        if (genericArg == typeof(int))
+        {
+            // NpgsqlDbType.IntegerRange = 33
+            _cachedNpgsqlDbTypeProperty!.SetValue(parameter, 33);
+        }
+        else if (genericArg == typeof(decimal))
+        {
+            // NpgsqlDbType.NumericRange = 34
+            _cachedNpgsqlDbTypeProperty!.SetValue(parameter, 34);
+        }
+        else if (genericArg == typeof(DateTime))
+        {
+            // NpgsqlDbType.TimestampRange = 35
+            _cachedNpgsqlDbTypeProperty!.SetValue(parameter, 35);
+        }
+    }
+
+    /// <summary>
+    /// Checks if a type is a JSON-related type using cached type comparisons where possible.
+    /// </summary>
+    private static bool IsJsonType(Type type)
+    {
+        // Use exact type comparisons for well-known types
+        if (type == typeof(System.Text.Json.JsonElement))
+        {
+            return true;
+        }
+
+        // Fall back to name check for types only known at runtime
+        return type.Name.Contains("JsonValue");
     }
 
     private static void ApplySqlServerOptimizations(DbParameter parameter, Type valueType)
@@ -172,7 +200,7 @@ public static class ProviderParameterFactory
         {
             parameter.DbType = DbType.Guid;
         }
-        else if (valueType.Name.Contains("JsonValue") || valueType.Name.Contains("JsonElement"))
+        else if (IsJsonType(valueType))
         {
             parameter.DbType = DbType.String;
             parameter.Size = -1; // NVARCHAR(MAX) for JSON
@@ -198,7 +226,7 @@ public static class ProviderParameterFactory
             // Use TINYINT(1) for better compatibility
             parameter.DbType = DbType.Byte;
         }
-        else if (valueType.Name.Contains("JsonValue") || valueType.Name.Contains("JsonElement"))
+        else if (IsJsonType(valueType))
         {
             // MySQL 5.7+ native JSON type
             parameter.DbType = DbType.String;
@@ -236,7 +264,7 @@ public static class ProviderParameterFactory
     private static void ApplySqliteOptimizations(DbParameter parameter, Type valueType)
     {
         // SQLite has flexible typing, minimal optimizations needed
-        if (valueType.Name.Contains("JsonValue") || valueType.Name.Contains("JsonElement"))
+        if (IsJsonType(valueType))
         {
             parameter.DbType = DbType.String;
         }
@@ -260,7 +288,7 @@ public static class ProviderParameterFactory
             // DuckDB LIST type support
             parameter.DbType = DbType.Object;
         }
-        else if (valueType.Name.Contains("JsonValue") || valueType.Name.Contains("JsonElement"))
+        else if (IsJsonType(valueType))
         {
             // DuckDB JSON type
             parameter.DbType = DbType.String;

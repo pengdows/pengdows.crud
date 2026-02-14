@@ -122,8 +122,14 @@ public class ReadOnlySingleWriterConnectionTests
 
         Assert.True(factory.Connections.Count >= 2);
 
-        // All recorded connections should be read-only because the context is ReadOnly
-        foreach (var recorded in factory.Connections)
+        // Operational connections (those that received session settings) should be read-only.
+        // Init connections used for dialect detection may have empty command lists because
+        // session settings detection was not yet complete when they opened.
+        var operationalConnections = factory.Connections
+            .Where(c => c.Commands.Count > 0)
+            .ToList();
+        Assert.NotEmpty(operationalConnections);
+        foreach (var recorded in operationalConnections)
         {
             Assert.Contains(recorded.Commands, c => c.Contains("query_only"));
         }

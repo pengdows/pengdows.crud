@@ -38,6 +38,69 @@ public class TransactionContextTests
         return new DatabaseContext(config, factory);
     }
 
+    [Fact]
+    public void TransactionConnection_UsesNoOpLock_BecauseUserLockSerializesAccess()
+    {
+        // The TransactionContext has its own _userLock (RealAsyncLocker) that serializes
+        // all operations. The pinned connection should NOT also have a real lock — that
+        // would be double-locking and waste time on semaphore acquisition.
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        using var tx = context.BeginTransaction();
+
+        // Get the connection's lock — should be NoOpAsyncLocker since TransactionContext
+        // already provides serialization via its own _userLock.
+        var txContext = (TransactionContext)tx;
+        var connField = typeof(TransactionContext).GetField("_connection",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.NotNull(connField);
+        var connection = (ITrackedConnection)connField!.GetValue(txContext)!;
+
+        var connLock = connection.GetLock();
+        Assert.IsType<NoOpAsyncLocker>(connLock);
+
+        // Meanwhile, the TransactionContext's own lock IS real (reusable variant)
+        var contextLock = tx.GetLock();
+        Assert.IsType<ReusableAsyncLocker>(contextLock);
+    }
+
+    [Fact]
+    public void TransactionGetLock_ReturnsSameInstance_NoPerCallAllocation()
+    {
+        // TransactionContext should return the SAME reusable locker instance
+        // on every GetLock() call, not allocate a new RealAsyncLocker each time.
+        // This eliminates per-operation heap allocation in hot paths like WriteStorm.
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        using var tx = context.BeginTransaction();
+
+        var lock1 = tx.GetLock();
+        var lock2 = tx.GetLock();
+        var lock3 = tx.GetLock();
+
+        Assert.Same(lock1, lock2);
+        Assert.Same(lock2, lock3);
+    }
+
+    [Fact]
+    public async Task TransactionGetLock_ReusableAfterDispose()
+    {
+        // The reusable locker must survive await using (DisposeAsync) and
+        // still be functional for the next operation.
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        using var tx = context.BeginTransaction();
+
+        // First use
+        await using (var locker = tx.GetLock())
+        {
+            await locker.LockAsync();
+        }
+
+        // Second use — same instance, must still work
+        await using (var locker = tx.GetLock())
+        {
+            await locker.LockAsync();
+        }
+    }
+
     [Theory]
     [InlineData(SupportedDatabase.CockroachDb)]
     [InlineData(SupportedDatabase.Sqlite)]
@@ -296,12 +359,12 @@ public class TransactionContextTests
     }
 
     [Fact]
-    public async Task GetLock_ReturnsRealAsyncLocker()
+    public async Task GetLock_ReturnsReusableAsyncLocker()
     {
         var tx = CreateContext(SupportedDatabase.Sqlite).BeginTransaction();
         await using var locker = tx.GetLock();
 
-        Assert.IsType<RealAsyncLocker>(locker);
+        Assert.IsType<ReusableAsyncLocker>(locker);
         await locker.LockAsync();
     }
 

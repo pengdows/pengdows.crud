@@ -25,7 +25,7 @@ internal sealed class IndexedViewEnvironment : IAsyncDisposable
                total_amount as TotalAmount,
                sum_order_amount as SumOrderAmount,
                count_for_avg as CountForAvg
-        FROM {{Schema}}.{{ViewName}} WITH (NOEXPAND)
+        FROM {{Schema}}.{{ViewName}}
         WHERE customer_id = {customerId}
         """;
 

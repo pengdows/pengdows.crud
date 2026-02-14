@@ -80,6 +80,26 @@ internal class StandardConnectionStrategy : SafeAsyncDisposableBase, IConnection
         return ValueTask.CompletedTask;
     }
 
+    /// <summary>
+    /// Shared helper for strategies that skip disposal of a persistent connection.
+    /// </summary>
+    internal static ValueTask ReleaseNonPersistentConnectionAsync(
+        ITrackedConnection? connection, ITrackedConnection? persistentConnection)
+    {
+        if (connection == null || ReferenceEquals(connection, persistentConnection))
+        {
+            return ValueTask.CompletedTask;
+        }
+
+        if (connection is IAsyncDisposable asyncDisposable)
+        {
+            return asyncDisposable.DisposeAsync();
+        }
+
+        connection.Dispose();
+        return ValueTask.CompletedTask;
+    }
+
     public virtual (ISqlDialect? dialect, IDataSourceInformation? dataSourceInfo) HandleDialectDetection(
         ITrackedConnection? initConnection,
         DbProviderFactory? factory,

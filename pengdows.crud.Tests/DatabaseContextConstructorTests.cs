@@ -628,7 +628,9 @@ public class DatabaseContextConstructorTests
 
         // Assert
         Assert.NotNull(connection);
-        Assert.Equal(connectionString, connection.ConnectionString);
+        // Connection string may be normalized (key casing, pooling defaults added)
+        Assert.Contains("localhost", connection.ConnectionString, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("testdb", connection.ConnectionString, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
