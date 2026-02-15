@@ -60,6 +60,43 @@ public class Uuid7OptimizedTests
     }
 
     [Fact]
+    public void NewUuid7RfcBytes_IncrementsRandField_WhenTimestampPinned()
+    {
+        var tlsField = typeof(Uuid7Optimized).GetField("_threadState", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var threadLocal = tlsField.GetValue(null)!;
+        var valueProp = threadLocal.GetType().GetProperty("Value")!;
+        var state = valueProp.GetValue(threadLocal)!;
+        var lastMsField = state.GetType().GetField("LastMs")!;
+        var counterField = state.GetType().GetField("Counter")!;
+
+        var originalLastMs = (long)lastMsField.GetValue(state)!;
+        var originalCounter = (int)counterField.GetValue(state)!;
+
+        try
+        {
+            var pinnedMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 10_000;
+            lastMsField.SetValue(state, pinnedMs);
+            counterField.SetValue(state, 0);
+
+            Span<byte> first = stackalloc byte[16];
+            Span<byte> second = stackalloc byte[16];
+
+            Uuid7Optimized.NewUuid7RfcBytes(first);
+            Uuid7Optimized.NewUuid7RfcBytes(second);
+
+            var firstRand = ExtractRand74(first);
+            var secondRand = ExtractRand74(second);
+
+            Assert.Equal(firstRand + 1, secondRand);
+        }
+        finally
+        {
+            counterField.SetValue(state, originalCounter);
+            lastMsField.SetValue(state, originalLastMs);
+        }
+    }
+
+    [Fact]
     public void NewUuid7RfcBytes_ThrowsWhenSpanTooSmall()
     {
         var dest = new byte[15];
@@ -417,4 +454,20 @@ public class Uuid7OptimizedTests
     }
 
     #endregion
+
+    private static UInt128 ExtractRand74(ReadOnlySpan<byte> rfc)
+    {
+        var randA = (ushort)(((rfc[6] & 0x0F) << 8) | rfc[7]);
+        var randB =
+            ((ulong)(rfc[8] & 0x3F) << 56) |
+            ((ulong)rfc[9] << 48) |
+            ((ulong)rfc[10] << 40) |
+            ((ulong)rfc[11] << 32) |
+            ((ulong)rfc[12] << 24) |
+            ((ulong)rfc[13] << 16) |
+            ((ulong)rfc[14] << 8) |
+            rfc[15];
+
+        return ((UInt128)randA << 62) | randB;
+    }
 }
