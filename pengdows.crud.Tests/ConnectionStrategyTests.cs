@@ -248,24 +248,22 @@ public class ConnectionStrategyTests
     }
 
     [Fact]
-    public async Task SingleWriter_ReadGetsNew_WriteGetsPersistent()
+    public async Task SingleWriter_ReadAndWrite_AreEphemeralConnections()
     {
         await using var ctx = CreateContext(DbMode.SingleWriter, SupportedDatabase.Sqlite, "file.db");
-        Assert.True(ctx.NumberOfOpenConnections >= 1);
+        Assert.Equal(0, ctx.NumberOfOpenConnections);
 
         var readConn = ctx.GetConnection(ExecutionType.Read);
         await readConn.OpenAsync();
-        var countAfterOpen = ctx.NumberOfOpenConnections;
-        Assert.True(countAfterOpen >= 2);
-
+        Assert.Equal(1, ctx.NumberOfOpenConnections);
         ctx.CloseAndDisposeConnection(readConn);
-        Assert.Equal(countAfterOpen - 1, ctx.NumberOfOpenConnections);
+        Assert.Equal(0, ctx.NumberOfOpenConnections);
 
         var writeConn = ctx.GetConnection(ExecutionType.Write);
-        // write connection is persistent; releasing should not change count
-        var beforeRelease = ctx.NumberOfOpenConnections;
+        await writeConn.OpenAsync();
+        Assert.Equal(1, ctx.NumberOfOpenConnections);
         ctx.CloseAndDisposeConnection(writeConn);
-        Assert.Equal(beforeRelease, ctx.NumberOfOpenConnections);
+        Assert.Equal(0, ctx.NumberOfOpenConnections);
     }
 
     [Fact]
@@ -353,7 +351,7 @@ public class ConnectionStrategyTests
     public async Task SingleWriter_MaxConnections_TracksReadPeak()
     {
         await using var ctx = CreateContext(DbMode.SingleWriter, SupportedDatabase.Sqlite, "file.db");
-        var before = ctx.NumberOfOpenConnections; // persistent write conn
+        var before = ctx.NumberOfOpenConnections;
         var read = ctx.GetConnection(ExecutionType.Read);
         await read.OpenAsync();
         Assert.True(ctx.NumberOfOpenConnections >= before + 1);

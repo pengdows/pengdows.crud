@@ -956,6 +956,12 @@ internal abstract class SqlDialect : ISqlDialect
     {
         try
         {
+            if (transaction is TransactionContext tx)
+            {
+                tx.ExecuteSessionNonQuery(sql);
+                return;
+            }
+
             using var sc = transaction.CreateSqlContainer(sql);
             sc.ExecuteNonQueryAsync().GetAwaiter().GetResult();
         }

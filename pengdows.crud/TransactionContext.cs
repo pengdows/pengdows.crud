@@ -277,6 +277,18 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         return _context is DatabaseContext dbCtx ? dbCtx.CreateSqlContainerLogger() : null;
     }
 
+    internal void ExecuteSessionNonQuery(string sql)
+    {
+        if (string.IsNullOrWhiteSpace(sql))
+        {
+            return;
+        }
+
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = sql;
+        cmd.ExecuteNonQuery();
+    }
+
     /// <inheritdoc/>
     internal ITrackedConnection GetConnection(ExecutionType type, bool isShared = false)
     {

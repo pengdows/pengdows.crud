@@ -162,6 +162,11 @@ internal class DuckDbDialect : SqlDialect
         return BuildSessionSettings(GetBaseSessionSettings(), GetReadOnlySessionSettings(), readOnly);
     }
 
+    public override void TryEnterReadOnlyTransaction(ITransactionContext transaction)
+    {
+        TryExecuteReadOnlySql(transaction, ReadOnlySessionSetting, "DuckDB");
+    }
+
     [Obsolete]
     public override string GetConnectionSessionSettings()
     {

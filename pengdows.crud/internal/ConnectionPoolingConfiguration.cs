@@ -589,6 +589,47 @@ internal static class ConnectionPoolingConfiguration
     }
 
     /// <summary>
+    /// Removes provider pooling settings from the connection string.
+    /// </summary>
+    public static string StripPoolingSetting(string connectionString, string? poolingSettingName)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            return connectionString;
+        }
+
+        try
+        {
+            var builder = new DbConnectionStringBuilder { ConnectionString = connectionString };
+
+            if (RepresentsRawConnectionString(builder, connectionString))
+            {
+                return connectionString;
+            }
+
+            var modified = false;
+            if (!string.IsNullOrWhiteSpace(poolingSettingName) && builder.ContainsKey(poolingSettingName))
+            {
+                builder.Remove(poolingSettingName);
+                modified = true;
+            }
+
+            if (!string.Equals(poolingSettingName, DefaultPoolingKey, StringComparison.OrdinalIgnoreCase) &&
+                builder.ContainsKey(DefaultPoolingKey))
+            {
+                builder.Remove(DefaultPoolingKey);
+                modified = true;
+            }
+
+            return modified ? builder.ConnectionString : connectionString;
+        }
+        catch
+        {
+            return connectionString;
+        }
+    }
+
+    /// <summary>
     /// Re-applies modifications from a provider-specific builder to a generic builder
     /// that preserves all values including sensitive ones.
     /// </summary>

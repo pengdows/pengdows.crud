@@ -130,6 +130,7 @@ public partial class DatabaseContext
         }
 
         var settings = _dialect.GetConnectionSessionSettings(this, readOnly);
+        var applied = false;
         if (!string.IsNullOrWhiteSpace(settings))
         {
             _logger.LogInformation("Applying session settings for {Name}", Name);
@@ -138,14 +139,19 @@ public partial class DatabaseContext
                 using var cmd = connection.CreateCommand();
                 cmd.CommandText = settings;
                 cmd.ExecuteNonQuery();
+                applied = true;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to apply session settings for {Name}", Name);
             }
         }
+        else
+        {
+            applied = true;
+        }
 
-        if (tracked != null)
+        if (tracked != null && applied)
         {
             tracked.LocalState.SessionSettingsApplied = true;
         }

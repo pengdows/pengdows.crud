@@ -380,9 +380,19 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
 
         LocalState.Reset();
         _onDispose?.Invoke(_connection);
-        _connection.Dispose();
-        DetachMetricsHandler();
-        ReleasePermit();
+        try
+        {
+            _connection.Dispose();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error while disposing connection.");
+        }
+        finally
+        {
+            DetachMetricsHandler();
+            ReleasePermit();
+        }
     }
 
     private async ValueTask DisposeConnectionAsyncCore()

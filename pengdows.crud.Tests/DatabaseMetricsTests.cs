@@ -107,6 +107,139 @@ public class DatabaseMetricsTests
     }
 
     [Fact]
+    public async Task ExecuteReaderAsync_UsesReadRoleMetrics()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+
+        var connection = new fakeDbConnection();
+        connection.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { { "value", 1 } }
+        });
+        factory.Connections.Add(connection);
+
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:",
+            EnableMetrics = true
+        };
+        await using var context = new DatabaseContext(config, factory);
+
+        connection.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { { "value", 1 } }
+        });
+
+        var before = context.Metrics;
+        var container = context.CreateSqlContainer("SELECT value FROM data");
+
+        await using (var reader = await container.ExecuteReaderAsync())
+        {
+            while (await reader.ReadAsync())
+            {
+            }
+        }
+
+        var after = context.Metrics;
+        Assert.Equal(before.Read.CommandsExecuted + 1, after.Read.CommandsExecuted);
+        Assert.Equal(before.Write.CommandsExecuted, after.Write.CommandsExecuted);
+    }
+
+    [Fact]
+    public async Task ExecuteReaderAsync_WithWriteExecutionType_UsesWriteRoleMetrics()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var connection = new fakeDbConnection();
+        connection.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { { "value", 1 } }
+        });
+        factory.Connections.Add(connection);
+
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:",
+            EnableMetrics = true
+        };
+        await using var context = new DatabaseContext(config, factory);
+
+        connection.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { { "value", 1 } }
+        });
+
+        var before = context.Metrics;
+        var container = context.CreateSqlContainer("SELECT value FROM data");
+
+        await using (var reader = await container.ExecuteReaderAsync(ExecutionType.Write))
+        {
+            while (await reader.ReadAsync())
+            {
+            }
+        }
+
+        var after = context.Metrics;
+        Assert.Equal(before.Write.CommandsExecuted + 1, after.Write.CommandsExecuted);
+        Assert.Equal(before.Read.CommandsExecuted, after.Read.CommandsExecuted);
+    }
+
+    [Fact]
+    public async Task ExecuteScalarAsync_WithWriteExecutionType_UsesWriteRoleMetrics()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var connection = new fakeDbConnection();
+        connection.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { { "value", 1 } }
+        });
+        factory.Connections.Add(connection);
+
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:",
+            EnableMetrics = true
+        };
+        await using var context = new DatabaseContext(config, factory);
+
+        connection.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { { "value", 1 } }
+        });
+
+        var before = context.Metrics;
+        var container = context.CreateSqlContainer("SELECT value FROM data");
+
+        var result = await container.ExecuteScalarAsync<int>(ExecutionType.Write);
+
+        Assert.Equal(1, result);
+        var after = context.Metrics;
+        Assert.Equal(before.Write.CommandsExecuted + 1, after.Write.CommandsExecuted);
+        Assert.Equal(before.Read.CommandsExecuted, after.Read.CommandsExecuted);
+    }
+
+    [Fact]
+    public async Task ExecuteScalarWriteAsync_UsesWriteRoleMetrics()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:",
+            EnableMetrics = true
+        };
+        await using var context = new DatabaseContext(config, factory);
+
+        var before = context.Metrics;
+        var container = context.CreateSqlContainer("INSERT INTO data(value) VALUES (1) RETURNING id");
+
+        var result = await container.ExecuteScalarWriteAsync<int>();
+
+        Assert.Equal(42, result);
+        var after = context.Metrics;
+        Assert.Equal(before.Write.CommandsExecuted + 1, after.Write.CommandsExecuted);
+        Assert.Equal(before.Read.CommandsExecuted, after.Read.CommandsExecuted);
+    }
+
+    [Fact]
     public async Task TransactionCommit_UpdatesMetrics()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);

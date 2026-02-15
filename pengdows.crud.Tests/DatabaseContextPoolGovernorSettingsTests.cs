@@ -1,3 +1,4 @@
+using System.Data.Common;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
@@ -75,6 +76,28 @@ public sealed class DatabaseContextPoolGovernorSettingsTests
         // Reader and writer have independent governors with their own configured limits
         Assert.Equal(5, reader.MaxPermits);
         Assert.Equal(10, writer.MaxPermits);
+    }
+
+    [Fact]
+    public void StandardMode_DoesNotSharePool_WhenConnectionStringsMatch()
+    {
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test;EmulatedProduct=Unknown",
+            ProviderName = "fake",
+            DbMode = DbMode.Standard,
+            EnablePoolGovernor = true,
+            MaxConcurrentReads = 7,
+            MaxConcurrentWrites = 3
+        };
+
+        using var ctx = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.Unknown));
+
+        var reader = ctx.GetPoolStatisticsSnapshot(PoolLabel.Reader);
+        var writer = ctx.GetPoolStatisticsSnapshot(PoolLabel.Writer);
+
+        Assert.Equal(7, reader.MaxPermits);
+        Assert.Equal(3, writer.MaxPermits);
     }
 
     [Fact]
@@ -161,5 +184,47 @@ public sealed class DatabaseContextPoolGovernorSettingsTests
 
         Assert.True(reader.Disabled);
         Assert.True(writer.Disabled);
+    }
+
+    [Fact]
+    public void SingleWriter_PoolingFalse_IsIgnoredAndRemoved()
+    {
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test.db;EmulatedProduct=Sqlite;Pooling=false",
+            ProviderName = SupportedDatabase.Sqlite.ToString(),
+            DbMode = DbMode.SingleWriter,
+            EnablePoolGovernor = true
+        };
+
+        using var ctx = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.Sqlite));
+
+        var builder = new DbConnectionStringBuilder { ConnectionString = ctx.ConnectionString };
+        Assert.False(builder.ContainsKey("Pooling"));
+
+        var writer = ctx.GetPoolStatisticsSnapshot(PoolLabel.Writer);
+        Assert.False(writer.Disabled);
+        Assert.Equal(1, writer.MaxPermits);
+    }
+
+    [Fact]
+    public void SingleConnection_PoolingFalse_IsIgnoredAndRemoved()
+    {
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test.db;EmulatedProduct=Sqlite;Pooling=false",
+            ProviderName = SupportedDatabase.Sqlite.ToString(),
+            DbMode = DbMode.SingleConnection,
+            EnablePoolGovernor = true
+        };
+
+        using var ctx = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.Sqlite));
+
+        var builder = new DbConnectionStringBuilder { ConnectionString = ctx.ConnectionString };
+        Assert.False(builder.ContainsKey("Pooling"));
+
+        var writer = ctx.GetPoolStatisticsSnapshot(PoolLabel.Writer);
+        Assert.False(writer.Disabled);
+        Assert.Equal(1, writer.MaxPermits);
     }
 }

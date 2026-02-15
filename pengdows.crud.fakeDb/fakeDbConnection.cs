@@ -540,8 +540,18 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
             DisposeCount++;
         }
 
-        Close();
-        base.Dispose(disposing);
+        try
+        {
+            Close();
+        }
+        catch
+        {
+            // Dispose should not throw, even if Close is configured to fail.
+        }
+        finally
+        {
+            base.Dispose(disposing);
+        }
     }
 
     public override async ValueTask DisposeAsync()

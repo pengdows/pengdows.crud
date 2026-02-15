@@ -19,6 +19,7 @@
 using System.Data;
 using System.Threading;
 using System.Threading.Tasks;
+using pengdows.crud.enums;
 using pengdows.crud.wrappers;
 
 namespace pengdows.crud;
@@ -105,6 +106,29 @@ public static class SqlContainerExtensions
     }
 
     /// <summary>
+    /// Executes a scalar query with an explicit execution intent.
+    /// </summary>
+    /// <typeparam name="T">The expected return type.</typeparam>
+    /// <param name="container">The SQL container.</param>
+    /// <param name="executionType">Execution intent (Read/Write) for pool selection.</param>
+    /// <param name="commandType">The type of command.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>The first column of the first row, or default if no results.</returns>
+    public static ValueTask<T?> ExecuteScalarAsync<T>(
+        this ISqlContainer container,
+        ExecutionType executionType,
+        CommandType commandType = CommandType.Text,
+        CancellationToken cancellationToken = default)
+    {
+        if (container is SqlContainer concrete)
+        {
+            return concrete.ExecuteScalarAsync<T>(executionType, commandType, cancellationToken);
+        }
+
+        return container.ExecuteScalarAsync<T>(commandType);
+    }
+
+    /// <summary>
     /// Executes a query returning a reader with cancellation support.
     /// </summary>
     /// <param name="container">The SQL container.</param>
@@ -119,6 +143,28 @@ public static class SqlContainerExtensions
         if (container is SqlContainer concrete)
         {
             return concrete.ExecuteReaderAsync(commandType, cancellationToken);
+        }
+
+        return container.ExecuteReaderAsync(commandType);
+    }
+
+    /// <summary>
+    /// Executes a query returning a reader with an explicit execution intent.
+    /// </summary>
+    /// <param name="container">The SQL container.</param>
+    /// <param name="executionType">Execution intent (Read/Write) for pool selection.</param>
+    /// <param name="commandType">The type of command.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>A tracked data reader for result iteration.</returns>
+    public static ValueTask<ITrackedReader> ExecuteReaderAsync(
+        this ISqlContainer container,
+        ExecutionType executionType,
+        CommandType commandType = CommandType.Text,
+        CancellationToken cancellationToken = default)
+    {
+        if (container is SqlContainer concrete)
+        {
+            return concrete.ExecuteReaderAsync(executionType, commandType, cancellationToken);
         }
 
         return container.ExecuteReaderAsync(commandType);
@@ -144,6 +190,26 @@ public static class SqlContainerExtensions
         }
 
         // Fallback to normal reader when container is not concrete
+        return container.ExecuteReaderAsync(CommandType.Text, cancellationToken);
+    }
+
+    /// <summary>
+    /// Executes a single-row reader with an explicit execution intent.
+    /// </summary>
+    /// <param name="container">The SQL container.</param>
+    /// <param name="executionType">Execution intent (Read/Write) for pool selection.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>A tracked data reader positioned at the first (and only expected) row.</returns>
+    public static ValueTask<ITrackedReader> ExecuteReaderSingleRowAsync(
+        this ISqlContainer container,
+        ExecutionType executionType,
+        CancellationToken cancellationToken = default)
+    {
+        if (container is SqlContainer concrete)
+        {
+            return concrete.ExecuteReaderSingleRowAsync(executionType, cancellationToken);
+        }
+
         return container.ExecuteReaderAsync(CommandType.Text, cancellationToken);
     }
 

@@ -5,6 +5,9 @@ using System.Data;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.fakeDb;
+using pengdows.crud.Tests.fakeDb;
+using pengdows.crud.wrappers;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -26,6 +29,22 @@ public class DatabaseContextConnectionTests
         var ex = Assert.Throws<InvalidOperationException>(() =>
             new DatabaseContext(config, factory, NullLoggerFactory.Instance));
         Assert.Contains("In-memory databases that use SingleConnection mode require a read-write context", ex.Message);
+    }
+
+    [Fact]
+    public void SingleWriter_DoesNotLeaveInitializationConnectionOpen()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test.db;EmulatedProduct=Sqlite",
+            DbMode = DbMode.SingleWriter,
+            ProviderName = "fake"
+        };
+
+        using var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
+
+        Assert.Equal(0, context.NumberOfOpenConnections);
     }
 
     [Fact]
@@ -115,6 +134,27 @@ public class DatabaseContextConnectionTests
         // After construction, detection IS completed so settings should execute
         context.ExecuteSessionSettings(connection, false);
         Assert.NotEmpty(connection.ExecutedStatements);
+    }
+
+    [Fact]
+    public void ExecuteSessionSettings_Failure_DoesNotMarkApplied()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=file.db;EmulatedProduct=Sqlite",
+            DbMode = DbMode.Standard,
+            ProviderName = "fake"
+        };
+
+        using var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
+        var connection = new fakeDbConnection();
+        ConnectionFailureHelper.ConfigureConnectionFailure(connection, ConnectionFailureMode.FailOnCommand);
+        using var tracked = new TrackedConnection(connection);
+
+        context.ExecuteSessionSettings(tracked, false);
+
+        Assert.False(tracked.LocalState.SessionSettingsApplied);
     }
 
     private sealed class CapturingConnection : IDbConnection

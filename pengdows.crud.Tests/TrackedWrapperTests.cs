@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using pengdows.crud.@internal;
+using pengdows.crud.infrastructure;
 using pengdows.crud.metrics;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
@@ -78,5 +79,26 @@ public class TrackedWrapperTests
 
         var snapshot = metrics.CreateSnapshot();
         Assert.Equal(1, snapshot.RowsReadTotal);
+    }
+
+    [Fact]
+    public void TrackedConnection_Dispose_ReleasesPermit_WhenUnderlyingDisposeThrows()
+    {
+        var fake = new fakeDbConnection();
+        fake.SetFailOnClose(new InvalidOperationException("boom"));
+        var governor = new PoolGovernor(PoolLabel.Writer, "test", 1, TimeSpan.FromMilliseconds(100));
+        var permit = governor.Acquire();
+        var tracked = new TrackedConnection(fake, permit: permit);
+
+        var before = governor.GetSnapshot();
+        Assert.Equal(1, before.InUse);
+
+        tracked.Dispose();
+
+        Assert.Equal(0, fake.CloseCount);
+        Assert.Equal(1, fake.DisposeCount);
+
+        var after = governor.GetSnapshot();
+        Assert.Equal(0, after.InUse);
     }
 }

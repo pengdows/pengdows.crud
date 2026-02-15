@@ -742,6 +742,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
     public async ValueTask<int> ExecuteNonQueryAsync(CommandType commandType, CancellationToken cancellationToken)
     {
+        var executionType = ExecutionType.Write;
         // Check if context is configured as read-only (exactly ReadWriteMode.ReadOnly, not ReadWrite)
         if (_context is DatabaseContext dbContext &&
             dbContext.ReadWriteMode == ReadWriteMode.ReadOnly)
@@ -750,22 +751,23 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }
 
         _context.AssertIsWriteConnection();
+
         ITrackedConnection? conn = null;
         DbCommand? cmd = null;
-        var metrics = GetMetricsCollector(ExecutionType.Write);
+        var metrics = GetMetricsCollector(executionType);
         var startTimestamp = metrics?.CommandStarted(_parameters.Count) ?? 0;
         try
         {
             await using var contextLocker = _context.GetLock();
             await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             var isTransaction = _context is ITransactionContext;
-            var isShared = ShouldUseSharedConnection(_context, ExecutionType.Write, isTransaction);
-            conn = GetConnection(ExecutionType.Write, isShared);
+            var isShared = ShouldUseSharedConnection(_context, executionType, isTransaction);
+            conn = GetConnection(executionType, isShared);
             // Note: SingleWriter mode now uses Standard lifecycle with governor policy.
             // The governor (WriteSlots=1) ensures only one write at a time.
             await using var connectionLocker = conn.GetLock();
             await connectionLocker.LockAsync(cancellationToken).ConfigureAwait(false);
-            cmd = await PrepareAndCreateCommandAsync(conn, commandType, ExecutionType.Write, cancellationToken)
+            cmd = await PrepareAndCreateCommandAsync(conn, commandType, executionType, cancellationToken)
                 .ConfigureAwait(false);
             var result = await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             metrics?.CommandSucceeded(startTimestamp, result);
@@ -795,14 +797,24 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
     public ValueTask<T?> ExecuteScalarAsync<T>(CommandType commandType = CommandType.Text)
     {
-        return ExecuteScalarAsync<T>(commandType, CancellationToken.None);
+        return ExecuteScalarAsync<T>(ExecutionType.Read, commandType, CancellationToken.None);
     }
 
-    public async ValueTask<T?> ExecuteScalarAsync<T>(CommandType commandType, CancellationToken cancellationToken)
+    public ValueTask<T?> ExecuteScalarAsync<T>(CommandType commandType, CancellationToken cancellationToken)
     {
-        _context.AssertIsReadConnection();
+        return ExecuteScalarAsync<T>(ExecutionType.Read, commandType, cancellationToken);
+    }
 
-        await using var reader = await ExecuteReaderAsync(commandType, cancellationToken).ConfigureAwait(false);
+    public ValueTask<T?> ExecuteScalarAsync<T>(ExecutionType executionType, CommandType commandType = CommandType.Text)
+    {
+        return ExecuteScalarAsync<T>(executionType, commandType, CancellationToken.None);
+    }
+
+    public async ValueTask<T?> ExecuteScalarAsync<T>(ExecutionType executionType, CommandType commandType,
+        CancellationToken cancellationToken)
+    {
+        await using var reader = await ExecuteReaderAsync(executionType, commandType, cancellationToken)
+            .ConfigureAwait(false);
         if (await reader.ReadAsync().ConfigureAwait(false))
         {
             var value = reader.GetValue(0); // always returns object
@@ -842,7 +854,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         _context.AssertIsWriteConnection();
         ITrackedConnection? conn = null;
         DbCommand? cmd = null;
-        var metrics = GetMetricsCollector(ExecutionType.Read);
+        var metrics = GetMetricsCollector(ExecutionType.Write);
         var startTimestamp = metrics?.CommandStarted(_parameters.Count) ?? 0;
         try
         {
@@ -908,17 +920,59 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
     public ValueTask<ITrackedReader> ExecuteReaderAsync(CommandType commandType = CommandType.Text)
     {
-        return ExecuteReaderAsync(commandType, CancellationToken.None);
+        return ExecuteReaderAsync(ExecutionType.Read, commandType, CancellationToken.None);
     }
 
-    public async ValueTask<ITrackedReader> ExecuteReaderAsync(CommandType commandType, CancellationToken cancellationToken)
+    public ValueTask<ITrackedReader> ExecuteReaderAsync(CommandType commandType, CancellationToken cancellationToken)
     {
-        _context.AssertIsReadConnection();
+        return ExecuteReaderAsync(ExecutionType.Read, commandType, cancellationToken);
+    }
+
+    public ValueTask<ITrackedReader> ExecuteReaderAsync(ExecutionType executionType,
+        CommandType commandType = CommandType.Text)
+    {
+        return ExecuteReaderAsync(executionType, commandType, CancellationToken.None);
+    }
+
+    public async ValueTask<ITrackedReader> ExecuteReaderAsync(ExecutionType executionType, CommandType commandType,
+        CancellationToken cancellationToken)
+    {
+        return await ExecuteReaderAsyncInternal(executionType, commandType, cancellationToken, singleRow: false)
+            .ConfigureAwait(false);
+    }
+
+    // Optimized single-row reader to hint providers/ADO.NET for minimal result shape
+    public ValueTask<ITrackedReader> ExecuteReaderSingleRowAsync(CancellationToken cancellationToken = default)
+    {
+        return ExecuteReaderSingleRowAsync(ExecutionType.Read, cancellationToken);
+    }
+
+    public async ValueTask<ITrackedReader> ExecuteReaderSingleRowAsync(ExecutionType executionType,
+        CancellationToken cancellationToken = default)
+    {
+        return await ExecuteReaderAsyncInternal(executionType, CommandType.Text, cancellationToken, singleRow: true)
+            .ConfigureAwait(false);
+    }
+
+    private async ValueTask<ITrackedReader> ExecuteReaderAsyncInternal(
+        ExecutionType executionType,
+        CommandType commandType,
+        CancellationToken cancellationToken,
+        bool singleRow)
+    {
+        if (executionType == ExecutionType.Write)
+        {
+            _context.AssertIsWriteConnection();
+        }
+        else
+        {
+            _context.AssertIsReadConnection();
+        }
 
         ITrackedConnection conn;
         DbCommand? cmd = null;
         ILockerAsync? connectionLocker = null;
-        var metrics = GetMetricsCollector(ExecutionType.Write);
+        var metrics = GetMetricsCollector(executionType);
         var startTimestamp = metrics?.CommandStarted(_parameters.Count) ?? 0;
         var lockTransferred = false;
         try
@@ -926,11 +980,11 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             await using var contextLocker = _context.GetLock();
             await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             var isTransaction = _context is ITransactionContext;
-            var isShared = ShouldUseSharedConnection(_context, ExecutionType.Read, isTransaction);
-            conn = GetConnection(ExecutionType.Read, isShared);
+            var isShared = ShouldUseSharedConnection(_context, executionType, isTransaction);
+            conn = GetConnection(executionType, isShared);
             connectionLocker = conn.GetLock();
             await connectionLocker.LockAsync(cancellationToken).ConfigureAwait(false);
-            cmd = await PrepareAndCreateCommandAsync(conn, commandType, ExecutionType.Read, cancellationToken)
+            cmd = await PrepareAndCreateCommandAsync(conn, commandType, executionType, cancellationToken)
                 .ConfigureAwait(false);
 
             // unless the databaseContext is in a transaction or SingleConnection mode,
@@ -939,93 +993,13 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             // closed. This prevents leaking
             var isSingleConnection = _context.ConnectionMode == DbMode.SingleConnection;
             var behavior = isTransaction || isSingleConnection
-                ? CommandBehavior.Default
-                : CommandBehavior.CloseConnection;
-            //behavior |= CommandBehavior.SingleResult;
+                ? (singleRow ? CommandBehavior.SingleRow : CommandBehavior.Default)
+                : (singleRow ? CommandBehavior.CloseConnection | CommandBehavior.SingleRow : CommandBehavior.CloseConnection);
 
             // if this is our single connection to the database, for a transaction
             //or sqlCe mode, or single connection mode, we will NOT close the connection.
             // otherwise, we will have the connection set to autoclose so that we
             //close the underlying connection when the DbDataReader is closed;
-            var dr = await cmd.ExecuteReaderAsync(behavior, cancellationToken).ConfigureAwait(false);
-            metrics?.CommandSucceeded(startTimestamp, 0);
-            Interlocked.Increment(ref _activeReaders);
-            var trackedReader = new TrackedReader(
-                dr,
-                conn,
-                connectionLocker,
-                behavior == CommandBehavior.CloseConnection,
-                cmd,
-                metrics,
-                this);
-            cmd = null;
-            lockTransferred = true; // TrackedReader now owns the lock
-            return trackedReader;
-        }
-        catch (OperationCanceledException)
-        {
-            metrics?.CommandCancelled(startTimestamp);
-            throw;
-        }
-        catch (Exception ex) when (IsTimeout(ex))
-        {
-            metrics?.CommandTimedOut(startTimestamp);
-            throw;
-        }
-        catch
-        {
-            metrics?.CommandFailed(startTimestamp);
-            throw;
-        }
-        finally
-        {
-            // If lock wasn't transferred to TrackedReader, release it here
-            if (!lockTransferred && connectionLocker != null)
-            {
-                try
-                {
-                    await connectionLocker.DisposeAsync().ConfigureAwait(false);
-                }
-                catch
-                {
-                    // Ignore disposal errors in finally block
-                }
-            }
-
-            //no matter what we do NOT close the underlying connection
-            //or dispose it here—the reader manages command disposal.
-            Cleanup(cmd, null, ExecutionType.Read);
-        }
-    }
-
-    // Optimized single-row reader to hint providers/ADO.NET for minimal result shape
-    public async ValueTask<ITrackedReader> ExecuteReaderSingleRowAsync(CancellationToken cancellationToken = default)
-    {
-        _context.AssertIsReadConnection();
-
-        ITrackedConnection conn;
-        DbCommand? cmd = null;
-        ILockerAsync? connectionLocker = null;
-        var metrics = GetMetricsCollector(ExecutionType.Read);
-        var startTimestamp = metrics?.CommandStarted(_parameters.Count) ?? 0;
-        var lockTransferred = false;
-        try
-        {
-            await using var contextLocker = _context.GetLock();
-            await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
-            var isTransaction = _context is ITransactionContext;
-            var isShared = ShouldUseSharedConnection(_context, ExecutionType.Read, isTransaction);
-            conn = GetConnection(ExecutionType.Read, isShared);
-            connectionLocker = conn.GetLock();
-            await connectionLocker.LockAsync(cancellationToken).ConfigureAwait(false);
-            cmd = await PrepareAndCreateCommandAsync(conn, CommandType.Text, ExecutionType.Read, cancellationToken)
-                .ConfigureAwait(false);
-
-            var isSingleConnection = _context.ConnectionMode == DbMode.SingleConnection;
-            var behavior = isTransaction || isSingleConnection
-                ? CommandBehavior.SingleRow
-                : CommandBehavior.CloseConnection | CommandBehavior.SingleRow;
-
             var dr = await cmd.ExecuteReaderAsync(behavior, cancellationToken).ConfigureAwait(false);
             metrics?.CommandSucceeded(startTimestamp, 0);
             Interlocked.Increment(ref _activeReaders);
@@ -1071,7 +1045,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 }
             }
 
-            // Command lifetime is managed by the returned reader for read operations.
+            //no matter what we do NOT close the underlying connection
+            //or dispose it here—the reader manages command disposal.
             Cleanup(cmd, null, ExecutionType.Read);
         }
     }

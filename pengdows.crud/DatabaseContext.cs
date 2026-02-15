@@ -156,6 +156,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private bool _enableWriterPreference = true;
     private int? _configuredReadPoolSize;
     private int? _configuredWritePoolSize;
+    private bool _explicitReadOnlyConnectionString;
     private const string ReadOnlyApplicationNameSuffix = ":ro";
     private const string WriteApplicationNameSuffix = ":rw";
 
@@ -201,6 +202,28 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
 
     /// <inheritdoc/>
     public bool IsReadOnlyConnection => _isReadConnection && !_isWriteConnection;
+
+    internal bool ShouldUseReadOnlyForReadIntent()
+    {
+        if (ReadWriteMode == ReadWriteMode.ReadOnly)
+        {
+            return true;
+        }
+
+        if (_explicitReadOnlyConnectionString)
+        {
+            return true;
+        }
+
+        // DuckDB read-only connections can lock out concurrent writers when sharing the same file.
+        if (_dataSourceInfo?.Product == SupportedDatabase.DuckDB)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
     /// <inheritdoc/>
     public bool RCSIEnabled { get; private set; }
 

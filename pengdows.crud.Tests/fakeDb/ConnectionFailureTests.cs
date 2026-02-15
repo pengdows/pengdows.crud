@@ -125,6 +125,21 @@ public class ConnectionFailureTests
     }
 
     [Fact]
+    public void fakeDbConnection_SetFailOnClose_Dispose_DoesNotThrow()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var connection = (fakeDbConnection)factory.CreateConnection();
+        connection.SetFailOnClose(new InvalidOperationException("boom"));
+        connection.Open();
+
+        var exception = Record.Exception(() => connection.Dispose());
+
+        Assert.Null(exception);
+        Assert.Equal(1, connection.DisposeCount);
+        Assert.Equal(0, connection.CloseCount);
+    }
+
+    [Fact]
     public void fakeDbConnection_ResetFailureConditions_ClearsAllFailures()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);

@@ -273,6 +273,13 @@ public partial class DatabaseContext
                 _dialect?.ApplicationNameSettingName,
                 builder);
 
+            if (ConnectionMode is DbMode.SingleWriter or DbMode.SingleConnection)
+            {
+                _connectionString = ConnectionPoolingConfiguration.StripPoolingSetting(
+                    _connectionString,
+                    _dialect?.PoolingSettingName);
+            }
+
             InitializeReadOnlyConnectionResources(configuration);
 
             // Validate read-only connection if an explicit RO connection string was provided
@@ -307,8 +314,8 @@ public partial class DatabaseContext
                 }
             }
 
-            // For Standard mode, dispose the connection after dialect initialization is complete
-            if (ConnectionMode == DbMode.Standard && initialConnection != null)
+            // For Standard and SingleWriter modes, dispose the connection after dialect initialization is complete
+            if (ConnectionMode is DbMode.Standard or DbMode.SingleWriter && initialConnection != null)
             {
                 initialConnection.Dispose();
                 // Reset counters to "fresh" state after initialization probe
@@ -612,12 +619,8 @@ public partial class DatabaseContext
 
         var writerKey = ComputePoolKeyHash(writerConnectionString);
         var readerKey = ComputePoolKeyHash(readerConnectionString);
-        var sharedPool = string.Equals(writerKey, readerKey, StringComparison.Ordinal);
-
-        if (ConnectionMode == DbMode.SingleWriter)
-        {
-            sharedPool = false;
-        }
+        var sharedPool = ConnectionMode == DbMode.SingleConnection &&
+                         string.Equals(writerKey, readerKey, StringComparison.Ordinal);
 
         int? sharedMax = null;
         if (sharedPool)
@@ -713,9 +716,17 @@ public partial class DatabaseContext
 
     private void InitializeReadOnlyConnectionResources(IDatabaseContextConfiguration configuration)
     {
+        _explicitReadOnlyConnectionString = !string.IsNullOrWhiteSpace(configuration.ReadOnlyConnectionString);
         // 1. Derive reader connection string BEFORE adding :rw to writer so the reader
         //    does not inherit the write suffix.
         _readerConnectionString = BuildReaderConnectionString(configuration);
+
+        if (ConnectionMode is DbMode.SingleWriter or DbMode.SingleConnection)
+        {
+            _readerConnectionString = ConnectionPoolingConfiguration.StripPoolingSetting(
+                _readerConnectionString,
+                _dialect?.PoolingSettingName);
+        }
 
         // 2. Finalize reader connection string: apply MaxPoolSize + provider-specific
         //    DataSource settings while it still differs from the writer.
@@ -861,12 +872,16 @@ public partial class DatabaseContext
             ? _connectionString
             : NormalizeConnectionString(rawReadOnlyConnectionString);
 
-        var readOnly = _dialect.GetReadOnlyConnectionString(baseReaderConnectionString);
-        var usesOriginalValue = string.IsNullOrWhiteSpace(readOnly) ||
-                                string.Equals(readOnly, baseReaderConnectionString, StringComparison.OrdinalIgnoreCase);
-        baseReaderConnectionString = usesOriginalValue
-            ? BuildReadOnlyConnectionStringFromBase(baseReaderConnectionString)
-            : readOnly;
+        if (ShouldUseReadOnlyForReadIntent())
+        {
+            var readOnly = _dialect.GetReadOnlyConnectionString(baseReaderConnectionString);
+            var usesOriginalValue = string.IsNullOrWhiteSpace(readOnly) ||
+                                    string.Equals(readOnly, baseReaderConnectionString,
+                                        StringComparison.OrdinalIgnoreCase);
+            baseReaderConnectionString = usesOriginalValue
+                ? BuildReadOnlyConnectionStringFromBase(baseReaderConnectionString)
+                : readOnly;
+        }
 
         return ConnectionPoolingConfiguration.ApplyApplicationNameSuffix(
             baseReaderConnectionString,

@@ -55,7 +55,8 @@ internal class StandardConnectionStrategy : SafeAsyncDisposableBase, IConnection
     public virtual ITrackedConnection GetConnection(ExecutionType executionType, bool isShared)
     {
         var executionIsRead = executionType == ExecutionType.Read;
-        var readOnly = _context.IsReadOnlyConnection || executionIsRead;
+        var readOnly = _context.IsReadOnlyConnection ||
+                       (executionIsRead && _context.ShouldUseReadOnlyForReadIntent());
         return _context.GetStandardConnectionWithExecutionType(executionType, isShared, readOnly);
     }
 
