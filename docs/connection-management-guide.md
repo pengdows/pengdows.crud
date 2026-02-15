@@ -89,7 +89,7 @@ The context also installs read and write `PoolGovernor` instances (enabled by `E
 
 ## Related Documentation
 
-* [CONNECTION-MODES.md](../CONNECTION-MODES.md) - Technical invariants and implementation details
+* [CONNECTION-MODES.md](CONNECTION-MODES.md) - Technical invariants and implementation details
 * [Connection Pooling](connection-pooling.md) - Database-specific pooling behavior
 * [Transactions](transactions.md) - Transaction management patterns
 * [Supported Databases](supported-databases.md) - Database provider support matrix

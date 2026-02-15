@@ -663,7 +663,12 @@ internal abstract class SqlDialect : ISqlDialect
         if (_parameterPool.TryDequeue(out var param))
         {
             pooled = true;
-            // Reset pooled parameter to clean state
+            // Reset pooled parameter to clean state.
+            // IMPORTANT: ResetProviderSpecificMetadata must be called BEFORE ResetDbType.
+            // Setting NpgsqlDbType=0 via reflection marks it as "explicitly set" internally;
+            // ResetDbType() clears that flag. If called in the wrong order, Npgsql will
+            // attempt to resolve NpgsqlDbType=0 and throw ArgumentOutOfRangeException.
+            ResetProviderSpecificMetadata(param);
             try
             {
                 param.ResetDbType();
@@ -672,8 +677,6 @@ internal abstract class SqlDialect : ISqlDialect
             {
                 // Ignore providers that don't support ResetDbType.
             }
-
-            ResetProviderSpecificMetadata(param);
             param.ParameterName = string.Empty;
             param.Value = null;
             param.DbType = DbType.Object;
@@ -695,6 +698,9 @@ internal abstract class SqlDialect : ISqlDialect
     {
         if (_parameterPool.Count < MaxPoolSize)
         {
+            // Clear value eagerly to avoid holding references to potentially large
+            // objects (strings, byte arrays, etc.) while the parameter sits in the pool.
+            parameter.Value = DBNull.Value;
             _parameterPool.Enqueue(parameter);
         }
         // If pool is full, let it get garbage collected

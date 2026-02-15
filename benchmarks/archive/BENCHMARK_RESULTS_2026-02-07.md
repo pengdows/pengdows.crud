@@ -10,6 +10,11 @@ After implementing 4 major performance optimizations, comprehensive benchmarks s
 - ✅ **32-42% less memory** in concurrent query scenarios vs EF
 - ✅ Competitive performance with Dapper while providing more features
 
+**Expected Failures & Design Intent:**
+- Failures in EF and Dapper runs are expected and do not block analysis.
+- Any pengdows.crud failure is treated as a regression and must be fixed.
+- pengdows.crud prioritizes safety and fairness under contention (pool governor, turnstile, and single-writer protections) to prevent write starvation and stabilize connection behavior.
+
 ## Benchmark Configuration
 
 - **Runtime**: .NET 8.0.23 (8.0.2325.60607), X64 RyuJIT AVX2
@@ -175,6 +180,8 @@ The optimizations implemented show measurable impact on memory allocations:
 - Efficient bulk operations → faster batch processing jobs
 
 ## Benchmarks with Issues
+
+Failures in EF and Dapper are expected in these suites; any pengdows.crud issue is a regression that requires investigation.
 
 **BulkUpsert_pengdows_Concurrent**: Returned NA
 - **Status**: Requires investigation

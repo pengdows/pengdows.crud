@@ -42,6 +42,22 @@ public sealed class SqlDialectParameterPoolTests
     }
 
     [Fact]
+    public void ReturnParameterToPool_ClearsValueImmediately()
+    {
+        var dialect = CreateDialect();
+        var param = dialect.CreateDbParameter("p0", DbType.String, "sensitive-password-123");
+
+        Assert.Equal("sensitive-password-123", param.Value);
+
+        dialect.ReturnParameterToPool(param);
+
+        // Value must be cleared on return, not deferred until next rental.
+        // This prevents sensitive data (passwords, PII) from lingering in the pool
+        // and avoids holding references to large objects (blobs, long strings).
+        Assert.Equal(DBNull.Value, param.Value);
+    }
+
+    [Fact]
     public void ParameterPoolRespectsMaxSize()
     {
         var dialect = CreateDialect();

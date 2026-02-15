@@ -360,6 +360,7 @@ public class PerformanceOptimizationBenchmarks
         [Column("last_name", DbType.String)]
         public string LastName { get; set; } = string.Empty;
 
+        [PrimaryKey(1)]
         [Column("email", DbType.String)]
         public string Email { get; set; } = string.Empty;
 

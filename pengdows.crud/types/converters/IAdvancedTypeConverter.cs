@@ -18,8 +18,25 @@ namespace pengdows.crud.types.converters;
 
 public interface IAdvancedTypeConverter
 {
+    /// <summary>
+    /// .NET type handled by this converter.
+    /// </summary>
     Type TargetType { get; }
+
+    /// <summary>
+    /// Converts a .NET value into a provider-specific representation.
+    /// </summary>
+    /// <param name="value">The .NET value to convert.</param>
+    /// <param name="provider">Target database provider.</param>
+    /// <returns>Value suitable for DbParameter assignment.</returns>
     object? ToProviderValue(object value, SupportedDatabase provider);
+
+    /// <summary>
+    /// Converts a provider-specific value back into a .NET representation.
+    /// </summary>
+    /// <param name="value">Value from the provider.</param>
+    /// <param name="provider">Source database provider.</param>
+    /// <returns>Converted .NET value or null.</returns>
     object? FromProviderValue(object value, SupportedDatabase provider);
 }
 

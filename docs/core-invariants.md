@@ -65,6 +65,6 @@ This is a compact, high-signal guide for maintainers and AI assistants. It captu
 
 ## Pointers for Deeper Context
 
-- `1.1/ARCHITECTURE.md` for the full locking model and lifecycle rationale.
-- `1.1/CONNECTION-MODES.md` and `1.1/docs/connection-management-guide.md` for mode details.
-- `1.1/pengdows.crud/wrappers/TrackedReader.cs` for reader-as-lease behavior.
+- `docs/ARCHITECTURE.md` for the full locking model and lifecycle rationale.
+- `docs/CONNECTION-MODES.md` and `docs/connection-management-guide.md` for mode details.
+- `pengdows.crud/wrappers/TrackedReader.cs` for reader-as-lease behavior.

@@ -75,6 +75,5 @@ Comprehensive benchmarks created in `benchmarks/CrudBenchmarks/PerformanceOptimi
 
 ## Documentation
 
-- `PERFORMANCE_ANALYSIS.md` - Detailed analysis and remaining opportunities
-- `OPTIMIZATION_SUMMARY.md` - This document
-
+- `../archive/PERFORMANCE_ANALYSIS.md` - Detailed analysis and remaining opportunities
+- `benchmarks/CrudBenchmarks/OPTIMIZATION_SUMMARY.md` - This document
