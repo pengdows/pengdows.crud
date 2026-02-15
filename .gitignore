@@ -34,3 +34,4 @@ temp-broken-tests/
 Artifacts/
 output.txt
 coverage*
+artifacts/
