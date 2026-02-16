@@ -43,3 +43,7 @@ artifacts/
 # Debug/scratch files
 debug_*.cs
 *.log
+
+# .NET SDK runtime artifacts
+.dotnet/
+*.DotSettings
