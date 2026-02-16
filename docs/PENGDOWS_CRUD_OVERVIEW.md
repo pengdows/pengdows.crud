@@ -1,15 +1,38 @@
-# pengdows.crud - SQL-First Data Access for .NET 8
+# pengdows.crud 2.0 - SQL-First Data Access for .NET 8 / .NET 10
 
 ## What is pengdows.crud?
 
-**pengdows.crud** is a lightweight, SQL-first data access library for .NET 8 that gives developers full control over their SQL while providing type safety, database abstraction, and comprehensive testing support. It's designed for teams who want to write SQL themselves but need the safety, testability, and cross-database compatibility that traditional ORMs struggle to provide.
+**pengdows.crud** is a lightweight, SQL-first data access library for .NET that gives developers full control over their SQL while providing type safety, database abstraction, and comprehensive testing support. It's designed for teams who want to write SQL themselves but need the safety, testability, and cross-database compatibility that traditional ORMs struggle to provide.
+
+## What's New in 2.0
+
+### Breaking Changes from 1.x
+- **`EntityHelper<TEntity, TRowID>` renamed to `TableGateway<TEntity, TRowID>`** — interface: `ITableGateway`
+- **Interface-first design mandate** — all public APIs exposed through `pengdows.crud.abstractions`
+- **All async methods return `ValueTask`/`ValueTask<T>`** instead of `Task`/`Task<T>` (30-50% allocation reduction)
+- **API baseline enforcement** — breaking interface changes detected automatically at build time
+
+### New Features
+- **.NET 10 multi-targeting** — `pengdows.crud` and `pengdows.crud.abstractions` target both `net8.0` and `net10.0`
+- **Batch operations** — `BatchCreateAsync` and `BatchUpsertAsync` for multi-row INSERT/UPSERT
+- **Pool governor** — Semaphore-based backpressure preventing connection pool exhaustion
+- **RFC 9562 UUIDv7** — `Uuid7Optimized` with configurable clock modes for database-friendly sortable IDs
+- **DbMode.Best** — Auto-selects optimal connection mode based on database type and connection string
+- **Metrics and observability** — 25+ real-time metrics with event-based updates
+- **Session settings** — Per-connection session initialization (ANSI_QUOTES, isolation defaults, search_path)
+- **Isolation profiles** — Portable `IsolationProfile` abstraction across database engines
+- **DataSource support** — Native `DbDataSource`/`NpgsqlDataSource` integration
+- **Connection strategy pattern** — `IConnectionStrategy` with 4 implementations
+- **Thread safety improvements** — `AsyncLocker` with contention tracking, serialized connection open
+- **Bounded LRU cache** — Prevents unbounded memory growth in long-running applications
+- **Advanced type registry** — Pluggable `AdvancedTypeRegistry` with 14+ specialized converters
 
 ## Philosophy: No Magic, Just Control
 
 Unlike Entity Framework or other ORMs, pengdows.crud follows these core principles:
 
 ### 1. **SQL-First, Not Query Builder-First**
-- You write the SQL yourself—no LINQ, no expression trees, no hidden query generation
+- You write the SQL yourself — no LINQ, no expression trees, no hidden query generation
 - What you write is what gets executed (WYSIWYG SQL)
 - Database-specific optimizations and features are always accessible
 - No "impedance mismatch" between C# and SQL
@@ -72,7 +95,9 @@ Unlike Entity Framework or other ORMs, pengdows.crud follows these core principl
 │  │ TableGateway<T>  │  │ DatabaseContext  │                │
 │  │ - CRUD ops       │  │ - Connection mgmt│                │
 │  │ - SQL building   │  │ - Transactions   │                │
-│  │ - Mapping        │  │ - Pooling        │                │
+│  │ - Batch ops      │  │ - Pool governor  │                │
+│  │ - Streaming      │  │ - Metrics        │                │
+│  │ - Mapping        │  │ - Session setup  │                │
 │  └──────────────────┘  └──────────────────┘                │
 │                                                             │
 │  ┌──────────────────┐  ┌──────────────────┐                │
@@ -85,7 +110,7 @@ Unlike Entity Framework or other ORMs, pengdows.crud follows these core principl
                      ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  ADO.NET Provider Layer                                     │
-│  - DbProviderFactory (SqlClient, Npgsql, etc.)             │
+│  - DbProviderFactory / DbDataSource                         │
 │  - DbConnection / DbCommand / DbDataReader                  │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -117,37 +142,42 @@ public class Customer
 
 // Use it
 var context = new DatabaseContext(connectionString, SqlClientFactory.Instance);
-var helper = new TableGateway<Customer, int>(context);
+var gateway = new TableGateway<Customer, int>(context);
 
 // CRUD operations
-var customer = await helper.RetrieveOneAsync(42);
-await helper.UpdateAsync(customer);
-await helper.DeleteAsync(42);
+var customer = await gateway.RetrieveOneAsync(42);
+await gateway.UpdateAsync(customer);
+await gateway.DeleteAsync(42);
 
 // Custom SQL
-var container = helper.BuildBaseRetrieve("c");
+var container = gateway.BuildBaseRetrieve("c");
 container.Query.Append(" WHERE c.email LIKE ");
 container.Query.Append(container.MakeParameterName("email"));
 container.AddParameterWithValue("email", DbType.String, "%@example.com");
-var results = await helper.LoadListAsync(container);
+var results = await gateway.LoadListAsync(container);
 ```
 
 #### **2. DatabaseContext**
-Connection lifecycle and transaction management.
+Connection lifecycle, transaction management, metrics, and pool governance.
 
 ```csharp
-// Create context
+// Create context (with auto-selected connection mode)
 var context = new DatabaseContext(
     "Server=localhost;Database=mydb",
-    SqlClientFactory.Instance
+    SqlClientFactory.Instance,
+    new DatabaseContextConfiguration { ConnectionMode = DbMode.Best }
 );
+
+// Or with NpgsqlDataSource (preferred for PostgreSQL)
+var dataSource = new NpgsqlDataSourceBuilder(connectionString).Build();
+var context = new DatabaseContext(connectionString, dataSource);
 
 // Transactions
 using var transaction = context.BeginTransaction();
 try
 {
-    await helper.CreateAsync(entity, transaction);
-    await helper.UpdateAsync(otherEntity, transaction);
+    await gateway.CreateAsync(entity, transaction);
+    await gateway.UpdateAsync(otherEntity, transaction);
     transaction.Commit();
 }
 catch
@@ -155,12 +185,6 @@ catch
     transaction.Rollback();
     throw;
 }
-
-// Connection modes
-// - Standard: New connection per operation (default, best for production)
-// - KeepAlive: Sentinel connection prevents unload (SQLite/LocalDB)
-// - SingleWriter: One persistent write connection (file-based DBs)
-// - SingleConnection: All operations share one connection (in-memory DBs)
 ```
 
 #### **3. SqlContainer**
@@ -178,7 +202,7 @@ container.Query.Append(" AND ");
 container.Query.Append(container.MakeParameterName("created_after"));
 container.AddParameterWithValue("created_after", DbType.DateTime, DateTime.Now.AddDays(-30));
 
-// Execute
+// Execute (returns ValueTask for reduced allocations)
 var reader = await container.ExecuteReaderAsync();
 ```
 
@@ -197,7 +221,7 @@ var context = new DatabaseContext(sqlConnectionString, SqlClientFactory.Instance
 // - Parameter markers (@param vs :param vs ?)
 // - Identifier quoting ([table] vs "table" vs `table`)
 // - UPSERT strategies (MERGE vs ON CONFLICT vs REPLACE)
-// - Pagination (OFFSET/FETCH vs LIMIT/OFFSET)
+// - Session settings (ANSI_QUOTES, isolation defaults)
 // - JSON operators (JSON_VALUE vs -> vs json_extract)
 ```
 
@@ -211,11 +235,11 @@ Comprehensive support for 9 database engines:
 | **PostgreSQL** | Npgsql | RETURNING, ANY(array), CTEs, JSON operators, LISTEN/NOTIFY |
 | **Oracle** | Oracle.ManagedDataAccess | RETURNING INTO, MERGE, sequences, PL/SQL |
 | **MySQL** | MySql.Data / MySqlConnector | ON DUPLICATE KEY UPDATE, JSON functions |
+| **MariaDB** | MySql.Data | MySQL-compatible, enhanced features |
 | **SQLite** | Microsoft.Data.Sqlite | RETURNING (3.35+), simple transactions |
 | **Firebird** | FirebirdSql.Data | RETURNING, MERGE, generators |
 | **CockroachDB** | Npgsql | PostgreSQL-compatible, distributed SQL |
 | **DuckDB** | DuckDB.NET | Analytical queries, in-memory/file-based |
-| **MariaDB** | MySql.Data | MySQL-compatible, enhanced features |
 
 ## Entity Mapping with Attributes
 
@@ -304,7 +328,7 @@ public class Product
     public string? InternalCode { get; set; }
 
     [Column("status", DbType.String)]
-    [IsEnum]                                  // Auto-converts enum ↔ string/int
+    [IsEnum]                                  // Auto-converts enum <-> string/int
     public ProductStatus Status { get; set; }
 
     [Column("metadata", DbType.String)]
@@ -332,10 +356,10 @@ var customer = new Customer
 };
 
 // Simple insert
-bool success = await helper.CreateAsync(customer, context);
+bool success = await gateway.CreateAsync(customer, context);
 
 // Or build SQL manually
-var container = helper.BuildCreate(customer);
+var container = gateway.BuildCreate(customer);
 container.Query.Append(" RETURNING customer_id"); // PostgreSQL
 var newId = await container.ExecuteScalarAsync<int>();
 ```
@@ -343,27 +367,27 @@ var newId = await container.ExecuteScalarAsync<int>();
 ### Retrieve
 ```csharp
 // By single ID
-var customer = await helper.RetrieveOneAsync(42);
+var customer = await gateway.RetrieveOneAsync(42);
 
 // By multiple IDs
-var customers = await helper.RetrieveAsync(new[] { 1, 2, 3, 4, 5 });
+var customers = await gateway.RetrieveAsync(new[] { 1, 2, 3, 4, 5 });
 
 // Custom SQL
-var container = helper.BuildBaseRetrieve("c");
+var container = gateway.BuildBaseRetrieve("c");
 container.Query.Append(" WHERE c.created_at > ");
 container.Query.Append(container.MakeParameterName("date"));
 container.AddParameterWithValue("date", DbType.DateTime, DateTime.Now.AddMonths(-1));
-var recentCustomers = await helper.LoadListAsync(container);
+var recentCustomers = await gateway.LoadListAsync(container);
 ```
 
 ### Update
 ```csharp
 // Update entity
 customer.Email = "newemail@acme.com";
-int rowsAffected = await helper.UpdateAsync(customer);
+int rowsAffected = await gateway.UpdateAsync(customer);
 
 // With optimistic concurrency check
-int rowsAffected = await helper.UpdateAsync(
+int rowsAffected = await gateway.UpdateAsync(
     customer,
     loadOriginal: true  // Loads original to detect concurrent changes
 );
@@ -372,16 +396,16 @@ int rowsAffected = await helper.UpdateAsync(
 ### Delete
 ```csharp
 // Single delete
-await helper.DeleteAsync(42);
+await gateway.DeleteAsync(42);
 
 // Bulk delete
-await helper.DeleteAsync(new[] { 1, 2, 3, 4, 5 });
+await gateway.DeleteAsync(new[] { 1, 2, 3, 4, 5 });
 ```
 
 ### Upsert (Insert or Update)
 ```csharp
 // Automatically chooses INSERT or UPDATE based on existence
-int rowsAffected = await helper.UpsertAsync(customer);
+int rowsAffected = await gateway.UpsertAsync(customer);
 
 // Uses database-specific strategies:
 // - SQL Server: MERGE
@@ -390,55 +414,68 @@ int rowsAffected = await helper.UpsertAsync(customer);
 // - SQLite: INSERT ... ON CONFLICT ... DO UPDATE (3.24+)
 ```
 
-## 🆕 Streaming API (Memory-Efficient Operations)
+## Batch Operations
 
-**New in 1.1**: Stream large result sets without loading everything into memory.
+Multi-row INSERT and UPSERT for high-throughput scenarios:
+
+```csharp
+var customers = new List<Customer>
+{
+    new() { Name = "Acme", Email = "a@acme.com" },
+    new() { Name = "Beta", Email = "b@beta.com" },
+    new() { Name = "Gamma", Email = "g@gamma.com" }
+};
+
+// Batch insert - generates multi-row VALUES syntax
+int affected = await gateway.BatchCreateAsync(customers, context);
+
+// Batch upsert - dialect-specific multi-row upsert
+int affected = await gateway.BatchUpsertAsync(customers, context);
+
+// Or build without executing (for inspection/modification)
+IReadOnlyList<ISqlContainer> chunks = gateway.BuildBatchCreate(customers);
+IReadOnlyList<ISqlContainer> chunks = gateway.BuildBatchUpsert(customers);
+```
+
+**How it works:**
+- Generates multi-row `INSERT INTO t (cols) VALUES (...), (...), (...)` syntax
+- Auto-chunks based on dialect's `MaxParameterLimit` with 10% headroom
+- NULL values inlined as literals (no parameter consumed)
+- Database-specific upsert strategies:
+  - PostgreSQL/CockroachDB: `INSERT ... ON CONFLICT DO UPDATE`
+  - MySQL/MariaDB: `INSERT ... ON DUPLICATE KEY UPDATE`
+  - SQL Server/Oracle/Firebird: falls back to individual upserts per entity
+
+## Streaming API (Memory-Efficient Operations)
+
+Stream large result sets without loading everything into memory.
 
 ### LoadStreamAsync - Stream Custom SQL Results
 
 ```csharp
 // Traditional approach - loads ALL orders into memory
-var container = helper.BuildBaseRetrieve("o");
+var container = gateway.BuildBaseRetrieve("o");
 container.Query.Append(" WHERE o.status = 'Pending'");
-var allOrders = await helper.LoadListAsync(container);
-// ❌ 50,000 orders × 5KB each = 250MB in memory
-
-foreach (var order in allOrders)
-{
-    await ProcessOrderAsync(order);
-}
+var allOrders = await gateway.LoadListAsync(container);
+// 50,000 orders x 5KB each = 250MB in memory
 
 // Streaming approach - processes one at a time
-await foreach (var order in helper.LoadStreamAsync(container))
+await foreach (var order in gateway.LoadStreamAsync(container))
 {
     await ProcessOrderAsync(order);
-    // ✅ Only 1 order (5KB) in memory at a time
-
-    // Can break early without loading rest
-    if (shouldStop) break;
+    // Only 1 order (5KB) in memory at a time
 }
 ```
 
 ### RetrieveStreamAsync - Stream by ID List
 
 ```csharp
-// Get 100,000 order IDs from search service
 var orderIds = await searchService.GetMatchingOrderIdsAsync();
 
-// Traditional approach - loads ALL 100K orders
-var orders = await helper.RetrieveAsync(orderIds);
-// ❌ 100,000 orders in memory
-
-foreach (var order in orders)
+await foreach (var order in gateway.RetrieveStreamAsync(orderIds))
 {
     await ExportToFileAsync(order);
-}
-
-// Streaming approach
-await foreach (var order in helper.RetrieveStreamAsync(orderIds))
-{
-    await ExportToFileAsync(order);
-    // ✅ Process and discard, never accumulating
+    // Process and discard, never accumulating
 }
 ```
 
@@ -446,11 +483,11 @@ await foreach (var order in helper.RetrieveStreamAsync(orderIds))
 
 ```csharp
 var cts = new CancellationTokenSource();
-cts.CancelAfter(TimeSpan.FromMinutes(5));  // Timeout after 5 minutes
+cts.CancelAfter(TimeSpan.FromMinutes(5));
 
 try
 {
-    await foreach (var order in helper.RetrieveStreamAsync(orderIds, null, cts.Token))
+    await foreach (var order in gateway.RetrieveStreamAsync(orderIds, null, cts.Token))
     {
         await ProcessOrderAsync(order);
     }
@@ -478,11 +515,11 @@ catch (OperationCanceledException)
 using var transaction = context.BeginTransaction();
 try
 {
-    await helper.CreateAsync(order, transaction);
+    await gateway.CreateAsync(order, transaction);
 
     foreach (var item in order.Items)
     {
-        await itemHelper.CreateAsync(item, transaction);
+        await itemGateway.CreateAsync(item, transaction);
     }
 
     transaction.Commit();
@@ -499,28 +536,26 @@ catch
 // Database-native isolation levels
 using var tx = context.BeginTransaction(IsolationLevel.Serializable);
 
-// Or portable isolation profiles
-using var tx = context.BeginTransaction(IsolationProfile.ReadCommitted);
+// Or portable isolation profiles (maps to optimal native level per database)
+using var tx = context.BeginTransaction(IsolationProfile.SafeNonBlockingReads);
 
 // Supported profiles:
-// - ReadUncommitted: Dirty reads allowed
-// - ReadCommitted: Default for most databases
-// - RepeatableRead: Prevents non-repeatable reads
-// - Serializable: Full isolation
-// - Snapshot: SQL Server/PostgreSQL snapshot isolation
+// - SafeNonBlockingReads: MVCC snapshot, no dirty reads, no blocking
+// - StrictConsistency:    Serializable, fully isolated (financial/critical logic)
+// - FastWithRisks:        ReadUncommitted / dirty reads (almost never recommended)
 ```
 
 ### Savepoints
 ```csharp
 using var transaction = context.BeginTransaction();
 
-await helper.CreateAsync(customer, transaction);
+await gateway.CreateAsync(customer, transaction);
 
 await transaction.SavepointAsync("customer_created");
 
 try
 {
-    await helper.CreateAsync(order, transaction);
+    await gateway.CreateAsync(order, transaction);
 }
 catch
 {
@@ -531,6 +566,164 @@ catch
 transaction.Commit();
 ```
 
+## Pool Governor
+
+The pool governor prevents connection pool exhaustion by limiting concurrent connections with semaphore-based backpressure.
+
+```csharp
+var config = new DatabaseContextConfiguration
+{
+    ConnectionMode = DbMode.Best,
+    PoolGovernorEnabled = true,
+    MaxConcurrentReads = 20,
+    MaxConcurrentWrites = 10,
+    PoolAcquireTimeout = TimeSpan.FromSeconds(5)
+};
+
+var context = new DatabaseContext(connectionString, factory, config);
+```
+
+**Features:**
+- Separate read and write permits for fine-grained control
+- Throws `PoolSaturatedException` when timeout expires
+- Turnstile fairness prevents writer starvation under reader pressure
+- Real-time metrics: in-use, peak, queued, timeouts, cancellations
+- RAII pattern via `PoolPermit` struct ensures permits are always released
+
+## UUIDv7 (RFC 9562)
+
+High-performance, time-sortable UUID generator optimized for database indexes:
+
+```csharp
+// Generate a UUIDv7
+var id = Uuid7Optimized.NewUuid7();
+
+// Non-blocking generation for latency-sensitive code
+if (Uuid7Optimized.TryNewUuid7(out var id))
+{
+    // Use id
+}
+
+// Configure clock mode for your deployment
+Uuid7Optimized.Configure(new Uuid7Options
+{
+    ClockMode = Uuid7ClockMode.NtpSynced  // Default
+});
+```
+
+**Clock modes:**
+| Mode | Accuracy | Use Case |
+|------|----------|----------|
+| `PtpSynced` | ±0.1-1.0ms | PTP-synchronized clusters (EKS Nitro, on-prem PTP) |
+| `NtpSynced` | ±1-10ms | Most cloud environments (default) |
+| `SingleInstance` | N/A | Single-writer services, embedded systems |
+
+**Why UUIDv7 over UUIDv4?**
+- Chronologically sortable (no B-tree index fragmentation)
+- Contains timestamp (useful for debugging/auditing)
+- Up to 4096 IDs per millisecond per thread
+- Thread-local counters (lock-free, zero CAS contention)
+
+## Metrics and Observability
+
+DatabaseContext tracks 25+ real-time metrics with minimal overhead:
+
+```csharp
+// Subscribe to metrics updates
+context.MetricsUpdated += (sender, metrics) =>
+{
+    Console.WriteLine($"Commands: {metrics.CommandsExecuted}, P95: {metrics.P95CommandMs}ms");
+};
+
+// Or poll on demand
+var metrics = context.GetMetrics();
+```
+
+**Metrics tracked:**
+
+| Category | Metrics |
+|----------|---------|
+| **Connections** | Current, peak, opened, closed, long-lived, avg hold/open/close time |
+| **Commands** | Executed, failed, timed-out, cancelled, avg duration, P95, P99 |
+| **Rows** | Total read, total affected, max parameters observed |
+| **Prepared Statements** | Cached, evicted |
+| **Transactions** | Active, max concurrent, avg duration |
+| **Read/Write Split** | Separate `DatabaseRoleMetrics` for read vs write operations |
+
+```csharp
+// Quick observability check
+var openConns = context.NumberOfOpenConnections;  // Current count
+var peakConns = context.PeakOpenConnections;      // Peak observed
+var dbProduct = context.Product;                   // Detected database
+var mode = context.ConnectionMode;                 // Current DbMode
+```
+
+## Connection Modes and Strategies
+
+### DbMode Enum
+
+```csharp
+public enum DbMode
+{
+    Standard = 0,         // Recommended for production
+    KeepAlive = 1,        // Keeps one sentinel connection open
+    SingleWriter = 2,     // Persistent writer + ephemeral readers
+    SingleConnection = 4, // All work through one pinned connection
+    Best = 15             // Auto-select optimal mode for the database
+}
+```
+
+### Mode Descriptions
+
+| Mode | Best For | Behavior |
+|------|----------|----------|
+| **Standard** | Production workloads | New connection per operation, relies on provider pooling |
+| **KeepAlive** | SQL Server LocalDB | Sentinel connection prevents database unload |
+| **SingleWriter** | File-based SQLite/DuckDB | One persistent write connection, ephemeral readers |
+| **SingleConnection** | In-memory `:memory:` databases | All operations share one pinned connection |
+| **Best** | Everywhere (recommended) | Auto-selects based on database type and connection string |
+
+### Best Mode Auto-Selection
+
+| Database Type | Connection Pattern | Auto-Selected Mode |
+|--------------|-------------------|-------------------|
+| SQLite/DuckDB | `:memory:` (isolated) | `SingleConnection` |
+| SQLite/DuckDB | File-based or shared memory | `SingleWriter` |
+| SQL Server | LocalDB instance | `KeepAlive` |
+| PostgreSQL, SQL Server, MySQL, Oracle, CockroachDB | Any | `Standard` |
+
+```csharp
+// Recommended: let pengdows.crud choose
+var context = new DatabaseContext(connectionString, factory,
+    new DatabaseContextConfiguration { ConnectionMode = DbMode.Best });
+```
+
+### Connection Strategy Pattern
+
+Each `DbMode` maps to an `IConnectionStrategy` implementation:
+- `StandardConnectionStrategy` — Ephemeral connections from pool
+- `KeepAliveConnectionStrategy` — Sentinel + ephemeral work connections
+- `SingleWriterConnectionStrategy` — Persistent writer + ephemeral readers
+- `SingleConnectionStrategy` — All work on single pinned connection
+
+## Session Settings
+
+Per-connection session initialization ensures consistent behavior across connections:
+
+```csharp
+// Automatic: dialect detects and applies session settings on first connection open
+// Examples:
+// - MySQL: SET sql_mode='ANSI_QUOTES,...'
+// - SQL Server: SET ARITHABORT ON, isolation level defaults
+// - PostgreSQL: SET search_path, timezone
+```
+
+**How it works:**
+- Dialect evaluates current session settings vs expected settings
+- Generates only the SET statements needed (delta-based)
+- Applied once per physical connection via `ConnectionLocalState.SessionSettingsApplied`
+- Skips execution if already compliant (zero overhead for warm connections)
+
 ## Testing Infrastructure
 
 ### Unit Testing with fakeDb
@@ -538,32 +731,17 @@ transaction.Commit();
 **fakeDb** is a complete ADO.NET provider implementation that wires up ADO.NET control flow for isolated unit testing.
 
 **What fakeDb does:**
-- ✅ Implements full `DbProviderFactory`, `DbConnection`, `DbCommand`, `DbDataReader` APIs
-- ✅ Returns empty result sets by default (customizable via constructor)
-- ✅ Simulates connection failures, timeouts, and error conditions
-- ✅ Allows SQL generation and parameter verification without a database
-- ✅ Enables fast, isolated unit tests without Docker or connection strings
+- Implements full `DbProviderFactory`, `DbConnection`, `DbCommand`, `DbDataReader` APIs
+- Returns empty result sets by default (customizable via constructor)
+- Simulates connection failures, timeouts, and error conditions
+- Allows SQL generation and parameter verification without a database
+- Enables fast, isolated unit tests without Docker or connection strings
 
 **What fakeDb does NOT do:**
-- ❌ No database semantics (no triggers, referential integrity, constraints)
-- ❌ No transaction isolation (BeginTransaction succeeds but doesn't enforce isolation)
-- ❌ No query execution (INSERT/UPDATE/DELETE return success, SELECT returns empty or mocked data)
-- ❌ No vendor-specific behavior (stored procedures, JSON functions, date formatting)
-
-**Use fakeDb for:**
-- Unit testing code paths (success/failure flows)
-- Verifying SQL generation correctness
-- Testing error handling and resilience
-- Fast feedback during TDD (thousands of tests in seconds)
-
-**Still need integration tests for:**
-- Database-specific behavior (PostgreSQL JSONB, SQL Server MERGE, etc.)
-- Transaction isolation and concurrency
-- Constraint violations and referential integrity
-- Actual data roundtripping and type conversion
-- Performance characteristics and query plans
-
-**Example:** fakeDb verifies your code *constructs* correct SQL and handles errors, but integration tests verify the SQL *executes* correctly on real databases.
+- No database semantics (no triggers, referential integrity, constraints)
+- No transaction isolation (BeginTransaction succeeds but doesn't enforce isolation)
+- No query execution (INSERT/UPDATE/DELETE return success, SELECT returns empty or mocked data)
+- No vendor-specific behavior (stored procedures, JSON functions, date formatting)
 
 ```csharp
 public class CustomerServiceTests
@@ -574,12 +752,12 @@ public class CustomerServiceTests
         // Arrange - No database needed!
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new TableGateway<Customer, int>(context);
+        var gateway = new TableGateway<Customer, int>(context);
 
         var customer = new Customer { Name = "Test", Email = "test@example.com" };
 
         // Act - Executes against fakeDb
-        var success = await helper.CreateAsync(customer, context);
+        var success = await gateway.CreateAsync(customer, context);
 
         // Assert - Verifies code paths without database
         Assert.True(success);
@@ -591,12 +769,12 @@ public class CustomerServiceTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         var context = new DatabaseContext("Host=fake", factory);
-        var helper = new TableGateway<Customer, int>(context);
+        var gateway = new TableGateway<Customer, int>(context);
 
         var customer = new Customer { Name = "Acme" };
 
         // Act
-        var container = helper.BuildCreate(customer);
+        var container = gateway.BuildCreate(customer);
 
         // Assert - Verify SQL generation
         Assert.Contains("INSERT INTO", container.Query.ToString());
@@ -616,7 +794,6 @@ public class CustomerIntegrationTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        // Spin up real PostgreSQL in Docker
         _postgres = new PostgreSqlBuilder()
             .WithImage("postgres:15-alpine")
             .Build();
@@ -628,25 +805,20 @@ public class CustomerIntegrationTests : IAsyncLifetime
             NpgsqlDataSource.Create(_postgres.GetConnectionString())
         );
 
-        // Run migrations
         await SetupSchemaAsync();
     }
 
     [Fact]
     public async Task CreateAndRetrieve_Customer_Roundtrips()
     {
-        // Arrange
-        var helper = new TableGateway<Customer, int>(_context);
+        var gateway = new TableGateway<Customer, int>(_context);
         var customer = new Customer { Name = "Test", Email = "test@example.com" };
 
-        // Act - Real database operations
-        await helper.CreateAsync(customer, _context);
-        var retrieved = await helper.RetrieveOneAsync(customer.Id);
+        await gateway.CreateAsync(customer, _context);
+        var retrieved = await gateway.RetrieveOneAsync(customer.Id);
 
-        // Assert
         Assert.NotNull(retrieved);
         Assert.Equal("Test", retrieved.Name);
-        Assert.Equal("test@example.com", retrieved.Email);
     }
 
     public async Task DisposeAsync()
@@ -661,84 +833,69 @@ public class CustomerIntegrationTests : IAsyncLifetime
 
 ```csharp
 [Fact]
-public void OpenConnection_WhenDatabaseDown_ThrowsExpectedException()
+public void ConnectionFailure_ThrowsExpectedException()
 {
-    // Arrange - fakeDb can simulate failures
-    var connection = (FakeDbConnection)factory.CreateConnection();
-    connection.SetFailOnOpen();
-
-    // Act & Assert
-    Assert.Throws<InvalidOperationException>(() => connection.Open());
-}
-
-[Fact]
-public async Task CreateCustomer_WhenConnectionBreaks_HandlesGracefully()
-{
-    // Arrange
-    var factory = FakeDbFactory.CreateFailingFactory(
+    var factory = fakeDbFactory.CreateFailingFactory(
         SupportedDatabase.PostgreSql,
-        ConnectionFailureMode.FailOnCommand
-    );
+        ConnectionFailureMode.FailOnOpen);
 
     var context = new DatabaseContext("Host=fake", factory);
-    var helper = new TableGateway<Customer, int>(context);
 
-    // Act & Assert - Verify error handling
-    await Assert.ThrowsAsync<InvalidOperationException>(
-        async () => await helper.CreateAsync(customer, context)
-    );
+    Assert.Throws<InvalidOperationException>(() =>
+    {
+        using var container = context.CreateSqlContainer("SELECT 1");
+        container.ExecuteScalarAsync<int>().GetAwaiter().GetResult();
+    });
 }
 ```
 
 ## Performance Optimizations
 
-### 1. Reader Plan Caching
+### 1. ValueTask Throughout
+All async methods return `ValueTask`/`ValueTask<T>` instead of `Task`/`Task<T>`, reducing allocations by 30-50% for synchronous completion paths.
+
+### 2. Reader Plan Caching
 ```csharp
 // First query: Builds plan by introspecting reader schema
-var customers = await helper.LoadListAsync(container);
+var customers = await gateway.LoadListAsync(container);
 // Cached: Column ordinals, type extractors, property setters
 
 // Subsequent queries with same schema: Reuses plan
-var moreCustomers = await helper.LoadListAsync(container);
-// ✅ No reflection, no string lookups, pure delegate calls
+var moreCustomers = await gateway.LoadListAsync(container);
+// No reflection, no string lookups, pure delegate calls
 ```
 
-### 2. SQL Template Caching
+### 3. SQL Template Caching
 ```csharp
 // First retrieve by ID: Builds SQL template
-var customer = await helper.RetrieveOneAsync(42);
+var customer = await gateway.RetrieveOneAsync(42);
 // Cached: "SELECT ... FROM customers WHERE customer_id = @p0"
 
 // Subsequent retrieves: Reuses template
-var other = await helper.RetrieveOneAsync(99);
-// ✅ No string building, just parameter swap
+var other = await gateway.RetrieveOneAsync(99);
+// No string building, just parameter swap
 ```
 
-### 3. Compiled Property Setters
+### 4. Compiled Property Setters
 ```csharp
 // Replaces slow reflection with fast compiled delegates
-// reader.GetString(0) → customer.Name = value  (direct call, no reflection)
+// reader.GetString(0) -> customer.Name = value  (direct call, no reflection)
 
 // Performance: ~1,700ns per row vs ~9,700ns with pure reflection (5.7x faster)
-// Benchmark: ReaderMappingBenchmark on AMD Ryzen 9 5950X, .NET 8.0.22
-// See benchmarks/CrudBenchmarks/ReaderMappingBenchmark.cs for methodology
 ```
 
-### 4. Parameter Bucketing
+### 5. Parameter Bucketing
 ```csharp
 // Instead of generating unique SQL for every ID count:
 // WHERE id IN (@p0, @p1, @p2)          -- 3 IDs
 // WHERE id IN (@p0, @p1, @p2, @p3)     -- 4 IDs
-// ... (unbounded cache entries)
 
 // Buckets to powers of 2 and reuses last value:
 // WHERE id IN (@p0, @p1, @p2, @p3)     -- 3 IDs uses 4-param template
-// WHERE id IN (@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7)  -- 5 IDs uses 8-param
-
 // Keeps cache bounded while maintaining performance
 ```
 
-### 5. Set-Valued Parameters (PostgreSQL, SQL Server)
+### 6. Set-Valued Parameters (PostgreSQL, SQL Server)
 ```csharp
 // Traditional: WHERE id IN (@p0, @p1, @p2, ..., @p99)  -- 100 parameters
 // Set-valued: WHERE id = ANY(@p0)  -- 1 array parameter
@@ -749,11 +906,16 @@ var other = await helper.RetrieveOneAsync(99);
 // - Faster parameter binding
 ```
 
+### 7. DbParameter Pooling
+Parameters are pooled and reused via `ConcurrentQueue`, avoiding repeated `DbProviderFactory.CreateParameter()` calls on hot paths.
+
+### 8. Bounded LRU Cache
+Query plans, prepared statements, and compiled accessors use bounded caches with LRU eviction, preventing unbounded memory growth in long-running applications.
+
 ## Multi-Tenancy Support
 
 pengdows.crud supports **tenant-per-database only**. It ships a lightweight multi-tenant registry that
-creates one `DatabaseContext` per tenant and caches them for reuse. Tenants are configured with a
-`DatabaseContextConfiguration` that includes provider name and connection string.
+creates one `DatabaseContext` per tenant and caches them for reuse.
 
 ### Configuration (appsettings.json)
 
@@ -810,304 +972,70 @@ public class TenantOrderService
     public async Task<Order?> GetOrderAsync(string tenantId, int id)
     {
         var ctx = _registry.GetContext(tenantId);
-        var helper = new TableGateway<Order, int>(ctx);
-        return await helper.RetrieveOneAsync(id);
+        var gateway = new TableGateway<Order, int>(ctx);
+        return await gateway.RetrieveOneAsync(id);
     }
 }
 ```
 
-**Behavior notes:**
-- Only tenant-per-database is supported (no shared-schema or row-level tenancy helpers).
-- Contexts are cached per tenant in `TenantContextRegistry`.
-- Each tenant context still follows the singleton-per-connection-string rule.
-- When using SQLite `:memory:` per tenant, use `DbMode.SingleConnection` or a shared in-memory connection string.
-
-## Connection Modes and Strategies
-
-### Standard (Default - Production Recommended)
-```csharp
-var context = new DatabaseContext(connectionString, factory);
-// - Opens connection per operation
-// - Closes immediately after
-// - Relies on provider connection pooling
-// - Best for: Production workloads, cloud databases
-```
-
-### KeepAlive (Embedded Databases)
-```csharp
-var context = new DatabaseContext(
-    "Data Source=mydb.db",
-    SqliteFactory.Instance,
-    new DatabaseContextConfiguration { ConnectionMode = DbMode.KeepAlive }
-);
-// - Keeps one sentinel connection open
-// - Prevents database unload (SQLite, LocalDB)
-// - Best for: SQLite, SQL Server LocalDB
-```
-
-### SingleWriter (File-Based Shared Databases)
-```csharp
-var context = new DatabaseContext(
-    "Data Source=mydb.db;Cache=Shared",
-    SqliteFactory.Instance,
-    new DatabaseContextConfiguration { ConnectionMode = DbMode.SingleWriter }
-);
-// - One persistent write connection
-// - Ephemeral read connections as needed
-// - Best for: SQLite with Cache=Shared, DuckDB files
-```
-
-### SingleConnection (In-Memory Databases)
-```csharp
-var context = new DatabaseContext(
-    "Data Source=:memory:",
-    SqliteFactory.Instance
-);
-// Auto-detects and uses SingleConnection mode
-// - All operations share one connection
-// - Connection stays open for lifetime of context
-// - Best for: SQLite :memory:, testing
-```
-
-### Best Mode Auto-Selection
-
-Use `DbMode.Best` to automatically select the optimal connection mode for your database:
-
-```csharp
-var context = new DatabaseContext(
-    connectionString,
-    factory,
-    new DatabaseContextConfiguration { DbMode = DbMode.Best }
-);
-```
-
-**Best-mode selection rules** (based on detected database type and connection string):
-
-| Database Type | Connection String Pattern | Auto-Selected Mode | Reason |
-|--------------|---------------------------|-------------------|---------|
-| **SQLite / DuckDB** | `Data Source=:memory:` (isolated) | `SingleConnection` | Each `:memory:` connection = separate database. Required for correctness. |
-| **SQLite / DuckDB** | `Mode=Memory;Cache=Shared` (shared in-memory) | `SingleWriter` | Multiple connections share database. Optimal write coordination. |
-| **SQLite / DuckDB** | File-based (e.g., `mydb.db`) | `SingleWriter` | Prevents lock contention. WAL enables many readers + one writer. |
-| **Firebird** | Embedded mode | `SingleConnection` | Embedded Firebird requires single connection. Required for correctness. |
-| **SQL Server** | LocalDB instance | `KeepAlive` | Prevents database unload. Sentinel connection keeps instance alive. |
-| **PostgreSQL** | Any | `Standard` | Full server supports high concurrency. Best throughput. |
-| **SQL Server** | Non-LocalDB | `Standard` | Client-server architecture. Connection pooling handles concurrency. |
-| **MySQL / MariaDB** | Any | `Standard` | Full server supports high concurrency. Best throughput. |
-| **Oracle** | Any | `Standard` | Full server supports high concurrency. Best throughput. |
-| **CockroachDB** | Any | `Standard` | Distributed database. Designed for high concurrency. |
-| **Unknown Provider** | Any | `Standard` | Safe default. Relies on provider pooling. |
-
-**Coercion Rules** (when explicit mode is unsafe):
-
-| Database Type | Requested Mode | Coerced To | Reason |
-|--------------|----------------|-----------|---------|
-| SQLite/DuckDB isolated `:memory:` | Any except `SingleConnection` | `SingleConnection` | **REQUIRED** - Each connection = separate database |
-| SQLite/DuckDB file or shared | `Standard` or `KeepAlive` | `SingleWriter` | **UNSAFE** - Lock contention without coordination |
-| Firebird embedded | Any except `SingleConnection` | `SingleConnection` | **REQUIRED** - Embedded mode limitation |
-| SQL Server LocalDB | Any except `KeepAlive` | `KeepAlive` | **REQUIRED** - Prevents instance unload |
-
-**Mode Mismatch Warnings** (safe but suboptimal):
-
-pengdows.crud logs warnings when you explicitly choose a mode that's safe but not optimal:
-
-```
-[LogWarning] ConnectionModeMismatch: SingleConnection mode used with PostgreSQL.
-Client-server databases support full concurrency; consider Standard mode for better throughput.
-```
-
-Examples of mismatch warnings:
-- **PostgreSQL + SingleConnection**: Safe but limits concurrency (one connection for all work)
-- **SQL Server + SingleWriter**: Safe but limits concurrency (one writer, ephemeral readers)
-- **SQLite file + Standard**: Safe with WAL but may cause lock contention without WAL
-
-**Key Insight**: `DbMode.Best` eliminates guesswork. It selects the most functional safe mode based on database capabilities and connection string analysis.
+**Key points:**
+- Only tenant-per-database is supported (no shared-schema or row-level tenancy)
+- Each tenant can use a **different database engine** (SQL Server, PostgreSQL, SQLite, etc.)
+- Contexts are cached per tenant in `TenantContextRegistry`
+- SQL automatically generated with tenant's dialect (parameter markers, quoting)
 
 ## NuGet Packages
 
 ```xml
-<!-- Core library -->
-<PackageReference Include="pengdows.crud" Version="1.1.0" />
+<!-- Core library (net8.0 + net10.0) -->
+<PackageReference Include="pengdows.crud" Version="2.0.0" />
 
-<!-- Interfaces only (for library projects) -->
-<PackageReference Include="pengdows.crud.abstractions" Version="1.1.0" />
+<!-- Interfaces only (net8.0 + net10.0, for library projects) -->
+<PackageReference Include="pengdows.crud.abstractions" Version="2.0.0" />
 
-<!-- Mock provider for testing -->
-<PackageReference Include="pengdows.crud.fakeDb" Version="1.1.0" />
+<!-- Mock provider for testing (net8.0) -->
+<PackageReference Include="pengdows.crud.fakeDb" Version="2.0.0" />
 ```
 
-## Code Quality & Testing Standards
+## Code Quality and Testing Standards
 
 ### Test-Driven Development (Mandatory)
 - **Red**: Write failing test first
 - **Green**: Implement minimal code to pass
 - **Refactor**: Improve while keeping tests green
-- **Coverage**: 83% minimum (CI enforced), 90% target
+- **Coverage**: 83% minimum (CI enforced), 95% target for new features
 
-### Test Count (as of v1.1)
-- **Unit Tests**: 2,951+ tests (all passing)
-- **Integration Tests**: 85 tests across 8 databases (83 passing, 2 skipped)
-- **Execution Time**: ~6 seconds for unit, varies for integration
+### Test Count (as of v2.0)
+- **Unit Tests**: 4,300+ tests (all passing)
+- **Integration Tests**: Across 9 databases via Testcontainers
+- **Benchmarks**: BenchmarkDotNet suite with automatic container lifecycle
 
 ### CI/CD Pipeline
 - Build on push to main
 - Run all unit tests (must pass)
-- Code coverage check (≥83%)
+- Code coverage check (>=83%)
+- API baseline verification (breaking interface changes detected)
 - Run integration tests (Testcontainers)
 - Publish to NuGet on successful builds
-
-## Real-World Usage Example
-
-```csharp
-// Dependency Injection Setup (ASP.NET Core)
-public void ConfigureServices(IServiceCollection services)
-{
-    // Register data source (better than factory for performance)
-    services.AddSingleton(sp =>
-    {
-        var connectionString = Configuration.GetConnectionString("Default");
-        return new NpgsqlDataSourceBuilder(connectionString).Build();
-    });
-
-    // Register context (singleton per connection string)
-    services.AddSingleton<IDatabaseContext>(sp =>
-    {
-        var dataSource = sp.GetRequiredService<NpgsqlDataSource>();
-        return new DatabaseContext(
-            Configuration.GetConnectionString("Default"),
-            dataSource
-        );
-    });
-
-    // Register audit resolver
-    services.AddScoped<IAuditValueResolver, UserAuditResolver>();
-
-    // Register entity helpers
-    services.AddScoped<ITableGateway<Customer, int>>(sp =>
-    {
-        var context = sp.GetRequiredService<IDatabaseContext>();
-        var audit = sp.GetRequiredService<IAuditValueResolver>();
-        return new TableGateway<Customer, int>(context, audit);
-    });
-}
-
-// Service Layer
-public class CustomerService
-{
-    private readonly ITableGateway<Customer, int> _helper;
-    private readonly IDatabaseContext _context;
-
-    public CustomerService(
-        ITableGateway<Customer, int> helper,
-        IDatabaseContext context)
-    {
-        _helper = helper;
-        _context = context;
-    }
-
-    public async Task<Customer?> GetCustomerAsync(int id)
-    {
-        return await _helper.RetrieveOneAsync(id);
-    }
-
-    public async Task<List<Customer>> SearchCustomersAsync(
-        string searchTerm,
-        int limit = 100)
-    {
-        var container = _helper.BuildBaseRetrieve("c");
-        container.Query.Append(" WHERE c.name ILIKE ");
-        container.Query.Append(container.MakeParameterName("search"));
-        container.AddParameterWithValue(
-            "search",
-            DbType.String,
-            $"%{searchTerm}%"
-        );
-        container.Query.Append(" LIMIT ");
-        container.Query.Append(limit);
-
-        return await _helper.LoadListAsync(container);
-    }
-
-    public async Task<Customer> CreateCustomerAsync(Customer customer)
-    {
-        using var transaction = _context.BeginTransaction();
-
-        try
-        {
-            await _helper.CreateAsync(customer, transaction);
-
-            // Audit log
-            await LogAuditAsync(
-                $"Created customer {customer.Id}",
-                transaction
-            );
-
-            transaction.Commit();
-            return customer;
-        }
-        catch
-        {
-            transaction.Rollback();
-            throw;
-        }
-    }
-
-    // Export large dataset using streaming
-    public async Task ExportCustomersToFileAsync(
-        string filePath,
-        CancellationToken cancellationToken = default)
-    {
-        await using var writer = new StreamWriter(filePath);
-        await writer.WriteLineAsync("Id,Name,Email,CreatedAt");
-
-        var container = _helper.BuildBaseRetrieve("c");
-
-        // Stream millions of customers without memory issues
-        await foreach (var customer in _helper.LoadStreamAsync(
-            container,
-            cancellationToken))
-        {
-            await writer.WriteLineAsync(
-                $"{customer.Id},{customer.Name},{customer.Email},{customer.CreatedAt}"
-            );
-        }
-    }
-}
-```
 
 ## Comparison to Other Libraries
 
 | Feature | EF Core | Dapper | PetaPoco | pengdows.crud |
 |---------|---------|--------|----------|---------------|
-| **SQL Control** | ❌ LINQ only | ✅ Raw SQL | ✅ Raw SQL | ✅ Raw SQL |
-| **Type Safety** | ✅ Strong | ⚠️ Dynamic | ⚠️ Dynamic | ✅ Strong |
-| **Change Tracking** | ✅ Built-in | ❌ Manual | ❌ Manual | ❌ Manual |
-| **Multi-DB Support** | ✅ 8+ DBs | ✅ Any ADO.NET | ✅ Any ADO.NET | ✅ 9 DBs |
-| **Testability** | ⚠️ InMemory | ✅ Mockable | ✅ Mockable | ✅ fakeDb |
+| **SQL Control** | LINQ only | Raw SQL | Raw SQL | Raw SQL |
+| **Type Safety** | Strong | Dynamic | Dynamic | Strong |
+| **Change Tracking** | Built-in | Manual | Manual | Manual |
+| **Multi-DB Support** | 8+ DBs | Any ADO.NET | Any ADO.NET | 9 DBs |
+| **Testability** | InMemory provider | Mockable | Mockable | fakeDb |
 | **Learning Curve** | High | Low | Low | Medium |
 | **Performance** | Good | Excellent | Very Good | Excellent |
-| **Streaming** | ✅ IAsyncEnumerable | ❌ None | ❌ None | ✅ IAsyncEnumerable |
-| **Transaction Mgmt** | ✅ Built-in | ⚠️ Manual | ⚠️ Manual | ✅ Built-in |
-| **Connection Mgmt** | ✅ Automatic | ⚠️ Manual | ⚠️ Manual | ✅ Strategies |
+| **Streaming** | IAsyncEnumerable | None | None | IAsyncEnumerable |
+| **Batch Operations** | SaveChanges | None | None | BatchCreate/BatchUpsert |
+| **Transaction Mgmt** | Built-in | Manual | Manual | Built-in |
+| **Connection Mgmt** | Automatic | Manual | Manual | Strategies + Governor |
+| **Metrics** | None | None | None | 25+ real-time metrics |
+| **ValueTask** | No | No | No | Yes (all async) |
 | **Code Size** | Very Large | Small | Small | Medium |
-
-## When to Choose pengdows.crud
-
-### ✅ Great Fit For:
-- **Performance-critical applications** where query optimization matters
-- **Teams comfortable with SQL** who want control
-- **Multi-database applications** needing vendor-specific features
-- **High-concurrency systems** with connection pool constraints
-- **Cloud deployments** minimizing connection costs
-- **Legacy database integration** with complex schemas
-- **Test-driven development** requiring fast, isolated tests
-- **Large data exports/ETL** needing memory-efficient streaming
-
-### ❌ Poor Fit For:
-- Rapid prototypes where ORM scaffolding saves time
-- Teams unfamiliar with SQL
-- Simple CRUD apps where performance doesn't matter
-- Projects requiring GraphQL auto-generation from models
-- Scenarios where change tracking is essential
 
 ## Getting Started
 
@@ -1134,47 +1062,51 @@ public class Product
 }
 ```
 
-### 3. Create Context and Helper
+### 3. Create Context and Gateway
 ```csharp
 var context = new DatabaseContext(
     "Server=localhost;Database=mydb",
-    SqlClientFactory.Instance
+    SqlClientFactory.Instance,
+    new DatabaseContextConfiguration { ConnectionMode = DbMode.Best }
 );
 
-var helper = new TableGateway<Product, int>(context);
+var gateway = new TableGateway<Product, int>(context);
 ```
 
 ### 4. Use It
 ```csharp
 // Create
 var product = new Product { Name = "Widget", Price = 9.99m };
-await helper.CreateAsync(product, context);
+await gateway.CreateAsync(product, context);
 
 // Read
-var allProducts = await helper.RetrieveAsync(new[] { 1, 2, 3 });
+var allProducts = await gateway.RetrieveAsync(new[] { 1, 2, 3 });
 
 // Update
 product.Price = 12.99m;
-await helper.UpdateAsync(product);
+await gateway.UpdateAsync(product);
 
 // Delete
-await helper.DeleteAsync(product.Id);
+await gateway.DeleteAsync(product.Id);
+
+// Batch insert
+var products = new List<Product> { /* ... */ };
+await gateway.BatchCreateAsync(products, context);
 
 // Custom query
-var container = helper.BuildBaseRetrieve("p");
+var container = gateway.BuildBaseRetrieve("p");
 container.Query.Append(" WHERE p.price > ");
 container.Query.Append(container.MakeParameterName("min_price"));
 container.AddParameterWithValue("min_price", DbType.Decimal, 10m);
-var expensiveProducts = await helper.LoadListAsync(container);
+var expensiveProducts = await gateway.LoadListAsync(container);
 ```
 
 ## Links and Resources
 
-- **GitHub**: (Repository URL would go here)
+- **GitHub**: https://github.com/pengdows/pengdows.crud
 - **NuGet**: https://www.nuget.org/packages/pengdows.crud/
-- **Documentation**: (Wiki/docs URL would go here)
-- **Supported Databases**: SQL Server, PostgreSQL, Oracle, MySQL, SQLite, Firebird, CockroachDB, DuckDB, MariaDB
+- **Supported Databases**: SQL Server, PostgreSQL, Oracle, MySQL, MariaDB, SQLite, Firebird, CockroachDB, DuckDB
 
 ---
 
-**pengdows.crud** - When you need SQL control with .NET safety and testability.
+**pengdows.crud 2.0** - SQL control, .NET safety, and testability.
