@@ -1262,7 +1262,7 @@ public partial class DatabaseContext
         }
         catch
         {
-            return connectionString;
+            return "REDACTED_CONNECTION_STRING";
         }
     }
 

@@ -10,7 +10,6 @@ namespace testbed;
 public class ExternalOracleTestContainer : TestContainer
 {
     private readonly string _connectionString;
-    private readonly string _testConnectionString;
 
     public ExternalOracleTestContainer()
     {
@@ -22,7 +21,6 @@ public class ExternalOracleTestContainer : TestContainer
         var password = Environment.GetEnvironmentVariable("ORACLE_PASSWORD") ?? "mysecretpassword";
 
         _connectionString = $"User Id={username};Password={password}; Data Source={host}:{port}/{service};";
-        _testConnectionString = _connectionString;
     }
 
     public override async Task StartAsync()
@@ -37,7 +35,7 @@ public class ExternalOracleTestContainer : TestContainer
                 throw new InvalidOperationException("Cannot create Oracle connection");
             }
 
-            conn.ConnectionString = _testConnectionString;
+            conn.ConnectionString = _connectionString;
             await conn.OpenAsync();
             await conn.CloseAsync();
 
@@ -46,8 +44,8 @@ public class ExternalOracleTestContainer : TestContainer
         catch (Exception ex)
         {
             throw new InvalidOperationException(
-                $"Cannot connect to external Oracle instance. " +
-                $"Make sure Oracle is running and accessible at: {_testConnectionString}. " +
+                "Cannot connect to external Oracle instance. " +
+                "Make sure Oracle is running and accessible using the configured ORACLE_* environment variables. " +
                 $"Error: {ex.Message}", ex);
         }
     }

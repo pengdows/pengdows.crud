@@ -800,10 +800,9 @@ internal abstract class SqlDialect : ISqlDialect
         {
             var elapsedUs = TicksToMicroseconds(Stopwatch.GetTimestamp() - start);
             Logger.LogDebug(
-                "DbParameter timing pooled={Pooled} dbType={DbType} hasValue={HasValue} handled={Handled} elapsed={ElapsedUs:0.000}us",
+                "DbParameter timing pooled={Pooled} dbType={DbType} handled={Handled} elapsed={ElapsedUs:0.000}us",
                 pooled,
                 type,
-                !valueIsNull,
                 handled,
                 elapsedUs);
         }
