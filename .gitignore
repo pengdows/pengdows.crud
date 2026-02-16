@@ -35,3 +35,7 @@ Artifacts/
 output.txt
 coverage*
 artifacts/
+
+# Debug/scratch files
+debug_*.cs
+*.log
