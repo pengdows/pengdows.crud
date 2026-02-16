@@ -119,7 +119,11 @@ internal abstract class SqlDialect : ISqlDialect
     private readonly ConcurrentQueue<DbParameter> _parameterPool = new();
     private const int MaxPoolSize = 100; // Prevent unbounded growth
 
-    private static readonly string[] ProviderSpecificResetProperties =
+    /// <summary>
+    /// Provider-specific parameter property names that need special handling
+    /// during pooling (reset) and cloning (copy). Shared with SqlContainer.
+    /// </summary>
+    internal static readonly string[] ProviderSpecificPropertyNames =
     {
         "NpgsqlDbType",
         "DataTypeName",
@@ -610,7 +614,7 @@ internal abstract class SqlDialect : ISqlDialect
     private static Action<DbParameter> BuildProviderSpecificResetter(Type parameterType)
     {
         List<ProviderPropertyReset>? resets = null;
-        foreach (var propertyName in ProviderSpecificResetProperties)
+        foreach (var propertyName in ProviderSpecificPropertyNames)
         {
             var property = parameterType.GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public);
             if (property == null || !property.CanWrite || property.GetIndexParameters().Length != 0)

@@ -107,20 +107,6 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 {
     private static readonly Regex ParamPlaceholderRegex = new(@"\{P\}([A-Za-z_][A-Za-z0-9_]*)", RegexOptions.Compiled);
 
-    // Provider-specific properties that must be preserved during parameter cloning.
-    // Mirrors SqlDialect.ProviderSpecificResetProperties — these are the properties
-    // that CreateDbParameter cannot re-derive when the CLR type is not registered
-    // in AdvancedTypeRegistry (e.g., explicitly-set OracleDbType).
-    private static readonly string[] ProviderSpecificCopyProperties =
-    {
-        "NpgsqlDbType",
-        "DataTypeName",
-        "SqlDbType",
-        "UdtTypeName",
-        "OracleDbType",
-        "MySqlDbType"
-    };
-
     private static readonly ConcurrentDictionary<Type, Action<DbParameter, DbParameter>> ProviderSpecificCopiers = new();
 
     private readonly IDatabaseContext _context;
@@ -709,9 +695,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
     /// <summary>
     /// Copies provider-specific properties from source to target using cached
-    /// reflection. Only copies properties whose values differ from their defaults
-    /// on the source, avoiding unnecessary overwrites of values already set by
-    /// the dialect factory.
+    /// reflection. The source's values unconditionally overwrite the target so
+    /// that explicitly-set provider properties (e.g., OracleDbType) survive cloning.
     /// </summary>
     private static void CopyProviderSpecificProperties(DbParameter source, DbParameter target)
     {
@@ -731,7 +716,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     private static Action<DbParameter, DbParameter> BuildProviderSpecificCopier(Type parameterType)
     {
         List<PropertyInfo>? properties = null;
-        foreach (var propertyName in ProviderSpecificCopyProperties)
+        foreach (var propertyName in SqlDialect.ProviderSpecificPropertyNames)
         {
             var property = parameterType.GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public);
             if (property == null || !property.CanRead || !property.CanWrite ||
