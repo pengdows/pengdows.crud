@@ -399,7 +399,6 @@ Topics include:
 
 ```bash
 dotnet add package pengdows.crud
-dotnet add package pengdows.crud.abstractions
 ```
 
 For testing without a real database:
@@ -427,7 +426,6 @@ var dt = sc.ExecuteScalar<DateTime>();
 ```csharp
 using System.Data;
 using pengdows.crud;
-using pengdows.crud.attributes;
 
 [Table("users")]
 public class User
