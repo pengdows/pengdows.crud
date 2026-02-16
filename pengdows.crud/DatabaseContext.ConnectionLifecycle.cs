@@ -23,6 +23,7 @@
 
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.@internal;
@@ -172,6 +173,9 @@ public partial class DatabaseContext
     /// <summary>
     /// Factory method to create a new tracked connection with state change monitoring and session settings.
     /// </summary>
+    [SuppressMessage("Security", "cs/clear-text-storage-of-sensitive-information",
+        Justification = "Connection strings are redacted via RedactConnectionString() before logging. " +
+                         "The raw connection string is only used for DbConnection.ConnectionString assignment.")]
     private ITrackedConnection FactoryCreateConnection(
         ExecutionType executionType,
         string? connectionString = null,

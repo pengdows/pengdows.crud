@@ -92,11 +92,17 @@ public class Program
 
             var nanoseconds = statistics.Percentiles.Percentile(_percentile);
             var timeUnit = style.TimeUnit ?? TimeUnit.GetBestTimeUnit(nanoseconds);
-            var divisor = timeUnit == TimeUnit.Nanosecond ? 1.0
-                : timeUnit == TimeUnit.Microsecond ? 1_000.0
-                : timeUnit == TimeUnit.Millisecond ? 1_000_000.0
-                : timeUnit == TimeUnit.Second ? 1_000_000_000.0
-                : 1.0;
+            double divisor;
+            if (timeUnit == TimeUnit.Nanosecond)
+                divisor = 1.0;
+            else if (timeUnit == TimeUnit.Microsecond)
+                divisor = 1_000.0;
+            else if (timeUnit == TimeUnit.Millisecond)
+                divisor = 1_000_000.0;
+            else if (timeUnit == TimeUnit.Second)
+                divisor = 1_000_000_000.0;
+            else
+                divisor = 1.0;
             return (nanoseconds / divisor).ToString("N2");
         }
 
