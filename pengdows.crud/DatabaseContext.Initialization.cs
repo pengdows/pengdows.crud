@@ -1035,7 +1035,7 @@ public partial class DatabaseContext
         string readOnlySuffix,
         out Dictionary<string, string> normalized)
     {
-        if (ConnectionStringNormalizationCache.TryGet(connectionString, out normalized))
+        if (ConnectionStringNormalizationCache.TryGet(connectionString, out normalized!))
         {
             return true;
         }

@@ -1,6 +1,7 @@
 using System;
 using System.Data;
 using System.Data.Common;
+using System.Threading;
 using System.Threading.Tasks;
 using pengdows.crud;
 using pengdows.crud.configuration;
@@ -138,6 +139,8 @@ public class CoverageGapTests_Infrastructure
         public string MakeParameterName(string parameterName) => throw new NotImplementedException();
         public ITransactionContext BeginTransaction(IsolationLevel? isolationLevel = null, ExecutionType executionType = ExecutionType.Write, bool? readOnly = null) => throw new NotImplementedException();
         public ITransactionContext BeginTransaction(IsolationProfile isolationProfile, ExecutionType executionType = ExecutionType.Write, bool? readOnly = null) => throw new NotImplementedException();
+        public Task<ITransactionContext> BeginTransactionAsync(IsolationLevel? isolationLevel = null, ExecutionType executionType = ExecutionType.Write, bool? readOnly = null, CancellationToken cancellationToken = default) => throw new NotImplementedException();
+        public Task<ITransactionContext> BeginTransactionAsync(IsolationProfile isolationProfile, ExecutionType executionType = ExecutionType.Write, bool? readOnly = null, CancellationToken cancellationToken = default) => throw new NotImplementedException();
         public string GenerateRandomName(int length = 5, int parameterNameMaxLength = 30) => throw new NotImplementedException();
         public void AssertIsWriteConnection() => throw new NotImplementedException();
         public void AssertIsReadConnection() => throw new NotImplementedException();

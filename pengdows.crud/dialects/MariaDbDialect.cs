@@ -117,6 +117,17 @@ internal class MariaDbDialect : MySqlDialect
         TryExecuteReadOnlySql(transaction, SetSessionTransactionReadOnlySql, "MariaDB");
     }
 
+    public override Task TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
+        CancellationToken cancellationToken = default)
+    {
+        return TryExecuteReadOnlySqlAsync(transaction, SetSessionTransactionReadOnlySql, "MariaDB", cancellationToken);
+    }
+
+    internal override string? GetReadOnlyTransactionResetSql()
+    {
+        return SetSessionTransactionReadWriteSql;
+    }
+
     private bool IsAtLeast(int major, int minor)
     {
         var v = ProductInfo.ParsedVersion;

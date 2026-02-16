@@ -1,6 +1,7 @@
 #region
 
 using System.Data;
+using System.Threading;
 
 #endregion
 
@@ -43,9 +44,21 @@ public interface ITransactionContext : IDatabaseContext
     void Commit();
 
     /// <summary>
+    /// Commits the transaction asynchronously.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    Task CommitAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Rolls back the transaction.
     /// </summary>
     void Rollback();
+
+    /// <summary>
+    /// Rolls back the transaction asynchronously.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    Task RollbackAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Creates a named savepoint within the transaction scope.

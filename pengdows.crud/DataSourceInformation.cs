@@ -102,6 +102,7 @@ public class DataSourceInformation : IDataSourceInformation
     public string QuotePrefix => _dialect.QuotePrefix;
     public string QuoteSuffix => _dialect.QuoteSuffix;
     public bool SupportsNamedParameters => _dialect.SupportsNamedParameters;
+    public bool SupportsRepeatedNamedParameters => _dialect.SupportsRepeatedNamedParameters;
     public string ParameterMarker => _dialect.ParameterMarker;
     public int ParameterNameMaxLength => _dialect.ParameterNameMaxLength;
     public Regex ParameterNamePatternRegex { get; }

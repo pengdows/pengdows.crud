@@ -57,6 +57,20 @@ public interface ITrackedConnection : IDbConnection
     IDbTransaction BeginTransaction(IsolationLevel isolationLevel);
 
     /// <summary>
+    /// Begins a transaction asynchronously with the default isolation level.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    Task<IDbTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Begins a transaction asynchronously with the specified isolation level.
+    /// </summary>
+    /// <param name="isolationLevel">Isolation level to use.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    Task<IDbTransaction> BeginTransactionAsync(IsolationLevel isolationLevel,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Changes the current database for this connection.
     /// </summary>
     /// <param name="databaseName">Target database name.</param>

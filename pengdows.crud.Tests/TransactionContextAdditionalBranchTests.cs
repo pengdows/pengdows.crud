@@ -142,6 +142,16 @@ public class TransactionContextAdditionalBranchTests
             return new StubTransaction(this, isolationLevel);
         }
 
+        public Task<IDbTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(BeginTransaction());
+        }
+
+        public Task<IDbTransaction> BeginTransactionAsync(IsolationLevel isolationLevel, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(BeginTransaction(isolationLevel));
+        }
+
         public void ChangeDatabase(string databaseName)
         {
         }

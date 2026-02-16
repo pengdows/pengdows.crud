@@ -49,6 +49,7 @@ internal class OracleDialect : SqlDialect
     public override string ParameterMarker => ":";
 
     public override bool SupportsNamedParameters => true;
+    public override bool SupportsRepeatedNamedParameters => false;
 
     // IMMUTABLE: Oracle bind variable limit: we follow 64,000 as a practical upper bound
     // for modern Oracle (12c+) engines and ODP.NET providers. This aligns with
@@ -111,6 +112,7 @@ internal class OracleDialect : SqlDialect
 
     private const string NlsDateFormatSetting = "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD';";
     private const string ReadOnlySessionSetting = "ALTER SESSION SET READ ONLY;";
+    private const string ReadWriteSessionSetting = "ALTER SESSION SET READ WRITE;";
 
     public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
     {
@@ -180,6 +182,17 @@ internal class OracleDialect : SqlDialect
     public override void TryEnterReadOnlyTransaction(ITransactionContext transaction)
     {
         TryExecuteReadOnlySql(transaction, ReadOnlySessionSetting, "Oracle");
+    }
+
+    public override Task TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
+        CancellationToken cancellationToken = default)
+    {
+        return TryExecuteReadOnlySqlAsync(transaction, ReadOnlySessionSetting, "Oracle", cancellationToken);
+    }
+
+    internal override string? GetReadOnlyTransactionResetSql()
+    {
+        return ReadWriteSessionSetting;
     }
 
     // Connection pooling properties for Oracle

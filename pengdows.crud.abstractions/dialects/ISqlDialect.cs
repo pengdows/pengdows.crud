@@ -44,6 +44,14 @@ public interface ISqlDialect
     bool SupportsNamedParameters { get; }
 
     /// <summary>
+    /// True when the dialect allows the same named parameter to appear multiple times
+    /// in a single SQL statement without requiring separate parameter objects for each occurrence.
+    /// Most named-parameter providers support this (SQL Server, PostgreSQL, etc.). Oracle does not.
+    /// Positional-parameter providers (e.g., OleDb with ?) never support this.
+    /// </summary>
+    bool SupportsRepeatedNamedParameters { get; }
+
+    /// <summary>
     /// Allows the dialect to render provider-specific JSON casts for parameter placeholders.
     /// </summary>
     /// <param name="parameterMarker">Base parameter marker (e.g., @p0).</param>
@@ -406,6 +414,14 @@ public interface ISqlDialect
     /// </summary>
     /// <param name="transaction">Transaction context.</param>
     void TryEnterReadOnlyTransaction(ITransactionContext transaction);
+
+    /// <summary>
+    /// Asynchronously attempts to enter a read-only transaction. Implementations may be a no-op.
+    /// </summary>
+    /// <param name="transaction">Transaction context.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    Task TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Determines whether READ_COMMITTED_SNAPSHOT is enabled.

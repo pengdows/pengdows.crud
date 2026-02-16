@@ -146,6 +146,7 @@ internal class DuckDbDialect : SqlDialect
 
     private const string ReadOnlyConnectionParam = "access_mode=READ_ONLY";
     private const string ReadOnlySessionSetting = "SET access_mode = 'read_only';";
+    private const string ReadWriteSessionSetting = "SET access_mode = 'read_write';";
 
     public override string? GetReadOnlyConnectionParameter()
     {
@@ -165,6 +166,17 @@ internal class DuckDbDialect : SqlDialect
     public override void TryEnterReadOnlyTransaction(ITransactionContext transaction)
     {
         TryExecuteReadOnlySql(transaction, ReadOnlySessionSetting, "DuckDB");
+    }
+
+    public override Task TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
+        CancellationToken cancellationToken = default)
+    {
+        return TryExecuteReadOnlySqlAsync(transaction, ReadOnlySessionSetting, "DuckDB", cancellationToken);
+    }
+
+    internal override string? GetReadOnlyTransactionResetSql()
+    {
+        return ReadWriteSessionSetting;
     }
 
     [Obsolete]

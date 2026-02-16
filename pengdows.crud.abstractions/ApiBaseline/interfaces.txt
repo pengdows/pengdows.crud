@@ -36,6 +36,8 @@ method pengdows.crud.IDatabaseContext::AssertIsReadConnection() -> void
 method pengdows.crud.IDatabaseContext::AssertIsWriteConnection() -> void
 method pengdows.crud.IDatabaseContext::BeginTransaction(System.Nullable`1<System.Data.IsolationLevel>, pengdows.crud.enums.ExecutionType, System.Nullable`1<bool>) -> pengdows.crud.ITransactionContext
 method pengdows.crud.IDatabaseContext::BeginTransaction(pengdows.crud.enums.IsolationProfile, pengdows.crud.enums.ExecutionType, System.Nullable`1<bool>) -> pengdows.crud.ITransactionContext
+method pengdows.crud.IDatabaseContext::BeginTransactionAsync(System.Nullable`1<System.Data.IsolationLevel>, pengdows.crud.enums.ExecutionType, System.Nullable`1<bool>, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<pengdows.crud.ITransactionContext>
+method pengdows.crud.IDatabaseContext::BeginTransactionAsync(pengdows.crud.enums.IsolationProfile, pengdows.crud.enums.ExecutionType, System.Nullable`1<bool>, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<pengdows.crud.ITransactionContext>
 method pengdows.crud.IDatabaseContext::CloseAndDisposeConnection(pengdows.crud.wrappers.ITrackedConnection) -> void
 method pengdows.crud.IDatabaseContext::CloseAndDisposeConnectionAsync(pengdows.crud.wrappers.ITrackedConnection) -> System.Threading.Tasks.ValueTask
 method pengdows.crud.IDatabaseContext::CreateDbParameter<T>(System.Data.DbType, T) -> System.Data.Common.DbParameter
@@ -62,12 +64,12 @@ method pengdows.crud.ISqlContainer::Clone(pengdows.crud.IDatabaseContext) -> pen
 method pengdows.crud.ISqlContainer::CreateCommand(pengdows.crud.wrappers.ITrackedConnection) -> System.Data.Common.DbCommand
 method pengdows.crud.ISqlContainer::CreateDbParameter<T>(System.Data.DbType, T) -> System.Data.Common.DbParameter
 method pengdows.crud.ISqlContainer::CreateDbParameter<T>(string, System.Data.DbType, T) -> System.Data.Common.DbParameter
-method pengdows.crud.ISqlContainer::ExecuteNonQueryAsync(System.Data.CommandType) -> System.Threading.Tasks.Task`1<int>
-method pengdows.crud.ISqlContainer::ExecuteNonQueryAsync(System.Data.CommandType, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
-method pengdows.crud.ISqlContainer::ExecuteReaderAsync(System.Data.CommandType) -> System.Threading.Tasks.Task`1<pengdows.crud.wrappers.ITrackedReader>
-method pengdows.crud.ISqlContainer::ExecuteReaderAsync(System.Data.CommandType, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<pengdows.crud.wrappers.ITrackedReader>
-method pengdows.crud.ISqlContainer::ExecuteScalarAsync<T>(System.Data.CommandType) -> System.Threading.Tasks.Task`1<T>
-method pengdows.crud.ISqlContainer::ExecuteScalarAsync<T>(System.Data.CommandType, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<T>
+method pengdows.crud.ISqlContainer::ExecuteNonQueryAsync(System.Data.CommandType) -> System.Threading.Tasks.ValueTask`1<int>
+method pengdows.crud.ISqlContainer::ExecuteNonQueryAsync(System.Data.CommandType, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
+method pengdows.crud.ISqlContainer::ExecuteReaderAsync(System.Data.CommandType) -> System.Threading.Tasks.ValueTask`1<pengdows.crud.wrappers.ITrackedReader>
+method pengdows.crud.ISqlContainer::ExecuteReaderAsync(System.Data.CommandType, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<pengdows.crud.wrappers.ITrackedReader>
+method pengdows.crud.ISqlContainer::ExecuteScalarAsync<T>(System.Data.CommandType) -> System.Threading.Tasks.ValueTask`1<T>
+method pengdows.crud.ISqlContainer::ExecuteScalarAsync<T>(System.Data.CommandType, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<T>
 method pengdows.crud.ISqlContainer::GetParameterValue(string) -> object
 method pengdows.crud.ISqlContainer::GetParameterValue<T>(string) -> T
 method pengdows.crud.ISqlContainer::MakeParameterName(System.Data.Common.DbParameter) -> string
@@ -125,7 +127,9 @@ method pengdows.crud.ITableGateway`2<TEntity, TRowID>::UpdateAsync(TEntity, peng
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::UpsertAsync(TEntity, pengdows.crud.IDatabaseContext) -> System.Threading.Tasks.Task`1<int>
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::UpsertAsync(TEntity, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
 method pengdows.crud.ITransactionContext::Commit() -> void
+method pengdows.crud.ITransactionContext::CommitAsync(System.Threading.CancellationToken) -> System.Threading.Tasks.Task
 method pengdows.crud.ITransactionContext::Rollback() -> void
+method pengdows.crud.ITransactionContext::RollbackAsync(System.Threading.CancellationToken) -> System.Threading.Tasks.Task
 method pengdows.crud.ITransactionContext::RollbackToSavepointAsync(string) -> System.Threading.Tasks.Task
 method pengdows.crud.ITransactionContext::SavepointAsync(string) -> System.Threading.Tasks.Task
 method pengdows.crud.ITypeMapRegistry::GetTableInfo<T>() -> pengdows.crud.ITableInfo
@@ -163,6 +167,7 @@ method pengdows.crud.dialects.ISqlDialect::RenderInsertReturningClause(string) -
 method pengdows.crud.dialects.ISqlDialect::RenderJsonArgument(string, pengdows.crud.IColumnInfo) -> string
 method pengdows.crud.dialects.ISqlDialect::ShouldDisablePrepareOn(System.Exception) -> bool
 method pengdows.crud.dialects.ISqlDialect::TryEnterReadOnlyTransaction(pengdows.crud.ITransactionContext) -> void
+method pengdows.crud.dialects.ISqlDialect::TryEnterReadOnlyTransactionAsync(pengdows.crud.ITransactionContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task
 method pengdows.crud.dialects.ISqlDialect::TryMarkJsonParameter(System.Data.Common.DbParameter, pengdows.crud.IColumnInfo) -> void
 method pengdows.crud.dialects.ISqlDialect::UpsertIncomingColumn(string) -> string
 method pengdows.crud.dialects.ISqlDialect::WrapObjectName(string) -> string
@@ -177,6 +182,8 @@ method pengdows.crud.threading.ILockerAsync::LockAsync(System.Threading.Cancella
 method pengdows.crud.threading.ILockerAsync::TryLockAsync(System.TimeSpan, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<bool>
 method pengdows.crud.wrappers.ITrackedConnection::BeginTransaction() -> System.Data.IDbTransaction
 method pengdows.crud.wrappers.ITrackedConnection::BeginTransaction(System.Data.IsolationLevel) -> System.Data.IDbTransaction
+method pengdows.crud.wrappers.ITrackedConnection::BeginTransactionAsync(System.Data.IsolationLevel, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<System.Data.IDbTransaction>
+method pengdows.crud.wrappers.ITrackedConnection::BeginTransactionAsync(System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<System.Data.IDbTransaction>
 method pengdows.crud.wrappers.ITrackedConnection::ChangeDatabase(string) -> void
 method pengdows.crud.wrappers.ITrackedConnection::Close() -> void
 method pengdows.crud.wrappers.ITrackedConnection::CreateCommand() -> System.Data.IDbCommand
@@ -234,6 +241,7 @@ property pengdows.crud.IDataSourceInformation::SupportsInsertOnConflict : bool {
 property pengdows.crud.IDataSourceInformation::SupportsMerge : bool { get; }
 property pengdows.crud.IDataSourceInformation::SupportsNamedParameters : bool { get; }
 property pengdows.crud.IDataSourceInformation::SupportsOnDuplicateKey : bool { get; }
+property pengdows.crud.IDataSourceInformation::SupportsRepeatedNamedParameters : bool { get; }
 property pengdows.crud.IDatabaseContext::CompositeIdentifierSeparator : string { get; }
 property pengdows.crud.IDatabaseContext::ConnectionMode : pengdows.crud.enums.DbMode { get; }
 property pengdows.crud.IDatabaseContext::ConnectionString : string { get; }
@@ -243,12 +251,12 @@ property pengdows.crud.IDatabaseContext::DatabaseProductName : string { get; }
 property pengdows.crud.IDatabaseContext::DisablePrepare : System.Nullable`1<bool> { get; }
 property pengdows.crud.IDatabaseContext::ForceManualPrepare : System.Nullable`1<bool> { get; }
 property pengdows.crud.IDatabaseContext::IsReadOnlyConnection : bool { get; }
-property pengdows.crud.IDatabaseContext::PeakOpenConnections : long { get; }
 property pengdows.crud.IDatabaseContext::MaxOutputParameters : int { get; }
 property pengdows.crud.IDatabaseContext::MaxParameterLimit : int { get; }
 property pengdows.crud.IDatabaseContext::Metrics : pengdows.crud.metrics.DatabaseMetrics { get; }
 property pengdows.crud.IDatabaseContext::Name : string { get; set; }
 property pengdows.crud.IDatabaseContext::NumberOfOpenConnections : long { get; }
+property pengdows.crud.IDatabaseContext::PeakOpenConnections : long { get; }
 property pengdows.crud.IDatabaseContext::PrepareStatements : bool { get; }
 property pengdows.crud.IDatabaseContext::ProcWrappingStyle : pengdows.crud.enums.ProcWrappingStyle { get; }
 property pengdows.crud.IDatabaseContext::Product : pengdows.crud.enums.SupportedDatabase { get; }
@@ -259,8 +267,9 @@ property pengdows.crud.IDatabaseContext::ReadWriteMode : pengdows.crud.enums.Rea
 property pengdows.crud.IDatabaseContext::RootId : System.Guid { get; }
 property pengdows.crud.IDatabaseContext::SessionSettingsPreamble : string { get; }
 property pengdows.crud.IDatabaseContext::SnapshotIsolationEnabled : bool { get; }
+property pengdows.crud.IDatabaseContext::SupportsInsertReturning : bool { get; }
 property pengdows.crud.IDatabaseContext::SupportsNamedParameters : bool { get; }
-property pengdows.crud.IDatabaseContext::TypeMapRegistry : pengdows.crud.ITypeMapRegistry { get; }
+property pengdows.crud.IDatabaseContext::SupportsRepeatedNamedParameters : bool { get; }
 property pengdows.crud.ISqlContainer::CompositeIdentifierSeparator : string { get; }
 property pengdows.crud.ISqlContainer::HasWhereAppended : bool { get; set; }
 property pengdows.crud.ISqlContainer::ParameterCount : int { get; }
@@ -286,20 +295,22 @@ property pengdows.crud.ITransactionContext::IsolationLevel : System.Data.Isolati
 property pengdows.crud.ITransactionContext::TransactionId : System.Guid { get; }
 property pengdows.crud.ITransactionContext::WasCommitted : bool { get; }
 property pengdows.crud.ITransactionContext::WasRolledBack : bool { get; }
+property pengdows.crud.configuration.IDatabaseContextConfiguration::ApplicationName : string { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::ConnectionString : string { get; set; }
-property pengdows.crud.configuration.IDatabaseContextConfiguration::ReadOnlyConnectionString : string { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::DbMode : pengdows.crud.enums.DbMode { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::DisablePrepare : System.Nullable`1<bool> { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::EnableMetrics : bool { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::EnablePoolGovernor : bool { get; set; }
+property pengdows.crud.configuration.IDatabaseContextConfiguration::EnableWriterPreference : bool { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::ForceManualPrepare : System.Nullable`1<bool> { get; set; }
+property pengdows.crud.configuration.IDatabaseContextConfiguration::MaxConcurrentReads : System.Nullable`1<int> { get; set; }
+property pengdows.crud.configuration.IDatabaseContextConfiguration::MaxConcurrentWrites : System.Nullable`1<int> { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::MetricsOptions : pengdows.crud.metrics.MetricsOptions { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::ModeLockTimeout : System.Nullable`1<System.TimeSpan> { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::PoolAcquireTimeout : System.TimeSpan { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::ProviderName : string { get; set; }
-property pengdows.crud.configuration.IDatabaseContextConfiguration::ReadPoolSize : System.Nullable`1<int> { get; set; }
+property pengdows.crud.configuration.IDatabaseContextConfiguration::ReadOnlyConnectionString : string { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::ReadWriteMode : pengdows.crud.enums.ReadWriteMode { get; set; }
-property pengdows.crud.configuration.IDatabaseContextConfiguration::WritePoolSize : System.Nullable`1<int> { get; set; }
 property pengdows.crud.dialects.IDatabaseProductInfo::DatabaseType : pengdows.crud.enums.SupportedDatabase { get; set; }
 property pengdows.crud.dialects.IDatabaseProductInfo::ParsedVersion : System.Version { get; set; }
 property pengdows.crud.dialects.IDatabaseProductInfo::ProductName : string { get; set; }
@@ -348,6 +359,7 @@ property pengdows.crud.dialects.ISqlDialect::SupportsOnDuplicateKey : bool { get
 property pengdows.crud.dialects.ISqlDialect::SupportsOuterJoins : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsPropertyGraphQueries : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsRegularExpressions : bool { get; }
+property pengdows.crud.dialects.ISqlDialect::SupportsRepeatedNamedParameters : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsRowPatternMatching : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsSavepoints : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsSetValuedParameters : bool { get; }

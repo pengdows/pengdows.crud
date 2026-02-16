@@ -35,6 +35,12 @@ public interface IDataSourceInformation
     bool SupportsNamedParameters { get; }
 
     /// <summary>
+    /// Gets a value indicating whether the same named parameter can appear multiple
+    /// times in a single SQL statement without requiring separate parameter objects.
+    /// </summary>
+    bool SupportsRepeatedNamedParameters { get; }
+
+    /// <summary>
     /// Gets the character or string used to denote parameters in SQL commands.
     /// </summary>
     string ParameterMarker { get; }

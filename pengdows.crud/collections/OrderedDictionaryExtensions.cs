@@ -18,6 +18,7 @@
 // =============================================================================
 
 using System.Data.Common;
+using System.Linq;
 using System.Reflection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -37,7 +38,9 @@ public static class OrderedDictionaryExtensions
     private static class PropertyCache<T>
     {
         public static readonly PropertyInfo[] Properties =
-            typeof(T).GetProperties(BindingFlags.Instance | BindingFlags.Public);
+            typeof(T).GetProperties(BindingFlags.Instance | BindingFlags.Public)
+                .OrderBy(p => p.MetadataToken)
+                .ToArray();
     }
 
     // Optional logger for visibility into property access failures

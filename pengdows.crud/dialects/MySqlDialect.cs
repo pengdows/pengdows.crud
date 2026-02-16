@@ -55,6 +55,7 @@ internal class MySqlDialect : SqlDialect
     private const string ExpectedSqlMode = RequiredSqlModeFlags;
 
     protected const string SetSessionTransactionReadOnlySql = "SET SESSION TRANSACTION READ ONLY;";
+    protected const string SetSessionTransactionReadWriteSql = "SET SESSION TRANSACTION READ WRITE;";
 
     private static readonly Version UpsertAliasVersionThreshold = new(8, 0, 20);
 
@@ -241,6 +242,17 @@ internal class MySqlDialect : SqlDialect
     public override void TryEnterReadOnlyTransaction(ITransactionContext transaction)
     {
         TryExecuteReadOnlySql(transaction, SetSessionTransactionReadOnlySql, "MySQL");
+    }
+
+    public override Task TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
+        CancellationToken cancellationToken = default)
+    {
+        return TryExecuteReadOnlySqlAsync(transaction, SetSessionTransactionReadOnlySql, "MySQL", cancellationToken);
+    }
+
+    internal override string? GetReadOnlyTransactionResetSql()
+    {
+        return SetSessionTransactionReadWriteSql;
     }
 
     // Connection pooling properties for MySQL (provider-aware)

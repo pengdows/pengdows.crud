@@ -474,6 +474,17 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
         return _connection.BeginTransaction(isolationLevel);
     }
 
+    public async Task<IDbTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
+    {
+        return await _connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<IDbTransaction> BeginTransactionAsync(IsolationLevel isolationLevel,
+        CancellationToken cancellationToken = default)
+    {
+        return await _connection.BeginTransactionAsync(isolationLevel, cancellationToken).ConfigureAwait(false);
+    }
+
     public void ChangeDatabase(string databaseName)
     {
         throw new NotImplementedException("ChangeDatabase is not supported.");

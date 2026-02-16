@@ -217,6 +217,11 @@ internal class SqliteDialect : SqlDialect
 
     public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
+        if (value is bool b && IsNumericDbType(type))
+        {
+            return base.CreateDbParameter(name, type, b ? 1 : 0);
+        }
+
         if (value is DateTime dt)
         {
             var utc = NormalizeUtc(dt);
@@ -230,6 +235,17 @@ internal class SqliteDialect : SqlDialect
         }
 
         return base.CreateDbParameter(name, type, value);
+    }
+
+    private static bool IsNumericDbType(DbType type)
+    {
+        return type is DbType.Byte or DbType.SByte
+            or DbType.Int16 or DbType.UInt16
+            or DbType.Int32 or DbType.UInt32
+            or DbType.Int64 or DbType.UInt64
+            or DbType.Single or DbType.Double
+            or DbType.Decimal or DbType.Currency
+            or DbType.VarNumeric;
     }
 
     // Connection pooling properties for SQLite (provider-aware)

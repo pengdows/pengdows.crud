@@ -106,12 +106,47 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     /// <inheritdoc/>
     public Guid RootId { get; }
 
+    /// <summary>
+    /// Common initialization shared by sync and async creation paths.
+    /// Returns the resolved execution type, isolation level, and connection provider.
+    /// </summary>
+    private static (ExecutionType executionType, IsolationLevel isolationLevel, IInternalConnectionProvider provider)
+        ResolveCreationParameters(
+            IDatabaseContext context,
+            IsolationLevel isolationLevel,
+            ExecutionType? executionType,
+            bool isReadOnly)
+    {
+        executionType ??= context.IsReadOnlyConnection || isReadOnly ? ExecutionType.Read : ExecutionType.Write;
+
+        if ((context.IsReadOnlyConnection || isReadOnly) && executionType != ExecutionType.Read)
+        {
+            throw new NotSupportedException("DatabaseContext is read-only");
+        }
+
+        if (context.Product == SupportedDatabase.CockroachDb)
+        {
+            isolationLevel = IsolationLevel.Serializable;
+        }
+
+        if (context is not IInternalConnectionProvider connectionProvider)
+        {
+            throw new InvalidOperationException("IDatabaseContext must provide internal connection access.");
+        }
+
+        return (executionType.Value, isolationLevel, connectionProvider);
+    }
+
+    /// <summary>
+    /// Initializes fields common to both sync and async creation.
+    /// </summary>
     private TransactionContext(
         IDatabaseContext context,
-        IsolationLevel isolationLevel = IsolationLevel.Unspecified,
-        ExecutionType? executionType = null,
-        bool isReadOnly = false,
-        ILogger<TransactionContext>? logger = null)
+        ITrackedConnection connection,
+        IDbTransaction transaction,
+        IsolationLevel isolationLevel,
+        bool isReadOnly,
+        ILogger<TransactionContext>? logger)
     {
         _logger = logger ?? new NullLogger<TransactionContext>();
         _context = context ?? throw new ArgumentNullException(nameof(context));
@@ -130,47 +165,66 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             _transactionMetricsStart = _metricsCollector.TransactionStarted();
         }
 
-        executionType ??= _context.IsReadOnlyConnection || _isReadOnly ? ExecutionType.Read : ExecutionType.Write;
-
-        if ((_context.IsReadOnlyConnection || _isReadOnly) && executionType != ExecutionType.Read)
-        {
-            throw new NotSupportedException("DatabaseContext is read-only");
-        }
-
-        if (_context.Product == SupportedDatabase.CockroachDb)
-        {
-            isolationLevel = IsolationLevel.Serializable;
-        }
-
-        // Defer all connection routing to the configured connection strategy.
-        // The strategy (and DatabaseContext helpers it uses) handle in-memory,
-        // SingleConnection, and SingleWriter cases.
-        if (_context is not IInternalConnectionProvider connectionProvider)
-        {
-            throw new InvalidOperationException("IDatabaseContext must provide internal connection access.");
-        }
-
-        // isShared=false: The TransactionContext's own _userLock serializes all operations
-        // on this pinned connection. A second lock on the connection itself would be redundant
-        // double-locking that adds measurable overhead (e.g., WriteStorm scenarios).
-        _connection = connectionProvider.GetConnection(executionType.Value, false);
-        EnsureConnectionIsOpen();
+        _connection = connection;
+        _transaction = transaction;
+        _resolvedIsolationLevel = isolationLevel;
         _userLock = new SemaphoreSlim(1, 1);
         _reusableLocker = new ReusableAsyncLocker(_userLock);
         _completionLock = new SemaphoreSlim(1, 1);
+    }
 
-        _resolvedIsolationLevel = isolationLevel;
-
-        // DuckDB's ADO.NET provider rejects explicit IsolationLevel values. Use provider default,
-        // but preserve the resolved isolation level for reporting and logic.
-        _transaction = _context.Product == SupportedDatabase.DuckDB
-            ? _connection.BeginTransaction()
-            : _connection.BeginTransaction(isolationLevel);
-
+    private TransactionContext(
+        IDatabaseContext context,
+        IsolationLevel isolationLevel = IsolationLevel.Unspecified,
+        ExecutionType? executionType = null,
+        bool isReadOnly = false,
+        ILogger<TransactionContext>? logger = null)
+        : this(context,
+            CreateConnectionAndTransaction(context, ref isolationLevel, ref executionType, isReadOnly,
+                out var transaction),
+            transaction,
+            isolationLevel,
+            isReadOnly,
+            logger)
+    {
         if (_isReadOnly)
         {
             _dialect.TryEnterReadOnlyTransaction(this);
         }
+    }
+
+    /// <summary>
+    /// Helper for the sync constructor chain — resolves parameters, gets connection,
+    /// opens it, and begins the transaction. Returns the connection; outputs the transaction.
+    /// </summary>
+    private static ITrackedConnection CreateConnectionAndTransaction(
+        IDatabaseContext context,
+        ref IsolationLevel isolationLevel,
+        ref ExecutionType? executionType,
+        bool isReadOnly,
+        out IDbTransaction transaction)
+    {
+        var (resolvedExecType, resolvedIsolation, connectionProvider) =
+            ResolveCreationParameters(context, isolationLevel, executionType, isReadOnly);
+        executionType = resolvedExecType;
+        isolationLevel = resolvedIsolation;
+
+        // isShared=false: The TransactionContext's own _userLock serializes all operations
+        // on this pinned connection. A second lock on the connection itself would be redundant
+        // double-locking that adds measurable overhead (e.g., WriteStorm scenarios).
+        var connection = connectionProvider.GetConnection(resolvedExecType, false);
+        if (connection.State != ConnectionState.Open)
+        {
+            connection.Open();
+        }
+
+        // DuckDB's ADO.NET provider rejects explicit IsolationLevel values. Use provider default,
+        // but preserve the resolved isolation level for reporting and logic.
+        transaction = context.Product == SupportedDatabase.DuckDB
+            ? connection.BeginTransaction()
+            : connection.BeginTransaction(resolvedIsolation);
+
+        return connection;
     }
 
     /// <inheritdoc/>
@@ -289,6 +343,63 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         cmd.ExecuteNonQuery();
     }
 
+    internal async Task ExecuteSessionNonQueryAsync(string sql)
+    {
+        if (string.IsNullOrWhiteSpace(sql))
+        {
+            return;
+        }
+
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = sql;
+        if (cmd is DbCommand db)
+        {
+            await db.ExecuteNonQueryAsync().ConfigureAwait(false);
+        }
+        else
+        {
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    private void TryResetReadOnlySession()
+    {
+        if (_isReadOnly && _dialect is SqlDialect sd)
+        {
+            var resetSql = sd.GetReadOnlyTransactionResetSql();
+            if (!string.IsNullOrEmpty(resetSql))
+            {
+                try
+                {
+                    ExecuteSessionNonQuery(resetSql);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Failed to reset read-only session settings.");
+                }
+            }
+        }
+    }
+
+    private async Task TryResetReadOnlySessionAsync()
+    {
+        if (_isReadOnly && _dialect is SqlDialect sd)
+        {
+            var resetSql = sd.GetReadOnlyTransactionResetSql();
+            if (!string.IsNullOrEmpty(resetSql))
+            {
+                try
+                {
+                    await ExecuteSessionNonQueryAsync(resetSql).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Failed to reset read-only session settings.");
+                }
+            }
+        }
+    }
+
     /// <inheritdoc/>
     internal ITrackedConnection GetConnection(ExecutionType type, bool isShared = false)
     {
@@ -344,6 +455,18 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
 
     ITransactionContext IDatabaseContext.BeginTransaction(IsolationLevel? isolationLevel, ExecutionType executionType,
         bool? readOnly)
+    {
+        throw new InvalidOperationException("Cannot begin a nested transaction from TransactionContext.");
+    }
+
+    Task<ITransactionContext> IDatabaseContext.BeginTransactionAsync(IsolationLevel? isolationLevel,
+        ExecutionType executionType, bool? readOnly, CancellationToken cancellationToken)
+    {
+        throw new InvalidOperationException("Cannot begin a nested transaction from TransactionContext.");
+    }
+
+    Task<ITransactionContext> IDatabaseContext.BeginTransactionAsync(IsolationProfile isolationProfile,
+        ExecutionType executionType, bool? readOnly, CancellationToken cancellationToken)
     {
         throw new InvalidOperationException("Cannot begin a nested transaction from TransactionContext.");
     }
@@ -519,6 +642,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             Interlocked.Exchange(ref _rolledBack, 1);
         }
 
+        TryResetReadOnlySession();
         _context.CloseAndDisposeConnection(_connection);
         CompleteTransactionMetrics();
     }
@@ -541,6 +665,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             Interlocked.Exchange(ref _rolledBack, 1);
         }
 
+        await TryResetReadOnlySessionAsync().ConfigureAwait(false);
         await _context.CloseAndDisposeConnectionAsync(_connection).ConfigureAwait(false);
         CompleteTransactionMetrics();
     }
@@ -650,14 +775,6 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         CompleteTransactionMetrics();
     }
 
-    private void EnsureConnectionIsOpen()
-    {
-        if (_connection.State != ConnectionState.Open)
-        {
-            _connection.Open();
-        }
-    }
-
     protected override ISqlDialect DialectCore => _dialect;
 
     // Internal factory used by DatabaseContext
@@ -669,5 +786,37 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         ILogger<TransactionContext>? logger = null)
     {
         return new TransactionContext(context, isolationLevel, executionType, isReadOnly, logger);
+    }
+
+    // Internal async factory used by DatabaseContext
+    internal static async Task<TransactionContext> CreateAsync(
+        IDatabaseContext context,
+        IsolationLevel isolationLevel = IsolationLevel.Unspecified,
+        ExecutionType? executionType = null,
+        bool isReadOnly = false,
+        ILogger<TransactionContext>? logger = null,
+        CancellationToken cancellationToken = default)
+    {
+        var (resolvedExecType, resolvedIsolation, connectionProvider) =
+            ResolveCreationParameters(context, isolationLevel, executionType, isReadOnly);
+
+        var connection = connectionProvider.GetConnection(resolvedExecType, false);
+        if (connection.State != ConnectionState.Open)
+        {
+            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        var transaction = context.Product == SupportedDatabase.DuckDB
+            ? await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false)
+            : await connection.BeginTransactionAsync(resolvedIsolation, cancellationToken).ConfigureAwait(false);
+
+        var tx = new TransactionContext(context, connection, transaction, resolvedIsolation, isReadOnly, logger);
+
+        if (isReadOnly)
+        {
+            await tx._dialect.TryEnterReadOnlyTransactionAsync(tx, cancellationToken).ConfigureAwait(false);
+        }
+
+        return tx;
     }
 }

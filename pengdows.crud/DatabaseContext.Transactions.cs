@@ -40,10 +40,80 @@ public partial class DatabaseContext
         ExecutionType executionType = ExecutionType.Write,
         bool? readOnly = null)
     {
-        var ro = readOnly ?? executionType == ExecutionType.Read;
+        var (ro, resolved) = ResolveTransactionParameters(isolationLevel, executionType, readOnly);
         if (ro)
         {
             executionType = ExecutionType.Read;
+        }
+
+        return TransactionContext.Create(this, resolved, executionType, ro);
+    }
+
+    /// <inheritdoc/>
+    public ITransactionContext BeginTransaction(
+        IsolationProfile isolationProfile,
+        ExecutionType executionType = ExecutionType.Write,
+        bool? readOnly = null)
+    {
+        if (isolationProfile == IsolationProfile.SafeNonBlockingReads
+            && Product == SupportedDatabase.PostgreSql)
+        {
+            throw new TransactionModeNotSupportedException(
+                "IsolationProfile.SafeNonBlockingReads requires read-committed snapshot semantics, which PostgreSQL does not provide.");
+        }
+
+        var level = _isolationResolver.Resolve(isolationProfile);
+        return BeginTransaction(level, executionType, readOnly);
+    }
+
+    /// <inheritdoc/>
+    public async Task<ITransactionContext> BeginTransactionAsync(
+        IsolationLevel? isolationLevel = null,
+        ExecutionType executionType = ExecutionType.Write,
+        bool? readOnly = null,
+        CancellationToken cancellationToken = default)
+    {
+        var (ro, resolved) = ResolveTransactionParameters(isolationLevel, executionType, readOnly);
+        if (ro)
+        {
+            executionType = ExecutionType.Read;
+        }
+
+        return await TransactionContext.CreateAsync(this, resolved, executionType, ro,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc/>
+    public async Task<ITransactionContext> BeginTransactionAsync(
+        IsolationProfile isolationProfile,
+        ExecutionType executionType = ExecutionType.Write,
+        bool? readOnly = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (isolationProfile == IsolationProfile.SafeNonBlockingReads
+            && Product == SupportedDatabase.PostgreSql)
+        {
+            throw new TransactionModeNotSupportedException(
+                "IsolationProfile.SafeNonBlockingReads requires read-committed snapshot semantics, which PostgreSQL does not provide.");
+        }
+
+        var level = _isolationResolver.Resolve(isolationProfile);
+        return await BeginTransactionAsync(level, executionType, readOnly, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Resolves transaction parameters (read-only flag, isolation level) from the input arguments.
+    /// Shared by both sync and async transaction creation paths.
+    /// </summary>
+    private (bool readOnly, IsolationLevel isolationLevel) ResolveTransactionParameters(
+        IsolationLevel? isolationLevel,
+        ExecutionType executionType,
+        bool? readOnly)
+    {
+        var ro = readOnly ?? executionType == ExecutionType.Read;
+        if (ro)
+        {
             if (!_isReadConnection)
             {
                 throw new InvalidOperationException("Context is not readable.");
@@ -99,23 +169,6 @@ public partial class DatabaseContext
             }
         }
 
-        return TransactionContext.Create(this, isolationLevel.Value, executionType, ro);
-    }
-
-    /// <inheritdoc/>
-    public ITransactionContext BeginTransaction(
-        IsolationProfile isolationProfile,
-        ExecutionType executionType = ExecutionType.Write,
-        bool? readOnly = null)
-    {
-        if (isolationProfile == IsolationProfile.SafeNonBlockingReads
-            && Product == SupportedDatabase.PostgreSql)
-        {
-            throw new TransactionModeNotSupportedException(
-                "IsolationProfile.SafeNonBlockingReads requires read-committed snapshot semantics, which PostgreSQL does not provide.");
-        }
-
-        var level = _isolationResolver.Resolve(isolationProfile);
-        return BeginTransaction(level, executionType, readOnly);
+        return (ro, isolationLevel.Value);
     }
 }

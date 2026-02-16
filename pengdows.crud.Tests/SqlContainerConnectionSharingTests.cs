@@ -1,6 +1,7 @@
 using System;
 using System.Data;
 using System.Data.Common;
+using System.Threading;
 using System.Threading.Tasks;
 using pengdows.crud.configuration;
 using pengdows.crud.dialects;
@@ -172,6 +173,20 @@ private sealed class RecordingContext : IDatabaseContext, ISqlDialectProvider, I
             ExecutionType executionType = ExecutionType.Write, bool? readOnly = null)
         {
             return _context.BeginTransaction(isolationProfile, executionType, readOnly);
+        }
+
+        public Task<ITransactionContext> BeginTransactionAsync(IsolationLevel? isolationLevel = null,
+            ExecutionType executionType = ExecutionType.Write, bool? readOnly = null,
+            CancellationToken cancellationToken = default)
+        {
+            return _context.BeginTransactionAsync(isolationLevel, executionType, readOnly, cancellationToken);
+        }
+
+        public Task<ITransactionContext> BeginTransactionAsync(IsolationProfile isolationProfile,
+            ExecutionType executionType = ExecutionType.Write, bool? readOnly = null,
+            CancellationToken cancellationToken = default)
+        {
+            return _context.BeginTransactionAsync(isolationProfile, executionType, readOnly, cancellationToken);
         }
 
         public string GenerateRandomName(int length = 5, int parameterNameMaxLength = 30)

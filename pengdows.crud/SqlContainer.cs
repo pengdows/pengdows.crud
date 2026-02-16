@@ -25,6 +25,7 @@
 #region
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics;
@@ -32,6 +33,7 @@ using System.Data.Common;
 using System.Globalization;
 using System.Linq;
 using System.Text;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -104,6 +106,23 @@ namespace pengdows.crud;
 public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectProvider, IReaderLifetimeListener
 {
     private static readonly Regex ParamPlaceholderRegex = new(@"\{P\}([A-Za-z_][A-Za-z0-9_]*)", RegexOptions.Compiled);
+
+    // Provider-specific properties that must be preserved during parameter cloning.
+    // Mirrors SqlDialect.ProviderSpecificResetProperties — these are the properties
+    // that CreateDbParameter cannot re-derive when the CLR type is not registered
+    // in AdvancedTypeRegistry (e.g., explicitly-set OracleDbType).
+    private static readonly string[] ProviderSpecificCopyProperties =
+    {
+        "NpgsqlDbType",
+        "DataTypeName",
+        "SqlDbType",
+        "UdtTypeName",
+        "OracleDbType",
+        "MySqlDbType"
+    };
+
+    private static readonly ConcurrentDictionary<Type, Action<DbParameter, DbParameter>> ProviderSpecificCopiers = new();
+
     private readonly IDatabaseContext _context;
     private readonly ISqlDialect _dialect;
 
@@ -179,6 +198,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     private int _outputParameterCount;
     private int _nextParameterId = -1;
     internal List<string> ParamSequence { get; } = new();
+    private Dictionary<string, string>? _renderedParameterMap;
 
     // Performance optimization: cache rendered command text to avoid repeated Query.ToString() calls
     private string? _cachedCommandText;
@@ -276,6 +296,38 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     internal string RenderParams(string sql)
     {
         ParamSequence.Clear();
+        _renderedParameterMap?.Clear();
+
+        if (_dialect.SupportsNamedParameters && !_dialect.SupportsRepeatedNamedParameters)
+        {
+            Dictionary<string, int>? counts = null;
+            HashSet<string>? usedNames = null;
+            return ParamPlaceholderRegex.Replace(sql, m =>
+            {
+                var name = m.Groups[1].Value;
+                counts ??= new Dictionary<string, int>(ParameterNameComparer.Instance);
+                counts.TryGetValue(name, out var count);
+                count++;
+                counts[name] = count;
+
+                var rendered = count == 1
+                    ? name
+                    : MakeDuplicateParameterName(name, count,
+                        usedNames ??= new HashSet<string>(ParamSequence, ParameterNameComparer.Instance));
+
+                usedNames?.Add(rendered);
+                ParamSequence.Add(rendered);
+
+                if (!string.Equals(rendered, name, StringComparison.Ordinal))
+                {
+                    _renderedParameterMap ??= new Dictionary<string, string>(ParameterNameComparer.Instance);
+                    _renderedParameterMap[rendered] = name;
+                }
+
+                return string.Concat(_dialect.ParameterMarker, rendered);
+            });
+        }
+
         return ParamPlaceholderRegex.Replace(sql, m =>
         {
             var name = m.Groups[1].Value;
@@ -284,6 +336,48 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 ? string.Concat(_dialect.ParameterMarker, name)
                 : _dialect.ParameterMarker;
         });
+    }
+
+    private string MakeDuplicateParameterName(string baseName, int occurrence, HashSet<string> usedNames)
+    {
+        var maxLength = Math.Max(1, _context.DataSourceInfo.ParameterNameMaxLength);
+        var attempt = occurrence;
+
+        while (true)
+        {
+            var suffix = "_" + attempt.ToString(CultureInfo.InvariantCulture);
+            if (suffix.Length >= maxLength)
+            {
+                return GenerateUniqueParameterName(usedNames);
+            }
+
+            var maxBaseLength = maxLength - suffix.Length;
+            var trimmed = baseName.Length > maxBaseLength ? baseName[..maxBaseLength] : baseName;
+            if (string.IsNullOrEmpty(trimmed))
+            {
+                trimmed = "p";
+            }
+
+            var candidate = string.Concat(trimmed, suffix);
+            if (!usedNames.Contains(candidate) && !_parameters.ContainsKey(candidate))
+            {
+                return candidate;
+            }
+
+            attempt++;
+        }
+    }
+
+    private string GenerateUniqueParameterName(HashSet<string> usedNames)
+    {
+        string name;
+        do
+        {
+            name = GenerateParameterName();
+        }
+        while (usedNames.Contains(name) || _parameters.ContainsKey(name));
+
+        return name;
     }
 
 
@@ -478,6 +572,13 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         {
             cmdText = RenderParams(cmdText);
         }
+        else if (ParamSequence.Count > 0)
+        {
+            // No {P} placeholders — clear any stale sequence from a previous render
+            // so AddParametersToCommand doesn't bind using an outdated mapping.
+            ParamSequence.Clear();
+            _renderedParameterMap?.Clear();
+        }
 
         dbCommand.CommandType = CommandType.Text;
         dbCommand.CommandText = cmdText;
@@ -513,8 +614,10 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             return;
         }
 
-        if (_context.SupportsNamedParameters || ParamSequence.Count == 0)
+        if (_context.SupportsNamedParameters && _context.SupportsRepeatedNamedParameters)
         {
+            // Named provider that supports repeated placeholders — each parameter
+            // appears once and the provider resolves duplicate references in SQL.
             foreach (var param in _parameters.Values)
             {
                 dbCommand.Parameters.Add(param);
@@ -524,14 +627,144 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             return;
         }
 
-        foreach (var name in ParamSequence)
+        if (_context.SupportsNamedParameters && ParamSequence.Count == 0)
         {
-            if (_parameters.TryGetValue(name, out var param))
+            // Named provider but no ParamSequence recorded (e.g., manual SQL).
+            // Fall back to adding all parameters once.
+            foreach (var param in _parameters.Values)
             {
                 dbCommand.Parameters.Add(param);
                 RegisterParameterOwner(param, dbCommand.Parameters);
             }
+
+            return;
         }
+
+        // Positional path or named provider that does NOT support repeated placeholders:
+        // ParamSequence may reference the same name multiple times (e.g., a value used
+        // in both SET and WHERE). Each occurrence needs its own DbParameter instance
+        // because ADO.NET providers reject adding the same object twice.
+        HashSet<string>? seenSource = null;
+        foreach (var renderedName in ParamSequence)
+        {
+            var sourceName = renderedName;
+            if (_renderedParameterMap != null &&
+                _renderedParameterMap.TryGetValue(renderedName, out var originalName))
+            {
+                sourceName = originalName;
+            }
+
+            if (!_parameters.TryGetValue(sourceName, out var param))
+            {
+                continue;
+            }
+
+            seenSource ??= new HashSet<string>(ParameterNameComparer.Instance);
+            var isFirst = seenSource.Add(sourceName);
+            var sameName = ParameterNameComparer.Instance.Equals(renderedName, sourceName);
+            if (isFirst && sameName)
+            {
+                // First occurrence — use the original parameter
+                dbCommand.Parameters.Add(param);
+                RegisterParameterOwner(param, dbCommand.Parameters);
+            }
+            else
+            {
+                // Duplicate occurrence (or renamed placeholder) — clone the parameter preserving metadata
+                var cloneName = _context.SupportsNamedParameters ? renderedName : null;
+                var clone = CreateParameterClone(param, cloneName);
+                dbCommand.Parameters.Add(clone);
+                RegisterParameterOwner(clone, dbCommand.Parameters);
+            }
+        }
+    }
+
+    private DbParameter CreateParameterClone(DbParameter source, string? nameOverride)
+    {
+        // Re-materialize through the dialect factory. This goes through the same
+        // AdvancedTypeRegistry / _commonConversions path as the original, so
+        // provider-specific configuration (OracleDbType, NpgsqlDbType, etc.) is
+        // applied by the dialect — no ICloneable dependency needed.
+        var clone = _dialect.CreateDbParameter<object?>(nameOverride, source.DbType, source.Value);
+        clone.Direction = source.Direction;
+        clone.Size = source.Size;
+        clone.Precision = source.Precision;
+        clone.Scale = source.Scale;
+        if (!string.IsNullOrEmpty(source.SourceColumn))
+        {
+            clone.SourceColumn = source.SourceColumn;
+        }
+
+        clone.SourceVersion = source.SourceVersion;
+        clone.IsNullable = source.IsNullable;
+        clone.SourceColumnNullMapping = source.SourceColumnNullMapping;
+
+        // Copy provider-specific properties (OracleDbType, NpgsqlDbType, etc.)
+        // that CreateDbParameter may not re-derive if the CLR type is not
+        // registered in AdvancedTypeRegistry.
+        CopyProviderSpecificProperties(source, clone);
+
+        return clone;
+    }
+
+    /// <summary>
+    /// Copies provider-specific properties from source to target using cached
+    /// reflection. Only copies properties whose values differ from their defaults
+    /// on the source, avoiding unnecessary overwrites of values already set by
+    /// the dialect factory.
+    /// </summary>
+    private static void CopyProviderSpecificProperties(DbParameter source, DbParameter target)
+    {
+        var sourceType = source.GetType();
+        var targetType = target.GetType();
+
+        // Only copy if both parameters are the same provider type
+        if (sourceType != targetType)
+        {
+            return;
+        }
+
+        var copier = ProviderSpecificCopiers.GetOrAdd(sourceType, BuildProviderSpecificCopier);
+        copier(source, target);
+    }
+
+    private static Action<DbParameter, DbParameter> BuildProviderSpecificCopier(Type parameterType)
+    {
+        List<PropertyInfo>? properties = null;
+        foreach (var propertyName in ProviderSpecificCopyProperties)
+        {
+            var property = parameterType.GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public);
+            if (property == null || !property.CanRead || !property.CanWrite ||
+                property.GetIndexParameters().Length != 0)
+            {
+                continue;
+            }
+
+            properties ??= new List<PropertyInfo>();
+            properties.Add(property);
+        }
+
+        if (properties == null)
+        {
+            return static (_, _) => { };
+        }
+
+        var propArray = properties.ToArray();
+        return (source, target) =>
+        {
+            foreach (var prop in propArray)
+            {
+                try
+                {
+                    var sourceValue = prop.GetValue(source);
+                    prop.SetValue(target, sourceValue);
+                }
+                catch
+                {
+                    // Ignore failures — provider may reject certain values in some states.
+                }
+            }
+        };
     }
 
     private void RegisterParameterOwner(DbParameter parameter, DbParameterCollection owner)
@@ -578,6 +811,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         ReturnParametersToPool();
         _outputParameterCount = 0;
         ParamSequence.Clear();
+        _renderedParameterMap?.Clear();
 
         // Invalidate cached command text when query is cleared
         _cachedCommandText = null;
@@ -969,7 +1203,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             _context.AssertIsReadConnection();
         }
 
-        ITrackedConnection conn;
+        ITrackedConnection? conn = null;
         DbCommand? cmd = null;
         ILockerAsync? connectionLocker = null;
         var metrics = GetMetricsCollector(executionType);
@@ -1045,9 +1279,9 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 }
             }
 
-            //no matter what we do NOT close the underlying connection
-            //or dispose it here—the reader manages command disposal.
-            Cleanup(cmd, null, ExecutionType.Read);
+            // On success (lockTransferred), TrackedReader owns the connection — pass null.
+            // On failure, pass the actual connection so Cleanup can dispose it.
+            Cleanup(cmd, lockTransferred ? null : conn, executionType);
         }
     }
 
@@ -1118,6 +1352,13 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             if (cmdText.Contains("{P}"))
             {
                 cmdText = RenderParams(cmdText);
+            }
+            else if (ParamSequence.Count > 0)
+            {
+                // No {P} placeholders — clear any stale sequence from a previous render
+                // so AddParametersToCommand doesn't bind using an outdated mapping.
+                ParamSequence.Clear();
+                _renderedParameterMap?.Clear();
             }
 
             // Cache the rendered command text for reuse
@@ -1360,12 +1601,9 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             }
         }
 
-        // Don't dispose read connections — they are left open until the reader disposes
-        if (executionType == ExecutionType.Read)
-        {
-            return;
-        }
-
+        // For reads, the TrackedReader owns the connection on success (conn will be null here).
+        // For writes, or if a read failed before TrackedReader took ownership (conn is non-null),
+        // we must dispose the connection to prevent leaks.
         if (_context is not TransactionContext && conn is not null)
         {
             _context.CloseAndDisposeConnection(conn);
@@ -1420,6 +1658,12 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             clone.ParamSequence.AddRange(ParamSequence);
         }
 
+        if (_renderedParameterMap is { Count: > 0 })
+        {
+            clone._renderedParameterMap = new Dictionary<string, string>(_renderedParameterMap,
+                ParameterNameComparer.Instance);
+        }
+
         clone._outputParameterCount = _outputParameterCount;
 
         return clone;
@@ -1449,6 +1693,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         {
             cloned.Precision = param.Precision;
         }
+
+        CopyProviderSpecificProperties(param, cloned);
 
         return cloned;
     }

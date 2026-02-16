@@ -5,6 +5,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
+[Collection("NormalizationCacheSerial")]
 public class DatabaseContextNormalizationCacheTests
 {
     [Fact]

@@ -139,6 +139,11 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     bool SupportsNamedParameters => DataSourceInfo.SupportsNamedParameters;
 
     /// <summary>
+    /// True if the same named parameter can appear multiple times in a single SQL statement.
+    /// </summary>
+    bool SupportsRepeatedNamedParameters => DataSourceInfo.SupportsRepeatedNamedParameters;
+
+    /// <summary>
     /// True if the provider supports INSERT ... RETURNING or OUTPUT clause for identity retrieval.
     /// </summary>
     bool SupportsInsertReturning { get; }
@@ -243,6 +248,24 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
         IsolationProfile isolationProfile,
         ExecutionType executionType = ExecutionType.Write,
         bool? readOnly = null);
+
+    /// <summary>
+    /// Begins a transaction asynchronously using the native ADO.NET IsolationLevel.
+    /// </summary>
+    Task<ITransactionContext> BeginTransactionAsync(
+        IsolationLevel? isolationLevel = null,
+        ExecutionType executionType = ExecutionType.Write,
+        bool? readOnly = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Begins a transaction asynchronously using a portable IsolationProfile abstraction.
+    /// </summary>
+    Task<ITransactionContext> BeginTransactionAsync(
+        IsolationProfile isolationProfile,
+        ExecutionType executionType = ExecutionType.Write,
+        bool? readOnly = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Returns a randomly generated, collision-safe parameter/alias name.

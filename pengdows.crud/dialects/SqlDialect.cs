@@ -165,6 +165,10 @@ internal abstract class SqlDialect : ISqlDialect
 
     public virtual bool SupportsNamedParameters => true;
 
+    // Named-parameter providers allow the same @name to appear multiple times in SQL
+    // with a single parameter object. Override to false for positional providers.
+    public virtual bool SupportsRepeatedNamedParameters => SupportsNamedParameters;
+
     public virtual string RenderJsonArgument(string parameterMarker, IColumnInfo column)
     {
         return parameterMarker;
@@ -746,6 +750,14 @@ internal abstract class SqlDialect : ISqlDialect
 
         if (!handled)
         {
+            // Validate CLR type compatibility with DbType before setting the value.
+            // Catches mismatches early with clear messages instead of deferring to
+            // provider-specific errors at execution time.
+            if (!valueIsNull)
+            {
+                DbTypeValidator.Validate(type, value);
+            }
+
             parameter.DbType = type;
             parameter.Value = valueIsNull ? DBNull.Value : value!;
         }
@@ -947,6 +959,22 @@ internal abstract class SqlDialect : ISqlDialect
     {
     }
 
+    public virtual Task TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Returns SQL to reset the session back to read-write after a read-only transaction completes.
+    /// Dialects that set session-scoped read-only state in <see cref="TryEnterReadOnlyTransaction"/>
+    /// should override this to provide the corresponding reset statement.
+    /// </summary>
+    internal virtual string? GetReadOnlyTransactionResetSql()
+    {
+        return null;
+    }
+
     /// <summary>
     /// Attempts to execute a read-only SQL statement within a transaction context.
     /// Swallows any exceptions and logs them at Debug level.
@@ -964,6 +992,29 @@ internal abstract class SqlDialect : ISqlDialect
 
             using var sc = transaction.CreateSqlContainer(sql);
             sc.ExecuteNonQueryAsync().GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "Failed to apply {DialectName} read-only session settings", dialectName);
+        }
+    }
+
+    /// <summary>
+    /// Async version of <see cref="TryExecuteReadOnlySql"/>.
+    /// </summary>
+    protected async Task TryExecuteReadOnlySqlAsync(ITransactionContext transaction, string sql,
+        string dialectName, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (transaction is TransactionContext tx)
+            {
+                await tx.ExecuteSessionNonQueryAsync(sql).ConfigureAwait(false);
+                return;
+            }
+
+            await using var sc = transaction.CreateSqlContainer(sql);
+            await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {

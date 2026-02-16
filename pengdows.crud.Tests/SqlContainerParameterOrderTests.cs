@@ -110,8 +110,7 @@ public class SqlContainerParameterOrderTests : SqlLiteContextTestBase
         ctx.As<ISqlDialectProvider>().SetupGet(p => p.Dialect).Returns(dialect);
 
         using var container = SqlContainer.CreateForDialect(ctx.Object, dialect, "SELECT {P}b, {P}a");
-        var rendered = container.RenderParams(container.Query.ToString());
-        container.Query.Clear().Append(rendered);
+        // Leave {P} placeholders — the execution path renders them via RenderParams
         var pA = dialect.CreateDbParameter("a", DbType.Int32, 1);
         pA.ParameterName = "a";
         var pB = dialect.CreateDbParameter("b", DbType.Int32, 2);
