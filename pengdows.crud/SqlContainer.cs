@@ -1552,14 +1552,26 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         return ticks * 1_000_000d / Stopwatch.Frequency;
     }
 
-    private Task OpenConnectionAsync(ITrackedConnection conn, CancellationToken cancellationToken)
+    private async Task OpenConnectionAsync(ITrackedConnection conn, CancellationToken cancellationToken)
     {
-        if (conn.State != ConnectionState.Open)
+        if (conn.State == ConnectionState.Open)
         {
-            return conn.OpenAsync(cancellationToken);
+            return;
         }
 
-        return Task.CompletedTask;
+        if (_context is DatabaseContext dbContext && dbContext.RequiresSerializedOpen)
+        {
+            await using var openLock = dbContext.GetConnectionOpenLock();
+            await openLock.LockAsync(cancellationToken).ConfigureAwait(false);
+            if (conn.State != ConnectionState.Open)
+            {
+                await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            return;
+        }
+
+        await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
     }
 
     private void Cleanup(DbCommand? cmd, ITrackedConnection? conn, ExecutionType executionType)

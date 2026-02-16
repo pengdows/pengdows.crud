@@ -30,6 +30,7 @@
 #region
 
 using System.Data.Common;
+using System.Threading;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
@@ -118,6 +119,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private IProcWrappingStrategy _procWrappingStrategy = null!;
     private ProcWrappingStyle _procWrappingStyle;
     private ITrackedConnection? _connection = null;
+    private SemaphoreSlim? _connectionOpenGate;
 
     private long _connectionCount;
     private string _connectionString = string.Empty;
@@ -262,6 +264,8 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     /// <inheritdoc/>
     public SupportedDatabase Product => _dataSourceInfo?.Product ?? SupportedDatabase.Unknown;
 
+    internal bool RequiresSerializedOpen { get; private set; }
+
     // ProcWrappingStyle is defined below with a setter to update strategy
     /// <inheritdoc/>
     public int MaxParameterLimit => _dataSourceInfo.MaxParameterLimit;
@@ -331,6 +335,19 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
             _connection = null;
         }
 
+        try
+        {
+            _connectionOpenGate?.Dispose();
+        }
+        catch
+        {
+            // ignore
+        }
+        finally
+        {
+            _connectionOpenGate = null;
+        }
+
         base.DisposeManaged();
     }
 
@@ -355,6 +372,19 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
         finally
         {
             _connection = null;
+        }
+
+        try
+        {
+            _connectionOpenGate?.Dispose();
+        }
+        catch
+        {
+            // ignore
+        }
+        finally
+        {
+            _connectionOpenGate = null;
         }
 
         await base.DisposeManagedAsync().ConfigureAwait(false);

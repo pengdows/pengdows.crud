@@ -27,6 +27,7 @@ using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.@internal;
 using pengdows.crud.infrastructure;
+using pengdows.crud.threading;
 using pengdows.crud.wrappers;
 
 namespace pengdows.crud;
@@ -83,6 +84,17 @@ public partial class DatabaseContext
     internal ITrackedConnection GetStandardConnection(bool isShared = false, bool readOnly = false)
     {
         return GetStandardConnectionWithExecutionType(ExecutionType.Read, isShared, readOnly);
+    }
+
+    internal ILockerAsync GetConnectionOpenLock()
+    {
+        ThrowIfDisposed();
+        if (!RequiresSerializedOpen || _connectionOpenGate == null)
+        {
+            return NoOpAsyncLocker.Instance;
+        }
+
+        return new RealAsyncLocker(_connectionOpenGate);
     }
 
     internal ITrackedConnection GetStandardConnectionWithExecutionType(ExecutionType executionType,

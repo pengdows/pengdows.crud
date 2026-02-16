@@ -213,10 +213,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         // on this pinned connection. A second lock on the connection itself would be redundant
         // double-locking that adds measurable overhead (e.g., WriteStorm scenarios).
         var connection = connectionProvider.GetConnection(resolvedExecType, false);
-        if (connection.State != ConnectionState.Open)
-        {
-            connection.Open();
-        }
+        OpenConnectionWithOptionalLock(context, connection);
 
         // DuckDB's ADO.NET provider rejects explicit IsolationLevel values. Use provider default,
         // but preserve the resolved isolation level for reporting and logic.
@@ -225,6 +222,28 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             : connection.BeginTransaction(resolvedIsolation);
 
         return connection;
+    }
+
+    private static void OpenConnectionWithOptionalLock(IDatabaseContext context, ITrackedConnection connection)
+    {
+        if (connection.State == ConnectionState.Open)
+        {
+            return;
+        }
+
+        if (context is DatabaseContext dbContext && dbContext.RequiresSerializedOpen)
+        {
+            using var openLock = dbContext.GetConnectionOpenLock();
+            openLock.Lock();
+            if (connection.State != ConnectionState.Open)
+            {
+                connection.Open();
+            }
+
+            return;
+        }
+
+        connection.Open();
     }
 
     /// <inheritdoc/>
@@ -801,10 +820,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             ResolveCreationParameters(context, isolationLevel, executionType, isReadOnly);
 
         var connection = connectionProvider.GetConnection(resolvedExecType, false);
-        if (connection.State != ConnectionState.Open)
-        {
-            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        }
+        await OpenConnectionWithOptionalLockAsync(context, connection, cancellationToken).ConfigureAwait(false);
 
         var transaction = context.Product == SupportedDatabase.DuckDB
             ? await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false)
@@ -818,5 +834,28 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         }
 
         return tx;
+    }
+
+    private static async Task OpenConnectionWithOptionalLockAsync(IDatabaseContext context, ITrackedConnection connection,
+        CancellationToken cancellationToken)
+    {
+        if (connection.State == ConnectionState.Open)
+        {
+            return;
+        }
+
+        if (context is DatabaseContext dbContext && dbContext.RequiresSerializedOpen)
+        {
+            await using var openLock = dbContext.GetConnectionOpenLock();
+            await openLock.LockAsync(cancellationToken).ConfigureAwait(false);
+            if (connection.State != ConnectionState.Open)
+            {
+                await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            return;
+        }
+
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
     }
 }

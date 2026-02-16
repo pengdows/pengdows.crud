@@ -26,6 +26,7 @@ using System;
 using System.Data.Common;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
@@ -255,6 +256,11 @@ public partial class DatabaseContext
 
             Name = _dataSourceInfo.DatabaseProductName;
             _procWrappingStyle = _dataSourceInfo.ProcWrappingStyle;
+            if (Product == SupportedDatabase.DuckDB)
+            {
+                RequiresSerializedOpen = true;
+                _connectionOpenGate = new SemaphoreSlim(1, 1);
+            }
 
             // Apply pooling defaults now that we have the final mode and dialect
             var builder = GetFactoryConnectionStringBuilder(_connectionString);
