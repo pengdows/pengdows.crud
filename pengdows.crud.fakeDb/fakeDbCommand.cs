@@ -98,7 +98,7 @@ public class fakeDbCommand : DbCommand
 
         if (TryGetCommandFailure(conn, CommandText, out var exNonQuery))
         {
-            throw exNonQuery;
+            throw exNonQuery!;
         }
 
         if (conn != null && !string.IsNullOrWhiteSpace(CommandText))
@@ -147,7 +147,7 @@ public class fakeDbCommand : DbCommand
 
             if (TryGetCommandFailure(conn, CommandText, out var exScalar))
             {
-                throw exScalar;
+                throw exScalar!;
             }
 
             // Apply output parameter values if queued
@@ -284,7 +284,7 @@ public class fakeDbCommand : DbCommand
         var conn = FakeConnection;
         if (TryGetCommandFailure(conn, CommandText, out var exReader))
         {
-            throw exReader;
+            throw exReader!;
         }
 
         // Prefer queued results when present (test control)
