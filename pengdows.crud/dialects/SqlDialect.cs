@@ -260,7 +260,7 @@ internal abstract class SqlDialect : ISqlDialect
     /// </summary>
     public virtual string GetSavepointSql(string name)
     {
-        return $"SAVEPOINT {name}";
+        return $"SAVEPOINT {WrapObjectName(name)}";
     }
 
     /// <summary>
@@ -269,7 +269,7 @@ internal abstract class SqlDialect : ISqlDialect
     /// </summary>
     public virtual string GetRollbackToSavepointSql(string name)
     {
-        return $"ROLLBACK TO SAVEPOINT {name}";
+        return $"ROLLBACK TO SAVEPOINT {WrapObjectName(name)}";
     }
 
     public virtual bool RequiresStoredProcParameterNameMatch => false;

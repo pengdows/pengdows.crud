@@ -81,15 +81,17 @@ public class DatabaseContextIsolationTests
     }
 
     [Fact]
-    public void BeginTransaction_ProfileUnsupported_Throws()
+    public void BeginTransaction_ProfileSupported_CockroachDb_And_DuckDB()
     {
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.CockroachDb}",
             new fakeDbFactory(SupportedDatabase.CockroachDb.ToString()));
-        Assert.Throws<NotSupportedException>(() => context.BeginTransaction(IsolationProfile.FastWithRisks));
+        using var tx1 = context.BeginTransaction(IsolationProfile.FastWithRisks);
+        Assert.NotNull(tx1);
 
         context = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.DuckDB}",
             new fakeDbFactory(SupportedDatabase.DuckDB.ToString()));
-        Assert.Throws<NotSupportedException>(() => context.BeginTransaction(IsolationProfile.FastWithRisks));
+        using var tx2 = context.BeginTransaction(IsolationProfile.FastWithRisks);
+        Assert.NotNull(tx2);
     }
 
     [Fact]

@@ -200,17 +200,20 @@ public sealed class IsolationResolver : IIsolationResolver
             SupportedDatabase.CockroachDb => new Dictionary<IsolationProfile, IsolationLevel>
             {
                 [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.Serializable,
-                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable
+                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
+                [IsolationProfile.FastWithRisks] = IsolationLevel.Serializable
             },
             SupportedDatabase.Sqlite => new Dictionary<IsolationProfile, IsolationLevel>
             {
                 [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
-                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable
+                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
+                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
             },
             SupportedDatabase.Firebird => new Dictionary<IsolationProfile, IsolationLevel>
             {
                 [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.Snapshot,
-                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable
+                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
+                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
             },
             SupportedDatabase.MySql => new Dictionary<IsolationProfile, IsolationLevel>
             {
@@ -227,12 +230,14 @@ public sealed class IsolationResolver : IIsolationResolver
             SupportedDatabase.Oracle => new Dictionary<IsolationProfile, IsolationLevel>
             {
                 [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
-                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable
+                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
+                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
             },
             SupportedDatabase.DuckDB => new Dictionary<IsolationProfile, IsolationLevel>
             {
                 [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.Serializable,
-                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable
+                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
+                [IsolationProfile.FastWithRisks] = IsolationLevel.Serializable
             },
             _ => new Dictionary<IsolationProfile, IsolationLevel>
             {

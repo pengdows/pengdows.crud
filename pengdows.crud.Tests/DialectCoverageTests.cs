@@ -145,7 +145,7 @@ public class DialectCoverageTests
         var dialect = new SqlServerDialect(new fakeDbFactory(SupportedDatabase.SqlServer),
             NullLogger<SqlServerDialect>.Instance);
         var sql = dialect.GetSavepointSql("test_sp");
-        Assert.Equal("SAVE TRANSACTION test_sp", sql);
+        Assert.Equal("SAVE TRANSACTION \"test_sp\"", sql);
     }
 
     [Fact]
@@ -154,7 +154,7 @@ public class DialectCoverageTests
         var dialect = new SqlServerDialect(new fakeDbFactory(SupportedDatabase.SqlServer),
             NullLogger<SqlServerDialect>.Instance);
         var sql = dialect.GetRollbackToSavepointSql("test_sp");
-        Assert.Equal("ROLLBACK TRANSACTION test_sp", sql);
+        Assert.Equal("ROLLBACK TRANSACTION \"test_sp\"", sql);
     }
 
     [Fact]
@@ -163,7 +163,7 @@ public class DialectCoverageTests
         var dialect = new PostgreSqlDialect(new fakeDbFactory(SupportedDatabase.PostgreSql),
             NullLogger<PostgreSqlDialect>.Instance);
         var sql = dialect.GetSavepointSql("test_sp");
-        Assert.Equal("SAVEPOINT test_sp", sql);
+        Assert.Equal("SAVEPOINT \"test_sp\"", sql);
     }
 
     [Fact]
@@ -172,7 +172,7 @@ public class DialectCoverageTests
         var dialect = new PostgreSqlDialect(new fakeDbFactory(SupportedDatabase.PostgreSql),
             NullLogger<PostgreSqlDialect>.Instance);
         var sql = dialect.GetRollbackToSavepointSql("test_sp");
-        Assert.Equal("ROLLBACK TO SAVEPOINT test_sp", sql);
+        Assert.Equal("ROLLBACK TO SAVEPOINT \"test_sp\"", sql);
     }
 
     [Fact]
@@ -180,7 +180,7 @@ public class DialectCoverageTests
     {
         var dialect = new MySqlDialect(new fakeDbFactory(SupportedDatabase.MySql), NullLogger<MySqlDialect>.Instance);
         var sql = dialect.GetSavepointSql("test_sp");
-        Assert.Equal("SAVEPOINT test_sp", sql);
+        Assert.Equal("SAVEPOINT \"test_sp\"", sql);
     }
 
     [Fact]
@@ -189,7 +189,7 @@ public class DialectCoverageTests
         var dialect =
             new SqliteDialect(new fakeDbFactory(SupportedDatabase.Sqlite), NullLogger<SqliteDialect>.Instance);
         var sql = dialect.GetSavepointSql("my_savepoint");
-        Assert.Equal("SAVEPOINT my_savepoint", sql);
+        Assert.Equal("SAVEPOINT \"my_savepoint\"", sql);
     }
 
     private sealed record DialectTestConfig(

@@ -207,7 +207,7 @@ public partial class TableGateway<TEntity, TRowID>
         var keys = _tableInfo.PrimaryKeys;
         if (keys.Count < 1)
         {
-            throw new Exception($"No primary keys found for type {typeof(TEntity).Name}");
+            throw new InvalidOperationException($"No primary keys found for type {typeof(TEntity).Name}");
         }
 
         return keys;

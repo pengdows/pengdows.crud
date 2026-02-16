@@ -115,12 +115,12 @@ internal class SqlServerDialect : SqlDialect
     // SQL Server uses SAVE TRANSACTION / ROLLBACK TRANSACTION instead of SAVEPOINT
     public override string GetSavepointSql(string name)
     {
-        return $"SAVE TRANSACTION {name}";
+        return $"SAVE TRANSACTION {WrapObjectName(name)}";
     }
 
     public override string GetRollbackToSavepointSql(string name)
     {
-        return $"ROLLBACK TRANSACTION {name}";
+        return $"ROLLBACK TRANSACTION {WrapObjectName(name)}";
     }
 
     public override bool SupportsInsertReturning => true;

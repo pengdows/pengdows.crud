@@ -99,7 +99,7 @@ public class IsolationResolverTests
         var resolver = new IsolationResolver(SupportedDatabase.CockroachDb, true, false);
 
         Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
-        Assert.Throws<NotSupportedException>(() => resolver.Resolve(IsolationProfile.FastWithRisks));
+        Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.FastWithRisks));
         Assert.Throws<InvalidOperationException>(() => resolver.Validate(IsolationLevel.ReadCommitted));
     }
 
@@ -146,7 +146,7 @@ public class IsolationResolverTests
 
         Assert.Equal(IsolationLevel.ReadCommitted, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
         Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.StrictConsistency));
-        Assert.Throws<NotSupportedException>(() => resolver.Resolve(IsolationProfile.FastWithRisks));
+        Assert.Equal(IsolationLevel.ReadCommitted, resolver.Resolve(IsolationProfile.FastWithRisks));
     }
 
     [Fact]
@@ -165,7 +165,7 @@ public class IsolationResolverTests
 
         Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
         Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.StrictConsistency));
-        Assert.Throws<NotSupportedException>(() => resolver.Resolve(IsolationProfile.FastWithRisks));
+        Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.FastWithRisks));
     }
 
     [Fact]
@@ -188,6 +188,6 @@ public class IsolationResolverTests
 
         Assert.Equal(IsolationLevel.ReadCommitted, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
         Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.StrictConsistency));
-        Assert.Throws<NotSupportedException>(() => resolver.Resolve(IsolationProfile.FastWithRisks));
+        Assert.Equal(IsolationLevel.ReadCommitted, resolver.Resolve(IsolationProfile.FastWithRisks));
     }
 }

@@ -632,7 +632,10 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     private async Task CompleteTransactionWithWaitAsync(Func<Task> action, bool markCommitted,
         CancellationToken cancellationToken = default)
     {
-        await _completionLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        if (!await _completionLock.WaitAsync(TimeSpan.FromSeconds(CompletionLockTimeoutSeconds), cancellationToken).ConfigureAwait(false))
+        {
+            throw new InvalidOperationException("Transaction completion timed out waiting for internal lock.");
+        }
         try
         {
             await CompleteTransactionAsync(action, markCommitted).ConfigureAwait(false);
