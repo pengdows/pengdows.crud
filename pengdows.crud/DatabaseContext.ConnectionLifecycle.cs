@@ -177,12 +177,12 @@ public partial class DatabaseContext
             activeConnectionString.IndexOf("password", StringComparison.OrdinalIgnoreCase) < 0)
         {
             _logger.LogWarning("Connection string missing password for {Name}: {ConnectionString}", Name,
-                activeConnectionString);
+                RedactConnectionString(activeConnectionString));
         }
         if (_logger.IsEnabled(LogLevel.Debug))
         {
             _logger.LogDebug("Preparing connection for {ExecutionType} with string: {ConnectionString}", executionType,
-                activeConnectionString);
+                RedactConnectionString(activeConnectionString));
         }
         var dataSource = ResolveDataSource(readOnly);
 

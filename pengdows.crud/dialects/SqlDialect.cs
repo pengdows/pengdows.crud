@@ -26,6 +26,7 @@ using System.Collections.Concurrent;
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
@@ -714,6 +715,9 @@ internal abstract class SqlDialect : ISqlDialect
         // If pool is full, let it get garbage collected
     }
 
+    [SuppressMessage("Security", "cs/exposure-of-private-information",
+        Justification = "This method's purpose is to store user-supplied values in DbParameters. " +
+                         "No parameter values are written to logs — only timing metadata (DbType, elapsed).")]
     public virtual DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
         var traceTimings = Logger.IsEnabled(LogLevel.Debug) && IsParameterTimingEnabled();
