@@ -276,20 +276,19 @@ public enum ExecutionType
 ## Supported Databases
 
 ```csharp
+[Flags]
 public enum SupportedDatabase
 {
-    SqlServer,
-    PostgreSql,
-    Oracle,
-    MySql,
-    MariaDb,
-    Sqlite,
-    Firebird,
-    CockroachDb,
-    Db2,
-    Snowflake,
-    Informix,
-    SapHana
+    Unknown = 0,
+    PostgreSql = 1,
+    SqlServer = 2,
+    Oracle = 4,
+    Firebird = 8,
+    CockroachDb = 16,
+    MariaDb = 32,
+    MySql = 64,
+    Sqlite = 128,
+    DuckDB = 256
 }
 ```
 
@@ -303,18 +302,21 @@ public interface IAuditValueResolver
 
 public interface IAuditValues
 {
-    string UserId { get; }
+    object UserId { get; init; }
+    DateTime UtcNow { get; }
+    T As<T>() { return (T)UserId; }
 }
 ```
 
-## TenantContextRegistry
+## ITenantContextRegistry
 
 For multi-tenancy:
 
 ```csharp
-public class TenantContextRegistry
+public interface ITenantContextRegistry
 {
-    IDatabaseContext GetContext(string tenantId);
-    void RegisterContext(string tenantId, IDatabaseContext context);
+    IDatabaseContext GetContext(string tenant);
 }
 ```
+
+`TenantContextRegistry` is the concrete implementation, constructed via DI with `IServiceProvider`, `ITenantConnectionResolver`, `IDatabaseContextFactory`, and `ILoggerFactory`.

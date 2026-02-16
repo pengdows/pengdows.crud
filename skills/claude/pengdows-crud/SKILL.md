@@ -535,6 +535,7 @@ Use lowest number possible:
 | `KeepAlive` (1) | Embedded DBs needing sentinel connection |
 | `SingleWriter` (2) | File-based SQLite/DuckDB |
 | `SingleConnection` (4) | In-memory `:memory:` databases |
+| `Best` (15) | Auto-select optimal mode for the database |
 
 ```csharp
 services.AddSingleton<IDatabaseContext>(sp =>
@@ -668,7 +669,7 @@ public class OrderGatewayTests
 
 ## Supported Databases
 
-SQL Server, PostgreSQL, Oracle, MySQL, MariaDB, SQLite, Firebird, CockroachDB, DuckDB, DB2, Snowflake, Informix, SAP HANA
+SQL Server, PostgreSQL, Oracle, MySQL, MariaDB, SQLite, Firebird, CockroachDB, DuckDB
 
 Each uses optimal SQL syntax (MERGE vs ON CONFLICT vs ON DUPLICATE KEY UPDATE).
 

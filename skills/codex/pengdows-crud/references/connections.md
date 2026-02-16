@@ -18,7 +18,6 @@ The philosophy is simple:
 ## DbMode Enum
 
 ```csharp
-[Flags]
 public enum DbMode
 {
     Standard = 0,         // Recommended for production
