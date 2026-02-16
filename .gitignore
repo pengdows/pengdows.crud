@@ -26,6 +26,10 @@ mydb.sqlite
 coverage.json
 Untitled.json
 benchmarks/CrudBenchmarks/BenchmarkDotNet.Artifacts/
+benchmarks/CrudBenchmarks/mplconfig/
+benchmarks/**/*results*.txt
+benchmarks/**/*results*.md
+benchmarks/archive/
 
 BenchmarkDotNet.Artifacts/*.log
 BenchmarkDotNet.Artifacts/
