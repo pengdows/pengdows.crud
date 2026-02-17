@@ -37,13 +37,13 @@ public partial class TableGateway<TEntity, TRowID>
 
     private class CachedContainerTemplates
     {
-        public ISqlContainer GetByIdTemplate = null!;
-        public ISqlContainer GetByIdsTemplate = null!;
+        public ISqlContainer? GetByIdTemplate;
+        public ISqlContainer? GetByIdsTemplate;
         public ISqlContainer InsertTemplate = null!;
-        public ISqlContainer UpdateTemplate = null!;
-        public ISqlContainer DeleteByIdTemplate = null!;
+        public ISqlContainer? DeleteByIdTemplate;
         public ISqlContainer BaseRetrieveTemplate = null!;
-        public ISqlContainer UpsertTemplate = null!;
+        // Update and Upsert cannot be cached as templates because NULL inlining
+        // in BuildSetClause makes the parameter structure vary per entity instance.
     }
 
     private static TRowID CreateTemplateRowId()
@@ -114,8 +114,7 @@ public partial class TableGateway<TEntity, TRowID>
     /// </summary>
     private CachedSqlTemplates BuildCachedSqlTemplatesForDialect(ISqlDialect dialect)
     {
-        var idCol = _tableInfo.Columns.Values.FirstOrDefault(c => c.IsId)
-                    ?? throw new InvalidOperationException($"No ID column defined for {typeof(TEntity).Name}");
+        var idCol = _tableInfo.Columns.Values.FirstOrDefault(c => c.IsId);
 
         var insertColumns = _tableInfo.Columns.Values
             .Where(c => !c.IsNonInsertable && (!c.IsId || c.IsIdIsWritable))
@@ -147,24 +146,33 @@ public partial class TableGateway<TEntity, TRowID>
 
         var insertSql =
             $"INSERT INTO {BuildWrappedTableName(dialect)} ({string.Join(", ", wrappedCols)}) VALUES ({string.Join(", ", valuePlaceholders)})";
-        var deleteSql =
-            $"DELETE FROM {BuildWrappedTableName(dialect)} WHERE {dialect.WrapObjectName(idCol.Name)} = {{0}}";
 
-        var updateColumns = _tableInfo.Columns.Values
-            .Where(c => !c.IsId && !c.IsVersion && !c.IsNonUpdateable && !c.IsCreatedBy && !c.IsCreatedOn)
-            .ToList();
+        // Delete and Update SQL require an ID column; null when entity has no [Id]
+        string? deleteSql = null;
+        string? updateSql = null;
+        List<IColumnInfo>? updateColumns = null;
 
-        var updateSql =
-            $"UPDATE {BuildWrappedTableName(dialect)} SET {{0}} WHERE {dialect.WrapObjectName(idCol.Name)} = {{1}}";
+        if (idCol != null)
+        {
+            deleteSql =
+                $"DELETE FROM {BuildWrappedTableName(dialect)} WHERE {dialect.WrapObjectName(idCol.Name)} = {{0}}";
+
+            updateColumns = _tableInfo.Columns.Values
+                .Where(c => !c.IsId && !c.IsVersion && !c.IsNonUpdateable && !c.IsCreatedBy && !c.IsCreatedOn)
+                .ToList();
+
+            updateSql =
+                $"UPDATE {BuildWrappedTableName(dialect)} SET {{0}} WHERE {dialect.WrapObjectName(idCol.Name)} = {{1}}";
+        }
 
         return new CachedSqlTemplates
         {
             InsertSql = insertSql,
             InsertColumns = insertColumns,
             InsertParameterNames = paramNames,
-            DeleteSql = deleteSql,
-            UpdateSql = updateSql,
-            UpdateColumns = updateColumns
+            DeleteSql = deleteSql!,
+            UpdateSql = updateSql!,
+            UpdateColumns = updateColumns!
         };
     }
 
@@ -182,29 +190,31 @@ public partial class TableGateway<TEntity, TRowID>
         // Build pre-configured containers with parameters for common operations
         var templates = new CachedContainerTemplates();
 
-        // GetById - always use single-parameter equality for minimal per-call overhead
-        templates.GetByIdTemplate = BuildRetrieveInternal(CreateTemplateRowIds(1), "", context, false);
+        // ID-dependent templates are only built when the entity has an [Id] column
+        if (_idColumn != null)
+        {
+            // GetById - always use single-parameter equality for minimal per-call overhead
+            templates.GetByIdTemplate = BuildRetrieveInternal(CreateTemplateRowIds(1), "", context, false);
 
-        // GetByIds - array parameter (will be updated with actual IDs)
-        templates.GetByIdsTemplate = BuildRetrieveInternal(CreateTemplateRowIds(2), "", context, false);
+            // GetByIds - array parameter (will be updated with actual IDs)
+            templates.GetByIdsTemplate = BuildRetrieveInternal(CreateTemplateRowIds(2), "", context, false);
 
-        // BaseRetrieve - no WHERE clause
-        templates.BaseRetrieveTemplate = BuildBaseRetrieve("a", context);
+            // Delete by ID - build directly to avoid circular dependency with BuildDelete fast path
+            templates.DeleteByIdTemplate = BuildDeleteDirect(CreateTemplateRowId(), context);
+        }
 
-        // Insert - entity fields as parameters
+        // BaseRetrieve - build directly to avoid circular dependency with BuildBaseRetrieve fast path
+        templates.BaseRetrieveTemplate = BuildBaseRetrieveDirect("a", context, dialect);
+
+        // Insert - build directly to avoid circular dependency with PrepareInsertContainer fast path.
+        // Skip MutateEntityForInsert since we only need the SQL structure and parameter names,
+        // not real entity values (those are set via SetParameterValue on each clone).
         var sampleEntity = new TEntity();
-        templates.InsertTemplate = BuildCreate(sampleEntity, context);
-
-        // Update - entity fields as parameters
-        // Note: loadOriginal=false since we're building a template with a sample entity,
-        // not performing an actual update. This makes the call synchronous (no I/O).
-        templates.UpdateTemplate = BuildUpdateAsync(sampleEntity, false, context).GetAwaiter().GetResult();
-
-        // Delete by ID
-        templates.DeleteByIdTemplate = BuildDelete(CreateTemplateRowId(), context);
-
-        // Upsert
-        templates.UpsertTemplate = BuildUpsert(sampleEntity, context);
+        var sqlTemplate = GetTemplatesForDialect(dialect);
+        var (insertContainer, _) = BuildInsertContainerDirect(sampleEntity, context, dialect, sqlTemplate);
+        insertContainer.Query.Replace(OutputClausePlaceholder, string.Empty);
+        insertContainer.Query.Replace(ReturningClausePlaceholder, string.Empty);
+        templates.InsertTemplate = insertContainer;
 
         return templates;
     }

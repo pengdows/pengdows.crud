@@ -91,6 +91,18 @@ public class SqlGenerationBenchmark
         return _filmHelper.BuildCreate(film, _ctx);
     }
 
+    [Benchmark]
+    public ISqlContainer SqlGeneration_Mine_BuildDelete()
+    {
+        return _filmHelper.BuildDelete(_filmId, _ctx);
+    }
+
+    [Benchmark]
+    public ISqlContainer SqlGeneration_Mine_BuildBaseRetrieve()
+    {
+        return _filmHelper.BuildBaseRetrieve("a", _ctx);
+    }
+
     // ============= PARAMETER CREATION BENCHMARKS =============
 
     [Benchmark]

@@ -138,7 +138,7 @@ internal class MySqlDialect : SqlDialect
             }
             else
             {
-                Logger.LogInformation("MySQL session settings: no changes required (already compliant)");
+                Logger.LogInformation("MySQL session settings: already compliant; enforcing baseline on every checkout");
             }
         }
 

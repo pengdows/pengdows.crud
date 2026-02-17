@@ -523,11 +523,26 @@ public sealed class TypeMapRegistry : ITypeMapRegistry
 
         var propertyType = Nullable.GetUnderlyingType(column.PropertyInfo.PropertyType) ??
                            column.PropertyInfo.PropertyType;
-        if (propertyType != typeof(string) && propertyType != typeof(Guid))
+        if (propertyType == typeof(string) || propertyType == typeof(Guid))
         {
-            throw new InvalidOperationException(
-                $"Property {entityType.FullName}.{column.PropertyInfo.Name} must be a string or Guid.");
+            return;
         }
+
+        if (IsNumericClrType(propertyType))
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"Property {entityType.FullName}.{column.PropertyInfo.Name} must be a string, Guid, or numeric type.");
+    }
+
+    private static bool IsNumericClrType(Type type)
+    {
+        return type == typeof(byte) || type == typeof(sbyte)
+            || type == typeof(short) || type == typeof(ushort)
+            || type == typeof(int) || type == typeof(uint)
+            || type == typeof(long) || type == typeof(ulong);
     }
 
     private static void ValidateTimestampColumn(Type entityType, IColumnInfo? column)

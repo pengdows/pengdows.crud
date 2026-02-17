@@ -222,17 +222,19 @@ public class QueryCacheTests : SqlLiteContextTestBase
         TypeMap.Register<CacheEntity>();
         var helper = new TableGateway<CacheEntity, int>(Context);
 
-        helper.BuildDelete(1);
+        // Use BuildBaseRetrieve with a non-"a" alias since it still populates the query cache.
+        // (BuildDelete now uses cloned container templates instead of the query cache.)
+        helper.BuildBaseRetrieve("b");
         var cache = GetQueryCache(helper);
-        Assert.True(cache.ContainsKey("DeleteById"));
+        Assert.True(cache.ContainsKey("BaseRetrieve:b"));
 
         helper.ClearCaches();
         cache = GetQueryCache(helper);
         Assert.Empty(cache);
 
-        helper.BuildDelete(2);
+        helper.BuildBaseRetrieve("b");
         cache = GetQueryCache(helper);
-        Assert.True(cache.ContainsKey("DeleteById"));
+        Assert.True(cache.ContainsKey("BaseRetrieve:b"));
     }
 
     private static Dictionary<string, string> GetQueryCache<TEntity, TId>(TableGateway<TEntity, TId> helper)

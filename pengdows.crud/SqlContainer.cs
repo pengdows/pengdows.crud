@@ -512,6 +512,13 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }
 
         parameter.Value = newValue;
+
+        // Update Size for string parameters to match the new value length,
+        // preventing truncation when cloned templates had shorter initial values.
+        if (newValue is string str && parameter.Size > 0)
+        {
+            parameter.Size = Math.Max(str.Length, 1);
+        }
     }
 
     public object? GetParameterValue(string parameterName)

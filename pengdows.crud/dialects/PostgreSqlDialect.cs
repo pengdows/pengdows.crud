@@ -184,7 +184,7 @@ internal class PostgreSqlDialect : SqlDialect
             else
             {
                 Logger.LogInformation(
-                    "PostgreSQL session settings detected: {CurrentSettings}. No changes required (already compliant)",
+                    "PostgreSQL session settings detected: {CurrentSettings}. Already compliant; enforcing baseline on every checkout",
                     snapshot);
             }
         }
@@ -268,9 +268,10 @@ internal class PostgreSqlDialect : SqlDialect
 
     public override string GetBaseSessionSettings()
     {
-        // If session settings haven't been detected yet (e.g., in testing),
-        // provide fallback settings that are compatible with older PostgreSQL versions
-        return _sessionSettings ?? DefaultSessionSettings;
+        // Always enforce the full baseline on every connection checkout.
+        // A cached empty diff means the first sampled connection was already compliant,
+        // but pooled connections can drift if external code mutates session state.
+        return string.IsNullOrWhiteSpace(_sessionSettings) ? DefaultSessionSettings : _sessionSettings;
     }
 
     public override string GetReadOnlySessionSettings()

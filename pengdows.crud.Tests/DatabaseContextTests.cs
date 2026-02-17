@@ -568,7 +568,7 @@ public class DatabaseContextTests
     }
 
     [Fact]
-    public void PinnedConnection_WithoutSessionSettings_DoesNotExecute()
+    public void PinnedConnection_AlwaysEnforcesBaseline_EvenWhenCompliant()
     {
         var factory = new RecordingFactory(SupportedDatabase.SqlServer);
         var config = new DatabaseContextConfiguration
@@ -580,9 +580,11 @@ public class DatabaseContextTests
 
         _ = new DatabaseContext(config, factory);
 
-        // Should execute DBCC USEROPTIONS to check settings, but no SET commands since settings are already correct
+        // Should execute DBCC USEROPTIONS to detect settings, then enforce full baseline
+        // even when the initial connection is already compliant (pooled connections can drift)
         Assert.Contains("DBCC USEROPTIONS", factory.Connection.ExecutedCommands);
-        Assert.DoesNotContain(factory.Connection.ExecutedCommands, cmd => cmd.Contains("SET"));
+        Assert.Contains(factory.Connection.ExecutedCommands,
+            cmd => cmd.Contains("SET QUOTED_IDENTIFIER ON", StringComparison.OrdinalIgnoreCase));
     }
 
     private sealed class RecordingFactory : DbProviderFactory

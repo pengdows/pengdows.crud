@@ -34,12 +34,67 @@ public partial class TableGateway<TEntity, TRowID>
         var ctx = context ?? _context;
         var dialect = GetDialect(ctx);
 
+        // Fast path: clone from cached template for alias "a" (the most common alias)
+        if (alias == "a")
+        {
+            var containerTemplates = GetContainerTemplatesForDialect(dialect, ctx);
+            return containerTemplates.BaseRetrieveTemplate.Clone(ctx);
+        }
+
         var sc = ctx.CreateSqlContainer();
 
         // Build SQL directly for this dialect, cached per alias + product
         var cacheKey = ctx.Product == _context.Product
             ? $"BaseRetrieve:{alias}"
             : $"BaseRetrieve:{alias}:{ctx.Product}";
+
+        var sql = GetCachedQuery(cacheKey, () =>
+        {
+            var hasAlias = !string.IsNullOrWhiteSpace(alias);
+            var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+            sb.Append("SELECT ");
+            for (var i = 0; i < _tableInfo.OrderedColumns.Count; i++)
+            {
+                if (i > 0)
+                {
+                    sb.Append(", ");
+                }
+
+                if (hasAlias)
+                {
+                    sb.Append(dialect.WrapObjectName(alias));
+                    sb.Append(dialect.CompositeIdentifierSeparator);
+                }
+
+                sb.Append(BuildWrappedColumnName(dialect, _tableInfo.OrderedColumns[i].Name));
+            }
+
+            sb.Append("\nFROM ");
+            sb.Append(BuildWrappedTableName(dialect));
+            if (hasAlias)
+            {
+                sb.Append(' ');
+                sb.Append(dialect.WrapObjectName(alias));
+            }
+
+            return sb.ToString();
+        });
+
+        sc.Query.Append(sql);
+        return sc;
+    }
+
+    /// <summary>
+    /// Builds base SELECT SQL directly without using cached container templates.
+    /// Used during template initialization to avoid circular dependency.
+    /// </summary>
+    private ISqlContainer BuildBaseRetrieveDirect(string alias, IDatabaseContext context, ISqlDialect dialect)
+    {
+        var sc = context.CreateSqlContainer();
+
+        var cacheKey = context.Product == _context.Product
+            ? $"BaseRetrieve:{alias}"
+            : $"BaseRetrieve:{alias}:{context.Product}";
 
         var sql = GetCachedQuery(cacheKey, () =>
         {

@@ -648,8 +648,9 @@ public partial class TableGateway<TEntity, TRowID> :
 
     /// <summary>
     /// Prepares the SqlContainer with an INSERT statement.
-    /// When stripPlaceholders is true, identity clause placeholders are removed.
-    /// When false, placeholders remain for BuildCreateWithReturning to replace.
+    /// When stripPlaceholders is true, identity clause placeholders are removed and the cached
+    /// template is cloned for better performance. When false, placeholders remain for
+    /// BuildCreateWithReturning to replace.
     /// </summary>
     private (ISqlContainer sc, ISqlDialect dialect) PrepareInsertContainer(TEntity entity, IDatabaseContext? context, bool stripPlaceholders)
     {
@@ -659,8 +660,37 @@ public partial class TableGateway<TEntity, TRowID> :
         }
 
         var ctx = context ?? _context;
-        var sc = ctx.CreateSqlContainer();
         var dialect = GetDialect(ctx);
+
+        // Mutate entity first (same for both paths)
+        MutateEntityForInsert(entity);
+
+        var sqlTemplate = GetTemplatesForDialect(dialect);
+
+        // Fast path: clone from cached InsertTemplate (skips SQL string building)
+        if (stripPlaceholders)
+        {
+            var containerTemplates = GetContainerTemplatesForDialect(dialect, ctx);
+            var sc = containerTemplates.InsertTemplate.Clone(ctx);
+
+            for (var i = 0; i < sqlTemplate.InsertColumns.Count; i++)
+            {
+                var value = sqlTemplate.InsertColumns[i].MakeParameterValueFromField(entity);
+                sc.SetParameterValue(sqlTemplate.InsertParameterNames[i], value);
+            }
+
+            return (sc, dialect);
+        }
+
+        // Slow path: build full SQL with placeholders for BuildCreateWithReturning
+        return BuildInsertContainerDirect(entity, ctx, dialect, sqlTemplate);
+    }
+
+    /// <summary>
+    /// Applies entity mutations required before INSERT: ID generation, audit fields, version init.
+    /// </summary>
+    private void MutateEntityForInsert(TEntity entity)
+    {
         EnsureWritableIdHasValue(entity);
 
         if (_hasAuditColumns)
@@ -682,19 +712,27 @@ public partial class TableGateway<TEntity, TRowID> :
                 }
             }
         }
+    }
 
-        var template = GetTemplatesForDialect(dialect);
+    /// <summary>
+    /// Builds INSERT SQL container directly (no template cloning). Used during template
+    /// initialization and for BuildCreateWithReturning which needs placeholder tokens.
+    /// </summary>
+    private (ISqlContainer sc, ISqlDialect dialect) BuildInsertContainerDirect(
+        TEntity entity, IDatabaseContext ctx, ISqlDialect dialect, CachedSqlTemplates sqlTemplate)
+    {
+        var sc = ctx.CreateSqlContainer();
 
         sc.Query.Append("INSERT INTO ")
             .Append(BuildWrappedTableName(dialect))
             .Append(" (");
 
-        for (var i = 0; i < template.InsertColumns.Count; i++)
+        for (var i = 0; i < sqlTemplate.InsertColumns.Count; i++)
         {
-            var column = template.InsertColumns[i];
+            var column = sqlTemplate.InsertColumns[i];
             var value = column.MakeParameterValueFromField(entity);
 
-            var paramName = template.InsertParameterNames[i];
+            var paramName = sqlTemplate.InsertParameterNames[i];
             var param = dialect.CreateDbParameter(paramName, column.DbType, value);
             if (column.IsJsonType)
             {
@@ -716,10 +754,10 @@ public partial class TableGateway<TEntity, TRowID> :
             .Append(OutputClausePlaceholder)
             .Append(" VALUES (");
 
-        for (var i = 0; i < template.InsertColumns.Count; i++)
+        for (var i = 0; i < sqlTemplate.InsertColumns.Count; i++)
         {
-            var column = template.InsertColumns[i];
-            var marker = dialect.MakeParameterName(template.InsertParameterNames[i]);
+            var column = sqlTemplate.InsertColumns[i];
+            var marker = dialect.MakeParameterName(sqlTemplate.InsertParameterNames[i]);
             if (column.IsJsonType)
             {
                 marker = dialect.RenderJsonArgument(marker, column);
@@ -736,12 +774,6 @@ public partial class TableGateway<TEntity, TRowID> :
         // Insert RETURNING placeholder (for PostgreSQL/SQLite/etc) after VALUES
         sc.Query.Append(')')
             .Append(ReturningClausePlaceholder);
-
-        if (stripPlaceholders)
-        {
-            sc.Query.Replace(OutputClausePlaceholder, string.Empty);
-            sc.Query.Replace(ReturningClausePlaceholder, string.Empty);
-        }
 
         return (sc, dialect);
     }
@@ -823,6 +855,32 @@ public partial class TableGateway<TEntity, TRowID> :
 
     /// <inheritdoc/>
     public ISqlContainer BuildDelete(TRowID id, IDatabaseContext? context = null)
+    {
+        if (_idColumn == null)
+        {
+            throw new InvalidOperationException($"row identity column for table {WrappedTableName} not found");
+        }
+
+        var ctx = context ?? _context;
+        var dialect = GetDialect(ctx);
+
+        var containerTemplates = GetContainerTemplatesForDialect(dialect, ctx);
+        var template = containerTemplates.DeleteByIdTemplate;
+        if (template != null)
+        {
+            var sc = template.Clone(ctx);
+            sc.SetParameterValue("k0", id);
+            return sc;
+        }
+
+        return BuildDeleteDirect(id, ctx);
+    }
+
+    /// <summary>
+    /// Builds DELETE SQL directly without using cached container templates.
+    /// Used during template initialization to avoid circular dependency.
+    /// </summary>
+    private ISqlContainer BuildDeleteDirect(TRowID id, IDatabaseContext? context = null)
     {
         var ctx = context ?? _context;
         var sc = ctx.CreateSqlContainer();
@@ -910,7 +968,7 @@ public partial class TableGateway<TEntity, TRowID> :
             {
                 // Single ID - reuse GetByIdTemplate
                 var templates = GetContainerTemplatesForDialect(dialect, ctx);
-                using var container = templates.GetByIdTemplate.Clone(ctx);
+                using var container = templates.GetByIdTemplate!.Clone(ctx);
 
                 if (dialect.SupportsSetValuedParameters)
                 {
@@ -928,7 +986,7 @@ public partial class TableGateway<TEntity, TRowID> :
             {
                 // Two IDs - can reuse GetByIdsTemplate for non-array dialects
                 var templates = GetContainerTemplatesForDialect(dialect, ctx);
-                using var container = templates.GetByIdsTemplate.Clone(ctx);
+                using var container = templates.GetByIdsTemplate!.Clone(ctx);
 
                 container.SetParameterValue("p0", list[0]);
                 container.SetParameterValue("p1", list[1]);
@@ -1005,7 +1063,7 @@ public partial class TableGateway<TEntity, TRowID> :
             {
                 // Single ID - reuse GetByIdTemplate
                 var templates = GetContainerTemplatesForDialect(dialect, ctx);
-                var container = templates.GetByIdTemplate.Clone(ctx);
+                var container = templates.GetByIdTemplate!.Clone(ctx);
 
                 if (dialect.SupportsSetValuedParameters)
                 {
@@ -1023,7 +1081,7 @@ public partial class TableGateway<TEntity, TRowID> :
             {
                 // Two IDs - can reuse GetByIdsTemplate for non-array dialects
                 var templates = GetContainerTemplatesForDialect(dialect, ctx);
-                var container = templates.GetByIdsTemplate.Clone(ctx);
+                var container = templates.GetByIdsTemplate!.Clone(ctx);
 
                 container.SetParameterValue("p0", list[0]);
                 container.SetParameterValue("p1", list[1]);

@@ -98,9 +98,9 @@ public class TypeMapRegistryBranchTests
     {
         [Column("id", DbType.Int32)] [Id] public int Id { get; set; }
 
-        [Column("created_by", DbType.Int32)]
+        [Column("created_by", DbType.Boolean)]
         [CreatedBy]
-        public int CreatedBy { get; set; }
+        public bool CreatedBy { get; set; }
     }
 
     [Table("test_table")]

@@ -8,6 +8,8 @@
 //   * On Update: Sets only LastUpdatedBy, LastUpdatedOn
 // - Requires AuditValueResolver if entity has user audit columns (CreatedBy/LastUpdatedBy).
 // - Time-only audit (CreatedOn/LastUpdatedOn) works without resolver (uses UTC now).
+// - Supports both DateTime and DateTimeOffset timestamp properties.
+// - Uses compiled delegates (GetOrCreateSetter / FastGetter) instead of raw reflection.
 // - Coerce() helper handles type conversion for audit values:
 //   * String to Guid parsing
 //   * Culture-invariant numeric conversion
@@ -42,10 +44,44 @@ public partial class TableGateway<TEntity, TRowID>
 
         if (t == typeof(Guid) && value is string s)
         {
-            return Guid.Parse(s);
+            if (!Guid.TryParse(s, out var parsed))
+            {
+                throw new InvalidOperationException(
+                    $"Cannot parse '{s}' as Guid for audit column of type {targetType.Name}.");
+            }
+
+            return parsed;
         }
 
         return TypeCoercionHelper.ConvertWithCache(value, t);
+    }
+
+    /// <summary>
+    /// Returns true if the timestamp value is null/default for DateTime or DateTimeOffset.
+    /// </summary>
+    private static bool IsDefaultTimestamp(object? value)
+    {
+        return value switch
+        {
+            null => true,
+            DateTime dt => dt == default,
+            DateTimeOffset dto => dto == default,
+            _ => false
+        };
+    }
+
+    /// <summary>
+    /// Converts a DateTime to the correct boxed type for the target property.
+    /// </summary>
+    private static object CoerceTimestamp(DateTime utcNow, Type propertyType)
+    {
+        var underlying = Nullable.GetUnderlyingType(propertyType) ?? propertyType;
+        if (underlying == typeof(DateTimeOffset))
+        {
+            return new DateTimeOffset(utcNow, TimeSpan.Zero);
+        }
+
+        return utcNow;
     }
 
     private void SetAuditFields(TEntity obj, bool updateOnly)
@@ -63,7 +99,6 @@ public partial class TableGateway<TEntity, TRowID>
 
         // Check if we have user-based audit fields (non-time fields)
         var hasUserAuditFields = _tableInfo.CreatedBy != null || _tableInfo.LastUpdatedBy != null;
-        var hasTimeAuditFields = _tableInfo.CreatedOn != null || _tableInfo.LastUpdatedOn != null;
 
         // If user-based audit fields exist but no resolver is configured, this is a usage error.
         // Tests expect an InvalidOperationException rather than letting the database fail later.
@@ -79,13 +114,16 @@ public partial class TableGateway<TEntity, TRowID>
         // Handle LastUpdated fields
         if (_tableInfo.LastUpdatedOn?.PropertyInfo != null)
         {
-            _tableInfo.LastUpdatedOn.PropertyInfo.SetValue(obj, utcNow);
+            var setter = GetOrCreateSetter(_tableInfo.LastUpdatedOn.PropertyInfo);
+            var coercedTime = CoerceTimestamp(utcNow, _tableInfo.LastUpdatedOn.PropertyInfo.PropertyType);
+            setter(obj, coercedTime);
         }
 
         if (_tableInfo.LastUpdatedBy?.PropertyInfo != null && auditValues != null)
         {
             var coercedUserId = Coerce(auditValues!.UserId, _tableInfo.LastUpdatedBy.PropertyInfo.PropertyType);
-            _tableInfo.LastUpdatedBy.PropertyInfo.SetValue(obj, coercedUserId);
+            var setter = GetOrCreateSetter(_tableInfo.LastUpdatedBy.PropertyInfo);
+            setter(obj, coercedUserId);
         }
         // When no resolver is provided, we've already thrown above if user audit fields exist
 
@@ -97,10 +135,12 @@ public partial class TableGateway<TEntity, TRowID>
         // Handle Created fields (only for new entities)
         if (_tableInfo.CreatedOn?.PropertyInfo != null)
         {
-            var currentValue = _tableInfo.CreatedOn.PropertyInfo.GetValue(obj) as DateTime?;
-            if (currentValue == null || currentValue == default(DateTime))
+            var currentValue = _tableInfo.CreatedOn.PropertyInfo.GetValue(obj);
+            if (IsDefaultTimestamp(currentValue))
             {
-                _tableInfo.CreatedOn.PropertyInfo.SetValue(obj, utcNow);
+                var setter = GetOrCreateSetter(_tableInfo.CreatedOn.PropertyInfo);
+                var coercedTime = CoerceTimestamp(utcNow, _tableInfo.CreatedOn.PropertyInfo.PropertyType);
+                setter(obj, coercedTime);
             }
         }
 
@@ -113,7 +153,8 @@ public partial class TableGateway<TEntity, TRowID>
                 || (currentValue is Guid guid && guid == Guid.Empty))
             {
                 var coercedUserId = Coerce(auditValues.UserId, _tableInfo.CreatedBy.PropertyInfo.PropertyType);
-                _tableInfo.CreatedBy.PropertyInfo.SetValue(obj, coercedUserId);
+                var setter = GetOrCreateSetter(_tableInfo.CreatedBy.PropertyInfo);
+                setter(obj, coercedUserId);
             }
         }
     }

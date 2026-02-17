@@ -108,7 +108,7 @@ public class SqlServerDialectSettingsTests
     }
 
     [Fact]
-    public async Task GetConnectionSessionSettings_OptimalSettings_ReturnsEmpty()
+    public async Task GetConnectionSessionSettings_OptimalSettings_StillEnforcesBaseline()
     {
         var rows = new[]
         {
@@ -126,11 +126,16 @@ public class SqlServerDialectSettingsTests
         await dialect.DetectDatabaseInfoAsync(conn);
         using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory);
         var settings = dialect.GetConnectionSessionSettings(ctx, false);
-        Assert.Equal(string.Empty, settings);
+
+        // Even when all settings are already optimal, the full baseline is enforced
+        // to protect against pooled connection drift
+        Assert.Contains("SET QUOTED_IDENTIFIER ON", settings);
+        Assert.Contains("SET ANSI_NULLS ON", settings);
+        Assert.Contains("SET ARITHABORT ON", settings);
     }
 
     [Fact]
-    public async Task GetConnectionSessionSettings_LowercaseKeys_ReturnsEmpty()
+    public async Task GetConnectionSessionSettings_LowercaseKeys_StillEnforcesBaseline()
     {
         var rows = new[]
         {
@@ -149,7 +154,9 @@ public class SqlServerDialectSettingsTests
         using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory);
         var settings = dialect.GetConnectionSessionSettings(ctx, false);
 
-        Assert.Equal(string.Empty, settings);
+        // Even with lowercase keys, baseline is enforced
+        Assert.Contains("SET QUOTED_IDENTIFIER ON", settings);
+        Assert.Contains("SET ANSI_NULLS ON", settings);
     }
 
     [Fact]

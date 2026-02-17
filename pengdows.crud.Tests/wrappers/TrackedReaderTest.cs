@@ -227,6 +227,27 @@ public class TrackedReaderTests
         }
     }
 
+    private sealed class DisposalOrderTrackingReader : fakeDbDataReader
+    {
+        private readonly fakeDbCommand _command;
+
+        public DisposalOrderTrackingReader(fakeDbCommand command)
+            : base(Array.Empty<Dictionary<string, object>>())
+        {
+            _command = command;
+        }
+
+        public bool WasCommandDisposedWhenReaderDisposed { get; private set; }
+        public bool WasDisposed { get; private set; }
+
+        protected override void Dispose(bool disposing)
+        {
+            WasCommandDisposedWhenReaderDisposed = _command.WasDisposed;
+            WasDisposed = true;
+            base.Dispose(disposing);
+        }
+    }
+
     [Fact]
     public async Task ReadAsync_ReturnsFalseAndDisposes_WhenDone()
     {
@@ -279,6 +300,25 @@ public class TrackedReaderTests
         // Should only dispose locker once despite being called twice
         Assert.Equal(1, locker.DisposeCallCount);
         Assert.Equal(1, connection.CloseCallCount);
+    }
+
+    [Fact]
+    public void Dispose_DisposesReaderBeforeCommand()
+    {
+        var command = new fakeDbCommand();
+        using var reader = new DisposalOrderTrackingReader(command);
+        var connection = new TestTrackedConnection();
+        var locker = new TestLockerAsync();
+
+        var tracked = new TrackedReader(reader, connection, locker, false, command);
+
+        tracked.Dispose();
+
+        Assert.True(reader.WasDisposed);
+        Assert.False(reader.WasCommandDisposedWhenReaderDisposed);
+        Assert.True(command.WasDisposed);
+        Assert.True(locker.WasDisposed);
+        Assert.False(connection.WasClosed);
     }
 
     [Fact]

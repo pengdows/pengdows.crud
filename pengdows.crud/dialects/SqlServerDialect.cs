@@ -158,9 +158,11 @@ internal class SqlServerDialect : SqlDialect
 
     public override string GetBaseSessionSettings()
     {
-        // SQL Server doesn't differentiate session settings based on read-only mode
-        // as it uses ApplicationIntent=ReadOnly in the connection string instead
-        return _sessionSettings ?? string.Empty;
+        // Always enforce the full baseline on every connection checkout.
+        // A cached empty diff means the first sampled connection was already compliant,
+        // but pooled connections can drift if external code mutates session state.
+        // SQL Server uses ApplicationIntent=ReadOnly in the connection string for read-only.
+        return string.IsNullOrWhiteSpace(_sessionSettings) ? DefaultSessionSettings : _sessionSettings;
     }
 
     public override string? GetReadOnlyConnectionParameter()
@@ -171,7 +173,7 @@ internal class SqlServerDialect : SqlDialect
     [Obsolete]
     public override string GetConnectionSessionSettings()
     {
-        return _sessionSettings ?? string.Empty;
+        return string.IsNullOrWhiteSpace(_sessionSettings) ? DefaultSessionSettings : _sessionSettings;
     }
 
     public override bool IsReadCommittedSnapshotOn(ITrackedConnection conn)
@@ -213,7 +215,7 @@ internal class SqlServerDialect : SqlDialect
             }
             else
             {
-                Logger.LogInformation("SQL Server session settings: no changes required (already compliant)");
+                Logger.LogInformation("SQL Server session settings: already compliant; enforcing baseline on every checkout");
             }
         }
 
