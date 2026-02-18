@@ -724,30 +724,7 @@ internal abstract class SqlDialect : ISqlDialect
         var start = traceTimings ? Stopwatch.GetTimestamp() : 0;
         var parameter = GetPooledParameter(out var pooled);
 
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            name = GenerateRandomName(5, ParameterNameMaxLength);
-        }
-        else if (SupportsNamedParameters)
-        {
-            // Strip parameter marker prefix if present, then validate the remaining name
-            var nameToValidate = name;
-            if (name.Length > 0 && (name[0] == '@' || name[0] == ':' || name[0] == '?' || name[0] == '$'))
-            {
-                nameToValidate = name.Substring(1);
-                name = nameToValidate; // Use the stripped name
-            }
-
-            // Validate that parameter names only contain alphanumeric characters and underscores
-            if (!IsValidParameterName(nameToValidate))
-            {
-                throw new ArgumentException(
-                    $"Parameter name '{name}' contains invalid characters. Only alphanumeric characters and underscores are allowed.",
-                    nameof(name));
-            }
-        }
-
-        parameter.ParameterName = name;
+        parameter.ParameterName = name ?? GenerateRandomName(5, ParameterNameMaxLength);
 
         // Performance: Inline null check to avoid method call overhead
         var valueIsNull = value == null || value is DBNull;
@@ -846,6 +823,54 @@ internal abstract class SqlDialect : ISqlDialect
     {
         return CreateDbParameter(null, type, value);
     }
+
+    public virtual DbParameter CreateDbParameter(string? name, DbType dbType, int value)
+    {
+        var parameter = GetPooledParameter(out _);
+        parameter.ParameterName = name;
+        parameter.DbType = dbType;
+        parameter.Value = value;
+        return parameter;
+    }
+    
+    public virtual DbParameter CreateDbParameter(string? name, DbType dbType, long value)
+    {
+        var parameter = GetPooledParameter(out _);
+        parameter.ParameterName = name;
+        parameter.DbType = dbType;
+        parameter.Value = value;
+        return parameter;
+    }
+
+    public virtual DbParameter CreateDbParameter(string? name, DbType dbType, string value)
+    {
+        var parameter = GetPooledParameter(out _);
+        parameter.ParameterName = name;
+        parameter.DbType = dbType;
+        parameter.Value = value;
+        if(value != null)
+            parameter.Size = Math.Max(value.Length, 1);
+        return parameter;
+    }
+    
+    public virtual DbParameter CreateDbParameter(string? name, DbType dbType, Guid value)
+    {
+        var parameter = GetPooledParameter(out _);
+        parameter.ParameterName = name;
+        parameter.DbType = dbType;
+        parameter.Value = value;
+        return parameter;
+    }
+    
+    public virtual DbParameter CreateDbParameter(string? name, DbType dbType, DateTime value)
+    {
+        var parameter = GetPooledParameter(out _);
+        parameter.ParameterName = name;
+        parameter.DbType = dbType;
+        parameter.Value = value;
+        return parameter;
+    }
+
 
     // Methods for database-specific operations
     public virtual string GetVersionQuery()

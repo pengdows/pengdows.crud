@@ -1,83 +1,68 @@
-# Gemini Code Assistant Context
+# Gemini Code Assistant Context: pengdows.crud 2.0
 
-This document provides context for the `pengdows.crud` project to help the Gemini code assistant understand the codebase.
+This document provides a deep, contextual understanding of the `pengdows.crud` 2.0 framework for Gemini. It covers the project's core philosophy, its key differentiating features, and its intended use cases.
 
-## Project Overview
+## Core Philosophy: The "Expert in a Box"
 
-`pengdows.crud` is a high-performance, SQL-first data access layer for .NET. It is designed to be a lightweight alternative to heavier ORMs like Entity Framework Core, while providing more features and better testability than micro-ORMs like Dapper.
+`pengdows.crud` is an opinionated, high-performance, SQL-first data access framework. It is designed to be more robust and feature-rich than a micro-ORM like Dapper, while retaining high performance and developer control, avoiding the pitfalls of heavier, abstraction-focused ORMs like EF Core.
 
-The core philosophy of `pengdows.crud` is to give developers full control over their SQL, while providing a robust and testable framework for database interactions.
+The central design principle is to provide **"Prego features"**—expert-level, built-in solutions to difficult, real-world data access problems that developers often assume are handled by their tools but usually are not. The framework guides developers toward robust, scalable, and secure architectural patterns by default.
 
-### Key Technologies
+It is built on a **database-first** philosophy, treating the database schema as a primary, expertly-designed artifact.
 
-*   **.NET:** The project is built on .NET and targets `net8.0` and `net10.0`. The `global.json` specifies the use of .NET SDK version `10.0.100`.
-*   **C#:** The language used for the project.
-*   **Supported Databases:** The library supports a wide range of databases, including:
-    *   SQL Server
-    *   PostgreSQL
-    *   MySQL / MariaDB
-    *   Oracle
-    *   SQLite
-    *   Firebird
-    *   DuckDB
-    *   CockroachDB
-    *   TimescaleDB
+## Key Differentiating Features
 
-### Architecture
+### 1. Advanced Connection Management (`DbMode`)
 
-The project is structured into several key components:
+The framework provides intelligent, adaptive connection strategies to ensure optimal performance and resilience.
 
-*   `pengdows.crud`: The core library containing the main data access logic.
-*   `pengdows.crud.abstractions`: Contains the public interfaces and abstractions for the library.
-*   `pengdows.crud.fakeDb`: A fake database provider for unit testing. This is a key feature that allows for fast and isolated tests.
-*   `pengdows.crud.Tests`: The unit test project, which uses the `fakeDb` provider.
-*   `pengdows.crud.IntegrationTests`: The integration test project, which uses Testcontainers to test against real databases.
-*   `benchmarks`: Contains performance benchmarks for the library.
+- **"Open Late, Close Early" Architecture:** In `Standard` mode (for server databases), connections are acquired from the provider's pool only at the moment of execution and released immediately after. This maximizes connection pool efficiency and prevents pool exhaustion under high load, a common issue with the "connection-per-request" pattern.
+- **`SingleWriter` Mode:** For file-based databases like SQLite, this mode provides a unique, built-in solution for safe concurrent writes. An application-level "turnstyle" governor serializes write *tasks*, preventing database locking errors, while still using ephemeral connections for maximum efficiency.
+- **`SingleConnection` Mode:** A dedicated mode for handling thread-safe access to a single, persistent connection, designed specifically for ephemeral `:memory:` databases, which is invaluable for testing.
+- **`Best` Mode:** Automatically selects the safest and most performant `DbMode` based on the provider and connection string.
 
-The central class in the library is `DatabaseContext`. It is designed to be a **singleton** per connection string and is thread-safe. This is a critical distinction from Entity Framework's `DbContext`, which is typically scoped to a request.
+### 2. Intelligent Dialect System
 
-The library features a sophisticated connection management system with different modes (`Standard`, `KeepAlive`, `SingleWriter`, `SingleConnection`) that are automatically selected based on the database provider and connection string.
+A powerful abstraction layer that makes application code portable across different database vendors by handling database-specific quirks.
 
-## Building and Running
+- **Portable Upsert:** Automatically translates a single `Upsert` command into the correct native SQL (`MERGE`, `INSERT ... ON CONFLICT`, etc.) for the target database.
+- **Intelligent Prepared Statements:** Selectively enables or disables prepared statements based on what is most performant for the target database (e.g., ON for PostgreSQL, OFF for SQL Server).
+- **Stored Procedure Wrapping (`ProcWrappingStyle`):** Automatically wraps stored procedure calls in the correct, vendor-specific syntax (`EXEC`, `CALL`, `BEGIN/END`, etc.).
 
-### Building the Project
+### 3. Intent-Based Transaction Management (`IsolationProfile`)
 
-To build the project and create NuGet packages, run the following command:
+Simplifies transaction management by allowing developers to specify their *intent* (e.g., `SafeNonBlockingReads`). The framework's `IsolationResolver` then maps this intent to the safest and most optimal `System.Data.IsolationLevel` for the target database.
 
-```bash
-./build-packages.sh
-```
+### 4. Advanced Type System (`AdvancedTypeRegistry`)
 
-This will create the packages in the `artifacts` directory.
+A multi-layered, high-performance, and extensible type coercion system.
+- Provides built-in support for advanced types like **JSON, spatial data, arrays, and network addresses**.
+- Allows developers to register their own custom handlers and converters for domain-specific types, which are then used seamlessly for both parameter writing and data reading.
 
-### Running Tests
+### 5. Robust Database-First Design Principles
 
-There are two types of tests in the project: unit tests and integration tests.
+The framework's design and tooling enforce sound database design.
+- **`[Id]` vs. `[PrimaryKey]`:** A clear distinction is made between a surrogate key (`[Id]`, for stable foreign key references) and a natural/business primary key (`[PrimaryKey]`). This encourages correct normalization and ensures that core CRUD operations can always leverage an appropriate index.
+- **`Uuid7Optimized`:** Provides a high-performance, RFC 9562-compliant UUIDv7 generator to create time-ordered, index-friendly surrogate keys.
 
-**Unit Tests:**
+### 6. Built-in Safety and Production-Ready Patterns
 
-The unit tests are designed to be fast and run without a real database, using the `pengdows.crud.fakeDb` provider. To run the unit tests, use the following command:
+- **Resource Safety:** The strict use of `IAsyncDisposable` on `TransactionContext` and `SqlContainer` makes accidental connection leaks virtually impossible.
+- **Audit Handling:** An `IAuditValueResolver` interface allows for easy, decoupled, and automatic population of audit columns (`CreatedBy`, `CreatedOn`, etc.).
+- **Multi-Tenancy:** Offers first-class, out-of-the-box support for the robust **database-per-tenant** model via `ITenantContextRegistry`.
 
-```bash
-./run-unit-tests.sh
-```
+### 7. Comprehensive Metrics
 
-This script will also collect and report code coverage.
+Provides deep operational visibility by tracking detailed metrics for connections, contention (from the `PoolGovernor`), command timings, transactions, and more. This is invaluable for debugging, performance tuning, and production monitoring.
 
-**Integration Tests:**
+## Related Projects
 
-The integration tests run against real databases using Testcontainers. To run the integration tests, use the following command:
+- **`pengdows.poco.mint`:** A code generation tool that inspects a database schema and generates C# POCOs with the correct `[Table]`, `[Column]`, `[Id]`, and `[PrimaryKey]` attributes for use with `pengdows.crud`.
+- **`pengdows.crud.fakeDb`:** A powerful, standalone NuGet package that provides a fake ADO.NET provider. It is essential for writing fast, isolated unit tests for any data access logic based on ADO.NET interfaces, including code that uses `pengdows.crud` or Dapper.
 
-```bash
-./run-integration-tests.sh
-```
+## Building and Testing
 
-## Development Conventions
-
-*   **SQL-First:** The library is designed around the principle of writing raw SQL. It does not have a LINQ provider.
-*   **Test-Driven Development (TDD):** The `README.md` states that TDD is mandatory for contributions.
-*   **High Test Coverage:** The project aims for a high test coverage (minimum 83%).
-*   **Singleton `DatabaseContext`:** As mentioned in the architecture section, `DatabaseContext` instances should be registered as singletons in the dependency injection container.
-*   **Explicit Transactions:** Transactions are not implicit. They should be created explicitly using `context.BeginTransaction()`.
-*   **Partial Classes:** The `DatabaseContext` class is split into multiple partial class files (`DatabaseContext.cs`, `DatabaseContext.Initialization.cs`, etc.) to organize its extensive functionality.
-*   **Internal Documentation:** The `docs/ARCHITECTURE.md` file contains detailed information about the internal workings of the library. It is a valuable resource for understanding the design decisions and implementation details.
+- **Build:** `./build-packages.sh`
+- **Unit Tests:** `./run-unit-tests.sh` (uses `fakeDb`)
+- **Integration Tests:** `./run-integration-tests.sh` (uses Testcontainers)
+- **Benchmarks:** `dotnet run --project benchmarks/CrudBenchmarks -- --filter '*MyBenchmark*'` (run from within the `2.0` directory).
