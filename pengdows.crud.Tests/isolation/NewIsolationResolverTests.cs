@@ -1,0 +1,54 @@
+using System.Data;
+using System.Linq;
+using pengdows.crud.enums;
+using pengdows.crud.isolation;
+using Xunit;
+
+namespace pengdows.crud.Tests.isolation;
+
+public class NewIsolationResolverTests
+{
+    [Fact]
+    public void Resolve_YugabyteDb_Mappings()
+    {
+        var resolver = new IsolationResolver(SupportedDatabase.YugabyteDb, false, false);
+
+        Assert.Equal(IsolationLevel.ReadCommitted, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
+        Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.StrictConsistency));
+        Assert.Equal(IsolationLevel.ReadCommitted, resolver.Resolve(IsolationProfile.FastWithRisks));
+        
+        var levels = resolver.GetSupportedLevels();
+        Assert.Contains(IsolationLevel.ReadCommitted, levels);
+        Assert.Contains(IsolationLevel.RepeatableRead, levels);
+        Assert.Contains(IsolationLevel.Serializable, levels);
+    }
+
+    [Fact]
+    public void Resolve_TiDb_Mappings()
+    {
+        var resolver = new IsolationResolver(SupportedDatabase.TiDb, false, false);
+
+        Assert.Equal(IsolationLevel.RepeatableRead, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
+        Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.StrictConsistency));
+        Assert.Equal(IsolationLevel.ReadCommitted, resolver.Resolve(IsolationProfile.FastWithRisks));
+
+        var levels = resolver.GetSupportedLevels();
+        Assert.Contains(IsolationLevel.ReadCommitted, levels);
+        Assert.Contains(IsolationLevel.RepeatableRead, levels);
+        Assert.Contains(IsolationLevel.Serializable, levels);
+    }
+
+    [Fact]
+    public void Resolve_QuestDb_Mappings()
+    {
+        var resolver = new IsolationResolver(SupportedDatabase.QuestDb, false, false);
+
+        Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
+        Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.StrictConsistency));
+        Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.FastWithRisks));
+
+        var levels = resolver.GetSupportedLevels();
+        Assert.Single(levels);
+        Assert.Contains(IsolationLevel.Serializable, levels);
+    }
+}

@@ -130,7 +130,7 @@ public class TransactionContextAdditionalBranchTests
         public ConnectionState State => _state;
         public string DataSource => "test";
         public string ServerVersion => "1.0";
-        public ConnectionLocalState LocalState { get; } = new();
+        public IConnectionLocalState LocalState { get; } = new ConnectionLocalState();
 
         public IDbTransaction BeginTransaction()
         {

@@ -114,7 +114,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
     public static Task<List<T>> LoadAsync<T>(
         IDataReader reader,
-        MapperOptions options,
+        IMapperOptions options,
         CancellationToken cancellationToken = default)
         where T : class, new()
     {
@@ -131,7 +131,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
     public static IAsyncEnumerable<T> StreamAsync<T>(
         IDataReader reader,
-        MapperOptions options,
+        IMapperOptions options,
         CancellationToken cancellationToken = default)
         where T : class, new()
     {
@@ -147,7 +147,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
     Task<List<T>> IDataReaderMapper.LoadAsync<T>(
         IDataReader reader,
-        MapperOptions options,
+        IMapperOptions options,
         CancellationToken cancellationToken)
     {
         return LoadInternalAsync<T>(reader, options, cancellationToken);
@@ -155,7 +155,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
     IAsyncEnumerable<T> IDataReaderMapper.StreamAsync<T>(
         IDataReader reader,
-        MapperOptions options,
+        IMapperOptions options,
         CancellationToken cancellationToken)
     {
         return StreamInternalAsync<T>(reader, options, cancellationToken);
@@ -163,7 +163,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
     private async Task<List<T>> LoadInternalAsync<T>(
         IDataReader reader,
-        MapperOptions options,
+        IMapperOptions options,
         CancellationToken cancellationToken)
         where T : class, new()
     {
@@ -192,7 +192,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
     private async IAsyncEnumerable<T> StreamInternalAsync<T>(
         IDataReader reader,
-        MapperOptions options,
+        IMapperOptions options,
         [EnumeratorCancellation] CancellationToken cancellationToken)
         where T : class, new()
     {
@@ -221,7 +221,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
     /// Called by both LoadInternalAsync (direct loop) and StreamInternalAsync
     /// to keep per-row logic in one place.
     /// </summary>
-    private static T MapSingleRow<T>(DbDataReader rdr, MapperPlan<T> plan, MapperOptions options)
+    private static T MapSingleRow<T>(DbDataReader rdr, MapperPlan<T> plan, IMapperOptions options)
         where T : class, new()
     {
         var obj = new T();
@@ -257,7 +257,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
         return obj;
     }
 
-    private static MapperPlan<T> BuildPlan<T>(DbDataReader reader, MapperOptions options)
+    private static MapperPlan<T> BuildPlan<T>(DbDataReader reader, IMapperOptions options)
     {
         var type = typeof(T);
         var propertyLookup = GetPropertyLookup(type, options);
@@ -295,7 +295,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
     /// Computes a long hash over the reader schema and mapping options.
     /// Pure arithmetic — no string allocations (AssemblyQualifiedName is gone).
     /// </summary>
-    private static long BuildSchemaHash(DbDataReader reader, MapperOptions options)
+    private static long BuildSchemaHash(DbDataReader reader, IMapperOptions options)
     {
         var hash = reader.FieldCount * 397L;
         hash = unchecked(hash * 31L + (options.ColumnsOnly ? 1 : 0));
@@ -500,7 +500,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
         PropertyInfo[] Properties,
         Action<T, DbDataReader>[] Setters);
 
-    private static IReadOnlyDictionary<string, PropertyInfo> GetPropertyLookup(Type type, MapperOptions options)
+    private static IReadOnlyDictionary<string, PropertyInfo> GetPropertyLookup(Type type, IMapperOptions options)
     {
         var key = new PropertyLookupCacheKey(type, options.ColumnsOnly);
         return _propertyLookupCache.GetOrAdd(key, static cacheKey => BuildPropertyLookup(cacheKey));

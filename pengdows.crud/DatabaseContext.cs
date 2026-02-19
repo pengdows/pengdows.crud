@@ -153,7 +153,6 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private readonly AttributionStats _attributionStats = new();
     private TimeSpan _poolAcquireTimeout = TimeSpan.FromSeconds(DatabaseContextConfiguration.DefaultPoolAcquireSeconds);
     private TimeSpan? _modeLockTimeout = TimeSpan.FromSeconds(DatabaseContextConfiguration.DefaultModeLockSeconds);
-    private bool _enablePoolGovernor = true;
     private bool _effectivePoolGovernorEnabled = true;
     private bool _enableWriterPreference = true;
     private int? _configuredReadPoolSize;

@@ -15,7 +15,6 @@
 // - Pool governance:
 //   * WritePoolSize, ReadPoolSize: Custom pool limits
 //   * PoolAcquireTimeout: How long to wait for pool permit
-//   * EnablePoolGovernor: Enable/disable permit-based pooling
 // - Mode locking:
 //   * ModeLockTimeout: Timeout for SingleWriter/SingleConnection lock
 // - Metrics:
@@ -92,7 +91,7 @@ public class DatabaseContextConfiguration : IDatabaseContextConfiguration
     public bool? ForceManualPrepare { get; set; }
     public bool? DisablePrepare { get; set; }
     public bool EnableMetrics { get; set; } = false;
-    public MetricsOptions MetricsOptions { get; set; } = MetricsOptions.Default;
+    public IMetricsOptions MetricsOptions { get; set; } = metrics.MetricsOptions.Default;
 
     private int? _maxConcurrentWrites;
     private int? _maxConcurrentReads;
@@ -143,7 +142,6 @@ public class DatabaseContextConfiguration : IDatabaseContextConfiguration
     public bool EnableWriterPreference { get; set; } = true;
     public TimeSpan PoolAcquireTimeout { get; set; } = TimeSpan.FromSeconds(DefaultPoolAcquireSeconds);
     public TimeSpan? ModeLockTimeout { get; set; } = TimeSpan.FromSeconds(DefaultModeLockSeconds);
-    public bool EnablePoolGovernor { get; set; } = true;
     
     public string ApplicationName { get; set; } = string.Empty;
 }

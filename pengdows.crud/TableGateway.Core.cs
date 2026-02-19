@@ -472,7 +472,7 @@ public partial class TableGateway<TEntity, TRowID> :
         if (_idColumn != null && !_idColumn.IsIdIsWritable && dialect.SupportsInsertReturning)
         {
             var sc = BuildCreateWithReturning(entity, true, ctx);
-            var generatedId = await sc.ExecuteScalarWriteAsync<object>();
+            var generatedId = await sc.ExecuteScalarOrNullAsync<object>(ExecutionType.Write);
 
             if (generatedId != null && generatedId != DBNull.Value)
             {
@@ -539,7 +539,7 @@ public partial class TableGateway<TEntity, TRowID> :
         if (_idColumn != null && !_idColumn.IsIdIsWritable && dialect.SupportsInsertReturning)
         {
             var sc = BuildCreateWithReturning(entity, true, ctx);
-            var generatedId = await sc.ExecuteScalarWriteAsync<object>(CommandType.Text, cancellationToken)
+            var generatedId = await sc.ExecuteScalarOrNullAsync<object>(ExecutionType.Write, CommandType.Text, cancellationToken)
                 .ConfigureAwait(false);
             if (generatedId != null && generatedId != DBNull.Value)
             {
@@ -596,7 +596,7 @@ public partial class TableGateway<TEntity, TRowID> :
         }
 
         var sc = ctx.CreateSqlContainer(lastIdQuery);
-        var generatedId = await sc.ExecuteScalarAsync<object>();
+        var generatedId = await sc.ExecuteScalarOrNullAsync<object>();
 
         if (generatedId != null && generatedId != DBNull.Value)
         {
@@ -1127,13 +1127,122 @@ public partial class TableGateway<TEntity, TRowID> :
                 "Single-ID operations require a designated Id column; use composite-key helpers.");
         }
 
-        var sc = ctx.CreateSqlContainer();
         var dialect = GetDialect(ctx);
-        sc.Query.Append("DELETE FROM ").Append(BuildWrappedTableName(dialect));
-        BuildWhere(sc.WrapObjectName(_idColumn.Name), list, sc);
-        return await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+        var wrappedIdColumnName = dialect.WrapObjectName(_idColumn.Name);
+
+        // Chunk by max parameter limit (with 10% headroom, similar to BatchCreate)
+        var chunks = ChunkList(list, 1, ctx.MaxParameterLimit);
+        var totalAffected = 0;
+
+        foreach (var chunk in chunks)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var sc = ctx.CreateSqlContainer();
+            sc.Query.Append("DELETE FROM ").Append(BuildWrappedTableName(dialect));
+            BuildWhere(wrappedIdColumnName, chunk, sc);
+            totalAffected += await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+        }
+
+        return totalAffected;
     }
 
+    /// <inheritdoc/>
+    public IReadOnlyList<ISqlContainer> BuildBatchDelete(IReadOnlyCollection<TEntity> entities,
+        IDatabaseContext? context = null)
+    {
+        if (entities == null)
+        {
+            throw new ArgumentNullException(nameof(entities));
+        }
+
+        if (entities.Count == 0)
+        {
+            return Array.Empty<ISqlContainer>();
+        }
+
+        var ctx = context ?? _context;
+        var dialect = GetDialect(ctx);
+        var keys = GetPrimaryKeys();
+
+        // Chunk by Math.Floor(maxParameterLimit / numberOfPrimaryKeys) with 10% headroom
+        var chunks = ChunkList(entities.ToList(), keys.Count, ctx.MaxParameterLimit);
+        var result = new List<ISqlContainer>(chunks.Count);
+
+        foreach (var chunk in chunks)
+        {
+            var sc = ctx.CreateSqlContainer();
+            sc.Query.Append("DELETE FROM ").Append(BuildWrappedTableName(dialect));
+            BuildWhereByPrimaryKey(chunk, sc, "", dialect);
+            result.Add(sc);
+        }
+
+        return result;
+    }
+
+    /// <inheritdoc/>
+    public Task<int> BatchDeleteAsync(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context = null)
+    {
+        return BatchDeleteAsync(entities, context, CancellationToken.None);
+    }
+
+    /// <inheritdoc/>
+    public async Task<int> BatchDeleteAsync(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context,
+        CancellationToken cancellationToken)
+    {
+        if (entities == null)
+        {
+            throw new ArgumentNullException(nameof(entities));
+        }
+
+        if (entities.Count == 0)
+        {
+            return 0;
+        }
+
+        var containers = BuildBatchDelete(entities, context);
+        var totalAffected = 0;
+
+        foreach (var sc in containers)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            totalAffected += await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+        }
+
+        return totalAffected;
+    }
+
+    private static IReadOnlyList<IReadOnlyList<T>> ChunkList<T>(
+        IReadOnlyList<T> list, int paramsPerRow, int maxParameterLimit)
+    {
+        if (maxParameterLimit <= 0 || paramsPerRow <= 0)
+        {
+            return new List<IReadOnlyList<T>> { list };
+        }
+
+        // 10% headroom to be safe
+        var usableParams = (int)(maxParameterLimit * 0.9);
+        var rowsPerChunk = Math.Max(1, usableParams / Math.Max(1, paramsPerRow));
+
+        if (list.Count <= rowsPerChunk)
+        {
+            return new List<IReadOnlyList<T>> { list };
+        }
+
+        var chunks = new List<IReadOnlyList<T>>();
+        for (var i = 0; i < list.Count; i += rowsPerChunk)
+        {
+            var end = Math.Min(i + rowsPerChunk, list.Count);
+            var chunk = new List<T>(end - i);
+            for (var j = i; j < end; j++)
+            {
+                chunk.Add(list[j]);
+            }
+
+            chunks.Add(chunk);
+        }
+
+        return chunks;
+    }
 
     private static List<TRowID> MaterializeDistinctIds(IEnumerable<TRowID> ids)
     {

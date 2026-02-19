@@ -235,7 +235,7 @@ public class CancellationTokenIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task SqlContainer_ExecuteScalarAsync_WithValidToken_ReturnsValue()
+    public async Task SqlContainer_ExecuteScalarOrNullAsync_WithValidToken_ReturnsValue()
     {
         // Arrange
         await _helper.CreateAsync(new TestEntity { Id = 13, Name = "Scalar", Value = 1300 }, _context);
@@ -243,14 +243,14 @@ public class CancellationTokenIntegrationTests : IAsyncLifetime
         using var cts = new CancellationTokenSource();
 
         // Act
-        var result = await container.ExecuteScalarAsync<int>(CommandType.Text, cts.Token);
+        var result = await container.ExecuteScalarOrNullAsync<int>(CommandType.Text, cts.Token);
 
         // Assert
         Assert.Equal(1300, result);
     }
 
     [Fact]
-    public async Task SqlContainer_ExecuteScalarAsync_WithCancelledToken_ThrowsTaskCanceledException()
+    public async Task SqlContainer_ExecuteScalarOrNullAsync_WithCancelledToken_ThrowsTaskCanceledException()
     {
         // Arrange
         using var container = _context.CreateSqlContainer("SELECT 1");
@@ -259,7 +259,7 @@ public class CancellationTokenIntegrationTests : IAsyncLifetime
 
         // Act & Assert
         await Assert.ThrowsAsync<TaskCanceledException>(async () =>
-            await container.ExecuteScalarAsync<int>(CommandType.Text, cts.Token));
+            await container.ExecuteScalarOrNullAsync<int>(CommandType.Text, cts.Token));
     }
 
     [Fact]

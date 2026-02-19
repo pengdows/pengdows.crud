@@ -123,12 +123,15 @@ public partial class TableGateway<TEntity, TRowID>
                     var targetType = Nullable.GetUnderlyingType(column.PropertyInfo.PropertyType) ??
                                      column.PropertyInfo.PropertyType;
 
-                    // byte[] requires special GetBytes handling - always use delegate path
+                    // byte[] requires special GetBytes handling - always use delegate path.
+                    // Use BuildCoercer so that type conversions (e.g. byte[16] → Guid for MySQL binary UUIDs)
+                    // are applied correctly instead of passing the raw byte[] to a typed setter.
                     if (fieldType == typeof(byte[]))
                     {
                         var valueExtractor = BuildValueExtractor(fieldType);
                         var setter = GetOrCreateSetter(column.PropertyInfo);
-                        coercionPlans.Add(new CoercedColumnPlan(i, valueExtractor, val => val, setter, column.PropertyInfo.PropertyType));
+                        var byteCoercer = BuildCoercer(column, fieldType, targetType);
+                        coercionPlans.Add(new CoercedColumnPlan(i, valueExtractor, byteCoercer ?? (val => val), setter, column.PropertyInfo.PropertyType));
                         continue;
                     }
 
@@ -403,6 +406,9 @@ public partial class TableGateway<TEntity, TRowID>
             TypeCode.Single => (r, i) => r.GetFloat(i),
             _ when fieldType == typeof(Guid) => (r, i) => r.GetGuid(i),
             _ when fieldType == typeof(byte[]) => (r, i) => ReadBytes(r, i),
+            // DateTimeOffset: use GetDateTime() to avoid GetValue() which throws for
+            // "timestamp without time zone" columns in QuestDB/Npgsql 9+.
+            _ when fieldType == typeof(DateTimeOffset) => (r, i) => (object)new DateTimeOffset(r.GetDateTime(i), TimeSpan.Zero),
             _ => (r, i) => r.GetValue(i)
         };
     }

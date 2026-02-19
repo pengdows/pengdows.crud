@@ -22,7 +22,7 @@ public class ReadOnlyTransactionTests
         await using var context = new DatabaseContext("Data Source=:memory:", SqliteFactory.Instance);
         await using var tx = context.BeginTransaction(readOnly: true);
         await using var container = tx.CreateSqlContainer("SELECT 1");
-        var result = await container.ExecuteScalarAsync<int>();
+        var result = await container.ExecuteScalarOrNullAsync<int>();
         Assert.Equal(1, result);
     }
 

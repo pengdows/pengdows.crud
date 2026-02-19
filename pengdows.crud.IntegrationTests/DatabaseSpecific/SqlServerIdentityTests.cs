@@ -81,7 +81,7 @@ WHERE [user_id] = ");
             verify.Query.Append(verify.MakeParameterName("p0"));
             verify.AddParameterWithValue("p0", DbType.String, entity.Username);
 
-            var count = Convert.ToInt32(await verify.ExecuteScalarAsync<int>());
+            var count = Convert.ToInt32(await verify.ExecuteScalarOrNullAsync<int>());
             Assert.Equal(1, count);
         });
     }

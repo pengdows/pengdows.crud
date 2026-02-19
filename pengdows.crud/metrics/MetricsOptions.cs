@@ -3,7 +3,7 @@ namespace pengdows.crud.metrics;
 /// <summary>
 /// Configuration for DatabaseContext metrics collection.
 /// </summary>
-public sealed class MetricsOptions
+public sealed class MetricsOptions : IMetricsOptions
 {
     private TimeSpan _longConnectionThreshold = TimeSpan.FromSeconds(30);
     private int _percentileWindowSize = 2048;

@@ -117,6 +117,11 @@ public class DataSourceInformation : IDataSourceInformation
         set => _maxOutputParameters = value;
     }
 
+    public bool SupportsTransactions => _dialect.SupportsTransactions;
+    public bool SupportsRowLevelDelete => _dialect.SupportsRowLevelDelete;
+    public bool SupportsDropTableIfExists => _dialect.SupportsDropTableIfExists;
+    public bool SupportsIntegrityConstraints => _dialect.SupportsIntegrityConstraints;
+    public bool SupportsTruncateTable => _dialect.SupportsTruncateTable;
     public bool SupportsMerge => _dialect.SupportsMerge;
     public bool SupportsInsertOnConflict => _dialect.SupportsInsertOnConflict;
     public bool SupportsOnDuplicateKey => _dialect.SupportsOnDuplicateKey;

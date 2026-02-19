@@ -12,5 +12,8 @@ public enum SupportedDatabase
     MariaDb = 32, // Better than MySQL, but still MySQL-rooted
     MySql = 64, // Historically non-standard, improving over time
     Sqlite = 128, // Minimal subset of SQL; useful, but not standard-compliant
-    DuckDB = 256 // Modern analytical database with excellent SQL:2016 compliance
+    DuckDB = 256, // Modern analytical database with excellent SQL:2016 compliance
+    QuestDb = 512, // High-performance time-series SQL database (PG-compatible wire)
+    YugabyteDb = 1024, // Distributed SQL database (PostgreSQL-compatible)
+    TiDb = 2048 // Distributed SQL database (MySQL-compatible)
 }

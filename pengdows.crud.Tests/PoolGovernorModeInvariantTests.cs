@@ -8,14 +8,13 @@ namespace pengdows.crud.Tests;
 public sealed class PoolGovernorModeInvariantTests
 {
     [Fact]
-    public void SingleConnection_DisablesReaderGovernor_AndPinsWriterPermit()
+    public void SingleConnection_DisablesGovernors()
     {
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = "Data Source=test;EmulatedProduct=SqlServer",
             ProviderName = SupportedDatabase.SqlServer.ToString(),
             DbMode = DbMode.SingleConnection,
-            EnablePoolGovernor = true,
             MaxConcurrentReads = 10,
             MaxConcurrentWrites = 10
         };
@@ -26,7 +25,8 @@ public sealed class PoolGovernorModeInvariantTests
         var writer = ctx.GetPoolStatisticsSnapshot(PoolLabel.Writer);
 
         Assert.True(reader.Disabled);
-        Assert.Equal(1, writer.TotalAcquired);
+        Assert.True(writer.Disabled);
+        Assert.Equal(0, writer.TotalAcquired);
     }
 
     [Fact]
@@ -42,7 +42,6 @@ public sealed class PoolGovernorModeInvariantTests
             ConnectionString = "Data Source=test;EmulatedProduct=MySql",
             ProviderName = SupportedDatabase.MySql.ToString(),
             DbMode = DbMode.SingleWriter,
-            EnablePoolGovernor = true,
             MaxConcurrentReads = 10,
             MaxConcurrentWrites = 10 // Will be overridden to 1 for SingleWriter
         };

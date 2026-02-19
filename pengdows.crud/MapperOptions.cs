@@ -10,7 +10,7 @@ public sealed record MapperOptions(
     bool Strict = false,
     bool ColumnsOnly = false,
     Func<string, string>? NamePolicy = null,
-    EnumParseFailureMode EnumMode = EnumParseFailureMode.Throw)
+    EnumParseFailureMode EnumMode = EnumParseFailureMode.Throw) : IMapperOptions
 {
     public static readonly MapperOptions Default = new();
 }

@@ -186,7 +186,25 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
 
     public object GetValue(int i)
     {
-        return _reader.GetValue(i);
+        try
+        {
+            return _reader.GetValue(i);
+        }
+        catch (Exception)
+        {
+            // Npgsql 9 workaround: GetValue() throws for "timestamp without time zone" columns.
+            // GetFieldValue<DateTime>() is the supported Npgsql 9 API for these columns.
+            try
+            {
+                var typeName = _reader.GetDataTypeName(i);
+                if (typeName.Contains("timestamp", StringComparison.OrdinalIgnoreCase))
+                {
+                    return _reader.GetFieldValue<DateTime>(i);
+                }
+            }
+            catch { }
+            throw;
+        }
     }
 
     public int GetValues(object[] values)
@@ -278,12 +296,66 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
 
     public DateTime GetDateTime(int i)
     {
-        return _reader.GetDateTime(i);
+        try
+        {
+            return _reader.GetDateTime(i);
+        }
+        catch (Exception)
+        {
+            // Npgsql 9 workaround: for "timestamp without time zone" columns (e.g. QuestDB TIMESTAMP),
+            // GetDateTime() may throw. GetFieldValue<DateTime>() is the supported API.
+            try
+            {
+                var typeName = _reader.GetDataTypeName(i);
+                if (typeName.Contains("timestamp", StringComparison.OrdinalIgnoreCase))
+                {
+                    return _reader.GetFieldValue<DateTime>(i);
+                }
+            }
+            catch { }
+            throw;
+        }
     }
 
     public Type GetFieldType(int i)
     {
-        return _reader.GetFieldType(i);
+        try
+        {
+            var type = _reader.GetFieldType(i);
+            // QuestDB PGWire workaround: Npgsql 9 may return DateTimeOffset for "timestamp without
+            // time zone" columns (e.g. QuestDB TIMESTAMP), but GetValue() throws for these.
+            // Remap to DateTime so the compiled mapper uses GetDateTime() instead of GetValue().
+            if (type == typeof(DateTimeOffset))
+            {
+                try
+                {
+                    var typeName = _reader.GetDataTypeName(i);
+                    if (typeName.Contains("without time zone", StringComparison.OrdinalIgnoreCase) ||
+                        (typeName.Contains("timestamp", StringComparison.OrdinalIgnoreCase) &&
+                         !typeName.Contains("with time zone", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        return typeof(DateTime);
+                    }
+                }
+                catch { }
+            }
+
+            return type;
+        }
+        catch (Exception)
+        {
+            // QuestDB PGWire workaround: some types (like timestamp) are not supported via standard GetFieldType
+            try
+            {
+                var typeName = _reader.GetDataTypeName(i);
+                if (typeName.Contains("timestamp", StringComparison.OrdinalIgnoreCase))
+                {
+                    return typeof(DateTime);
+                }
+            }
+            catch { }
+            throw;
+        }
     }
 
     public Guid GetGuid(int i)

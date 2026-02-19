@@ -4,16 +4,14 @@
 //          support and convenience methods without breaking the interface.
 //
 // AI SUMMARY:
-// - Provides CancellationToken overloads for ExecuteNonQueryAsync,
-//   ExecuteScalarAsync, and ExecuteReaderAsync.
+// - Provides ExecutionType routing for scalar, reader, and non-query methods.
 // - Uses pattern matching to prefer concrete SqlContainer implementations
-//   when available (which support cancellation), falling back to interface
-//   methods (which don't) when the container is a different implementation.
+//   when available, falling back to interface methods for other implementations.
 // - AppendQuery: Fluent helper to append SQL to the query builder.
 // - ExecuteReaderSingleRowAsync: Optimized for single-row queries.
-// - ExecuteScalarWriteAsync: For INSERT/UPDATE with RETURNING/OUTPUT clauses.
-// - These extensions allow existing ISqlContainer-based code to gain
-//   cancellation support without interface-breaking changes.
+// - ExecuteScalarRequiredAsync/OrNull/Try with ExecutionType: Connection pool routing.
+// - These extensions allow ISqlContainer-based code to specify execution intent
+//   (Read/Write) without interface-breaking changes.
 // =============================================================================
 
 using System.Data;
@@ -85,36 +83,20 @@ public static class SqlContainerExtensions
     }
 
     /// <summary>
-    /// Executes a scalar query with cancellation support.
-    /// </summary>
-    /// <typeparam name="T">The expected return type.</typeparam>
-    /// <param name="container">The SQL container.</param>
-    /// <param name="commandType">The type of command.</param>
-    /// <param name="cancellationToken">Token to cancel the operation.</param>
-    /// <returns>The first column of the first row, or default if no results.</returns>
-    public static ValueTask<T?> ExecuteScalarAsync<T>(
-        this ISqlContainer container,
-        CommandType commandType,
-        CancellationToken cancellationToken)
-    {
-        if (container is SqlContainer concrete)
-        {
-            return concrete.ExecuteScalarAsync<T>(commandType, cancellationToken);
-        }
-
-        return container.ExecuteScalarAsync<T>(commandType);
-    }
-
-    /// <summary>
-    /// Executes a scalar query with an explicit execution intent.
+    /// Executes a scalar query that must return a value, with an explicit execution intent.
     /// </summary>
     /// <typeparam name="T">The expected return type.</typeparam>
     /// <param name="container">The SQL container.</param>
     /// <param name="executionType">Execution intent (Read/Write) for pool selection.</param>
     /// <param name="commandType">The type of command.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
-    /// <returns>The first column of the first row, or default if no results.</returns>
-    public static ValueTask<T?> ExecuteScalarAsync<T>(
+    /// <returns>The scalar value.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the query returns no rows, or when the value is null and <typeparamref name="T"/> is non-nullable.</exception>
+    /// <remarks>
+    /// Use <see cref="ExecutionType.Write"/> for INSERT ... RETURNING / OUTPUT queries
+    /// to ensure write connection routing (important for read replicas and SingleWriter mode).
+    /// </remarks>
+    public static ValueTask<T> ExecuteScalarRequiredAsync<T>(
         this ISqlContainer container,
         ExecutionType executionType,
         CommandType commandType = CommandType.Text,
@@ -122,10 +104,56 @@ public static class SqlContainerExtensions
     {
         if (container is SqlContainer concrete)
         {
-            return concrete.ExecuteScalarAsync<T>(executionType, commandType, cancellationToken);
+            return concrete.ExecuteScalarRequiredAsync<T>(executionType, commandType, cancellationToken);
         }
 
-        return container.ExecuteScalarAsync<T>(commandType);
+        return container.ExecuteScalarRequiredAsync<T>(commandType);
+    }
+
+    /// <summary>
+    /// Executes a scalar query that may return no rows or null, with an explicit execution intent.
+    /// </summary>
+    /// <typeparam name="T">The expected return type.</typeparam>
+    /// <param name="container">The SQL container.</param>
+    /// <param name="executionType">Execution intent (Read/Write) for pool selection.</param>
+    /// <param name="commandType">The type of command.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>The scalar value, or <c>null</c> if no rows or the value was DBNull.</returns>
+    public static ValueTask<T?> ExecuteScalarOrNullAsync<T>(
+        this ISqlContainer container,
+        ExecutionType executionType,
+        CommandType commandType = CommandType.Text,
+        CancellationToken cancellationToken = default)
+    {
+        if (container is SqlContainer concrete)
+        {
+            return concrete.ExecuteScalarOrNullAsync<T>(executionType, commandType, cancellationToken);
+        }
+
+        return container.ExecuteScalarOrNullAsync<T>(commandType);
+    }
+
+    /// <summary>
+    /// Executes a scalar query returning a <see cref="ScalarResult{T}"/> with an explicit execution intent.
+    /// </summary>
+    /// <typeparam name="T">The expected return type.</typeparam>
+    /// <param name="container">The SQL container.</param>
+    /// <param name="executionType">Execution intent (Read/Write) for pool selection.</param>
+    /// <param name="commandType">The type of command.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>A <see cref="ScalarResult{T}"/> with unambiguous status.</returns>
+    public static ValueTask<ScalarResult<T>> TryExecuteScalarAsync<T>(
+        this ISqlContainer container,
+        ExecutionType executionType,
+        CommandType commandType = CommandType.Text,
+        CancellationToken cancellationToken = default)
+    {
+        if (container is SqlContainer concrete)
+        {
+            return concrete.TryExecuteScalarAsync<T>(executionType, commandType, cancellationToken);
+        }
+
+        return container.TryExecuteScalarAsync<T>(commandType);
     }
 
     /// <summary>
@@ -213,37 +241,4 @@ public static class SqlContainerExtensions
         return container.ExecuteReaderAsync(CommandType.Text, cancellationToken);
     }
 
-    /// <summary>
-    /// Executes a write operation that returns a scalar value (e.g., INSERT with RETURNING).
-    /// </summary>
-    /// <typeparam name="T">The expected return type (typically the generated ID).</typeparam>
-    /// <param name="container">The SQL container.</param>
-    /// <param name="commandType">The type of command.</param>
-    /// <param name="cancellationToken">Token to cancel the operation.</param>
-    /// <returns>The returned value, typically a generated primary key.</returns>
-    /// <remarks>
-    /// <para>
-    /// This method uses a write connection (not read) which is important for:
-    /// </para>
-    /// <list type="bullet">
-    /// <item><description>Databases with read replicas (ensures write goes to primary)</description></item>
-    /// <item><description>SingleWriter mode (enforces a single write permit via the governor instead of a pinned connection)</description></item>
-    /// </list>
-    /// <para>
-    /// Common use cases: INSERT ... RETURNING id (PostgreSQL), INSERT ... OUTPUT (SQL Server).
-    /// </para>
-    /// </remarks>
-    public static ValueTask<T?> ExecuteScalarWriteAsync<T>(
-        this ISqlContainer container,
-        CommandType commandType = CommandType.Text,
-        CancellationToken cancellationToken = default)
-    {
-        if (container is SqlContainer concrete)
-        {
-            return concrete.ExecuteScalarWriteAsync<T>(commandType, cancellationToken);
-        }
-
-        // Fallback to read-path scalar if non-concrete (may not work for writes)
-        return container.ExecuteScalarAsync<T>(commandType, cancellationToken);
-    }
 }

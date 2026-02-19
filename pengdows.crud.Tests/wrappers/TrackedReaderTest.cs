@@ -37,7 +37,7 @@ public class TrackedReaderTests
         public string DataSource => "localhost";
         public string ServerVersion => "1.0.0";
         public ConnectionState State => ConnectionState.Open;
-        public ConnectionLocalState LocalState { get; } = new();
+        public IConnectionLocalState LocalState { get; } = new ConnectionLocalState();
 
         public void Close()
         {

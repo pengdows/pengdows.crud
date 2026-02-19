@@ -60,6 +60,17 @@ Provides deep operational visibility by tracking detailed metrics for connection
 - **`pengdows.poco.mint`:** A code generation tool that inspects a database schema and generates C# POCOs with the correct `[Table]`, `[Column]`, `[Id]`, and `[PrimaryKey]` attributes for use with `pengdows.crud`.
 - **`pengdows.crud.fakeDb`:** A powerful, standalone NuGet package that provides a fake ADO.NET provider. It is essential for writing fast, isolated unit tests for any data access logic based on ADO.NET interfaces, including code that uses `pengdows.crud` or Dapper.
 
+## Project Mandates
+
+### 1. Test-Driven Development (TDD) Required
+All new functionality, dialect additions, and bug fixes MUST be implemented using a TDD approach. Tests must be written and verified before or alongside the implementation.
+
+### 2. High Coverage Standards
+The project CI enforces a minimum of 83% line coverage. However, for all new 2.0 work, a target of **95% coverage** is expected. A change is not considered complete without corresponding unit tests (in `pengdows.crud.Tests`) and, where applicable, integration tests (in `testbed`).
+
+### 3. Interface-First Design
+All public APIs must be exposed via interfaces in `pengdows.crud.abstractions`. Implementation details should remain internal to `pengdows.crud` whenever possible.
+
 ## Building and Testing
 
 - **Build:** `./build-packages.sh`

@@ -501,7 +501,7 @@ public class EqualFootingCrudBenchmarks : IDisposable
         {
             await using var container = _pengdowsContext.CreateSqlContainer(
                 "SELECT AVG(salary) FROM benchmark WHERE is_active = 1");
-            result = await container.ExecuteScalarAsync<double>();
+            result = await container.ExecuteScalarOrNullAsync<double>();
         }
 
         return result;

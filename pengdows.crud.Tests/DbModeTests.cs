@@ -65,7 +65,7 @@ public class DbModeTests
         await Task.WhenAll(tasks);
 
         var scSelect = context.CreateSqlContainer("SELECT COUNT(*) FROM Users");
-        var count = await scSelect.ExecuteScalarAsync<int>();
+        var count = await scSelect.ExecuteScalarOrNullAsync<int>();
         Assert.Equal(20, count);
     }
 
@@ -100,7 +100,7 @@ public class DbModeTests
         await Task.WhenAll(tasks);
 
         var scRead = context.CreateSqlContainer("SELECT COUNT(*) FROM Users");
-        var count = await scRead.ExecuteScalarAsync<int>();
+        var count = await scRead.ExecuteScalarOrNullAsync<int>();
         Assert.Equal(20, count);
 
         // Cleanup the temp file

@@ -149,8 +149,14 @@ public class fakeDbDataReader : DbDataReader
             return 0;
         }
 
+        // When buffer is null, return the total available length (standard .NET GetBytes convention).
+        if (buffer == null)
+        {
+            return available;
+        }
+
         var toCopy = (int)Math.Min(length, available);
-        if (buffer != null && toCopy > 0)
+        if (toCopy > 0)
         {
             Array.Copy(bytes, (int)dataOffset, buffer, bufferOffset, toCopy);
         }

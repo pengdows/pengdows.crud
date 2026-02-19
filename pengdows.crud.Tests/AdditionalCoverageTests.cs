@@ -150,15 +150,15 @@ public class AdditionalCoverageTests : SqlLiteContextTestBase
     }
 
     [Fact]
-    public async Task SqlContainer_ExecuteScalarWriteAsync_WorksCorrectly()
+    public async Task SqlContainer_ExecuteScalarRequiredAsync_WorksCorrectly()
     {
-        // Test the ExecuteScalarWriteAsync method
+        // Test the ExecuteScalarRequiredAsync method
         // Arrange
         var container = Context.CreateSqlContainer();
         container.Query.Append("SELECT 42");
 
         // Act
-        var result = await container.ExecuteScalarWriteAsync<int>();
+        var result = await container.ExecuteScalarRequiredAsync<int>();
 
         // Assert
         Assert.Equal(42, result);

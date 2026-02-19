@@ -114,7 +114,7 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
     /// <summary>
     /// Per-connection state for prepare behavior tracking
     /// </summary>
-    public ConnectionLocalState LocalState { get; } = new();
+    public IConnectionLocalState LocalState { get; } = new ConnectionLocalState();
 
 
     internal TrackedConnection(

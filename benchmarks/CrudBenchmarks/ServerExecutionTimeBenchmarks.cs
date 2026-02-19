@@ -392,7 +392,7 @@ public class ServerExecutionTimeBenchmarks : IAsyncDisposable
         sc.Query.Append(sql);
         sc.AddParameterWithValue("title", DbType.String, title);
         sc.AddParameterWithValue("length", DbType.Int32, 90);
-        return await sc.ExecuteScalarWriteAsync<int>(CommandType.Text);
+        return await sc.ExecuteScalarRequiredAsync<int>(CommandType.Text);
     }
 
     [Benchmark]
@@ -411,7 +411,7 @@ public class ServerExecutionTimeBenchmarks : IAsyncDisposable
         _currentBenchmarkLabel = nameof(Insert_EntityFramework);
         var title = $"ServerExec_{Interlocked.Increment(ref _runCounter):D10}";
         var sql = BuildInsertSql(p => $"@{p}");
-        return await ExecuteScalarAsync(
+        return await ExecuteScalarOrNullAsync(
             _efDbContext,
             sql,
             new NpgsqlParameter("title", title),
@@ -472,7 +472,7 @@ public class ServerExecutionTimeBenchmarks : IAsyncDisposable
         insertSc.Query.Append(insertSql);
         insertSc.AddParameterWithValue("title", DbType.String, title);
         insertSc.AddParameterWithValue("length", DbType.Int32, 60);
-        var tempId = await insertSc.ExecuteScalarWriteAsync<int>(CommandType.Text);
+        var tempId = await insertSc.ExecuteScalarRequiredAsync<int>(CommandType.Text);
 
         // Delete the temporary row
         await using var deleteSc = _pengdowsContext.CreateSqlContainer();
@@ -507,7 +507,7 @@ public class ServerExecutionTimeBenchmarks : IAsyncDisposable
         // Insert a temporary row
         var title = $"TempDel_{Interlocked.Increment(ref _runCounter):D10}";
         var insertSql = BuildTempInsertSql(p => $"@{p}");
-        var tempId = await ExecuteScalarAsync(
+        var tempId = await ExecuteScalarOrNullAsync(
             _efDbContext,
             insertSql,
             new NpgsqlParameter("title", title),
@@ -734,7 +734,7 @@ CREATE TABLE film_actor (
 
     // EF helper methods for raw scalar/non-query execution
 
-    private static async Task<int> ExecuteScalarAsync(
+    private static async Task<int> ExecuteScalarOrNullAsync(
         DbContext context,
         string sql,
         params NpgsqlParameter[] parameters)

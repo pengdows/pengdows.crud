@@ -20,7 +20,7 @@ public interface ISqlContainer : ISafeAsyncDisposableBase
     /// <summary>
     /// Gets the query builder used to compose the SQL query.
     /// </summary>
-    SqlQueryBuilder Query { get; }
+    ISqlQueryBuilder Query { get; }
 
     /// <summary>
     /// Gets the current count of parameters added to the container.
@@ -166,21 +166,72 @@ public interface ISqlContainer : ISafeAsyncDisposableBase
     ValueTask<int> ExecuteNonQueryAsync(CommandType commandType, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Executes the query and returns the first column of the first row in the result set.
+    /// Executes the query and returns the first column of the first row.
+    /// Throws if the query returns no rows, or if the value is null/DBNull and <typeparamref name="T"/> is a non-nullable value type.
     /// </summary>
     /// <typeparam name="T">The expected return type.</typeparam>
     /// <param name="commandType">Type of command to execute.</param>
-    /// <returns>The scalar value or <c>null</c> if no results.</returns>
-    ValueTask<T?> ExecuteScalarAsync<T>(CommandType commandType = CommandType.Text);
+    /// <returns>The scalar value. For nullable <typeparamref name="T"/>, returns <c>null</c> when the column is DBNull.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the query returns no rows, or when the value is null and <typeparamref name="T"/> is non-nullable.</exception>
+    ValueTask<T> ExecuteScalarRequiredAsync<T>(CommandType commandType = CommandType.Text);
 
     /// <summary>
     /// Executes the query and returns the first column of the first row with cancellation support.
+    /// Throws if the query returns no rows, or if the value is null/DBNull and <typeparamref name="T"/> is a non-nullable value type.
     /// </summary>
     /// <typeparam name="T">The expected return type.</typeparam>
     /// <param name="commandType">Type of command to execute.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
-    /// <returns>The scalar value or <c>null</c> if no results.</returns>
-    ValueTask<T?> ExecuteScalarAsync<T>(CommandType commandType, CancellationToken cancellationToken);
+    /// <returns>The scalar value. For nullable <typeparamref name="T"/>, returns <c>null</c> when the column is DBNull.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the query returns no rows, or when the value is null and <typeparamref name="T"/> is non-nullable.</exception>
+    ValueTask<T> ExecuteScalarRequiredAsync<T>(CommandType commandType, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Executes the query and returns the first column of the first row, or <c>null</c> if no rows or the value is DBNull.
+    /// </summary>
+    /// <typeparam name="T">The expected return type.</typeparam>
+    /// <param name="commandType">Type of command to execute.</param>
+    /// <returns>The scalar value, or <c>null</c> if the query returned no rows or the value was DBNull.</returns>
+    /// <remarks>
+    /// This method intentionally conflates "no rows" and "null value" into a single <c>null</c> return.
+    /// Use <see cref="TryExecuteScalarAsync{T}(CommandType)"/> if you need to distinguish between these cases.
+    /// </remarks>
+    ValueTask<T?> ExecuteScalarOrNullAsync<T>(CommandType commandType = CommandType.Text);
+
+    /// <summary>
+    /// Executes the query and returns the first column of the first row, or <c>null</c> if no rows or the value is DBNull.
+    /// </summary>
+    /// <typeparam name="T">The expected return type.</typeparam>
+    /// <param name="commandType">Type of command to execute.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>The scalar value, or <c>null</c> if the query returned no rows or the value was DBNull.</returns>
+    ValueTask<T?> ExecuteScalarOrNullAsync<T>(CommandType commandType, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Executes the query and returns a <see cref="ScalarResult{T}"/> that unambiguously distinguishes
+    /// between no rows, null value, and actual value.
+    /// </summary>
+    /// <typeparam name="T">The expected return type.</typeparam>
+    /// <param name="commandType">Type of command to execute.</param>
+    /// <returns>A <see cref="ScalarResult{T}"/> with <see cref="ScalarStatus"/> indicating the outcome.</returns>
+    /// <remarks>
+    /// This is the fully unambiguous scalar API. Use when you need to distinguish between:
+    /// <list type="bullet">
+    ///   <item><description><see cref="ScalarStatus.None"/>: Query returned zero rows.</description></item>
+    ///   <item><description><see cref="ScalarStatus.Null"/>: Query returned a row but the value was DBNull/null.</description></item>
+    ///   <item><description><see cref="ScalarStatus.Value"/>: Query returned a non-null value.</description></item>
+    /// </list>
+    /// </remarks>
+    ValueTask<ScalarResult<T>> TryExecuteScalarAsync<T>(CommandType commandType = CommandType.Text);
+
+    /// <summary>
+    /// Executes the query and returns a <see cref="ScalarResult{T}"/> with cancellation support.
+    /// </summary>
+    /// <typeparam name="T">The expected return type.</typeparam>
+    /// <param name="commandType">Type of command to execute.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>A <see cref="ScalarResult{T}"/> with <see cref="ScalarStatus"/> indicating the outcome.</returns>
+    ValueTask<ScalarResult<T>> TryExecuteScalarAsync<T>(CommandType commandType, CancellationToken cancellationToken);
 
     /// <summary>
     /// Executes the query and returns a tracked data reader.

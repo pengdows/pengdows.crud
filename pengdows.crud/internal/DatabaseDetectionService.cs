@@ -36,8 +36,11 @@ internal static class DatabaseDetectionService
         (SupportedDatabase.SqlServer, new[] { "sql server" }),
         (SupportedDatabase.MariaDb, new[] { "mariadb" }),
         (SupportedDatabase.MySql, new[] { "mysql" }),
+        (SupportedDatabase.TiDb, new[] { "tidb" }),
         (SupportedDatabase.CockroachDb, new[] { "cockroach" }),
-        (SupportedDatabase.PostgreSql, new[] { "postgres" }),
+        (SupportedDatabase.YugabyteDb, new[] { "yugabyte" }),
+        (SupportedDatabase.QuestDb, new[] { "questdb" }),
+        (SupportedDatabase.PostgreSql, new[] { "postgres", "npgsql" }),
         (SupportedDatabase.Oracle, new[] { "oracle" }),
         (SupportedDatabase.Sqlite, new[] { "sqlite" }),
         (SupportedDatabase.Firebird, new[] { "firebird" }),
@@ -48,13 +51,22 @@ internal static class DatabaseDetectionService
     {
         (SupportedDatabase.SqlServer, new[] { "sqlserver", "system.data.sqlclient", "microsoft.data.sqlclient" }),
         (SupportedDatabase.PostgreSql, new[] { "npgsql", "postgres" }),
+        (SupportedDatabase.YugabyteDb, new[] { "yugabyte" }),
+        (SupportedDatabase.QuestDb, new[] { "questdb" }),
         (SupportedDatabase.MySql, new[] { "mysql" }),
         (SupportedDatabase.MariaDb, new[] { "mariadb" }),
+        (SupportedDatabase.TiDb, new[] { "tidb" }),
         (SupportedDatabase.Sqlite, new[] { "sqlite" }),
         (SupportedDatabase.Oracle, new[] { "oracle" }),
         (SupportedDatabase.Firebird, new[] { "firebird" }),
         (SupportedDatabase.DuckDB, new[] { "duckdb" })
     };
+
+    /// <summary>
+    /// Detects database product from a product name string using token matching.
+    /// Used as a fallback when only a name string is available.
+    /// </summary>
+    internal static SupportedDatabase DetectFromName(string name) => Match(name, SchemaProductTokens);
 
     /// <summary>
     /// Detects database product from connection schema metadata.
@@ -103,7 +115,32 @@ internal static class DatabaseDetectionService
             if (schema.Rows.Count > 0)
             {
                 var productName = schema.Rows[0].Field<string>("DataSourceProductName");
+                var productVersion = schema.Rows[0].Field<string>("DataSourceProductVersion");
+                
+                var sv = string.Empty;
+                if (connection is DbConnection dbc) sv = dbc.ServerVersion;
+                else if (connection is ITrackedConnection tc) sv = tc.ServerVersion;
+
                 var detected = Match(productName, SchemaProductTokens);
+
+                // If it's a generic protocol (Postgres/MySQL), check for flavors
+                if (detected == SupportedDatabase.MySql)
+                {
+                    // MariaDB reports DataSourceProductName = "MySQL" but its version contains "MariaDB"
+                    if (!string.IsNullOrEmpty(productVersion) &&
+                        productVersion.Contains("mariadb", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return SupportedDatabase.MariaDb;
+                    }
+                    var flavor = DetectFlavor(connection);
+                    if (flavor != SupportedDatabase.Unknown) return flavor;
+                }
+                else if (detected == SupportedDatabase.PostgreSql)
+                {
+                    var flavor = DetectFlavor(connection);
+                    if (flavor != SupportedDatabase.Unknown) return flavor;
+                }
+
                 if (detected != SupportedDatabase.Unknown)
                 {
                     return detected;
@@ -113,6 +150,44 @@ internal static class DatabaseDetectionService
         catch
         {
             // Fall back to other detection methods
+        }
+
+        return DetectFlavor(connection);
+    }
+
+    private static SupportedDatabase DetectFlavor(IDbConnection? connection)
+    {
+        if (connection == null) return SupportedDatabase.Unknown;
+
+        try
+        {
+            var serverVersion = string.Empty;
+            if (connection is DbConnection dbConn) serverVersion = dbConn.ServerVersion;
+            else if (connection is ITrackedConnection tracked) serverVersion = tracked.ServerVersion;
+            else if (connection.GetType().GetProperty("ServerVersion") is { } prop) 
+                serverVersion = prop.GetValue(connection)?.ToString() ?? string.Empty;
+
+            if (!string.IsNullOrEmpty(serverVersion))
+            {
+                if (serverVersion.Contains("TiDB", StringComparison.OrdinalIgnoreCase)) return SupportedDatabase.TiDb;
+                if (serverVersion.Contains("-YB-", StringComparison.OrdinalIgnoreCase) || serverVersion.Contains("Yugabyte", StringComparison.OrdinalIgnoreCase)) return SupportedDatabase.YugabyteDb;
+                if (serverVersion.Contains("QuestDB", StringComparison.OrdinalIgnoreCase)) return SupportedDatabase.QuestDb;
+                if (serverVersion.Contains("Cockroach", StringComparison.OrdinalIgnoreCase)) return SupportedDatabase.CockroachDb;
+            }
+
+            // Deep check via query
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = "SELECT version()";
+            var version = cmd.ExecuteScalar()?.ToString() ?? string.Empty;
+            
+            if (version.Contains("TiDB", StringComparison.OrdinalIgnoreCase)) return SupportedDatabase.TiDb;
+            if (version.Contains("-YB-", StringComparison.OrdinalIgnoreCase) || version.Contains("Yugabyte", StringComparison.OrdinalIgnoreCase)) return SupportedDatabase.YugabyteDb;
+            if (version.Contains("QuestDB", StringComparison.OrdinalIgnoreCase)) return SupportedDatabase.QuestDb;
+            if (version.Contains("Cockroach", StringComparison.OrdinalIgnoreCase)) return SupportedDatabase.CockroachDb;
+        }
+        catch
+        {
+            // Ignore
         }
 
         return SupportedDatabase.Unknown;

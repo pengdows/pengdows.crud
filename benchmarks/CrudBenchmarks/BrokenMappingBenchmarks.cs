@@ -600,7 +600,7 @@ public class BrokenMappingBenchmarks : IDisposable
         var sql = BuildAggregateCountSql(param => container.MakeParameterName(param));
         container.Query.Append(sql);
         container.AddParameterWithValue("isActive", DbType.Boolean, true);
-        var result = await container.ExecuteScalarAsync<long>();
+        var result = await container.ExecuteScalarOrNullAsync<long>();
         return (int)result;
     }
 
@@ -625,7 +625,7 @@ public class BrokenMappingBenchmarks : IDisposable
         try
         {
             var sql = BuildAggregateCountSql(param => $"@{param}");
-            // EF doesn't support ExecuteScalarAsync directly from raw SQL easily,
+            // EF doesn't support ExecuteScalarOrNullAsync directly from raw SQL easily,
             // so we use a connection-level approach via the context
             var conn = _efContext.Database.GetDbConnection();
             if (conn.State != ConnectionState.Open) await conn.OpenAsync();

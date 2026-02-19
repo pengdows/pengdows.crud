@@ -148,6 +148,12 @@ public static class TypeCoercionHelper
             var parseMethod = typeof(Guid).GetMethod(nameof(Guid.Parse), new[] { typeof(string) })!;
             conversion = Expression.Call(parseMethod, typedInput);
         }
+        else if (sourceType == typeof(byte[]) && targetType == typeof(Guid))
+        {
+            // new Guid(bytes) — MySQL and similar providers store UUIDs as BINARY(16)
+            var guidCtor = typeof(Guid).GetConstructor(new[] { typeof(byte[]) })!;
+            conversion = Expression.New(guidCtor, typedInput);
+        }
         else if (sourceType == typeof(DateTime) && targetType == typeof(DateTimeOffset))
         {
             // new DateTimeOffset(dateTimeValue)

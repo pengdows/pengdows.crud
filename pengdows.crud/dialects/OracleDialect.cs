@@ -74,6 +74,9 @@ internal class OracleDialect : SqlDialect
     public override bool SupportsNamespaces => true;
 
     public override bool SupportsMerge => true;
+
+    // Oracle does not support DROP TABLE IF EXISTS — requires PL/SQL exception handling.
+    public override bool SupportsDropTableIfExists => false;
     public override bool SupportsJsonTypes => IsInitialized && ProductInfo.ParsedVersion?.Major >= 12;
     public override bool SupportsIdentityColumns => true;
     public override bool SupportsSavepoints => true;

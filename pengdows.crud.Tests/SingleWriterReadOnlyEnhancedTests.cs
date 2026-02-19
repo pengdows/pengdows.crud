@@ -224,7 +224,7 @@ public class SingleWriterReadOnlyEnhancedTests
         // Should not throw - the operation should succeed even though FakeDb may not return results
         try
         {
-            var result = await container.ExecuteScalarAsync<int>();
+            var result = await container.ExecuteScalarOrNullAsync<int>();
             Assert.True(true, "Read operation completed successfully");
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("expected at least one row"))

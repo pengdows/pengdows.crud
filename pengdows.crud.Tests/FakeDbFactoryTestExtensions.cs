@@ -1,6 +1,7 @@
 #region
 
 using System;
+using System.Collections.Generic;
 using pengdows.crud.fakeDb;
 
 #endregion
@@ -26,9 +27,14 @@ internal static class fakeDbFactoryTestExtensions
 
     public static void SetScalarResult(this fakeDbFactory factory, object? value)
     {
+        // Build reader row: ExecuteScalarCore uses ExecuteReaderAsync internally,
+        // so we must feed the reader queue (single row, single column).
+        var readerRow = MakeScalarReaderRow(value);
+
         foreach (var c in factory.Connections)
         {
-            c.EnqueueScalarResult(value);
+            c.EnqueueReaderResult(readerRow);
+            c.EnqueueScalarResult(value); // also feed ADO.NET scalar path (used by dialect internals)
             c.SetDefaultScalarOnce(value);
         }
 
@@ -37,10 +43,16 @@ internal static class fakeDbFactoryTestExtensions
         {
             var extra = new fakeDbConnection();
             extra.EnableDataPersistence = factory.EnableDataPersistence;
+            extra.EnqueueReaderResult(readerRow);
             extra.EnqueueScalarResult(value);
             extra.SetDefaultScalarOnce(value);
             factory.Connections.Add(extra);
         }
+    }
+
+    private static List<Dictionary<string, object?>> MakeScalarReaderRow(object? value)
+    {
+        return [new Dictionary<string, object?> { ["scalar"] = value }];
     }
 
     public static void SetNonQueryException(this fakeDbFactory factory, Exception exception)
@@ -115,6 +127,7 @@ internal static class fakeDbFactoryTestExtensions
 
         // Set up operation results for CreateAsync phase
         primaryConnection.EnqueueNonQueryResult(rowsAffected); // For INSERT statement
+        primaryConnection.EnqueueReaderResult(MakeScalarReaderRow(generatedId)); // For reader-based scalar
         primaryConnection.SetDefaultScalarOnce(generatedId); // For INSERT...RETURNING or first scalar call
         primaryConnection.EnqueueScalarResult(generatedId); // For subsequent scalar calls
 
@@ -133,6 +146,7 @@ internal static class fakeDbFactoryTestExtensions
             var fx = new fakeDbConnection();
             fx.EnableDataPersistence = factory.EnableDataPersistence;
             fx.EnqueueNonQueryResult(rowsAffected);
+            fx.EnqueueReaderResult(MakeScalarReaderRow(generatedId));
             fx.SetDefaultScalarOnce(generatedId);
             fx.EnqueueScalarResult(generatedId);
             // Set up version queries for fallback connections too

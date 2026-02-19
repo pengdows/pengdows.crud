@@ -8,7 +8,10 @@ using testbed.mariaDb;
 using testbed.MySQL;
 using testbed.Oracle;
 using testbed.PostgreSQL;
+using testbed.QuestDb;
 using testbed.SqlServer;
+using testbed.TiDB;
+using testbed.Yugabyte;
 
 namespace testbed;
 
@@ -37,10 +40,13 @@ public class ParallelTestOrchestrator
             SupportedDatabase.SqlServer => new SqlServerTestContainer(),
             SupportedDatabase.MySql => new MySqlTestContainer(),
             SupportedDatabase.MariaDb => new MariaDbContainer(),
-            SupportedDatabase.Oracle when _includeOracle => new ExternalOracleTestContainer(),
+            SupportedDatabase.Oracle when _includeOracle => new OracleTestContainer(),
             SupportedDatabase.Firebird => new FirebirdSqlTestContainer(),
             SupportedDatabase.CockroachDb => new CockroachDbTestContainer(),
             SupportedDatabase.DuckDB => new DuckDbTestContainer(),
+            SupportedDatabase.YugabyteDb => new YugabyteTestContainer(),
+            SupportedDatabase.QuestDb => new QuestDbTestContainer(),
+            SupportedDatabase.TiDb => new TiDBTestContainer(),
             _ => null
         };
 
@@ -218,6 +224,27 @@ public class ParallelTestOrchestrator
                 DatabaseProvider = "Firebird",
                 Container = new FirebirdSqlTestContainer(),
                 TestProviderFactory = (db, sp) => new FirebirdTestProvider(db, sp)
+            },
+            new()
+            {
+                ContainerName = "YugabyteDB",
+                DatabaseProvider = "YugabyteDB",
+                Container = new YugabyteTestContainer(),
+                TestProviderFactory = (db, sp) => new YugabyteTestProvider(db, sp)
+            },
+            new()
+            {
+                ContainerName = "QuestDB",
+                DatabaseProvider = "QuestDB",
+                Container = new QuestDbTestContainer(),
+                TestProviderFactory = (db, sp) => new QuestDbTestProvider(db, sp)
+            },
+            new()
+            {
+                ContainerName = "TiDB",
+                DatabaseProvider = "TiDB",
+                Container = new TiDBTestContainer(),
+                TestProviderFactory = (db, sp) => new TiDBTestProvider(db, sp)
             }
             // Add Sybase as needed
         };
@@ -229,7 +256,7 @@ public class ParallelTestOrchestrator
             {
                 ContainerName = "Oracle",
                 DatabaseProvider = "Oracle",
-                Container = new ExternalOracleTestContainer(), // Use external Oracle instead of managing container
+                Container = new OracleTestContainer(), // Use managed Testcontainer
                 TestProviderFactory = (db, sp) => new OracleTestProvider(db, sp)
             });
         }

@@ -248,6 +248,24 @@ public interface ISqlDialect
     bool SupportsSavepoints { get; }
 
     /// <summary>
+    /// True when the database supports interactive transactions (BEGIN/COMMIT/ROLLBACK).
+    /// Databases like QuestDB expose PGWire but do not support transactional semantics.
+    /// </summary>
+    bool SupportsTransactions { get; }
+
+    /// <summary>
+    /// True when the database supports row-level DELETE (DELETE FROM … WHERE …).
+    /// Databases like QuestDB only support TRUNCATE TABLE for data removal.
+    /// </summary>
+    bool SupportsRowLevelDelete { get; }
+
+    /// <summary>
+    /// True when the database supports DROP TABLE IF EXISTS syntax.
+    /// Oracle requires a PL/SQL exception block instead.
+    /// </summary>
+    bool SupportsDropTableIfExists { get; }
+
+    /// <summary>
     /// Gets the SQL statement to create a savepoint with the given name.
     /// </summary>
     /// <param name="name">The savepoint name.</param>
@@ -534,6 +552,15 @@ public interface ISqlDialect
     /// </summary>
     string GetNaturalKeyLookupQuery(string tableName, string idColumnName, IReadOnlyList<string> columnNames,
         IReadOnlyList<string> parameterNames);
+
+    /// <summary>
+    /// Gives the dialect a chance to transform a value before it is assigned to a parameter.
+    /// Useful for databases with non-standard representations of common types (e.g., QuestDB timestamps).
+    /// </summary>
+    /// <param name="value">The raw value from the entity.</param>
+    /// <param name="dbType">The target database type.</param>
+    /// <returns>The transformed value to be stored in the parameter.</returns>
+    object? PrepareParameterValue(object? value, DbType dbType);
 
     // Connection pooling properties
     /// <summary>

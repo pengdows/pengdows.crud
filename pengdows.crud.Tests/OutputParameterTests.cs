@@ -159,7 +159,7 @@ public class OutputParameterTests
         };
         await using var context = new DatabaseContext(cfg, factory);
 
-        // ExecuteScalarAsync uses ExecuteReaderAsync internally, so queue a reader result
+        // ExecuteScalarOrNullAsync uses ExecuteReaderAsync internally, so queue a reader result
         connection.EnqueueReaderResult(new List<Dictionary<string, object?>>
         {
             new() { ["count"] = 100 }
@@ -174,7 +174,7 @@ public class OutputParameterTests
             "SELECT COUNT(*) FROM users; SET {P}rowCount = @@ROWCOUNT");
         var rowCountParam = container.AddParameterWithValue("rowCount", DbType.Int32, 0, ParameterDirection.Output);
 
-        var scalarResult = await container.ExecuteScalarAsync<int>();
+        var scalarResult = await container.ExecuteScalarOrNullAsync<int>();
 
         // Assert
         Assert.Equal(100, scalarResult);

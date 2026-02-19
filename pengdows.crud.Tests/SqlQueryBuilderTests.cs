@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -112,5 +113,252 @@ public class SqlQueryBuilderTests
 
         Assert.Throws<ArgumentNullException>(() => builder.Replace(null!, "X"));
         Assert.Throws<ArgumentException>(() => builder.Replace(string.Empty, "X"));
+    }
+
+    [Fact]
+    public void Append_Int_ConvertsCorrectly()
+    {
+        var builder = new SqlQueryBuilder();
+        builder.Append(42);
+        Assert.Equal("42", builder.ToString());
+    }
+
+    [Fact]
+    public void Append_NegativeInt_ConvertsCorrectly()
+    {
+        var builder = new SqlQueryBuilder();
+        builder.Append(-1);
+        Assert.Equal("-1", builder.ToString());
+    }
+
+    [Fact]
+    public void Append_Long_ConvertsCorrectly()
+    {
+        var builder = new SqlQueryBuilder();
+        builder.Append(9876543210L);
+        Assert.Equal("9876543210", builder.ToString());
+    }
+
+    [Fact]
+    public void Append_Double_ConvertsCorrectly()
+    {
+        var builder = new SqlQueryBuilder();
+        builder.Append(3.14);
+        var result = builder.ToString();
+        Assert.Contains("3", result);
+        Assert.Contains("14", result);
+    }
+
+    [Fact]
+    public void Append_Decimal_ConvertsCorrectly()
+    {
+        var builder = new SqlQueryBuilder();
+        builder.Append(1.5m);
+        var result = builder.ToString();
+        Assert.Contains("1", result);
+        Assert.Contains("5", result);
+    }
+
+    [Fact]
+    public void Append_NullObject_IsNoOp()
+    {
+        var builder = new SqlQueryBuilder();
+        builder.Append((object?)null);
+        Assert.Equal(string.Empty, builder.ToString());
+        Assert.Equal(0, builder.Length);
+    }
+
+    [Fact]
+    public void Append_ObjectWithValue_UsesToString()
+    {
+        var builder = new SqlQueryBuilder();
+        builder.Append((object?)123);
+        Assert.Equal("123", builder.ToString());
+    }
+
+    [Fact]
+    public void Append_NullISqlQueryBuilder_IsNoOp()
+    {
+        var builder = new SqlQueryBuilder("SELECT");
+        builder.Append((ISqlQueryBuilder?)null!);
+        Assert.Equal("SELECT", builder.ToString());
+    }
+
+    [Fact]
+    public void Append_EmptySqlQueryBuilder_IsNoOp()
+    {
+        var builder = new SqlQueryBuilder("SELECT");
+        var other = new SqlQueryBuilder(); // empty
+        builder.Append((ISqlQueryBuilder)other);
+        Assert.Equal("SELECT", builder.ToString());
+    }
+
+    [Fact]
+    public void Append_AnotherSqlQueryBuilder_CopiesContent()
+    {
+        var other = new SqlQueryBuilder(" 1");
+        var builder = new SqlQueryBuilder("SELECT");
+        builder.Append((ISqlQueryBuilder)other);
+        Assert.Equal("SELECT 1", builder.ToString());
+    }
+
+    [Fact]
+    public void AppendLine_NoArgs_AppendsNewline()
+    {
+        var builder = new SqlQueryBuilder("SELECT");
+        builder.AppendLine();
+        Assert.Equal("SELECT\n", builder.ToString());
+    }
+
+    [Fact]
+    public void AppendLine_WithValue_AppendsValueAndNewline()
+    {
+        var builder = new SqlQueryBuilder();
+        builder.AppendLine("SELECT 1");
+        Assert.Equal("SELECT 1\n", builder.ToString());
+    }
+
+    [Fact]
+    public void AppendLine_WithNullValue_AppendsOnlyNewline()
+    {
+        var builder = new SqlQueryBuilder();
+        builder.AppendLine((string?)null);
+        Assert.Equal("\n", builder.ToString());
+    }
+
+    [Fact]
+    public void AppendFormat_WithProvider_FormatsContent()
+    {
+        var builder = new SqlQueryBuilder();
+        builder.AppendFormat(CultureInfo.InvariantCulture, "{0:F2}", 3.14159);
+        Assert.Equal("3.14", builder.ToString());
+    }
+
+    [Fact]
+    public void AppendFormat_NullFormat_Throws()
+    {
+        var builder = new SqlQueryBuilder();
+        Assert.Throws<ArgumentNullException>(() => builder.AppendFormat((string)null!, "arg"));
+        Assert.Throws<ArgumentNullException>(() => builder.AppendFormat(CultureInfo.InvariantCulture, (string)null!, "arg"));
+    }
+
+    [Fact]
+    public void Dispose_TwiceIsNoOp()
+    {
+        var builder = new SqlQueryBuilder("SELECT 1");
+        builder.Dispose();
+        // After dispose the buffer is null; ToString should return empty
+        Assert.Equal(string.Empty, builder.ToString());
+        builder.Dispose(); // second dispose — must not throw
+    }
+
+    [Fact]
+    public void Clear_OnEmptyBuilder_VersionUnchanged()
+    {
+        var builder = new SqlQueryBuilder();
+        var v = builder.Version;
+        builder.Clear();
+        Assert.Equal(v, builder.Version);
+        Assert.Equal(string.Empty, builder.ToString());
+    }
+
+    [Fact]
+    public void Replace_OnEmptyBuilder_IsNoOp()
+    {
+        var builder = new SqlQueryBuilder();
+        var v = builder.Version;
+        builder.Replace("X", "Y");
+        Assert.Equal(v, builder.Version);
+        Assert.Equal(string.Empty, builder.ToString());
+    }
+
+    [Fact]
+    public void Append_LargeString_GrowsBuffer()
+    {
+        var builder = new SqlQueryBuilder(4); // tiny initial capacity forces Grow()
+        var large = new string('A', 1024);
+        builder.Append(large);
+        Assert.Equal(large, builder.ToString());
+        Assert.Equal(1024, builder.Length);
+    }
+
+    [Fact]
+    public void Constructor_WithZeroCapacity_UsesDefault()
+    {
+        var builder = new SqlQueryBuilder(0);
+        builder.Append("test");
+        Assert.Equal("test", builder.ToString());
+    }
+
+    [Fact]
+    public void Constructor_WithNegativeCapacity_UsesDefault()
+    {
+        var builder = new SqlQueryBuilder(-5);
+        builder.Append("test");
+        Assert.Equal("test", builder.ToString());
+    }
+
+    [Fact]
+    public void Replace_SingleOccurrence_Replaces()
+    {
+        var builder = new SqlQueryBuilder("Hello World");
+        builder.Replace("World", "SQL");
+        Assert.Equal("Hello SQL", builder.ToString());
+    }
+
+    [Fact]
+    public void Replace_WithLongerValue_Expands()
+    {
+        var builder = new SqlQueryBuilder("A B C");
+        builder.Replace("B", "HELLO");
+        Assert.Equal("A HELLO C", builder.ToString());
+    }
+
+    [Fact]
+    public void Replace_WithShorterValue_Contracts()
+    {
+        var builder = new SqlQueryBuilder("AABAA");
+        builder.Replace("AA", "X");
+        Assert.Equal("XBX", builder.ToString());
+    }
+
+    [Fact]
+    public void CopyFrom_ThrowsOnNull()
+    {
+        var builder = new SqlQueryBuilder();
+        Assert.Throws<ArgumentNullException>(() => builder.CopyFrom(null!));
+    }
+
+    [Fact]
+    public void CopyFrom_EmptySource_ResultsInEmptyTarget()
+    {
+        var source = new SqlQueryBuilder();
+        var target = new SqlQueryBuilder("existing");
+        target.CopyFrom(source);
+        Assert.Equal(string.Empty, target.ToString());
+        Assert.Equal(0, target.Length);
+    }
+
+    [Fact]
+    public void Constructor_WithInitialString_HasContent()
+    {
+        var builder = new SqlQueryBuilder("SELECT 1");
+        Assert.Equal("SELECT 1", builder.ToString());
+        Assert.Equal(8, builder.Length);
+    }
+
+    [Fact]
+    public void ToString_OnEmpty_ReturnsEmptyString()
+    {
+        var builder = new SqlQueryBuilder();
+        Assert.Equal(string.Empty, builder.ToString());
+    }
+
+    [Fact]
+    public void Replace_WithEmptyNewValue_RemovesOldValue()
+    {
+        var builder = new SqlQueryBuilder("SELECT X FROM X");
+        builder.Replace("X", string.Empty);
+        Assert.Equal("SELECT  FROM ", builder.ToString());
     }
 }

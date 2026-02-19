@@ -33,14 +33,14 @@ public class SqlContainerTransactionParameterPoolingTests : IDisposable
     }
 
     [Fact]
-    public async Task ExecuteScalarAsync_WithTransactionContextAndParameters_Works()
+    public async Task ExecuteScalarOrNullAsync_WithTransactionContextAndParameters_Works()
     {
         await using var tx = _context.BeginTransaction();
         await using var container = tx.CreateSqlContainer("SELECT value FROM test_table WHERE id = ");
         container.Query.Append(container.MakeParameterName("id"));
         container.AddParameterWithValue("id", DbType.Int32, 1);
 
-        var result = await container.ExecuteScalarAsync<long>();
+        var result = await container.ExecuteScalarOrNullAsync<long>();
 
         Assert.Equal(42L, result);
     }

@@ -81,7 +81,7 @@ public class CoverageImprovementTests
     #region SqlContainer Edge Cases
 
     [Fact]
-    public async Task SqlContainer_ExecuteScalarWriteAsync_WithoutCancellationToken_Works()
+    public async Task SqlContainer_ExecuteScalarRequiredAsync_WithoutCancellationToken_Works()
     {
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
@@ -90,14 +90,14 @@ public class CoverageImprovementTests
         var container = context.CreateSqlContainer("INSERT INTO test VALUES (1) RETURNING id");
 
         // Act - Call without cancellation token
-        var result = await container.ExecuteScalarWriteAsync<int>();
+        var result = await container.ExecuteScalarRequiredAsync<int>();
 
         // Assert
         Assert.Equal(42, result);
     }
 
     [Fact]
-    public async Task SqlContainer_ExecuteScalarWriteAsync_WithCommandType_Works()
+    public async Task SqlContainer_ExecuteScalarRequiredAsync_WithCommandType_Works()
     {
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
@@ -106,7 +106,7 @@ public class CoverageImprovementTests
         var container = context.CreateSqlContainer("sp_insert_test");
 
         // Act - Call with explicit CommandType
-        var result = await container.ExecuteScalarWriteAsync<int>(CommandType.StoredProcedure);
+        var result = await container.ExecuteScalarRequiredAsync<int>(CommandType.StoredProcedure);
 
         // Assert
         Assert.Equal(123, result);

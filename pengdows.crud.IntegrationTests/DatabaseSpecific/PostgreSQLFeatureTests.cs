@@ -19,8 +19,8 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
 
     protected override IEnumerable<SupportedDatabase> GetSupportedProviders()
     {
-        // Only test against PostgreSQL
-        return new[] { SupportedDatabase.PostgreSql };
+        // Only test against PostgreSQL and YugabyteDB (PG compatible)
+        return new[] { SupportedDatabase.PostgreSql, SupportedDatabase.YugabyteDb };
     }
 
     protected override async Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)
@@ -281,7 +281,7 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
             verifyContainer.Query.Append(verifyContainer.MakeParameterName("name"));
             verifyContainer.AddParameterWithValue("name", DbType.String, "Conflict Test Product");
 
-            var result = await verifyContainer.ExecuteScalarAsync<string>();
+            var result = await verifyContainer.ExecuteScalarOrNullAsync<string>();
             Assert.NotNull(result);
             Assert.Contains("\"version\": 2", result);
             Assert.Contains("\"updated\": true", result);

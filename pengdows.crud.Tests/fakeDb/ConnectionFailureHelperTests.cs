@@ -33,7 +33,7 @@ public class ConnectionFailureHelperTests
         await using var container = context.CreateSqlContainer("SELECT 1");
 
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await container.ExecuteScalarAsync<int>());
+            await container.ExecuteScalarOrNullAsync<int>());
     }
 
     [Fact]
@@ -192,6 +192,6 @@ public class ConnectionFailureHelperTests
         await using var container = context.CreateSqlContainer("SELECT 1");
 
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await container.ExecuteScalarAsync<int>());
+            await container.ExecuteScalarOrNullAsync<int>());
     }
 }

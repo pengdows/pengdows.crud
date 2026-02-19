@@ -78,13 +78,14 @@ internal static class PoolingConfigReader
             ? TryGetInt(b, dialect.MinPoolSizeSettingName!)
             : null;
 
-        // If pooling is explicitly disabled, treat provider pool as "no limit".
+        // If pooling is explicitly disabled, retain explicit max/min if provided but do not
+        // fall back to dialect defaults (callers use null to mean "no pool size constraint").
         if (poolingEnabled == false)
         {
             return new PoolConfig(
                 false,
                 minPool ?? defaultMin,
-                null,
+                maxPool,
                 PoolConfigSource.ConnectionString);
         }
 

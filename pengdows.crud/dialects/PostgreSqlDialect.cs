@@ -390,6 +390,33 @@ SET client_min_messages = warning;";
         return $"EXCLUDED.{WrapObjectName(columnName)}";
     }
 
+    /// <summary>
+    /// Sets Npgsql-specific type properties on a parameter via reflection so that
+    /// subclasses (e.g. QuestDbDialect) can reuse the same logic without duplicating it.
+    /// Silently ignores failures when the parameter is not an Npgsql parameter type.
+    /// </summary>
+    protected void SetNpgsqlParameterType(DbParameter parameter, string npgsqlDbTypeName, string dataTypeName)
+    {
+        try
+        {
+            var type = parameter.GetType();
+            var npgsqlDbTypeProp = type.GetProperty(NpgsqlDbTypeProperty);
+            if (npgsqlDbTypeProp != null)
+            {
+                if (Enum.TryParse(npgsqlDbTypeProp.PropertyType, npgsqlDbTypeName, true, out var enumVal))
+                {
+                    npgsqlDbTypeProp.SetValue(parameter, enumVal);
+                }
+            }
+
+            type.GetProperty(DataTypeNameProperty)?.SetValue(parameter, dataTypeName);
+        }
+        catch
+        {
+            // Not an Npgsql parameter or the property is absent — ignore.
+        }
+    }
+
     // Tests access a protected member via reflection; provide a protected facade that
     // delegates to the public base implementation without changing API surface.
     protected new SqlStandardLevel DetermineStandardCompliance(Version? version)

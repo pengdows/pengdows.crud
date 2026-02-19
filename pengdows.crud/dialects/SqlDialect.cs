@@ -253,6 +253,9 @@ internal abstract class SqlDialect : ISqlDialect
     public virtual bool SupportsInsertOnConflict => false; // PostgreSQL, SQLite extension
     public virtual bool SupportsOnDuplicateKey => false; // MySQL, MariaDB extension
     public virtual bool SupportsSavepoints => false;
+    public virtual bool SupportsTransactions => true;
+    public virtual bool SupportsRowLevelDelete => true;
+    public virtual bool SupportsDropTableIfExists => true;
 
     /// <summary>
     /// Gets the SQL statement to create a savepoint with the given name.
@@ -724,6 +727,28 @@ internal abstract class SqlDialect : ISqlDialect
         var start = traceTimings ? Stopwatch.GetTimestamp() : 0;
         var parameter = GetPooledParameter(out var pooled);
 
+        // Treat empty/whitespace names as null (auto-generate)
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            name = null;
+        }
+
+        // Strip dialect-specific parameter prefixes (@, :, ?, $) if present
+        if (name != null)
+        {
+            name = name.Replace("@", string.Empty)
+                .Replace(":", string.Empty)
+                .Replace("?", string.Empty)
+                .Replace("$", string.Empty);
+
+            if (!IsValidParameterName(name))
+            {
+                throw new ArgumentException(
+                    $"Parameter name '{name}' contains invalid characters. Only alphanumeric characters and underscores are allowed.",
+                    nameof(name));
+            }
+        }
+
         parameter.ParameterName = name ?? GenerateRandomName(5, ParameterNameMaxLength);
 
         // Performance: Inline null check to avoid method call overhead
@@ -825,51 +850,22 @@ internal abstract class SqlDialect : ISqlDialect
     }
 
     public virtual DbParameter CreateDbParameter(string? name, DbType dbType, int value)
-    {
-        var parameter = GetPooledParameter(out _);
-        parameter.ParameterName = name;
-        parameter.DbType = dbType;
-        parameter.Value = value;
-        return parameter;
-    }
-    
+        => CreateDbParameter<int>(name, dbType, value);
+
     public virtual DbParameter CreateDbParameter(string? name, DbType dbType, long value)
-    {
-        var parameter = GetPooledParameter(out _);
-        parameter.ParameterName = name;
-        parameter.DbType = dbType;
-        parameter.Value = value;
-        return parameter;
-    }
+        => CreateDbParameter<long>(name, dbType, value);
 
     public virtual DbParameter CreateDbParameter(string? name, DbType dbType, string value)
-    {
-        var parameter = GetPooledParameter(out _);
-        parameter.ParameterName = name;
-        parameter.DbType = dbType;
-        parameter.Value = value;
-        if(value != null)
-            parameter.Size = Math.Max(value.Length, 1);
-        return parameter;
-    }
-    
+        => CreateDbParameter<string>(name, dbType, value);
+
     public virtual DbParameter CreateDbParameter(string? name, DbType dbType, Guid value)
-    {
-        var parameter = GetPooledParameter(out _);
-        parameter.ParameterName = name;
-        parameter.DbType = dbType;
-        parameter.Value = value;
-        return parameter;
-    }
-    
+        => CreateDbParameter<Guid>(name, dbType, value);
+
     public virtual DbParameter CreateDbParameter(string? name, DbType dbType, DateTime value)
-    {
-        var parameter = GetPooledParameter(out _);
-        parameter.ParameterName = name;
-        parameter.DbType = dbType;
-        parameter.Value = value;
-        return parameter;
-    }
+        => CreateDbParameter<DateTime>(name, dbType, value);
+
+    public virtual DbParameter CreateDbParameter(string? name, DbType dbType, DateTimeOffset value)
+        => CreateDbParameter<DateTimeOffset>(name, dbType, value);
 
 
     // Methods for database-specific operations
@@ -1084,7 +1080,38 @@ internal abstract class SqlDialect : ISqlDialect
             var versionString = await GetDatabaseVersionAsync(connection);
             var productName = await GetProductNameAsync(connection) ?? ExtractProductNameFromVersion(versionString);
             var parsedVersion = ParseVersion(versionString);
-            var databaseType = InferDatabaseTypeFromInfo(productName, versionString);
+
+            // Enrich version string with schema DataSourceProductVersion for more accurate inference.
+            // Real drivers report meaningful version strings; fakeDb returns literal "version()" which
+            // lacks product markers. The schema DataSourceProductVersion (e.g. "11.7.2-MariaDB-ubu2404")
+            // provides a reliable fallback.
+            string? schemaProductVersion = null;
+            try
+            {
+                var schema = connection.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
+                if (schema.Rows.Count > 0)
+                    schemaProductVersion = schema.Rows[0].Field<string>("DataSourceProductVersion");
+            }
+            catch
+            {
+                // Schema may not be available for all connections; fall back to runtime version string.
+            }
+
+            var versionForInference = !string.IsNullOrEmpty(schemaProductVersion) &&
+                                      !versionString.Contains(schemaProductVersion,
+                                          StringComparison.OrdinalIgnoreCase)
+                ? $"{versionString} {schemaProductVersion}"
+                : versionString;
+
+            // Use dialect's virtual method first so subclasses can express their own intent.
+            // If it falls through to DatabaseType (the default), fall back to the centralized
+            // detection service which uses factory type names and schema metadata.
+            var databaseType = InferDatabaseTypeFromInfo(productName, versionForInference);
+            if (databaseType == DatabaseType)
+            {
+                databaseType = DatabaseDetectionService.DetectProduct(connection, Factory);
+            }
+
             var standardCompliance = DetermineStandardCompliance(parsedVersion);
 
             _productInfo = new DatabaseProductInfo
@@ -1571,6 +1598,11 @@ internal abstract class SqlDialect : ISqlDialect
         }
 
         return new string(buffer);
+    }
+
+    public virtual object? PrepareParameterValue(object? value, DbType dbType)
+    {
+        return value;
     }
 
     /// <summary>

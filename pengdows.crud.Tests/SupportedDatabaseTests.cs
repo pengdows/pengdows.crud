@@ -49,7 +49,10 @@ public class SupportedDatabaseTests
                 "MariaDb",
                 "MySql",
                 "Sqlite",
-                "DuckDB"
+                "DuckDB",
+                "QuestDb",
+                "YugabyteDb",
+                "TiDb"
             },
             names);
     }

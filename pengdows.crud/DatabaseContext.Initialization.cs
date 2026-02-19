@@ -215,7 +215,6 @@ public partial class DatabaseContext
             _disablePrepare = configuration.DisablePrepare;
             _poolAcquireTimeout = configuration.PoolAcquireTimeout;
             _modeLockTimeout = configuration.ModeLockTimeout;
-            _enablePoolGovernor = configuration.EnablePoolGovernor;
             _enableWriterPreference = configuration.EnableWriterPreference;
             _configuredReadPoolSize = configuration.MaxConcurrentReads;
             _configuredWritePoolSize = configuration.MaxConcurrentWrites;
@@ -582,9 +581,7 @@ public partial class DatabaseContext
             return;
         }
 
-        _effectivePoolGovernorEnabled = ConnectionMode == DbMode.SingleConnection
-            ? _enablePoolGovernor
-            : true;
+        _effectivePoolGovernorEnabled = ConnectionMode != DbMode.SingleConnection;
 
         if (!_effectivePoolGovernorEnabled)
         {
@@ -604,62 +601,24 @@ public partial class DatabaseContext
         var rawWriterMax = ResolveGovernorMax(_configuredWritePoolSize, writerConfig);
         var rawReaderMax = ResolveGovernorMax(_configuredReadPoolSize, readerConfig);
 
-        var writerPoolingDisabled = writerConfig.PoolingEnabled == false;
-        var readerPoolingDisabled = readerConfig.PoolingEnabled == false;
-
-        var hasWriterOverride = _configuredWritePoolSize.HasValue;
-        var hasReaderOverride = _configuredReadPoolSize.HasValue;
-
-        var disableWriterGovernor = writerPoolingDisabled && _enablePoolGovernor && !hasWriterOverride;
-        var disableReaderGovernor = readerPoolingDisabled && _enablePoolGovernor && !hasReaderOverride;
-
-        if (writerPoolingDisabled && !disableWriterGovernor)
+        if (writerConfig.PoolingEnabled == false)
         {
             rawWriterMax ??= Math.Max(1, writerConfig.MinPoolSize ?? 1);
         }
 
-        if (readerPoolingDisabled && !disableReaderGovernor)
+        if (readerConfig.PoolingEnabled == false)
         {
             rawReaderMax ??= Math.Max(1, readerConfig.MinPoolSize ?? 1);
         }
 
         var writerKey = ComputePoolKeyHash(writerConnectionString);
         var readerKey = ComputePoolKeyHash(readerConnectionString);
-        var sharedPool = ConnectionMode == DbMode.SingleConnection &&
-                         string.Equals(writerKey, readerKey, StringComparison.Ordinal);
-
-        int? sharedMax = null;
-        if (sharedPool)
-        {
-            sharedMax = ResolveSharedMax(rawWriterMax, rawReaderMax);
-        }
 
         var writerLabelMax = rawWriterMax;
         var readerLabelMax = rawReaderMax;
-        var readerDisabled = false;
-
-        switch (ConnectionMode)
+        if (ConnectionMode == DbMode.SingleWriter)
         {
-            case DbMode.SingleConnection:
-                writerLabelMax = 1;
-                readerLabelMax = null;
-                readerDisabled = true;
-                break;
-            case DbMode.SingleWriter:
-                writerLabelMax = 1;
-                rawWriterMax = 1;
-                if (sharedPool && readerLabelMax.HasValue)
-                {
-                    readerLabelMax = Math.Max(1, readerLabelMax.Value - 1);
-                }
-
-                break;
-        }
-
-        SemaphoreSlim? sharedSemaphore = null;
-        if (sharedPool && sharedMax.HasValue && sharedMax.Value > 0)
-        {
-            sharedSemaphore = new SemaphoreSlim(sharedMax.Value, sharedMax.Value);
+            writerLabelMax = 1;
         }
 
         // SingleWriter mode: create turnstile for writer-preference fairness
@@ -673,28 +632,25 @@ public partial class DatabaseContext
         _writerGovernor = CreateGovernor(
             PoolLabel.Writer,
             writerKey,
-            sharedMax ?? writerLabelMax,
-            sharedSemaphore,
-            disableWriterGovernor,
+            writerLabelMax,
+            null,
+            false,
             turnstile: turnstile,
             holdTurnstile: true,
             ownsTurnstile: turnstile != null); // Writers hold turnstile until permit released
 
-        var readerGovernorDisabled = readerDisabled || disableReaderGovernor;
-        _readerGovernor = readerGovernorDisabled
-            ? CreateGovernor(PoolLabel.Reader, readerKey, null, null, true)
-            : CreateGovernor(
-                PoolLabel.Reader,
-                readerKey,
-                sharedMax ?? readerLabelMax,
-                sharedSemaphore,
-                false,
-                turnstile: turnstile,
-                holdTurnstile: false,
-                ownsTurnstile: false); // Readers touch-and-release turnstile
+        _readerGovernor = CreateGovernor(
+            PoolLabel.Reader,
+            readerKey,
+            readerLabelMax,
+            null,
+            false,
+            turnstile: turnstile,
+            holdTurnstile: false,
+            ownsTurnstile: false); // Readers touch-and-release turnstile
 
-        // Attach permit for modes with persistent connections (not SingleWriter anymore)
-        if (ConnectionMode is DbMode.SingleConnection or DbMode.KeepAlive)
+        // Attach permit for modes with persistent connections.
+        if (ConnectionMode == DbMode.KeepAlive)
         {
             AttachPinnedPermitIfNeeded();
         }
@@ -909,7 +865,7 @@ public partial class DatabaseContext
 
     private void AttachPinnedPermitIfNeeded()
     {
-        if (!_enablePoolGovernor || _writerGovernor == null)
+        if (!_effectivePoolGovernorEnabled || _writerGovernor == null)
         {
             return;
         }

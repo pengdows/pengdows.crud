@@ -39,6 +39,9 @@ public static class DataSourceTestData
             SupportedDatabase.MariaDb => "MariaDB",
             SupportedDatabase.PostgreSql => "PostgreSQL",
             SupportedDatabase.CockroachDb => "CockroachDB",
+            SupportedDatabase.YugabyteDb => "YugabyteDB",
+            SupportedDatabase.QuestDb => "QuestDB",
+            SupportedDatabase.TiDb => "TiDB",
             SupportedDatabase.Sqlite => "SQLite",
             SupportedDatabase.Firebird => "Firebird",
             SupportedDatabase.Oracle => "Oracle Database",
@@ -47,7 +50,8 @@ public static class DataSourceTestData
 
         var markerFormat = db switch
         {
-            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.Oracle => ":{0}",
+            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb 
+                or SupportedDatabase.QuestDb or SupportedDatabase.Oracle => ":{0}",
             SupportedDatabase.DuckDB => "$" + "{0}",
             _ => "@{0}"
         };
@@ -70,8 +74,11 @@ public static class DataSourceTestData
             SupportedDatabase.SqlServer => new SqlServerDialect(factory, NullLogger.Instance),
             SupportedDatabase.MySql => new MySqlDialect(factory, NullLogger.Instance),
             SupportedDatabase.MariaDb => new MariaDbDialect(factory, NullLogger.Instance),
+            SupportedDatabase.TiDb => new TiDbDialect(factory, NullLogger.Instance),
             SupportedDatabase.PostgreSql => new PostgreSqlDialect(factory, NullLogger.Instance),
-            SupportedDatabase.CockroachDb => new PostgreSqlDialect(factory, NullLogger.Instance),
+            SupportedDatabase.CockroachDb => new CockroachDbDialect(factory, NullLogger.Instance),
+            SupportedDatabase.YugabyteDb => new YugabyteDbDialect(factory, NullLogger.Instance),
+            SupportedDatabase.QuestDb => new QuestDbDialect(factory, NullLogger.Instance),
             SupportedDatabase.Sqlite => new SqliteDialect(factory, NullLogger.Instance),
             SupportedDatabase.Firebird => new FirebirdDialect(factory, NullLogger.Instance),
             SupportedDatabase.Oracle => new OracleDialect(factory, NullLogger.Instance),
@@ -121,7 +128,8 @@ public class DataSourceInformationTests
         // Assert: parameter marker
         var expectedMarker = db switch
         {
-            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.Oracle => ":",
+            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb 
+                or SupportedDatabase.QuestDb or SupportedDatabase.Oracle => ":",
             SupportedDatabase.DuckDB => "$",
             _ => "@"
         };
@@ -135,7 +143,8 @@ public class DataSourceInformationTests
         var canMerge = (db == SupportedDatabase.SqlServer && info.ParsedVersion?.Major >= 10)
                        || db == SupportedDatabase.Oracle
                        || (db == SupportedDatabase.Firebird && info.ParsedVersion?.Major >= 2)
-                       || (db == SupportedDatabase.PostgreSql && info.ParsedVersion?.Major > 14);
+                       || (db == SupportedDatabase.PostgreSql && info.ParsedVersion?.Major > 14)
+                       || (db == SupportedDatabase.YugabyteDb && info.ParsedVersion?.Major > 14);
         Assert.Equal(canMerge, info.SupportsMerge);
         Assert.NotEqual(!canMerge, info.SupportsMerge);
 
@@ -144,6 +153,7 @@ public class DataSourceInformationTests
         {
             SupportedDatabase.PostgreSql,
             SupportedDatabase.CockroachDb,
+            SupportedDatabase.YugabyteDb,
             SupportedDatabase.Sqlite,
             SupportedDatabase.DuckDB
         }.Contains(db);
@@ -152,7 +162,8 @@ public class DataSourceInformationTests
         var canOnDuplicateKey = new[]
         {
             SupportedDatabase.MySql,
-            SupportedDatabase.MariaDb
+            SupportedDatabase.MariaDb,
+            SupportedDatabase.TiDb
         }.Contains(db);
         Assert.Equal(canOnDuplicateKey, info.SupportsOnDuplicateKey);
 
@@ -161,16 +172,18 @@ public class DataSourceInformationTests
         {
             SupportedDatabase.SqlServer => ProcWrappingStyle.Exec,
             SupportedDatabase.Oracle => ProcWrappingStyle.Oracle,
-            SupportedDatabase.MySql or SupportedDatabase.MariaDb => ProcWrappingStyle.Call,
-            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb => ProcWrappingStyle.PostgreSQL,
+            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb => ProcWrappingStyle.Call,
+            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb 
+                or SupportedDatabase.QuestDb => ProcWrappingStyle.PostgreSQL,
             SupportedDatabase.Firebird => ProcWrappingStyle.ExecuteProcedure,
             _ => ProcWrappingStyle.None
         };
         var expectedRequiresStoredProcParameterNameMatch = db switch
         {
             SupportedDatabase.Firebird or SupportedDatabase.Sqlite or SupportedDatabase.SqlServer
-                or SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.DuckDB => false,
-            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.Oracle => true,
+                or SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.DuckDB or SupportedDatabase.TiDb => false,
+            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb 
+                or SupportedDatabase.QuestDb or SupportedDatabase.Oracle => true,
             _ => true
         };
 
@@ -185,10 +198,9 @@ public class DataSourceInformationTests
         var expectedOutputParams = db switch
         {
             SupportedDatabase.SqlServer => 1024,
-            SupportedDatabase.MySql => 65535,
-            SupportedDatabase.MariaDb => 65535,
-            SupportedDatabase.PostgreSql => 100,
-            SupportedDatabase.CockroachDb => 100,
+            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb => 65535,
+            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb 
+                or SupportedDatabase.QuestDb => 100,
             SupportedDatabase.Oracle => 1024,
             SupportedDatabase.Sqlite => 0,
             SupportedDatabase.Firebird => 1499,

@@ -134,6 +134,16 @@ public sealed class IsolationResolver : IIsolationResolver
             {
                 IsolationLevel.Serializable
             },
+            SupportedDatabase.YugabyteDb => new HashSet<IsolationLevel>
+            {
+                IsolationLevel.ReadCommitted,
+                IsolationLevel.RepeatableRead,
+                IsolationLevel.Serializable
+            },
+            SupportedDatabase.QuestDb => new HashSet<IsolationLevel>
+            {
+                IsolationLevel.Serializable
+            },
             SupportedDatabase.Sqlite => new HashSet<IsolationLevel>
             {
                 IsolationLevel.ReadCommitted,
@@ -155,6 +165,12 @@ public sealed class IsolationResolver : IIsolationResolver
             SupportedDatabase.MariaDb => new HashSet<IsolationLevel>
             {
                 IsolationLevel.ReadUncommitted,
+                IsolationLevel.ReadCommitted,
+                IsolationLevel.RepeatableRead,
+                IsolationLevel.Serializable
+            },
+            SupportedDatabase.TiDb => new HashSet<IsolationLevel>
+            {
                 IsolationLevel.ReadCommitted,
                 IsolationLevel.RepeatableRead,
                 IsolationLevel.Serializable
@@ -203,6 +219,18 @@ public sealed class IsolationResolver : IIsolationResolver
                 [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
                 [IsolationProfile.FastWithRisks] = IsolationLevel.Serializable
             },
+            SupportedDatabase.YugabyteDb => new Dictionary<IsolationProfile, IsolationLevel>
+            {
+                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
+                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
+                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
+            },
+            SupportedDatabase.QuestDb => new Dictionary<IsolationProfile, IsolationLevel>
+            {
+                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.Serializable,
+                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
+                [IsolationProfile.FastWithRisks] = IsolationLevel.Serializable
+            },
             SupportedDatabase.Sqlite => new Dictionary<IsolationProfile, IsolationLevel>
             {
                 [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
@@ -226,6 +254,12 @@ public sealed class IsolationResolver : IIsolationResolver
                 [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.RepeatableRead,
                 [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
                 [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted
+            },
+            SupportedDatabase.TiDb => new Dictionary<IsolationProfile, IsolationLevel>
+            {
+                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.RepeatableRead,
+                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
+                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
             },
             SupportedDatabase.Oracle => new Dictionary<IsolationProfile, IsolationLevel>
             {

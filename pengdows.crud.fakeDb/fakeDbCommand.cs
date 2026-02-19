@@ -287,6 +287,13 @@ public class fakeDbCommand : DbCommand
             throw exReader!;
         }
 
+        // Propagate persistent scalar exception through the reader path as well,
+        // since ExecuteScalarCore now uses ExecuteReaderAsync internally.
+        if (conn?.PersistentScalarException != null)
+        {
+            throw conn.PersistentScalarException;
+        }
+
         // Prefer queued results when present (test control)
         if (conn != null)
         {

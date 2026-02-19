@@ -36,7 +36,7 @@ public class SqlContainerBranchTests
     }
 
     [Fact]
-    public async Task ExecuteScalarAsync_NoRows_NonNullable_Throws()
+    public async Task ExecuteScalarOrNullAsync_NoRows_NonNullable_ReturnsDefault()
     {
         var connection = new fakeDbConnection();
         connection.EnqueueReaderResult(new[]
@@ -47,11 +47,13 @@ public class SqlContainerBranchTests
         using var ctx = CreateContext(SupportedDatabase.Sqlite, connection);
         var container = ctx.CreateSqlContainer("SELECT 1");
 
-        await Assert.ThrowsAsync<InvalidOperationException>(async () => await container.ExecuteScalarAsync<int>());
+        // OrNull returns default(int?) = null, even for non-nullable T
+        var result = await container.ExecuteScalarOrNullAsync<int>();
+        Assert.Equal(default, result);
     }
 
     [Fact]
-    public async Task ExecuteScalarAsync_NoRows_Nullable_ReturnsDefault()
+    public async Task ExecuteScalarRequiredAsync_NoRows_Throws()
     {
         var connection = new fakeDbConnection();
         connection.EnqueueReaderResult(new[]
@@ -62,13 +64,29 @@ public class SqlContainerBranchTests
         using var ctx = CreateContext(SupportedDatabase.Sqlite, connection);
         var container = ctx.CreateSqlContainer("SELECT 1");
 
-        var result = await container.ExecuteScalarAsync<int?>();
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await container.ExecuteScalarRequiredAsync<int>());
+    }
+
+    [Fact]
+    public async Task ExecuteScalarOrNullAsync_NoRows_Nullable_ReturnsDefault()
+    {
+        var connection = new fakeDbConnection();
+        connection.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { { "version", "3.42.0" } }
+        });
+        connection.EnqueueReaderResult(Array.Empty<Dictionary<string, object?>>());
+        using var ctx = CreateContext(SupportedDatabase.Sqlite, connection);
+        var container = ctx.CreateSqlContainer("SELECT 1");
+
+        var result = await container.ExecuteScalarOrNullAsync<int?>();
 
         Assert.Null(result);
     }
 
     [Fact]
-    public async Task ExecuteScalarAsync_Object_ReturnsRawValue()
+    public async Task ExecuteScalarOrNullAsync_Object_ReturnsRawValue()
     {
         var connection = new fakeDbConnection();
         connection.EnqueueReaderResult(new[]
@@ -82,57 +100,85 @@ public class SqlContainerBranchTests
         using var ctx = CreateContext(SupportedDatabase.Sqlite, connection);
         var container = ctx.CreateSqlContainer("SELECT 1");
 
-        var result = await container.ExecuteScalarAsync<object>();
+        var result = await container.ExecuteScalarOrNullAsync<object>();
 
         Assert.Equal("raw", result);
     }
 
     [Fact]
-    public async Task ExecuteScalarWriteAsync_NullResult_NonNullable_Throws()
+    public async Task ExecuteScalarRequiredAsync_NullResult_NonNullable_Throws()
     {
         var connection = new fakeDbConnection();
-        connection.SetScalarResultForCommand("SELECT scalar_test", DBNull.Value);
+        connection.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { { "version", "3.42.0" } }
+        });
+        connection.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { { "value", DBNull.Value } }
+        });
         using var ctx = CreateContext(SupportedDatabase.Sqlite, connection);
         var container = ctx.CreateSqlContainer("SELECT scalar_test");
 
-        await Assert.ThrowsAsync<InvalidOperationException>(async () => await container.ExecuteScalarWriteAsync<int>());
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await container.ExecuteScalarRequiredAsync<int>());
     }
 
     [Fact]
-    public async Task ExecuteScalarWriteAsync_NullResult_Nullable_ReturnsDefault()
+    public async Task ExecuteScalarRequiredAsync_NullResult_Nullable_ReturnsDefault()
     {
         var connection = new fakeDbConnection();
-        connection.SetScalarResultForCommand("SELECT scalar_test", DBNull.Value);
+        connection.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { { "version", "3.42.0" } }
+        });
+        connection.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { { "value", DBNull.Value } }
+        });
         using var ctx = CreateContext(SupportedDatabase.Sqlite, connection);
         var container = ctx.CreateSqlContainer("SELECT scalar_test");
 
-        var result = await container.ExecuteScalarWriteAsync<int?>();
+        var result = await container.ExecuteScalarRequiredAsync<int?>();
 
         Assert.Null(result);
     }
 
     [Fact]
-    public async Task ExecuteScalarWriteAsync_Object_ReturnsRawValue()
+    public async Task ExecuteScalarRequiredAsync_Object_ReturnsRawValue()
     {
         var connection = new fakeDbConnection();
-        connection.SetScalarResultForCommand("SELECT scalar_test", "raw");
+        connection.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { { "version", "3.42.0" } }
+        });
+        connection.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { { "value", "raw" } }
+        });
         using var ctx = CreateContext(SupportedDatabase.Sqlite, connection);
         var container = ctx.CreateSqlContainer("SELECT scalar_test");
 
-        var result = await container.ExecuteScalarWriteAsync<object>();
+        var result = await container.ExecuteScalarRequiredAsync<object>();
 
         Assert.Equal("raw", result);
     }
 
     [Fact]
-    public async Task ExecuteScalarWriteAsync_CoercesValue()
+    public async Task ExecuteScalarRequiredAsync_CoercesValue()
     {
         var connection = new fakeDbConnection();
-        connection.SetScalarResultForCommand("SELECT scalar_test", "42");
+        connection.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { { "version", "3.42.0" } }
+        });
+        connection.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { { "value", "42" } }
+        });
         using var ctx = CreateContext(SupportedDatabase.PostgreSql, connection);
         var container = ctx.CreateSqlContainer("SELECT scalar_test");
 
-        var result = await container.ExecuteScalarWriteAsync<int>();
+        var result = await container.ExecuteScalarRequiredAsync<int>();
 
         Assert.Equal(42, result);
     }

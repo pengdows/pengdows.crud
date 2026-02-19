@@ -568,13 +568,12 @@ transaction.Commit();
 
 ## Pool Governor
 
-The pool governor prevents connection pool exhaustion by limiting concurrent connections with semaphore-based backpressure.
+The pool governor prevents connection pool exhaustion by limiting concurrent connections with semaphore-based backpressure (enabled in every mode except `SingleConnection`).
 
 ```csharp
 var config = new DatabaseContextConfiguration
 {
-    ConnectionMode = DbMode.Best,
-    PoolGovernorEnabled = true,
+    DbMode = DbMode.Best,
     MaxConcurrentReads = 20,
     MaxConcurrentWrites = 10,
     PoolAcquireTimeout = TimeSpan.FromSeconds(5)

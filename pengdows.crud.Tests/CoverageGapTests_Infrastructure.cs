@@ -271,7 +271,6 @@ public class CoverageGapTests_Infrastructure
         Assert.True(config.EnableWriterPreference);
         Assert.Equal(TimeSpan.FromSeconds(DatabaseContextConfiguration.DefaultPoolAcquireSeconds), config.PoolAcquireTimeout);
         Assert.Equal(TimeSpan.FromSeconds(DatabaseContextConfiguration.DefaultModeLockSeconds), config.ModeLockTimeout);
-        Assert.True(config.EnablePoolGovernor);
         Assert.Equal(string.Empty, config.ApplicationName);
     }
 
@@ -397,16 +396,6 @@ public class CoverageGapTests_Infrastructure
         Assert.True(config.EnableWriterPreference);
         config.EnableWriterPreference = false;
         Assert.False(config.EnableWriterPreference);
-    }
-
-    [Fact]
-    public void Configuration_EnablePoolGovernor_GetSet()
-    {
-        var config = new DatabaseContextConfiguration();
-
-        Assert.True(config.EnablePoolGovernor);
-        config.EnablePoolGovernor = false;
-        Assert.False(config.EnablePoolGovernor);
     }
 
     [Fact]

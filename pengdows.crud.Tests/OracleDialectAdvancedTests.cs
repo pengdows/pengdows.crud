@@ -78,7 +78,7 @@ public class OracleDialectAdvancedTests
     public void CreateDbParameter_With_Null_Value_Should_Set_DBNull()
     {
         // Act
-        var param = _dialect.CreateDbParameter("null_param", DbType.String, null);
+        var param = _dialect.CreateDbParameter<string?>("null_param", DbType.String, null);
 
         // Assert
         Assert.Equal("null_param", param.ParameterName);

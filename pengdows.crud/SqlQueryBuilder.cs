@@ -6,7 +6,7 @@ namespace pengdows.crud;
 /// <summary>
 /// High-performance, pooled SQL query builder optimized for repeated appends.
 /// </summary>
-public sealed class SqlQueryBuilder : IDisposable
+public sealed class SqlQueryBuilder : ISqlQueryBuilder
 {
     private const int DefaultCapacity = 256;
     private char[]? _buffer;
@@ -40,7 +40,7 @@ public sealed class SqlQueryBuilder : IDisposable
     /// </summary>
     public int Version => _version;
 
-    public SqlQueryBuilder Append(char value)
+    public ISqlQueryBuilder Append(char value)
     {
         EnsureCapacity(_length + 1);
         _buffer![_length++] = value;
@@ -48,7 +48,7 @@ public sealed class SqlQueryBuilder : IDisposable
         return this;
     }
 
-    public SqlQueryBuilder Append(string? value)
+    public ISqlQueryBuilder Append(string? value)
     {
         if (string.IsNullOrEmpty(value))
         {
@@ -59,7 +59,7 @@ public sealed class SqlQueryBuilder : IDisposable
         return this;
     }
 
-    public SqlQueryBuilder Append(ReadOnlySpan<char> value)
+    public ISqlQueryBuilder Append(ReadOnlySpan<char> value)
     {
         if (value.Length == 0)
         {
@@ -73,17 +73,22 @@ public sealed class SqlQueryBuilder : IDisposable
         return this;
     }
 
-    public SqlQueryBuilder Append(SqlQueryBuilder other)
+    public ISqlQueryBuilder Append(ISqlQueryBuilder other)
     {
-        if (other == null || other._length == 0)
+        if (other == null || other.Length == 0)
         {
             return this;
         }
 
-        return Append(other.AsSpan());
+        if (other is SqlQueryBuilder sqb)
+        {
+            return Append(sqb.AsSpan());
+        }
+
+        return Append(other.ToString());
     }
 
-    public SqlQueryBuilder CopyFrom(SqlQueryBuilder other)
+    internal SqlQueryBuilder CopyFrom(SqlQueryBuilder other)
     {
         if (other == null)
         {
@@ -102,7 +107,7 @@ public sealed class SqlQueryBuilder : IDisposable
         return this;
     }
 
-    public SqlQueryBuilder Append(int value)
+    public ISqlQueryBuilder Append(int value)
     {
         Span<char> scratch = stackalloc char[11];
         if (!value.TryFormat(scratch, out var written, provider: CultureInfo.CurrentCulture))
@@ -113,7 +118,7 @@ public sealed class SqlQueryBuilder : IDisposable
         return Append(scratch[..written]);
     }
 
-    public SqlQueryBuilder Append(long value)
+    public ISqlQueryBuilder Append(long value)
     {
         Span<char> scratch = stackalloc char[20];
         if (!value.TryFormat(scratch, out var written, provider: CultureInfo.CurrentCulture))
@@ -124,33 +129,33 @@ public sealed class SqlQueryBuilder : IDisposable
         return Append(scratch[..written]);
     }
 
-    public SqlQueryBuilder Append(double value)
+    public ISqlQueryBuilder Append(double value)
     {
         return Append(value.ToString(CultureInfo.CurrentCulture));
     }
 
-    public SqlQueryBuilder Append(decimal value)
+    public ISqlQueryBuilder Append(decimal value)
     {
         return Append(value.ToString(CultureInfo.CurrentCulture));
     }
 
-    public SqlQueryBuilder Append(object? value)
+    public ISqlQueryBuilder Append(object? value)
     {
         return Append(value?.ToString());
     }
 
-    public SqlQueryBuilder AppendLine()
+    public ISqlQueryBuilder AppendLine()
     {
         return Append('\n');
     }
 
-    public SqlQueryBuilder AppendLine(string? value)
+    public ISqlQueryBuilder AppendLine(string? value)
     {
         Append(value);
         return Append('\n');
     }
 
-    public SqlQueryBuilder AppendFormat(string format, params object?[] args)
+    public ISqlQueryBuilder AppendFormat(string format, params object?[] args)
     {
         if (format == null)
         {
@@ -160,7 +165,7 @@ public sealed class SqlQueryBuilder : IDisposable
         return Append(string.Format(CultureInfo.CurrentCulture, format, args));
     }
 
-    public SqlQueryBuilder AppendFormat(IFormatProvider? provider, string format, params object?[] args)
+    public ISqlQueryBuilder AppendFormat(IFormatProvider? provider, string format, params object?[] args)
     {
         if (format == null)
         {
@@ -170,7 +175,7 @@ public sealed class SqlQueryBuilder : IDisposable
         return Append(string.Format(provider ?? CultureInfo.CurrentCulture, format, args));
     }
 
-    public SqlQueryBuilder Replace(string oldValue, string? newValue)
+    public ISqlQueryBuilder Replace(string oldValue, string? newValue)
     {
         if (oldValue == null)
         {
@@ -259,7 +264,7 @@ public sealed class SqlQueryBuilder : IDisposable
         return this;
     }
 
-    public SqlQueryBuilder Clear()
+    public ISqlQueryBuilder Clear()
     {
         if (_length == 0)
         {

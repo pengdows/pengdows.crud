@@ -6,13 +6,13 @@ namespace pengdows.crud.connection;
 /// <summary>
 /// Per-connection state for tracking prepare behavior and caching
 /// </summary>
-public sealed class ConnectionLocalState
+public sealed class ConnectionLocalState : IConnectionLocalState
 {
     /// <summary>
     /// Whether prepare has been disabled for this connection due to failures
     /// </summary>
     public bool PrepareDisabled { get; set; }
-    
+
     /// <summary>
     /// Tracks whether session settings have already been applied for this connection
     /// </summary>

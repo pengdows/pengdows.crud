@@ -358,8 +358,8 @@ public class AdvancedTypeRegistry
 
     private void RegisterJsonMappings()
     {
-        // PostgreSQL JSONB
-        RegisterMapping<JsonDocument>(SupportedDatabase.PostgreSql, new ProviderTypeMapping
+        // PostgreSQL JSONB (shared by flavors)
+        var pgJson = new ProviderTypeMapping
         {
             DbType = DbType.String,
             ConfigureParameter = (param, value) =>
@@ -368,14 +368,19 @@ public class AdvancedTypeRegistry
                 param.GetType().GetProperty(NpgsqlNames.DataTypeName)?.SetValue(param, "jsonb");
                 SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Jsonb);
             }
-        });
+        };
+        RegisterMapping<JsonDocument>(SupportedDatabase.PostgreSql, pgJson);
+        RegisterMapping<JsonDocument>(SupportedDatabase.CockroachDb, pgJson);
+        RegisterMapping<JsonDocument>(SupportedDatabase.YugabyteDb, pgJson);
 
-        // MySQL JSON
-        RegisterMapping<JsonDocument>(SupportedDatabase.MySql, new ProviderTypeMapping
+        // MySQL JSON (shared by flavors)
+        var mySqlJson = new ProviderTypeMapping
         {
             DbType = DbType.String,
             ConfigureParameter = (param, value) => { SetEnumProperty(param, MySqlNames.DbTypeProperty, MySqlNames.Json); }
-        });
+        };
+        RegisterMapping<JsonDocument>(SupportedDatabase.MySql, mySqlJson);
+        RegisterMapping<JsonDocument>(SupportedDatabase.TiDb, mySqlJson);
 
         // SQL Server JSON (stored as NVARCHAR(MAX))
         RegisterMapping<JsonDocument>(SupportedDatabase.SqlServer, new ProviderTypeMapping
@@ -428,69 +433,93 @@ public class AdvancedTypeRegistry
     private void RegisterArrayMappings()
     {
         // PostgreSQL int[] arrays
-        RegisterMapping<int[]>(SupportedDatabase.PostgreSql, new ProviderTypeMapping
+        var pgIntArray = new ProviderTypeMapping
         {
             DbType = DbType.Object,
             ConfigureParameter = (param, value) => { SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Array, NpgsqlNames.Integer); }
-        });
+        };
+        RegisterMapping<int[]>(SupportedDatabase.PostgreSql, pgIntArray);
+        RegisterMapping<int[]>(SupportedDatabase.CockroachDb, pgIntArray);
+        RegisterMapping<int[]>(SupportedDatabase.YugabyteDb, pgIntArray);
 
         // PostgreSQL text[] arrays
-        RegisterMapping<string[]>(SupportedDatabase.PostgreSql, new ProviderTypeMapping
+        var pgTextArray = new ProviderTypeMapping
         {
             DbType = DbType.Object,
             ConfigureParameter = (param, value) => { SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Array, NpgsqlNames.Text); }
-        });
+        };
+        RegisterMapping<string[]>(SupportedDatabase.PostgreSql, pgTextArray);
+        RegisterMapping<string[]>(SupportedDatabase.CockroachDb, pgTextArray);
+        RegisterMapping<string[]>(SupportedDatabase.YugabyteDb, pgTextArray);
     }
 
     private void RegisterRangeMappings()
     {
         // PostgreSQL int4range
-        RegisterMapping<Range<int>>(SupportedDatabase.PostgreSql, new ProviderTypeMapping
+        var pgIntRange = new ProviderTypeMapping
         {
             DbType = DbType.String,
             ConfigureParameter = (param, value) => { SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Int4Range); }
-        });
+        };
+        RegisterMapping<Range<int>>(SupportedDatabase.PostgreSql, pgIntRange);
+        RegisterMapping<Range<int>>(SupportedDatabase.CockroachDb, pgIntRange);
+        RegisterMapping<Range<int>>(SupportedDatabase.YugabyteDb, pgIntRange);
 
         // PostgreSQL tsrange
-        RegisterMapping<Range<DateTime>>(SupportedDatabase.PostgreSql, new ProviderTypeMapping
+        var pgTsRange = new ProviderTypeMapping
         {
             DbType = DbType.String,
             ConfigureParameter = (param, value) => { SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.TsRange); }
-        });
+        };
+        RegisterMapping<Range<DateTime>>(SupportedDatabase.PostgreSql, pgTsRange);
+        RegisterMapping<Range<DateTime>>(SupportedDatabase.CockroachDb, pgTsRange);
+        RegisterMapping<Range<DateTime>>(SupportedDatabase.YugabyteDb, pgTsRange);
     }
 
     private void RegisterNetworkMappings()
     {
         // PostgreSQL inet
-        RegisterMapping<Inet>(SupportedDatabase.PostgreSql, new ProviderTypeMapping
+        var pgInet = new ProviderTypeMapping
         {
             DbType = DbType.String,
             ConfigureParameter = (param, value) => { SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Inet); }
-        });
+        };
+        RegisterMapping<Inet>(SupportedDatabase.PostgreSql, pgInet);
+        RegisterMapping<Inet>(SupportedDatabase.CockroachDb, pgInet);
+        RegisterMapping<Inet>(SupportedDatabase.YugabyteDb, pgInet);
 
         // PostgreSQL cidr
-        RegisterMapping<Cidr>(SupportedDatabase.PostgreSql, new ProviderTypeMapping
+        var pgCidr = new ProviderTypeMapping
         {
             DbType = DbType.String,
             ConfigureParameter = (param, value) => { SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Cidr); }
-        });
+        };
+        RegisterMapping<Cidr>(SupportedDatabase.PostgreSql, pgCidr);
+        RegisterMapping<Cidr>(SupportedDatabase.CockroachDb, pgCidr);
+        RegisterMapping<Cidr>(SupportedDatabase.YugabyteDb, pgCidr);
 
         // PostgreSQL macaddr
-        RegisterMapping<MacAddress>(SupportedDatabase.PostgreSql, new ProviderTypeMapping
+        var pgMac = new ProviderTypeMapping
         {
             DbType = DbType.String,
             ConfigureParameter = (param, value) => { SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.MacAddr); }
-        });
+        };
+        RegisterMapping<MacAddress>(SupportedDatabase.PostgreSql, pgMac);
+        RegisterMapping<MacAddress>(SupportedDatabase.CockroachDb, pgMac);
+        RegisterMapping<MacAddress>(SupportedDatabase.YugabyteDb, pgMac);
     }
 
     private void RegisterTemporalMappings()
     {
         // PostgreSQL interval
-        RegisterMapping<PostgreSqlInterval>(SupportedDatabase.PostgreSql, new ProviderTypeMapping
+        var pgInterval = new ProviderTypeMapping
         {
             DbType = DbType.Object,
             ConfigureParameter = (param, value) => { SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Interval); }
-        });
+        };
+        RegisterMapping<PostgreSqlInterval>(SupportedDatabase.PostgreSql, pgInterval);
+        RegisterMapping<PostgreSqlInterval>(SupportedDatabase.CockroachDb, pgInterval);
+        RegisterMapping<PostgreSqlInterval>(SupportedDatabase.YugabyteDb, pgInterval);
 
         RegisterMapping<IntervalYearMonth>(SupportedDatabase.Oracle, new ProviderTypeMapping
         {
@@ -541,13 +570,17 @@ public class AdvancedTypeRegistry
         });
 
         // PostgreSQL bytea
-        RegisterMapping<Stream>(SupportedDatabase.PostgreSql, new ProviderTypeMapping
+        var pgStream = new ProviderTypeMapping
         {
             DbType = DbType.Binary,
             ConfigureParameter = (param, value) => { param.DbType = DbType.Binary; }
-        });
+        };
+        RegisterMapping<Stream>(SupportedDatabase.PostgreSql, pgStream);
+        RegisterMapping<Stream>(SupportedDatabase.CockroachDb, pgStream);
+        RegisterMapping<Stream>(SupportedDatabase.YugabyteDb, pgStream);
+        RegisterMapping<Stream>(SupportedDatabase.QuestDb, pgStream);
 
-        RegisterMapping<TextReader>(SupportedDatabase.PostgreSql, new ProviderTypeMapping
+        var pgTextReader = new ProviderTypeMapping
         {
             DbType = DbType.String,
             ConfigureParameter = (param, value) =>
@@ -555,7 +588,11 @@ public class AdvancedTypeRegistry
                 param.DbType = DbType.String;
                 SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Text);
             }
-        });
+        };
+        RegisterMapping<TextReader>(SupportedDatabase.PostgreSql, pgTextReader);
+        RegisterMapping<TextReader>(SupportedDatabase.CockroachDb, pgTextReader);
+        RegisterMapping<TextReader>(SupportedDatabase.YugabyteDb, pgTextReader);
+        RegisterMapping<TextReader>(SupportedDatabase.QuestDb, pgTextReader);
 
         // Oracle BLOB
         RegisterMapping<Stream>(SupportedDatabase.Oracle, new ProviderTypeMapping
@@ -586,11 +623,15 @@ public class AdvancedTypeRegistry
         });
 
         // PostgreSQL UUID
-        RegisterMapping<Guid>(SupportedDatabase.PostgreSql, new ProviderTypeMapping
+        var pgGuid = new ProviderTypeMapping
         {
             DbType = DbType.Guid,
             ConfigureParameter = (param, value) => { SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Uuid); }
-        });
+        };
+        RegisterMapping<Guid>(SupportedDatabase.PostgreSql, pgGuid);
+        RegisterMapping<Guid>(SupportedDatabase.CockroachDb, pgGuid);
+        RegisterMapping<Guid>(SupportedDatabase.YugabyteDb, pgGuid);
+        RegisterMapping<Guid>(SupportedDatabase.QuestDb, pgGuid);
     }
 
     private static void SetEnumProperty(DbParameter parameter, string propertyName, params string[] enumNames)

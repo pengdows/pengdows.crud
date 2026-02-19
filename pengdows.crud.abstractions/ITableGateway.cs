@@ -344,6 +344,38 @@ public interface ITableGateway<TEntity, TRowID>
     Task<int> DeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Builds one or more SQL DELETE statements for a list of object identities (primary keys).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Generates <c>DELETE FROM t WHERE (k1 = @p1 AND k2 = @p2) OR (k1 = @p3 AND k2 = @p4) ...</c> statements.
+    /// When the number of entities exceeds the dialect's parameter limit, the result
+    /// is automatically chunked into multiple containers.
+    /// </para>
+    /// </remarks>
+    /// <param name="entities">The entities to delete. Must not be null.</param>
+    /// <param name="context">Optional database context override for transaction scenarios.</param>
+    /// <returns>One or more SQL containers, each representing a chunk of the batch.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="entities"/> is null.</exception>
+    IReadOnlyList<ISqlContainer> BuildBatchDelete(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context = null);
+
+    /// <summary>
+    /// Executes a DELETE for all provided object identities (primary keys) and returns the total number of affected rows.
+    /// </summary>
+    /// <remarks>
+    /// Empty lists return 0. Multiple entities are chunked and executed sequentially to respect parameter limits.
+    /// </remarks>
+    /// <param name="entities">The entities to delete. Must not be null.</param>
+    /// <param name="context">Optional database context override for transaction scenarios.</param>
+    /// <returns>Total number of affected rows across all chunks.</returns>
+    Task<int> BatchDeleteAsync(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context = null);
+
+    /// <summary>
+    /// Executes a DELETE for all provided object identities with cancellation support.
+    /// </summary>
+    Task<int> BatchDeleteAsync(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Executes an UPDATE for the given object and returns the number of affected rows.
     /// Returns 0 when no changes are detected.
     /// </summary>

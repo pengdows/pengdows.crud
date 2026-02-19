@@ -342,6 +342,24 @@ public class SqlContainerCloningTests : IDisposable
         Assert.Equal(1, clonedContainer.ParameterCount);
     }
 
+    [Fact]
+    public void Clone_NewParametersDoNotCollideWithExisting()
+    {
+        // Arrange - create container with auto-named parameters
+        using var original = _sqliteContext.CreateSqlContainer("SELECT * FROM users WHERE ");
+        var p0 = original.AddParameterWithValue(DbType.Int32, 1);
+        var p1 = original.AddParameterWithValue(DbType.String, "active");
+
+        // Act - clone, then add a new parameter to the clone
+        using var clone = original.Clone();
+        var pNew = clone.AddParameterWithValue(DbType.Int32, 99);
+
+        // Assert - the new parameter name must not collide with cloned parameters
+        Assert.NotEqual(p0.ParameterName, pNew.ParameterName);
+        Assert.NotEqual(p1.ParameterName, pNew.ParameterName);
+        Assert.Equal(3, clone.ParameterCount);
+    }
+
     public void Dispose()
     {
         _sqliteContext?.Dispose();

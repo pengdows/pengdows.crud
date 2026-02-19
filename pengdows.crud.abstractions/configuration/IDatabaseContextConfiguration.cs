@@ -60,7 +60,7 @@ public interface IDatabaseContextConfiguration
     /// <summary>
     /// Metrics collection options for the associated <see cref="IDatabaseContext"/>.
     /// </summary>
-    MetricsOptions MetricsOptions { get; set; }
+    IMetricsOptions MetricsOptions { get; set; }
 
     /// <summary>
     /// Governor-driven limit for concurrent write operations.
@@ -81,11 +81,6 @@ public interface IDatabaseContextConfiguration
     /// Optional timeout for shared-connection mode locks. Null disables timeouts (wait forever).
     /// </summary>
     TimeSpan? ModeLockTimeout { get; set; }
-
-    /// <summary>
-    /// Enables or disables internal pool governor behavior.
-    /// </summary>
-    bool EnablePoolGovernor { get; set; }
 
     /// <summary>
     /// Optional value passed to the provider (Application Name / Client Info) used for telemetry/connection tagging.

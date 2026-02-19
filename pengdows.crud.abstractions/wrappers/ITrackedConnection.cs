@@ -126,5 +126,5 @@ public interface ITrackedConnection : IDbConnection
     /// <summary>
     /// Per-connection state for prepare behavior tracking
     /// </summary>
-    ConnectionLocalState LocalState { get; }
+    IConnectionLocalState LocalState { get; }
 }

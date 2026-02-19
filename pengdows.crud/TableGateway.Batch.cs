@@ -57,7 +57,7 @@ public partial class TableGateway<TEntity, TRowID>
             PrepareVersionForCreate(entity);
         }
 
-        var chunks = ChunkEntities(entities, insertableColumns.Count, ctx.MaxParameterLimit);
+        var chunks = ChunkList(entities, insertableColumns.Count, ctx.MaxParameterLimit);
         var result = new List<ISqlContainer>(chunks.Count);
 
         foreach (var chunk in chunks)
@@ -224,39 +224,6 @@ public partial class TableGateway<TEntity, TRowID>
         }
     }
 
-    private static IReadOnlyList<IReadOnlyList<TEntity>> ChunkEntities(
-        IReadOnlyList<TEntity> entities, int columnsPerRow, int maxParameterLimit)
-    {
-        if (maxParameterLimit <= 0 || columnsPerRow <= 0)
-        {
-            return new List<IReadOnlyList<TEntity>> { entities };
-        }
-
-        // 10% headroom
-        var usableParams = (int)(maxParameterLimit * 0.9);
-        var rowsPerChunk = Math.Max(1, usableParams / Math.Max(1, columnsPerRow));
-
-        if (entities.Count <= rowsPerChunk)
-        {
-            return new List<IReadOnlyList<TEntity>> { entities };
-        }
-
-        var chunks = new List<IReadOnlyList<TEntity>>();
-        for (var i = 0; i < entities.Count; i += rowsPerChunk)
-        {
-            var end = Math.Min(i + rowsPerChunk, entities.Count);
-            var chunk = new List<TEntity>(end - i);
-            for (var j = i; j < end; j++)
-            {
-                chunk.Add(entities[j]);
-            }
-
-            chunks.Add(chunk);
-        }
-
-        return chunks;
-    }
-
     private ISqlContainer BuildBatchInsertContainer(
         IReadOnlyList<TEntity> chunk,
         IReadOnlyList<IColumnInfo> insertableColumns,
@@ -381,7 +348,7 @@ public partial class TableGateway<TEntity, TRowID>
 
         var updateSetStr = updateSet.ToString();
 
-        var chunks = ChunkEntities(entities, insertableColumns.Count, ctx.MaxParameterLimit);
+        var chunks = ChunkList(entities, insertableColumns.Count, ctx.MaxParameterLimit);
         var result = new List<ISqlContainer>(chunks.Count);
 
         foreach (var chunk in chunks)
@@ -445,7 +412,7 @@ public partial class TableGateway<TEntity, TRowID>
 
         var updateSetStr = updateSet.ToString();
 
-        var chunks = ChunkEntities(entities, insertableColumns.Count, ctx.MaxParameterLimit);
+        var chunks = ChunkList(entities, insertableColumns.Count, ctx.MaxParameterLimit);
         var result = new List<ISqlContainer>(chunks.Count);
 
         foreach (var chunk in chunks)

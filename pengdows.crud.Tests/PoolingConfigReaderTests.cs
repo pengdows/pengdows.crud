@@ -26,7 +26,7 @@ public sealed class PoolingConfigReaderTests
     }
 
     [Fact]
-    public void GetEffectivePoolConfig_WhenPoolingDisabled_TreatsProviderPoolAsUnbounded()
+    public void GetEffectivePoolConfig_WhenPoolingDisabled_RetainsMaxPoolSize()
     {
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         var dialect = new PostgreSqlDialect(factory, NullLogger.Instance);
@@ -38,7 +38,7 @@ public sealed class PoolingConfigReaderTests
         Assert.Equal(PoolConfigSource.ConnectionString, cfg.Source);
         Assert.False(cfg.PoolingEnabled);
         Assert.Equal(2, cfg.MinPoolSize);
-        Assert.Null(cfg.MaxPoolSize);
+        Assert.Equal(42, cfg.MaxPoolSize);
     }
 
     [Fact]

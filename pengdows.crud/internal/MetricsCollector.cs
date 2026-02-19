@@ -30,7 +30,7 @@ namespace pengdows.crud.@internal;
 
 internal sealed class MetricsCollector
 {
-    private readonly MetricsOptions _options;
+    private readonly IMetricsOptions _options;
     private readonly MetricsCollector? _parent;
     private readonly Ewma _commandDuration = new(64);
     private readonly Ewma _connectionHold = new(64);
@@ -60,7 +60,7 @@ internal sealed class MetricsCollector
     private int _transactionsActive;
     private int _transactionsMax;
 
-    internal MetricsCollector(MetricsOptions options, MetricsCollector? parent = null)
+    internal MetricsCollector(IMetricsOptions options, MetricsCollector? parent = null)
     {
         _options = options ?? MetricsOptions.Default;
         _parent = parent;

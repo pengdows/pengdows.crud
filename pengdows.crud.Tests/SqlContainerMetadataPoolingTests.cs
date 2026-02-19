@@ -109,7 +109,7 @@ public class SqlContainerMetadataPoolingTests : IDisposable
     }
 
     [Fact]
-    public async Task ExecuteScalarAsync_WorksWithMetadata()
+    public async Task ExecuteScalarOrNullAsync_WorksWithMetadata()
     {
         // Arrange - insert test data
         using var insertCmd = _connection.CreateCommand();
@@ -121,7 +121,7 @@ public class SqlContainerMetadataPoolingTests : IDisposable
         container.AddParameterWithValue("id", DbType.Int32, 4);
 
         // Act
-        var result = await container.ExecuteScalarAsync<int>();
+        var result = await container.ExecuteScalarOrNullAsync<int>();
 
         // Assert
         Assert.Equal(42, result);
@@ -214,7 +214,7 @@ public class SqlContainerMetadataPoolingTests : IDisposable
         container.AddParameterWithValue("param", dbType, value);
 
         // Act
-        var result = await container.ExecuteScalarAsync<object>();
+        var result = await container.ExecuteScalarOrNullAsync<object>();
 
         // Assert
         Assert.NotNull(result);

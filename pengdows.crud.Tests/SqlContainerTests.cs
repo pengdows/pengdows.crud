@@ -286,7 +286,7 @@ public class SqlContainerTests : SqlLiteContextTestBase, IDisposable
     }
 
     [Fact]
-    public async Task ExecuteScalarAsync_ReturnsValue_WhenRowExists()
+    public async Task ExecuteScalarOrNullAsync_ReturnsValue_WhenRowExists()
     {
         var qp = Context.QuotePrefix;
         var qs = Context.QuoteSuffix;
@@ -300,13 +300,13 @@ public class SqlContainerTests : SqlLiteContextTestBase, IDisposable
         container.Clear();
         container.Query.AppendFormat("SELECT {0}Name{1} FROM {0}Test{1} WHERE {0}Id{1} = 1", qp, qs);
 
-        var result = await container.ExecuteScalarAsync<string>();
+        var result = await container.ExecuteScalarOrNullAsync<string>();
 
         Assert.Equal("TestName", result);
     }
 
     [Fact]
-    public async Task ExecuteScalarAsync_ReturnsNull_WhenNoRowsForNullableType()
+    public async Task ExecuteScalarOrNullAsync_ReturnsNull_WhenNoRowsForNullableType()
     {
         var qp = Context.QuotePrefix;
         var qs = Context.QuoteSuffix;
@@ -315,7 +315,7 @@ public class SqlContainerTests : SqlLiteContextTestBase, IDisposable
 
         container.Query.AppendFormat("SELECT {0}Name{1} FROM {0}Test{1} WHERE {0}Id{1} = 1", qp, qs);
 
-        var result = await container.ExecuteScalarAsync<string>();
+        var result = await container.ExecuteScalarOrNullAsync<string>();
         Assert.Null(result);
         AssertProperNumberOfConnectionsForMode();
     }
@@ -340,7 +340,7 @@ public class SqlContainerTests : SqlLiteContextTestBase, IDisposable
     }
 
     [Fact]
-    public async Task ExecuteScalarAsync_ValueTaskCanBeAwaited()
+    public async Task ExecuteScalarOrNullAsync_ValueTaskCanBeAwaited()
     {
         var qp = Context.QuotePrefix;
         var qs = Context.QuoteSuffix;
@@ -354,14 +354,14 @@ public class SqlContainerTests : SqlLiteContextTestBase, IDisposable
         container.Clear();
         container.Query.AppendFormat("SELECT {0}Name{1} FROM {0}Test{1} WHERE {0}Id{1} = 1", qp, qs);
 
-        ValueTask<string?> valueTask = container.ExecuteScalarAsync<string>();
+        ValueTask<string?> valueTask = container.ExecuteScalarOrNullAsync<string>();
 
         var result = await valueTask;
         Assert.Equal("TestName", result);
     }
 
     [Fact]
-    public async Task ExecuteScalarAsync_ThrowsException_WhenNoRowsForNonNullableType()
+    public async Task ExecuteScalarRequiredAsync_ThrowsException_WhenNoRowsForNonNullableType()
     {
         var qp = Context.QuotePrefix;
         var qs = Context.QuoteSuffix;
@@ -370,7 +370,22 @@ public class SqlContainerTests : SqlLiteContextTestBase, IDisposable
 
         container.Query.AppendFormat("SELECT {0}Id{1} FROM {0}Test{1} WHERE {0}Id{1} = -1", qp, qs);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(async () => await container.ExecuteScalarAsync<int>());
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await container.ExecuteScalarRequiredAsync<int>());
+        AssertProperNumberOfConnectionsForMode();
+    }
+
+    [Fact]
+    public async Task ExecuteScalarOrNullAsync_ReturnsDefault_WhenNoRows()
+    {
+        var qp = Context.QuotePrefix;
+        var qs = Context.QuoteSuffix;
+        await BuildTestTable();
+        var container = Context.CreateSqlContainer();
+
+        container.Query.AppendFormat("SELECT {0}Id{1} FROM {0}Test{1} WHERE {0}Id{1} = -1", qp, qs);
+
+        var result = await container.ExecuteScalarOrNullAsync<int>();
+        Assert.Equal(default, result);
         AssertProperNumberOfConnectionsForMode();
     }
 

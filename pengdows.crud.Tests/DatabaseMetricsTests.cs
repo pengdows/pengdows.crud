@@ -35,7 +35,7 @@ public class DatabaseMetricsTests
     }
 
     [Fact]
-    public async Task ExecuteScalarAsync_TimeoutIsTrackedAsFailure()
+    public async Task ExecuteScalarOrNullAsync_TimeoutIsTrackedAsFailure()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
 
@@ -56,7 +56,7 @@ public class DatabaseMetricsTests
 
         var container = context.CreateSqlContainer("SELECT 1");
 
-        await Assert.ThrowsAsync<TimeoutException>(async () => await container.ExecuteScalarAsync<int>());
+        await Assert.ThrowsAsync<TimeoutException>(async () => await container.ExecuteScalarOrNullAsync<int>());
 
         var metrics = context.Metrics;
         Assert.Equal(1, metrics.CommandsFailed);
@@ -184,7 +184,7 @@ public class DatabaseMetricsTests
     }
 
     [Fact]
-    public async Task ExecuteScalarAsync_WithWriteExecutionType_UsesWriteRoleMetrics()
+    public async Task ExecuteScalarOrNullAsync_WithWriteExecutionType_UsesWriteRoleMetrics()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var connection = new fakeDbConnection();
@@ -209,7 +209,7 @@ public class DatabaseMetricsTests
         var before = context.Metrics;
         var container = context.CreateSqlContainer("SELECT value FROM data");
 
-        var result = await container.ExecuteScalarAsync<int>(ExecutionType.Write);
+        var result = await container.ExecuteScalarOrNullAsync<int>(ExecutionType.Write);
 
         Assert.Equal(1, result);
         var after = context.Metrics;
@@ -218,20 +218,33 @@ public class DatabaseMetricsTests
     }
 
     [Fact]
-    public async Task ExecuteScalarWriteAsync_UsesWriteRoleMetrics()
+    public async Task ExecuteScalarRequiredAsync_UsesWriteRoleMetrics()
     {
+        var connection = new fakeDbConnection();
+        connection.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { { "id", 42 } }
+        });
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        factory.Connections.Add(connection);
         var config = new DatabaseContextConfiguration
         {
-            ConnectionString = "Data Source=:memory:",
-            EnableMetrics = true
+            ConnectionString = "Data Source=:memory:;EmulatedProduct=Sqlite",
+            EnableMetrics = true,
+            DbMode = DbMode.SingleConnection
         };
         await using var context = new DatabaseContext(config, factory);
+
+        // Initialization probes consume queued results, so re-prime the connection for the actual command.
+        connection.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { { "id", 42 } }
+        });
 
         var before = context.Metrics;
         var container = context.CreateSqlContainer("INSERT INTO data(value) VALUES (1) RETURNING id");
 
-        var result = await container.ExecuteScalarWriteAsync<int>();
+        var result = await container.ExecuteScalarRequiredAsync<int>(ExecutionType.Write);
 
         Assert.Equal(42, result);
         var after = context.Metrics;
@@ -317,7 +330,7 @@ public class DatabaseMetricsTests
         };
 
         var container = context.CreateSqlContainer("SELECT 1");
-        var value = await container.ExecuteScalarAsync<int>();
+        var value = await container.ExecuteScalarOrNullAsync<int>();
         Assert.Equal(1, value);
 
         var snapshot = await signal.Task.WaitAsync(TimeSpan.FromSeconds(1));
@@ -358,7 +371,7 @@ public class DatabaseMetricsTests
         context.MetricsUpdated -= handler;
 
         var container = context.CreateSqlContainer("SELECT 1");
-        var value = await container.ExecuteScalarAsync<int>();
+        var value = await container.ExecuteScalarOrNullAsync<int>();
         Assert.Equal(1, value);
 
         Assert.False(invoked);

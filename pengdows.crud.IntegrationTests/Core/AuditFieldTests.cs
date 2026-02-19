@@ -332,7 +332,7 @@ WHERE lower(trim(rdb$relation_name)) = @name
 
         await using var container = context.CreateSqlContainer(query);
         container.AddParameterWithValue("name", DbType.String, "audited_entity");
-        var value = await container.ExecuteScalarAsync<object>();
+        var value = await container.ExecuteScalarOrNullAsync<object>();
         return value != null && !(value is DBNull);
     }
 }

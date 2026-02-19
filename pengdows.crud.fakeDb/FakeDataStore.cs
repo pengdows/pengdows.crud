@@ -108,6 +108,8 @@ public class FakeDataStore
         return null;
     }
 
+    public int LastInsertId => _lastInsertId;
+
     public IEnumerable<Dictionary<string, object?>> ExecuteReader(string commandText,
         DbParameterCollection? parameters = null)
     {
@@ -118,10 +120,25 @@ public class FakeDataStore
 
         var sql = commandText.Trim().ToUpperInvariant();
 
+        // Handle last-insert-id functions (SQLite, MySQL, etc.)
+        if (sql.Contains("LAST_INSERT_ROWID") || sql.Contains("LAST_INSERT_ID") ||
+            sql.Contains("SCOPE_IDENTITY") || sql.Contains("LASTVAL") ||
+            sql.Contains("@@IDENTITY"))
+        {
+            return [new Dictionary<string, object?> { ["id"] = (object?)_lastInsertId }];
+        }
+
         // Handle SELECT queries
         if (sql.StartsWith("SELECT"))
         {
             return HandleSelect(commandText, parameters);
+        }
+
+        // Handle INSERT ... RETURNING: execute the INSERT and return the generated ID
+        if (sql.StartsWith("INSERT") && sql.Contains("RETURNING"))
+        {
+            HandleInsert(commandText, parameters);
+            return [new Dictionary<string, object?> { ["id"] = (object?)_lastInsertId }];
         }
 
         return Enumerable.Empty<Dictionary<string, object?>>();

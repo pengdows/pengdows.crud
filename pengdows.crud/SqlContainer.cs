@@ -9,7 +9,7 @@
 // - Key features:
 //   * Query property (SqlQueryBuilder) for building SQL dynamically
 //   * AddParameterWithValue/CreateDbParameter for safe parameterization
-//   * ExecuteNonQueryAsync/ExecuteScalarAsync/ExecuteReaderAsync for execution
+//   * ExecuteNonQueryAsync/ExecuteScalarRequiredAsync/ExecuteScalarOrNullAsync/TryExecuteScalarAsync/ExecuteReaderAsync
 //   * WrapObjectName for dialect-specific identifier quoting
 //   * MakeParameterName for dialect-specific parameter naming (@p, :p, ?)
 // - Manages parameter ordering for positional parameter databases (Oracle, ODBC).
@@ -70,7 +70,7 @@ namespace pengdows.crud;
 /// </para>
 /// <list type="bullet">
 /// <item><description><see cref="ExecuteNonQueryAsync"/> - INSERT, UPDATE, DELETE returning row count</description></item>
-/// <item><description><see cref="ExecuteScalarAsync{T}"/> - Single value queries (COUNT, MAX, etc.)</description></item>
+/// <item><description><see cref="ExecuteScalarRequiredAsync{T}"/>, <see cref="ExecuteScalarOrNullAsync{T}"/>, <see cref="TryExecuteScalarAsync{T}"/> - Single value queries (COUNT, MAX, etc.)</description></item>
 /// <item><description><see cref="ExecuteReaderAsync"/> - Multi-row result sets</description></item>
 /// </list>
 /// <para>
@@ -252,7 +252,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         return new SqlContainer(context, dialect, query, logger);
     }
 
-    public SqlQueryBuilder Query => _query;
+    public ISqlQueryBuilder Query => _query;
 
     public int ParameterCount => _parameters.Count;
 
@@ -503,19 +503,22 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             }
         }
 
+        // Allow dialect to transform value (e.g. DateTime to long for QuestDB)
+        var preparedValue = _dialect.PrepareParameterValue(newValue, parameter.DbType);
+
         // If switching to an array value on providers that support set-valued parameters
         // (e.g., PostgreSQL ANY(@p)), coerce DbType to Object so the provider
         // can infer the correct array type during preparation.
-        if (newValue is Array && _dialect.SupportsSetValuedParameters)
+        if (preparedValue is Array && _dialect.SupportsSetValuedParameters)
         {
             parameter.DbType = DbType.Object;
         }
 
-        parameter.Value = newValue;
+        parameter.Value = preparedValue ?? DBNull.Value;
 
         // Update Size for string parameters to match the new value length,
         // preventing truncation when cloned templates had shorter initial values.
-        if (newValue is string str && parameter.Size > 0)
+        if (preparedValue is string str && parameter.Size > 0)
         {
             parameter.Size = Math.Max(str.Length, 1);
         }
@@ -1021,127 +1024,151 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }
     }
 
-    public ValueTask<T?> ExecuteScalarAsync<T>(CommandType commandType = CommandType.Text)
+    // ── ExecuteScalarRequiredAsync ─────────────────────────────────────────────
+    // Throws if no rows. Throws if null/DBNull and T is a non-nullable value type.
+
+    public async ValueTask<T> ExecuteScalarRequiredAsync<T>(CommandType commandType = CommandType.Text)
     {
-        return ExecuteScalarAsync<T>(ExecutionType.Read, commandType, CancellationToken.None);
+        return await ExecuteScalarRequiredAsync<T>(ExecutionType.Read, commandType, CancellationToken.None)
+            .ConfigureAwait(false);
     }
 
-    public ValueTask<T?> ExecuteScalarAsync<T>(CommandType commandType, CancellationToken cancellationToken)
-    {
-        return ExecuteScalarAsync<T>(ExecutionType.Read, commandType, cancellationToken);
-    }
-
-    public ValueTask<T?> ExecuteScalarAsync<T>(ExecutionType executionType, CommandType commandType = CommandType.Text)
-    {
-        return ExecuteScalarAsync<T>(executionType, commandType, CancellationToken.None);
-    }
-
-    public async ValueTask<T?> ExecuteScalarAsync<T>(ExecutionType executionType, CommandType commandType,
+    public async ValueTask<T> ExecuteScalarRequiredAsync<T>(CommandType commandType,
         CancellationToken cancellationToken)
     {
-        await using var reader = await ExecuteReaderAsync(executionType, commandType, cancellationToken)
+        return await ExecuteScalarRequiredAsync<T>(ExecutionType.Read, commandType, cancellationToken)
             .ConfigureAwait(false);
-        if (await reader.ReadAsync().ConfigureAwait(false))
-        {
-            var value = reader.GetValue(0); // always returns object
-            if (typeof(T) == typeof(object))
-            {
-                return (T?)value;
-            }
-
-            var targetType = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
-            return (T?)TypeCoercionHelper.Coerce(value, reader.GetFieldType(0), targetType, DefaultCoercionOptions);
-        }
-
-        // Return default for nullable types, throw for non-nullable types (following ADO.NET ExecuteScalar behavior)
-        var isNullable = !typeof(T).IsValueType || Nullable.GetUnderlyingType(typeof(T)) != null;
-        if (isNullable)
-        {
-            return default;
-        }
-
-        throw new InvalidOperationException("ExecuteScalarAsync expected at least one row but found none.");
     }
 
-    // Write-path scalar execution (e.g., INSERT ... RETURNING / OUTPUT)
-    public ValueTask<T?> ExecuteScalarWriteAsync<T>(CommandType commandType = CommandType.Text)
+    public async ValueTask<T> ExecuteScalarRequiredAsync<T>(ExecutionType executionType,
+        CommandType commandType = CommandType.Text)
     {
-        return ExecuteScalarWriteAsync<T>(commandType, CancellationToken.None);
+        return await ExecuteScalarRequiredAsync<T>(executionType, commandType, CancellationToken.None)
+            .ConfigureAwait(false);
     }
 
-    public async ValueTask<T?> ExecuteScalarWriteAsync<T>(CommandType commandType, CancellationToken cancellationToken)
+    public async ValueTask<T> ExecuteScalarRequiredAsync<T>(ExecutionType executionType, CommandType commandType,
+        CancellationToken cancellationToken)
     {
-        // Check for explicit read-only mode
-        if (_context is DatabaseContext dbContext && dbContext.ReadWriteMode == ReadWriteMode.ReadOnly)
-        {
-            throw new NotSupportedException("Write operations are not supported in read-only mode.");
-        }
+        var result = await ExecuteScalarCore<T>(executionType, commandType, cancellationToken)
+            .ConfigureAwait(false);
 
-        _context.AssertIsWriteConnection();
-        ITrackedConnection? conn = null;
-        DbCommand? cmd = null;
-        var metrics = GetMetricsCollector(ExecutionType.Write);
-        var startTimestamp = metrics?.CommandStarted(_parameters.Count) ?? 0;
-        try
+        switch (result.Status)
         {
-            await using var contextLocker = _context.GetLock();
-            await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
-            var isTransaction = _context is ITransactionContext;
-            var isShared = ShouldUseSharedConnection(_context, ExecutionType.Write, isTransaction);
-            conn = GetConnection(ExecutionType.Write, isShared);
-            // Note: SingleWriter mode now uses Standard lifecycle with governor policy.
-            // The governor (WriteSlots=1) ensures only one write at a time.
-            await using var connectionLocker = conn.GetLock();
-            await connectionLocker.LockAsync(cancellationToken).ConfigureAwait(false);
-            cmd = await PrepareAndCreateCommandAsync(conn, commandType, ExecutionType.Write, cancellationToken)
-                .ConfigureAwait(false);
+            case ScalarStatus.None:
+                throw new InvalidOperationException("Query returned no rows.");
 
-            var result = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-            if (result is null || result is DBNull)
+            case ScalarStatus.Null:
             {
                 var isNullable = !typeof(T).IsValueType || Nullable.GetUnderlyingType(typeof(T)) != null;
                 if (!isNullable)
                 {
-                    metrics?.CommandFailed(startTimestamp);
-                    throw new InvalidOperationException("ExecuteScalarWriteAsync expected a value but found none.");
+                    throw new InvalidOperationException(
+                        $"Query returned a null value but the target type {typeof(T).Name} is non-nullable.");
                 }
 
-                metrics?.CommandSucceeded(startTimestamp, 0);
-                return default;
+                return default!;
             }
 
-            if (typeof(T) == typeof(object))
-            {
-                metrics?.RecordRowsRead(1);
-                metrics?.CommandSucceeded(startTimestamp, 0);
-                return (T?)result;
-            }
+            case ScalarStatus.Value:
+                return result.Value!;
 
-            var targetType = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
-            var coerced = (T?)TypeCoercionHelper.Coerce(result, result.GetType(), targetType, DefaultCoercionOptions);
-            metrics?.RecordRowsRead(coerced is null ? 0 : 1);
-            metrics?.CommandSucceeded(startTimestamp, 0);
-            return coerced;
+            default:
+                throw new InvalidOperationException($"Unexpected ScalarStatus: {result.Status}");
         }
-        catch (OperationCanceledException)
+    }
+
+    // ── ExecuteScalarOrNullAsync ─────────────────────────────────────────────
+    // Returns null for no rows or DBNull. Never throws for data absence.
+
+    public ValueTask<T?> ExecuteScalarOrNullAsync<T>(CommandType commandType = CommandType.Text)
+    {
+        return ExecuteScalarOrNullAsync<T>(ExecutionType.Read, commandType, CancellationToken.None);
+    }
+
+    public ValueTask<T?> ExecuteScalarOrNullAsync<T>(CommandType commandType, CancellationToken cancellationToken)
+    {
+        return ExecuteScalarOrNullAsync<T>(ExecutionType.Read, commandType, cancellationToken);
+    }
+
+    public ValueTask<T?> ExecuteScalarOrNullAsync<T>(ExecutionType executionType,
+        CommandType commandType = CommandType.Text)
+    {
+        return ExecuteScalarOrNullAsync<T>(executionType, commandType, CancellationToken.None);
+    }
+
+    public async ValueTask<T?> ExecuteScalarOrNullAsync<T>(ExecutionType executionType, CommandType commandType,
+        CancellationToken cancellationToken)
+    {
+        var result = await ExecuteScalarCore<T>(executionType, commandType, cancellationToken)
+            .ConfigureAwait(false);
+        return result.Value;
+    }
+
+    // ── TryExecuteScalarAsync ───────────────────────────────────────────────
+    // Returns ScalarResult<T> with unambiguous Status. Never throws for data absence.
+
+    public ValueTask<ScalarResult<T>> TryExecuteScalarAsync<T>(CommandType commandType = CommandType.Text)
+    {
+        return TryExecuteScalarAsync<T>(ExecutionType.Read, commandType, CancellationToken.None);
+    }
+
+    public ValueTask<ScalarResult<T>> TryExecuteScalarAsync<T>(CommandType commandType,
+        CancellationToken cancellationToken)
+    {
+        return TryExecuteScalarAsync<T>(ExecutionType.Read, commandType, cancellationToken);
+    }
+
+    public ValueTask<ScalarResult<T>> TryExecuteScalarAsync<T>(ExecutionType executionType,
+        CommandType commandType = CommandType.Text)
+    {
+        return TryExecuteScalarAsync<T>(executionType, commandType, CancellationToken.None);
+    }
+
+    public ValueTask<ScalarResult<T>> TryExecuteScalarAsync<T>(ExecutionType executionType, CommandType commandType,
+        CancellationToken cancellationToken)
+    {
+        return ExecuteScalarCore<T>(executionType, commandType, cancellationToken);
+    }
+
+    // ── Core scalar implementation ──────────────────────────────────────────
+    // Reader-based: uses ExecuteReaderAsync, reads exactly one row/one column.
+    // Never calls provider ExecuteScalar (avoids TimesTen/ODBC quirks).
+
+    private async ValueTask<ScalarResult<T>> ExecuteScalarCore<T>(
+        ExecutionType executionType, CommandType commandType, CancellationToken cancellationToken)
+    {
+        if (executionType == ExecutionType.Write &&
+            _context is DatabaseContext dbCtx &&
+            dbCtx.ReadWriteMode == ReadWriteMode.ReadOnly)
         {
-            metrics?.CommandCancelled(startTimestamp);
-            throw;
+            throw new NotSupportedException("Write operations are not supported in read-only mode.");
         }
-        catch (Exception ex) when (IsTimeout(ex))
+
+        await using var reader = await ExecuteReaderAsync(executionType, commandType, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!await reader.ReadAsync().ConfigureAwait(false))
         {
-            metrics?.CommandTimedOut(startTimestamp);
-            throw;
+            return new ScalarResult<T>(ScalarStatus.None, default);
         }
-        catch
+
+        var value = reader.GetValue(0);
+
+        if (Utils.IsNullOrDbNull(value))
         {
-            metrics?.CommandFailed(startTimestamp);
-            throw;
+            return new ScalarResult<T>(ScalarStatus.Null, default);
         }
-        finally
+
+        if (typeof(T) == typeof(object))
         {
-            Cleanup(cmd, conn, ExecutionType.Write);
+            return new ScalarResult<T>(ScalarStatus.Value, (T)value);
         }
+
+        var targetType = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
+        var coerced = (T?)TypeCoercionHelper.Coerce(value, reader.GetFieldType(0), targetType,
+            DefaultCoercionOptions);
+        return new ScalarResult<T>(ScalarStatus.Value, coerced);
     }
 
     public ValueTask<ITrackedReader> ExecuteReaderAsync(CommandType commandType = CommandType.Text)
@@ -1669,6 +1696,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }
 
         clone._outputParameterCount = _outputParameterCount;
+        clone._nextParameterId = _nextParameterId;
 
         return clone;
     }
