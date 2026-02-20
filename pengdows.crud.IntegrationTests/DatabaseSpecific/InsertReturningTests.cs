@@ -38,8 +38,7 @@ public class InsertReturningTests : DatabaseTestBase
     private static readonly SupportedDatabase[] NonReturningProviders =
     {
         SupportedDatabase.MySql,
-        SupportedDatabase.TiDb,
-        SupportedDatabase.QuestDb
+        SupportedDatabase.TiDb
     };
 
     public InsertReturningTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture)
@@ -195,11 +194,6 @@ CREATE TABLE {table} (
 CREATE TABLE {table} (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name VARCHAR(255) NOT NULL
-);",
-            SupportedDatabase.QuestDb => $@"
-CREATE TABLE {table} (
-    id LONG,
-    name STRING
 );",
             _ => throw new NotSupportedException($"Provider {provider} is not supported by this test")
         };

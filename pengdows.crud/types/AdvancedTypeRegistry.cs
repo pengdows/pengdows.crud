@@ -323,6 +323,9 @@ public class AdvancedTypeRegistry
 
         // Identity/Concurrency types
         RegisterIdentityMappings();
+
+        // Snowflake-specific types
+        RegisterSnowflakeMappings();
     }
 
     private void RegisterDefaultConverters()
@@ -578,7 +581,6 @@ public class AdvancedTypeRegistry
         RegisterMapping<Stream>(SupportedDatabase.PostgreSql, pgStream);
         RegisterMapping<Stream>(SupportedDatabase.CockroachDb, pgStream);
         RegisterMapping<Stream>(SupportedDatabase.YugabyteDb, pgStream);
-        RegisterMapping<Stream>(SupportedDatabase.QuestDb, pgStream);
 
         var pgTextReader = new ProviderTypeMapping
         {
@@ -592,7 +594,6 @@ public class AdvancedTypeRegistry
         RegisterMapping<TextReader>(SupportedDatabase.PostgreSql, pgTextReader);
         RegisterMapping<TextReader>(SupportedDatabase.CockroachDb, pgTextReader);
         RegisterMapping<TextReader>(SupportedDatabase.YugabyteDb, pgTextReader);
-        RegisterMapping<TextReader>(SupportedDatabase.QuestDb, pgTextReader);
 
         // Oracle BLOB
         RegisterMapping<Stream>(SupportedDatabase.Oracle, new ProviderTypeMapping
@@ -631,7 +632,31 @@ public class AdvancedTypeRegistry
         RegisterMapping<Guid>(SupportedDatabase.PostgreSql, pgGuid);
         RegisterMapping<Guid>(SupportedDatabase.CockroachDb, pgGuid);
         RegisterMapping<Guid>(SupportedDatabase.YugabyteDb, pgGuid);
-        RegisterMapping<Guid>(SupportedDatabase.QuestDb, pgGuid);
+    }
+
+    private void RegisterSnowflakeMappings()
+    {
+        // Snowflake BINARY / VARBINARY columns via Stream
+        RegisterMapping<Stream>(SupportedDatabase.Snowflake, new ProviderTypeMapping
+        {
+            DbType = DbType.Binary,
+            ConfigureParameter = (param, value) => { param.DbType = DbType.Binary; }
+        });
+
+        // Snowflake stores GUIDs as VARCHAR(36) — use plain string with fixed size
+        RegisterMapping<Guid>(SupportedDatabase.Snowflake, new ProviderTypeMapping
+        {
+            DbType = DbType.String,
+            ConfigureParameter = (param, value) =>
+            {
+                param.DbType = DbType.String;
+                param.Size = 36;
+                if (value is Guid guid)
+                {
+                    param.Value = guid.ToString("D");
+                }
+            }
+        });
     }
 
     private static void SetEnumProperty(DbParameter parameter, string propertyName, params string[] enumNames)

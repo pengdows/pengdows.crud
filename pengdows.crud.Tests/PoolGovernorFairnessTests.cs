@@ -9,8 +9,9 @@ namespace pengdows.crud.Tests;
 
 /// <summary>
 /// Tests for PoolGovernor turnstile fairness mechanism.
-/// The turnstile ensures writer preference - when a writer is waiting,
-/// new readers cannot start until the writer completes.
+/// Writers hold the turnstile for the duration of their permit.  New readers
+/// are gated at the turnstile while a writer slot is occupied, reducing — but
+/// not eliminating — writer starvation under sustained reader pressure.
 /// </summary>
 public sealed class PoolGovernorFairnessTests
 {

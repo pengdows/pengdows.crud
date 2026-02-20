@@ -39,7 +39,7 @@ internal static class DatabaseDetectionService
         (SupportedDatabase.TiDb, new[] { "tidb" }),
         (SupportedDatabase.CockroachDb, new[] { "cockroach" }),
         (SupportedDatabase.YugabyteDb, new[] { "yugabyte" }),
-        (SupportedDatabase.QuestDb, new[] { "questdb" }),
+        (SupportedDatabase.Snowflake, new[] { "snowflake" }),
         (SupportedDatabase.PostgreSql, new[] { "postgres", "npgsql" }),
         (SupportedDatabase.Oracle, new[] { "oracle" }),
         (SupportedDatabase.Sqlite, new[] { "sqlite" }),
@@ -52,14 +52,14 @@ internal static class DatabaseDetectionService
         (SupportedDatabase.SqlServer, new[] { "sqlserver", "system.data.sqlclient", "microsoft.data.sqlclient" }),
         (SupportedDatabase.PostgreSql, new[] { "npgsql", "postgres" }),
         (SupportedDatabase.YugabyteDb, new[] { "yugabyte" }),
-        (SupportedDatabase.QuestDb, new[] { "questdb" }),
         (SupportedDatabase.MySql, new[] { "mysql" }),
         (SupportedDatabase.MariaDb, new[] { "mariadb" }),
         (SupportedDatabase.TiDb, new[] { "tidb" }),
         (SupportedDatabase.Sqlite, new[] { "sqlite" }),
         (SupportedDatabase.Oracle, new[] { "oracle" }),
         (SupportedDatabase.Firebird, new[] { "firebird" }),
-        (SupportedDatabase.DuckDB, new[] { "duckdb" })
+        (SupportedDatabase.DuckDB, new[] { "duckdb" }),
+        (SupportedDatabase.Snowflake, new[] { "snowflake", "net.snowflake" })
     };
 
     /// <summary>
@@ -171,7 +171,6 @@ internal static class DatabaseDetectionService
             {
                 if (serverVersion.Contains("TiDB", StringComparison.OrdinalIgnoreCase)) return SupportedDatabase.TiDb;
                 if (serverVersion.Contains("-YB-", StringComparison.OrdinalIgnoreCase) || serverVersion.Contains("Yugabyte", StringComparison.OrdinalIgnoreCase)) return SupportedDatabase.YugabyteDb;
-                if (serverVersion.Contains("QuestDB", StringComparison.OrdinalIgnoreCase)) return SupportedDatabase.QuestDb;
                 if (serverVersion.Contains("Cockroach", StringComparison.OrdinalIgnoreCase)) return SupportedDatabase.CockroachDb;
             }
 
@@ -182,7 +181,6 @@ internal static class DatabaseDetectionService
             
             if (version.Contains("TiDB", StringComparison.OrdinalIgnoreCase)) return SupportedDatabase.TiDb;
             if (version.Contains("-YB-", StringComparison.OrdinalIgnoreCase) || version.Contains("Yugabyte", StringComparison.OrdinalIgnoreCase)) return SupportedDatabase.YugabyteDb;
-            if (version.Contains("QuestDB", StringComparison.OrdinalIgnoreCase)) return SupportedDatabase.QuestDb;
             if (version.Contains("Cockroach", StringComparison.OrdinalIgnoreCase)) return SupportedDatabase.CockroachDb;
         }
         catch

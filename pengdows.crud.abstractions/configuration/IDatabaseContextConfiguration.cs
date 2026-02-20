@@ -63,23 +63,78 @@ public interface IDatabaseContextConfiguration
     IMetricsOptions MetricsOptions { get; set; }
 
     /// <summary>
-    /// Governor-driven limit for concurrent write operations.
+    /// Maximum number of concurrent write operations admitted by the connection governor.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>This is NOT the ADO.NET <c>Max Pool Size</c>.</b> It controls how many concurrent
+    /// write operations the library's admission governor allows at once. ADO.NET pooling is
+    /// configured separately via the connection string (e.g., <c>Max Pool Size=N</c>).
+    /// </para>
+    /// <para>
+    /// When <c>null</c> (the default), the governor defaults to the ADO.NET <c>Max Pool Size</c>
+    /// parsed from the connection string using the dialect's pool-size key, or the dialect's
+    /// built-in default if that key is absent.
+    /// </para>
+    /// <para>
+    /// Setting this lower than the ADO.NET pool size limits library-level concurrency.
+    /// Setting it higher has no additional effect — ADO.NET becomes the bottleneck.
+    /// For predictable behavior, align this value with your ADO.NET <c>Max Pool Size</c>.
+    /// </para>
+    /// </remarks>
     int? MaxConcurrentWrites { get; set; }
 
     /// <summary>
-    /// Governor-driven limit for concurrent read operations.
+    /// Maximum number of concurrent read operations admitted by the connection governor.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>This is NOT the ADO.NET <c>Max Pool Size</c>.</b> It controls how many concurrent
+    /// read operations the library's admission governor allows at once. ADO.NET pooling is
+    /// configured separately via the connection string (e.g., <c>Max Pool Size=N</c>).
+    /// </para>
+    /// <para>
+    /// When <c>null</c> (the default), the governor defaults to the ADO.NET <c>Max Pool Size</c>
+    /// parsed from the connection string using the dialect's pool-size key, or the dialect's
+    /// built-in default if that key is absent.
+    /// </para>
+    /// <para>
+    /// Setting this lower than the ADO.NET pool size limits library-level concurrency.
+    /// Setting it higher has no additional effect — ADO.NET becomes the bottleneck.
+    /// For predictable behavior, align this value with your ADO.NET <c>Max Pool Size</c>.
+    /// </para>
+    /// </remarks>
     int? MaxConcurrentReads { get; set; }
 
     /// <summary>
-    /// Timeout for internal pool permit acquisition. Should be lower than provider connection timeout.
+    /// How long to wait for a governor permit before throwing <c>PoolSaturatedException</c>.
     /// </summary>
+    /// <remarks>
+    /// Should be set lower than the ADO.NET connection timeout so the library surfaces a
+    /// meaningful error before the driver does.
+    /// </remarks>
     TimeSpan PoolAcquireTimeout { get; set; }
 
     /// <summary>
-    /// Optional timeout for shared-connection mode locks. Null disables timeouts (wait forever).
+    /// Timeout for internal mode locks used in <see cref="enums.DbMode.SingleWriter"/> and
+    /// <see cref="enums.DbMode.SingleConnection"/> modes.
+    /// <c>null</c> means wait indefinitely.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This timeout governs a different bottleneck than <see cref="PoolAcquireTimeout"/>:
+    /// <list type="bullet">
+    ///   <item><see cref="PoolAcquireTimeout"/> — waiting for a governor permit (pool admission, default 5 s)</item>
+    ///   <item><see cref="ModeLockTimeout"/> — waiting for a shared-connection write lock (default 30 s)</item>
+    /// </list>
+    /// </para>
+    /// <para>
+    /// Mode locks guard long-running transactions, which is why the default (30 s) is higher than
+    /// the governor timeout (5 s). <c>null</c> means wait indefinitely — appropriate when you prefer
+    /// to block rather than abort long transactions. Set both timeouts explicitly if you want
+    /// consistent failure behavior across all wait surfaces.
+    /// </para>
+    /// </remarks>
     TimeSpan? ModeLockTimeout { get; set; }
 
     /// <summary>
@@ -88,7 +143,16 @@ public interface IDatabaseContextConfiguration
     string ApplicationName { get; set; }
 
     /// <summary>
-    /// When true, enables the writer-preference turnstile during SingleWriter mode.
+    /// When true, enables the writer-preference turnstile in <see cref="enums.DbMode.SingleWriter"/> mode.
     /// </summary>
-    bool EnableWriterPreference { get; set; }
+    /// <remarks>
+    /// <b>This setting has no effect in any mode other than <see cref="enums.DbMode.SingleWriter"/>.</b>
+    /// <para>
+    /// In SingleWriter mode the governor limits concurrent writes to one. When contention occurs
+    /// (multiple callers racing for the single write slot), the turnstile gives the waiting writer
+    /// priority over incoming readers by blocking new read attempts until the write slot is acquired.
+    /// This reduces — but does not eliminate — writer starvation under sustained read pressure.
+    /// </para>
+    /// </remarks>
+    bool EnableSingleWriterFairness { get; set; }
 }

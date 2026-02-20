@@ -108,10 +108,6 @@ public class MagicStringRegressionTests
     {
         var d = CreateOracleDialect();
         using var ctx = CreateContext(SupportedDatabase.Oracle);
-#pragma warning disable CS0618
-        var obsolete = d.GetConnectionSessionSettings();
-#pragma warning restore CS0618
-        Assert.Equal(d.GetConnectionSessionSettings(ctx, readOnly: false), obsolete);
     }
 
     // ── Firebird dialect SQL pins ─────────────────────────────────────────
@@ -140,10 +136,6 @@ public class MagicStringRegressionTests
     {
         var d = CreateFirebirdDialect();
         using var ctx = CreateContext(SupportedDatabase.Firebird);
-#pragma warning disable CS0618
-        var obsolete = d.GetConnectionSessionSettings();
-#pragma warning restore CS0618
-        Assert.Equal(d.GetConnectionSessionSettings(ctx, readOnly: false), obsolete);
     }
 
     // ── PostgreSQL read-only pins ─────────────────────────────────────────

@@ -140,10 +140,6 @@ public sealed class IsolationResolver : IIsolationResolver
                 IsolationLevel.RepeatableRead,
                 IsolationLevel.Serializable
             },
-            SupportedDatabase.QuestDb => new HashSet<IsolationLevel>
-            {
-                IsolationLevel.Serializable
-            },
             SupportedDatabase.Sqlite => new HashSet<IsolationLevel>
             {
                 IsolationLevel.ReadCommitted,
@@ -182,6 +178,11 @@ public sealed class IsolationResolver : IIsolationResolver
             },
             SupportedDatabase.DuckDB => new HashSet<IsolationLevel>
             {
+                IsolationLevel.Serializable
+            },
+            SupportedDatabase.Snowflake => new HashSet<IsolationLevel>
+            {
+                IsolationLevel.ReadCommitted,
                 IsolationLevel.Serializable
             },
             _ => new HashSet<IsolationLevel>
@@ -225,12 +226,6 @@ public sealed class IsolationResolver : IIsolationResolver
                 [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
                 [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
             },
-            SupportedDatabase.QuestDb => new Dictionary<IsolationProfile, IsolationLevel>
-            {
-                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.Serializable,
-                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
-                [IsolationProfile.FastWithRisks] = IsolationLevel.Serializable
-            },
             SupportedDatabase.Sqlite => new Dictionary<IsolationProfile, IsolationLevel>
             {
                 [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
@@ -272,6 +267,12 @@ public sealed class IsolationResolver : IIsolationResolver
                 [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.Serializable,
                 [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
                 [IsolationProfile.FastWithRisks] = IsolationLevel.Serializable
+            },
+            SupportedDatabase.Snowflake => new Dictionary<IsolationProfile, IsolationLevel>
+            {
+                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
+                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
+                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
             },
             _ => new Dictionary<IsolationProfile, IsolationLevel>
             {

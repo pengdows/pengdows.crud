@@ -148,6 +148,7 @@ public partial class DatabaseContext
                 0,
                 0,
                 0,
+                0, // TotalTurnstileTimeouts
                 0,
                 true);
         }

@@ -268,7 +268,7 @@ public class CoverageGapTests_Infrastructure
         Assert.NotNull(config.MetricsOptions);
         Assert.Null(config.MaxConcurrentWrites);
         Assert.Null(config.MaxConcurrentReads);
-        Assert.True(config.EnableWriterPreference);
+        Assert.True(config.EnableSingleWriterFairness);
         Assert.Equal(TimeSpan.FromSeconds(DatabaseContextConfiguration.DefaultPoolAcquireSeconds), config.PoolAcquireTimeout);
         Assert.Equal(TimeSpan.FromSeconds(DatabaseContextConfiguration.DefaultModeLockSeconds), config.ModeLockTimeout);
         Assert.Equal(string.Empty, config.ApplicationName);
@@ -305,40 +305,6 @@ public class CoverageGapTests_Infrastructure
         };
 
         Assert.Equal(ReadWriteMode.ReadWrite, config.ReadWriteMode);
-    }
-
-    [Fact]
-    public void Configuration_WritePoolSize_LegacyAlias_GetSet()
-    {
-#pragma warning disable CS0618 // Obsolete
-        var config = new DatabaseContextConfiguration();
-
-        Assert.Null(config.WritePoolSize);
-
-        config.WritePoolSize = 42;
-        Assert.Equal(42, config.WritePoolSize);
-        Assert.Equal(42, config.MaxConcurrentWrites);
-
-        config.MaxConcurrentWrites = 99;
-        Assert.Equal(99, config.WritePoolSize);
-#pragma warning restore CS0618
-    }
-
-    [Fact]
-    public void Configuration_ReadPoolSize_LegacyAlias_GetSet()
-    {
-#pragma warning disable CS0618 // Obsolete
-        var config = new DatabaseContextConfiguration();
-
-        Assert.Null(config.ReadPoolSize);
-
-        config.ReadPoolSize = 55;
-        Assert.Equal(55, config.ReadPoolSize);
-        Assert.Equal(55, config.MaxConcurrentReads);
-
-        config.MaxConcurrentReads = 77;
-        Assert.Equal(77, config.ReadPoolSize);
-#pragma warning restore CS0618
     }
 
     [Fact]
@@ -389,13 +355,13 @@ public class CoverageGapTests_Infrastructure
     }
 
     [Fact]
-    public void Configuration_EnableWriterPreference_GetSet()
+    public void Configuration_EnableSingleWriterFairness_GetSet()
     {
         var config = new DatabaseContextConfiguration();
 
-        Assert.True(config.EnableWriterPreference);
-        config.EnableWriterPreference = false;
-        Assert.False(config.EnableWriterPreference);
+        Assert.True(config.EnableSingleWriterFairness);
+        config.EnableSingleWriterFairness = false;
+        Assert.False(config.EnableSingleWriterFairness);
     }
 
     [Fact]
@@ -504,30 +470,102 @@ public class CoverageGapTests_Infrastructure
         Assert.Equal(30, DatabaseContextConfiguration.DefaultModeLockSeconds);
     }
 
+    #endregion
+
+    #region DatabaseContext Config Validation
+
     [Fact]
-    public void Configuration_WritePoolSize_SetViaMaxConcurrentWrites_ReflectedInLegacy()
+    public void DatabaseContext_ZeroPoolAcquireTimeout_Throws()
     {
-#pragma warning disable CS0618 // Obsolete
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var config = new DatabaseContextConfiguration
         {
-            MaxConcurrentWrites = 25
+            ConnectionString = "Data Source=:memory:",
+            PoolAcquireTimeout = TimeSpan.Zero
         };
 
-        Assert.Equal(25, config.WritePoolSize);
-#pragma warning restore CS0618
+        Assert.Throws<ArgumentOutOfRangeException>(() => new DatabaseContext(config, factory));
     }
 
     [Fact]
-    public void Configuration_ReadPoolSize_SetViaMaxConcurrentReads_ReflectedInLegacy()
+    public void DatabaseContext_NegativePoolAcquireTimeout_Throws()
     {
-#pragma warning disable CS0618 // Obsolete
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var config = new DatabaseContextConfiguration
         {
-            MaxConcurrentReads = 30
+            ConnectionString = "Data Source=:memory:",
+            PoolAcquireTimeout = TimeSpan.FromSeconds(-1)
         };
 
-        Assert.Equal(30, config.ReadPoolSize);
-#pragma warning restore CS0618
+        Assert.Throws<ArgumentOutOfRangeException>(() => new DatabaseContext(config, factory));
+    }
+
+    [Fact]
+    public void DatabaseContext_ZeroMaxConcurrentReads_Throws()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:",
+            MaxConcurrentReads = 0
+        };
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => new DatabaseContext(config, factory));
+    }
+
+    [Fact]
+    public void DatabaseContext_NegativeMaxConcurrentWrites_Throws()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:",
+            MaxConcurrentWrites = -1
+        };
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => new DatabaseContext(config, factory));
+    }
+
+    [Fact]
+    public void DatabaseContext_ZeroModeLockTimeout_Throws()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:",
+            ModeLockTimeout = TimeSpan.Zero
+        };
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => new DatabaseContext(config, factory));
+    }
+
+    [Fact]
+    public void DatabaseContext_NullModeLockTimeout_DoesNotThrow()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        using var ctx = new DatabaseContext(
+            new DatabaseContextConfiguration
+            {
+                ConnectionString = "Data Source=:memory:",
+                ModeLockTimeout = null
+            },
+            factory);
+        Assert.NotNull(ctx);
+    }
+
+    [Fact]
+    public void DatabaseContext_ValidGovernorLimits_DoesNotThrow()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        using var ctx = new DatabaseContext(
+            new DatabaseContextConfiguration
+            {
+                ConnectionString = "Data Source=:memory:",
+                MaxConcurrentReads = 10,
+                MaxConcurrentWrites = 5
+            },
+            factory);
+        Assert.NotNull(ctx);
     }
 
     #endregion

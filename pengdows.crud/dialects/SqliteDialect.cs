@@ -106,12 +106,6 @@ internal class SqliteDialect : SqlDialect
         return "Mode=ReadOnly";
     }
 
-    [Obsolete]
-    public override string GetConnectionSessionSettings()
-    {
-        return "PRAGMA foreign_keys = ON;";
-    }
-
     internal override void ApplyConnectionSettingsCore(
         IDbConnection connection,
         IDatabaseContext context,

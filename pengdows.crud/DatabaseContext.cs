@@ -154,7 +154,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private TimeSpan _poolAcquireTimeout = TimeSpan.FromSeconds(DatabaseContextConfiguration.DefaultPoolAcquireSeconds);
     private TimeSpan? _modeLockTimeout = TimeSpan.FromSeconds(DatabaseContextConfiguration.DefaultModeLockSeconds);
     private bool _effectivePoolGovernorEnabled = true;
-    private bool _enableWriterPreference = true;
+    private bool _enableSingleWriterFairness = true;
     private int? _configuredReadPoolSize;
     private int? _configuredWritePoolSize;
     private bool _explicitReadOnlyConnectionString;
@@ -164,13 +164,11 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     /// <inheritdoc/>
     public Guid RootId { get; } = Guid.NewGuid();
 
-    [Obsolete("Use the constructor that takes DatabaseContextConfiguration instead.")]
     private ReadWriteMode _readWriteMode = ReadWriteMode.ReadWrite;
 
     /// <inheritdoc/>
     public ReadWriteMode ReadWriteMode
     {
-#pragma warning disable CS0618
         get => _readWriteMode;
         set
         {
@@ -183,7 +181,6 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
                 _isReadConnection = true;
             }
         }
-#pragma warning restore CS0618
     }
 
     /// <inheritdoc/>

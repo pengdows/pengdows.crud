@@ -117,11 +117,6 @@ public interface ISqlDialect
     Regex ParameterNamePattern { get; }
 
     /// <summary>
-    /// Indicates support for integrity constraints such as foreign keys.
-    /// </summary>
-    bool SupportsIntegrityConstraints { get; }
-
-    /// <summary>
     /// True when the dialect supports join operations.
     /// </summary>
     bool SupportsJoins { get; }
@@ -246,18 +241,6 @@ public interface ISqlDialect
     /// True when savepoint statements are supported.
     /// </summary>
     bool SupportsSavepoints { get; }
-
-    /// <summary>
-    /// True when the database supports interactive transactions (BEGIN/COMMIT/ROLLBACK).
-    /// Databases like QuestDB expose PGWire but do not support transactional semantics.
-    /// </summary>
-    bool SupportsTransactions { get; }
-
-    /// <summary>
-    /// True when the database supports row-level DELETE (DELETE FROM … WHERE …).
-    /// Databases like QuestDB only support TRUNCATE TABLE for data removal.
-    /// </summary>
-    bool SupportsRowLevelDelete { get; }
 
     /// <summary>
     /// True when the database supports DROP TABLE IF EXISTS syntax.
@@ -397,12 +380,6 @@ public interface ISqlDialect
     /// <returns>Command text configuring session options.</returns>
     string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly);
 
-    /// <summary>
-    /// Legacy accessor for session settings without context information.
-    /// </summary>
-    /// <returns>Command text configuring session options.</returns>
-    [Obsolete("Use the overload accepting context and readOnly.")]
-    string GetConnectionSessionSettings();
 
     /// <summary>
     /// Applies connection-string or provider-specific settings to the provided connection.
@@ -420,12 +397,6 @@ public interface ISqlDialect
     /// <returns>True if prepare should be disabled for this connection.</returns>
     bool ShouldDisablePrepareOn(Exception ex);
 
-    /// <summary>
-    /// Legacy overload for connection settings without context information.
-    /// </summary>
-    /// <param name="connection">Connection to configure.</param>
-    [Obsolete("Use the overload accepting context and readOnly.")]
-    void ApplyConnectionSettings(IDbConnection connection);
 
     /// <summary>
     /// Attempts to enter a read-only transaction. Implementations may be a no-op.
@@ -555,7 +526,7 @@ public interface ISqlDialect
 
     /// <summary>
     /// Gives the dialect a chance to transform a value before it is assigned to a parameter.
-    /// Useful for databases with non-standard representations of common types (e.g., QuestDB timestamps).
+    /// Useful for databases with non-standard representations of common types.
     /// </summary>
     /// <param name="value">The raw value from the entity.</param>
     /// <param name="dbType">The target database type.</param>

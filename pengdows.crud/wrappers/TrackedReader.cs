@@ -302,7 +302,7 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
         }
         catch (Exception)
         {
-            // Npgsql 9 workaround: for "timestamp without time zone" columns (e.g. QuestDB TIMESTAMP),
+            // Npgsql 9 workaround: for "timestamp without time zone" columns,
             // GetDateTime() may throw. GetFieldValue<DateTime>() is the supported API.
             try
             {
@@ -322,8 +322,8 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
         try
         {
             var type = _reader.GetFieldType(i);
-            // QuestDB PGWire workaround: Npgsql 9 may return DateTimeOffset for "timestamp without
-            // time zone" columns (e.g. QuestDB TIMESTAMP), but GetValue() throws for these.
+            // Npgsql 9 workaround: Npgsql 9 may return DateTimeOffset for "timestamp without
+            // time zone" columns, but GetValue() throws for these.
             // Remap to DateTime so the compiled mapper uses GetDateTime() instead of GetValue().
             if (type == typeof(DateTimeOffset))
             {
@@ -344,7 +344,7 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
         }
         catch (Exception)
         {
-            // QuestDB PGWire workaround: some types (like timestamp) are not supported via standard GetFieldType
+            // Npgsql 9 workaround: some types (like timestamp) are not supported via standard GetFieldType
             try
             {
                 var typeName = _reader.GetDataTypeName(i);

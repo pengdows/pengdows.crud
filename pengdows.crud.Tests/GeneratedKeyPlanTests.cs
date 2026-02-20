@@ -153,6 +153,7 @@ public class GeneratedKeyPlanTests
     [InlineData(SupportedDatabase.DuckDB, false)]
     [InlineData(SupportedDatabase.Oracle, false)]
     [InlineData(SupportedDatabase.Firebird, false)]
+    [InlineData(SupportedDatabase.Snowflake, false)]
     public void HasSessionScopedLastIdFunction_ReturnsCorrectValue(SupportedDatabase dbType, bool expectedResult)
     {
         var dialect = CreateDialectForType(dbType);
@@ -172,6 +173,7 @@ public class GeneratedKeyPlanTests
             SupportedDatabase.Oracle => new OracleDialect(CreateFactory(dbType), _logger),
             SupportedDatabase.Firebird => new FirebirdDialect(CreateFactory(dbType), _logger),
             SupportedDatabase.DuckDB => new DuckDbDialect(CreateFactory(dbType), _logger),
+            SupportedDatabase.Snowflake => new SnowflakeDialect(CreateFactory(dbType), _logger),
             _ => throw new ArgumentOutOfRangeException(nameof(dbType), dbType, "Unsupported database type")
         };
     }
@@ -189,6 +191,7 @@ public class GeneratedKeyPlanTests
             (SupportedDatabase.SqlServer, GeneratedKeyPlan.OutputInserted, "OUTPUT INSERTED.\"id\""),
             (SupportedDatabase.Firebird, GeneratedKeyPlan.Returning, "RETURNING \"id\""),
             (SupportedDatabase.DuckDB, GeneratedKeyPlan.Returning, "RETURNING \"id\""),
+            (SupportedDatabase.Snowflake, GeneratedKeyPlan.Returning, "RETURNING \"id\""),
 
             // Session-scoped functions (safe fallback)
             (SupportedDatabase.MySql, GeneratedKeyPlan.SessionScopedFunction, "SELECT LAST_INSERT_ID()"),

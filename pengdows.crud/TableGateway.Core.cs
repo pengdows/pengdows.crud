@@ -89,6 +89,7 @@ public partial class TableGateway<TEntity, TRowID> :
 
     private readonly IAuditValueResolver? _auditValueResolver;
     private IDatabaseContext _context = null!;
+    protected IDatabaseContext Context => _context;
     private ISqlDialect _dialect = null!;
 
     private IColumnInfo? _idColumn;
@@ -344,55 +345,6 @@ public partial class TableGateway<TEntity, TRowID> :
     public string MakeParameterName(DbParameter p)
     {
         return _dialect.MakeParameterName(p);
-    }
-
-    /// <summary>
-    /// Legacy dialect token replacement method. Use neutral token system instead.
-    /// </summary>
-    [Obsolete("Use neutral token system with {Q}/{q}/{S} tokens instead")]
-    public string ReplaceDialectTokens(string sql, string quotePrefix, string quoteSuffix, string parameterMarker)
-    {
-        if (sql == null)
-        {
-            throw new ArgumentNullException(nameof(sql));
-        }
-
-        var dialectPrefix = _dialect.QuotePrefix;
-        var dialectSuffix = _dialect.QuoteSuffix;
-        var dialectMarker = _dialect.ParameterMarker;
-
-        var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
-        var inQuote = false;
-
-        for (var i = 0; i < sql.Length; i++)
-        {
-            if (!inQuote && sql.AsSpan(i).StartsWith(dialectPrefix))
-            {
-                sb.Append(quotePrefix);
-                i += dialectPrefix.Length - 1;
-                inQuote = true;
-                continue;
-            }
-
-            if (inQuote && sql.AsSpan(i).StartsWith(dialectSuffix))
-            {
-                sb.Append(quoteSuffix);
-                i += dialectSuffix.Length - 1;
-                inQuote = false;
-                continue;
-            }
-
-            if (sql.AsSpan(i).StartsWith(dialectMarker))
-            {
-                sb.Append(parameterMarker);
-                i += dialectMarker.Length - 1;
-                continue;
-            }
-
-            sb.Append(sql[i]);
-        }
-
-        return sb.ToString();
     }
 
     /// <summary>

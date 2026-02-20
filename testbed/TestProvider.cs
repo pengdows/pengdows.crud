@@ -127,12 +127,6 @@ public class TestProvider : IAsyncTestProvider
 
     protected virtual async Task TestTransactions()
     {
-        if (!_context.DataSourceInfo.SupportsTransactions)
-        {
-            Console.WriteLine($"  [{_context.Product}] Skipping transactions (not supported)");
-            return;
-        }
-
         var count = await CountTestRows();
 
         await TestRollbackTransaction();
@@ -250,16 +244,6 @@ CREATE TABLE {qp}test_table{qs} (
     protected virtual async Task DeletedRow(TestTable t, IDatabaseContext? db = null)
     {
         var ctx = db ?? _context;
-        if (!_context.DataSourceInfo.SupportsRowLevelDelete)
-        {
-            // Databases without DELETE FROM use TRUNCATE to reset the table.
-            // Safe here because RunTest() guarantees exactly one row exists at this point.
-            var tsc = ctx.CreateSqlContainer();
-            tsc.Query.AppendFormat("TRUNCATE TABLE {0}", _helper.WrappedTableName);
-            await tsc.ExecuteNonQueryAsync();
-            return;
-        }
-
         var sc = _helper.BuildDelete(t.Id, ctx);
         var count = await sc.ExecuteNonQueryAsync();
         if (count != 1)
@@ -284,7 +268,6 @@ CREATE TABLE {qp}test_table{qs} (
             SupportedDatabase.PostgreSql => "BOOLEAN",
             SupportedDatabase.CockroachDb => "BOOLEAN",
             SupportedDatabase.YugabyteDb => "BOOLEAN",
-            SupportedDatabase.QuestDb => "BOOLEAN",
             SupportedDatabase.Sqlite => "INTEGER",
             SupportedDatabase.DuckDB => "BOOLEAN",
             SupportedDatabase.Firebird => "SMALLINT",
@@ -462,12 +445,6 @@ CREATE TABLE {qp}test_table{qs} (
 
     protected virtual async Task TestRowRoundTrip()
     {
-        if (!_context.DataSourceInfo.SupportsRowLevelDelete)
-        {
-            Console.WriteLine($"  [{_context.Product}] Skipping row round-trip (requires row-level DELETE for cleanup)");
-            return;
-        }
-
         var id = Interlocked.Increment(ref _nextId);
         // Latin Extended-A only — CJK requires NVARCHAR/UTF-8 charset which not all containers use by default
         var unicodeDesc = RoundTripDescription;
@@ -541,11 +518,6 @@ CREATE TABLE {qp}test_table{qs} (
 
     protected virtual async Task TestExtendedTransactions()
     {
-        if (!_context.DataSourceInfo.SupportsTransactions)
-        {
-            Console.WriteLine($"  [{_context.Product}] Skipping extended transactions (not supported)");
-            return;
-        }
 
         await TestRollbackOnException();
         await TestReadYourWrites();
@@ -595,12 +567,6 @@ CREATE TABLE {qp}test_table{qs} (
 
     protected virtual async Task TestConcurrency()
     {
-        if (!_context.DataSourceInfo.SupportsRowLevelDelete)
-        {
-            Console.WriteLine($"  [{_context.Product}] Skipping concurrency (requires row-level DELETE)");
-            return;
-        }
-
         const int n = 5;
         var tasks = Enumerable.Range(0, n).Select(async _ =>
         {
@@ -689,12 +655,6 @@ CREATE TABLE {qp}test_table{qs} (
 
     protected virtual async Task TestPagingCapability()
     {
-        if (!_context.DataSourceInfo.SupportsRowLevelDelete)
-        {
-            Console.WriteLine($"  [{_context.Product}] Skipping paging (requires row-level DELETE for cleanup)");
-            return;
-        }
-
         // Insert 10 rows so we can page through exactly our rows
         var ids = new List<long>();
         for (var i = 0; i < 10; i++)
@@ -771,47 +731,39 @@ CREATE TABLE {qp}test_table{qs} (
 
     protected virtual async Task TestErrorMapping()
     {
-        // 12a + 12b: Duplicate PK and connection health — only meaningful when PK enforcement exists
-        if (_context.DataSourceInfo.SupportsIntegrityConstraints)
+        // 12a + 12b: Duplicate PK and connection health
+        var id = Interlocked.Increment(ref _nextId);
+        var t = new TestTable
         {
-            var id = Interlocked.Increment(ref _nextId);
-            var t = new TestTable
-            {
-                Id = id,
-                Name = NameEnum.Test,
-                Description = "error-mapping-test",
-                Value = 0,
-                IsActive = true
-            };
+            Id = id,
+            Name = NameEnum.Test,
+            Description = "error-mapping-test",
+            Value = 0,
+            IsActive = true
+        };
 
-            // Insert first copy
-            var sc1 = _helper.BuildCreate(t, _context);
-            await sc1.ExecuteNonQueryAsync();
+        // Insert first copy
+        var sc1 = _helper.BuildCreate(t, _context);
+        await sc1.ExecuteNonQueryAsync();
 
-            // 12a: Duplicate PK → must surface as DbException
-            try
-            {
-                var sc2 = _helper.BuildCreate(t, _context);
-                await sc2.ExecuteNonQueryAsync();
-                throw new Exception("[ErrorMapping] Expected DbException for duplicate PK — none thrown");
-            }
-            catch (DbException ex)
-            {
-                Console.WriteLine(
-                    $"  [ErrorMapping] Unique violation → DbException: OK ({ex.Message[..Math.Min(80, ex.Message.Length)]}...)");
-            }
-
-            // 12b: Connection must still be usable after the exception
-            var healthCount = await CountTestRows();
-            Console.WriteLine($"  [ErrorMapping] Connection health after exception: OK (count={healthCount})");
-
-            await CleanupTestRow(id);
+        // 12a: Duplicate PK → must surface as DbException
+        try
+        {
+            var sc2 = _helper.BuildCreate(t, _context);
+            await sc2.ExecuteNonQueryAsync();
+            throw new Exception("[ErrorMapping] Expected DbException for duplicate PK — none thrown");
         }
-        else
+        catch (DbException ex)
         {
             Console.WriteLine(
-                $"  [{_context.Product}] Skipping 12a/12b (no PK enforcement — unique violation not guaranteed)");
+                $"  [ErrorMapping] Unique violation → DbException: OK ({ex.Message[..Math.Min(80, ex.Message.Length)]}...)");
         }
+
+        // 12b: Connection must still be usable after the exception
+        var healthCount = await CountTestRows();
+        Console.WriteLine($"  [ErrorMapping] Connection health after exception: OK (count={healthCount})");
+
+        await CleanupTestRow(id);
 
         // 12c: Syntax error → must always surface as DbException with non-empty message
         var badSc = _context.CreateSqlContainer("SELECT * FROM");
@@ -886,13 +838,10 @@ CREATE TABLE {qp}test_table{qs} (
     }
 
     /// <summary>
-    /// Deletes a single row by ID. Skips silently for databases without row-level DELETE.
+    /// Deletes a single row by ID.
     /// </summary>
     protected virtual async Task CleanupTestRow(long id, IDatabaseContext? db = null)
     {
-        if (!_context.DataSourceInfo.SupportsRowLevelDelete)
-            return; // rows accumulate until the table is recreated at the next test run
-
         var ctx = db ?? _context;
         var del = _helper.BuildDelete(id, ctx);
         await del.ExecuteNonQueryAsync();

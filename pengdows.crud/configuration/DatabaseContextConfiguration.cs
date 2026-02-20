@@ -12,11 +12,18 @@
 //   * ReadWriteMode: ReadWrite, ReadOnly (WriteOnly converted to ReadWrite)
 // - Statement preparation:
 //   * ForceManualPrepare, DisablePrepare: Override provider defaults
-// - Pool governance:
-//   * WritePoolSize, ReadPoolSize: Custom pool limits
-//   * PoolAcquireTimeout: How long to wait for pool permit
-// - Mode locking:
-//   * ModeLockTimeout: Timeout for SingleWriter/SingleConnection lock
+// - Connection governor (admission control — NOT ADO.NET pool sizing):
+//   * MaxConcurrentWrites: Governor permit limit for write connections
+//   * MaxConcurrentReads: Governor permit limit for read connections
+//   * PoolAcquireTimeout: How long to wait for a governor permit
+//   NOTE: These do NOT set ADO.NET Max Pool Size. Configure ADO.NET pool size
+//         in the connection string and keep these values aligned with it.
+// - Mode locking (SingleWriter / SingleConnection):
+//   * ModeLockTimeout: Timeout for shared-connection write locks.
+//     Defaults to 30 s (higher than PoolAcquireTimeout's 5 s) because mode
+//     locks guard long transactions, not just pool admission.
+// - SingleWriter fairness:
+//   * EnableSingleWriterFairness: turnstile for writer-preference in SingleWriter mode ONLY.
 // - Metrics:
 //   * EnableMetrics, MetricsOptions: Performance tracking configuration
 // =============================================================================
@@ -96,52 +103,28 @@ public class DatabaseContextConfiguration : IDatabaseContextConfiguration
     private int? _maxConcurrentWrites;
     private int? _maxConcurrentReads;
 
-    /// <summary>
-    /// Maximum number of concurrent write operations allowed by the governor.
-    /// Overrides <see cref="ReadPoolSize"/> for backward compatibility.
-    /// </summary>
+    /// <inheritdoc/>
     public int? MaxConcurrentWrites
     {
         get => _maxConcurrentWrites;
         set => _maxConcurrentWrites = value;
     }
 
-    /// <summary>
-    /// Maximum number of concurrent read operations allowed by the governor.
-    /// Overrides <see cref="ReadPoolSize"/> for backward compatibility.
-    /// </summary>
+    /// <inheritdoc/>
     public int? MaxConcurrentReads
     {
         get => _maxConcurrentReads;
         set => _maxConcurrentReads = value;
     }
 
-    /// <summary>
-    /// Legacy alias for <see cref="MaxConcurrentWrites"/>.
-    /// </summary>
-    [Obsolete("Use MaxConcurrentWrites instead.")]
-    public int? WritePoolSize
-    {
-        get => MaxConcurrentWrites;
-        set => MaxConcurrentWrites = value;
-    }
+    /// <inheritdoc/>
+    public bool EnableSingleWriterFairness { get; set; } = true;
 
-    /// <summary>
-    /// Legacy alias for <see cref="MaxConcurrentReads"/>.
-    /// </summary>
-    [Obsolete("Use MaxConcurrentReads instead.")]
-    public int? ReadPoolSize
-    {
-        get => MaxConcurrentReads;
-        set => MaxConcurrentReads = value;
-    }
-
-    /// <summary>
-    /// When true, the governor enforces writer-preference gates (turnstile) for SingleWriter mode.
-    /// </summary>
-    public bool EnableWriterPreference { get; set; } = true;
+    /// <inheritdoc/>
     public TimeSpan PoolAcquireTimeout { get; set; } = TimeSpan.FromSeconds(DefaultPoolAcquireSeconds);
+
+    /// <inheritdoc/>
     public TimeSpan? ModeLockTimeout { get; set; } = TimeSpan.FromSeconds(DefaultModeLockSeconds);
-    
+
     public string ApplicationName { get; set; } = string.Empty;
 }

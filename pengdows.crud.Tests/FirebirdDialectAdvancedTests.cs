@@ -320,16 +320,6 @@ public class FirebirdDialectAdvancedTests
     }
 
     [Fact]
-    public void GetConnectionSessionSettings_Obsolete_Should_Return_Transaction_And_Dialect_Settings()
-    {
-#pragma warning disable CS0618 // Type or member is obsolete
-        var settings = _dialect.GetConnectionSessionSettings();
-#pragma warning restore CS0618 // Type or member is obsolete
-
-        Assert.Equal("SET TRANSACTION ISOLATION LEVEL READ COMMITTED;\nSET SQL DIALECT 3;", settings);
-    }
-
-    [Fact]
     public void Version_Dependent_Features_Should_Work_When_Not_Initialized()
     {
         // These properties check IsInitialized and ProductInfo.ParsedVersion

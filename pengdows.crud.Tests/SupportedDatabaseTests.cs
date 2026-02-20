@@ -11,6 +11,7 @@ namespace pengdows.crud.Tests;
 public class SupportedDatabaseTests
 {
     [Theory]
+    [InlineData("Snowflake", SupportedDatabase.Snowflake)]
     [InlineData("CockroachDb", SupportedDatabase.CockroachDb)]
     [InlineData("Firebird", SupportedDatabase.Firebird)]
     [InlineData("MariaDb", SupportedDatabase.MariaDb)]
@@ -50,9 +51,9 @@ public class SupportedDatabaseTests
                 "MySql",
                 "Sqlite",
                 "DuckDB",
-                "QuestDb",
                 "YugabyteDb",
-                "TiDb"
+                "TiDb",
+                "Snowflake"
             },
             names);
     }

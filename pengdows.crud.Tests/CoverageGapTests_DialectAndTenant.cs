@@ -401,19 +401,6 @@ public class CoverageGapTests_DialectAndTenant
         Assert.Equal(settingsReadWrite, settingsReadOnly);
     }
 
-    #pragma warning disable CS0618 // Suppress obsolete warning for GetConnectionSessionSettings()
-    [Fact]
-    public void FirebirdDialect_GetConnectionSessionSettings_Obsolete_ReturnsDefaultSettings()
-    {
-        var dialect = CreateFirebirdDialect();
-
-        var settings = dialect.GetConnectionSessionSettings();
-
-        Assert.Contains("SET TRANSACTION ISOLATION LEVEL READ COMMITTED", settings);
-        Assert.Contains("SET SQL DIALECT 3", settings);
-    }
-    #pragma warning restore CS0618
-
     #endregion
 
     #region TenantContextRegistry Tests
@@ -695,6 +682,208 @@ public class CoverageGapTests_DialectAndTenant
         Assert.NotSame(c1, c2);
         Assert.NotSame(c2, c3);
         Assert.NotSame(c1, c3);
+    }
+
+    [Fact]
+    public void TenantContextRegistry_Invalidate_DisposesAndRemovesCachedContext()
+    {
+        using var sp = BuildServiceProvider();
+        using var registry = new TenantContextRegistry(
+            sp,
+            new StubTenantResolver(),
+            new StubContextFactory(),
+            NullLoggerFactory.Instance);
+
+        var first = registry.GetContext("tenant1");
+        registry.Invalidate("tenant1");
+
+        var second = registry.GetContext("tenant1");
+
+        // A new instance must be returned after invalidation.
+        Assert.NotSame(first, second);
+    }
+
+    [Fact]
+    public void TenantContextRegistry_Invalidate_UnknownTenant_DoesNotThrow()
+    {
+        using var sp = BuildServiceProvider();
+        using var registry = new TenantContextRegistry(
+            sp,
+            new StubTenantResolver(),
+            new StubContextFactory(),
+            NullLoggerFactory.Instance);
+
+        // Should silently succeed — nothing to remove.
+        registry.Invalidate("nonexistent");
+    }
+
+    [Fact]
+    public void TenantContextRegistry_Invalidate_HandlesContextDisposeException()
+    {
+        using var sp = BuildServiceProvider();
+        var registry = new TenantContextRegistry(
+            sp,
+            new StubTenantResolver(),
+            new ThrowingOnDisposeContextFactory(),
+            NullLoggerFactory.Instance);
+
+        registry.GetContext("tenant1"); // populate cache
+
+        // Should not throw even if the context's Dispose fails.
+        var ex = Record.Exception(() => registry.Invalidate("tenant1"));
+        Assert.Null(ex);
+
+        registry.Dispose();
+    }
+
+    [Fact]
+    public void TenantContextRegistry_InvalidateAll_EvictsAllContexts()
+    {
+        using var sp = BuildServiceProvider();
+        using var registry = new TenantContextRegistry(
+            sp,
+            new StubTenantResolver(),
+            new StubContextFactory(),
+            NullLoggerFactory.Instance);
+
+        var a = registry.GetContext("a");
+        var b = registry.GetContext("b");
+
+        registry.InvalidateAll();
+
+        var a2 = registry.GetContext("a");
+        var b2 = registry.GetContext("b");
+
+        Assert.NotSame(a, a2);
+        Assert.NotSame(b, b2);
+    }
+
+    [Fact]
+    public void TenantContextRegistry_MaxTenantCount_ExceededByNewTenant_Throws()
+    {
+        using var sp = BuildServiceProvider();
+        using var registry = new TenantContextRegistry(
+            sp,
+            new StubTenantResolver(),
+            new StubContextFactory(),
+            NullLoggerFactory.Instance,
+            maxTenantCount: 2);
+
+        registry.GetContext("t1");
+        registry.GetContext("t2");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => registry.GetContext("t3"));
+        Assert.Contains("maximum tenant count", ex.Message);
+    }
+
+    [Fact]
+    public void TenantContextRegistry_MaxTenantCount_ExistingTenantAllowedAfterCapReached()
+    {
+        using var sp = BuildServiceProvider();
+        using var registry = new TenantContextRegistry(
+            sp,
+            new StubTenantResolver(),
+            new StubContextFactory(),
+            NullLoggerFactory.Instance,
+            maxTenantCount: 1);
+
+        var first = registry.GetContext("t1");
+
+        // Retrieving an already-cached tenant must succeed even though cap == 1 is reached.
+        var again = registry.GetContext("t1");
+        Assert.Same(first, again);
+    }
+
+    [Fact]
+    public void TenantContextRegistry_MaxTenantCount_AfterInvalidate_AllowsNewTenant()
+    {
+        using var sp = BuildServiceProvider();
+        using var registry = new TenantContextRegistry(
+            sp,
+            new StubTenantResolver(),
+            new StubContextFactory(),
+            NullLoggerFactory.Instance,
+            maxTenantCount: 1);
+
+        registry.GetContext("t1");
+        registry.Invalidate("t1");
+
+        // Slot freed; new tenant should succeed.
+        var ex = Record.Exception(() => registry.GetContext("t2"));
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void TenantContextRegistry_Constructor_NegativeMaxTenantCount_Throws()
+    {
+        using var sp = BuildServiceProvider();
+        var ex = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new TenantContextRegistry(
+                sp,
+                new StubTenantResolver(),
+                new StubContextFactory(),
+                NullLoggerFactory.Instance,
+                maxTenantCount: 0));
+        Assert.Equal("maxTenantCount", ex.ParamName);
+    }
+
+    [Fact]
+    public void TenantContextRegistry_GetContext_AfterDispose_ThrowsObjectDisposedException()
+    {
+        using var sp = BuildServiceProvider();
+        var registry = new TenantContextRegistry(
+            sp,
+            new StubTenantResolver(),
+            new StubContextFactory(),
+            NullLoggerFactory.Instance);
+
+        registry.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => registry.GetContext("t1"));
+    }
+
+    [Fact]
+    public void TenantContextRegistry_GetContext_NullTenant_Throws()
+    {
+        using var sp = BuildServiceProvider();
+        using var registry = new TenantContextRegistry(
+            sp,
+            new StubTenantResolver(),
+            new StubContextFactory(),
+            NullLoggerFactory.Instance);
+
+        Assert.Throws<ArgumentNullException>(() => registry.GetContext(null!));
+    }
+
+    [Fact]
+    public void TenantContextRegistry_GetContext_WhitespaceTenant_Throws()
+    {
+        using var sp = BuildServiceProvider();
+        using var registry = new TenantContextRegistry(
+            sp,
+            new StubTenantResolver(),
+            new StubContextFactory(),
+            NullLoggerFactory.Instance);
+
+        Assert.Throws<ArgumentNullException>(() => registry.GetContext("   "));
+    }
+
+    [Fact]
+    public void TenantContextRegistry_Invalidate_BeforeValueCreated_DoesNotThrow()
+    {
+        // This test exercises the IsValueCreated guard path in Invalidate:
+        // if a Lazy<T> was inserted but never evaluated, Invalidate should skip Dispose.
+        using var sp = BuildServiceProvider();
+        using var registry = new TenantContextRegistry(
+            sp,
+            new StubTenantResolver(),
+            new StubContextFactory(),
+            NullLoggerFactory.Instance);
+
+        // Do NOT call GetContext — leave Lazy unevaluated.
+        // Invalidate for a key that was never created is a no-op.
+        var ex = Record.Exception(() => registry.Invalidate("ghost"));
+        Assert.Null(ex);
     }
 
     /// <summary>

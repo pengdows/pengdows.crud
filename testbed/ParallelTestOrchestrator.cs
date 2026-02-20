@@ -8,9 +8,9 @@ using testbed.mariaDb;
 using testbed.MySQL;
 using testbed.Oracle;
 using testbed.PostgreSQL;
-using testbed.QuestDb;
 using testbed.SqlServer;
 using testbed.TiDB;
+using testbed.Snowflake;
 using testbed.Yugabyte;
 
 namespace testbed;
@@ -20,11 +20,13 @@ public class ParallelTestOrchestrator
     private readonly IServiceProvider _services;
     private readonly ConcurrentBag<TestResult> _results = new();
     private readonly bool _includeOracle;
+    private readonly bool _includeSnowflake;
 
-    public ParallelTestOrchestrator(IServiceProvider services, bool includeOracle = false)
+    public ParallelTestOrchestrator(IServiceProvider services, bool includeOracle = false, bool includeSnowflake = false)
     {
         _services = services;
         _includeOracle = includeOracle;
+        _includeSnowflake = includeSnowflake;
     }
 
     /// <summary>
@@ -45,8 +47,8 @@ public class ParallelTestOrchestrator
             SupportedDatabase.CockroachDb => new CockroachDbTestContainer(),
             SupportedDatabase.DuckDB => new DuckDbTestContainer(),
             SupportedDatabase.YugabyteDb => new YugabyteTestContainer(),
-            SupportedDatabase.QuestDb => new QuestDbTestContainer(),
             SupportedDatabase.TiDb => new TiDBTestContainer(),
+            SupportedDatabase.Snowflake when _includeSnowflake => new SnowflakeTestContainer(),
             _ => null
         };
 
@@ -234,13 +236,6 @@ public class ParallelTestOrchestrator
             },
             new()
             {
-                ContainerName = "QuestDB",
-                DatabaseProvider = "QuestDB",
-                Container = new QuestDbTestContainer(),
-                TestProviderFactory = (db, sp) => new QuestDbTestProvider(db, sp)
-            },
-            new()
-            {
                 ContainerName = "TiDB",
                 DatabaseProvider = "TiDB",
                 Container = new TiDBTestContainer(),
@@ -248,6 +243,18 @@ public class ParallelTestOrchestrator
             }
             // Add Sybase as needed
         };
+
+        // Snowflake — requires external credentials; opt-in via INCLUDE_SNOWFLAKE=true
+        if (_includeSnowflake)
+        {
+            configurations.Add(new TestConfiguration
+            {
+                ContainerName = "Snowflake",
+                DatabaseProvider = "Snowflake",
+                Container = new SnowflakeTestContainer(),
+                TestProviderFactory = (db, sp) => new SnowflakeTestProvider(db, sp)
+            });
+        }
 
         // Oracle - check if external Oracle is available
         if (_includeOracle)

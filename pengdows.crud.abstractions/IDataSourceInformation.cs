@@ -96,24 +96,9 @@ public interface IDataSourceInformation
     SupportedDatabase Product { get; }
 
     /// <summary>
-    /// Gets a value indicating whether the database supports interactive transactions.
-    /// </summary>
-    bool SupportsTransactions { get; }
-
-    /// <summary>
-    /// Gets a value indicating whether the database supports row-level DELETE (DELETE FROM … WHERE …).
-    /// </summary>
-    bool SupportsRowLevelDelete { get; }
-
-    /// <summary>
     /// Gets a value indicating whether the database supports DROP TABLE IF EXISTS syntax.
     /// </summary>
     bool SupportsDropTableIfExists { get; }
-
-    /// <summary>
-    /// Gets a value indicating whether the database enforces integrity constraints such as PRIMARY KEY uniqueness.
-    /// </summary>
-    bool SupportsIntegrityConstraints { get; }
 
     /// <summary>
     /// Gets a value indicating whether the database supports TRUNCATE TABLE.

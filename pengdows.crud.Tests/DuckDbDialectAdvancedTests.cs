@@ -364,16 +364,6 @@ public class DuckDbDialectAdvancedTests
         Assert.Equal(255, _dialect.ParameterNameMaxLength);
     }
 
-    [Fact]
-    public void GetConnectionSessionSettings_Obsolete_Should_Return_Empty_String()
-    {
-#pragma warning disable CS0618 // Type or member is obsolete
-        var settings = _dialect.GetConnectionSessionSettings();
-#pragma warning restore CS0618 // Type or member is obsolete
-
-        Assert.Equal(string.Empty, settings);
-    }
-
     [Theory]
     [InlineData("v1.4.0", true)]
     [InlineData("v1.3.0", false)]

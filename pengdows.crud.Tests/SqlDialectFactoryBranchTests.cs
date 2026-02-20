@@ -40,13 +40,13 @@ public class SqlDialectFactoryBranchTests
     [InlineData("TiDB", SupportedDatabase.TiDb)]
     [InlineData("CockroachDB", SupportedDatabase.CockroachDb)]
     [InlineData("Yugabyte", SupportedDatabase.YugabyteDb)]
-    [InlineData("QuestDB", SupportedDatabase.QuestDb)]
     [InlineData("Npgsql", SupportedDatabase.PostgreSql)]
     [InlineData("Postgres", SupportedDatabase.PostgreSql)]
     [InlineData("Oracle", SupportedDatabase.Oracle)]
     [InlineData("SQLite", SupportedDatabase.Sqlite)]
     [InlineData("Firebird", SupportedDatabase.Firebird)]
     [InlineData("Duck DB", SupportedDatabase.DuckDB)]
+    [InlineData("Snowflake", SupportedDatabase.Snowflake)]
     [InlineData("Unknown", SupportedDatabase.Unknown)]
     public void InferDatabaseTypeFromName_UsesTokens(string name, SupportedDatabase expected)
     {
@@ -64,7 +64,6 @@ public class SqlDialectFactoryBranchTests
     [InlineData(SupportedDatabase.SqlServer, typeof(SqlServerDialect))]
     [InlineData(SupportedDatabase.PostgreSql, typeof(PostgreSqlDialect))]
     [InlineData(SupportedDatabase.CockroachDb, typeof(CockroachDbDialect))]
-    [InlineData(SupportedDatabase.QuestDb, typeof(QuestDbDialect))]
     [InlineData(SupportedDatabase.YugabyteDb, typeof(YugabyteDbDialect))]
     [InlineData(SupportedDatabase.TiDb, typeof(TiDbDialect))]
     [InlineData(SupportedDatabase.MySql, typeof(MySqlDialect))]
@@ -73,6 +72,7 @@ public class SqlDialectFactoryBranchTests
     [InlineData(SupportedDatabase.Oracle, typeof(OracleDialect))]
     [InlineData(SupportedDatabase.Firebird, typeof(FirebirdDialect))]
     [InlineData(SupportedDatabase.DuckDB, typeof(DuckDbDialect))]
+    [InlineData(SupportedDatabase.Snowflake, typeof(SnowflakeDialect))]
     [InlineData(SupportedDatabase.Unknown, typeof(Sql92Dialect))]
     public void CreateDialectForType_ReturnsExpectedDialect(SupportedDatabase type, Type expectedDialect)
     {

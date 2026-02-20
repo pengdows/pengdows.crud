@@ -432,17 +432,6 @@ public class OracleDialectAdvancedTests
     }
 
     [Fact]
-    public void GetConnectionSessionSettings_Obsolete_Should_Return_Base_Settings()
-    {
-#pragma warning disable CS0618 // Type or member is obsolete
-        var settings = _dialect.GetConnectionSessionSettings();
-#pragma warning restore CS0618 // Type or member is obsolete
-
-        Assert.Contains("ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD'", settings);
-        Assert.DoesNotContain("ALTER SESSION SET READ ONLY", settings);
-    }
-
-    [Fact]
     public void ApplyConnectionSettings_Should_Handle_Non_Oracle_Connection()
     {
         var connection = _factory.CreateConnection(); // This is not an Oracle connection

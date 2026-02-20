@@ -291,13 +291,6 @@ internal class PostgreSqlDialect : SqlDialect
         return BuildSessionSettings(baseSettings, GetReadOnlySessionSettings(), readOnly);
     }
 
-    [Obsolete]
-    public override string GetConnectionSessionSettings()
-    {
-        return _sessionSettings ?? @"SET standard_conforming_strings = on;
-SET client_min_messages = warning;";
-    }
-
     /// <summary>
     /// Bakes Npgsql-specific settings (auto-prepare, multiplexing) into the connection
     /// string before the DataSource is created.  Must be called while the connection
@@ -392,7 +385,7 @@ SET client_min_messages = warning;";
 
     /// <summary>
     /// Sets Npgsql-specific type properties on a parameter via reflection so that
-    /// subclasses (e.g. QuestDbDialect) can reuse the same logic without duplicating it.
+    /// subclasses can reuse the same logic without duplicating it.
     /// Silently ignores failures when the parameter is not an Npgsql parameter type.
     /// </summary>
     protected void SetNpgsqlParameterType(DbParameter parameter, string npgsqlDbTypeName, string dataTypeName)

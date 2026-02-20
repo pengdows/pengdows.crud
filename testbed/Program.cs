@@ -11,8 +11,7 @@ using testbed;
 #endregion
 
 // Enable Npgsql legacy timestamp behaviour so that "timestamp without time zone" columns
-// (used by QuestDB and similar PostgreSQL-compatible databases) can be read as DateTime.
-// Npgsql 6+ made this strict by default; the switch restores the pre-v6 behaviour.
+// can be read as DateTime. Npgsql 6+ made this strict by default; the switch restores the pre-v6 behaviour.
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
 foreach (var (assembly, type, factory) in DbProviderFactoryFinder.FindAllFactories())
@@ -30,7 +29,8 @@ Console.WriteLine();
 
 // Use the new parallel orchestrator (Oracle can be enabled via INCLUDE_ORACLE=true)
 var includeOracle = Environment.GetEnvironmentVariable("INCLUDE_ORACLE")?.ToLower() == "true";
-var orchestrator = new ParallelTestOrchestrator(host.Services, includeOracle);
+var includeSnowflake = Environment.GetEnvironmentVariable("INCLUDE_SNOWFLAKE")?.ToLower() == "true";
+var orchestrator = new ParallelTestOrchestrator(host.Services, includeOracle, includeSnowflake);
 
 // Optional filtering: --only A,B or --exclude X,Y or env TESTBED_ONLY/TESTBED_EXCLUDE
 static ISet<string> ParseList(string? csv)

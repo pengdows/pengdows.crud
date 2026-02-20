@@ -119,13 +119,6 @@ internal class FirebirdDialect : SqlDialect
         return DefaultSessionSettings;
     }
 
-    [Obsolete]
-    public override string GetConnectionSessionSettings()
-    {
-        return DefaultSessionSettings;
-    }
-
-
     public override async Task<string?> GetProductNameAsync(ITrackedConnection connection)
     {
         // Prefer scalar results to match fakeDb test helpers

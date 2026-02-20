@@ -407,7 +407,7 @@ public partial class TableGateway<TEntity, TRowID>
             _ when fieldType == typeof(Guid) => (r, i) => r.GetGuid(i),
             _ when fieldType == typeof(byte[]) => (r, i) => ReadBytes(r, i),
             // DateTimeOffset: use GetDateTime() to avoid GetValue() which throws for
-            // "timestamp without time zone" columns in QuestDB/Npgsql 9+.
+            // "timestamp without time zone" columns in Npgsql 9+.
             _ when fieldType == typeof(DateTimeOffset) => (r, i) => (object)new DateTimeOffset(r.GetDateTime(i), TimeSpan.Zero),
             _ => (r, i) => r.GetValue(i)
         };

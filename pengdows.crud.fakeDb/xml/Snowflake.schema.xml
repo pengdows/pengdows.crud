@@ -43,25 +43,23 @@
     </xs:schema>
     <DataSourceInformation>
         <CompositeIdentifierSeparatorPattern>\.</CompositeIdentifierSeparatorPattern>
-        <DataSourceProductName>QuestDB</DataSourceProductName>
-        <DataSourceProductVersion>7.3.10</DataSourceProductVersion>
-        <DataSourceProductVersionNormalized>7.03</DataSourceProductVersionNormalized>
+        <DataSourceProductName>Snowflake</DataSourceProductName>
+        <DataSourceProductVersion>7.43.0</DataSourceProductVersion>
+        <DataSourceProductVersionNormalized>07.43.00</DataSourceProductVersionNormalized>
         <GroupByBehavior>2</GroupByBehavior>
         <IdentifierPattern>
-            (^\[\p{Lo}\p{Lu}\p{Ll}_@#][\p{Lo}\p{Lu}\p{Ll}\p{Nd}@$#_]*$)|(^\[[^\]\0]|\]\]+\]$)|(^"[^"\0]|""+"$)
+            (^\[\p{Lo}\p{Lu}\p{Ll}_@#][\p{Lo}\p{Lu}\p{Ll}\p{Nd}@$#_]*$)|(^\[[^\]\0]|\]\]+\]$)|(^\"[^\"\0]|\"\"+\"$)
         </IdentifierPattern>
         <IdentifierCase>1</IdentifierCase>
         <OrderByColumnsInSelect>false</OrderByColumnsInSelect>
-        <ParameterMarkerFormat>{0}</ParameterMarkerFormat>
-        <ParameterMarkerPattern>:[\p{Lo}\p{Lu}\p{Ll}\p{Lm}_@#][\p{Lo}\p{Lu}\p{Ll}\p{Lm}\p{Nd}\uff3f_@#\$]*(?=\s+|$)
-        </ParameterMarkerPattern>
-        <ParameterNameMaxLength>63</ParameterNameMaxLength>
+        <ParameterMarkerFormat>:{0}</ParameterMarkerFormat>
+        <ParameterMarkerPattern>:[A-Za-z][A-Za-z0-9_]*</ParameterMarkerPattern>
+        <ParameterNameMaxLength>255</ParameterNameMaxLength>
         <QuotedIdentifierPattern>"(([^"]|"")*)"</QuotedIdentifierPattern>
         <QuotedIdentifierCase>2</QuotedIdentifierCase>
-        <ParameterNamePattern>^[\p{Lo}\p{Lu}\p{Ll}\p{Lm}_@#][\p{Lo}\p{Lu}\p{Ll}\p{Lm}\p{Nd}\uff3f_@#\$]*(?=\s+|$)
-        </ParameterNamePattern>
+        <ParameterNamePattern>[A-Za-z][A-Za-z0-9_]*</ParameterNamePattern>
         <StatementSeparatorPattern>;</StatementSeparatorPattern>
         <StringLiteralPattern>'(([^']|'')*)'</StringLiteralPattern>
-        <SupportedJoinOperators>5</SupportedJoinOperators>
+        <SupportedJoinOperators>15</SupportedJoinOperators>
     </DataSourceInformation>
 </NewDataSet>

@@ -13,7 +13,7 @@ public enum SupportedDatabase
     MySql = 64, // Historically non-standard, improving over time
     Sqlite = 128, // Minimal subset of SQL; useful, but not standard-compliant
     DuckDB = 256, // Modern analytical database with excellent SQL:2016 compliance
-    QuestDb = 512, // High-performance time-series SQL database (PG-compatible wire)
-    YugabyteDb = 1024, // Distributed SQL database (PostgreSQL-compatible)
-    TiDb = 2048 // Distributed SQL database (MySQL-compatible)
+    YugabyteDb = 512, // Distributed SQL database (PostgreSQL-compatible)
+    TiDb = 1024, // Distributed SQL database (MySQL-compatible)
+    Snowflake = 2048 // Cloud data warehouse with strong SQL:2016 compliance
 }

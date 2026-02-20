@@ -14,6 +14,7 @@ public class DialectCoverageTests
         yield return new object[] { SupportedDatabase.MySql };
         yield return new object[] { SupportedDatabase.Oracle };
         yield return new object[] { SupportedDatabase.DuckDB };
+        yield return new object[] { SupportedDatabase.Snowflake };
         yield return new object[] { SupportedDatabase.Unknown };
         yield return new object[] { SupportedDatabase.PostgreSql };
         yield return new object[] { SupportedDatabase.SqlServer };
@@ -73,6 +74,12 @@ public class DialectCoverageTests
                 "\"",
                 true,
                 "@",
+                true),
+            SupportedDatabase.Snowflake => new DialectTestConfig(
+                new SnowflakeDialect(factory, NullLogger<SnowflakeDialect>.Instance),
+                "\"",
+                true,
+                ":",
                 true),
             _ => throw new ArgumentOutOfRangeException(nameof(db), db, null)
         };

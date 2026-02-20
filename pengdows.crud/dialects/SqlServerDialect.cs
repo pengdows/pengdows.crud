@@ -170,12 +170,6 @@ internal class SqlServerDialect : SqlDialect
         return "ApplicationIntent=ReadOnly";
     }
 
-    [Obsolete]
-    public override string GetConnectionSessionSettings()
-    {
-        return string.IsNullOrWhiteSpace(_sessionSettings) ? DefaultSessionSettings : _sessionSettings;
-    }
-
     public override bool IsReadCommittedSnapshotOn(ITrackedConnection conn)
     {
         using var cmd = conn.CreateCommand();

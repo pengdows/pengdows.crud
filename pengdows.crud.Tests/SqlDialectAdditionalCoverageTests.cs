@@ -100,7 +100,6 @@ public class SqlDialectAdditionalCoverageTests
         var dialect = new TestableDialect(factory, NullLoggerFactory.Instance.CreateLogger<TestableDialect>());
         var features = new[]
         {
-            dialect.SupportsIntegrityConstraints,
             dialect.SupportsJoins,
             dialect.SupportsOuterJoins,
             dialect.SupportsSubqueries,
@@ -125,7 +124,8 @@ public class SqlDialectAdditionalCoverageTests
             dialect.SupportsMergeReturning,
             dialect.SupportsInsertOnConflict,
             dialect.SupportsOnDuplicateKey,
-            dialect.SupportsSavepoints
+            dialect.SupportsSavepoints,
+            dialect.SupportsDropTableIfExists
         };
 
         Assert.Equal(26, features.Length);

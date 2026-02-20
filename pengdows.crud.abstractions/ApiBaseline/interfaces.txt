@@ -164,7 +164,6 @@ method pengdows.crud.configuration.IDbProviderLoader::LoadAndRegisterProviders(M
 method pengdows.crud.connection.IConnectionLocalState::IsAlreadyPreparedForShape(string) -> bool
 method pengdows.crud.connection.IConnectionLocalState::MarkShapePrepared(string, int&) -> bool
 method pengdows.crud.connection.IConnectionLocalState::Reset() -> void
-method pengdows.crud.dialects.ISqlDialect::ApplyConnectionSettings(System.Data.IDbConnection) -> void
 method pengdows.crud.dialects.ISqlDialect::ApplyConnectionSettings(System.Data.IDbConnection, pengdows.crud.IDatabaseContext, bool) -> void
 method pengdows.crud.dialects.ISqlDialect::CreateDbParameter<T>(System.Data.DbType, T) -> System.Data.Common.DbParameter
 method pengdows.crud.dialects.ISqlDialect::CreateDbParameter<T>(string, System.Data.DbType, T) -> System.Data.Common.DbParameter
@@ -172,7 +171,6 @@ method pengdows.crud.dialects.ISqlDialect::DetectDatabaseInfo(pengdows.crud.wrap
 method pengdows.crud.dialects.ISqlDialect::DetectDatabaseInfoAsync(pengdows.crud.wrappers.ITrackedConnection) -> System.Threading.Tasks.Task`1<pengdows.crud.dialects.IDatabaseProductInfo>
 method pengdows.crud.dialects.ISqlDialect::GenerateRandomName(int, int) -> string
 method pengdows.crud.dialects.ISqlDialect::GetCompatibilityWarning() -> string
-method pengdows.crud.dialects.ISqlDialect::GetConnectionSessionSettings() -> string
 method pengdows.crud.dialects.ISqlDialect::GetConnectionSessionSettings(pengdows.crud.IDatabaseContext, bool) -> string
 method pengdows.crud.dialects.ISqlDialect::GetCorrelationTokenLookupQuery(string, string, string, string) -> string
 method pengdows.crud.dialects.ISqlDialect::GetDataSourceInformationSchema(pengdows.crud.wrappers.ITrackedConnection) -> System.Data.DataTable
@@ -193,6 +191,7 @@ method pengdows.crud.dialects.ISqlDialect::MakeParameterName(System.Data.Common.
 method pengdows.crud.dialects.ISqlDialect::MakeParameterName(string) -> string
 method pengdows.crud.dialects.ISqlDialect::ParameterMarkerAt(int) -> string
 method pengdows.crud.dialects.ISqlDialect::ParseVersion(string) -> System.Version
+method pengdows.crud.dialects.ISqlDialect::PrepareParameterValue(object, System.Data.DbType) -> object
 method pengdows.crud.dialects.ISqlDialect::RenderInsertReturningClause(string) -> string
 method pengdows.crud.dialects.ISqlDialect::RenderJsonArgument(string, pengdows.crud.IColumnInfo) -> string
 method pengdows.crud.dialects.ISqlDialect::ShouldDisablePrepareOn(System.Exception) -> bool
@@ -207,6 +206,8 @@ method pengdows.crud.isolation.IIsolationResolver::ResolveWithDetail(pengdows.cr
 method pengdows.crud.isolation.IIsolationResolver::Validate(System.Data.IsolationLevel) -> void
 method pengdows.crud.tenant.ITenantConnectionResolver::GetDatabaseContextConfiguration(string) -> pengdows.crud.configuration.IDatabaseContextConfiguration
 method pengdows.crud.tenant.ITenantContextRegistry::GetContext(string) -> pengdows.crud.IDatabaseContext
+method pengdows.crud.tenant.ITenantContextRegistry::Invalidate(string) -> void
+method pengdows.crud.tenant.ITenantContextRegistry::InvalidateAll() -> void
 method pengdows.crud.threading.ILockerAsync::Lock() -> void
 method pengdows.crud.threading.ILockerAsync::LockAsync(System.Threading.CancellationToken) -> System.Threading.Tasks.Task
 method pengdows.crud.threading.ILockerAsync::TryLockAsync(System.TimeSpan, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<bool>
@@ -267,11 +268,13 @@ property pengdows.crud.IDataSourceInformation::QuotePrefix : string { get; }
 property pengdows.crud.IDataSourceInformation::QuoteSuffix : string { get; }
 property pengdows.crud.IDataSourceInformation::RequiresStoredProcParameterNameMatch : bool { get; }
 property pengdows.crud.IDataSourceInformation::StandardCompliance : pengdows.crud.enums.SqlStandardLevel { get; }
+property pengdows.crud.IDataSourceInformation::SupportsDropTableIfExists : bool { get; }
 property pengdows.crud.IDataSourceInformation::SupportsInsertOnConflict : bool { get; }
 property pengdows.crud.IDataSourceInformation::SupportsMerge : bool { get; }
 property pengdows.crud.IDataSourceInformation::SupportsNamedParameters : bool { get; }
 property pengdows.crud.IDataSourceInformation::SupportsOnDuplicateKey : bool { get; }
 property pengdows.crud.IDataSourceInformation::SupportsRepeatedNamedParameters : bool { get; }
+property pengdows.crud.IDataSourceInformation::SupportsTruncateTable : bool { get; }
 property pengdows.crud.IDatabaseContext::CompositeIdentifierSeparator : string { get; }
 property pengdows.crud.IDatabaseContext::ConnectionMode : pengdows.crud.enums.DbMode { get; }
 property pengdows.crud.IDatabaseContext::ConnectionString : string { get; }
@@ -336,7 +339,7 @@ property pengdows.crud.configuration.IDatabaseContextConfiguration::ConnectionSt
 property pengdows.crud.configuration.IDatabaseContextConfiguration::DbMode : pengdows.crud.enums.DbMode { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::DisablePrepare : System.Nullable`1<bool> { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::EnableMetrics : bool { get; set; }
-property pengdows.crud.configuration.IDatabaseContextConfiguration::EnableWriterPreference : bool { get; set; }
+property pengdows.crud.configuration.IDatabaseContextConfiguration::EnableSingleWriterFairness : bool { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::ForceManualPrepare : System.Nullable`1<bool> { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::MaxConcurrentReads : System.Nullable`1<int> { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::MaxConcurrentWrites : System.Nullable`1<int> { get; set; }
@@ -378,12 +381,12 @@ property pengdows.crud.dialects.ISqlDialect::QuoteSuffix : string { get; }
 property pengdows.crud.dialects.ISqlDialect::RequiresStoredProcParameterNameMatch : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsArrayTypes : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsCommonTableExpressions : bool { get; }
+property pengdows.crud.dialects.ISqlDialect::SupportsDropTableIfExists : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsEnhancedWindowFunctions : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsExternalPooling : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsInsertOnConflict : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsInsertReturning : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsInsteadOfTriggers : bool { get; }
-property pengdows.crud.dialects.ISqlDialect::SupportsIntegrityConstraints : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsJoins : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsJsonTable : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsJsonTypes : bool { get; }

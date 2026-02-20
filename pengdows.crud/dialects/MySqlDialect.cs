@@ -199,12 +199,6 @@ internal class MySqlDialect : SqlDialect
         return $"{baseSettings}\nSET SESSION TRANSACTION READ WRITE;";
     }
 
-    [Obsolete]
-    public override string GetConnectionSessionSettings()
-    {
-        return _sessionSettings ?? DefaultSqlMode;
-    }
-
     public override SqlStandardLevel DetermineStandardCompliance(Version? version)
     {
         if (version == null)

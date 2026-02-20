@@ -74,7 +74,8 @@ public class TenantConnectionResolver : ITenantConnectionResolver
                 nameof(configuration));
         }
 
-        _configurations[tenant] = configuration;
+        // Clone so that mutations to the caller's object after registration do not affect stored config.
+        _configurations[tenant] = CloneConfiguration(configuration);
     }
 
     public void Register(IEnumerable<TenantConfiguration> tenants)
@@ -136,11 +137,35 @@ public class TenantConnectionResolver : ITenantConnectionResolver
             if (!string.IsNullOrWhiteSpace(baseApp) &&
                 string.IsNullOrWhiteSpace(configuration.ApplicationName))
             {
+                // Clone before mutating so the caller's original config object is not modified.
+                configuration = CloneConfiguration(configuration);
                 configuration.ApplicationName = $"{baseApp}:{tenantName}";
             }
 
             Register(tenantName, configuration);
         }
+    }
+
+    private static DatabaseContextConfiguration CloneConfiguration(IDatabaseContextConfiguration source)
+    {
+        return new DatabaseContextConfiguration
+        {
+            ConnectionString = source.ConnectionString,
+            ReadOnlyConnectionString = source.ReadOnlyConnectionString,
+            ProviderName = source.ProviderName,
+            DbMode = source.DbMode,
+            ReadWriteMode = source.ReadWriteMode,
+            ForceManualPrepare = source.ForceManualPrepare,
+            DisablePrepare = source.DisablePrepare,
+            EnableMetrics = source.EnableMetrics,
+            MetricsOptions = source.MetricsOptions,
+            MaxConcurrentWrites = source.MaxConcurrentWrites,
+            MaxConcurrentReads = source.MaxConcurrentReads,
+            PoolAcquireTimeout = source.PoolAcquireTimeout,
+            ModeLockTimeout = source.ModeLockTimeout,
+            ApplicationName = source.ApplicationName,
+            EnableSingleWriterFairness = source.EnableSingleWriterFairness
+        };
     }
 
     public void Clear()

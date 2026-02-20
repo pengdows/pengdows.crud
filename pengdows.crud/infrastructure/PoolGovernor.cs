@@ -11,16 +11,24 @@
 //   * Release(): Returns permit to pool (called by PoolPermit)
 //   * GetSnapshot(): Returns current pool statistics
 // - Throws PoolSaturatedException when timeout expires waiting for permit.
-// - Tracks: inUse, peakInUse, queued, totalAcquired, totalTimeouts.
+// - Tracks: inUse, peakInUse, queued, totalAcquired, totalPermitTimeouts, totalTurnstileTimeouts.
+//   * TotalTimeouts in snapshot = semaphore (permit) acquisition timeouts.
+//   * TotalTurnstileTimeouts in snapshot = turnstile acquisition timeouts.
 // - Can be disabled (returns default permits without blocking).
 // - Shared semaphore support:
 //   * OwnsSemaphore: true if governor created its own semaphore
 //   * When using shared semaphore, caller must ensure maxPermits matches actual capacity
 //   * Telemetry uses maxPermits as reported capacity (not verified at runtime)
 // - Turnstile fairness support (optional):
-//   * Prevents writer starvation under reader pressure
-//   * Writers (holdTurnstile=true): acquire turnstile before slot, release on permit dispose
-//   * Readers (holdTurnstile=false): touch-and-release turnstile, then acquire slot
+//   * Reduces writer starvation risk under sustained reader pressure.
+//   * Writers (holdTurnstile=true): hold turnstile for the duration of their permit.
+//     - While a writer holds its slot, new readers cannot pass the turnstile.
+//     - IMPORTANT: This does NOT drain readers already queued on the semaphore before
+//       the writer acquired the turnstile. Starvation is reduced, not eliminated.
+//   * Readers (holdTurnstile=false): touch-and-release turnstile, then acquire slot.
+//   * Only effective when reader and writer governors share the same turnstile instance
+//     and target the same connection pool (same pool key). Governors targeting separate
+//     connection pools (e.g., primary + read replica) should use independent turnstiles.
 // - PoolPermit: RAII struct ensuring permit release on dispose.
 // =============================================================================
 
@@ -53,7 +61,8 @@ internal sealed class PoolGovernor : IDisposable
     private long _peakInUse;
     private long _queued;
     private long _totalAcquired;
-    private long _totalTimeouts;
+    private long _totalPermitTimeouts;    // timed out waiting for a connection slot
+    private long _totalTurnstileTimeouts; // timed out waiting for the fairness turnstile
     private long _totalCanceledWaits;
 
     public PoolGovernor(
@@ -128,13 +137,16 @@ internal sealed class PoolGovernor : IDisposable
             throw new InvalidOperationException(NotInitializedMessage);
         }
 
-        // Turnstile fairness: acquire turnstile first to prevent starvation
+        // Turnstile fairness: acquire turnstile first to reduce writer starvation risk.
+        // Writers hold the turnstile for their entire permit lifetime; readers touch-and-release.
+        // NOTE: readers already queued on the semaphore when the writer grabs the turnstile
+        // are not displaced — only NEW reader attempts are gated.
         var turnstileAcquired = false;
         if (_turnstile != null)
         {
             if (!_turnstile.Wait(_acquireTimeout, cancellationToken))
             {
-                Interlocked.Increment(ref _totalTimeouts);
+                Interlocked.Increment(ref _totalTurnstileTimeouts);
                 throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
             }
 
@@ -165,7 +177,7 @@ internal sealed class PoolGovernor : IDisposable
                     var acquired = _semaphore.Wait(_acquireTimeout, cancellationToken);
                     if (!acquired)
                     {
-                        Interlocked.Increment(ref _totalTimeouts);
+                        Interlocked.Increment(ref _totalPermitTimeouts);
                         throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
                     }
 
@@ -253,13 +265,16 @@ internal sealed class PoolGovernor : IDisposable
             throw new InvalidOperationException(NotInitializedMessage);
         }
 
-        // Turnstile fairness: acquire turnstile first to prevent starvation
+        // Turnstile fairness: acquire turnstile first to reduce writer starvation risk.
+        // Writers hold the turnstile for their entire permit lifetime; readers touch-and-release.
+        // NOTE: readers already queued on the semaphore when the writer grabs the turnstile
+        // are not displaced — only NEW reader attempts are gated.
         var turnstileAcquired = false;
         if (_turnstile != null)
         {
             if (!await _turnstile.WaitAsync(_acquireTimeout, cancellationToken).ConfigureAwait(false))
             {
-                Interlocked.Increment(ref _totalTimeouts);
+                Interlocked.Increment(ref _totalTurnstileTimeouts);
                 throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
             }
 
@@ -292,7 +307,7 @@ internal sealed class PoolGovernor : IDisposable
                     var acquired = await _semaphore.WaitAsync(_acquireTimeout, cancellationToken).ConfigureAwait(false);
                     if (!acquired)
                     {
-                        Interlocked.Increment(ref _totalTimeouts);
+                        Interlocked.Increment(ref _totalPermitTimeouts);
                         throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
                     }
 
@@ -381,39 +396,44 @@ internal sealed class PoolGovernor : IDisposable
             return;
         }
 
-        var deadline = timeout.HasValue ? DateTime.UtcNow + timeout.Value : DateTime.MaxValue;
-        var signal = GetCurrentDrainSignal();
+        // Use a linked CancellationTokenSource so we can apply a deadline without
+        // polling.  When the drain signal fires we return immediately; when the
+        // timeout (or caller token) fires we surface the appropriate exception.
+        using var timeoutCts = timeout.HasValue
+            ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
+            : null;
+        timeoutCts?.CancelAfter(timeout!.Value);
+        var effectiveToken = timeoutCts?.Token ?? cancellationToken;
 
-        for (;;)
+        while (Interlocked.Read(ref _inUse) > 0)
         {
+            var signal = GetCurrentDrainSignal();
+
             if (signal.Task.IsCompleted)
             {
-                return;
-            }
-
-            if (DateTime.UtcNow > deadline)
-            {
-                throw new TimeoutException("Drain timeout");
+                // Signal already set — re-check _inUse before returning.
+                // A concurrent Acquire() may have bumped it back up.
+                break;
             }
 
             try
             {
-                await signal.Task.WaitAsync(TimeSpan.FromMilliseconds(500), cancellationToken).ConfigureAwait(false);
-                return;
+                await signal.Task.WaitAsync(effectiveToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (timeoutCts != null
+                                                      && timeoutCts.IsCancellationRequested
+                                                      && !cancellationToken.IsCancellationRequested)
+            {
+                throw new TimeoutException("Drain timeout");
             }
             catch (OperationCanceledException)
             {
+                // Task.WaitAsync throws TaskCanceledException (a subclass of
+                // OperationCanceledException).  Normalize to the base type so
+                // callers see a consistent exception regardless of runtime version.
                 throw new OperationCanceledException(cancellationToken);
             }
-            catch (TimeoutException)
-            {
-                if (Interlocked.Read(ref _inUse) == 0)
-                {
-                    return;
-                }
-
-                signal = GetCurrentDrainSignal();
-            }
+            // Signal fired (or was reset and re-signalled) — loop to re-check _inUse.
         }
     }
 
@@ -463,7 +483,8 @@ internal sealed class PoolGovernor : IDisposable
             (int)Math.Clamp(Interlocked.Read(ref _peakInUse), 0L, int.MaxValue),
             (int)Math.Clamp(Interlocked.Read(ref _queued), 0L, int.MaxValue),
             Interlocked.Read(ref _totalAcquired),
-            Interlocked.Read(ref _totalTimeouts),
+            Interlocked.Read(ref _totalPermitTimeouts),
+            Interlocked.Read(ref _totalTurnstileTimeouts),
             Interlocked.Read(ref _totalCanceledWaits),
             _disabled);
     }

@@ -98,5 +98,17 @@ public class IsolationLevelSupportTests
                 IsolationLevel.Serializable
             }
         };
+
+        yield return new object[]
+        {
+            SupportedDatabase.Snowflake,
+            false,
+            false,
+            new[]
+            {
+                IsolationLevel.ReadCommitted,
+                IsolationLevel.Serializable
+            }
+        };
     }
 }

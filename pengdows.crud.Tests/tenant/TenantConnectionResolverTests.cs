@@ -45,9 +45,11 @@ public class TenantConnectionResolverTests
         var resultA = resolver.GetDatabaseContextConfiguration("a");
         var resultB = resolver.GetDatabaseContextConfiguration("b");
 
-        // Assert
-        Assert.Same(tenantA.DatabaseContextConfiguration, resultA);
-        Assert.Same(tenantB.DatabaseContextConfiguration, resultB);
+        // Assert — values equal; stored config is a clone so references differ.
+        Assert.Equal(tenantA.DatabaseContextConfiguration.ConnectionString, resultA.ConnectionString);
+        Assert.Equal(tenantA.DatabaseContextConfiguration.ProviderName, resultA.ProviderName);
+        Assert.Equal(tenantB.DatabaseContextConfiguration.ConnectionString, resultB.ConnectionString);
+        Assert.Equal(tenantB.DatabaseContextConfiguration.ProviderName, resultB.ProviderName);
     }
 
     [Fact]
@@ -66,7 +68,7 @@ public class TenantConnectionResolverTests
     }
 
     [Fact]
-    public void Register_And_GetConfiguration_Should_ReturnSameInstance()
+    public void Register_And_GetConfiguration_Should_ReturnEquivalentConfig()
     {
         // Arrange
         var tenantId = "tenant-a";
@@ -83,8 +85,11 @@ public class TenantConnectionResolverTests
         resolver.Register(tenantId, config);
         var result = resolver.GetDatabaseContextConfiguration(tenantId);
 
-        // Assert
-        Assert.Same(config, result);
+        // Assert — stored config is a clone so references differ; values must match.
+        Assert.Equal(config.ConnectionString, result.ConnectionString);
+        Assert.Equal(config.ProviderName, result.ProviderName);
+        Assert.Equal(config.DbMode, result.DbMode);
+        Assert.Equal(config.ReadWriteMode, result.ReadWriteMode);
     }
 
     [Fact]
@@ -340,6 +345,27 @@ public class TenantConnectionResolverTests
         resolver.Clear();
 
         Assert.Throws<InvalidOperationException>(() => resolver.GetDatabaseContextConfiguration("tenant-clear"));
+    }
+
+    [Fact]
+    public void Register_MutatingConfigAfterRegistration_DoesNotAffectStoredConfig()
+    {
+        var resolver = new TenantConnectionResolver();
+        var original = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=original;",
+            ProviderName = "FakeProvider"
+        };
+
+        resolver.Register("tenant1", original);
+
+        // Mutate the object the caller still holds.
+        original.ConnectionString = "Server=mutated;";
+
+        var stored = resolver.GetDatabaseContextConfiguration("tenant1");
+
+        // The stored config must reflect the value at registration time, not the mutation.
+        Assert.Equal("Server=original;", stored.ConnectionString);
     }
 
     private class TestTenantConnectionResolver : ITenantConnectionResolver

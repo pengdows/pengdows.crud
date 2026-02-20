@@ -209,7 +209,6 @@ internal abstract class SqlDialect : ISqlDialect
     public virtual Regex ParameterNamePattern => new("^[a-zA-Z][a-zA-Z0-9_]*$", RegexOptions.Compiled);
 
     // Feature support based on SQL standards and database capabilities
-    public virtual bool SupportsIntegrityConstraints => MaxSupportedStandard >= SqlStandardLevel.Sql89;
     public virtual bool SupportsJoins => MaxSupportedStandard >= SqlStandardLevel.Sql92;
     public virtual bool SupportsOuterJoins => MaxSupportedStandard >= SqlStandardLevel.Sql92;
     public virtual bool SupportsSubqueries => MaxSupportedStandard >= SqlStandardLevel.Sql92;
@@ -253,8 +252,6 @@ internal abstract class SqlDialect : ISqlDialect
     public virtual bool SupportsInsertOnConflict => false; // PostgreSQL, SQLite extension
     public virtual bool SupportsOnDuplicateKey => false; // MySQL, MariaDB extension
     public virtual bool SupportsSavepoints => false;
-    public virtual bool SupportsTransactions => true;
-    public virtual bool SupportsRowLevelDelete => true;
     public virtual bool SupportsDropTableIfExists => true;
 
     /// <summary>
@@ -919,12 +916,6 @@ internal abstract class SqlDialect : ISqlDialect
             SupportsNamedParameters);
     }
 
-    [Obsolete("Use GetConnectionSessionSettings(IDatabaseContext,bool).")]
-    public virtual string GetConnectionSessionSettings()
-    {
-        return string.Empty;
-    }
-
     public virtual string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
     {
         return BuildSessionSettings(GetBaseSessionSettings(), GetReadOnlySessionSettings(), readOnly);
@@ -976,11 +967,6 @@ internal abstract class SqlDialect : ISqlDialect
     public virtual bool ShouldDisablePrepareOn(Exception ex)
     {
         return ex is NotSupportedException or InvalidOperationException;
-    }
-
-    [Obsolete("Use the overload accepting context and readOnly.")]
-    public virtual void ApplyConnectionSettings(IDbConnection connection)
-    {
     }
 
     public virtual void TryEnterReadOnlyTransaction(ITransactionContext transaction)

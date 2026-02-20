@@ -81,49 +81,6 @@ public partial class DatabaseContext
 
 
 
-    // [Obsolete("Use the constructor that takes DatabaseContextConfiguration instead.")]
-    // public DatabaseContext(
-    //     string connectionString,
-    //     DbProviderFactory factory,
-    //     DbMode mode = DbMode.Best,
-    //     ReadWriteMode readWriteMode = ReadWriteMode.ReadWrite,
-    //     ILoggerFactory? loggerFactory = null)
-    //     : this(
-    //         new DatabaseContextConfiguration
-    //         {
-    //             ConnectionString = connectionString,
-    //             ReadWriteMode = readWriteMode,
-    //             DbMode = mode
-    //         },
-    //         factory,
-    //         loggerFactory ?? NullLoggerFactory.Instance,
-    //         new TypeMapRegistry(),
-    //         null)
-    // {
-    // }
-    //
-    // [Obsolete("Use the constructor that takes DatabaseContextConfiguration instead.")]
-    // internal DatabaseContext(
-    //     string connectionString,
-    //     DbProviderFactory factory,
-    //     ITypeMapRegistry typeMapRegistry,
-    //     DbMode mode = DbMode.Best,
-    //     ReadWriteMode readWriteMode = ReadWriteMode.ReadWrite,
-    //     ILoggerFactory? loggerFactory = null)
-    //     : this(
-    //         new DatabaseContextConfiguration
-    //         {
-    //             ConnectionString = connectionString,
-    //             ReadWriteMode = readWriteMode,
-    //             DbMode = mode
-    //         },
-    //         factory,
-    //         loggerFactory ?? NullLoggerFactory.Instance,
-    //         typeMapRegistry,
-    //         null)
-    // {
-    // }
-
     // Convenience overloads for reflection-based tests and ease of use
     public DatabaseContext(string connectionString, DbProviderFactory factory, string? readOnlyConnectionString = null)
         : this(new DatabaseContextConfiguration
@@ -196,6 +153,8 @@ public partial class DatabaseContext
                 throw new ArgumentException("ConnectionString is required.", nameof(configuration.ConnectionString));
             }
 
+            ValidateConfiguration(configuration);
+
             _loggerFactory = loggerFactory ?? NullLoggerFactory.Instance;
             _logger = _loggerFactory.CreateLogger<IDatabaseContext>();
             if (TypeCoercionHelper.Logger is NullLogger)
@@ -215,7 +174,7 @@ public partial class DatabaseContext
             _disablePrepare = configuration.DisablePrepare;
             _poolAcquireTimeout = configuration.PoolAcquireTimeout;
             _modeLockTimeout = configuration.ModeLockTimeout;
-            _enableWriterPreference = configuration.EnableWriterPreference;
+            _enableSingleWriterFairness = configuration.EnableSingleWriterFairness;
             _configuredReadPoolSize = configuration.MaxConcurrentReads;
             _configuredWritePoolSize = configuration.MaxConcurrentWrites;
             if (configuration.EnableMetrics)
@@ -621,10 +580,15 @@ public partial class DatabaseContext
             writerLabelMax = 1;
         }
 
-        // SingleWriter mode: create turnstile for writer-preference fairness
-        // This prevents reader floods from starving writers
+        // SingleWriter mode: create a shared turnstile for writer-preference fairness.
+        // The turnstile is only shared when reader and writer target the same connection pool.
+        // When a dedicated read-only connection string points to a different server (e.g. a
+        // read replica), sharing the turnstile would incorrectly gate replica reads behind
+        // primary writes — those operations are independent and should not compete.
+        var sharesTurnstile = string.Equals(writerKey, readerKey, StringComparison.Ordinal);
+
         SemaphoreSlim? turnstile = null;
-        if (ConnectionMode == DbMode.SingleWriter && _enableWriterPreference)
+        if (ConnectionMode == DbMode.SingleWriter && _enableSingleWriterFairness && sharesTurnstile)
         {
             turnstile = new SemaphoreSlim(1, 1);
         }
@@ -777,6 +741,45 @@ public partial class DatabaseContext
             _readerDataSource = null;
             _logger.LogWarning(
                 "Read-only connection string differs, but no provider factory is available. Read-only operations will reuse the provided DbDataSource.");
+        }
+    }
+
+    /// <summary>
+    /// Validates configuration fields that cannot be caught at connection time.
+    /// ConnectionString is validated before this call.
+    /// </summary>
+    private static void ValidateConfiguration(IDatabaseContextConfiguration config)
+    {
+        if (config.PoolAcquireTimeout <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(config.PoolAcquireTimeout),
+                config.PoolAcquireTimeout,
+                "PoolAcquireTimeout must be greater than zero.");
+        }
+
+        if (config.MaxConcurrentReads.HasValue && config.MaxConcurrentReads.Value <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(config.MaxConcurrentReads),
+                config.MaxConcurrentReads.Value,
+                "MaxConcurrentReads must be greater than zero when specified.");
+        }
+
+        if (config.MaxConcurrentWrites.HasValue && config.MaxConcurrentWrites.Value <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(config.MaxConcurrentWrites),
+                config.MaxConcurrentWrites.Value,
+                "MaxConcurrentWrites must be greater than zero when specified.");
+        }
+
+        if (config.ModeLockTimeout.HasValue && config.ModeLockTimeout.Value <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(config.ModeLockTimeout),
+                config.ModeLockTimeout.Value,
+                "ModeLockTimeout must be greater than zero when specified (use null to wait indefinitely).");
         }
     }
 

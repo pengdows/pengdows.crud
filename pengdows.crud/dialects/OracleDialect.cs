@@ -124,12 +124,6 @@ internal class OracleDialect : SqlDialect
             : NlsDateFormatSetting;
     }
 
-    [Obsolete]
-    public override string GetConnectionSessionSettings()
-    {
-        return NlsDateFormatSetting;
-    }
-
     internal override void ApplyConnectionSettingsCore(
         IDbConnection connection,
         IDatabaseContext context,

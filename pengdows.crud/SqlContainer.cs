@@ -221,20 +221,6 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     }
 
 
-    // Legacy constructor kept for binary compatibility but made unreachable to callers.
-    // Any attempt to call this directly will fail at compile time.
-    [Obsolete("Do not construct SqlContainer directly. Use IDatabaseContext.CreateSqlContainer(...) instead.", true)]
-    internal SqlContainer(IDatabaseContext context, string? query = "", ILogger<ISqlContainer>? logger = null)
-        : this(
-            context,
-            (context as ISqlDialectProvider)?.Dialect
-            ?? throw new InvalidOperationException(
-                "IDatabaseContext must implement ISqlDialectProvider and expose a non-null Dialect."),
-            query,
-            logger)
-    {
-    }
-
     // Internal factory used by DatabaseContext/TransactionContext
     internal static SqlContainer Create(IDatabaseContext context, string? query = "",
         ILogger<ISqlContainer>? logger = null)
@@ -503,7 +489,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             }
         }
 
-        // Allow dialect to transform value (e.g. DateTime to long for QuestDB)
+        // Allow dialect to transform value
         var preparedValue = _dialect.PrepareParameterValue(newValue, parameter.DbType);
 
         // If switching to an array value on providers that support set-valued parameters

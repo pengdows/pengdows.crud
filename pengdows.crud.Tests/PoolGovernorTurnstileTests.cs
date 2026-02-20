@@ -1,7 +1,13 @@
 // Tests for the turnstile-fairness paths in PoolGovernor.
 // A writer (holdTurnstile=true) holds the turnstile for the duration of its
-// permit; readers (holdTurnstile=false) touch-and-release it.  This prevents
-// reader floods from starving writers.
+// permit; readers (holdTurnstile=false) touch-and-release it.
+// This reduces writer starvation risk: while a writer holds its slot, new
+// readers are gated at the turnstile.  Readers already queued on the semaphore
+// before the writer grabbed the turnstile are NOT displaced.
+//
+// Metrics note: TotalTurnstileTimeouts counts turnstile waits that timed out;
+// TotalTimeouts counts semaphore (permit slot) waits that timed out.  These are
+// tracked separately so operators can distinguish the two bottlenecks.
 
 using System;
 using System.Threading;
@@ -31,8 +37,10 @@ public sealed class PoolGovernorTurnstileTests
 
         using var wp = writer.Acquire();   // holds turnstile
 
+        // Reader times out waiting for the TURNSTILE (not the slot semaphore).
         Assert.Throws<PoolSaturatedException>(() => reader.Acquire());
-        Assert.Equal(1, reader.GetSnapshot().TotalTimeouts);
+        Assert.Equal(1, reader.GetSnapshot().TotalTurnstileTimeouts);
+        Assert.Equal(0, reader.GetSnapshot().TotalTimeouts); // no permit timeout
     }
 
     [Fact]
@@ -50,8 +58,10 @@ public sealed class PoolGovernorTurnstileTests
 
         var wp = await writer.AcquireAsync();
 
+        // Reader times out waiting for the TURNSTILE (not the slot semaphore).
         await Assert.ThrowsAsync<PoolSaturatedException>(() => reader.AcquireAsync());
-        Assert.Equal(1, reader.GetSnapshot().TotalTimeouts);
+        Assert.Equal(1, reader.GetSnapshot().TotalTurnstileTimeouts);
+        Assert.Equal(0, reader.GetSnapshot().TotalTimeouts); // no permit timeout
 
         wp.Dispose();
     }
@@ -121,10 +131,11 @@ public sealed class PoolGovernorTurnstileTests
         wp.Dispose();
     }
 
-    // ── Second writer times out on turnstile ──────────────────────────────
+    // ── Second writer times out waiting ───────────────────────────────────
+    // W1 holds the turnstile (permit held).  W2 times out on the turnstile.
 
     [Fact]
-    public void Acquire_SecondWriterTimesOutOnTurnstile()
+    public void Acquire_SecondWriterTimesOutWaiting()
     {
         using var turnstile = new SemaphoreSlim(1, 1);
 
@@ -136,12 +147,14 @@ public sealed class PoolGovernorTurnstileTests
 
         using var p1 = w1.Acquire();   // holds turnstile
 
+        // W2 cannot pass the turnstile — it is still held by W1's permit.
         Assert.Throws<PoolSaturatedException>(() => w2.Acquire());
-        Assert.Equal(1, w2.GetSnapshot().TotalTimeouts);
+        Assert.Equal(1, w2.GetSnapshot().TotalTurnstileTimeouts); // turnstile bottleneck
+        Assert.Equal(0, w2.GetSnapshot().TotalTimeouts);           // no permit timeout
     }
 
     [Fact]
-    public async Task AcquireAsync_SecondWriterTimesOutOnTurnstile()
+    public async Task AcquireAsync_SecondWriterTimesOutWaiting()
     {
         using var turnstile = new SemaphoreSlim(1, 1);
 
@@ -153,8 +166,10 @@ public sealed class PoolGovernorTurnstileTests
 
         var p1 = await w1.AcquireAsync();
 
+        // W2 cannot pass the turnstile — it is still held by W1's permit.
         await Assert.ThrowsAsync<PoolSaturatedException>(() => w2.AcquireAsync());
-        Assert.Equal(1, w2.GetSnapshot().TotalTimeouts);
+        Assert.Equal(1, w2.GetSnapshot().TotalTurnstileTimeouts); // turnstile bottleneck
+        Assert.Equal(0, w2.GetSnapshot().TotalTimeouts);           // no permit timeout
 
         p1.Dispose();
     }

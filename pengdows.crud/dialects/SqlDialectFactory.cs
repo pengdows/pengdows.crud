@@ -7,7 +7,7 @@
 // - CreateDialectForType() - Creates dialect for known SupportedDatabase type.
 // - Auto-detection flow: Delegates to DatabaseDetectionService for robust identification.
 // - Supported dialects: SqlServer, PostgreSql, MySql, MariaDb, Oracle,
-//   Sqlite, Firebird, DuckDb, CockroachDb, QuestDb, YugabyteDb, TiDb.
+//   Sqlite, Firebird, DuckDb, CockroachDb, YugabyteDb, TiDb, Snowflake.
 // - Each dialect is initialized via DetectDatabaseInfoAsync() after creation.
 // =============================================================================
 
@@ -69,7 +69,6 @@ public static class SqlDialectFactory
             SupportedDatabase.SqlServer => new SqlServerDialect(factory, logger),
             SupportedDatabase.PostgreSql => new PostgreSqlDialect(factory, logger),
             SupportedDatabase.CockroachDb => new CockroachDbDialect(factory, logger),
-            SupportedDatabase.QuestDb => new QuestDbDialect(factory, logger),
             SupportedDatabase.YugabyteDb => new YugabyteDbDialect(factory, logger),
             SupportedDatabase.TiDb => new TiDbDialect(factory, logger),
             SupportedDatabase.MySql => new MySqlDialect(factory, logger),
@@ -78,6 +77,7 @@ public static class SqlDialectFactory
             SupportedDatabase.Oracle => new OracleDialect(factory, logger),
             SupportedDatabase.Firebird => new FirebirdDialect(factory, logger),
             SupportedDatabase.DuckDB => new DuckDbDialect(factory, logger),
+            SupportedDatabase.Snowflake => new SnowflakeDialect(factory, logger),
             _ => new Sql92Dialect(factory, logger)
         };
     }

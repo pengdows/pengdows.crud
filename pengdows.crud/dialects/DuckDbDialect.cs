@@ -179,12 +179,6 @@ internal class DuckDbDialect : SqlDialect
         return ReadWriteSessionSetting;
     }
 
-    [Obsolete]
-    public override string GetConnectionSessionSettings()
-    {
-        return string.Empty;
-    }
-
     public override async Task<string?> GetProductNameAsync(ITrackedConnection connection)
     {
         // Try SELECT version() first
