@@ -19,7 +19,8 @@ internal static class DatabaseSchemaHelper
         "products",
         "articles",
         "tagged_items",
-        "accounts"
+        "accounts",
+        "round_trip_entity"
     };
 
     public static async Task DropTablesAsync(IDatabaseContext context)

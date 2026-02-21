@@ -257,25 +257,38 @@ internal class FirebirdDialect : SqlDialect
 
     public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
-        var parameter = base.CreateDbParameter(name, type, value);
+        // Intercept unsupported types before they reach the provider parameter's set_DbType
+        var targetType = type;
+        object? targetValue = value;
+
         if (type == DbType.Boolean)
         {
-            parameter.DbType = DbType.Int16;
+            targetType = DbType.Int16;
             if (value is bool boolValue)
             {
-                parameter.Value = boolValue ? (short)1 : (short)0;
+                targetValue = boolValue ? (short)1 : (short)0;
             }
         }
         else if (type == DbType.Guid)
         {
-            parameter.DbType = DbType.Binary;
+            targetType = DbType.Binary;
             if (value is Guid guidValue)
             {
-                parameter.Value = guidValue.ToByteArray();
+                targetValue = guidValue.ToByteArray();
+            }
+        }
+        else if (type == DbType.DateTimeOffset)
+        {
+            // Firebird does not support DateTimeOffset; coerce to UTC DateTime
+            targetType = DbType.DateTime;
+            if (value is DateTimeOffset dto)
+            {
+                // Use Unspecified kind to prevent provider-side timezone adjustments
+                targetValue = DateTime.SpecifyKind(dto.UtcDateTime, DateTimeKind.Unspecified);
             }
         }
 
-        return parameter;
+        return base.CreateDbParameter<object?>(name, targetType, targetValue);
     }
 
     // Connection pooling properties for Firebird

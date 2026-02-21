@@ -426,16 +426,11 @@ public partial class TableGateway<TEntity, TRowID> :
     }
 
     /// <inheritdoc/>
-    public async Task<bool> CreateAsync(TEntity entity, IDatabaseContext context)
+    public async Task<bool> CreateAsync(TEntity entity, IDatabaseContext? context = null)
     {
         if (entity == null)
         {
             throw new ArgumentNullException(nameof(entity));
-        }
-
-        if (context == null)
-        {
-            throw new ArgumentNullException(nameof(context));
         }
 
         var ctx = context ?? _context;
@@ -494,16 +489,12 @@ public partial class TableGateway<TEntity, TRowID> :
     }
 
     /// <inheritdoc/>
-    public async Task<bool> CreateAsync(TEntity entity, IDatabaseContext context, CancellationToken cancellationToken)
+    public async Task<bool> CreateAsync(TEntity entity, IDatabaseContext? context = null,
+        CancellationToken cancellationToken = default)
     {
         if (entity == null)
         {
             throw new ArgumentNullException(nameof(entity));
-        }
-
-        if (context == null)
-        {
-            throw new ArgumentNullException(nameof(context));
         }
 
         var ctx = context ?? _context;
@@ -878,13 +869,8 @@ public partial class TableGateway<TEntity, TRowID> :
     }
 
     /// <inheritdoc/>
-    public Task<int> DeleteAsync(TRowID id, IDatabaseContext? context = null)
-    {
-        return DeleteAsync(id, context, CancellationToken.None);
-    }
-
-    /// <inheritdoc/>
-    public async Task<int> DeleteAsync(TRowID id, IDatabaseContext? context, CancellationToken cancellationToken)
+    public async Task<int> DeleteAsync(TRowID id, IDatabaseContext? context = null,
+        CancellationToken cancellationToken = default)
     {
         var ctx = context ?? _context;
         var sc = BuildDelete(id, ctx);
@@ -892,14 +878,8 @@ public partial class TableGateway<TEntity, TRowID> :
     }
 
     /// <inheritdoc/>
-    public Task<List<TEntity>> RetrieveAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null)
-    {
-        return RetrieveAsync(ids, context, CancellationToken.None);
-    }
-
-    /// <inheritdoc/>
-    public async Task<List<TEntity>> RetrieveAsync(IEnumerable<TRowID> ids, IDatabaseContext? context,
-        CancellationToken cancellationToken)
+    public async Task<List<TEntity>> RetrieveAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null,
+        CancellationToken cancellationToken = default)
     {
         if (ids == null)
         {
@@ -989,14 +969,8 @@ public partial class TableGateway<TEntity, TRowID> :
     }
 
     /// <inheritdoc/>
-    public IAsyncEnumerable<TEntity> RetrieveStreamAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null)
-    {
-        return RetrieveStreamAsync(ids, context, CancellationToken.None);
-    }
-
-    /// <inheritdoc/>
-    public async IAsyncEnumerable<TEntity> RetrieveStreamAsync(IEnumerable<TRowID> ids, IDatabaseContext? context,
-        [EnumeratorCancellation] CancellationToken cancellationToken)
+    public async IAsyncEnumerable<TEntity> RetrieveStreamAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         if (ids == null)
         {
@@ -1073,14 +1047,8 @@ public partial class TableGateway<TEntity, TRowID> :
     }
 
     /// <inheritdoc/>
-    public Task<int> DeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null)
-    {
-        return DeleteAsync(ids, context, CancellationToken.None);
-    }
-
-    /// <inheritdoc/>
-    public async Task<int> DeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context,
-        CancellationToken cancellationToken)
+    public async Task<int> DeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null,
+        CancellationToken cancellationToken = default)
     {
         if (ids == null)
         {
@@ -1153,14 +1121,8 @@ public partial class TableGateway<TEntity, TRowID> :
     }
 
     /// <inheritdoc/>
-    public Task<int> BatchDeleteAsync(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context = null)
-    {
-        return BatchDeleteAsync(entities, context, CancellationToken.None);
-    }
-
-    /// <inheritdoc/>
-    public async Task<int> BatchDeleteAsync(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context,
-        CancellationToken cancellationToken)
+    public async Task<int> BatchDeleteAsync(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context = null,
+        CancellationToken cancellationToken = default)
     {
         if (entities == null)
         {
@@ -1290,14 +1252,8 @@ public partial class TableGateway<TEntity, TRowID> :
 
 
     /// <inheritdoc/>
-    public Task<TEntity?> RetrieveOneAsync(TEntity objectToRetrieve, IDatabaseContext? context = null)
-    {
-        return RetrieveOneAsync(objectToRetrieve, context, CancellationToken.None);
-    }
-
-    /// <inheritdoc/>
-    public Task<TEntity?> RetrieveOneAsync(TEntity objectToRetrieve, IDatabaseContext? context,
-        CancellationToken cancellationToken)
+    public Task<TEntity?> RetrieveOneAsync(TEntity objectToRetrieve, IDatabaseContext? context = null,
+        CancellationToken cancellationToken = default)
     {
         if (objectToRetrieve == null)
         {
@@ -1311,14 +1267,8 @@ public partial class TableGateway<TEntity, TRowID> :
     }
 
     /// <inheritdoc/>
-    public Task<TEntity?> RetrieveOneAsync(TRowID id, IDatabaseContext? context = null)
-    {
-        return RetrieveOneAsync(id, context, CancellationToken.None);
-    }
-
-    /// <inheritdoc/>
-    public async Task<TEntity?> RetrieveOneAsync(TRowID id, IDatabaseContext? context,
-        CancellationToken cancellationToken)
+    public async Task<TEntity?> RetrieveOneAsync(TRowID id, IDatabaseContext? context = null,
+        CancellationToken cancellationToken = default)
     {
         var ctx = context ?? _context;
         if (_idColumn == null)
@@ -1554,28 +1504,16 @@ public partial class TableGateway<TEntity, TRowID> :
     // moved to TableGateway.Update.cs
 
     /// <inheritdoc/>
-    public Task<int> UpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null)
-    {
-        var ctx = context ?? _context;
-        return UpdateAsync(objectToUpdate, _versionColumn != null, ctx, CancellationToken.None);
-    }
-
-    /// <inheritdoc/>
-    public Task<int> UpdateAsync(TEntity objectToUpdate, IDatabaseContext? context, CancellationToken cancellationToken)
+    public Task<int> UpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null,
+        CancellationToken cancellationToken = default)
     {
         var ctx = context ?? _context;
         return UpdateAsync(objectToUpdate, _versionColumn != null, ctx, cancellationToken);
     }
 
     /// <inheritdoc/>
-    public Task<int> UpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context = null)
-    {
-        return UpdateAsync(objectToUpdate, loadOriginal, context, CancellationToken.None);
-    }
-
-    /// <inheritdoc/>
-    public async Task<int> UpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context,
-        CancellationToken cancellationToken)
+    public async Task<int> UpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context = null,
+        CancellationToken cancellationToken = default)
     {
         var ctx = context ?? _context;
         try

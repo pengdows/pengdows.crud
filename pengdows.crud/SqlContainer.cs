@@ -954,20 +954,37 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
     public ValueTask<int> ExecuteNonQueryAsync(CommandType commandType = CommandType.Text)
     {
-        return ExecuteNonQueryAsync(commandType, CancellationToken.None);
+        return ExecuteNonQueryAsync(ExecutionType.Write, commandType, CancellationToken.None);
     }
 
-    public async ValueTask<int> ExecuteNonQueryAsync(CommandType commandType, CancellationToken cancellationToken)
+    public ValueTask<int> ExecuteNonQueryAsync(CommandType commandType, CancellationToken cancellationToken)
     {
-        var executionType = ExecutionType.Write;
-        // Check if context is configured as read-only (exactly ReadWriteMode.ReadOnly, not ReadWrite)
-        if (_context is DatabaseContext dbContext &&
-            dbContext.ReadWriteMode == ReadWriteMode.ReadOnly)
-        {
-            throw new NotSupportedException("Write operations are not supported in read-only mode.");
-        }
+        return ExecuteNonQueryAsync(ExecutionType.Write, commandType, cancellationToken);
+    }
 
-        _context.AssertIsWriteConnection();
+    public ValueTask<int> ExecuteNonQueryAsync(ExecutionType executionType, CommandType commandType = CommandType.Text)
+    {
+        return ExecuteNonQueryAsync(executionType, commandType, CancellationToken.None);
+    }
+
+    public async ValueTask<int> ExecuteNonQueryAsync(ExecutionType executionType, CommandType commandType,
+        CancellationToken cancellationToken)
+    {
+        if (executionType == ExecutionType.Write)
+        {
+            // Check if context is configured as read-only (exactly ReadWriteMode.ReadOnly, not ReadWrite)
+            if (_context is DatabaseContext dbContext &&
+                dbContext.ReadWriteMode == ReadWriteMode.ReadOnly)
+            {
+                throw new NotSupportedException("Write operations are not supported in read-only mode.");
+            }
+
+            _context.AssertIsWriteConnection();
+        }
+        else
+        {
+            _context.AssertIsReadConnection();
+        }
 
         ITrackedConnection? conn = null;
         DbCommand? cmd = null;

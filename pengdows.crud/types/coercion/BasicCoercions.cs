@@ -126,7 +126,10 @@ public class DateTimeOffsetCoercion : DbCoercion<DateTimeOffset>
                 value = dto;
                 return true;
             case DateTime dt:
-                value = new DateTimeOffset(dt);
+                // Treat as UTC by default for consistency with how we store them
+                value = dt.Kind == DateTimeKind.Unspecified 
+                    ? new DateTimeOffset(DateTime.SpecifyKind(dt, DateTimeKind.Utc))
+                    : new DateTimeOffset(dt);
                 return true;
             default:
                 value = DateTimeOffset.MinValue;
@@ -624,6 +627,24 @@ public class ByteArrayCoercion : DbCoercion<byte[]>
             case ArraySegment<byte> segment:
                 value = segment.ToArray();
                 return true;
+            case Stream stream:
+                try
+                {
+                    if (stream.CanSeek)
+                    {
+                        stream.Seek(0, SeekOrigin.Begin);
+                    }
+
+                    using var ms = new MemoryStream();
+                    stream.CopyTo(ms);
+                    value = ms.ToArray();
+                    return true;
+                }
+                catch
+                {
+                    value = null;
+                    return false;
+                }
             default:
                 value = null;
                 return false;

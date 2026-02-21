@@ -111,7 +111,7 @@ internal abstract class SqlDialect : ISqlDialect
                 p.DbType = DbType.DateTime;
                 if (v is DateTimeOffset dto)
                 {
-                    p.Value = dto.DateTime;
+                    p.Value = dto.UtcDateTime;
                 }
             }
         };

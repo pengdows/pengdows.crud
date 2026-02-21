@@ -31,13 +31,8 @@ namespace pengdows.crud;
 public partial class TableGateway<TEntity, TRowID>
 {
     /// <inheritdoc/>
-    public Task<int> UpsertAsync(TEntity entity, IDatabaseContext? context = null)
-    {
-        return UpsertAsync(entity, context, CancellationToken.None);
-    }
-
-    /// <inheritdoc/>
-    public async Task<int> UpsertAsync(TEntity entity, IDatabaseContext? context, CancellationToken cancellationToken)
+    public async Task<int> UpsertAsync(TEntity entity, IDatabaseContext? context = null,
+        CancellationToken cancellationToken = default)
     {
         if (entity == null)
         {

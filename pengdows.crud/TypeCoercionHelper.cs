@@ -721,7 +721,7 @@ public static class TypeCoercionHelper
     /// <param name="provider">Database provider for registry dispatch.</param>
     /// <param name="parseMode">Enum parse-failure behaviour.</param>
     /// <param name="options">Provider-wide coercion options (time policy, etc.).</param>
-    internal static Func<object, object?> ResolveCoercer(
+    internal static Func<object?, object?> ResolveCoercer(
         IColumnInfo column,
         SupportedDatabase provider,
         EnumParseFailureMode parseMode,
@@ -737,22 +737,22 @@ public static class TypeCoercionHelper
         if (column.EnumType != null)
         {
             var enumType = column.EnumType;
-            return value => CoerceEnum(value, enumType, parseMode, targetType);
+            return value => value == null ? null : CoerceEnum(value, enumType, parseMode, targetType);
         }
 
         if (column.IsJsonType)
         {
-            return value => CoerceJsonValue(value, targetType, column, options);
+            return value => value == null ? null : CoerceJsonValue(value, targetType, column, options);
         }
 
         if (runtimeTarget == typeof(DateTimeOffset))
         {
-            return value => CoerceDateTimeOffset(value, options);
+            return value => value == null ? null : CoerceDateTimeOffset(value, options);
         }
 
         if (runtimeTarget == typeof(DateTime))
         {
-            return value => CoerceDateTime(value, options);
+            return value => value == null ? null : CoerceDateTime(value, options);
         }
 
         // Try to resolve a registered coercion once; if found, the returned
@@ -762,19 +762,25 @@ public static class TypeCoercionHelper
         {
             return value =>
             {
+                if (value == null)
+                {
+                    return null;
+                }
+
                 var dbValue = new types.coercion.DbValue(value, sourceType ?? value.GetType());
                 if (coercion.TryRead(in dbValue, runtimeTarget, out var result))
                 {
                     return result;
                 }
 
-                return Convert.ChangeType(value, runtimeTarget, CultureInfo.InvariantCulture);
+                // Fallback to robust conversion cache
+                return ConvertWithCache(value, runtimeTarget);
             };
         }
 
         // Fallback: full Coerce dispatch covers char[]→string, AdvancedTypeRegistry,
         // Convert.ChangeType, etc.  The registry lookups here are unavoidable for
         // types that have no registered coercion.
-        return value => Coerce(value, sourceType ?? value.GetType(), column, parseMode, options);
+        return value => value == null ? null : Coerce(value, sourceType ?? value.GetType(), column, parseMode, options);
     }
 }

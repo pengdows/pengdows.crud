@@ -383,6 +383,17 @@ internal class PostgreSqlDialect : SqlDialect
         return $"EXCLUDED.{WrapObjectName(columnName)}";
     }
 
+    public override object? PrepareParameterValue(object? value, DbType dbType)
+    {
+        if (value is DateTimeOffset dto)
+        {
+            // Npgsql 6+ requires DateTimeOffset to be UTC when writing to timestamptz.
+            return dto.UtcDateTime;
+        }
+
+        return base.PrepareParameterValue(value, dbType);
+    }
+
     /// <summary>
     /// Sets Npgsql-specific type properties on a parameter via reflection so that
     /// subclasses can reuse the same logic without duplicating it.

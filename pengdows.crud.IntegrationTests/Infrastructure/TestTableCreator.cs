@@ -41,6 +41,154 @@ public class TestTableCreator
             $"[TestTableCreator] Created {_context.Product} table, result={result}, DbMode={((DatabaseContext)_context).ConnectionMode}");
     }
 
+    public async Task CreateRoundTripTableAsync()
+    {
+        var table = _context.WrapObjectName("round_trip_entity");
+        var idCol = _context.WrapObjectName("id");
+        var textCol = _context.WrapObjectName("text_value");
+        var unicodeCol = _context.WrapObjectName("text_unicode");
+        var nullCol = _context.WrapObjectName("text_nullable");
+        var intCol = _context.WrapObjectName("int_value");
+        var longCol = _context.WrapObjectName("long_value");
+        var decimalCol = _context.WrapObjectName("decimal_value");
+        var boolCol = _context.WrapObjectName("bool_value");
+        var dtoCol = _context.WrapObjectName("datetimeoffset_value");
+        var guidCol = _context.WrapObjectName("guid_value");
+        var binCol = _context.WrapObjectName("binary_value");
+
+        if (_context.Product == SupportedDatabase.Firebird)
+        {
+            await using var tx = _context.BeginTransaction();
+            try
+            {
+                var sqlFb = $@"
+                    CREATE TABLE {table} (
+                        {idCol} BIGINT NOT NULL PRIMARY KEY,
+                        {textCol} VARCHAR(255) CHARACTER SET UTF8 NOT NULL,
+                        {unicodeCol} VARCHAR(255) CHARACTER SET UTF8 NOT NULL,
+                        {nullCol} VARCHAR(255) CHARACTER SET UTF8,
+                        {intCol} INTEGER NOT NULL,
+                        {longCol} BIGINT NOT NULL,
+                        {decimalCol} DECIMAL(18,8) NOT NULL,
+                        {boolCol} SMALLINT NOT NULL,
+                        {dtoCol} TIMESTAMP NOT NULL,
+                        {guidCol} CHAR(36) CHARACTER SET ASCII NOT NULL,
+                        {binCol} BLOB SUB_TYPE 0 NOT NULL
+                    )";
+                await using var fbContainer = tx.CreateSqlContainer(sqlFb);
+                await fbContainer.ExecuteNonQueryAsync();
+                tx.Commit();
+                return;
+            }
+            catch (Exception ex) when (ex.Message.Contains("already exists"))
+            {
+                // ignore
+                return;
+            }
+        }
+
+        var sql = _context.Product switch
+        {
+            SupportedDatabase.Sqlite => $@"
+                CREATE TABLE IF NOT EXISTS {table} (
+                    {idCol} BIGINT PRIMARY KEY,
+                    {textCol} TEXT NOT NULL,
+                    {unicodeCol} TEXT NOT NULL,
+                    {nullCol} TEXT,
+                    {intCol} INTEGER NOT NULL,
+                    {longCol} BIGINT NOT NULL,
+                    {decimalCol} REAL NOT NULL,
+                    {boolCol} INTEGER NOT NULL,
+                    {dtoCol} TEXT NOT NULL,
+                    {guidCol} TEXT NOT NULL,
+                    {binCol} BLOB NOT NULL
+                )",
+            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb or SupportedDatabase.Snowflake => $@"
+                CREATE TABLE IF NOT EXISTS {table} (
+                    {idCol} BIGINT PRIMARY KEY,
+                    {textCol} VARCHAR(255) NOT NULL,
+                    {unicodeCol} VARCHAR(255) NOT NULL,
+                    {nullCol} VARCHAR(255),
+                    {intCol} INTEGER NOT NULL,
+                    {longCol} BIGINT NOT NULL,
+                    {decimalCol} DECIMAL(18,8) NOT NULL,
+                    {boolCol} BOOLEAN NOT NULL,
+                    {dtoCol} TIMESTAMPTZ NOT NULL,
+                    {guidCol} UUID NOT NULL,
+                    {binCol} BYTEA NOT NULL
+                )",
+            SupportedDatabase.SqlServer => $@"
+                IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[round_trip_entity]') AND type in (N'U'))
+                CREATE TABLE [dbo].[round_trip_entity] (
+                    [id] BIGINT PRIMARY KEY,
+                    [text_value] NVARCHAR(255) NOT NULL,
+                    [text_unicode] NVARCHAR(255) NOT NULL,
+                    [text_nullable] NVARCHAR(255),
+                    [int_value] INT NOT NULL,
+                    [long_value] BIGINT NOT NULL,
+                    [decimal_value] DECIMAL(18,8) NOT NULL,
+                    [bool_value] BIT NOT NULL,
+                    [datetimeoffset_value] DATETIMEOFFSET NOT NULL,
+                    [guid_value] UNIQUEIDENTIFIER NOT NULL,
+                    [binary_value] VARBINARY(256) NOT NULL
+                )",
+            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb => $@"
+                CREATE TABLE IF NOT EXISTS {table} (
+                    {idCol} BIGINT PRIMARY KEY,
+                    {textCol} VARCHAR(255) NOT NULL,
+                    {unicodeCol} VARCHAR(255) CHARACTER SET utf8mb4 NOT NULL,
+                    {nullCol} VARCHAR(255),
+                    {intCol} INT NOT NULL,
+                    {longCol} BIGINT NOT NULL,
+                    {decimalCol} DECIMAL(18,8) NOT NULL,
+                    {boolCol} BOOLEAN NOT NULL,
+                    {dtoCol} DATETIME(6) NOT NULL,
+                    {guidCol} CHAR(36) NOT NULL,
+                    {binCol} VARBINARY(256) NOT NULL
+                )",
+            SupportedDatabase.Oracle => $@"
+                DECLARE
+                    table_exists NUMBER;
+                BEGIN
+                    SELECT COUNT(*) INTO table_exists FROM user_tables WHERE table_name = 'ROUND_TRIP_ENTITY';
+                    IF table_exists = 0 THEN
+                        EXECUTE IMMEDIATE '
+                            CREATE TABLE {table} (
+                                {idCol} NUMBER PRIMARY KEY,
+                                {textCol} VARCHAR2(255) NOT NULL,
+                                {unicodeCol} NVARCHAR2(255) NOT NULL,
+                                {nullCol} VARCHAR2(255),
+                                {intCol} NUMBER(10) NOT NULL,
+                                {longCol} NUMBER(19) NOT NULL,
+                                {decimalCol} NUMBER(18,8) NOT NULL,
+                                {boolCol} NUMBER(1) NOT NULL,
+                                {dtoCol} TIMESTAMP WITH TIME ZONE NOT NULL,
+                                {guidCol} RAW(16) NOT NULL,
+                                {binCol} RAW(256) NOT NULL
+                            )';
+                    END IF;
+                END;",
+            SupportedDatabase.DuckDB => $@"
+                CREATE TABLE IF NOT EXISTS {table} (
+                    {idCol} BIGINT PRIMARY KEY,
+                    {textCol} VARCHAR NOT NULL,
+                    {unicodeCol} VARCHAR NOT NULL,
+                    {nullCol} VARCHAR,
+                    {intCol} INTEGER NOT NULL,
+                    {longCol} BIGINT NOT NULL,
+                    {decimalCol} DECIMAL(18,8) NOT NULL,
+                    {boolCol} BOOLEAN NOT NULL,
+                    {dtoCol} TIMESTAMPTZ NOT NULL,
+                    {guidCol} UUID NOT NULL,
+                    {binCol} BLOB NOT NULL
+                )",
+            _ => throw new NotSupportedException($"Database {_context.Product} not supported")
+        };
+
+        await using var container = _context.CreateSqlContainer(sql);
+        await container.ExecuteNonQueryAsync();
+    }
+
     private async Task CreateFirebirdTestTableAsync()
     {
         await using var create = _context.CreateSqlContainer(CreateFirebirdTableSql());

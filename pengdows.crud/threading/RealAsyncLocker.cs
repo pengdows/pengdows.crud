@@ -215,21 +215,24 @@ internal sealed class RealAsyncLocker : SafeAsyncDisposableBase, ILockerAsync
             throw new TaskCanceledException();
         }
 
+        var waitTicks = Stopwatch.GetTimestamp() - start;
         if (acquired)
         {
-            var waitTicks = Stopwatch.GetTimestamp() - start;
             _stats?.RecordWaitEnd(waitTicks);
             AcquireLockState();
             _logger.LogTrace("Lock acquired");
-        }
-        else
-        {
-            var waitTicks = Stopwatch.GetTimestamp() - start;
-            _stats?.RecordTimeout(waitTicks);
-            _logger.LogTrace("Lock acquisition timed out");
+            return true;
         }
 
-        return acquired;
+        if (cancellationToken.IsCancellationRequested)
+        {
+            _stats?.RecordWaitEnd(waitTicks);
+            throw new TaskCanceledException();
+        }
+
+        _stats?.RecordTimeout(waitTicks);
+        _logger.LogTrace("Lock acquisition timed out");
+        return false;
     }
 
     private void ReleaseIfHeld()

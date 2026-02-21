@@ -10,6 +10,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
+[Collection("TypeRegistry")]
 public class DataReaderMapperNegativeTests
 {
     [Fact]

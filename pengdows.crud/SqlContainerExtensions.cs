@@ -78,8 +78,7 @@ public static class SqlContainerExtensions
             return concrete.ExecuteNonQueryAsync(commandType, cancellationToken);
         }
 
-        // Fallback to interface method (no token support)
-        return container.ExecuteNonQueryAsync(commandType);
+        return container.ExecuteNonQueryAsync(commandType, cancellationToken);
     }
 
     /// <summary>
@@ -107,7 +106,7 @@ public static class SqlContainerExtensions
             return concrete.ExecuteScalarRequiredAsync<T>(executionType, commandType, cancellationToken);
         }
 
-        return container.ExecuteScalarRequiredAsync<T>(commandType);
+        return container.ExecuteScalarRequiredAsync<T>(executionType, commandType, cancellationToken);
     }
 
     /// <summary>
@@ -130,7 +129,7 @@ public static class SqlContainerExtensions
             return concrete.ExecuteScalarOrNullAsync<T>(executionType, commandType, cancellationToken);
         }
 
-        return container.ExecuteScalarOrNullAsync<T>(commandType);
+        return container.ExecuteScalarOrNullAsync<T>(executionType, commandType, cancellationToken);
     }
 
     /// <summary>
@@ -153,7 +152,7 @@ public static class SqlContainerExtensions
             return concrete.TryExecuteScalarAsync<T>(executionType, commandType, cancellationToken);
         }
 
-        return container.TryExecuteScalarAsync<T>(commandType);
+        return container.TryExecuteScalarAsync<T>(executionType, commandType, cancellationToken);
     }
 
     /// <summary>
@@ -173,7 +172,7 @@ public static class SqlContainerExtensions
             return concrete.ExecuteReaderAsync(commandType, cancellationToken);
         }
 
-        return container.ExecuteReaderAsync(commandType);
+        return container.ExecuteReaderAsync(commandType, cancellationToken);
     }
 
     /// <summary>
@@ -195,7 +194,7 @@ public static class SqlContainerExtensions
             return concrete.ExecuteReaderAsync(executionType, commandType, cancellationToken);
         }
 
-        return container.ExecuteReaderAsync(commandType);
+        return container.ExecuteReaderAsync(executionType, commandType, cancellationToken);
     }
 
     /// <summary>
@@ -238,7 +237,7 @@ public static class SqlContainerExtensions
             return concrete.ExecuteReaderSingleRowAsync(executionType, cancellationToken);
         }
 
-        return container.ExecuteReaderAsync(CommandType.Text, cancellationToken);
+        return container.ExecuteReaderAsync(executionType, CommandType.Text, cancellationToken);
     }
 
 }

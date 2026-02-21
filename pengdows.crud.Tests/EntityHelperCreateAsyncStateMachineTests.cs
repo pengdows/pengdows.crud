@@ -64,8 +64,9 @@ public class TableGatewayCreateAsyncStateMachineTests
         _typeMap.Register<TestEntitySimple>();
         var entity = new TestEntitySimple { Name = "Test" };
 
-        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.CreateAsync(entity, null!)
-        );
+        var result = await helper.CreateAsync(entity, null!);
+
+        Assert.True(result);
     }
 
     [Fact]

@@ -131,7 +131,8 @@ public partial class TableGateway<TEntity, TRowID>
                         var valueExtractor = BuildValueExtractor(fieldType);
                         var setter = GetOrCreateSetter(column.PropertyInfo);
                         var byteCoercer = BuildCoercer(column, fieldType, targetType);
-                        coercionPlans.Add(new CoercedColumnPlan(i, valueExtractor, byteCoercer ?? (val => val), setter, column.PropertyInfo.PropertyType));
+                        Func<object?, object?> identity = static val => val;
+                        coercionPlans.Add(new CoercedColumnPlan(i, valueExtractor, byteCoercer ?? identity, setter, column.PropertyInfo.PropertyType));
                         continue;
                     }
 
@@ -139,7 +140,8 @@ public partial class TableGateway<TEntity, TRowID>
                     var coercer = BuildCoercer(column, fieldType, targetType);
 
                     // Simple numeric conversions and exact matches can be compiled inline
-                    var canCompileInline = coercer == null || IsSimpleConversion(fieldType, targetType);
+                    // ONLY if the field type is supported by direct reader methods.
+                    var canCompileInline = coercer == null && IsSimpleConversion(fieldType, targetType);
 
                     if (canCompileInline)
                     {
@@ -151,7 +153,12 @@ public partial class TableGateway<TEntity, TRowID>
                         // Complex handling required - use delegate-based plan
                         var valueExtractor = BuildValueExtractor(fieldType);
                         var setter = GetOrCreateSetter(column.PropertyInfo);
-                        coercionPlans.Add(new CoercedColumnPlan(i, valueExtractor, coercer!, setter, column.PropertyInfo.PropertyType));
+
+                        // Ensure we have a valid coercer delegate even if no complex conversion is needed.
+                        // ResolveCoercer handles the robust conversion path (registered coercions + ConvertWithCache fallback).
+                        var finalCoercer = coercer ?? TypeCoercionHelper.ResolveCoercer(column, _coercionOptions.Provider, EnumParseBehavior, _coercionOptions, fieldType);
+                        
+                        coercionPlans.Add(new CoercedColumnPlan(i, valueExtractor, finalCoercer, setter, column.PropertyInfo.PropertyType));
                     }
                 }
             }
@@ -219,6 +226,21 @@ public partial class TableGateway<TEntity, TRowID>
     // Check if a type conversion can be compiled inline (vs requiring delegate-based coercion)
     private static bool IsSimpleConversion(Type fieldType, Type targetType)
     {
+        // Only allow types that have a direct GetXxx method in GetReaderMethod
+        var code = Type.GetTypeCode(fieldType);
+        var isSupportedBaseType = code switch
+        {
+            TypeCode.Int32 or TypeCode.Int64 or TypeCode.String or TypeCode.DateTime or
+                TypeCode.Decimal or TypeCode.Boolean or TypeCode.Int16 or TypeCode.Byte or
+                TypeCode.Double or TypeCode.Single => true,
+            _ => fieldType == typeof(Guid)
+        };
+
+        if (!isSupportedBaseType)
+        {
+            return false;
+        }
+
         // Exact match
         if (fieldType == targetType)
         {
@@ -406,9 +428,6 @@ public partial class TableGateway<TEntity, TRowID>
             TypeCode.Single => (r, i) => r.GetFloat(i),
             _ when fieldType == typeof(Guid) => (r, i) => r.GetGuid(i),
             _ when fieldType == typeof(byte[]) => (r, i) => ReadBytes(r, i),
-            // DateTimeOffset: use GetDateTime() to avoid GetValue() which throws for
-            // "timestamp without time zone" columns in Npgsql 9+.
-            _ when fieldType == typeof(DateTimeOffset) => (r, i) => (object)new DateTimeOffset(r.GetDateTime(i), TimeSpan.Zero),
             _ => (r, i) => r.GetValue(i)
         };
     }
@@ -452,8 +471,8 @@ public partial class TableGateway<TEntity, TRowID>
             return null;
         }
 
-                var resolved = TypeCoercionHelper.ResolveCoercer(
-                    column, _coercionOptions.Provider, EnumParseBehavior, _coercionOptions, fieldType);
+        var resolved = TypeCoercionHelper.ResolveCoercer(
+            column, _coercionOptions.Provider, EnumParseBehavior, _coercionOptions, fieldType);
 
         return value =>
         {

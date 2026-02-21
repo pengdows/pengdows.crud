@@ -71,14 +71,7 @@ public partial class TableGateway<TEntity, TRowID>
 
     /// <inheritdoc/>
     public async Task<int> BatchCreateAsync(
-        IReadOnlyList<TEntity> entities, IDatabaseContext? context = null)
-    {
-        return await BatchCreateAsync(entities, context, CancellationToken.None).ConfigureAwait(false);
-    }
-
-    /// <inheritdoc/>
-    public async Task<int> BatchCreateAsync(
-        IReadOnlyList<TEntity> entities, IDatabaseContext? context, CancellationToken cancellationToken)
+        IReadOnlyList<TEntity> entities, IDatabaseContext? context = null, CancellationToken cancellationToken = default)
     {
         if (entities == null)
         {
@@ -160,14 +153,7 @@ public partial class TableGateway<TEntity, TRowID>
 
     /// <inheritdoc/>
     public async Task<int> BatchUpsertAsync(
-        IReadOnlyList<TEntity> entities, IDatabaseContext? context = null)
-    {
-        return await BatchUpsertAsync(entities, context, CancellationToken.None).ConfigureAwait(false);
-    }
-
-    /// <inheritdoc/>
-    public async Task<int> BatchUpsertAsync(
-        IReadOnlyList<TEntity> entities, IDatabaseContext? context, CancellationToken cancellationToken)
+        IReadOnlyList<TEntity> entities, IDatabaseContext? context = null, CancellationToken cancellationToken = default)
     {
         if (entities == null)
         {

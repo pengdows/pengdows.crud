@@ -33,30 +33,16 @@ namespace pengdows.crud;
 public partial class TableGateway<TEntity, TRowID>
 {
     /// <inheritdoc/>
-    public Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null)
-    {
-        var ctx = context ?? _context;
-        return BuildUpdateAsync(objectToUpdate, _versionColumn != null, ctx, CancellationToken.None);
-    }
-
-    /// <inheritdoc/>
-    public Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, IDatabaseContext? context,
-        CancellationToken cancellationToken)
+    public Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null,
+        CancellationToken cancellationToken = default)
     {
         var ctx = context ?? _context;
         return BuildUpdateAsync(objectToUpdate, _versionColumn != null, ctx, cancellationToken);
     }
 
     /// <inheritdoc/>
-    public Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, bool loadOriginal,
-        IDatabaseContext? context = null)
-    {
-        return BuildUpdateAsync(objectToUpdate, loadOriginal, context, CancellationToken.None);
-    }
-
-    /// <inheritdoc/>
     public async Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, bool loadOriginal,
-        IDatabaseContext? context, CancellationToken cancellationToken)
+        IDatabaseContext? context = null, CancellationToken cancellationToken = default)
     {
         if (objectToUpdate == null)
         {
