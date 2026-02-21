@@ -789,9 +789,23 @@ internal abstract class SqlDialect : ISqlDialect
             }
             else if (parameter.DbType == DbType.Decimal && value is decimal dec)
             {
-                var (prec, scale) = DecimalHelpers.Infer(dec);
-                parameter.Precision = (byte)prec;
-                parameter.Scale = (byte)scale;
+                // Microsoft.Data.SqlClient 6.x validates that the decimal value fits
+                // within the parameter's declared Precision/Scale before sending to the
+                // server.  When Precision=0, SqlClient treats the parameter as DECIMAL(1,0)
+                // (the minimum valid SQL decimal), which rejects any value requiring more
+                // than one significant digit (e.g. 10, 19.99, 100).
+                //
+                // Fix: always set Precision to at least 18 (the standard SQL Server
+                // DECIMAL column precision) so any value that fits in a typical column
+                // is accepted.  Scale is set to the value's natural fractional digits
+                // (e.g. 2 for 19.99m, 0 for 10m) so no silent rounding occurs.
+                //
+                // Using Precision=18 is the industry convention (used by Dapper, EF Core).
+                // All supported databases (SQL Server, PostgreSQL, Oracle, MySQL, etc.)
+                // accept DECIMAL(18,S) parameters for columns declared with P≤18.
+                var (inferredPrecision, inferredScale) = DecimalHelpers.Infer(dec);
+                parameter.Precision = (byte)Math.Max(inferredPrecision, 18);
+                parameter.Scale = (byte)inferredScale;
             }
         }
 

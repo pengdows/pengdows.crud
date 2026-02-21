@@ -100,6 +100,13 @@ public partial class TableGateway<TEntity, TRowID> :
 
     private IColumnInfo? _versionColumn;
 
+    // Cached compiled setters for audit fields — initialized once in Initialize(), eliminating
+    // repeated ConcurrentDictionary lookups in GetOrCreateSetter on every Create/Update call.
+    private Action<object, object?>? _auditLastUpdatedOnSetter;
+    private Action<object, object?>? _auditLastUpdatedBySetter;
+    private Action<object, object?>? _auditCreatedOnSetter;
+    private Action<object, object?>? _auditCreatedBySetter;
+
     private TypeCoercionOptions _coercionOptions = TypeCoercionOptions.Default;
 
     private readonly BoundedCache<string, IReadOnlyList<IColumnInfo>> _columnListCache = new(MaxCacheSize);
@@ -323,6 +330,20 @@ public partial class TableGateway<TEntity, TRowID> :
 
         _idColumn = _tableInfo.Columns.Values.FirstOrDefault(itm => itm.IsId);
         _versionColumn = _tableInfo.Columns.Values.FirstOrDefault(itm => itm.IsVersion);
+
+        // Cache compiled setters for audit fields once at construction time to avoid repeated
+        // ConcurrentDictionary lookups (GetOrCreateSetter) on every Create/Update call.
+        if (_hasAuditColumns)
+        {
+            if (_tableInfo.LastUpdatedOn?.PropertyInfo != null)
+                _auditLastUpdatedOnSetter = GetOrCreateSetter(_tableInfo.LastUpdatedOn.PropertyInfo);
+            if (_tableInfo.LastUpdatedBy?.PropertyInfo != null)
+                _auditLastUpdatedBySetter = GetOrCreateSetter(_tableInfo.LastUpdatedBy.PropertyInfo);
+            if (_tableInfo.CreatedOn?.PropertyInfo != null)
+                _auditCreatedOnSetter = GetOrCreateSetter(_tableInfo.CreatedOn.PropertyInfo);
+            if (_tableInfo.CreatedBy?.PropertyInfo != null)
+                _auditCreatedBySetter = GetOrCreateSetter(_tableInfo.CreatedBy.PropertyInfo);
+        }
 
         // Note: Validation for missing audit resolver with user fields is now handled
         // in SetAuditFields method where it throws InvalidOperationException
@@ -652,7 +673,7 @@ public partial class TableGateway<TEntity, TRowID> :
 
         if (_versionColumn != null)
         {
-            var current = _versionColumn.PropertyInfo.GetValue(entity);
+            var current = _versionColumn.MakeParameterValueFromField(entity);
             if (current == null || Utils.IsZeroNumeric(current))
             {
                 var target = Nullable.GetUnderlyingType(_versionColumn.PropertyInfo.PropertyType) ??
@@ -739,7 +760,7 @@ public partial class TableGateway<TEntity, TRowID> :
 
         var property = _idColumn.PropertyInfo;
         var underlyingType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
-        var currentValue = property.GetValue(entity);
+        var currentValue = _idColumn.MakeParameterValueFromField(entity);
 
         if (underlyingType == typeof(Guid))
         {

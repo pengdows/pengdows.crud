@@ -25,19 +25,18 @@ coverage-report/
 mydb.sqlite
 coverage.json
 Untitled.json
-benchmarks/CrudBenchmarks/BenchmarkDotNet.Artifacts/
 benchmarks/CrudBenchmarks/mplconfig/
 benchmarks/**/*results*.txt
 benchmarks/**/*results*.md
 benchmarks/archive/
 
-BenchmarkDotNet.Artifacts/*.log
 BenchmarkDotNet.Artifacts/
 node_modules/
 temp-broken-tests/
 Artifacts/
 output.txt
-coverage*
+coverage-*.xml
+coverage-*.json
 artifacts/
 
 # Debug/scratch files

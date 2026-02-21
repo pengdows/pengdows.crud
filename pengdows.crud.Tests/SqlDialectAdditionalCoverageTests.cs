@@ -61,12 +61,16 @@ public class SqlDialectAdditionalCoverageTests
     }
 
     [Fact]
-    public void CreateDbParameter_DecimalValue_SetsPrecisionAndScale()
+    public void CreateDbParameter_DecimalValue_SetsPrecisionToAtLeast18AndExactScale()
     {
+        // Precision is set to max(inferred, 18) so SqlClient 6.x accepts any value
+        // for a standard DECIMAL(18,x) column.  Scale is the value's natural scale.
+        // 123.4500m trims trailing fractional zeros → scale=2; inferred precision=5;
+        // final Precision = max(5, 18) = 18.
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var dialect = new TestableDialect(factory, NullLoggerFactory.Instance.CreateLogger<TestableDialect>());
         var parameter = dialect.CreateDbParameter("p", DbType.Decimal, 123.4500m);
-        Assert.Equal(5, parameter.Precision);
+        Assert.Equal(18, parameter.Precision);
         Assert.Equal(2, parameter.Scale);
     }
 

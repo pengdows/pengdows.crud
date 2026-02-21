@@ -31,7 +31,6 @@ using System.Data;
 using System.Diagnostics;
 using System.Data.Common;
 using System.Globalization;
-using System.Linq;
 using System.Text;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -508,6 +507,9 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         {
             parameter.Size = Math.Max(str.Length, 1);
         }
+
+        // Do not adjust Precision/Scale for decimal parameters here.
+        // See SqlDialect.CreateDbParameter for the rationale.
     }
 
     public object? GetParameterValue(string parameterName)
@@ -1294,7 +1296,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     {
         if (list != null)
         {
-            foreach (var p in list.OfType<DbParameter>())
+            foreach (var p in list)
             {
                 AddParameter(p);
             }

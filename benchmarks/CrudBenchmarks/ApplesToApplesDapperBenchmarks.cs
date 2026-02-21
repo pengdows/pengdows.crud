@@ -28,7 +28,9 @@ public class ApplesToApplesDapperBenchmarks : IDisposable
     private SqliteConnection _sentinel = null!;
 
     private DatabaseContext _pengdowsContext = null!;
+    private DatabaseContext _pengdowsSingleContext = null!;
     private TableGateway<BenchEntity, int> _gateway = null!;
+    private TableGateway<BenchEntity, int> _singleGateway = null!;
     private TypeMapRegistry _typeMap = null!;
 
     private DbProviderFactory _factory = null!;
@@ -78,14 +80,26 @@ public class ApplesToApplesDapperBenchmarks : IDisposable
 
         _typeMap = new TypeMapRegistry();
         _typeMap.Register<BenchEntity>();
-        var cfg = new DatabaseContextConfiguration
+        
+        // Standard Context: Connection-per-op (Includes Governor + Open/Close overhead)
+        var cfgStandard = new DatabaseContextConfiguration
         {
             ConnectionString = ConnStr,
             ReadWriteMode = ReadWriteMode.ReadWrite,
             DbMode = DbMode.Standard
         };
-        _pengdowsContext = new DatabaseContext(cfg, SqliteFactory.Instance, null, _typeMap);
+        _pengdowsContext = new DatabaseContext(cfgStandard, SqliteFactory.Instance, null, _typeMap);
         _gateway = new TableGateway<BenchEntity, int>(_pengdowsContext);
+
+        // SingleConnection Context: Shared connection (Pure mapping performance)
+        var cfgSingle = new DatabaseContextConfiguration
+        {
+            ConnectionString = ConnStr,
+            ReadWriteMode = ReadWriteMode.ReadWrite,
+            DbMode = DbMode.SingleConnection
+        };
+        _pengdowsSingleContext = new DatabaseContext(cfgSingle, SqliteFactory.Instance, null, _typeMap);
+        _singleGateway = new TableGateway<BenchEntity, int>(_pengdowsSingleContext);
 
         _pengdowsSql = BuildSingleReadSql(p => _pengdowsContext.MakeParameterName(p));
         _dapperSql = BuildSingleReadSql(p => $"@{p}");
@@ -95,6 +109,7 @@ public class ApplesToApplesDapperBenchmarks : IDisposable
     public void GlobalCleanup()
     {
         _pengdowsContext?.Dispose();
+        _pengdowsSingleContext?.Dispose();
         _sentinel?.Dispose();
     }
 
@@ -103,8 +118,12 @@ public class ApplesToApplesDapperBenchmarks : IDisposable
         GlobalCleanup();
     }
 
-    [Benchmark(Baseline = true)]
-    public async Task<int> ReadSingle_Pengdows_ReadySql_NewConnection()
+    /// <summary>
+    /// Measures pengdows.crud in production-standard mode.
+    /// Includes: Governor wait, Connection Open/Close, Command Prepare, and Mapping.
+    /// </summary>
+    [Benchmark]
+    public async Task<int> ReadSingle_Pengdows_ProductionStandard()
     {
         var hits = 0;
         for (var i = 0; i < RecordCount; i++)
@@ -122,8 +141,35 @@ public class ApplesToApplesDapperBenchmarks : IDisposable
         return hits;
     }
 
+    /// <summary>
+    /// Measures pengdows.crud mapping engine ONLY.
+    /// Eliminates Governor and Open/Close overhead by using a shared persistent connection.
+    /// </summary>
     [Benchmark]
-    public async Task<int> ReadSingle_Dapper_ReadySql_NewConnection()
+    public async Task<int> ReadSingle_Pengdows_PureMapping()
+    {
+        var hits = 0;
+        for (var i = 0; i < RecordCount; i++)
+        {
+            var id = NextId();
+            await using var container = _pengdowsSingleContext.CreateSqlContainer(_pengdowsSql);
+            container.AddParameterWithValue("id", DbType.Int32, id);
+            var result = await _singleGateway.LoadSingleAsync(container);
+            if (result != null)
+            {
+                hits++;
+            }
+        }
+
+        return hits;
+    }
+
+    /// <summary>
+    /// Measures Dapper using connection-per-op.
+    /// Note: Does NOT include governor overhead, making it "faster" but less safe than Standard mode.
+    /// </summary>
+    [Benchmark(Baseline = true)]
+    public async Task<int> ReadSingle_Dapper_NewConnection()
     {
         var hits = 0;
         for (var i = 0; i < RecordCount; i++)
@@ -134,6 +180,27 @@ public class ApplesToApplesDapperBenchmarks : IDisposable
             conn.ConnectionString = ConnStr;
             await conn.OpenAsync();
             var row = await conn.QuerySingleOrDefaultAsync<DapperBenchEntity>(_dapperSql, new { id });
+            if (row != null)
+            {
+                hits++;
+            }
+        }
+
+        return hits;
+    }
+
+    /// <summary>
+    /// Measures Dapper mapping engine ONLY.
+    /// Uses the sentinel connection to eliminate Open/Close overhead.
+    /// </summary>
+    [Benchmark]
+    public async Task<int> ReadSingle_Dapper_PureMapping()
+    {
+        var hits = 0;
+        for (var i = 0; i < RecordCount; i++)
+        {
+            var id = NextId();
+            var row = await _sentinel.QuerySingleOrDefaultAsync<DapperBenchEntity>(_dapperSql, new { id });
             if (row != null)
             {
                 hits++;

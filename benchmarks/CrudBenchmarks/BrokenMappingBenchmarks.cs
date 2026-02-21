@@ -122,7 +122,7 @@ public class BrokenMappingBenchmarks : IDisposable
     // ============================================================================
 
     [GlobalSetup]
-    public void Setup()
+    public async Task Setup()
     {
         _connectionString = "Data Source=BrokenMapping;Mode=Memory;Cache=Shared";
 
@@ -146,8 +146,8 @@ public class BrokenMappingBenchmarks : IDisposable
             .Options;
         _efContext = new EfBrokenWeirdContext(efOptions);
 
-        CreateSchema();
-        SeedData();
+        await CreateSchemaAsync();
+        await SeedDataAsync();
     }
 
     [GlobalCleanup]
@@ -159,7 +159,7 @@ public class BrokenMappingBenchmarks : IDisposable
         _sentinelConnection?.Dispose();
     }
 
-    private void CreateSchema()
+    private async Task CreateSchemaAsync()
     {
         var createSql = @"
             CREATE TABLE ""Weird Table Names"" (
@@ -172,11 +172,11 @@ public class BrokenMappingBenchmarks : IDisposable
                 ""Is Active"" INTEGER NOT NULL
             )";
 
-        using var container = _pengdowsContext.CreateSqlContainer(createSql);
-        container.ExecuteNonQueryAsync().AsTask().Wait();
+        await using var container = _pengdowsContext.CreateSqlContainer(createSql);
+        await container.ExecuteNonQueryAsync();
     }
 
-    private void SeedData()
+    private async Task SeedDataAsync()
     {
         for (int i = 1; i <= 100; i++)
         {
@@ -189,7 +189,7 @@ public class BrokenMappingBenchmarks : IDisposable
                 Select = i,
                 IsActive = i % 2 == 0
             };
-            _pengdowsHelper.CreateAsync(entity).Wait();
+            await _pengdowsHelper.CreateAsync(entity);
         }
     }
 

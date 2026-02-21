@@ -1,0 +1,203 @@
+Summary - pengdows.crud Coverage - Targeting 95%
+  Generated on: 1/25/2026 - 6:29:44 AM
+  Coverage date: 1/19/2026 - 5:32:17 PM - 1/23/2026 - 5:08:52 PM
+  Parser: MultiReport (2x Cobertura)
+  Assemblies: 2
+  Classes: 179
+  Files: 145
+  Line coverage: 87.2%
+  Covered lines: 14092
+  Uncovered lines: 2062
+  Coverable lines: 16154
+  Total lines: 26704
+  Branch coverage: 80.3% (6626 of 8250)
+  Covered branches: 6626
+  Total branches: 8250
+  Method coverage: 95.9% (2937 of 3062)
+  Full method coverage: 73.2% (2243 of 3062)
+  Covered methods: 2937
+  Fully covered methods: 2243
+  Total methods: 3062
+
+pengdows.crud                                                                     87.2%
+  pengdows.crud.attributes.ColumnAttribute                                         100%
+  pengdows.crud.attributes.EnumColumnAttribute                                     100%
+  pengdows.crud.attributes.IdAttribute                                             100%
+  pengdows.crud.attributes.JsonAttribute                                           100%
+  pengdows.crud.attributes.PrimaryKeyAttribute                                     100%
+  pengdows.crud.attributes.TableAttribute                                          100%
+  pengdows.crud.AuditValues                                                        100%
+  pengdows.crud.collections.OrderedDictionary<T1, T2>                             88.2%
+  pengdows.crud.collections.OrderedDictionaryExtensions                           97.8%
+  pengdows.crud.ColumnInfo                                                         100%
+  pengdows.crud.configuration.DatabaseContextConfiguration                         100%
+  pengdows.crud.configuration.DatabaseProviderConfig                               100%
+  pengdows.crud.configuration.DbProviderLoader                                    88.6%
+  pengdows.crud.DatabaseContext                                                   89.9%
+  pengdows.crud.DataReaderMapper                                                  94.6%
+  pengdows.crud.DataSourceInformation                                             98.9%
+  pengdows.crud.DecimalHelpers                                                     100%
+  pengdows.crud.diagnostics.EventIds                                               100%
+  pengdows.crud.dialects.DatabaseProductInfo                                       100%
+  pengdows.crud.dialects.DuckDbDialect                                            94.1%
+  pengdows.crud.dialects.FirebirdDialect                                            90%
+  pengdows.crud.dialects.MariaDbDialect                                           96.2%
+  pengdows.crud.dialects.MySqlDialect                                             96.7%
+  pengdows.crud.dialects.OracleDialect                                            92.5%
+  pengdows.crud.dialects.PostgreSqlDialect                                        80.1%
+  pengdows.crud.dialects.Sql92Dialect                                              100%
+  pengdows.crud.dialects.SqlDialect                                               88.3%
+  pengdows.crud.dialects.SqlDialectFactory                                        98.7%
+  pengdows.crud.dialects.SqliteDialect                                            89.4%
+  pengdows.crud.dialects.SqlServerDialect                                         92.9%
+  pengdows.crud.EntityHelper<T1, T2>                                              85.1%
+  pengdows.crud.EphemeralSecureString                                             97.1%
+  pengdows.crud.exceptions.ConnectionFailedException                               100%
+  pengdows.crud.exceptions.InvalidValueException                                   100%
+  pengdows.crud.exceptions.ModeContentionException                                87.5%
+  pengdows.crud.exceptions.NoColumnsFoundException                                 100%
+  pengdows.crud.exceptions.PoolSaturatedException                                   90%
+  pengdows.crud.exceptions.PrimaryKeyOnRowIdColumn                                 100%
+  pengdows.crud.exceptions.TooManyColumns                                          100%
+  pengdows.crud.exceptions.TooManyParametersException                              100%
+  pengdows.crud.exceptions.TransactionModeNotSupportedException                    100%
+  pengdows.crud.infrastructure.PoolGovernor                                       78.6%
+  pengdows.crud.infrastructure.PoolPermit                                          100%
+  pengdows.crud.infrastructure.SafeAsyncDisposableBase                              95%
+  pengdows.crud.infrastructure.StringBuilderPool                                  83.8%
+  pengdows.crud.internal.BoundedCache<T1, T2>                                      100%
+  pengdows.crud.internal.ClauseCounters                                            100%
+  pengdows.crud.internal.ConnectionPoolingConfiguration                             88%
+  pengdows.crud.internal.ConnectionStringHelper                                   76.7%
+  pengdows.crud.internal.DatabaseDetectionService                                 92.8%
+  pengdows.crud.internal.DatabaseTopology                                          100%
+  pengdows.crud.internal.MetricsCollector                                         89.1%
+  pengdows.crud.internal.PoolConfig                                                100%
+  pengdows.crud.internal.PoolingConfigReader                                      79.4%
+  pengdows.crud.internal.SbLite                                                    100%
+  pengdows.crud.internal.SessionSettingsConfigurator                              93.8%
+  pengdows.crud.internal.StringBuilderLite                                        84.5%
+  pengdows.crud.isolation.IsolationResolver                                       96.1%
+  pengdows.crud.metrics.AttributionSnapshot                                          0%
+  pengdows.crud.metrics.AttributionStats                                          11.7%
+  pengdows.crud.metrics.ModeContentionSnapshot                                    83.3%
+  pengdows.crud.metrics.ModeContentionStats                                        100%
+  pengdows.crud.metrics.PoolStatisticsSnapshot                                    77.7%
+  pengdows.crud.ReflectionSerializer                                              86.5%
+  pengdows.crud.SqlContainer                                                      86.8%
+  pengdows.crud.SqlContainerExtensions                                              55%
+  pengdows.crud.strategies.connection.ConnectionStrategyFactory                     90%
+  pengdows.crud.strategies.connection.KeepAliveConnectionStrategy                 73.3%
+  pengdows.crud.strategies.connection.KeepAliveConnectionStrategyTestExtensions    100%
+  pengdows.crud.strategies.connection.SingleConnectionStrategy                    92.3%
+  pengdows.crud.strategies.connection.SingleWriterConnectionStrategy              92.8%
+  pengdows.crud.strategies.connection.StandardConnectionStrategy                  93.5%
+  pengdows.crud.strategies.proc.CallProcWrappingStrategy                           100%
+  pengdows.crud.strategies.proc.ExecProcWrappingStrategy                           100%
+  pengdows.crud.strategies.proc.ExecuteProcedureWrappingStrategy                  77.7%
+  pengdows.crud.strategies.proc.OracleProcWrappingStrategy                         100%
+  pengdows.crud.strategies.proc.PostgresProcWrappingStrategy                      77.7%
+  pengdows.crud.strategies.proc.ProcWrappingStrategyFactory                        100%
+  pengdows.crud.strategies.proc.UnsupportedProcWrappingStrategy                    100%
+  pengdows.crud.StubAuditValueResolver                                             100%
+  pengdows.crud.TableInfo                                                          100%
+  pengdows.crud.tenant.MultiTenantOptions                                          100%
+  pengdows.crud.tenant.TenantConfiguration                                         100%
+  pengdows.crud.tenant.TenantConnectionResolver                                   85.7%
+  pengdows.crud.tenant.TenantContextRegistry                                      79.2%
+  pengdows.crud.tenant.TenantServiceCollectionExtensions                           100%
+  pengdows.crud.threading.NoOpAsyncLocker                                          100%
+  pengdows.crud.threading.RealAsyncLocker                                         94.3%
+  pengdows.crud.TransactionContext                                                87.7%
+  pengdows.crud.TypeCoercionHelper                                                96.4%
+  pengdows.crud.TypeMapRegistry                                                   93.3%
+  pengdows.crud.types.AdvancedTypeRegistry                                        95.8%
+  pengdows.crud.types.attributes.ComputedAttribute                                 100%
+  pengdows.crud.types.attributes.CurrencyAttribute                                 100%
+  pengdows.crud.types.attributes.DbEnumAttribute                                   100%
+  pengdows.crud.types.attributes.JsonContractAttribute                             100%
+  pengdows.crud.types.attributes.MaxLengthForInlineAttribute                       100%
+  pengdows.crud.types.attributes.RangeTypeAttribute                                100%
+  pengdows.crud.types.attributes.SpatialTypeAttribute                              100%
+  pengdows.crud.types.CachedParameterConfig                                        100%
+  pengdows.crud.types.coercion.AdvancedCoercions                                   100%
+  pengdows.crud.types.coercion.BasicCoercions                                      100%
+  pengdows.crud.types.coercion.BlobStreamCoercion                                 78.7%
+  pengdows.crud.types.coercion.BooleanCoercion                                    95.6%
+  pengdows.crud.types.coercion.ByteArrayCoercion                                   100%
+  pengdows.crud.types.coercion.CidrCoercion                                         55%
+  pengdows.crud.types.coercion.ClobStreamCoercion                                 68.1%
+  pengdows.crud.types.coercion.CoercionRegistry                                   84.4%
+  pengdows.crud.types.coercion.DateTimeCoercion                                   93.7%
+  pengdows.crud.types.coercion.DateTimeOffsetCoercion                             83.3%
+  pengdows.crud.types.coercion.DateTimeRangeCoercion                              90.9%
+  pengdows.crud.types.coercion.DbCoercion<T>                                      80.9%
+  pengdows.crud.types.coercion.DbValue                                             100%
+  pengdows.crud.types.coercion.DecimalCoercion                                     100%
+  pengdows.crud.types.coercion.GeographyCoercion                                    64%
+  pengdows.crud.types.coercion.GeometryCoercion                                   67.1%
+  pengdows.crud.types.coercion.GuidCoercion                                        100%
+  pengdows.crud.types.coercion.HStoreCoercion                                     90.9%
+  pengdows.crud.types.coercion.InetCoercion                                       69.2%
+  pengdows.crud.types.coercion.IntArrayCoercion                                   89.2%
+  pengdows.crud.types.coercion.IntervalDaySecondCoercion                          67.3%
+  pengdows.crud.types.coercion.IntervalYearMonthCoercion                          65.8%
+  pengdows.crud.types.coercion.IntRangeCoercion                                   86.3%
+  pengdows.crud.types.coercion.JsonDocumentCoercion                                100%
+  pengdows.crud.types.coercion.JsonElementCoercion                                 100%
+  pengdows.crud.types.coercion.JsonValueCoercion                                    80%
+  pengdows.crud.types.coercion.MacAddressCoercion                                 59.6%
+  pengdows.crud.types.coercion.ParameterBindingRules                              90.7%
+  pengdows.crud.types.coercion.PostgreSqlIntervalCoercion                         96.1%
+  pengdows.crud.types.coercion.PostgreSqlRangeDateTimeCoercion                    67.5%
+  pengdows.crud.types.coercion.PostgreSqlRangeIntCoercion                         67.5%
+  pengdows.crud.types.coercion.PostgreSqlRangeLongCoercion                        47.5%
+  pengdows.crud.types.coercion.ProviderParameterFactory                           92.1%
+  pengdows.crud.types.coercion.RowVersionValueCoercion                             100%
+  pengdows.crud.types.coercion.StringArrayCoercion                                  80%
+  pengdows.crud.types.coercion.TimeSpanCoercion                                    100%
+  pengdows.crud.types.converters.AdvancedTypeConverter<T>                         51.7%
+  pengdows.crud.types.converters.BlobStreamConverter                               100%
+  pengdows.crud.types.converters.CidrConverter                                    51.8%
+  pengdows.crud.types.converters.ClobStreamConverter                               100%
+  pengdows.crud.types.converters.GeographyConverter                               72.5%
+  pengdows.crud.types.converters.GeometryConverter                                57.1%
+  pengdows.crud.types.converters.InetConverter                                    56.8%
+  pengdows.crud.types.converters.IntervalDaySecondConverter                       85.2%
+  pengdows.crud.types.converters.IntervalYearMonthConverter                       76.1%
+  pengdows.crud.types.converters.MacAddressConverter                              48.6%
+  pengdows.crud.types.converters.PostgreSqlIntervalConverter                      76.7%
+  pengdows.crud.types.converters.PostgreSqlRangeConverter<T>                        85%
+  pengdows.crud.types.converters.RowVersionConverter                               100%
+  pengdows.crud.types.converters.SpatialConverter<T>                              67.8%
+  pengdows.crud.types.MappingKey                                                   100%
+  pengdows.crud.types.ProviderTypeMapping                                          100%
+  pengdows.crud.types.valueobjects.Cidr                                           64.5%
+  pengdows.crud.types.valueobjects.Geography                                      80.9%
+  pengdows.crud.types.valueobjects.Geometry                                       80.9%
+  pengdows.crud.types.valueobjects.HStore                                         84.4%
+  pengdows.crud.types.valueobjects.Inet                                           81.2%
+  pengdows.crud.types.valueobjects.IntervalDaySecond                              96.5%
+  pengdows.crud.types.valueobjects.IntervalYearMonth                                96%
+  pengdows.crud.types.valueobjects.JsonValue                                      87.8%
+  pengdows.crud.types.valueobjects.MacAddress                                     69.2%
+  pengdows.crud.types.valueobjects.PostgreSqlInterval                             59.3%
+  pengdows.crud.types.valueobjects.Range<T>                                       82.7%
+  pengdows.crud.types.valueobjects.RowVersion                                     89.6%
+  pengdows.crud.types.valueobjects.SpatialValue                                     94%
+  pengdows.crud.Utils                                                             90.2%
+  pengdows.crud.Uuid7Optimized                                                    91.6%
+  pengdows.crud.Uuid7Options                                                       100%
+  pengdows.crud.wrappers.TrackedConnection                                        91.1%
+  pengdows.crud.wrappers.TrackedReader                                            91.4%
+
+pengdows.crud.abstractions                                                        85.5%
+  pengdows.crud.connection.ConnectionLocalState                                   70.9%
+  pengdows.crud.IAuditValues                                                         0%
+  pengdows.crud.IDatabaseContext                                                  66.6%
+  pengdows.crud.isolation.IsolationResolution                                      100%
+  pengdows.crud.MapperOptions                                                      100%
+  pengdows.crud.metrics.DatabaseMetrics                                            100%
+  pengdows.crud.metrics.MetricsOptions                                             100%
+  pengdows.crud.TypeCoercionOptions                                                100%
+  pengdows.crud.TypeMapRegistryExtensions                                          100%

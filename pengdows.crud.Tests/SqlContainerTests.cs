@@ -137,6 +137,26 @@ public class SqlContainerTests : SqlLiteContextTestBase, IDisposable
     }
 
     [Fact]
+    public void SetParameterValue_Decimal_DoesNotChangePrecisionOrScale()
+    {
+        // SetParameterValue only updates the value; Precision/Scale are fixed at
+        // CreateDbParameter time.  For 0m: inferred=(0,0), Precision=max(0,18)=18,
+        // Scale=0.  After SetParameterValue(19.99m) the metadata is unchanged.
+        var container = Context.CreateSqlContainer();
+        var param = container.AddParameterWithValue(DbType.Decimal, 0m);
+
+        // 0m → Precision=18 (min), Scale=0
+        Assert.Equal((byte)18, param.Precision);
+        Assert.Equal((byte)0, param.Scale);
+
+        container.SetParameterValue(param.ParameterName, 19.99m);
+
+        // Metadata unchanged after value update
+        Assert.Equal((byte)18, param.Precision);
+        Assert.Equal((byte)0, param.Scale);
+    }
+
+    [Fact]
     public void SetParameterValue_MissingParameter_Throws()
     {
         var container = Context.CreateSqlContainer();

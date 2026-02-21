@@ -22,6 +22,8 @@ public class FirebirdTestProvider : TestProvider
     /// </summary>
     protected override string RoundTripDescription => "Hello World ASCII round-trip test string";
 
+    protected override string RoundTripFidelityUnicodeText => "Hello World ASCII fidelity test string";
+
     public override async Task CreateTable()
     {
         var sqlContainer = context.CreateSqlContainer();

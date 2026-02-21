@@ -2,14 +2,14 @@
     <PropertyGroup>
         <!--
           Skip the "no vendor" verification step that checks for vendored dependencies.
-          Set to false on CI/build agents where .NET 8 tooling is available.
+          Set to true locally if you haven't built the verify-novendor tool yet.
         -->
-        <SkipVerifyNoVendor>true</SkipVerifyNoVendor>
+        <SkipVerifyNoVendor>false</SkipVerifyNoVendor>
         <!--
           Skip public API interface validation during builds.
-          Set to false on CI and release builds to enforce API compatibility checks.
+          Set to true locally if you haven't built the InterfaceApiCheck tool yet.
         -->
-        <SkipInterfaceValidation>true</SkipInterfaceValidation>
+        <SkipInterfaceValidation>false</SkipInterfaceValidation>
         <Version>2.0.0</Version>
         <InformationalVersion>$(Version)</InformationalVersion>
         <AssemblyVersion>2.0.0.0</AssemblyVersion>

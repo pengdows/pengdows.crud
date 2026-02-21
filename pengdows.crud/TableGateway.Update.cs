@@ -103,7 +103,7 @@ public partial class TableGateway<TEntity, TRowID>
 
         var idName = counters.NextKey();
         var pId = dialect.CreateDbParameter(idName, _idColumn.DbType,
-            _idColumn.PropertyInfo.GetValue(objectToUpdate)!);
+            _idColumn.MakeParameterValueFromField(objectToUpdate));
         parameters.Add(pId);
 
         var sql = string.Format(template.UpdateSql, setClause, dialect.MakeParameterName(pId));
@@ -132,7 +132,7 @@ public partial class TableGateway<TEntity, TRowID>
         CancellationToken cancellationToken)
     {
         var ctx = context ?? _context;
-        var idValue = _idColumn!.PropertyInfo.GetValue(objectToUpdate);
+        var idValue = _idColumn!.MakeParameterValueFromField(objectToUpdate);
         if (IsDefaultId(idValue))
         {
             return null;

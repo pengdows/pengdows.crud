@@ -67,7 +67,7 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
     private SqliteConnection _sentinelConnection = null!;
 
     [GlobalSetup]
-    public void Setup()
+    public async Task Setup()
     {
         var connStr = $"Data Source=stress_test_{Guid.NewGuid():N}.db;Mode=Memory;Cache=Shared";
         var sqliteDialect = new SqliteDialect(SqliteFactory.Instance, NullLogger<SqlDialect>.Instance);
@@ -106,8 +106,8 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
             .UseSqlite(_connectionString)
             .Options;
 
-        CreateSchema();
-        SeedData();
+        await CreateSchemaAsync();
+        await SeedDataAsync();
     }
 
     [GlobalCleanup]
@@ -117,22 +117,22 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
         _sentinelConnection?.Dispose();
     }
 
-    private void CreateSchema()
+    private async Task CreateSchemaAsync()
     {
-        using var container = _pengdowsContext.CreateSqlContainer(@"
+        await using var container = _pengdowsContext.CreateSqlContainer(@"
             CREATE TABLE IF NOT EXISTS stress_test (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 value INTEGER NOT NULL
             )");
-        container.ExecuteNonQueryAsync().AsTask().Wait();
+        await container.ExecuteNonQueryAsync();
     }
 
-    private void SeedData()
+    private async Task SeedDataAsync()
     {
         for (int i = 1; i <= 100; i++)
         {
             var entity = new PoolProtectEntity { Value = i };
-            _pengdowsHelper.CreateAsync(entity).Wait();
+            await _pengdowsHelper.CreateAsync(entity);
         }
     }
 
@@ -313,7 +313,7 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
                         await ApplyBusyTimeoutAsync(container);
                         var sql = BuildReadSql(param => container.MakeParameterName(param));
                         container.Query.Append(sql);
-                        container.AddParameterWithValue("id", DbType.Int32, random.Next(1, 100));
+                        container.AddParameterWithValue("id", DbType.Int32, Random.Shared.Next(1, 100));
                         await _pengdowsHelper.LoadSingleAsync(container);
                         break;
                     }
@@ -323,7 +323,7 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
                         await ApplyBusyTimeoutAsync(container);
                         var sql = BuildInsertSql(param => container.MakeParameterName(param));
                         container.Query.Append(sql);
-                        container.AddParameterWithValue("value", DbType.Int32, random.Next());
+                        container.AddParameterWithValue("value", DbType.Int32, Random.Shared.Next());
                         await container.ExecuteNonQueryAsync();
                         break;
                     }
@@ -333,8 +333,8 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
                         await ApplyBusyTimeoutAsync(container);
                         var sql = BuildUpdateSql(param => container.MakeParameterName(param));
                         container.Query.Append(sql);
-                        container.AddParameterWithValue("value", DbType.Int32, random.Next());
-                        container.AddParameterWithValue("id", DbType.Int32, random.Next(1, 100));
+                        container.AddParameterWithValue("value", DbType.Int32, Random.Shared.Next());
+                        container.AddParameterWithValue("id", DbType.Int32, Random.Shared.Next(1, 100));
                         await container.ExecuteNonQueryAsync();
                         break;
                     }
@@ -344,7 +344,7 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
                         await ApplyBusyTimeoutAsync(container);
                         var sql = BuildListSql(param => container.MakeParameterName(param));
                         container.Query.Append(sql);
-                        container.AddParameterWithValue("min", DbType.Int32, random.Next(50));
+                        container.AddParameterWithValue("min", DbType.Int32, Random.Shared.Next(50));
                         await _pengdowsHelper.LoadListAsync(container);
                         break;
                     }
@@ -376,26 +376,26 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
                     {
                         var sql = BuildReadSql(param => $"@{param}");
                         await conn.QueryFirstOrDefaultAsync<PoolProtectEntity>(sql,
-                            new { id = random.Next(1, 100) });
+                            new { id = Random.Shared.Next(1, 100) });
                         break;
                     }
                     case 1:
                     {
                         var sql = BuildInsertSql(param => $"@{param}");
-                        await conn.ExecuteAsync(sql, new { value = random.Next() });
+                        await conn.ExecuteAsync(sql, new { value = Random.Shared.Next() });
                         break;
                     }
                     case 2:
                     {
                         var sql = BuildUpdateSql(param => $"@{param}");
                         await conn.ExecuteAsync(sql,
-                            new { id = random.Next(1, 100), value = random.Next() });
+                            new { id = Random.Shared.Next(1, 100), value = Random.Shared.Next() });
                         break;
                     }
                     case 3:
                     {
                         var sql = BuildListSql(param => $"@{param}");
-                        await conn.QueryAsync<PoolProtectEntity>(sql, new { min = random.Next(50) });
+                        await conn.QueryAsync<PoolProtectEntity>(sql, new { min = Random.Shared.Next(50) });
                         break;
                     }
                 }
@@ -426,7 +426,7 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
                     {
                         var sql = BuildReadSql(param => $"@{param}");
                         await context.Entities
-                            .FromSqlRaw(sql, new SqliteParameter("id", random.Next(1, 100)))
+                            .FromSqlRaw(sql, new SqliteParameter("id", Random.Shared.Next(1, 100)))
                             .AsNoTracking()
                             .FirstOrDefaultAsync();
                         break;
@@ -436,7 +436,7 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
                         var sql = BuildInsertSql(param => $"@{param}");
                         await context.Database.ExecuteSqlRawAsync(
                             sql,
-                            new SqliteParameter("value", random.Next()));
+                            new SqliteParameter("value", Random.Shared.Next()));
                         break;
                     }
                     case 2:
@@ -444,15 +444,15 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
                         var sql = BuildUpdateSql(param => $"@{param}");
                         await context.Database.ExecuteSqlRawAsync(
                             sql,
-                            new SqliteParameter("value", random.Next()),
-                            new SqliteParameter("id", random.Next(1, 100)));
+                            new SqliteParameter("value", Random.Shared.Next()),
+                            new SqliteParameter("id", Random.Shared.Next(1, 100)));
                         break;
                     }
                     case 3:
                     {
                         var sql = BuildListSql(param => $"@{param}");
                         await context.Entities
-                            .FromSqlRaw(sql, new SqliteParameter("min", random.Next(50)))
+                            .FromSqlRaw(sql, new SqliteParameter("min", Random.Shared.Next(50)))
                             .AsNoTracking()
                             .ToListAsync();
                         break;

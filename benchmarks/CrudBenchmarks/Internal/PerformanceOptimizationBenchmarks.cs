@@ -271,12 +271,8 @@ public class PerformanceOptimizationBenchmarks
     [Benchmark]
     public ISqlContainer RetrieveOne_Optimized_Direct()
     {
-        // Uses the optimized BuildRetrieveOne internally
-        var container = _ctx.CreateSqlContainer();
-        var sc = _helper.BuildBaseRetrieve("", _ctx);
-
-        // Simulate the optimized path without List allocation
-        return sc;
+        // Uses the optimized BuildBaseRetrieve path without List allocation
+        return _helper.BuildBaseRetrieve("", _ctx);
     }
 
     // ============================================================================

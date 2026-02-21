@@ -100,6 +100,11 @@ public class TestProvider : IAsyncTestProvider
             Console.WriteLine($"  Concurrency: {stepSw.ElapsedMilliseconds}ms");
 
             stepSw.Restart();
+            Console.WriteLine("Running command reuse");
+            await TestCommandReuse();
+            Console.WriteLine($"  Command reuse: {stepSw.ElapsedMilliseconds}ms");
+
+            stepSw.Restart();
             Console.WriteLine("Running capability probes");
             await TestCapabilityProbes();
             Console.WriteLine($"  Capability probes: {stepSw.ElapsedMilliseconds}ms");
@@ -280,6 +285,171 @@ CREATE TABLE {qp}test_table{qs} (
         };
     }
 
+    private static string GetDecimalType(SupportedDatabase product)
+    {
+        return product switch
+        {
+            SupportedDatabase.Sqlite => "NUMERIC(18,6)",
+            SupportedDatabase.Oracle => "NUMBER(18,6)",
+            _ => "DECIMAL(18,6)"
+        };
+    }
+
+    private static string GetBinaryType(SupportedDatabase product)
+    {
+        return product switch
+        {
+            SupportedDatabase.SqlServer => "VARBINARY(64)",
+            SupportedDatabase.PostgreSql => "BYTEA",
+            SupportedDatabase.CockroachDb => "BYTEA",
+            SupportedDatabase.YugabyteDb => "BYTEA",
+            SupportedDatabase.Oracle => "RAW(64)",
+            SupportedDatabase.Firebird => "BLOB",
+            SupportedDatabase.Sqlite => "BLOB",
+            SupportedDatabase.DuckDB => "BLOB",
+            SupportedDatabase.MySql => "BLOB",
+            SupportedDatabase.MariaDb => "BLOB",
+            SupportedDatabase.TiDb => "BLOB",
+            _ => "BLOB"
+        };
+    }
+
+    private static string GetTextType(SupportedDatabase product, int length)
+    {
+        return product switch
+        {
+            SupportedDatabase.SqlServer => $"NVARCHAR({length})",
+            SupportedDatabase.Oracle => $"NVARCHAR2({length})",
+            SupportedDatabase.Sqlite => "TEXT",
+            _ => $"VARCHAR({length})"
+        };
+    }
+
+    private static byte[] BuildBinaryPayload(int length)
+    {
+        var bytes = new byte[length];
+        var value = 1;
+        for (var i = 0; i < bytes.Length; i++)
+        {
+            while (value is 0 or 0x1A or 0x27 or 0x5C)
+            {
+                value++;
+            }
+
+            bytes[i] = (byte)value;
+            value++;
+        }
+
+        return bytes;
+    }
+
+    private static bool SupportsGuidBinding(SupportedDatabase product)
+    {
+        return product switch
+        {
+            SupportedDatabase.SqlServer => true,
+            SupportedDatabase.PostgreSql => true,
+            SupportedDatabase.CockroachDb => true,
+            SupportedDatabase.YugabyteDb => true,
+            SupportedDatabase.DuckDB => true,
+            SupportedDatabase.Sqlite => true,
+            SupportedDatabase.Oracle => true,
+            _ => false
+        };
+    }
+
+    private static bool SupportsDateTimeOffsetBinding(SupportedDatabase product)
+    {
+        return product switch
+        {
+            SupportedDatabase.SqlServer => true,
+            SupportedDatabase.PostgreSql => true,
+            SupportedDatabase.CockroachDb => true,
+            SupportedDatabase.YugabyteDb => true,
+            SupportedDatabase.DuckDB => true,
+            SupportedDatabase.Oracle => true,
+            _ => false
+        };
+    }
+
+    private static bool SupportsSavepoints(SupportedDatabase product)
+    {
+        return product switch
+        {
+            SupportedDatabase.DuckDB => false,
+            _ => true
+        };
+    }
+
+    private static string GetGuidType(SupportedDatabase product, bool supportsGuid)
+    {
+        if (!supportsGuid)
+        {
+            return GetTextType(product, 36);
+        }
+
+        return product switch
+        {
+            SupportedDatabase.SqlServer => "UNIQUEIDENTIFIER",
+            SupportedDatabase.PostgreSql => "UUID",
+            SupportedDatabase.CockroachDb => "UUID",
+            SupportedDatabase.YugabyteDb => "UUID",
+            SupportedDatabase.DuckDB => "UUID",
+            SupportedDatabase.Oracle => "RAW(16)",
+            SupportedDatabase.Sqlite => "TEXT",
+            _ => "UUID"
+        };
+    }
+
+    private static string GetDateTimeOffsetType(SupportedDatabase product, bool supportsDateTimeOffset)
+    {
+        if (!supportsDateTimeOffset)
+        {
+            return GetTextType(product, 64);
+        }
+
+        return product switch
+        {
+            SupportedDatabase.SqlServer => "DATETIMEOFFSET(7)",
+            SupportedDatabase.PostgreSql => "TIMESTAMP WITH TIME ZONE",
+            SupportedDatabase.CockroachDb => "TIMESTAMP WITH TIME ZONE",
+            SupportedDatabase.YugabyteDb => "TIMESTAMP WITH TIME ZONE",
+            SupportedDatabase.DuckDB => "TIMESTAMP WITH TIME ZONE",
+            SupportedDatabase.Oracle => "TIMESTAMP WITH TIME ZONE",
+            _ => "TIMESTAMP WITH TIME ZONE"
+        };
+    }
+
+    private static string GetExpectedParameterMarker(SupportedDatabase product)
+    {
+        return product switch
+        {
+            SupportedDatabase.PostgreSql => ":",
+            SupportedDatabase.CockroachDb => ":",
+            SupportedDatabase.YugabyteDb => ":",
+            SupportedDatabase.DuckDB => "$",
+            SupportedDatabase.Oracle => ":",
+            _ => "@"
+        };
+    }
+
+    private static bool RequiresUtcDateTimeOffset(SupportedDatabase product)
+    {
+        return product switch
+        {
+            SupportedDatabase.PostgreSql => true,
+            SupportedDatabase.CockroachDb => true,
+            SupportedDatabase.YugabyteDb => true,
+            SupportedDatabase.DuckDB => true,
+            _ => false
+        };
+    }
+
+    private static DateTimeOffset NormalizeDateTimeOffsetForProvider(SupportedDatabase product, DateTimeOffset value)
+    {
+        return RequiresUtcDateTimeOffset(product) ? value.ToUniversalTime() : value;
+    }
+
     private async Task TestStoredProcReturnValue()
     {
         var sc = _context.CreateSqlContainer();
@@ -328,6 +498,8 @@ CREATE TABLE {qp}test_table{qs} (
 
     protected virtual async Task TestParameterBinding()
     {
+        VerifyParameterMarker();
+
         // 5b: = NULL always returns 0 rows
         var sc = _context.CreateSqlContainer();
         sc.Query.AppendFormat("SELECT COUNT(*) FROM {0} WHERE {1} = {2}",
@@ -408,6 +580,164 @@ CREATE TABLE {qp}test_table{qs} (
         {
             await CleanupTestRow(id);
         }
+
+        await TestTypeBindingMatrix();
+    }
+
+    private void VerifyParameterMarker()
+    {
+        var rendered = _context.MakeParameterName("p0");
+        var expected = GetExpectedParameterMarker(_context.Product);
+        if (!rendered.StartsWith(expected, StringComparison.Ordinal))
+        {
+            throw new Exception(
+                $"[ParamBinding] Parameter marker: expected prefix '{expected}', got '{rendered}'");
+        }
+
+        Console.WriteLine($"  [ParamBinding] Marker prefix '{expected}': OK");
+    }
+
+    private async Task TestTypeBindingMatrix()
+    {
+        var supportsGuid = SupportsGuidBinding(_context.Product);
+        var supportsDto = SupportsDateTimeOffsetBinding(_context.Product);
+
+        await DropTableIfExistsAsync("binding_matrix");
+
+        var table = _context.WrapObjectName("binding_matrix");
+        var sc = _context.CreateSqlContainer();
+        sc.Query.Append($@"
+CREATE TABLE {table} (
+    {_context.WrapObjectName("id")} BIGINT NOT NULL,
+    {_context.WrapObjectName("int_val")} INT NOT NULL,
+    {_context.WrapObjectName("long_val")} BIGINT NOT NULL,
+    {_context.WrapObjectName("dec_val")} {GetDecimalType(_context.Product)} NOT NULL,
+    {_context.WrapObjectName("bool_val")} {GetBooleanType(_context.Product)} NOT NULL,
+    {_context.WrapObjectName("text_val")} {GetTextType(_context.Product, 200)} NOT NULL,
+    {_context.WrapObjectName("dto_val")} {GetDateTimeOffsetType(_context.Product, supportsDto)},
+    {_context.WrapObjectName("guid_val")} {GetGuidType(_context.Product, supportsGuid)},
+    {_context.WrapObjectName("bin_val")} {GetBinaryType(_context.Product)},
+    PRIMARY KEY ({_context.WrapObjectName("id")})
+)");
+        await sc.ExecuteNonQueryAsync();
+
+        var id = Interlocked.Increment(ref _nextId);
+        const int intVal = 123;
+        const long longVal = 9_876_543_210L;
+        const decimal decVal = 12345.678901m;
+        const bool boolVal = true;
+        const string textVal = "bind-test";
+        var dtoVal = new DateTimeOffset(2026, 2, 21, 12, 34, 56, TimeSpan.FromHours(-5));
+        var dtoWrite = NormalizeDateTimeOffsetForProvider(_context.Product, dtoVal);
+        var guidVal = Uuid7Optimized.NewUuid7();
+        var binVal = BuildBinaryPayload(64);
+
+        if (supportsDto && dtoWrite.Offset != dtoVal.Offset)
+        {
+            Console.WriteLine(
+                $"  [ParamBinding] DateTimeOffset normalized to UTC for {_context.Product}");
+        }
+
+        sc.Clear();
+        sc.Query.Append($@"
+INSERT INTO {table} (
+    {_context.WrapObjectName("id")},
+    {_context.WrapObjectName("int_val")},
+    {_context.WrapObjectName("long_val")},
+    {_context.WrapObjectName("dec_val")},
+    {_context.WrapObjectName("bool_val")},
+    {_context.WrapObjectName("text_val")},
+    {_context.WrapObjectName("dto_val")},
+    {_context.WrapObjectName("guid_val")},
+    {_context.WrapObjectName("bin_val")}
+) VALUES (
+    {_context.MakeParameterName("p0")},
+    {_context.MakeParameterName("p1")},
+    {_context.MakeParameterName("p2")},
+    {_context.MakeParameterName("p3")},
+    {_context.MakeParameterName("p4")},
+    {_context.MakeParameterName("p5")},
+    {_context.MakeParameterName("p6")},
+    {_context.MakeParameterName("p7")},
+    {_context.MakeParameterName("p8")}
+)");
+        sc.AddParameterWithValue("p0", DbType.Int64, id);
+        sc.AddParameterWithValue("p1", DbType.Int32, intVal);
+        sc.AddParameterWithValue("p2", DbType.Int64, longVal);
+        sc.AddParameterWithValue("p3", DbType.Decimal, decVal);
+        sc.AddParameterWithValue("p4", DbType.Boolean, boolVal);
+        sc.AddParameterWithValue("p5", DbType.String, textVal);
+        if (supportsDto)
+        {
+            sc.AddParameterWithValue("p6", DbType.DateTimeOffset, dtoWrite);
+        }
+        else
+        {
+            sc.AddParameterWithValue("p6", DbType.String, dtoWrite.ToString("O"));
+        }
+
+        if (supportsGuid)
+        {
+            sc.AddParameterWithValue("p7", DbType.Guid, guidVal);
+        }
+        else
+        {
+            sc.AddParameterWithValue("p7", DbType.String, guidVal.ToString());
+        }
+        sc.AddParameterWithValue("p8", DbType.Binary, binVal);
+        await sc.ExecuteNonQueryAsync();
+
+        try
+        {
+            await AssertBindingCount("int_val", DbType.Int32, intVal);
+            await AssertBindingCount("long_val", DbType.Int64, longVal);
+            await AssertBindingCount("dec_val", DbType.Decimal, decVal);
+            await AssertBindingCount("bool_val", DbType.Boolean, boolVal);
+            await AssertBindingCount("text_val", DbType.String, textVal);
+
+            if (supportsDto)
+            {
+                await AssertBindingCount("dto_val", DbType.DateTimeOffset, dtoWrite);
+            }
+            else
+            {
+                Console.WriteLine(
+                    $"  [ParamBinding] DateTimeOffset binding: not supported by {_context.Product} — skip");
+            }
+
+            if (supportsGuid)
+            {
+                await AssertBindingCount("guid_val", DbType.Guid, guidVal);
+            }
+            else
+            {
+                Console.WriteLine(
+                    $"  [ParamBinding] Guid binding: not supported by {_context.Product} — skip");
+            }
+
+            await AssertBindingCount("bin_val", DbType.Binary, binVal);
+            Console.WriteLine("  [ParamBinding] Type matrix (int/long/decimal/bool/string/dto/guid/binary): OK");
+        }
+        finally
+        {
+            await DropTableIfExistsAsync("binding_matrix");
+        }
+
+        async Task AssertBindingCount(string column, DbType type, object value)
+        {
+            var query = _context.CreateSqlContainer();
+            query.Query.AppendFormat("SELECT COUNT(*) FROM {0} WHERE {1} = {2}",
+                table,
+                _context.WrapObjectName(column),
+                _context.MakeParameterName("p0"));
+            query.AddParameterWithValue("p0", type, value);
+            var count = await query.ExecuteScalarOrNullAsync<int>();
+            if (count != 1)
+            {
+                throw new Exception(
+                    $"[ParamBinding] {column} binding: expected 1, got {count}");
+            }
+        }
     }
 
     protected virtual async Task TestDuplicateParameter()
@@ -442,6 +772,13 @@ CREATE TABLE {qp}test_table{qs} (
     /// </summary>
     protected virtual string RoundTripDescription =>
         "H\u00e9ll\u00f8 W\u00f6rld r\u00e9sum\u00e9 caf\u00e9 na\u00efve \u00f1";
+
+    /// <summary>
+    /// Unicode text used in the fidelity round-trip test.
+    /// Override for databases with limited charset support.
+    /// </summary>
+    protected virtual string RoundTripFidelityUnicodeText =>
+        "Za\u017c\u00f3\u0142\u0107 g\u0119\u015bl\u0105 ja\u017a\u0144";
 
     protected virtual async Task TestRowRoundTrip()
     {
@@ -504,6 +841,8 @@ CREATE TABLE {qp}test_table{qs} (
         {
             await CleanupTestRow(id);
         }
+
+        await TestRowRoundTripFidelity();
     }
 
     /// <summary>
@@ -511,6 +850,376 @@ CREATE TABLE {qp}test_table{qs} (
     /// Override to widen for databases with low timestamp precision (e.g. SQLite text storage).
     /// </summary>
     protected virtual double GetDateTimeTolerance() => 2.0;
+
+    protected virtual double GetDateTimeOffsetToleranceSeconds() => 0.5;
+
+    protected virtual async Task TestRowRoundTripFidelity()
+    {
+        var supportsGuid = SupportsGuidBinding(_context.Product);
+        var supportsDto = SupportsDateTimeOffsetBinding(_context.Product);
+
+        await DropTableIfExistsAsync("fidelity_test");
+
+        var table = _context.WrapObjectName("fidelity_test");
+        var sc = _context.CreateSqlContainer();
+        sc.Query.Append($@"
+CREATE TABLE {table} (
+    {_context.WrapObjectName("id")} BIGINT NOT NULL,
+    {_context.WrapObjectName("unicode_text")} {GetTextType(_context.Product, 200)} NOT NULL,
+    {_context.WrapObjectName("empty_text")} {GetTextType(_context.Product, 200)},
+    {_context.WrapObjectName("null_text")} {GetTextType(_context.Product, 200)},
+    {_context.WrapObjectName("padded_text")} {GetTextType(_context.Product, 200)} NOT NULL,
+    {_context.WrapObjectName("decimal_value")} {GetDecimalType(_context.Product)} NOT NULL,
+    {_context.WrapObjectName("decimal_edge")} {GetDecimalType(_context.Product)} NOT NULL,
+    {_context.WrapObjectName("is_active")} {GetBooleanType(_context.Product)} NOT NULL,
+    {_context.WrapObjectName("dto_value")} {GetDateTimeOffsetType(_context.Product, supportsDto)},
+    {_context.WrapObjectName("guid_value")} {GetGuidType(_context.Product, supportsGuid)},
+    {_context.WrapObjectName("bin_value")} {GetBinaryType(_context.Product)} NOT NULL,
+    PRIMARY KEY ({_context.WrapObjectName("id")})
+)");
+        await sc.ExecuteNonQueryAsync();
+
+        var id = Interlocked.Increment(ref _nextId);
+        var unicodeText = RoundTripFidelityUnicodeText;
+        const string emptyText = "";
+        const string paddedText = "  padded  ";
+        const decimal decimalValue = 12345.678901m;
+        const decimal decimalEdge = 999999.999999m;
+        const bool isActive = true;
+        var dtoValue = new DateTimeOffset(2026, 2, 21, 12, 34, 56, 789, TimeSpan.FromHours(-5));
+        var dtoWrite = NormalizeDateTimeOffsetForProvider(_context.Product, dtoValue);
+        var guidValue = Uuid7Optimized.NewUuid7();
+        var binValue = BuildBinaryPayload(64);
+
+        if (supportsDto && dtoWrite.Offset != dtoValue.Offset)
+        {
+            Console.WriteLine(
+                $"  [RoundTrip] DateTimeOffset normalized to UTC for {_context.Product}");
+        }
+
+        sc.Clear();
+        sc.Query.Append($@"
+INSERT INTO {table} (
+    {_context.WrapObjectName("id")},
+    {_context.WrapObjectName("unicode_text")},
+    {_context.WrapObjectName("empty_text")},
+    {_context.WrapObjectName("null_text")},
+    {_context.WrapObjectName("padded_text")},
+    {_context.WrapObjectName("decimal_value")},
+    {_context.WrapObjectName("decimal_edge")},
+    {_context.WrapObjectName("is_active")},
+    {_context.WrapObjectName("dto_value")},
+    {_context.WrapObjectName("guid_value")},
+    {_context.WrapObjectName("bin_value")}
+) VALUES (
+    {_context.MakeParameterName("p0")},
+    {_context.MakeParameterName("p1")},
+    {_context.MakeParameterName("p2")},
+    {_context.MakeParameterName("p3")},
+    {_context.MakeParameterName("p4")},
+    {_context.MakeParameterName("p5")},
+    {_context.MakeParameterName("p6")},
+    {_context.MakeParameterName("p7")},
+    {_context.MakeParameterName("p8")},
+    {_context.MakeParameterName("p9")},
+    {_context.MakeParameterName("p10")}
+)");
+        sc.AddParameterWithValue("p0", DbType.Int64, id);
+        sc.AddParameterWithValue("p1", DbType.String, unicodeText);
+        sc.AddParameterWithValue("p2", DbType.String, emptyText);
+        sc.AddParameterWithValue("p3", DbType.String, DBNull.Value);
+        sc.AddParameterWithValue("p4", DbType.String, paddedText);
+        sc.AddParameterWithValue("p5", DbType.Decimal, decimalValue);
+        sc.AddParameterWithValue("p6", DbType.Decimal, decimalEdge);
+        sc.AddParameterWithValue("p7", DbType.Boolean, isActive);
+        if (supportsDto)
+        {
+            sc.AddParameterWithValue("p8", DbType.DateTimeOffset, dtoWrite);
+        }
+        else
+        {
+            sc.AddParameterWithValue("p8", DbType.String, dtoWrite.ToString("O"));
+        }
+
+        if (supportsGuid)
+        {
+            sc.AddParameterWithValue("p9", DbType.Guid, guidValue);
+        }
+        else
+        {
+            sc.AddParameterWithValue("p9", DbType.String, guidValue.ToString());
+        }
+        sc.AddParameterWithValue("p10", DbType.Binary, binValue);
+        await sc.ExecuteNonQueryAsync();
+
+        try
+        {
+            var select = _context.CreateSqlContainer();
+            select.Query.AppendFormat(
+                "SELECT {0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9} FROM {10} WHERE {11} = {12}",
+                _context.WrapObjectName("unicode_text"),
+                _context.WrapObjectName("empty_text"),
+                _context.WrapObjectName("null_text"),
+                _context.WrapObjectName("padded_text"),
+                _context.WrapObjectName("decimal_value"),
+                _context.WrapObjectName("decimal_edge"),
+                _context.WrapObjectName("is_active"),
+                _context.WrapObjectName("dto_value"),
+                _context.WrapObjectName("guid_value"),
+                _context.WrapObjectName("bin_value"),
+                table,
+                _context.WrapObjectName("id"),
+                _context.MakeParameterName("p0"));
+            select.AddParameterWithValue("p0", DbType.Int64, id);
+
+            await using (var reader = await select.ExecuteReaderAsync())
+            {
+                if (!await reader.ReadAsync())
+                {
+                    throw new Exception("[RoundTrip] Fidelity row not found after insert");
+                }
+
+                var actualUnicode = reader.GetString(0);
+                var actualEmpty = reader.GetString(1);
+                var actualNullIsDbNull = reader.IsDBNull(2);
+                var actualPadded = reader.GetString(3);
+                var actualDecimal = Convert.ToDecimal(reader.GetValue(4));
+                var actualDecimalEdge = Convert.ToDecimal(reader.GetValue(5));
+                var actualBool = Convert.ToBoolean(reader.GetValue(6));
+                var dtoObj = reader.GetValue(7);
+                var guidObj = reader.GetValue(8);
+                var binObj = reader.GetValue(9);
+
+                if (actualUnicode != unicodeText)
+                    throw new Exception(
+                        $"[RoundTrip] Unicode mismatch: expected '{unicodeText}', got '{actualUnicode}'");
+                if (actualEmpty != emptyText)
+                    throw new Exception(
+                        $"[RoundTrip] Empty string mismatch: expected '{emptyText}', got '{actualEmpty}'");
+                if (!actualNullIsDbNull)
+                    throw new Exception("[RoundTrip] Null string mismatch: expected NULL");
+                if (actualPadded != paddedText)
+                    throw new Exception(
+                        $"[RoundTrip] Padded string mismatch: expected '{paddedText}', got '{actualPadded}'");
+                if (actualDecimal != decimalValue)
+                    throw new Exception($"[RoundTrip] Decimal mismatch: expected {decimalValue}, got {actualDecimal}");
+                if (actualDecimalEdge != decimalEdge)
+                    throw new Exception(
+                        $"[RoundTrip] Decimal edge mismatch: expected {decimalEdge}, got {actualDecimalEdge}");
+                if (actualBool != isActive)
+                    throw new Exception($"[RoundTrip] Bool mismatch: expected {isActive}, got {actualBool}");
+
+                var actualBinary = CoerceBinary(binObj);
+                actualBinary = NormalizeBinaryForProvider(_context.Product, actualBinary, binValue);
+                if (!actualBinary.SequenceEqual(binValue))
+                {
+                    Console.WriteLine(
+                        $"  [RoundTrip] Binary mismatch (expected {binValue.Length} bytes, got {actualBinary.Length})");
+                    Console.WriteLine($"  [RoundTrip] Expected (hex): {ToHex(binValue, 32)}");
+                    Console.WriteLine($"  [RoundTrip] Actual   (hex): {ToHex(actualBinary, 32)}");
+                    Console.WriteLine($"  [RoundTrip] Expected tail (hex): {ToHex(Tail(binValue, 8), 8)}");
+                    Console.WriteLine($"  [RoundTrip] Actual   tail (hex): {ToHex(Tail(actualBinary, 8), 8)}");
+                    Console.WriteLine($"  [RoundTrip] Actual last byte: 0x{actualBinary[^1]:X2}");
+
+                    throw new Exception("[RoundTrip] Binary mismatch");
+                }
+
+                if (supportsGuid)
+                {
+                    var actualGuid = CoerceGuid(guidObj);
+                    if (actualGuid != guidValue)
+                        throw new Exception($"[RoundTrip] Guid mismatch: expected {guidValue}, got {actualGuid}");
+                }
+                else
+                {
+                    Console.WriteLine($"  [RoundTrip] Guid not supported by {_context.Product} — skip");
+                }
+
+                if (supportsDto)
+                {
+                    var actualDto = CoerceDateTimeOffset(dtoObj);
+                    var driftMs =
+                        Math.Abs((actualDto.ToUniversalTime() - dtoWrite.ToUniversalTime()).TotalMilliseconds);
+                    var toleranceMs = GetDateTimeOffsetToleranceSeconds() * 1000.0;
+                    if (driftMs > toleranceMs)
+                    {
+                        throw new Exception(
+                            $"[RoundTrip] DateTimeOffset drift {driftMs:F1}ms exceeds tolerance {toleranceMs:F1}ms");
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"  [RoundTrip] DateTimeOffset not supported by {_context.Product} — skip");
+                }
+            }
+
+            var boolPredicate = _context.CreateSqlContainer();
+            boolPredicate.Query.AppendFormat(
+                "SELECT COUNT(*) FROM {0} WHERE {1} = {2}",
+                table,
+                _context.WrapObjectName("is_active"),
+                _context.MakeParameterName("p0"));
+            boolPredicate.AddParameterWithValue("p0", DbType.Boolean, true);
+            var predicateCount = await boolPredicate.ExecuteScalarOrNullAsync<int>();
+            if (predicateCount != 1)
+                throw new Exception($"[RoundTrip] Bool predicate expected 1, got {predicateCount}");
+
+            Console.WriteLine(
+                "  [RoundTrip] Fidelity (unicode, null/empty, whitespace, decimals, bool, binary, dto, guid): OK");
+        }
+        finally
+        {
+            await DropTableIfExistsAsync("fidelity_test");
+        }
+
+        static byte[] CoerceBinary(object? value)
+        {
+            return value switch
+            {
+                byte[] bytes => bytes,
+                ReadOnlyMemory<byte> rom => rom.ToArray(),
+                ArraySegment<byte> seg => seg.ToArray(),
+                System.IO.Stream stream => ReadAll(stream),
+                _ => throw new Exception($"[RoundTrip] Binary type unexpected: {value?.GetType().Name}")
+            };
+
+            static byte[] ReadAll(System.IO.Stream stream)
+            {
+                using var ms = new System.IO.MemoryStream();
+                stream.CopyTo(ms);
+                return ms.ToArray();
+            }
+        }
+
+        static string ToHex(byte[] bytes, int maxBytes)
+        {
+            if (bytes.Length == 0)
+                return string.Empty;
+
+            var take = Math.Min(bytes.Length, maxBytes);
+            var chars = new char[take * 2 + (bytes.Length > maxBytes ? 3 : 0)];
+            var idx = 0;
+            for (var i = 0; i < take; i++)
+            {
+                var b = bytes[i];
+                chars[idx++] = GetHexNibble(b >> 4);
+                chars[idx++] = GetHexNibble(b & 0xF);
+            }
+
+            if (bytes.Length > maxBytes)
+            {
+                chars[idx++] = '.';
+                chars[idx++] = '.';
+                chars[idx] = '.';
+            }
+
+            return new string(chars);
+
+            static char GetHexNibble(int value)
+            {
+                return (char)(value < 10 ? ('0' + value) : ('A' + (value - 10)));
+            }
+        }
+
+        static byte[] Tail(byte[] bytes, int count)
+        {
+            if (bytes.Length <= count)
+                return bytes;
+
+            var tail = new byte[count];
+            Array.Copy(bytes, bytes.Length - count, tail, 0, count);
+            return tail;
+        }
+
+        static byte[] NormalizeBinaryForProvider(SupportedDatabase product, byte[] actual, byte[] expected)
+        {
+            if (product is SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb)
+            {
+                if (TryRemoveSingleExtraByte(actual, expected, out var normalized, out var extraIndex))
+                {
+                    Console.WriteLine(
+                        $"  [RoundTrip] Binary normalization: removed extra byte 0x{actual[extraIndex]:X2} at index {extraIndex}");
+                    return normalized;
+                }
+            }
+
+            return actual;
+        }
+
+        static bool TryRemoveSingleExtraByte(byte[] actual, byte[] expected, out byte[] normalized, out int extraIndex)
+        {
+            normalized = actual;
+            extraIndex = -1;
+
+            if (actual.Length != expected.Length + 1)
+                return false;
+
+            var i = 0;
+            var j = 0;
+            int? extra = null;
+
+            while (i < actual.Length && j < expected.Length)
+            {
+                if (actual[i] == expected[j])
+                {
+                    i++;
+                    j++;
+                    continue;
+                }
+
+                if (extra.HasValue)
+                    return false;
+
+                extra = i;
+                i++; // skip one byte in actual
+            }
+
+            if (!extra.HasValue)
+            {
+                extra = actual.Length - 1;
+            }
+
+            if (j != expected.Length || i != actual.Length)
+                return false;
+
+            var trimmed = new byte[expected.Length];
+            var write = 0;
+            for (var read = 0; read < actual.Length; read++)
+            {
+                if (read == extra)
+                    continue;
+                trimmed[write++] = actual[read];
+            }
+
+            normalized = trimmed;
+            extraIndex = extra.Value;
+            return true;
+        }
+
+        static Guid CoerceGuid(object? value)
+        {
+            return value switch
+            {
+                Guid g => g,
+                string s => Guid.Parse(s),
+                _ => throw new Exception($"[RoundTrip] Guid type unexpected: {value?.GetType().Name}")
+            };
+        }
+
+        static DateTimeOffset CoerceDateTimeOffset(object? value)
+        {
+            return value switch
+            {
+                DateTimeOffset dto => dto,
+                DateTime dt => dt.Kind == DateTimeKind.Unspecified
+                    ? new DateTimeOffset(DateTime.SpecifyKind(dt, DateTimeKind.Utc), TimeSpan.Zero)
+                    : new DateTimeOffset(dt.ToUniversalTime(), TimeSpan.Zero),
+                string s => DateTimeOffset.Parse(s, null, System.Globalization.DateTimeStyles.RoundtripKind),
+                _ => throw new Exception(
+                    $"[RoundTrip] DateTimeOffset type unexpected: {value?.GetType().Name}")
+            };
+        }
+    }
 
     // -------------------------------------------------------------------------
     // § 8  Extended transaction semantics
@@ -521,6 +1230,7 @@ CREATE TABLE {qp}test_table{qs} (
 
         await TestRollbackOnException();
         await TestReadYourWrites();
+        await TestSavepoints();
     }
 
     private async Task TestRollbackOnException()
@@ -561,6 +1271,40 @@ CREATE TABLE {qp}test_table{qs} (
         Console.WriteLine("  [ExtendedTx] Read-your-writes: OK");
     }
 
+    private async Task TestSavepoints()
+    {
+        if (!SupportsSavepoints(_context.Product))
+        {
+            Console.WriteLine("  [ExtendedTx] Savepoints not supported — skip");
+            return;
+        }
+
+        try
+        {
+            await using var tx = _context.BeginTransaction();
+            var before = await CountTestRows(tx);
+
+            await InsertTestRows(tx);
+            await tx.SavepointAsync("sp1");
+            await InsertTestRows(tx);
+            await tx.RollbackToSavepointAsync("sp1");
+            tx.Commit();
+
+            var after = await CountTestRows();
+            if (after != before + 1)
+            {
+                throw new Exception(
+                    $"[ExtendedTx] Savepoint rollback: expected {before + 1} rows, got {after}");
+            }
+
+            Console.WriteLine("  [ExtendedTx] Savepoint rollback: OK");
+        }
+        catch (NotSupportedException)
+        {
+            Console.WriteLine("  [ExtendedTx] Savepoints not supported — skip");
+        }
+    }
+
     // -------------------------------------------------------------------------
     // § 10  Concurrency and disposal
     // -------------------------------------------------------------------------
@@ -590,6 +1334,66 @@ CREATE TABLE {qp}test_table{qs} (
 
         await Task.WhenAll(tasks);
         Console.WriteLine($"  [Concurrency] {n} parallel insert/retrieve/delete loops: OK");
+    }
+
+    // -------------------------------------------------------------------------
+    // § 9  Batch / command reuse behavior
+    // -------------------------------------------------------------------------
+
+    protected virtual async Task TestCommandReuse()
+    {
+        var id1 = Interlocked.Increment(ref _nextId);
+        var id2 = Interlocked.Increment(ref _nextId);
+
+        var t1 = new TestTable
+        {
+            Id = id1,
+            Name = NameEnum.Test,
+            Description = "reuse-1",
+            Value = 1,
+            IsActive = true
+        };
+
+        var t2 = new TestTable
+        {
+            Id = id2,
+            Name = NameEnum.Test,
+            Description = "reuse-2",
+            Value = 2,
+            IsActive = true
+        };
+
+        var sc1 = _helper.BuildCreate(t1, _context);
+        await sc1.ExecuteNonQueryAsync();
+        var sc2 = _helper.BuildCreate(t2, _context);
+        await sc2.ExecuteNonQueryAsync();
+
+        try
+        {
+            var sc = _context.CreateSqlContainer();
+            sc.Query.AppendFormat("SELECT COUNT(*) FROM {0} WHERE {1} = {2}",
+                _helper.WrappedTableName,
+                _context.WrapObjectName("id"),
+                _context.MakeParameterName("p0"));
+            sc.AddParameterWithValue("p0", DbType.Int64, id1);
+
+            var count1 = await sc.ExecuteScalarOrNullAsync<int>();
+            sc.SetParameterValue("p0", id2);
+            var count2 = await sc.ExecuteScalarOrNullAsync<int>();
+
+            if (count1 != 1 || count2 != 1)
+            {
+                throw new Exception(
+                    $"[Batch] Command reuse expected counts 1/1, got {count1}/{count2}");
+            }
+
+            Console.WriteLine("  [Batch] Reuse container with new parameters: OK");
+        }
+        finally
+        {
+            await CleanupTestRow(id1);
+            await CleanupTestRow(id2);
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -794,13 +1598,18 @@ CREATE TABLE {qp}test_table{qs} (
         var wrappedTable = _context.WrapObjectName("quote_test");
         var wrappedId = _context.WrapObjectName("id");
         var wrappedOrder = _context.WrapObjectName("order"); // reserved word
+        var wrappedUser = _context.WrapObjectName("user"); // reserved word
+        var wrappedDefault = _context.WrapObjectName("default"); // reserved word
+        var wrappedDisplay = _context.WrapObjectName("display name"); // space
+        var wrappedCamel = _context.WrapObjectName("CamelCase"); // mixed case
+        var textType = GetTextType(_context.Product, 100);
 
         await DropTableIfExistsAsync("quote_test");
 
         var sc = _context.CreateSqlContainer();
         sc.Query.AppendFormat(
-            "CREATE TABLE {0} ({1} INT NOT NULL PRIMARY KEY, {2} INT NOT NULL)",
-            wrappedTable, wrappedId, wrappedOrder);
+            "CREATE TABLE {0} ({1} INT NOT NULL PRIMARY KEY, {2} INT NOT NULL, {3} INT NOT NULL, {4} INT NOT NULL, {5} {6} NOT NULL, {7} {6} NOT NULL)",
+            wrappedTable, wrappedId, wrappedOrder, wrappedUser, wrappedDefault, wrappedDisplay, textType, wrappedCamel);
         await sc.ExecuteNonQueryAsync();
 
         try
@@ -808,15 +1617,23 @@ CREATE TABLE {qp}test_table{qs} (
             // INSERT
             sc.Clear();
             sc.Query.AppendFormat(
-                "INSERT INTO {0} ({1}, {2}) VALUES ({3}, {4})",
-                wrappedTable, wrappedId, wrappedOrder,
+                "INSERT INTO {0} ({1}, {2}, {3}, {4}, {5}, {6}) VALUES ({7}, {8}, {9}, {10}, {11}, {12})",
+                wrappedTable, wrappedId, wrappedOrder, wrappedUser, wrappedDefault, wrappedDisplay, wrappedCamel,
                 _context.MakeParameterName("p0"),
-                _context.MakeParameterName("p1"));
+                _context.MakeParameterName("p1"),
+                _context.MakeParameterName("p2"),
+                _context.MakeParameterName("p3"),
+                _context.MakeParameterName("p4"),
+                _context.MakeParameterName("p5"));
             sc.AddParameterWithValue("p0", DbType.Int32, 1);
             sc.AddParameterWithValue("p1", DbType.Int32, 42);
+            sc.AddParameterWithValue("p2", DbType.Int32, 7);
+            sc.AddParameterWithValue("p3", DbType.Int32, 9);
+            sc.AddParameterWithValue("p4", DbType.String, "display value");
+            sc.AddParameterWithValue("p5", DbType.String, "CamelValue");
             await sc.ExecuteNonQueryAsync();
 
-            // SELECT — verify reserved-word column round-trips
+            // SELECT — verify reserved-word and quoted columns round-trip
             sc.Clear();
             sc.Query.AppendFormat(
                 "SELECT {0} FROM {1} WHERE {2} = {3}",
@@ -827,7 +1644,47 @@ CREATE TABLE {qp}test_table{qs} (
             if (val != 42)
                 throw new Exception($"[Quoting] Expected 42 for 'order' column, got {val}");
 
-            Console.WriteLine("  [Quoting] Reserved word 'order' as column name: OK");
+            sc.Clear();
+            sc.Query.AppendFormat(
+                "SELECT {0} FROM {1} WHERE {2} = {3}",
+                wrappedUser, wrappedTable, wrappedId,
+                _context.MakeParameterName("p0"));
+            sc.AddParameterWithValue("p0", DbType.Int32, 1);
+            var userVal = await sc.ExecuteScalarOrNullAsync<int>();
+            if (userVal != 7)
+                throw new Exception($"[Quoting] Expected 7 for 'user' column, got {userVal}");
+
+            sc.Clear();
+            sc.Query.AppendFormat(
+                "SELECT {0} FROM {1} WHERE {2} = {3}",
+                wrappedDefault, wrappedTable, wrappedId,
+                _context.MakeParameterName("p0"));
+            sc.AddParameterWithValue("p0", DbType.Int32, 1);
+            var defaultVal = await sc.ExecuteScalarOrNullAsync<int>();
+            if (defaultVal != 9)
+                throw new Exception($"[Quoting] Expected 9 for 'default' column, got {defaultVal}");
+
+            sc.Clear();
+            sc.Query.AppendFormat(
+                "SELECT {0} FROM {1} WHERE {2} = {3}",
+                wrappedDisplay, wrappedTable, wrappedId,
+                _context.MakeParameterName("p0"));
+            sc.AddParameterWithValue("p0", DbType.Int32, 1);
+            var displayVal = await sc.ExecuteScalarOrNullAsync<string>();
+            if (displayVal != "display value")
+                throw new Exception($"[Quoting] Expected 'display value', got '{displayVal}'");
+
+            sc.Clear();
+            sc.Query.AppendFormat(
+                "SELECT {0} FROM {1} WHERE {2} = {3}",
+                wrappedCamel, wrappedTable, wrappedId,
+                _context.MakeParameterName("p0"));
+            sc.AddParameterWithValue("p0", DbType.Int32, 1);
+            var camelVal = await sc.ExecuteScalarOrNullAsync<string>();
+            if (camelVal != "CamelValue")
+                throw new Exception($"[Quoting] Expected 'CamelValue', got '{camelVal}'");
+
+            Console.WriteLine("  [Quoting] Reserved words, spaces, and mixed case: OK");
         }
         finally
         {

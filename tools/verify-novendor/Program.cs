@@ -44,6 +44,10 @@ static class V {
     static int RunCore(string[] args, CancellationToken cancellationToken) {
         if (args.Length == 0) { Console.Error.WriteLine("Usage: verify-novendor <dir> [--allow \"pattern;pattern\"]"); return 2; }
         var root = args[0];
+        if (string.IsNullOrWhiteSpace(root)) {
+            root = Environment.CurrentDirectory;
+            Console.Error.WriteLine($"[warn] Empty directory argument; using current directory: {root}");
+        }
         var allowArg = args.Skip(1).FirstOrDefault(a => a.StartsWith("--allow=", StringComparison.OrdinalIgnoreCase));
         var allows = (allowArg?.Substring("--allow=".Length) ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries);
 

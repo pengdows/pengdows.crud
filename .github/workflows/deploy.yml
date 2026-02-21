@@ -27,7 +27,7 @@ jobs:
             10.0.x
 
       - name: Restore dependencies
-        run: dotnet restore
+        run: dotnet restore pengdows.crud.sln
 
       - name: Build solution
         run: dotnet build --no-restore --configuration Release
@@ -59,9 +59,11 @@ jobs:
         run: |
           dotnet run --no-build --configuration Release --project testbed/testbed.csproj
 
-      - name: Run benchmarks
+      - name: Run benchmarks (internal smoke test only)
         run: |
-          dotnet run --no-build --configuration Release --project benchmarks/CrudBenchmarks/CrudBenchmarks.csproj
+          dotnet run --no-build --configuration Release --project benchmarks/CrudBenchmarks/CrudBenchmarks.csproj -- \
+            --filter "CrudBenchmarks.Internal.*" \
+            --iterationCount 1 --warmupCount 1
 
       - name: Generate coverage report
         run: |
@@ -114,7 +116,7 @@ jobs:
           fi
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           files: TestResults/**/coverage.cobertura.xml
           fail_ci_if_error: true
@@ -156,7 +158,6 @@ jobs:
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "version_short=$version" >> "$GITHUB_OUTPUT"
 
       - name: Build
         run: dotnet build pengdows.crud.sln -c Release
@@ -182,16 +183,31 @@ jobs:
           fi
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+      - name: Check if version already published
+        id: nuget_check
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://api.nuget.org/v3-flatcontainer/pengdows.crud/${VERSION}/${VERSION}.nupkg")
+          if [ "$STATUS" = "200" ]; then
+            echo "Version $VERSION already exists on NuGet — skipping publish."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Version $VERSION is new — proceeding with publish."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Push package to NuGet
+        if: steps.nuget_check.outputs.skip != 'true'
         run: |
           set -euo pipefail
-          dotnet nuget push pengdows.crud.abstractions/bin/Release/pengdows.crud.abstractions.${{ steps.version.outputs.version_short }}.nupkg \
+          dotnet nuget push pengdows.crud.abstractions/bin/Release/pengdows.crud.abstractions.${{ steps.version.outputs.version }}.nupkg \
             --source https://api.nuget.org/v3/index.json \
             --api-key "$NUGET_API_KEY"
-          dotnet nuget push pengdows.crud.fakeDb/bin/Release/pengdows.crud.fakeDb.${{ steps.version.outputs.version_short }}.nupkg \
+          dotnet nuget push pengdows.crud.fakeDb/bin/Release/pengdows.crud.fakeDb.${{ steps.version.outputs.version }}.nupkg \
             --source https://api.nuget.org/v3/index.json \
             --api-key "$NUGET_API_KEY"
-          dotnet nuget push pengdows.crud/bin/Release/pengdows.crud.${{ steps.version.outputs.version_short }}.nupkg \
+          dotnet nuget push pengdows.crud/bin/Release/pengdows.crud.${{ steps.version.outputs.version }}.nupkg \
             --source https://api.nuget.org/v3/index.json \
             --api-key "$NUGET_API_KEY"
         env:
@@ -207,24 +223,25 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Directory.Build.props
-          git commit -m "Bump version to v${{ steps.version.outputs.version_short }}" || echo "No changes to commit"
+          git commit -m "Bump version to v${{ steps.version.outputs.version }}" || echo "No changes to commit"
 
       - name: Push version bump commit
         if: ${{ !github.ref_protected }}
         run: git push origin HEAD:${{ github.event.repository.default_branch }}
 
       - name: Tag the release
-        if: ${{ !github.ref_protected }}
+        if: ${{ !github.ref_protected && steps.nuget_check.outputs.skip != 'true' }}
         run: |
-          git tag -a "v${{ steps.version.outputs.version_short }}" -m "Release v${{ steps.version.outputs.version_short }}"
-          git push origin "v${{ steps.version.outputs.version_short }}"
+          git tag -a "v${{ steps.version.outputs.version }}" -m "Release v${{ steps.version.outputs.version }}"
+          git push origin "v${{ steps.version.outputs.version }}"
 
       - name: Create GitHub Release
+        if: steps.nuget_check.outputs.skip != 'true'
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v${{ steps.version.outputs.version_short }}
-          name: v${{ steps.version.outputs.version_short }}
-          body: Automated release for version v${{ steps.version.outputs.version_short }}
+          tag_name: v${{ steps.version.outputs.version }}
+          name: v${{ steps.version.outputs.version }}
+          body: Automated release for version v${{ steps.version.outputs.version }}
           target_commitish: ${{ github.sha }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

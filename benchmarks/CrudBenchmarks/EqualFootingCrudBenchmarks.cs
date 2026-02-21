@@ -48,6 +48,7 @@ public class EqualFootingCrudBenchmarks : IDisposable
     // Counters for unique IDs in delete / create benchmarks
     private int _deleteIdSeed = 100_000;
     private int _batchIdSeed = 200_000;
+    private bool _originalMatchNamesWithUnderscores;
 
     [Params(1, 10, 100)]
     public int RecordCount { get; set; }
@@ -59,6 +60,7 @@ public class EqualFootingCrudBenchmarks : IDisposable
     [GlobalSetup]
     public void GlobalSetup()
     {
+        _originalMatchNamesWithUnderscores = DefaultTypeMap.MatchNamesWithUnderscores;
         DefaultTypeMap.MatchNamesWithUnderscores = true;
 
         // Sentinel connection — keeps the in-memory database alive
@@ -111,6 +113,7 @@ public class EqualFootingCrudBenchmarks : IDisposable
     [GlobalCleanup]
     public void GlobalCleanup()
     {
+        DefaultTypeMap.MatchNamesWithUnderscores = _originalMatchNamesWithUnderscores;
         DumpPengdowsMetrics();
         _pengdowsContext?.Dispose();
         _sentinel?.Dispose();

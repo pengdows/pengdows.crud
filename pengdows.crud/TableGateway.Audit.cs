@@ -111,19 +111,17 @@ public partial class TableGateway<TEntity, TRowID>
 
         var utcNow = auditValues?.UtcNow ?? DateTime.UtcNow;
 
-        // Handle LastUpdated fields
-        if (_tableInfo.LastUpdatedOn?.PropertyInfo != null)
+        // Handle LastUpdated fields — use instance-cached setters to avoid per-call dictionary lookup
+        if (_auditLastUpdatedOnSetter != null)
         {
-            var setter = GetOrCreateSetter(_tableInfo.LastUpdatedOn.PropertyInfo);
-            var coercedTime = CoerceTimestamp(utcNow, _tableInfo.LastUpdatedOn.PropertyInfo.PropertyType);
-            setter(obj, coercedTime);
+            var coercedTime = CoerceTimestamp(utcNow, _tableInfo.LastUpdatedOn!.PropertyInfo.PropertyType);
+            _auditLastUpdatedOnSetter(obj, coercedTime);
         }
 
-        if (_tableInfo.LastUpdatedBy?.PropertyInfo != null && auditValues != null)
+        if (_auditLastUpdatedBySetter != null && auditValues != null)
         {
-            var coercedUserId = Coerce(auditValues!.UserId, _tableInfo.LastUpdatedBy.PropertyInfo.PropertyType);
-            var setter = GetOrCreateSetter(_tableInfo.LastUpdatedBy.PropertyInfo);
-            setter(obj, coercedUserId);
+            var coercedUserId = Coerce(auditValues!.UserId, _tableInfo.LastUpdatedBy!.PropertyInfo.PropertyType);
+            _auditLastUpdatedBySetter(obj, coercedUserId);
         }
         // When no resolver is provided, we've already thrown above if user audit fields exist
 
@@ -132,29 +130,27 @@ public partial class TableGateway<TEntity, TRowID>
             return;
         }
 
-        // Handle Created fields (only for new entities)
-        if (_tableInfo.CreatedOn?.PropertyInfo != null)
+        // Handle Created fields (only for new entities) — use MakeParameterValueFromField (uses FastGetter internally)
+        if (_auditCreatedOnSetter != null)
         {
-            var currentValue = _tableInfo.CreatedOn.PropertyInfo.GetValue(obj);
+            var currentValue = _tableInfo.CreatedOn!.MakeParameterValueFromField(obj);
             if (IsDefaultTimestamp(currentValue))
             {
-                var setter = GetOrCreateSetter(_tableInfo.CreatedOn.PropertyInfo);
                 var coercedTime = CoerceTimestamp(utcNow, _tableInfo.CreatedOn.PropertyInfo.PropertyType);
-                setter(obj, coercedTime);
+                _auditCreatedOnSetter(obj, coercedTime);
             }
         }
 
-        if (_tableInfo.CreatedBy?.PropertyInfo != null && auditValues != null)
+        if (_auditCreatedBySetter != null && auditValues != null)
         {
-            var currentValue = _tableInfo.CreatedBy.PropertyInfo.GetValue(obj);
+            var currentValue = _tableInfo.CreatedBy!.MakeParameterValueFromField(obj);
             if (currentValue == null
                 || currentValue as string == string.Empty
                 || Utils.IsZeroNumeric(currentValue)
                 || (currentValue is Guid guid && guid == Guid.Empty))
             {
                 var coercedUserId = Coerce(auditValues.UserId, _tableInfo.CreatedBy.PropertyInfo.PropertyType);
-                var setter = GetOrCreateSetter(_tableInfo.CreatedBy.PropertyInfo);
-                setter(obj, coercedUserId);
+                _auditCreatedBySetter(obj, coercedUserId);
             }
         }
     }

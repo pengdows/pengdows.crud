@@ -210,7 +210,7 @@ This is intentional design - it allows "last modified" queries without checking 
 - Prefer `pengdows.crud.fakeDb` for unit tests; avoid real DBs. Use `testbed/` for integration via Testcontainers.
 - Coverage artifacts live in `TestResults/`; CI publishes Cobertura from `TestResults/**/coverage.cobertura.xml`.
 - The entire unit-test suite currently finishes in under 30 seconds; if a run approaches three minutes, terminate it and investigate for locking/hanging issues immediately.
-- CI enforces minimum **83% coverage**; target **90%** for new work.
+- CI enforces minimum **83% coverage**; target **95%** for new work.
 - Expand `fakeDb` when tests need behaviors it lacks - don't bypass its limitations.
 
 ## Commit & Pull Request Guidelines

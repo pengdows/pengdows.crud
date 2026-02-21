@@ -116,7 +116,7 @@ public partial class TableGateway<TEntity, TRowID>
             return;
         }
 
-        var v = _versionColumn.PropertyInfo.GetValue(e);
+        var v = _versionColumn.MakeParameterValueFromField(e);
         if (v == null || Utils.IsZeroNumeric(v))
         {
             var t = Nullable.GetUnderlyingType(_versionColumn.PropertyInfo.PropertyType) ??

@@ -211,7 +211,7 @@ public partial class TableGateway<TEntity, TRowID>
             return;
         }
 
-        var current = _versionColumn.PropertyInfo.GetValue(entity);
+        var current = _versionColumn.MakeParameterValueFromField(entity);
         if (current == null || Utils.IsZeroNumeric(current))
         {
             var target = Nullable.GetUnderlyingType(_versionColumn.PropertyInfo.PropertyType) ??

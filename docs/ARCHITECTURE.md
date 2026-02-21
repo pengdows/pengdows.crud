@@ -228,7 +228,7 @@ await conn.DisposeAsync();  // Returns to provider pool
 - PostgreSQL + SingleConnection → Logs warning (limits concurrency unnecessarily)
 - SQL Server + SingleWriter → Logs warning (limits concurrency unnecessarily)
 
-See `/home/alaricd/prj/pengdows/1.1/pengdows.crud/DatabaseContext.Initialization.cs:561-661` for full coercion logic.
+See `pengdows.crud/DatabaseContext.Initialization.cs` for full coercion logic.
 
 ---
 
@@ -1146,17 +1146,20 @@ public async Task<ITrackedConnection> AcquireConnection(ExecutionType executionT
 
 ## Version History
 
-### 1.1 (Current)
+### 2.0 (Current)
+- Breaking interface changes (`EntityHelper` → `TableGateway`)
+- Interface-first design mandate; all public APIs in `pengdows.crud.abstractions`
+- API baseline enforcement via `tools/interface-api-check`
+- Separated integration tests into dedicated project (`pengdows.crud.IntegrationTests`)
 - Streaming APIs (LoadStreamAsync, RetrieveStreamAsync)
 - Enhanced fakeDb with connection failure simulation
 - Two-level locking architecture
 - Mode mismatch detection and warnings
 - Comprehensive XML documentation
-- This architecture document
 
 ### 1.0
 - Initial release
-- Basic CRUD operations
+- Basic CRUD operations (`EntityHelper<TEntity, TRowID>`)
 - Multi-database support
 - Transaction management
 - Audit field tracking
