@@ -189,6 +189,99 @@ public class TestTableCreator
         await container.ExecuteNonQueryAsync();
     }
 
+    public async Task CreateTortureTableAsync()
+    {
+        var table = _context.WrapObjectName("Default Order");
+        var idCol = _context.WrapObjectName("Group By");
+        var selectCol = _context.WrapObjectName("Select");
+        var fromCol = _context.WrapObjectName("From");
+        var userCol = _context.WrapObjectName("User Name");
+
+        var sql = _context.Product switch
+        {
+            SupportedDatabase.Sqlite => $@"
+                CREATE TABLE IF NOT EXISTS {table} (
+                    {idCol} BIGINT PRIMARY KEY,
+                    {selectCol} TEXT,
+                    {fromCol} TEXT,
+                    {userCol} TEXT
+                )",
+            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb or SupportedDatabase.Snowflake => $@"
+                CREATE TABLE IF NOT EXISTS {table} (
+                    {idCol} BIGINT PRIMARY KEY,
+                    {selectCol} VARCHAR(255),
+                    {fromCol} VARCHAR(255),
+                    {userCol} VARCHAR(255)
+                )",
+            SupportedDatabase.SqlServer => $@"
+                IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'{table}') AND type in (N'U'))
+                CREATE TABLE {table} (
+                    {idCol} BIGINT PRIMARY KEY,
+                    {selectCol} NVARCHAR(255),
+                    {fromCol} NVARCHAR(255),
+                    {userCol} NVARCHAR(255)
+                )",
+            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb => $@"
+                CREATE TABLE IF NOT EXISTS {table} (
+                    {idCol} BIGINT PRIMARY KEY,
+                    {selectCol} VARCHAR(255),
+                    {fromCol} VARCHAR(255),
+                    {userCol} VARCHAR(255)
+                )",
+            SupportedDatabase.Oracle => $@"
+                DECLARE
+                    table_exists NUMBER;
+                BEGIN
+                    SELECT COUNT(*) INTO table_exists FROM user_tables WHERE table_name = 'Default Order';
+                    IF table_exists = 0 THEN
+                        EXECUTE IMMEDIATE '
+                            CREATE TABLE ""Default Order"" (
+                                ""Group By"" NUMBER PRIMARY KEY,
+                                ""Select"" VARCHAR2(255),
+                                ""From"" VARCHAR2(255),
+                                ""User Name"" VARCHAR2(255)
+                            )';
+                    END IF;
+                END;",
+            SupportedDatabase.Firebird => $@"
+                EXECUTE BLOCK AS
+                BEGIN
+                    IF (NOT EXISTS(SELECT 1 FROM RDB$RELATIONS WHERE RDB$RELATION_NAME = 'Default Order')) THEN
+                        EXECUTE STATEMENT 'CREATE TABLE ""Default Order"" (
+                            ""Group By"" BIGINT NOT NULL PRIMARY KEY,
+                            ""Select"" VARCHAR(255),
+                            ""From"" VARCHAR(255),
+                            ""User Name"" VARCHAR(255)
+                        )';
+                END",
+            SupportedDatabase.DuckDB => $@"
+                CREATE TABLE IF NOT EXISTS {table} (
+                    {idCol} BIGINT PRIMARY KEY,
+                    {selectCol} VARCHAR,
+                    {fromCol} VARCHAR,
+                    {userCol} VARCHAR
+                )",
+            _ => throw new NotSupportedException($"Database {_context.Product} not supported")
+        };
+
+        // For Firebird DDL visibility
+        if (_context.Product == SupportedDatabase.Firebird)
+        {
+            await using var tx = _context.BeginTransaction();
+            try
+            {
+                await using var fbContainer = tx.CreateSqlContainer(sql);
+                await fbContainer.ExecuteNonQueryAsync();
+                tx.Commit();
+            }
+            catch (Exception ex) when (ex.Message.Contains("already exists")) { /* ignore */ }
+            return;
+        }
+
+        await using var container = _context.CreateSqlContainer(sql);
+        await container.ExecuteNonQueryAsync();
+    }
+
     private async Task CreateFirebirdTestTableAsync()
     {
         await using var create = _context.CreateSqlContainer(CreateFirebirdTableSql());
