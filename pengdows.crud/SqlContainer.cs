@@ -34,7 +34,6 @@ using System.Globalization;
 using System.Text;
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -104,8 +103,6 @@ namespace pengdows.crud;
 /// <seealso cref="TableGateway{TEntity,TRowID}"/>
 public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectProvider, IReaderLifetimeListener
 {
-    private static readonly Regex ParamPlaceholderRegex = new(@"\{P\}([A-Za-z_][A-Za-z0-9_]*)", RegexOptions.Compiled);
-
     private static readonly ConcurrentDictionary<Type, Action<DbParameter, DbParameter>> ProviderSpecificCopiers = new();
 
     private readonly IDatabaseContext _context;
@@ -269,44 +266,151 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         ParamSequence.Clear();
         _renderedParameterMap?.Clear();
 
-        if (_dialect.SupportsNamedParameters && !_dialect.SupportsRepeatedNamedParameters)
+        return _dialect.SupportsNamedParameters && !_dialect.SupportsRepeatedNamedParameters
+            ? RenderParamsDeduplicating(sql)
+            : RenderParamsSimple(sql);
+    }
+
+    // True for [A-Za-z_] — valid first char of a {P} parameter name.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsIdentStart(char c) =>
+        (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_';
+
+    // True for [A-Za-z0-9_] — valid continuation char of a {P} parameter name.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsIdentContinue(char c) =>
+        IsIdentStart(c) || (c >= '0' && c <= '9');
+
+    /// <summary>
+    /// Scans <paramref name="sql"/> for <c>{P}NAME</c> placeholders and replaces each with
+    /// the dialect's parameter marker (e.g. <c>@NAME</c> for SQLite/SQL Server, <c>:NAME</c>
+    /// for PostgreSQL, <c>?</c> for positional providers).
+    /// Used for all dialects that allow the same named parameter to appear multiple times
+    /// in one statement (virtually all except Oracle).
+    /// Avoids Regex overhead: no Match/Group allocations, no per-match string.Concat.
+    /// </summary>
+    private string RenderParamsSimple(string sql)
+    {
+        var span = sql.AsSpan();
+        var cursor = 0;
+        StringBuilder? sb = null;
+
+        while (cursor < sql.Length)
         {
-            Dictionary<string, int>? counts = null;
-            HashSet<string>? usedNames = null;
-            return ParamPlaceholderRegex.Replace(sql, m =>
+            var relIdx = span[cursor..].IndexOf("{P}", StringComparison.Ordinal);
+            if (relIdx < 0) break;
+
+            var matchStart = cursor + relIdx;
+            var nameStart = matchStart + 3; // skip past "{P}"
+
+            // Not a valid identifier start — emit "{P}" literally and continue scanning
+            if (nameStart >= sql.Length || !IsIdentStart(sql[nameStart]))
             {
-                var name = m.Groups[1].Value;
-                counts ??= new Dictionary<string, int>(ParameterNameComparer.Instance);
-                counts.TryGetValue(name, out var count);
-                count++;
-                counts[name] = count;
+                sb ??= new StringBuilder(sql.Length + 32);
+                sb.Append(span[cursor..(nameStart)]);
+                cursor = nameStart;
+                continue;
+            }
 
-                var rendered = count == 1
-                    ? name
-                    : MakeDuplicateParameterName(name, count,
-                        usedNames ??= new HashSet<string>(ParamSequence, ParameterNameComparer.Instance));
+            // Scan to end of identifier: [A-Za-z_][A-Za-z0-9_]*
+            var nameEnd = nameStart + 1;
+            while (nameEnd < sql.Length && IsIdentContinue(sql[nameEnd]))
+                nameEnd++;
 
-                usedNames?.Add(rendered);
-                ParamSequence.Add(rendered);
+            sb ??= new StringBuilder(sql.Length + 32);
+            sb.Append(span[cursor..matchStart]);  // literal text before {P}NAME
 
-                if (!string.Equals(rendered, name, StringComparison.Ordinal))
-                {
-                    _renderedParameterMap ??= new Dictionary<string, string>(ParameterNameComparer.Instance);
-                    _renderedParameterMap[rendered] = name;
-                }
+            var name = sql[nameStart..nameEnd];
+            ParamSequence.Add(name);
 
-                return string.Concat(_dialect.ParameterMarker, rendered);
-            });
+            sb.Append(_dialect.ParameterMarker);
+            if (_dialect.SupportsNamedParameters)
+                sb.Append(span[nameStart..nameEnd]); // span avoids extra string alloc
+
+            cursor = nameEnd;
         }
 
-        return ParamPlaceholderRegex.Replace(sql, m =>
+        if (sb == null)
+            return sql; // no placeholders found — return original without allocation
+
+        if (cursor < sql.Length)
+            sb.Append(span[cursor..]);
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Oracle-specific rendering path: repeated uses of the same <c>{P}NAME</c> in one
+    /// statement are rewritten to unique names (<c>:p</c>, <c>:p_2</c>, <c>:p_3</c>, …)
+    /// because Oracle's ODP.NET treats each bind position as a distinct parameter slot.
+    /// Maintains <see cref="_renderedParameterMap"/> for the original→rendered name mapping
+    /// so <c>AddParametersToCommand</c> can clone parameters correctly.
+    /// Avoids Regex overhead: no Match/Group allocations, no per-match string.Concat.
+    /// </summary>
+    private string RenderParamsDeduplicating(string sql)
+    {
+        var span = sql.AsSpan();
+        var cursor = 0;
+        StringBuilder? sb = null;
+        Dictionary<string, int>? counts = null;
+        HashSet<string>? usedNames = null;
+
+        while (cursor < sql.Length)
         {
-            var name = m.Groups[1].Value;
-            ParamSequence.Add(name);
-            return _dialect.SupportsNamedParameters
-                ? string.Concat(_dialect.ParameterMarker, name)
-                : _dialect.ParameterMarker;
-        });
+            var relIdx = span[cursor..].IndexOf("{P}", StringComparison.Ordinal);
+            if (relIdx < 0) break;
+
+            var matchStart = cursor + relIdx;
+            var nameStart = matchStart + 3;
+
+            if (nameStart >= sql.Length || !IsIdentStart(sql[nameStart]))
+            {
+                sb ??= new StringBuilder(sql.Length + 32);
+                sb.Append(span[cursor..nameStart]);
+                cursor = nameStart;
+                continue;
+            }
+
+            var nameEnd = nameStart + 1;
+            while (nameEnd < sql.Length && IsIdentContinue(sql[nameEnd]))
+                nameEnd++;
+
+            sb ??= new StringBuilder(sql.Length + 32);
+            sb.Append(span[cursor..matchStart]);
+
+            var name = sql[nameStart..nameEnd];
+            counts ??= new Dictionary<string, int>(ParameterNameComparer.Instance);
+            counts.TryGetValue(name, out var count);
+            count++;
+            counts[name] = count;
+
+            var rendered = count == 1
+                ? name
+                : MakeDuplicateParameterName(name, count,
+                    usedNames ??= new HashSet<string>(ParamSequence, ParameterNameComparer.Instance));
+
+            usedNames?.Add(rendered);
+            ParamSequence.Add(rendered);
+
+            if (!string.Equals(rendered, name, StringComparison.Ordinal))
+            {
+                _renderedParameterMap ??= new Dictionary<string, string>(ParameterNameComparer.Instance);
+                _renderedParameterMap[rendered] = name;
+            }
+
+            sb.Append(_dialect.ParameterMarker);
+            sb.Append(rendered); // rendered is already a string; no extra concat needed
+
+            cursor = nameEnd;
+        }
+
+        if (sb == null)
+            return sql;
+
+        if (cursor < sql.Length)
+            sb.Append(span[cursor..]);
+
+        return sb.ToString();
     }
 
     private string MakeDuplicateParameterName(string baseName, int occurrence, HashSet<string> usedNames)

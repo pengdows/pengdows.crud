@@ -61,7 +61,7 @@ public class InsertReturningTests : DatabaseTestBase
         await container.ExecuteNonQueryAsync();
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task CreateAsync_ReturningClause_PopulatesIdentityAcrossProviders()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -94,7 +94,7 @@ public class InsertReturningTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task CreateAsync_NonReturningProviders_InsertsSuccessfully()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -126,7 +126,7 @@ public class InsertReturningTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task VerifyDialect_SupportsInsertReturning_MatchesExpectation()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>

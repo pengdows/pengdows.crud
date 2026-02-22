@@ -67,6 +67,103 @@ public class BenchmarkFairnessTests
         });
     }
 
+    [Fact]
+    public void ApplesToApplesBenchmarks_UseSqliteProvider()
+    {
+        const string fileName = "ApplesToApplesDapperBenchmarks.cs";
+        var text = LoadBenchmarkText(fileName);
+
+        AssertAllPresent(fileName, text, new[]
+        {
+            "SqliteConnection",
+            "SqliteFactory",
+            "Microsoft.Data.Sqlite",
+            "Mode=Memory",
+            "Cache=Shared"
+        });
+
+        AssertAllAbsent(fileName, text, new[]
+        {
+            "DuckDBClientFactory",
+            "DuckDBConnection",
+            ".duckdb"
+        });
+    }
+
+    [Fact]
+    public void ApplesToApplesBenchmarks_ExposeFieldTypeDiagnostics()
+    {
+        const string fileName = "ApplesToApplesDapperBenchmarks.cs";
+        var text = LoadBenchmarkText(fileName);
+
+        AssertAllPresent(fileName, text, new[]
+        {
+            "DumpFieldTypes",
+            "GetFieldType",
+            "Console.WriteLine"
+        });
+    }
+
+    [Fact]
+    public void SqliteDateHandlingBenchmarks_ExposeFieldTypeDiagnostics()
+    {
+        var fileName = Path.Combine("Internal", "SqliteDateHandlingBenchmarks.cs");
+        var text = LoadBenchmarkText(fileName);
+
+        AssertAllPresent(fileName, text, new[]
+        {
+            "SqliteDateHandlingBenchmarks",
+            "DumpFieldTypes",
+            "GetFieldType",
+            "SqliteConnection"
+        });
+    }
+
+    [Fact]
+    public void SqliteDateHandlingBenchmarks_IsNotSealed()
+    {
+        var fileName = Path.Combine("Internal", "SqliteDateHandlingBenchmarks.cs");
+        var text = LoadBenchmarkText(fileName);
+
+        AssertAllPresent(fileName, text, new[]
+        {
+            "public class SqliteDateHandlingBenchmarks"
+        });
+
+        AssertAllAbsent(fileName, text, new[]
+        {
+            "sealed class SqliteDateHandlingBenchmarks"
+        });
+    }
+
+    [Fact]
+    public void TypeHandlingBenchmarks_ExposeDateTimeStringCoercion()
+    {
+        var fileName = Path.Combine("Internal", "TypeHandlingBenchmarks.cs");
+        var text = LoadBenchmarkText(fileName);
+
+        AssertAllPresent(fileName, text, new[]
+        {
+            "Coercion_DateTime_Read_String",
+            "ResolveCoercer",
+            "DateTime"
+        });
+    }
+
+    [Fact]
+    public void BenchmarkProgram_UsesExplicitBenchmarkDiscovery()
+    {
+        const string fileName = "Program.cs";
+        var text = LoadBenchmarkText(fileName);
+
+        AssertAllPresent(fileName, text, new[]
+        {
+            "BenchmarkAttribute",
+            "FromTypes",
+            "GetTypes"
+        });
+    }
+
     private static List<string> FindOffenders(IEnumerable<string> tokens, HashSet<string> excludedFiles)
     {
         var benchmarksDir = GetBenchmarksDirectory();
@@ -107,5 +204,12 @@ public class BenchmarkFairnessTests
         var missing = tokens.Where(token => !text.Contains(token, StringComparison.Ordinal)).ToList();
         Assert.True(missing.Count == 0,
             $"{fileName} missing: {string.Join(", ", missing)}");
+    }
+
+    private static void AssertAllAbsent(string fileName, string text, IEnumerable<string> tokens)
+    {
+        var present = tokens.Where(token => text.Contains(token, StringComparison.Ordinal)).ToList();
+        Assert.True(present.Count == 0,
+            $"{fileName} should not contain: {string.Join(", ", present)}");
     }
 }

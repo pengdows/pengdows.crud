@@ -42,7 +42,7 @@ public class AuditFieldTests : DatabaseTestBase
         await container.ExecuteNonQueryAsync();
     }
 
-    [Fact]
+    [SkippableFact]
     public Task CreateAsync_PopulatesCreatedByAndCreatedOn()
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -71,7 +71,7 @@ public class AuditFieldTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public Task CreateAsync_AlsoPopulatesLastUpdatedFields()
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -99,7 +99,7 @@ public class AuditFieldTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public Task UpdateAsync_PopulatesLastUpdatedByAndLastUpdatedOn()
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -133,7 +133,7 @@ public class AuditFieldTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public Task UpdateAsync_DoesNotModifyCreatedFields()
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -166,7 +166,7 @@ public class AuditFieldTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public Task MultipleUpdates_UpdatesLastUpdatedFieldsEachTime()
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -200,7 +200,7 @@ public class AuditFieldTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public Task CreateAsync_WithoutAuditResolver_ThrowsForUserAuditFields()
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -222,7 +222,7 @@ public class AuditFieldTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public Task UpsertAsync_NewEntity_PopulatesCreatedFields()
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>

@@ -107,7 +107,13 @@ public class QueryCacheTests : SqlLiteContextTestBase
         helper.BuildWhere(wrapped, new[] { 1, 2 }, sc2);
 
         var cache = GetQueryCache(helper);
-        Assert.NotSame(cache[$"WhereQuery:{wrapped}:1"], cache[$"WhereQuery:{wrapped}:2"]);
+        // Single-ID clause is stored in CachedSqlTemplates (dialect-keyed), not in _queryCache,
+        // to prevent cross-dialect cache pollution (e.g. SQLite "@" vs PostgreSQL ":" markers).
+        Assert.False(cache.ContainsKey(wrapped), "Single-ID clause is in CachedSqlTemplates, not _queryCache");
+        // Multi-ID uses "WhereQuery:{col}:{bucket}" in _queryCache.
+        Assert.True(cache.ContainsKey($"WhereQuery:{wrapped}:2"), "Two-ID clause should be cached under WhereQuery key");
+        // SQL output is structurally different (equality vs IN-list).
+        Assert.NotEqual(sc1.Query.ToString(), sc2.Query.ToString());
     }
 
     [Fact]
@@ -187,10 +193,11 @@ public class QueryCacheTests : SqlLiteContextTestBase
         );
 
         var cache = GetQueryCache(helper);
-        // Verify both cache entries exist before comparing
-        Assert.True(cache.ContainsKey($"WhereQuery:{wrapped}:1"), $"Cache should contain key WhereQuery:{wrapped}:1");
-        Assert.True(cache.ContainsKey($"WhereQuery:{wrapped}:2"), $"Cache should contain key WhereQuery:{wrapped}:2");
-        Assert.NotSame(cache[$"WhereQuery:{wrapped}:1"], cache[$"WhereQuery:{wrapped}:2"]);
+        // Single-ID clause is stored in CachedSqlTemplates (dialect-keyed), not in _queryCache,
+        // to prevent cross-dialect cache pollution (e.g. SQLite "@" vs PostgreSQL ":" markers).
+        Assert.False(cache.ContainsKey(wrapped), $"Single-ID clause should be in CachedSqlTemplates, not _queryCache");
+        // Multi-ID (count=2) caches the IN-list clause under "WhereQuery:{col}:2".
+        Assert.True(cache.ContainsKey($"WhereQuery:{wrapped}:2"), $"Two-ID clause should be cached under WhereQuery key");
     }
 
     [Fact]
@@ -240,23 +247,32 @@ public class QueryCacheTests : SqlLiteContextTestBase
     private static Dictionary<string, string> GetQueryCache<TEntity, TId>(TableGateway<TEntity, TId> helper)
         where TEntity : class, new()
     {
+        // _queryCache is ConcurrentDictionary<SupportedDatabase, BoundedCache<string, string>>
+        // Aggregate all dialect caches into one dictionary for test inspection.
         var field = typeof(TableGateway<TEntity, TId>)
             .GetField("_queryCache", BindingFlags.NonPublic | BindingFlags.Instance);
-        var cache = field!.GetValue(helper)!;
-        var mapField = cache.GetType().GetField("_map", BindingFlags.NonPublic | BindingFlags.Instance);
-        var rawMap = mapField!.GetValue(cache)!;
-
-        // _map is ConcurrentDictionary<TKey, CacheEntry> — unwrap each CacheEntry.Value
-        var entryType = rawMap.GetType().GetGenericArguments()[1];
-        var valueProp = entryType.GetProperty("Value")!;
+        var outerDict = field!.GetValue(helper)!;
 
         var result = new Dictionary<string, string>();
-        foreach (var item in (System.Collections.IEnumerable)rawMap)
+        foreach (var dialectKvp in (System.Collections.IEnumerable)outerDict)
         {
-            var itemType = item.GetType();
-            var key = (string)itemType.GetProperty("Key")!.GetValue(item)!;
-            var entry = itemType.GetProperty("Value")!.GetValue(item)!;
-            result[key] = (string)valueProp.GetValue(entry)!;
+            var kvpType = dialectKvp.GetType();
+            var boundedCache = kvpType.GetProperty("Value")!.GetValue(dialectKvp)!;
+
+            var mapField = boundedCache.GetType().GetField("_map", BindingFlags.NonPublic | BindingFlags.Instance);
+            var rawMap = mapField!.GetValue(boundedCache)!;
+
+            // _map is ConcurrentDictionary<TKey, CacheEntry> — unwrap each CacheEntry.Value
+            var entryType = rawMap.GetType().GetGenericArguments()[1];
+            var valueProp = entryType.GetProperty("Value")!;
+
+            foreach (var item in (System.Collections.IEnumerable)rawMap)
+            {
+                var itemType = item.GetType();
+                var key = (string)itemType.GetProperty("Key")!.GetValue(item)!;
+                var entry = itemType.GetProperty("Value")!.GetValue(item)!;
+                result[key] = (string)valueProp.GetValue(entry)!;
+            }
         }
 
         return result;

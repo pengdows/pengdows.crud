@@ -17,6 +17,7 @@
 
 using System.Runtime.CompilerServices;
 using pengdows.crud.dialects;
+using pengdows.crud.@internal;
 
 namespace pengdows.crud;
 
@@ -31,8 +32,34 @@ public partial class TableGateway<TEntity, TRowID>
         public List<IColumnInfo> InsertColumns = null!;
         public List<string> InsertParameterNames = null!;
         public string DeleteSql = null!;
-        public string UpdateSql = null!;
+
+        // UpdateSql split into prefix/suffix to allow direct StringBuilder appends,
+        // eliminating the string.Format call and intermediate string allocation per UPDATE.
+        public string UpdateSqlPrefix = null!;   // "UPDATE tbl SET "
+        public string UpdateSqlSuffix = null!;   // " WHERE idcol = "
+
+        // Pre-built version increment fragment (", vercol = vercol + 1") or null when not applicable.
+        public string? VersionIncrementClause;
+
+        // Pre-built upsert UPDATE SET fragment, e.g. "col = EXCLUDED.col, col2 = EXCLUDED.col2".
+        // Null for dialects that don't support upsert or where it could not be pre-built.
+        public string? UpsertUpdateFragment;
+
         public List<IColumnInfo> UpdateColumns = null!;
+
+        // Pre-wrapped column names for UpdateColumns — eliminates per-call ConcurrentDictionary lookups
+        // in BuildSetClause. Indexed in parallel with UpdateColumns.
+        public string[] UpdateColumnWrappedNames = null!;
+
+        // Pre-built single-ID WHERE body for equality retrieval: e.g., "\"Id\" = @p0"
+        // Dialect-specific — eliminates per-call _queryCache lookup and cross-dialect collision.
+        // Null when entity has no [Id] column.
+        public string? IdEqualityWhereBody;
+
+        // Pre-built single-ID WHERE body when a NULL may also match:
+        // e.g., "(\"Id\" = @p0 OR \"Id\" IS NULL)"
+        // Null when entity has no [Id] column.
+        public string? IdEqualityNullableWhereBody;
     }
 
     private class CachedContainerTemplates
@@ -149,7 +176,8 @@ public partial class TableGateway<TEntity, TRowID>
 
         // Delete and Update SQL require an ID column; null when entity has no [Id]
         string? deleteSql = null;
-        string? updateSql = null;
+        string? updateSqlPrefix = null;
+        string? updateSqlSuffix = null;
         List<IColumnInfo>? updateColumns = null;
 
         if (idCol != null)
@@ -161,8 +189,113 @@ public partial class TableGateway<TEntity, TRowID>
                 .Where(c => !c.IsId && !c.IsVersion && !c.IsNonUpdateable && !c.IsCreatedBy && !c.IsCreatedOn)
                 .ToList();
 
-            updateSql =
-                $"UPDATE {BuildWrappedTableName(dialect)} SET {{0}} WHERE {dialect.WrapObjectName(idCol.Name)} = {{1}}";
+            // Split into prefix/suffix for direct StringBuilder appends — eliminates string.Format per call
+            updateSqlPrefix = $"UPDATE {BuildWrappedTableName(dialect)} SET ";
+            updateSqlSuffix = $" WHERE {dialect.WrapObjectName(idCol.Name)} = ";
+        }
+
+        // Pre-build single-ID equality WHERE body — dialect-specific, stored in CachedSqlTemplates
+        // to avoid cross-dialect collision that would occur with a shared _queryCache key.
+        string? idEqualityWhereBody = null;
+        string? idEqualityNullableWhereBody = null;
+        if (idCol != null)
+        {
+            var wrappedIdName = dialect.WrapObjectName(idCol.Name);
+            var pName = dialect.SupportsNamedParameters
+                ? string.Concat(dialect.ParameterMarker, "p0")
+                : "?";
+            idEqualityWhereBody = string.Concat(wrappedIdName, " = ", pName);
+            idEqualityNullableWhereBody =
+                $"({wrappedIdName} = {pName}{SqlFragments.Or}{wrappedIdName} IS NULL)";
+        }
+
+        // Cache version increment clause; null for byte[] (rowversion/timestamp — DB handles increment)
+        string? versionIncrementClause = null;
+        if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
+        {
+            versionIncrementClause =
+                $", {dialect.WrapObjectName(_versionColumn.Name)} = {dialect.WrapObjectName(_versionColumn.Name)} + 1";
+        }
+
+        // Pre-build the upsert UPDATE SET fragment (deterministic per dialect+entity+auditResolver config).
+        // Eliminates the per-call SbLite loop in BuildUpsertOnConflict/OnDuplicate/Merge.
+        string? upsertUpdateFragment = null;
+        if (updateColumns != null)
+        {
+            var frag = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+            if (dialect.SupportsMerge)
+            {
+                var tp = dialect.MergeUpdateRequiresTargetAlias ? "t." : "";
+                foreach (var col in updateColumns)
+                {
+                    if (_auditValueResolver == null && col.IsLastUpdatedBy) continue;
+                    if (frag.Length > 0) frag.Append(", ");
+                    frag.Append(tp);
+                    frag.Append(dialect.WrapObjectName(col.Name));
+                    frag.Append(" = s.");
+                    frag.Append(dialect.WrapObjectName(col.Name));
+                }
+
+                if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
+                {
+                    frag.Append(", ");
+                    frag.Append(tp);
+                    frag.Append(dialect.WrapObjectName(_versionColumn.Name));
+                    frag.Append(" = ");
+                    frag.Append(tp);
+                    frag.Append(dialect.WrapObjectName(_versionColumn.Name));
+                    frag.Append(" + 1");
+                }
+            }
+            else
+            {
+                // ON CONFLICT (PostgreSQL/CockroachDB) or ON DUPLICATE KEY UPDATE (MySQL/MariaDB)
+                try
+                {
+                    foreach (var col in updateColumns)
+                    {
+                        if (_auditValueResolver == null && col.IsLastUpdatedBy) continue;
+                        if (frag.Length > 0) frag.Append(", ");
+                        frag.Append(dialect.WrapObjectName(col.Name));
+                        frag.Append(" = ");
+                        frag.Append(dialect.UpsertIncomingColumn(col.Name));
+                    }
+
+                    if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
+                    {
+                        frag.Append(", ");
+                        frag.Append(dialect.WrapObjectName(_versionColumn.Name));
+                        frag.Append(" = ");
+                        frag.Append(dialect.WrapObjectName(_versionColumn.Name));
+                        frag.Append(" + 1");
+                    }
+                }
+                catch (NotSupportedException)
+                {
+                    // Dialect doesn't support upsert (e.g., FakeDb default dialect)
+                    frag.Clear();
+                }
+            }
+
+            if (frag.Length > 0)
+            {
+                upsertUpdateFragment = frag.ToString();
+            }
+        }
+
+        // Pre-wrap UpdateColumn names to eliminate per-call ConcurrentDictionary lookups in BuildSetClause.
+        string[] updateColumnWrappedNames;
+        if (updateColumns != null)
+        {
+            updateColumnWrappedNames = new string[updateColumns.Count];
+            for (var i = 0; i < updateColumns.Count; i++)
+            {
+                updateColumnWrappedNames[i] = dialect.WrapObjectName(updateColumns[i].Name);
+            }
+        }
+        else
+        {
+            updateColumnWrappedNames = Array.Empty<string>();
         }
 
         return new CachedSqlTemplates
@@ -171,8 +304,14 @@ public partial class TableGateway<TEntity, TRowID>
             InsertColumns = insertColumns,
             InsertParameterNames = paramNames,
             DeleteSql = deleteSql!,
-            UpdateSql = updateSql!,
-            UpdateColumns = updateColumns!
+            UpdateSqlPrefix = updateSqlPrefix!,
+            UpdateSqlSuffix = updateSqlSuffix!,
+            VersionIncrementClause = versionIncrementClause,
+            UpsertUpdateFragment = upsertUpdateFragment,
+            UpdateColumns = updateColumns!,
+            UpdateColumnWrappedNames = updateColumnWrappedNames,
+            IdEqualityWhereBody = idEqualityWhereBody,
+            IdEqualityNullableWhereBody = idEqualityNullableWhereBody
         };
     }
 

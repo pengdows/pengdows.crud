@@ -730,13 +730,14 @@ internal abstract class SqlDialect : ISqlDialect
             name = null;
         }
 
-        // Strip dialect-specific parameter prefixes (@, :, ?, $) if present
+        // Strip dialect-specific parameter prefixes (@, :, ?, $) if present.
+        // Fast path: check first char before doing any allocation. Skip entirely if clean.
         if (name != null)
         {
-            name = name.Replace("@", string.Empty)
-                .Replace(":", string.Empty)
-                .Replace("?", string.Empty)
-                .Replace("$", string.Empty);
+            if (name.Length > 0 && name[0] is '@' or ':' or '?' or '$')
+            {
+                name = name.TrimStart('@', ':', '?', '$');
+            }
 
             if (!IsValidParameterName(name))
             {

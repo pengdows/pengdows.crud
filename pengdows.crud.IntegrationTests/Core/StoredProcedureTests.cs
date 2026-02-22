@@ -22,7 +22,7 @@ public class StoredProcedureTests : DatabaseTestBase
         return Task.CompletedTask;
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task StoredProc_ReturnValueCapture_WorksOnSqlServer()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>

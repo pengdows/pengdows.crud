@@ -1,5 +1,4 @@
 using System.Data;
-using System.Diagnostics;
 using BenchmarkDotNet.Attributes;
 using Dapper;
 using DotNet.Testcontainers.Builders;
@@ -14,14 +13,13 @@ using pengdows.crud.enums;
 namespace CrudBenchmarks;
 
 /// <summary>
-/// Proves thesis points #4 and #5:
-///   #4 - pengdows.crud holds connections for less time than EF/Dapper
+/// Proves thesis point #5:
 ///   #5 - Server execution time is equal across all three frameworks
 ///
 /// Uses a PostgreSQL 15 Testcontainer with pg_stat_statements to capture
 /// server-side execution metrics. Each framework gets its own connection pool
-/// via Application Name separation. Connection hold time is measured with
-/// Stopwatch around the full open-execute-close cycle.
+/// via Application Name separation. True connection hold time is reported via
+/// the pengdows Metrics API (conn_hold_avg) and pg_stat_statements output.
 /// </summary>
 [MemoryDiagnoser]
 [SimpleJob(warmupCount: 5, iterationCount: 10, invocationCount: 100)]
@@ -392,7 +390,7 @@ public class ServerExecutionTimeBenchmarks : IAsyncDisposable
         sc.Query.Append(sql);
         sc.AddParameterWithValue("title", DbType.String, title);
         sc.AddParameterWithValue("length", DbType.Int32, 90);
-        return await sc.ExecuteScalarRequiredAsync<int>(CommandType.Text);
+        return await sc.ExecuteScalarRequiredAsync<int>(ExecutionType.Write, CommandType.Text);
     }
 
     [Benchmark]
@@ -472,7 +470,7 @@ public class ServerExecutionTimeBenchmarks : IAsyncDisposable
         insertSc.Query.Append(insertSql);
         insertSc.AddParameterWithValue("title", DbType.String, title);
         insertSc.AddParameterWithValue("length", DbType.Int32, 60);
-        var tempId = await insertSc.ExecuteScalarRequiredAsync<int>(CommandType.Text);
+        var tempId = await insertSc.ExecuteScalarRequiredAsync<int>(ExecutionType.Write, CommandType.Text);
 
         // Delete the temporary row
         await using var deleteSc = _pengdowsContext.CreateSqlContainer();
@@ -487,16 +485,19 @@ public class ServerExecutionTimeBenchmarks : IAsyncDisposable
     {
         _currentBenchmarkLabel = nameof(Delete_Dapper);
 
-        await using var conn = await _dapperDataSource.OpenConnectionAsync();
-
-        // Insert a temporary row
+        // Insert a temporary row (new connection, mirrors pengdows behaviour)
         var title = $"TempDel_{Interlocked.Increment(ref _runCounter):D10}";
         var insertSql = BuildTempInsertSql(p => $"@{p}");
-        var tempId = await conn.ExecuteScalarAsync<int>(insertSql, new { title, length = 60 });
+        int tempId;
+        await using (var insertConn = await _dapperDataSource.OpenConnectionAsync())
+        {
+            tempId = await insertConn.ExecuteScalarAsync<int>(insertSql, new { title, length = 60 });
+        }
 
-        // Delete the temporary row
+        // Delete the temporary row (new connection, mirrors pengdows behaviour)
         var deleteSql = BuildDeleteSql(p => $"@{p}");
-        return await conn.ExecuteAsync(deleteSql, new { id = tempId });
+        await using var deleteConn = await _dapperDataSource.OpenConnectionAsync();
+        return await deleteConn.ExecuteAsync(deleteSql, new { id = tempId });
     }
 
     [Benchmark]
@@ -519,67 +520,6 @@ public class ServerExecutionTimeBenchmarks : IAsyncDisposable
             _efDbContext,
             deleteSql,
             new NpgsqlParameter("id", tempId));
-    }
-
-    // ============================================================
-    // Connection Hold Time measurement (3 methods)
-    // Thesis point #4: pengdows holds connections for less time
-    // ============================================================
-
-    [Benchmark]
-    public async Task<long> ConnectionHoldTime_Pengdows()
-    {
-        _currentBenchmarkLabel = nameof(ConnectionHoldTime_Pengdows);
-        var sw = Stopwatch.StartNew();
-
-        await using var sc = _pengdowsContext.CreateSqlContainer();
-        var sql = BuildSingleReadSql(p => sc.MakeParameterName(p));
-        sc.Query.Append(sql);
-        sc.AddParameterWithValue("id", DbType.Int32, _sampleFilmId);
-        await using var reader = await sc.ExecuteReaderSingleRowAsync();
-        if (await reader.ReadAsync())
-        {
-            _filmHelper.MapReaderToObject(reader);
-        }
-
-        sw.Stop();
-        return sw.ElapsedTicks;
-    }
-
-    [Benchmark]
-    public async Task<long> ConnectionHoldTime_Dapper()
-    {
-        _currentBenchmarkLabel = nameof(ConnectionHoldTime_Dapper);
-        var sw = Stopwatch.StartNew();
-
-        await using var conn = await _dapperDataSource.OpenConnectionAsync();
-        var sql = BuildSingleReadSql(p => $"@{p}");
-        var row = await conn.QuerySingleOrDefaultAsync<DapperFilmRow>(sql, new { id = _sampleFilmId });
-        if (row != null)
-        {
-            MapDapperFilm(row);
-        }
-
-        // Connection stays open until disposed at end of using block
-        sw.Stop();
-        return sw.ElapsedTicks;
-    }
-
-    [Benchmark]
-    public async Task<long> ConnectionHoldTime_EntityFramework()
-    {
-        _currentBenchmarkLabel = nameof(ConnectionHoldTime_EntityFramework);
-        var sw = Stopwatch.StartNew();
-
-        await using var ctx = new ServerExecDbContext(_efOptions);
-        var sql = BuildSingleReadSql(p => $"@{p}");
-        await ctx.Films
-            .FromSqlRaw(sql, new NpgsqlParameter("id", _sampleFilmId))
-            .AsNoTracking()
-            .FirstOrDefaultAsync();
-
-        sw.Stop();
-        return sw.ElapsedTicks;
     }
 
     // ============================================================
@@ -859,7 +799,6 @@ CREATE TABLE film_actor (
         public int Id { get; set; }
         public string Title { get; set; } = string.Empty;
         public int Length { get; set; }
-        public virtual ICollection<EfFilmActor> FilmActors { get; set; } = new List<EfFilmActor>();
     }
 
     public class EfFilmActor

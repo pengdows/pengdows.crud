@@ -42,7 +42,7 @@ public partial class TableGateway<TEntity, TRowID>
     {
         _readerPlans.Clear();
         _columnListCache.Clear();
-        _queryCache.Clear();
-        _whereParameterNames.Clear();
+        foreach (var cache in _queryCache.Values) cache.Clear();
+        foreach (var cache in _whereParameterNames.Values) cache.Clear();
     }
 }

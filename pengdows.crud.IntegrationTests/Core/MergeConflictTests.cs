@@ -24,7 +24,7 @@ public class MergeConflictTests : DatabaseTestBase
         return Task.CompletedTask;
     }
 
-    [Fact]
+    [SkippableFact]
     public Task VersionedEntity_ConcurrentUpdate_DetectsConflict()
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -63,7 +63,7 @@ public class MergeConflictTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public Task MergeRecord_UpsertAfterRemoteChange_ProducesCombinedValue()
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>

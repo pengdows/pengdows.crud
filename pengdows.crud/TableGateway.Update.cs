@@ -21,7 +21,6 @@
 using System.Data;
 using System.Data.Common;
 using System.Globalization;
-using System.Text;
 using pengdows.crud.dialects;
 using pengdows.crud.@internal;
 
@@ -75,16 +74,17 @@ public partial class TableGateway<TEntity, TRowID>
         }
 
         var counters = new ClauseCounters();
-        var (setClause, parameters) = BuildSetClause(objectToUpdate, original, dialect, counters);
-        if (setClause.Length == 0)
+        sc.Query.Append(template.UpdateSqlPrefix);
+        var (columnsAdded, parameters) = BuildSetClause(objectToUpdate, original, dialect, ref counters, sc.Query);
+        if (columnsAdded == 0)
         {
             throw new InvalidOperationException("No changes detected for update.");
         }
 
-        // Append version increment if needed
-        if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
+        // Append version increment directly from cached clause (no string alloc)
+        if (template.VersionIncrementClause != null)
         {
-            setClause += GetVersionIncrementClause(dialect);
+            sc.Query.Append(template.VersionIncrementClause);
         }
 
         var idName = counters.NextKey();
@@ -92,13 +92,14 @@ public partial class TableGateway<TEntity, TRowID>
             _idColumn.MakeParameterValueFromField(objectToUpdate));
         parameters.Add(pId);
 
-        var sql = string.Format(template.UpdateSql, setClause, dialect.MakeParameterName(pId));
-        sc.Query.Append(sql);
+        sc.Query.Append(template.UpdateSqlSuffix);
+        if (dialect.SupportsNamedParameters) { sc.Query.Append(dialect.ParameterMarker); sc.Query.Append(idName); }
+        else { sc.Query.Append('?'); }
 
         if (_versionColumn != null)
         {
             var versionValue = _versionColumn.MakeParameterValueFromField(objectToUpdate);
-            var versionParam = AppendVersionCondition(sc, versionValue, dialect, counters);
+            var versionParam = AppendVersionCondition(sc, versionValue, dialect, ref counters);
             if (versionParam != null)
             {
                 parameters.Add(versionParam);
@@ -164,15 +165,21 @@ public partial class TableGateway<TEntity, TRowID>
         };
     }
 
-    private (string clause, List<DbParameter> parameters) BuildSetClause(TEntity updated, TEntity? original,
-        ISqlDialect dialect, ClauseCounters counters)
+    // Writes SET clause items directly into queryTarget (sc.Query) to avoid the
+    // intermediate SbLite.ToString() + string.Format allocations.
+    // Returns the count of columns written (0 = no changes detected).
+    private (int columnsAdded, List<DbParameter> parameters) BuildSetClause(TEntity updated, TEntity? original,
+        ISqlDialect dialect, ref ClauseCounters counters, ISqlQueryBuilder queryTarget)
     {
-        // Use stack-allocated StringBuilderLite for SET clause construction (5-8% allocation reduction)
-        var clause = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
         var template = GetTemplatesForDialect(dialect);
+
+        // Hoist dialect properties outside loop — constant per dialect, avoid N virtual calls
+        var supportsNamed = dialect.SupportsNamedParameters;
+        var paramMarker = dialect.ParameterMarker;
 
         // Pre-size parameters list based on updatable column count
         var parameters = new List<DbParameter>(template.UpdateColumns.Count);
+        var columnsAdded = 0;
 
         for (var i = 0; i < template.UpdateColumns.Count; i++)
         {
@@ -185,15 +192,17 @@ public partial class TableGateway<TEntity, TRowID>
                 continue;
             }
 
-            if (clause.Length > 0)
+            if (columnsAdded > 0)
             {
-                clause.Append(SqlFragments.Comma);
+                queryTarget.Append(SqlFragments.Comma);
             }
+
+            columnsAdded++;
 
             if (Utils.IsNullOrDbNull(newValue))
             {
-                clause.Append(dialect.WrapObjectName(column.Name));
-                clause.Append(" = NULL");
+                queryTarget.Append(template.UpdateColumnWrappedNames[i]);
+                queryTarget.Append(" = NULL");
             }
             else
             {
@@ -205,19 +214,28 @@ public partial class TableGateway<TEntity, TRowID>
                 }
 
                 parameters.Add(param);
-                var marker = dialect.MakeParameterName(param);
+
+                queryTarget.Append(template.UpdateColumnWrappedNames[i]);
+                queryTarget.Append(SqlFragments.EqualsOp);
                 if (column.IsJsonType)
                 {
-                    marker = dialect.RenderJsonArgument(marker, column);
+                    // JSON columns need the full marker string for wrapping — rare path
+                    queryTarget.Append(dialect.RenderJsonArgument(dialect.MakeParameterName(name), column));
                 }
-
-                clause.Append(dialect.WrapObjectName(column.Name));
-                clause.Append(SqlFragments.EqualsOp);
-                clause.Append(marker);
+                else if (supportsNamed)
+                {
+                    // Direct append — eliminates MakeParameterName's Replace+Concat per column
+                    queryTarget.Append(paramMarker);
+                    queryTarget.Append(name);
+                }
+                else
+                {
+                    queryTarget.Append('?');
+                }
             }
         }
 
-        return (clause.ToString(), parameters);
+        return (columnsAdded, parameters);
     }
 
     internal static bool ValuesAreEqual(object? newValue, object? originalValue, DbType dbType)
@@ -354,13 +372,82 @@ public partial class TableGateway<TEntity, TRowID>
         return false;
     }
 
+    // String-returning overload used by BuildUpdateByKey (upsert-by-key path in Core.cs).
+    // Uses SbLite to avoid heap allocation for the intermediate SET clause string.
+    private (string clause, List<DbParameter> parameters) BuildSetClause(TEntity updated, TEntity? original,
+        ISqlDialect dialect, ref ClauseCounters counters)
+    {
+        var clause = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+        var template = GetTemplatesForDialect(dialect);
+
+        // Hoist dialect properties outside loop — constant per dialect, avoid N virtual calls
+        var supportsNamed = dialect.SupportsNamedParameters;
+        var paramMarker = dialect.ParameterMarker;
+
+        var parameters = new List<DbParameter>(template.UpdateColumns.Count);
+
+        for (var i = 0; i < template.UpdateColumns.Count; i++)
+        {
+            var column = template.UpdateColumns[i];
+            var newValue = column.MakeParameterValueFromField(updated);
+            var originalValue = original != null ? column.MakeParameterValueFromField(original) : null;
+
+            if (original != null && ValuesAreEqual(newValue, originalValue, column.DbType))
+            {
+                continue;
+            }
+
+            if (clause.Length > 0)
+            {
+                clause.Append(SqlFragments.Comma);
+            }
+
+            if (Utils.IsNullOrDbNull(newValue))
+            {
+                clause.Append(template.UpdateColumnWrappedNames[i]);
+                clause.Append(" = NULL");
+            }
+            else
+            {
+                var name = counters.NextSet();
+                var param = dialect.CreateDbParameter(name, column.DbType, newValue);
+                if (column.IsJsonType)
+                {
+                    dialect.TryMarkJsonParameter(param, column);
+                }
+
+                parameters.Add(param);
+
+                clause.Append(template.UpdateColumnWrappedNames[i]);
+                clause.Append(SqlFragments.EqualsOp);
+                if (column.IsJsonType)
+                {
+                    clause.Append(dialect.RenderJsonArgument(dialect.MakeParameterName(name), column));
+                }
+                else if (supportsNamed)
+                {
+                    // Direct append — eliminates MakeParameterName's Replace+Concat per column
+                    clause.Append(paramMarker);
+                    clause.Append(name);
+                }
+                else
+                {
+                    clause.Append('?');
+                }
+            }
+        }
+
+        return (clause.ToString(), parameters);
+    }
+
+    // Used by BuildUpdateByKey (upsert-by-key path in Core.cs).
     private string GetVersionIncrementClause(ISqlDialect dialect)
     {
         return $", {dialect.WrapObjectName(_versionColumn!.Name)} = {dialect.WrapObjectName(_versionColumn.Name)} + 1";
     }
 
     private DbParameter? AppendVersionCondition(ISqlContainer sc, object? versionValue, ISqlDialect dialect,
-        ClauseCounters counters)
+        ref ClauseCounters counters)
     {
         if (versionValue == null)
         {
@@ -370,8 +457,9 @@ public partial class TableGateway<TEntity, TRowID>
 
         var name = counters.NextVer();
         var pVersion = dialect.CreateDbParameter(name, _versionColumn!.DbType, versionValue);
-        sc.Query.Append(SqlFragments.And).Append(sc.WrapObjectName(_versionColumn.Name))
-            .Append($" = {dialect.MakeParameterName(pVersion)}");
+        sc.Query.Append(SqlFragments.And).Append(sc.WrapObjectName(_versionColumn.Name)).Append(" = ");
+        if (dialect.SupportsNamedParameters) { sc.Query.Append(dialect.ParameterMarker); sc.Query.Append(name); }
+        else { sc.Query.Append('?'); }
         return pVersion;
     }
 }

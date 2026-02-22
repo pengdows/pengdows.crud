@@ -26,7 +26,7 @@ public class ConcurrencyTests : DatabaseTestBase
         await tableCreator.CreateTestTableAsync();
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task ParallelReads_SameRecord_AllSucceed()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -54,7 +54,7 @@ public class ConcurrencyTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task ParallelInserts_DifferentRecords_AllSucceed()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -83,7 +83,7 @@ public class ConcurrencyTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task ParallelUpdates_DifferentRecords_NoConflicts()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -122,7 +122,7 @@ public class ConcurrencyTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task ParallelDeletes_DifferentRecords_AllSucceed()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -156,7 +156,7 @@ public class ConcurrencyTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task ParallelTransactions_Independent_NoDeadlock()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -190,7 +190,7 @@ public class ConcurrencyTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task ConcurrentReadsAndWrites_Consistent()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -250,7 +250,7 @@ public class ConcurrencyTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task MultipleContexts_SameDatabase_WorkIndependently()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -284,7 +284,7 @@ public class ConcurrencyTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task BulkRead_WhileBulkWrite_NoErrors()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -343,7 +343,7 @@ public class ConcurrencyTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task ParallelTransactions_WritingSameRecord_SerializedCorrectly()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -404,7 +404,7 @@ public class ConcurrencyTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task StressTest_ManySmallTransactions_NoLeaks()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>

@@ -310,6 +310,7 @@ CREATE TABLE {qp}test_table{qs} (
             SupportedDatabase.MySql => "BLOB",
             SupportedDatabase.MariaDb => "BLOB",
             SupportedDatabase.TiDb => "BLOB",
+            SupportedDatabase.Snowflake => "VARBINARY",
             _ => "BLOB"
         };
     }
@@ -377,6 +378,7 @@ CREATE TABLE {qp}test_table{qs} (
         return product switch
         {
             SupportedDatabase.DuckDB => false,
+            SupportedDatabase.Snowflake => false,
             _ => true
         };
     }
@@ -427,6 +429,7 @@ CREATE TABLE {qp}test_table{qs} (
             SupportedDatabase.PostgreSql => ":",
             SupportedDatabase.CockroachDb => ":",
             SupportedDatabase.YugabyteDb => ":",
+            SupportedDatabase.Snowflake => ":",
             SupportedDatabase.DuckDB => "$",
             SupportedDatabase.Oracle => ":",
             _ => "@"
@@ -1550,17 +1553,26 @@ INSERT INTO {table} (
         var sc1 = _helper.BuildCreate(t, _context);
         await sc1.ExecuteNonQueryAsync();
 
-        // 12a: Duplicate PK → must surface as DbException
-        try
+        // 12a: Duplicate PK → must surface as DbException (except Snowflake, which doesn't enforce constraints)
+        if (_context.Product == SupportedDatabase.Snowflake)
         {
             var sc2 = _helper.BuildCreate(t, _context);
             await sc2.ExecuteNonQueryAsync();
-            throw new Exception("[ErrorMapping] Expected DbException for duplicate PK — none thrown");
+            Console.WriteLine("  [ErrorMapping] Unique violation not enforced on Snowflake — skip");
         }
-        catch (DbException ex)
+        else
         {
-            Console.WriteLine(
-                $"  [ErrorMapping] Unique violation → DbException: OK ({ex.Message[..Math.Min(80, ex.Message.Length)]}...)");
+            try
+            {
+                var sc2 = _helper.BuildCreate(t, _context);
+                await sc2.ExecuteNonQueryAsync();
+                throw new Exception("[ErrorMapping] Expected DbException for duplicate PK — none thrown");
+            }
+            catch (DbException ex)
+            {
+                Console.WriteLine(
+                    $"  [ErrorMapping] Unique violation → DbException: OK ({ex.Message[..Math.Min(80, ex.Message.Length)]}...)");
+            }
         }
 
         // 12b: Connection must still be usable after the exception

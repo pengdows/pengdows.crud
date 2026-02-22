@@ -23,7 +23,7 @@ public class RoundTripTests : DatabaseTestBase
         await tableCreator.CreateRoundTripTableAsync();
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task RoundTrip_FullEntity_PreservesDataFidelity()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -85,7 +85,8 @@ public class RoundTripTests : DatabaseTestBase
             }
 
             // DateTimeOffset assertions
-            if (provider is SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.Firebird)
+            if (provider is SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.Firebird
+                or SupportedDatabase.Snowflake)
             {
                 // Discard offset, check UTC instant within 1ms
                 Assert.Equal(original.DateTimeOffsetValue.UtcDateTime, retrieved.DateTimeOffsetValue.UtcDateTime, TimeSpan.FromMilliseconds(1));
@@ -103,7 +104,7 @@ public class RoundTripTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task RoundTrip_EmptyValues_HandledCorrectly()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>

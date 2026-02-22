@@ -111,9 +111,12 @@ public partial class TableGateway<TEntity, TRowID> :
 
     private readonly BoundedCache<string, IReadOnlyList<IColumnInfo>> _columnListCache = new(MaxCacheSize);
 
-    private readonly BoundedCache<string, string> _queryCache = new(MaxCacheSize);
+    // Keyed by dialect (SupportedDatabase) so that different dialects used with the same
+    // TableGateway instance never share cached SQL strings that embed dialect-specific content
+    // (identifier quoting, parameter markers).  Sharing within the same dialect is intentional.
+    private readonly ConcurrentDictionary<SupportedDatabase, BoundedCache<string, string>> _queryCache = new();
 
-    private readonly BoundedCache<string, string[]> _whereParameterNames = new(MaxCacheSize);
+    private readonly ConcurrentDictionary<SupportedDatabase, BoundedCache<string, string[]>> _whereParameterNames = new();
 
     // Cache for wrapped table names per dialect (table name + schema never change, only dialect quoting varies)
     // Expected 3-5% reduction in SQL generation when the same TableGateway is used with different contexts/dialects
@@ -408,15 +411,11 @@ public partial class TableGateway<TEntity, TRowID> :
         return sb.ToString();
     }
 
-    private string GetCachedQuery(string key, Func<string> factory)
-    {
-        if (_queryCache.TryGet(key, out var sql))
-        {
-            return sql;
-        }
+    private BoundedCache<string, string> GetOrCreateQueryCache(ISqlDialect dialect) =>
+        _queryCache.GetOrAdd(dialect.DatabaseType, static _ => new BoundedCache<string, string>(MaxCacheSize));
 
-        return _queryCache.GetOrAdd(key, _ => factory());
-    }
+    private BoundedCache<string, string[]> GetOrCreateParamNamesCache(ISqlDialect dialect) =>
+        _whereParameterNames.GetOrAdd(dialect.DatabaseType, static _ => new BoundedCache<string, string[]>(MaxCacheSize));
 
 
     /// <inheritdoc/>
@@ -721,18 +720,25 @@ public partial class TableGateway<TEntity, TRowID> :
         for (var i = 0; i < sqlTemplate.InsertColumns.Count; i++)
         {
             var column = sqlTemplate.InsertColumns[i];
-            var marker = dialect.MakeParameterName(sqlTemplate.InsertParameterNames[i]);
-            if (column.IsJsonType)
-            {
-                marker = dialect.RenderJsonArgument(marker, column);
-            }
-
             if (i > 0)
             {
                 sc.Query.Append(", ");
             }
 
-            sc.Query.Append(marker);
+            var paramName = sqlTemplate.InsertParameterNames[i];
+            if (column.IsJsonType)
+            {
+                sc.Query.Append(dialect.RenderJsonArgument(dialect.MakeParameterName(paramName), column));
+            }
+            else if (dialect.SupportsNamedParameters)
+            {
+                sc.Query.Append(dialect.ParameterMarker);
+                sc.Query.Append(paramName);
+            }
+            else
+            {
+                sc.Query.Append('?');
+            }
         }
 
         // Insert RETURNING placeholder (for PostgreSQL/SQLite/etc) after VALUES
@@ -860,10 +866,12 @@ public partial class TableGateway<TEntity, TRowID> :
         var param = dialect.CreateDbParameter(name, _idColumn.DbType, id);
         sc.AddParameter(param);
 
-        var baseKey = "DeleteById";
-        var cacheKey = ctx.Product == _context.Product ? baseKey : $"{baseKey}:{ctx.Product}";
-        var sql = GetCachedQuery(cacheKey,
-            () => string.Format(GetTemplatesForDialect(dialect).DeleteSql, dialect.MakeParameterName(param)));
+        var deleteCache = GetOrCreateQueryCache(dialect);
+        if (!deleteCache.TryGet("DeleteById", out var sql))
+        {
+            sql = string.Format(GetTemplatesForDialect(dialect).DeleteSql, dialect.MakeParameterName(param));
+            deleteCache.GetOrAdd("DeleteById", _ => sql);
+        }
         sc.Query.Append(sql);
         return sc;
     }
@@ -1562,7 +1570,7 @@ public partial class TableGateway<TEntity, TRowID> :
         }
 
         var counters = new ClauseCounters();
-        var (setClause, parameters) = BuildSetClause(updated, null, dialect, counters);
+        var (setClause, parameters) = BuildSetClause(updated, null, dialect, ref counters);
         if (setClause.Length == 0)
         {
             throw new InvalidOperationException("No changes detected for update.");
@@ -1587,20 +1595,34 @@ public partial class TableGateway<TEntity, TRowID> :
             var name = counters.NextKey();
             var p = dialect.CreateDbParameter(name, key.DbType, v);
             parameters.Add(p);
-            where.Append($"{dialect.WrapObjectName(key.Name)} = {dialect.MakeParameterName(p)}");
+            where.Append(dialect.WrapObjectName(key.Name));
+            where.Append(" = ");
+            if (dialect.SupportsNamedParameters) { where.Append(dialect.ParameterMarker); where.Append(name); }
+            else { where.Append('?'); }
         }
 
-        var sql = $"UPDATE {BuildWrappedTableName(dialect)} SET {setClause} WHERE {where.ToString()}";
+        var sqlBuf = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+        sqlBuf.Append("UPDATE ");
+        sqlBuf.Append(BuildWrappedTableName(dialect));
+        sqlBuf.Append(" SET ");
+        sqlBuf.Append(setClause);
+        sqlBuf.Append(" WHERE ");
+        sqlBuf.Append(where.AsSpan());
+
         if (_versionColumn != null)
         {
             var vv = _versionColumn.MakeParameterValueFromField(updated);
             var name = counters.NextVer();
             var p = dialect.CreateDbParameter(name, _versionColumn.DbType, vv);
             parameters.Add(p);
-            sql += $" AND {dialect.WrapObjectName(_versionColumn.Name)} = {dialect.MakeParameterName(p)}";
+            sqlBuf.Append(" AND ");
+            sqlBuf.Append(dialect.WrapObjectName(_versionColumn.Name));
+            sqlBuf.Append(" = ");
+            if (dialect.SupportsNamedParameters) { sqlBuf.Append(dialect.ParameterMarker); sqlBuf.Append(name); }
+            else { sqlBuf.Append('?'); }
         }
 
-        return (sql, parameters);
+        return (sqlBuf.ToString(), parameters);
     }
 
 

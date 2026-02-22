@@ -31,6 +31,7 @@ public class TestTableCreator
             SupportedDatabase.MariaDb => CreateMariaDbTableSql(),
             SupportedDatabase.DuckDB => CreateDuckDbTableSql(),
             SupportedDatabase.CockroachDb => CreatePostgreSqlTableSql(),
+            SupportedDatabase.Snowflake => CreateSnowflakeTableSql(),
             SupportedDatabase.Oracle => CreateOracleTableSql(),
             _ => throw new NotSupportedException($"Database {_context.Product} not supported")
         };
@@ -103,7 +104,7 @@ public class TestTableCreator
                     {guidCol} TEXT NOT NULL,
                     {binCol} BLOB NOT NULL
                 )",
-            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb or SupportedDatabase.Snowflake => $@"
+            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => $@"
                 CREATE TABLE IF NOT EXISTS {table} (
                     {idCol} BIGINT PRIMARY KEY,
                     {textCol} VARCHAR(255) NOT NULL,
@@ -116,6 +117,20 @@ public class TestTableCreator
                     {dtoCol} TIMESTAMPTZ NOT NULL,
                     {guidCol} UUID NOT NULL,
                     {binCol} BYTEA NOT NULL
+                )",
+            SupportedDatabase.Snowflake => $@"
+                CREATE TABLE IF NOT EXISTS {table} (
+                    {idCol} BIGINT PRIMARY KEY,
+                    {textCol} VARCHAR(255) NOT NULL,
+                    {unicodeCol} VARCHAR(255) NOT NULL,
+                    {nullCol} VARCHAR(255),
+                    {intCol} INTEGER NOT NULL,
+                    {longCol} BIGINT NOT NULL,
+                    {decimalCol} DECIMAL(18,8) NOT NULL,
+                    {boolCol} BOOLEAN NOT NULL,
+                    {dtoCol} TIMESTAMP_NTZ NOT NULL,
+                    {guidCol} VARCHAR(36) NOT NULL,
+                    {binCol} VARBINARY(256) NOT NULL
                 )",
             SupportedDatabase.SqlServer => $@"
                 IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[round_trip_entity]') AND type in (N'U'))
@@ -315,6 +330,12 @@ public class TestTableCreator
                     {0}name{1} VARCHAR(255) NOT NULL,
                     {0}balance{1} DECIMAL(18,2) NOT NULL DEFAULT 0.00
                 )", qp, qs),
+            SupportedDatabase.Snowflake => string.Format(@"
+                CREATE TABLE IF NOT EXISTS {0}accounts{1} (
+                    {0}id{1} BIGINT PRIMARY KEY,
+                    {0}name{1} VARCHAR(255) NOT NULL,
+                    {0}balance{1} DECIMAL(18,2) NOT NULL DEFAULT 0.00
+                )", qp, qs),
             SupportedDatabase.SqlServer => string.Format(@"
                 IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'{0}dbo{1}.{0}accounts{1}') AND type in (N'U'))
                 CREATE TABLE {0}dbo{1}.{0}accounts{1} (
@@ -418,6 +439,33 @@ public class TestTableCreator
     {
         return CreateMySqlTableSql();
         // Same as MySQL
+    }
+
+    private string CreateSnowflakeTableSql()
+    {
+        var table = _context.WrapObjectName("test_table");
+        var idColumn = _context.WrapObjectName("id");
+        var nameColumn = _context.WrapObjectName("name");
+        var valueColumn = _context.WrapObjectName("value");
+        var descriptionColumn = _context.WrapObjectName("description");
+        var isActiveColumn = _context.WrapObjectName("is_active");
+        var createdAtColumn = _context.WrapObjectName("created_at");
+        var createdByColumn = _context.WrapObjectName("created_by");
+        var updatedAtColumn = _context.WrapObjectName("updated_at");
+        var updatedByColumn = _context.WrapObjectName("updated_by");
+
+        return $@"
+        CREATE TABLE IF NOT EXISTS {table} (
+            {idColumn} BIGINT PRIMARY KEY,
+            {nameColumn} VARCHAR(255) NOT NULL,
+            {valueColumn} INTEGER NOT NULL,
+            {descriptionColumn} VARCHAR(1024),
+            {isActiveColumn} BOOLEAN NOT NULL DEFAULT TRUE,
+            {createdAtColumn} TIMESTAMP_NTZ NOT NULL DEFAULT CURRENT_TIMESTAMP(),
+            {createdByColumn} VARCHAR(100),
+            {updatedAtColumn} TIMESTAMP_NTZ,
+            {updatedByColumn} VARCHAR(100)
+        )";
     }
 
     private string CreateFirebirdTableSql()

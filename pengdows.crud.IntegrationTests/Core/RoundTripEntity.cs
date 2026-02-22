@@ -19,11 +19,14 @@ namespace pengdows.crud.IntegrationTests.Core;
 ///     Same assertion as MySQL / MariaDB.</item>
 ///   <item>SQLite: DateTimeOffset stored as ISO-8601 TEXT; sub-millisecond
 ///     precision may be lost. Assert within 1 ms.</item>
+///   <item>Snowflake: DateTimeOffset stored as TIMESTAMP_NTZ; offset is
+///     normalised to UTC. Assert only the UTC instant within 1 ms.</item>
 ///   <item>SQLite: DecimalValue stored as REAL (IEEE 754 double); precision
 ///     is limited to ~15 significant digits. Assert with 1e-7 tolerance.</item>
 ///   <item>Oracle: GuidValue stored as RAW(16) (binary); round-trips exactly.</item>
 ///   <item>MySQL / MariaDB / SQLite / Firebird: GuidValue stored as CHAR(36)
 ///     or TEXT; round-trips exactly as a string representation.</item>
+///   <item>Snowflake: GuidValue stored as VARCHAR(36); round-trips exactly.</item>
 /// </list>
 /// </summary>
 [Table("round_trip_entity")]

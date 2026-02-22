@@ -22,7 +22,7 @@ public class ParameterBindingTests : DatabaseTestBase
         await tableCreator.CreateRoundTripTableAsync();
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task BindSameParameterMultipleTimes_WorksSuccessfully()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -51,7 +51,7 @@ public class ParameterBindingTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task NullSemantics_EqualityVsIsNull()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -80,7 +80,7 @@ public class ParameterBindingTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task TypeMatrixBinding_SurvivesExecution()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>

@@ -133,6 +133,9 @@ internal ref struct StringBuilderLite
         Append(tmp.Slice(0, written));
     }
 
+    /// <summary>Returns a read-only span over the built characters without allocating a string.</summary>
+    public ReadOnlySpan<char> AsSpan() => _buf.Slice(0, _pos);
+
     public override string ToString()
     {
         return _buf.Slice(0, _pos).ToString();

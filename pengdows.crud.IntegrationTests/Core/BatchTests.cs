@@ -22,7 +22,7 @@ public class BatchTests : DatabaseTestBase
         await tableCreator.CreateTestTableAsync();
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task ReuseContainer_WithNewParameters_WorksSuccessfully()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -77,7 +77,7 @@ public class BatchTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task SequentialCommands_OnSameConnection_WorksSuccessfully()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>

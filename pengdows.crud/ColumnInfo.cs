@@ -23,6 +23,7 @@
 
 using System.Collections.Concurrent;
 using System.Data;
+using System.Linq.Expressions;
 using System.Reflection;
 using System.Text.Json;
 
@@ -73,6 +74,7 @@ public class ColumnInfo : IColumnInfo
 {
     /// <summary>
     /// Non-generic helper to invoke the generic enum cache via reflection.
+    /// Used as a fallback when <see cref="EnumStringConverter"/> is not pre-compiled.
     /// </summary>
     private static string GetEnumString(Type enumType, object enumValue)
     {
@@ -84,6 +86,31 @@ public class ColumnInfo : IColumnInfo
         var method = cacheType.GetMethod(nameof(EnumStringCache<DayOfWeek>.GetOrAdd))!;
         return (string)method.Invoke(null, new[] { enumValue })!;
     }
+
+    /// <summary>
+    /// Builds a compiled delegate for enum-to-string conversion for the given enum type.
+    /// The compiled delegate unboxes the object to the concrete enum type then calls
+    /// <see cref="EnumStringCache{TEnum}.GetOrAdd"/> directly — no per-call reflection.
+    /// Called once per entity type during TypeMapRegistry initialization.
+    /// </summary>
+    internal static Func<object, string> BuildEnumStringConverter(Type enumType)
+    {
+        var cacheType = typeof(EnumStringCache<>).MakeGenericType(enumType);
+        var method = cacheType.GetMethod(nameof(EnumStringCache<DayOfWeek>.GetOrAdd))!;
+        // Compile: (object v) => EnumStringCache<TEnum>.GetOrAdd((TEnum)v)
+        var param = Expression.Parameter(typeof(object), "v");
+        var cast = Expression.Convert(param, enumType);   // unbox object → TEnum
+        var call = Expression.Call(method, cast);          // static direct call
+        return Expression.Lambda<Func<object, string>>(call, param).Compile();
+    }
+
+    /// <summary>
+    /// Gets or sets a pre-compiled delegate for enum-to-string conversion.
+    /// Set by <see cref="TypeMapRegistry"/> at initialization time to eliminate
+    /// per-call <c>MakeGenericType</c> + <c>GetMethod</c> + <c>Invoke</c> overhead.
+    /// Falls back to <see cref="GetEnumString"/> when null (e.g., in unit tests).
+    /// </summary>
+    internal Func<object, string>? EnumStringConverter { get; set; }
 
     /// <summary>
     /// Gets or sets a compiled delegate for fast property value retrieval.
@@ -267,9 +294,11 @@ public class ColumnInfo : IColumnInfo
             {
                 if (DbType == DbType.String)
                 {
-                    // Use box-free generic enum cache for string conversion
-                    // This avoids boxing the enum value into an object for the cache key
-                    value = GetEnumString(EnumType, current);
+                    // Use pre-compiled delegate if set by TypeMapRegistry (eliminates MakeGenericType
+                    // + GetMethod + Invoke per call); fall back to reflection for ad-hoc ColumnInfo.
+                    value = EnumStringConverter != null
+                        ? EnumStringConverter(current)
+                        : GetEnumString(EnumType, current);
                 }
                 else
                 {

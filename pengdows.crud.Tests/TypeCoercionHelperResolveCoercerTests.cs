@@ -89,4 +89,28 @@ public class TypeCoercionHelperResolveCoercerTests
         Assert.Equal("payload", typed.Value);
         Assert.Equal(typeof(string), coercion.LastObservedDbType);
     }
+
+    [Fact]
+    public void ResolveCoercer_ForTypePair_ConvertsValue()
+    {
+        var method = typeof(TypeCoercionHelper).GetMethod(
+            "ResolveCoercer",
+            BindingFlags.NonPublic | BindingFlags.Static,
+            null,
+            new[] { typeof(Type), typeof(Type), typeof(EnumParseFailureMode) },
+            null);
+
+        Assert.NotNull(method);
+
+        var resolved = (Func<object?, object?>)method!.Invoke(null, new object?[]
+        {
+            typeof(string),
+            typeof(int),
+            EnumParseFailureMode.Throw
+        })!;
+
+        var result = resolved("42");
+
+        Assert.Equal(42, result);
+    }
 }

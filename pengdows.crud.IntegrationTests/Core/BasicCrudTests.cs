@@ -25,7 +25,7 @@ public class BasicCrudTests : DatabaseTestBase
         await tableCreator.CreateTestTableAsync();
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task CreateAsync_WithValidEntity_InsertsRecordSuccessfully()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -49,7 +49,7 @@ public class BasicCrudTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task RetrieveOneAsync_WithExistingId_ReturnsCorrectEntity()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -70,7 +70,7 @@ public class BasicCrudTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task RetrieveOneAsync_WithNonExistentId_ReturnsNull()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -87,7 +87,7 @@ public class BasicCrudTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task RetrieveAsync_WithMultipleIds_ReturnsMatchingEntities()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -118,7 +118,7 @@ public class BasicCrudTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task UpdateAsync_WithValidChanges_UpdatesRecordSuccessfully()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -144,7 +144,7 @@ public class BasicCrudTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task UpdateAsync_WithNonExistentEntity_ReturnsZero()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -162,7 +162,7 @@ public class BasicCrudTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task DeleteAsync_WithExistingId_DeletesRecordSuccessfully()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -184,7 +184,7 @@ public class BasicCrudTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task DeleteAsync_WithMultipleIds_DeletesAllMatching()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -217,7 +217,7 @@ public class BasicCrudTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task UpsertAsync_WithNewEntity_InsertsRecord()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -240,7 +240,7 @@ public class BasicCrudTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task UpsertAsync_WithExistingEntity_UpdatesRecord()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>

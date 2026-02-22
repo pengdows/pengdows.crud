@@ -26,7 +26,7 @@ public class DbModeTests : DatabaseTestBase
         await tableCreator.CreateTestTableAsync();
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task DbMode_Standard_OpensAndClosesConnections()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -50,7 +50,7 @@ public class DbModeTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task DbMode_Standard_MultipleOperations_EachGetsNewConnection()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -80,7 +80,7 @@ public class DbModeTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task DbMode_Standard_WithTransaction_MaintainsConnection()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -94,13 +94,24 @@ public class DbModeTests : DatabaseTestBase
             var helper = CreateTableGateway(transaction);
 
             var connCountInTransaction = transaction.NumberOfOpenConnections;
-            Assert.True(connCountInTransaction > 0, "Transaction should have at least one connection open");
+            if (provider == SupportedDatabase.Snowflake)
+            {
+                Output.WriteLine("Snowflake opens connections lazily; skipping initial connection count assertion");
+            }
+            else
+            {
+                Assert.True(connCountInTransaction > 0, "Transaction should have at least one connection open");
+            }
 
             await helper.CreateAsync(entity1, transaction);
             await helper.CreateAsync(entity2, transaction);
 
             // Connection should still be open during transaction
-            Assert.True(transaction.NumberOfOpenConnections > 0, "Connection should remain open during transaction");
+            if (provider != SupportedDatabase.Snowflake)
+            {
+                Assert.True(transaction.NumberOfOpenConnections > 0,
+                    "Connection should remain open during transaction");
+            }
 
             transaction.Commit();
 
@@ -114,7 +125,7 @@ public class DbModeTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task DbMode_Standard_ParallelOperations_IndependentConnections()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -143,7 +154,7 @@ public class DbModeTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task ExecutionType_Read_UsesReadConnection()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -177,7 +188,7 @@ public class DbModeTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task ExecutionType_Write_UsesWriteConnection()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -234,7 +245,7 @@ public class DbModeTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Transaction_ReadOnly_AllowsReadsOnly()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -271,7 +282,7 @@ public class DbModeTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Connection_Reuse_WithinTransaction_SameConnection()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -287,7 +298,7 @@ public class DbModeTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Connection_Close_OutsideTransaction_ClosesImmediately()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -323,7 +334,7 @@ public class DbModeTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task MultipleTransactions_Sequential_EachGetsOwnConnection()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -353,7 +364,7 @@ public class DbModeTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Connection_Metrics_TracksOpenConnections()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -384,7 +395,7 @@ public class DbModeTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task IsolationLevel_ReadCommitted_PreventsDirtyReads()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>

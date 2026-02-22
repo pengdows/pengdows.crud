@@ -43,42 +43,13 @@ public partial class TableGateway<TEntity, TRowID>
 
         var sc = ctx.CreateSqlContainer();
 
-        // Build SQL directly for this dialect, cached per alias + product
-        var cacheKey = ctx.Product == _context.Product
-            ? $"BaseRetrieve:{alias}"
-            : $"BaseRetrieve:{alias}:{ctx.Product}";
-
-        var sql = GetCachedQuery(cacheKey, () =>
+        var brCache = GetOrCreateQueryCache(dialect);
+        var brKey = $"BaseRetrieve:{alias}";
+        if (!brCache.TryGet(brKey, out var sql))
         {
-            var hasAlias = !string.IsNullOrWhiteSpace(alias);
-            var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
-            sb.Append("SELECT ");
-            for (var i = 0; i < _tableInfo.OrderedColumns.Count; i++)
-            {
-                if (i > 0)
-                {
-                    sb.Append(", ");
-                }
-
-                if (hasAlias)
-                {
-                    sb.Append(dialect.WrapObjectName(alias));
-                    sb.Append(dialect.CompositeIdentifierSeparator);
-                }
-
-                sb.Append(BuildWrappedColumnName(dialect, _tableInfo.OrderedColumns[i].Name));
-            }
-
-            sb.Append("\nFROM ");
-            sb.Append(BuildWrappedTableName(dialect));
-            if (hasAlias)
-            {
-                sb.Append(' ');
-                sb.Append(dialect.WrapObjectName(alias));
-            }
-
-            return sb.ToString();
-        });
+            sql = BuildBaseRetrieveSql(alias, dialect);
+            brCache.GetOrAdd(brKey, _ => sql);
+        }
 
         sc.Query.Append(sql);
         return sc;
@@ -92,44 +63,48 @@ public partial class TableGateway<TEntity, TRowID>
     {
         var sc = context.CreateSqlContainer();
 
-        var cacheKey = context.Product == _context.Product
-            ? $"BaseRetrieve:{alias}"
-            : $"BaseRetrieve:{alias}:{context.Product}";
-
-        var sql = GetCachedQuery(cacheKey, () =>
+        var brCache = GetOrCreateQueryCache(dialect);
+        var brKey = $"BaseRetrieve:{alias}";
+        if (!brCache.TryGet(brKey, out var sql))
         {
-            var hasAlias = !string.IsNullOrWhiteSpace(alias);
-            var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
-            sb.Append("SELECT ");
-            for (var i = 0; i < _tableInfo.OrderedColumns.Count; i++)
-            {
-                if (i > 0)
-                {
-                    sb.Append(", ");
-                }
-
-                if (hasAlias)
-                {
-                    sb.Append(dialect.WrapObjectName(alias));
-                    sb.Append(dialect.CompositeIdentifierSeparator);
-                }
-
-                sb.Append(BuildWrappedColumnName(dialect, _tableInfo.OrderedColumns[i].Name));
-            }
-
-            sb.Append("\nFROM ");
-            sb.Append(BuildWrappedTableName(dialect));
-            if (hasAlias)
-            {
-                sb.Append(' ');
-                sb.Append(dialect.WrapObjectName(alias));
-            }
-
-            return sb.ToString();
-        });
+            sql = BuildBaseRetrieveSql(alias, dialect);
+            brCache.GetOrAdd(brKey, _ => sql);
+        }
 
         sc.Query.Append(sql);
         return sc;
+    }
+
+    private string BuildBaseRetrieveSql(string alias, ISqlDialect dialect)
+    {
+        var hasAlias = !string.IsNullOrWhiteSpace(alias);
+        var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+        sb.Append("SELECT ");
+        for (var i = 0; i < _tableInfo.OrderedColumns.Count; i++)
+        {
+            if (i > 0)
+            {
+                sb.Append(", ");
+            }
+
+            if (hasAlias)
+            {
+                sb.Append(dialect.WrapObjectName(alias));
+                sb.Append(dialect.CompositeIdentifierSeparator);
+            }
+
+            sb.Append(BuildWrappedColumnName(dialect, _tableInfo.OrderedColumns[i].Name));
+        }
+
+        sb.Append("\nFROM ");
+        sb.Append(BuildWrappedTableName(dialect));
+        if (hasAlias)
+        {
+            sb.Append(' ');
+            sb.Append(dialect.WrapObjectName(alias));
+        }
+
+        return sb.ToString();
     }
 
     /// <inheritdoc/>
@@ -236,7 +211,7 @@ public partial class TableGateway<TEntity, TRowID>
                 sb.Append(SqlFragments.Or);
             }
 
-            sb.Append(BuildPrimaryKeyClause(entity, keys, wrappedAlias, parameters, dialect, counters));
+            sb.Append(BuildPrimaryKeyClause(entity, keys, wrappedAlias, parameters, dialect, ref counters));
         }
 
         if (sb.Length == 0)
@@ -279,7 +254,7 @@ public partial class TableGateway<TEntity, TRowID>
     }
 
     private string BuildPrimaryKeyClause(TEntity entity, IReadOnlyList<IColumnInfo> keys, string alias,
-        List<DbParameter> parameters, ISqlDialect dialect, ClauseCounters counters)
+        List<DbParameter> parameters, ISqlDialect dialect, ref ClauseCounters counters)
     {
         var clause = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
         clause.Append('(');
@@ -305,7 +280,16 @@ public partial class TableGateway<TEntity, TRowID>
             else
             {
                 clause.Append(" = ");
-                clause.Append(dialect.MakeParameterName(parameter));
+                if (dialect.SupportsNamedParameters)
+                {
+                    clause.Append(dialect.ParameterMarker);
+                    clause.Append(name);
+                }
+                else
+                {
+                    clause.Append('?');
+                }
+
                 parameters.Add(parameter);
             }
         }
@@ -339,6 +323,35 @@ public partial class TableGateway<TEntity, TRowID>
     {
         if (ids is null)
         {
+            return sqlContainer;
+        }
+
+        // Fast path: single-element collection — skip List/HashSet allocation entirely.
+        // Handles the most common case: BuildRetrieve(new[]{ id }), RetrieveOneAsync(id).
+        if (ids is IReadOnlyCollection<TRowID> singleCheck && singleCheck.Count == 1)
+        {
+            // Access element without allocating an IEnumerator box
+            var singleId = singleCheck is IList<TRowID> singleList ? singleList[0] : singleCheck.First();
+
+            if (Utils.IsNullOrDbNull(singleId))
+            {
+                AppendWherePrefix(sqlContainer);
+                sqlContainer.Query.Append(wrappedColumnName).Append(" IS NULL");
+                return sqlContainer;
+            }
+
+            var dialect1 = ((ISqlDialectProvider)sqlContainer).Dialect;
+            CheckParameterLimit(sqlContainer, 1);
+
+            // Use CachedSqlTemplates (keyed per dialect) instead of _queryCache to avoid
+            // cross-dialect collision: wrappedColumnName is identical for dialects that share
+            // the same quote style (e.g. SQLite and PostgreSQL both use '"'), so a shared
+            // _queryCache key would embed the wrong parameter marker for the second dialect.
+            var template1 = GetTemplatesForDialect(dialect1);
+            AppendWherePrefix(sqlContainer);
+            sqlContainer.Query.Append(template1.IdEqualityWhereBody!);
+            var parameter = dialect1.CreateDbParameter("p0", _idColumn!.DbType, singleId);
+            sqlContainer.AddParameter(parameter);
             return sqlContainer;
         }
 
@@ -383,30 +396,16 @@ public partial class TableGateway<TEntity, TRowID>
         }
 
         // Single non-null value = equality (optionally OR IS NULL when hasNull)
+        // Reached when: deduplication reduced multiple inputs to 1 unique ID, or
+        // the caller used a non-IReadOnlyCollection enumerable.
+        // Use CachedSqlTemplates (dialect-keyed) to avoid cross-dialect collision in _queryCache.
         if (nonNullIds.Count == 1)
         {
-            var paramName = sqlContainer.MakeParameterName("p0");
-            var product = (((ISqlDialectProvider)sqlContainer).Dialect as SqlDialect)?.DatabaseType
-                          ?? SupportedDatabase.Unknown;
-            var key = $"WhereEquals:{wrappedColumnName}:{product}{(hasNull ? ":Null" : string.Empty)}";
-            var equalityCore = GetCachedQuery(key, () => string.Concat(wrappedColumnName, " = ", paramName));
-            _queryCache.GetOrAdd($"WhereQuery:{wrappedColumnName}:1", _ => equalityCore);
-
+            var template2 = GetTemplatesForDialect(dialect);
+            var body = hasNull ? template2.IdEqualityNullableWhereBody! : template2.IdEqualityWhereBody!;
             AppendWherePrefix(sqlContainer);
-            if (hasNull)
-            {
-                sqlContainer.Query.Append('(')
-                    .Append(equalityCore)
-                    .Append(SqlFragments.Or)
-                    .Append(wrappedColumnName)
-                    .Append(" IS NULL)");
-            }
-            else
-            {
-                sqlContainer.Query.Append(equalityCore);
-            }
-
-            var parameter = sqlContainer.CreateDbParameter(paramName, _idColumn!.DbType, nonNullIds[0]);
+            sqlContainer.Query.Append(body);
+            var parameter = sqlContainer.CreateDbParameter("p0", _idColumn!.DbType, nonNullIds[0]);
             sqlContainer.AddParameter(parameter);
             return sqlContainer;
         }
@@ -415,8 +414,13 @@ public partial class TableGateway<TEntity, TRowID>
         if (dialect.SupportsSetValuedParameters)
         {
             var paramName = sqlContainer.MakeParameterName("w0");
-            var anyCore = GetCachedQuery($"WhereAny:{wrappedColumnName}",
-                () => string.Concat(wrappedColumnName, " = ANY(", paramName, ")"));
+            var anyCache = GetOrCreateQueryCache(dialect);
+            var anyKey = $"WhereAny:{wrappedColumnName}";
+            if (!anyCache.TryGet(anyKey, out var anyCore))
+            {
+                anyCore = string.Concat(wrappedColumnName, " = ANY(", paramName, ")");
+                anyCache.GetOrAdd(anyKey, _ => anyCore);
+            }
 
             AppendWherePrefix(sqlContainer);
             if (hasNull)
@@ -442,10 +446,10 @@ public partial class TableGateway<TEntity, TRowID>
             ? 1
             : (int)System.Numerics.BitOperations.RoundUpToPowerOf2((uint)nonNullIds.Count);
 
-        // Cache parameter names by bucket size only (not column name) since names are position-based
-        // This improves cache hit rate - w0, w1, w2 are reused across all columns
+        // Parameter names are dialect-specific (e.g. "@w0" vs ":w0"), so cache per dialect + bucket.
+        var paramNamesCache = GetOrCreateParamNamesCache(dialect);
         var paramNamesKey = $"WhereParams:{bucket}";
-        if (!_whereParameterNames.TryGet(paramNamesKey, out var names))
+        if (!paramNamesCache.TryGet(paramNamesKey, out var names))
         {
             names = new string[bucket];
             for (var i = 0; i < bucket; i++)
@@ -453,29 +457,26 @@ public partial class TableGateway<TEntity, TRowID>
                 names[i] = sqlContainer.MakeParameterName($"w{i}");
             }
 
-            _whereParameterNames.GetOrAdd(paramNamesKey, _ => names);
+            paramNamesCache.GetOrAdd(paramNamesKey, _ => names);
         }
 
         // Query cache must include column name since it generates "columnName IN (w0, w1, w2)"
+        var inCache = GetOrCreateQueryCache(dialect);
         var queryKey = $"WhereQuery:{wrappedColumnName}:{bucket}";
-        var inCore = GetCachedQuery(queryKey, () =>
+        if (!inCache.TryGet(queryKey, out var inCore))
         {
             var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
             sb.Append(wrappedColumnName);
             sb.Append(SqlFragments.In);
             for (var i = 0; i < names.Length; i++)
             {
-                if (i > 0)
-                {
-                    sb.Append(SqlFragments.Comma);
-                }
-
+                if (i > 0) sb.Append(SqlFragments.Comma);
                 sb.Append(names[i]);
             }
-
             sb.Append(SqlFragments.CloseParen);
-            return sb.ToString();
-        });
+            inCore = sb.ToString();
+            inCache.GetOrAdd(queryKey, _ => inCore);
+        }
 
         AppendWherePrefix(sqlContainer);
         if (hasNull)

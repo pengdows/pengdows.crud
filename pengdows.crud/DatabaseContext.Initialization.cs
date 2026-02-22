@@ -704,6 +704,13 @@ public partial class DatabaseContext
             _readerConnectionString = _connectionString;
         }
 
+        _connectionNamePrefixWrite = ExtractApplicationName(_connectionString);
+        _connectionNamePrefixRead = ExtractApplicationName(_readerConnectionString);
+        if (string.Equals(_readerConnectionString, _connectionString, StringComparison.OrdinalIgnoreCase))
+        {
+            _connectionNamePrefixRead = _connectionNamePrefixWrite;
+        }
+
         // 4. Both connection strings are now complete — create DataSources.
         if (!_dataSourceProvided && _factory != null && _dataSource == null)
         {
@@ -853,6 +860,36 @@ public partial class DatabaseContext
             _dialect.ApplicationNameSettingName,
             ReadOnlyApplicationNameSuffix,
             configuration.ApplicationName);
+    }
+
+    private string? ExtractApplicationName(string connectionString)
+    {
+        var settingName = _dialect?.ApplicationNameSettingName;
+        if (string.IsNullOrWhiteSpace(settingName) || string.IsNullOrWhiteSpace(connectionString))
+        {
+            return null;
+        }
+
+        try
+        {
+            var builder = GetFactoryConnectionStringBuilder(connectionString);
+            if (RepresentsRawConnectionString(builder, connectionString))
+            {
+                return null;
+            }
+
+            if (builder.TryGetValue(settingName, out var value))
+            {
+                var appName = Convert.ToString(value)?.Trim();
+                return string.IsNullOrWhiteSpace(appName) ? null : appName;
+            }
+        }
+        catch
+        {
+            // ignore parse errors - no application name available
+        }
+
+        return null;
     }
 
     private bool HasDedicatedReadConnectionString()
@@ -1196,12 +1233,16 @@ public partial class DatabaseContext
         return processed;
     }
 
+    internal static Action? RedactionHook;
+
     private static string RedactConnectionString(string connectionString)
     {
         if (string.IsNullOrWhiteSpace(connectionString))
         {
             return string.Empty;
         }
+
+        RedactionHook?.Invoke();
 
         try
         {

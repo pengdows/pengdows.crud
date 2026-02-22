@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Data.Common;
+using System.Threading;
 
 namespace pengdows.crud.connection;
 
@@ -18,8 +19,8 @@ public sealed class ConnectionLocalState : IConnectionLocalState
     /// </summary>
     public bool SessionSettingsApplied { get; set; }
 
-    private readonly ConcurrentDictionary<string, byte> _prepared = new();
-    private readonly ConcurrentQueue<string> _order = new();
+    private ConcurrentDictionary<string, byte>? _prepared;
+    private ConcurrentQueue<string>? _order;
     private const int _maxPrepared = 32;
 
     /// <summary>
@@ -35,7 +36,8 @@ public sealed class ConnectionLocalState : IConnectionLocalState
     /// </summary>
     public bool IsAlreadyPreparedForShape(string shapeHash)
     {
-        return _prepared.ContainsKey(shapeHash);
+        var prepared = Volatile.Read(ref _prepared);
+        return prepared != null && prepared.ContainsKey(shapeHash);
     }
 
     /// <summary>
@@ -44,12 +46,14 @@ public sealed class ConnectionLocalState : IConnectionLocalState
     public bool MarkShapePrepared(string shapeHash, out int evicted)
     {
         evicted = 0;
-        if (_prepared.TryAdd(shapeHash, 0))
+        var prepared = GetPreparedCache();
+        var order = GetPreparedOrder();
+        if (prepared.TryAdd(shapeHash, 0))
         {
-            _order.Enqueue(shapeHash);
-            while (_prepared.Count > _maxPrepared && _order.TryDequeue(out var old))
+            order.Enqueue(shapeHash);
+            while (prepared.Count > _maxPrepared && order.TryDequeue(out var old))
             {
-                if (_prepared.TryRemove(old, out _))
+                if (prepared.TryRemove(old, out _))
                 {
                     evicted++;
                 }
@@ -67,12 +71,40 @@ public sealed class ConnectionLocalState : IConnectionLocalState
     /// </summary>
     public void Reset()
     {
-        while (_order.TryDequeue(out _))
+        var order = Volatile.Read(ref _order);
+        while (order != null && order.TryDequeue(out _))
         {
         }
 
-        _prepared.Clear();
+        var prepared = Volatile.Read(ref _prepared);
+        prepared?.Clear();
         // Don't reset PrepareDisabled - that should persist for the physical connection
         SessionSettingsApplied = false;
+    }
+
+    private ConcurrentDictionary<string, byte> GetPreparedCache()
+    {
+        var prepared = Volatile.Read(ref _prepared);
+        if (prepared != null)
+        {
+            return prepared;
+        }
+
+        prepared = new ConcurrentDictionary<string, byte>();
+        var existing = Interlocked.CompareExchange(ref _prepared, prepared, null);
+        return existing ?? prepared;
+    }
+
+    private ConcurrentQueue<string> GetPreparedOrder()
+    {
+        var order = Volatile.Read(ref _order);
+        if (order != null)
+        {
+            return order;
+        }
+
+        order = new ConcurrentQueue<string>();
+        var existing = Interlocked.CompareExchange(ref _order, order, null);
+        return existing ?? order;
     }
 }

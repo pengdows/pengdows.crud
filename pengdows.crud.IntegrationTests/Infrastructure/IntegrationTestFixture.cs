@@ -20,12 +20,65 @@ internal static class IntegrationTestConfiguration
     };
 
     public static IReadOnlyList<SupportedDatabase> EnabledProviders =>
-        ShouldIncludeOracle
-            ? BaseProviders.Concat(new[] { SupportedDatabase.Oracle }).ToArray()
-            : BaseProviders;
+        FilterIntegrationOnly(
+            GetEnabledProviders(ShouldIncludeOracle, ShouldIncludeSnowflake),
+            Environment.GetEnvironmentVariable("INTEGRATION_ONLY"));
 
     public static bool ShouldIncludeOracle =>
         string.Equals(Environment.GetEnvironmentVariable("INCLUDE_ORACLE"), "true", StringComparison.OrdinalIgnoreCase);
+
+    public static bool ShouldIncludeSnowflake =>
+        string.Equals(Environment.GetEnvironmentVariable("INCLUDE_SNOWFLAKE"), "true", StringComparison.OrdinalIgnoreCase);
+
+    internal static IReadOnlyList<SupportedDatabase> GetEnabledProviders(bool includeOracle, bool includeSnowflake)
+    {
+        var providers = BaseProviders.ToList();
+
+        if (includeOracle)
+        {
+            providers.Add(SupportedDatabase.Oracle);
+        }
+
+        if (includeSnowflake)
+        {
+            providers.Add(SupportedDatabase.Snowflake);
+        }
+
+        return providers;
+    }
+
+    internal static IReadOnlyList<SupportedDatabase> FilterIntegrationOnly(
+        IReadOnlyList<SupportedDatabase> providers,
+        string? only)
+    {
+        if (string.IsNullOrWhiteSpace(only))
+        {
+            return providers;
+        }
+
+        var filtered = only.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(token => Enum.TryParse<SupportedDatabase>(token, true, out var parsed)
+                ? parsed
+                : (SupportedDatabase?)null)
+            .Where(parsed => parsed.HasValue)
+            .Select(parsed => parsed!.Value)
+            .ToList();
+
+        if (filtered.Count == 0)
+        {
+            throw new InvalidOperationException(
+                $"INTEGRATION_ONLY did not match any SupportedDatabase values: '{only}'.");
+        }
+
+        var matched = providers.Where(filtered.Contains).ToArray();
+        if (matched.Length == 0)
+        {
+            throw new InvalidOperationException(
+                $"INTEGRATION_ONLY did not match any SupportedDatabase values: '{only}'.");
+        }
+
+        return matched;
+    }
 }
 
 public class IntegrationTestFixture : IAsyncLifetime
@@ -51,7 +104,8 @@ public class IntegrationTestFixture : IAsyncLifetime
         await _host.StartAsync();
 
         var orchestrator =
-            new ParallelTestOrchestrator(_host.Services, IntegrationTestConfiguration.ShouldIncludeOracle);
+            new ParallelTestOrchestrator(_host.Services, IntegrationTestConfiguration.ShouldIncludeOracle,
+                IntegrationTestConfiguration.ShouldIncludeSnowflake);
 
         foreach (var provider in IntegrationTestConfiguration.EnabledProviders)
         {
@@ -72,7 +126,8 @@ public class IntegrationTestFixture : IAsyncLifetime
 
         if (_containers.Count == 0)
         {
-            throw new InvalidOperationException("No database providers could be initialized for integration tests.");
+            Console.WriteLine(
+                "Warning: No database providers could be initialized. All integration tests will be skipped.");
         }
     }
 

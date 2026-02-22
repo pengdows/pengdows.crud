@@ -112,11 +112,34 @@ dotnet test --filter "FullyQualifiedName~ErrorHandling"
 # Include Oracle tests (requires Oracle database)
 export INCLUDE_ORACLE=true
 
+# Include Snowflake tests (requires Snowflake credentials)
+export INCLUDE_SNOWFLAKE=true
+
 # Test only specific providers
 export TESTBED_ONLY="PostgreSql,SqlServer"
 
 # Exclude specific providers
 export TESTBED_EXCLUDE="Oracle,Firebird"
+```
+
+#### Snowflake Configuration
+
+Snowflake tests use the external Snowflake account (no Docker image). Provide the required environment variables:
+
+```bash
+export SNOWFLAKE_ACCOUNT="your_account_identifier"
+export SNOWFLAKE_USER="your_user"
+export SNOWFLAKE_PASSWORD="your_password"
+export SNOWFLAKE_WAREHOUSE="your_warehouse"
+# Required unless SNOWFLAKE_CREATE_DATABASE=true
+export SNOWFLAKE_DATABASE="your_database"
+# Optional: defaults to PUBLIC if not set
+export SNOWFLAKE_SCHEMA="your_schema"
+export SNOWFLAKE_CREATE_DATABASE=true
+# Optional: prefix for generated test database/schema names (default: PENGDOWS_TEST)
+export SNOWFLAKE_TEST_PREFIX="PENGDOWS_TEST"
+# Optional: admin connection database (defaults to SNOWFLAKE_DATABASE if provided)
+export SNOWFLAKE_ADMIN_DATABASE="your_admin_database"
 ```
 
 #### Docker Configuration

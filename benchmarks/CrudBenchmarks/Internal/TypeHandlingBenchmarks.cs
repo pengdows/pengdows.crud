@@ -1,8 +1,10 @@
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Net;
 using BenchmarkDotNet.Attributes;
+using pengdows.crud;
 using pengdows.crud.enums;
 using pengdows.crud.types;
 using pengdows.crud.types.coercion;
@@ -34,6 +36,8 @@ public class TypeHandlingBenchmarks
     private HStore _hstoreValue;
     private TimeSpan _timeSpan;
     private DateTimeOffset _dateTimeOffset;
+    private string _dateTimeString = string.Empty;
+    private Func<object?, object?>? _dateTimeStringCoercer;
     private int[]? _intArray;
     private string[]? _stringArray;
     private SupportedDatabase _geometryProvider;
@@ -55,6 +59,11 @@ public class TypeHandlingBenchmarks
         _hstoreValue = HStore.Parse("\"key1\"=>\"value1\", \"key2\"=>NULL, \"key3\"=>\"value with spaces\"");
         _timeSpan = TimeSpan.FromHours(2.5);
         _dateTimeOffset = DateTimeOffset.Now;
+        _dateTimeString = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture);
+        _dateTimeStringCoercer = TypeCoercionHelper.ResolveCoercer(
+            typeof(string),
+            typeof(DateTime),
+            EnumParseFailureMode.Throw);
         _intArray = new[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
         _stringArray = new[] { "hello", "world", "test", "coercion", "performance" };
 
@@ -231,6 +240,12 @@ public class TypeHandlingBenchmarks
     {
         var dbValue = new DbValue(_dateTimeOffset);
         return _coercionRegistry!.TryRead(dbValue, typeof(DateTimeOffset), out _);
+    }
+
+    [Benchmark]
+    public object? Coercion_DateTime_Read_String()
+    {
+        return _dateTimeStringCoercer!(_dateTimeString);
     }
 
     [Benchmark]

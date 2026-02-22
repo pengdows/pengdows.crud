@@ -23,7 +23,7 @@ public class DiagnosticsTests : DatabaseTestBase
         await tableCreator.CreateTestTableAsync();
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task SyntaxError_SurfacesAsDbException()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -42,11 +42,17 @@ public class DiagnosticsTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task UniqueConstraintViolation_SurfacesAsDbException()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
+            if (provider == SupportedDatabase.Snowflake)
+            {
+                Output.WriteLine("Skipping unique constraint test for Snowflake (constraints are not enforced)");
+                return;
+            }
+
             // Arrange
             var auditResolver = GetAuditResolver();
             var helper = new TableGateway<TestTable, long>(context, auditResolver);

@@ -40,6 +40,7 @@ public class EqualFootingCrudBenchmarks : IDisposable
     // pengdows.crud
     private DatabaseContext _pengdowsContext = null!;
     private TableGateway<BenchEntity, int> _gateway = null!;
+    private TableGateway<BenchEntityNative, long> _gatewayNative = null!;
     private TypeMapRegistry _typeMap = null!;
 
     // Entity Framework options (DbContext created per operation)
@@ -101,8 +102,10 @@ public class EqualFootingCrudBenchmarks : IDisposable
         // pengdows.crud
         _typeMap = new TypeMapRegistry();
         _typeMap.Register<BenchEntity>();
+        _typeMap.Register<BenchEntityNative>();
         _pengdowsContext = new DatabaseContext(ConnStr, SqliteFactory.Instance, _typeMap);
         _gateway = new TableGateway<BenchEntity, int>(_pengdowsContext);
+        _gatewayNative = new TableGateway<BenchEntityNative, long>(_pengdowsContext);
 
         // Entity Framework options — DbContext created per operation
         _efOptions = new DbContextOptionsBuilder<EfBenchContext>()
@@ -229,6 +232,28 @@ public class EqualFootingCrudBenchmarks : IDisposable
         return result;
     }
 
+    /// <summary>
+    /// Same query as ReadSingle_Pengdows but using BenchEntityNative (long/long/long) so
+    /// SQLite's native int64 return values require zero coercion. The delta vs
+    /// ReadSingle_Pengdows isolates the int64→int32 and int64→bool coercion cost.
+    /// </summary>
+    [Benchmark]
+    public async Task<BenchEntityNative?> ReadSingle_Pengdows_Native()
+    {
+        BenchEntityNative? result = null;
+        for (var i = 0; i < RecordCount; i++)
+        {
+            await using var container = _pengdowsContext.CreateSqlContainer();
+            container.Query.Append(
+                "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = ");
+            container.Query.Append(container.MakeParameterName("Id"));
+            container.AddParameterWithValue("Id", DbType.Int64, (long)((i % SeedRows) + 1));
+            result = await _gatewayNative.LoadSingleAsync(container);
+        }
+
+        return result;
+    }
+
     [Benchmark]
     public async Task<EfBenchEntity?> ReadSingle_EntityFramework()
     {
@@ -263,6 +288,23 @@ public class EqualFootingCrudBenchmarks : IDisposable
         container.AddParameterWithValue("Age", DbType.Int32, 30);
         container.AddParameterWithValue("Limit", DbType.Int32, RecordCount);
         return await _gateway.LoadListAsync(container);
+    }
+
+    /// <summary>
+    /// Same query as ReadList_Pengdows but using BenchEntityNative — zero coercion.
+    /// </summary>
+    [Benchmark]
+    public async Task<List<BenchEntityNative>> ReadList_Pengdows_Native()
+    {
+        await using var container = _pengdowsContext.CreateSqlContainer();
+        container.Query.Append(
+            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE age > ");
+        container.Query.Append(container.MakeParameterName("Age"));
+        container.Query.Append(" LIMIT ");
+        container.Query.Append(container.MakeParameterName("Limit"));
+        container.AddParameterWithValue("Age", DbType.Int64, 30L);
+        container.AddParameterWithValue("Limit", DbType.Int32, RecordCount);
+        return await _gatewayNative.LoadListAsync(container);
     }
 
     [Benchmark]
@@ -915,6 +957,35 @@ public class EqualFootingCrudBenchmarks : IDisposable
 
         [Column("is_active", DbType.Boolean)]
         public bool IsActive { get; set; }
+
+        [Column("created_at", DbType.String)]
+        public string CreatedAt { get; set; } = string.Empty;
+    }
+
+    // ========================================================================
+    // ENTITY: pengdows.crud — SQLite native types (no coercion)
+    // id/age/is_active declared as long so SQLite's int64 return values
+    // map directly without int64→int32 or int64→bool conversion.
+    // ========================================================================
+
+    [Table("benchmark")]
+    public class BenchEntityNative
+    {
+        [Id(false)]
+        [Column("id", DbType.Int64)]
+        public long Id { get; set; }
+
+        [Column("name", DbType.String)]
+        public string Name { get; set; } = string.Empty;
+
+        [Column("age", DbType.Int64)]
+        public long Age { get; set; }
+
+        [Column("salary", DbType.Double)]
+        public double Salary { get; set; }
+
+        [Column("is_active", DbType.Int64)]
+        public long IsActive { get; set; }
 
         [Column("created_at", DbType.String)]
         public string CreatedAt { get; set; } = string.Empty;

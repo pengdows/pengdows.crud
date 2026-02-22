@@ -126,12 +126,13 @@ public partial class TableGateway<TEntity, TRowID>
         var dialect = GetDialect(ctx);
         PrepareForInsertOrUpsert(entity);
 
-        // Pre-size collections to avoid resize operations (5-8% improvement)
         var insertableColumns = GetCachedInsertableColumns();
-        var capacity = insertableColumns.Count;
-        var columns = new List<string>(capacity);
-        var values = new List<string>(capacity);
-        var parameters = new List<DbParameter>(capacity);
+        var template = GetTemplatesForDialect(dialect);
+
+        // Use SbLites instead of List<string> for column/value lists — eliminates two heap allocations.
+        var colSb = SbLite.Create(stackalloc char[512]);
+        var valSb = SbLite.Create(stackalloc char[256]);
+        var parameters = new List<DbParameter>(insertableColumns.Count);
         var counters = new ClauseCounters();
 
         foreach (var column in insertableColumns)
@@ -144,10 +145,13 @@ public partial class TableGateway<TEntity, TRowID>
                 continue;
             }
 
-            columns.Add(dialect.WrapObjectName(column.Name));
+            if (colSb.Length > 0) colSb.Append(", ");
+            if (valSb.Length > 0) valSb.Append(", ");
+            colSb.Append(dialect.WrapObjectName(column.Name));
+
             if (Utils.IsNullOrDbNull(value))
             {
-                values.Add("NULL");
+                valSb.Append("NULL");
             }
             else
             {
@@ -159,36 +163,20 @@ public partial class TableGateway<TEntity, TRowID>
                 }
 
                 parameters.Add(p);
-                var marker = dialect.MakeParameterName(p);
                 if (column.IsJsonType)
                 {
-                    marker = dialect.RenderJsonArgument(marker, column);
+                    valSb.Append(dialect.RenderJsonArgument(dialect.MakeParameterName(name), column));
                 }
-
-                values.Add(marker);
+                else if (dialect.SupportsNamedParameters)
+                {
+                    valSb.Append(dialect.ParameterMarker);
+                    valSb.Append(name);
+                }
+                else
+                {
+                    valSb.Append('?');
+                }
             }
-        }
-
-        var updateSet = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
-        foreach (var column in GetCachedUpdatableColumns())
-        {
-            if (_auditValueResolver == null && column.IsLastUpdatedBy)
-            {
-                continue;
-            }
-
-            if (updateSet.Length > 0)
-            {
-                updateSet.Append(", ");
-            }
-
-            updateSet.Append($"{dialect.WrapObjectName(column.Name)} = {dialect.UpsertIncomingColumn(column.Name)}");
-        }
-
-        if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
-        {
-            updateSet.Append(
-                $", {dialect.WrapObjectName(_versionColumn.Name)} = {dialect.WrapObjectName(_versionColumn.Name)} + 1");
         }
 
         var keys = _tableInfo.PrimaryKeys;
@@ -202,41 +190,20 @@ public partial class TableGateway<TEntity, TRowID>
         var sc = ctx.CreateSqlContainer();
         sc.Query.Append("INSERT INTO ")
             .Append(BuildWrappedTableName(dialect))
-            .Append(" (");
-        for (var i = 0; i < columns.Count; i++)
-        {
-            if (i > 0)
-            {
-                sc.Query.Append(", ");
-            }
+            .Append(" (")
+            .Append(colSb.AsSpan())
+            .Append(") VALUES (")
+            .Append(valSb.AsSpan())
+            .Append(") ON CONFLICT (");
 
-            sc.Query.Append(columns[i]);
-        }
-
-        sc.Query.Append(") VALUES (");
-        for (var i = 0; i < values.Count; i++)
-        {
-            if (i > 0)
-            {
-                sc.Query.Append(", ");
-            }
-
-            sc.Query.Append(values[i]);
-        }
-
-        sc.Query.Append(") ON CONFLICT (");
         for (var i = 0; i < conflictCols.Count; i++)
         {
-            if (i > 0)
-            {
-                sc.Query.Append(", ");
-            }
-
+            if (i > 0) sc.Query.Append(", ");
             sc.Query.Append(dialect.WrapObjectName(conflictCols[i].Name));
         }
 
         sc.Query.Append(") DO UPDATE SET ")
-            .Append(updateSet.ToString());
+            .Append(template.UpsertUpdateFragment);
 
         sc.AddParameters(parameters);
         return sc;
@@ -288,20 +255,26 @@ public partial class TableGateway<TEntity, TRowID>
 
         PrepareForInsertOrUpsert(entity);
 
-        // Pre-size collections based on column count
+        var template = GetTemplatesForDialect(dialect);
         var capacity = _tableInfo.OrderedColumns.Count;
-        var columns = new List<string>(capacity);
-        var values = new List<string>(capacity);
+
+        // Use SbLites instead of List<string> for column/value lists — eliminates two heap allocations.
+        var colSb = SbLite.Create(stackalloc char[512]);
+        var valSb = SbLite.Create(stackalloc char[256]);
         var parameters = new List<DbParameter>(capacity);
         var counters = new ClauseCounters();
 
         foreach (var column in _tableInfo.OrderedColumns)
         {
             var value = column.MakeParameterValueFromField(entity);
-            string placeholder;
+
+            if (colSb.Length > 0) colSb.Append(", ");
+            if (valSb.Length > 0) valSb.Append(", ");
+            colSb.Append(dialect.WrapObjectName(column.Name));
+
             if (Utils.IsNullOrDbNull(value))
             {
-                placeholder = FormatFirebirdValueExpression("NULL", column);
+                valSb.Append(FormatFirebirdValueExpression("NULL", column));
             }
             else
             {
@@ -313,39 +286,20 @@ public partial class TableGateway<TEntity, TRowID>
                 }
 
                 parameters.Add(p);
-                var marker = dialect.MakeParameterName(p);
                 if (column.IsJsonType)
                 {
-                    marker = dialect.RenderJsonArgument(marker, column);
+                    valSb.Append(dialect.RenderJsonArgument(dialect.MakeParameterName(name), column));
                 }
-
-                placeholder = marker;
+                else if (dialect.SupportsNamedParameters)
+                {
+                    valSb.Append(dialect.ParameterMarker);
+                    valSb.Append(name);
+                }
+                else
+                {
+                    valSb.Append('?');
+                }
             }
-
-            columns.Add(dialect.WrapObjectName(column.Name));
-            values.Add(placeholder);
-        }
-
-        var updateSet = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
-        foreach (var column in GetCachedUpdatableColumns())
-        {
-            if (_auditValueResolver == null && column.IsLastUpdatedBy)
-            {
-                continue;
-            }
-
-            if (updateSet.Length > 0)
-            {
-                updateSet.Append(", ");
-            }
-
-            updateSet.Append($"{dialect.WrapObjectName(column.Name)} = {dialect.UpsertIncomingColumn(column.Name)}");
-        }
-
-        if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
-        {
-            updateSet.Append(
-                $", {dialect.WrapObjectName(_versionColumn.Name)} = {dialect.WrapObjectName(_versionColumn.Name)} + 1");
         }
 
         var keys = _tableInfo.PrimaryKeys;
@@ -357,29 +311,12 @@ public partial class TableGateway<TEntity, TRowID>
         var sc = ctx.CreateSqlContainer();
         sc.Query.Append("INSERT INTO ")
             .Append(BuildWrappedTableName(dialect))
-            .Append(" (");
-        for (var i = 0; i < columns.Count; i++)
-        {
-            if (i > 0)
-            {
-                sc.Query.Append(", ");
-            }
+            .Append(" (")
+            .Append(colSb.AsSpan())
+            .Append(") VALUES (")
+            .Append(valSb.AsSpan())
+            .Append(")");
 
-            sc.Query.Append(columns[i]);
-        }
-
-        sc.Query.Append(") VALUES (");
-        for (var i = 0; i < values.Count; i++)
-        {
-            if (i > 0)
-            {
-                sc.Query.Append(", ");
-            }
-
-            sc.Query.Append(values[i]);
-        }
-
-        sc.Query.Append(")");
         var incomingAlias = dialect.UpsertIncomingAlias;
         if (!string.IsNullOrEmpty(incomingAlias))
         {
@@ -387,7 +324,7 @@ public partial class TableGateway<TEntity, TRowID>
         }
 
         sc.Query.Append(" ON DUPLICATE KEY UPDATE ")
-            .Append(updateSet.ToString());
+            .Append(template.UpsertUpdateFragment);
 
         sc.AddParameters(parameters);
         return sc;
@@ -405,20 +342,25 @@ public partial class TableGateway<TEntity, TRowID>
 
         PrepareForInsertOrUpsert(entity);
 
-        // Pre-size collections based on column count
         var capacity = _tableInfo.OrderedColumns.Count;
-        var srcColumns = new List<string>(capacity);
-        var values = new List<string>(capacity);
+
+        // Use SbLites instead of List<string> for src columns and values — eliminates two heap allocations.
+        var srcColSb = SbLite.Create(stackalloc char[512]);
+        var valSb    = SbLite.Create(stackalloc char[256]);
         var parameters = new List<DbParameter>(capacity);
         var counters = new ClauseCounters();
 
         foreach (var column in _tableInfo.OrderedColumns)
         {
             var value = column.MakeParameterValueFromField(entity);
-            string placeholder;
+
+            if (srcColSb.Length > 0) srcColSb.Append(", ");
+            if (valSb.Length > 0) valSb.Append(", ");
+            srcColSb.Append(dialect.WrapObjectName(column.Name));
+
             if (Utils.IsNullOrDbNull(value))
             {
-                placeholder = "NULL";
+                valSb.Append("NULL");
             }
             else
             {
@@ -430,51 +372,36 @@ public partial class TableGateway<TEntity, TRowID>
                 }
 
                 parameters.Add(p);
-                var marker = dialect.MakeParameterName(p);
                 if (column.IsJsonType)
                 {
-                    marker = dialect.RenderJsonArgument(marker, column);
+                    valSb.Append(dialect.RenderJsonArgument(dialect.MakeParameterName(name), column));
                 }
-
-                placeholder = marker;
+                else if (dialect.SupportsNamedParameters)
+                {
+                    valSb.Append(dialect.ParameterMarker);
+                    valSb.Append(name);
+                }
+                else
+                {
+                    valSb.Append('?');
+                }
             }
-
-            srcColumns.Add(dialect.WrapObjectName(column.Name));
-            values.Add(placeholder);
         }
 
         var insertableColumns = GetCachedInsertableColumns();
-        var insertColumns = new List<string>(insertableColumns.Count);
+        var template = GetTemplatesForDialect(dialect);
+
+        // Use SbLites for insert columns and their s.col aliases — eliminates two List<string> allocations.
+        var insertColSb = SbLite.Create(stackalloc char[512]);
+        var insertValSb = SbLite.Create(stackalloc char[512]);
         foreach (var column in insertableColumns)
         {
-            insertColumns.Add(dialect.WrapObjectName(column.Name));
-        }
-
-        var updateSet = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
-        // PostgreSQL MERGE does not allow target alias on left side of UPDATE SET
-        // SQL Server/Oracle do allow it
-        var targetPrefix = dialect.MergeUpdateRequiresTargetAlias ? "t." : "";
-
-        foreach (var column in GetCachedUpdatableColumns())
-        {
-            if (_auditValueResolver == null && column.IsLastUpdatedBy)
-            {
-                continue;
-            }
-
-            if (updateSet.Length > 0)
-            {
-                updateSet.Append(", ");
-            }
-
-            updateSet.Append(
-                $"{targetPrefix}{dialect.WrapObjectName(column.Name)} = s.{dialect.WrapObjectName(column.Name)}");
-        }
-
-        if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
-        {
-            updateSet.Append(
-                $", {targetPrefix}{dialect.WrapObjectName(_versionColumn.Name)} = {targetPrefix}{dialect.WrapObjectName(_versionColumn.Name)} + 1");
+            if (insertColSb.Length > 0) insertColSb.Append(", ");
+            if (insertValSb.Length > 0) insertValSb.Append(", ");
+            var wrapped = dialect.WrapObjectName(column.Name);
+            insertColSb.Append(wrapped);
+            insertValSb.Append("s.");
+            insertValSb.Append(wrapped);
         }
 
         var keys = _tableInfo.PrimaryKeys;
@@ -503,57 +430,18 @@ public partial class TableGateway<TEntity, TRowID>
         sc.Query.Append("MERGE INTO ")
             .Append(BuildWrappedTableName(dialect))
             .Append(" t USING (VALUES (")
-            ;
-        for (var i = 0; i < values.Count; i++)
-        {
-            if (i > 0)
-            {
-                sc.Query.Append(", ");
-            }
-
-            sc.Query.Append(values[i]);
-        }
-
-        sc.Query.Append(")) AS s (");
-        for (var i = 0; i < srcColumns.Count; i++)
-        {
-            if (i > 0)
-            {
-                sc.Query.Append(", ");
-            }
-
-            sc.Query.Append(srcColumns[i]);
-        }
-
-        sc.Query.Append(") ON ")
-            .Append(join.ToString())
+            .Append(valSb.AsSpan())
+            .Append(")) AS s (")
+            .Append(srcColSb.AsSpan())
+            .Append(") ON ")
+            .Append(join.AsSpan())
             .Append(" WHEN MATCHED THEN UPDATE SET ")
-            .Append(updateSet.ToString())
+            .Append(template.UpsertUpdateFragment)
             .Append(" WHEN NOT MATCHED THEN INSERT (")
-            ;
-        for (var i = 0; i < insertColumns.Count; i++)
-        {
-            if (i > 0)
-            {
-                sc.Query.Append(", ");
-            }
-
-            sc.Query.Append(insertColumns[i]);
-        }
-
-        sc.Query.Append(") VALUES (");
-        for (var i = 0; i < insertColumns.Count; i++)
-        {
-            if (i > 0)
-            {
-                sc.Query.Append(", ");
-            }
-
-            sc.Query.Append("s.");
-            sc.Query.Append(insertColumns[i]);
-        }
-
-        sc.Query.Append(");");
+            .Append(insertColSb.AsSpan())
+            .Append(") VALUES (")
+            .Append(insertValSb.AsSpan())
+            .Append(");");
 
         sc.AddParameters(parameters);
         return sc;
@@ -566,21 +454,25 @@ public partial class TableGateway<TEntity, TRowID>
 
         PrepareForInsertOrUpsert(entity);
 
-        // Pre-size collections based on column count
         var insertableColumns = GetCachedInsertableColumns();
-        var capacity = insertableColumns.Count;
-        var values = new List<string>(capacity);
-        var parameters = new List<DbParameter>(capacity);
+
+        // Use SbLites instead of List<string> — eliminates two heap allocations.
+        var insertColSb = SbLite.Create(stackalloc char[512]);
+        var valSb = SbLite.Create(stackalloc char[256]);
+        var parameters = new List<DbParameter>(insertableColumns.Count);
         var counters = new ClauseCounters();
 
-        var insertColumns = new List<string>(capacity);
         foreach (var column in insertableColumns)
         {
             var value = column.MakeParameterValueFromField(entity);
-            string placeholder;
+
+            if (insertColSb.Length > 0) insertColSb.Append(", ");
+            if (valSb.Length > 0) valSb.Append(", ");
+            insertColSb.Append(dialect.WrapObjectName(column.Name));
+
             if (Utils.IsNullOrDbNull(value))
             {
-                placeholder = "NULL";
+                valSb.Append("NULL");
             }
             else
             {
@@ -592,17 +484,20 @@ public partial class TableGateway<TEntity, TRowID>
                 }
 
                 parameters.Add(p);
-                var marker = dialect.MakeParameterName(p);
                 if (column.IsJsonType)
                 {
-                    marker = dialect.RenderJsonArgument(marker, column);
+                    valSb.Append(dialect.RenderJsonArgument(dialect.MakeParameterName(name), column));
                 }
-
-                placeholder = marker;
+                else if (dialect.SupportsNamedParameters)
+                {
+                    valSb.Append(dialect.ParameterMarker);
+                    valSb.Append(name);
+                }
+                else
+                {
+                    valSb.Append('?');
+                }
             }
-
-            insertColumns.Add(dialect.WrapObjectName(column.Name));
-            values.Add(placeholder);
         }
 
         var keys = _tableInfo.PrimaryKeys;
@@ -616,29 +511,11 @@ public partial class TableGateway<TEntity, TRowID>
         var sc = ctx.CreateSqlContainer();
         sc.Query.Append("UPDATE OR INSERT INTO ")
             .Append(BuildWrappedTableName(dialect))
-            .Append(" (");
-        for (var i = 0; i < insertColumns.Count; i++)
-        {
-            if (i > 0)
-            {
-                sc.Query.Append(", ");
-            }
-
-            sc.Query.Append(insertColumns[i]);
-        }
-
-        sc.Query.Append(") VALUES (");
-        for (var i = 0; i < values.Count; i++)
-        {
-            if (i > 0)
-            {
-                sc.Query.Append(", ");
-            }
-
-            sc.Query.Append(values[i]);
-        }
-
-        sc.Query.Append(") MATCHING (");
+            .Append(" (")
+            .Append(insertColSb.AsSpan())
+            .Append(") VALUES (")
+            .Append(valSb.AsSpan())
+            .Append(") MATCHING (");
         for (var i = 0; i < joinCols.Count; i++)
         {
             if (i > 0)

@@ -643,6 +643,20 @@ public class AdvancedTypeRegistry
             ConfigureParameter = (param, value) => { param.DbType = DbType.Binary; }
         });
 
+        // Snowflake TIMESTAMP_NTZ for DateTimeOffset (store UTC DateTime)
+        RegisterMapping<DateTimeOffset>(SupportedDatabase.Snowflake, new ProviderTypeMapping
+        {
+            DbType = DbType.DateTime,
+            ConfigureParameter = (param, value) =>
+            {
+                param.DbType = DbType.DateTime;
+                if (value is DateTimeOffset dto)
+                {
+                    param.Value = dto.UtcDateTime;
+                }
+            }
+        });
+
         // Snowflake stores GUIDs as VARCHAR(36) — use plain string with fixed size
         RegisterMapping<Guid>(SupportedDatabase.Snowflake, new ProviderTypeMapping
         {

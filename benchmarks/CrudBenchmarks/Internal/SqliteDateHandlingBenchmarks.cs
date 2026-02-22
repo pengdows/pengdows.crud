@@ -1,8 +1,10 @@
+using System;
+using System.Collections.Generic;
 using System.Data;
-using System.Data.Common;
 using System.Reflection;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using BenchmarkDotNet.Attributes;
 using Dapper;
 using Microsoft.Data.Sqlite;
@@ -14,33 +16,22 @@ using pengdows.crud.enums;
 namespace CrudBenchmarks;
 
 /// <summary>
-/// Apples-to-apples comparison between Dapper and pengdows.crud:
-/// - Same SQLite in-memory database
-/// - New connection per operation (factory -> connection string -> open)
-/// - Prebuilt SQL reused across iterations (no per-iteration SQL generation)
-/// - Per-iteration cost is parameters + execution + mapping
+/// Focused SQLite benchmark to understand DateTime handling costs.
+/// Uses a string-backed DATETIME column to reflect SQLite storage behavior.
 /// </summary>
 [MemoryDiagnoser]
 [SimpleJob(warmupCount: 3, iterationCount: 10)]
-public class ApplesToApplesDapperBenchmarks : IDisposable
+public class SqliteDateHandlingBenchmarks : IDisposable
 {
     private const int SeedRows = 1000;
 
     private SqliteConnection _sentinel = null!;
-
-    private DatabaseContext _pengdowsContext = null!;
-    private DatabaseContext _pengdowsSingleContext = null!;
+    private DatabaseContext _context = null!;
     private TableGateway<BenchEntity, int> _gateway = null!;
-    private TableGateway<BenchEntity, int> _singleGateway = null!;
     private TypeMapRegistry _typeMap = null!;
-
-    private DbProviderFactory _factory = null!;
-
     private string _connectionString = string.Empty;
-
     private string _pengdowsSql = string.Empty;
     private string _dapperSql = string.Empty;
-
     private int _idSeed;
     private string? _fieldTypeDump;
 
@@ -50,10 +41,8 @@ public class ApplesToApplesDapperBenchmarks : IDisposable
     [GlobalSetup]
     public void GlobalSetup()
     {
-        _factory = SqliteFactory.Instance;
-        _connectionString = "Data Source=ApplesToApplesBench;Mode=Memory;Cache=Shared";
+        _connectionString = "Data Source=SqliteDateHandlingBench;Mode=Memory;Cache=Shared";
 
-        // Sentinel connection keeps the in-memory database alive for pure mapping tests
         _sentinel = new SqliteConnection(_connectionString);
         _sentinel.Open();
 
@@ -62,8 +51,7 @@ public class ApplesToApplesDapperBenchmarks : IDisposable
             cmd.CommandText = @"
                 CREATE TABLE IF NOT EXISTS benchmark (
                     id INTEGER PRIMARY KEY,
-                    name VARCHAR NOT NULL,
-                    age INTEGER NOT NULL
+                    created_at TEXT NOT NULL
                 )";
             cmd.ExecuteNonQuery();
         }
@@ -74,9 +62,10 @@ public class ApplesToApplesDapperBenchmarks : IDisposable
             cmd.Transaction = tx;
             for (var i = 1; i <= SeedRows; i++)
             {
+                var created = DateTime.UtcNow.AddMinutes(-i).ToString("O");
                 cmd.CommandText =
-                    "INSERT INTO benchmark (id, name, age) " +
-                    $"VALUES ({i}, 'Person {i}', {20 + (i % 50)})";
+                    "INSERT INTO benchmark (id, created_at) " +
+                    $"VALUES ({i}, '{created}')";
                 cmd.ExecuteNonQuery();
             }
 
@@ -85,36 +74,24 @@ public class ApplesToApplesDapperBenchmarks : IDisposable
 
         _typeMap = new TypeMapRegistry();
         _typeMap.Register<BenchEntity>();
-        
-        // Standard Context: Connection-per-op (Includes Governor + Open/Close overhead)
-        var cfgStandard = new DatabaseContextConfiguration
-        {
-            ConnectionString = _connectionString,
-            ReadWriteMode = ReadWriteMode.ReadWrite,
-            DbMode = DbMode.Standard
-        };
-        _pengdowsContext = new DatabaseContext(cfgStandard, SqliteFactory.Instance, null, _typeMap);
-        _gateway = new TableGateway<BenchEntity, int>(_pengdowsContext);
 
-        // SingleConnection Context: Shared connection (Pure mapping performance)
-        var cfgSingle = new DatabaseContextConfiguration
+        var cfg = new DatabaseContextConfiguration
         {
             ConnectionString = _connectionString,
             ReadWriteMode = ReadWriteMode.ReadWrite,
             DbMode = DbMode.SingleConnection
         };
-        _pengdowsSingleContext = new DatabaseContext(cfgSingle, SqliteFactory.Instance, null, _typeMap);
-        _singleGateway = new TableGateway<BenchEntity, int>(_pengdowsSingleContext);
+        _context = new DatabaseContext(cfg, SqliteFactory.Instance, null, _typeMap);
+        _gateway = new TableGateway<BenchEntity, int>(_context);
 
-        _pengdowsSql = BuildSingleReadSql(p => _pengdowsContext.MakeParameterName(p));
+        _pengdowsSql = BuildSingleReadSql(p => _context.MakeParameterName(p));
         _dapperSql = BuildSingleReadSql(p => $"@{p}");
     }
 
     [GlobalCleanup]
     public void GlobalCleanup()
     {
-        _pengdowsContext?.Dispose();
-        _pengdowsSingleContext?.Dispose();
+        _context?.Dispose();
         _sentinel?.Dispose();
     }
 
@@ -123,18 +100,14 @@ public class ApplesToApplesDapperBenchmarks : IDisposable
         GlobalCleanup();
     }
 
-    /// <summary>
-    /// Measures pengdows.crud in production-standard mode.
-    /// Includes: Governor wait, Connection Open/Close, Command Prepare, and Mapping.
-    /// </summary>
     [Benchmark]
-    public async Task<int> ReadSingle_Pengdows_ProductionStandard()
+    public async Task<int> ReadSingle_Pengdows_PureMapping()
     {
         var hits = 0;
         for (var i = 0; i < RecordCount; i++)
         {
             var id = NextId();
-            await using var container = _pengdowsContext.CreateSqlContainer(_pengdowsSql);
+            await using var container = _context.CreateSqlContainer(_pengdowsSql);
             container.AddParameterWithValue("id", DbType.Int32, id);
             var result = await _gateway.LoadSingleAsync(container);
             if (result != null)
@@ -146,59 +119,7 @@ public class ApplesToApplesDapperBenchmarks : IDisposable
         return hits;
     }
 
-    /// <summary>
-    /// Measures pengdows.crud mapping engine ONLY.
-    /// Eliminates Governor and Open/Close overhead by using a shared persistent connection.
-    /// </summary>
-    [Benchmark]
-    public async Task<int> ReadSingle_Pengdows_PureMapping()
-    {
-        var hits = 0;
-        for (var i = 0; i < RecordCount; i++)
-        {
-            var id = NextId();
-            await using var container = _pengdowsSingleContext.CreateSqlContainer(_pengdowsSql);
-            container.AddParameterWithValue("id", DbType.Int32, id);
-            var result = await _singleGateway.LoadSingleAsync(container);
-            if (result != null)
-            {
-                hits++;
-            }
-        }
-
-        return hits;
-    }
-
-    /// <summary>
-    /// Measures Dapper using connection-per-op.
-    /// Note: Does NOT include governor overhead, making it "faster" but less safe than Standard mode.
-    /// </summary>
     [Benchmark(Baseline = true)]
-    public async Task<int> ReadSingle_Dapper_NewConnection()
-    {
-        var hits = 0;
-        for (var i = 0; i < RecordCount; i++)
-        {
-            var id = NextId();
-            await using var conn = _factory.CreateConnection()
-                ?? throw new InvalidOperationException("Failed to create Sqlite connection.");
-            conn.ConnectionString = _connectionString;
-            await conn.OpenAsync();
-            var row = await conn.QuerySingleOrDefaultAsync<DapperBenchEntity>(_dapperSql, new { id });
-            if (row != null)
-            {
-                hits++;
-            }
-        }
-
-        return hits;
-    }
-
-    /// <summary>
-    /// Measures Dapper mapping engine ONLY.
-    /// Uses the sentinel connection to eliminate Open/Close overhead.
-    /// </summary>
-    [Benchmark]
     public async Task<int> ReadSingle_Dapper_PureMapping()
     {
         var hits = 0;
@@ -275,7 +196,7 @@ public class ApplesToApplesDapperBenchmarks : IDisposable
 
     private static string BuildSingleReadSql(Func<string, string> param)
     {
-        return "SELECT id, name, age FROM benchmark WHERE id = " + param("id");
+        return "SELECT id, created_at FROM benchmark WHERE id = " + param("id");
     }
 
     [Table("benchmark")]
@@ -285,17 +206,13 @@ public class ApplesToApplesDapperBenchmarks : IDisposable
         [Column("id", DbType.Int32)]
         public int Id { get; set; }
 
-        [Column("name", DbType.String)]
-        public string Name { get; set; } = string.Empty;
-
-        [Column("age", DbType.Int32)]
-        public int Age { get; set; }
+        [Column("created_at", DbType.DateTime)]
+        public DateTime CreatedAt { get; set; }
     }
 
     public sealed class DapperBenchEntity
     {
         public int Id { get; set; }
-        public string Name { get; set; } = string.Empty;
-        public int Age { get; set; }
+        public DateTime CreatedAt { get; set; }
     }
 }

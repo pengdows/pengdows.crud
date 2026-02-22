@@ -133,11 +133,11 @@ public class NewDialectTests
     }
 
     [Fact]
-    public void SnowflakeDialect_SupportsSavepoints_IsTrue()
+    public void SnowflakeDialect_SupportsSavepoints_IsFalse()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Snowflake);
         var dialect = new SnowflakeDialect(factory, NullLogger<SnowflakeDialect>.Instance);
-        Assert.True(dialect.SupportsSavepoints);
+        Assert.False(dialect.SupportsSavepoints);
     }
 
     [Fact]
@@ -146,5 +146,18 @@ public class NewDialectTests
         var factory = new fakeDbFactory(SupportedDatabase.Snowflake);
         var dialect = new SnowflakeDialect(factory, NullLogger<SnowflakeDialect>.Instance);
         Assert.True(dialect.SupportsMerge);
+    }
+
+    [Fact]
+    public void SnowflakeDialect_PrepareParameterValue_NormalizesDateTimeOffsetToUtcDateTime()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Snowflake);
+        var dialect = new SnowflakeDialect(factory, NullLogger<SnowflakeDialect>.Instance);
+        var value = new DateTimeOffset(2026, 2, 21, 14, 30, 45, 123, TimeSpan.FromHours(-5));
+
+        var prepared = dialect.PrepareParameterValue(value, DbType.DateTimeOffset);
+
+        var preparedDateTime = Assert.IsType<DateTime>(prepared);
+        Assert.Equal(value.UtcDateTime, preparedDateTime);
     }
 }

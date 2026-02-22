@@ -22,7 +22,7 @@ public class QuotingTortureTests : DatabaseTestBase
         await tableCreator.CreateTortureTableAsync();
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task TortureCRUD_HandlesEvilIdentifiersSuccessfully()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>

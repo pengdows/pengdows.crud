@@ -297,6 +297,13 @@ public sealed class TypeMapRegistry : ITypeMapRegistry
             throw new InvalidOperationException(
                 $"Enum column {entityType.FullName}.{prop.Name} must use string or numeric DbType; found {ci.DbType}.");
         }
+
+        if (ci.EnumAsString)
+        {
+            // Pre-compile a delegate that unboxes object → TEnum and calls EnumStringCache<TEnum>.GetOrAdd()
+            // directly (JIT-level call, no reflection overhead per row).
+            ci.EnumStringConverter = ColumnInfo.BuildEnumStringConverter(ci.EnumType);
+        }
     }
 
     private static void AttachAuditReferences(TableInfo tableInfo, ColumnInfo ci)

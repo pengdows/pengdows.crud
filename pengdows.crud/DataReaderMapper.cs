@@ -94,6 +94,38 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
     private static readonly MethodInfo _getFieldValueGenericMethod = ResolveGetFieldValueMethod();
 
+    // Cached MethodInfo/ConstructorInfo for typed direct-read expression trees.
+    // Resolved once at class load to avoid per-plan reflection overhead.
+    private static readonly MethodInfo _coerceDateTimeFromStringMethod =
+        typeof(TypeCoercionHelper).GetMethod(
+            nameof(TypeCoercionHelper.CoerceDateTimeFromString),
+            BindingFlags.NonPublic | BindingFlags.Static,
+            null,
+            new[] { typeof(string) },
+            null)!;
+
+    private static readonly MethodInfo _coerceDateTimeOffsetFromStringMethod =
+        typeof(TypeCoercionHelper).GetMethod(
+            nameof(TypeCoercionHelper.CoerceDateTimeOffsetFromString),
+            BindingFlags.NonPublic | BindingFlags.Static,
+            null,
+            new[] { typeof(string) },
+            null)!;
+
+    private static readonly MethodInfo _coerceDateTimeOffsetFromDateTimeMethod =
+        typeof(TypeCoercionHelper).GetMethod(
+            nameof(TypeCoercionHelper.CoerceDateTimeOffsetFromDateTime),
+            BindingFlags.NonPublic | BindingFlags.Static,
+            null,
+            new[] { typeof(DateTime) },
+            null)!;
+
+    private static readonly MethodInfo _guidParseMethod =
+        typeof(Guid).GetMethod(nameof(Guid.Parse), new[] { typeof(string) })!;
+
+    private static readonly ConstructorInfo _guidFromBytesConstructor =
+        typeof(Guid).GetConstructor(new[] { typeof(byte[]) })!;
+
     internal DataReaderMapper()
     {
     }
@@ -336,22 +368,21 @@ public sealed class DataReaderMapper : IDataReaderMapper
         var readerParam = Expression.Parameter(typeof(DbDataReader), "reader");
 
         var propertyAccess = Expression.Property(objParam, key.Property);
+        var targetType = key.Property.PropertyType;
+        var underlyingTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
 
         Expression valueExpression;
         if (key.RequiresCoercion)
         {
-            var getValueMethod = typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetValue))!;
-            var rawValue = Expression.Call(readerParam, getValueMethod, Expression.Constant(key.Ordinal));
-            valueExpression = Expression.Convert(
-                Expression.Call(
-                    typeof(DataReaderMapper),
-                    nameof(CoerceValue),
-                    Type.EmptyTypes,
-                    rawValue,
-                    Expression.Constant(key.Property, typeof(PropertyInfo)),
-                    Expression.Constant(key.FieldType, typeof(Type)),
-                    Expression.Constant(key.EnumMode, typeof(EnumParseFailureMode))),
-                key.Property.PropertyType);
+            if (!TryBuildDirectReadExpression(key, readerParam, targetType, underlyingTarget, out valueExpression))
+            {
+                // Fallback: GetValue() returns boxed object; coercer returns boxed result; then unbox.
+                var getValueMethod = typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetValue))!;
+                var rawValue = Expression.Call(readerParam, getValueMethod, Expression.Constant(key.Ordinal));
+                var coercer = TypeCoercionHelper.ResolveCoercer(key.FieldType, targetType, key.EnumMode);
+                var invokeCoercer = Expression.Invoke(Expression.Constant(coercer), rawValue);
+                valueExpression = Expression.Convert(invokeCoercer, targetType);
+            }
         }
         else
         {
@@ -367,9 +398,28 @@ public sealed class DataReaderMapper : IDataReaderMapper
                 rawValue = Expression.Call(readerParam, getFieldValueMethod, Expression.Constant(key.Ordinal));
             }
 
-            valueExpression = key.Property.PropertyType == key.FieldType
-                ? rawValue
-                : Expression.Convert(rawValue, key.Property.PropertyType);
+            if (targetType == key.FieldType)
+            {
+                valueExpression = rawValue;
+            }
+            else if (underlyingTarget == typeof(bool) && IsNumericType(key.FieldType))
+            {
+                var nonZero = Expression.NotEqual(rawValue, Expression.Default(key.FieldType));
+                valueExpression = targetType != underlyingTarget
+                    ? Expression.Convert(nonZero, targetType)
+                    : nonZero;
+            }
+            else if (IsNumericType(key.FieldType) && IsNumericType(underlyingTarget))
+            {
+                var converted = BuildNumericConversion(rawValue, key.FieldType, underlyingTarget);
+                valueExpression = targetType != underlyingTarget
+                    ? Expression.Convert(converted, targetType)
+                    : converted;
+            }
+            else
+            {
+                valueExpression = Expression.Convert(rawValue, targetType);
+            }
         }
 
         var assignment = Expression.Assign(propertyAccess, valueExpression);
@@ -395,7 +445,124 @@ public sealed class DataReaderMapper : IDataReaderMapper
             return false;
         }
 
+        if (IsNumericType(fieldType) && IsNumericType(targetType))
+        {
+            return false;
+        }
+
+        if (targetType == typeof(bool) && IsNumericType(fieldType))
+        {
+            return false;
+        }
+
         return true;
+    }
+
+    private static Expression BuildNumericConversion(Expression rawValue, Type sourceType, Type targetType)
+    {
+        if (sourceType == targetType)
+        {
+            return rawValue;
+        }
+
+        // Integral → integral narrowing (e.g. long → int, long → short, int → byte).
+        // Use unchecked conversion — in a DB context the schema is trusted to fit.
+        // Emits conv.i4 / conv.i2 / etc. (1 CPU instruction, no overflow branch).
+        if (IsIntegralType(sourceType) && IsIntegralType(targetType))
+        {
+            return Expression.Convert(rawValue, targetType);
+        }
+
+        // float/double/decimal → integral: use Convert.ToXxx for rounding semantics.
+        if (IsIntegralType(targetType) && !IsIntegralType(sourceType))
+        {
+            var method = ResolveConvertMethod(targetType, sourceType);
+            if (method != null)
+            {
+                return Expression.Call(method, rawValue);
+            }
+        }
+
+        if (targetType == typeof(decimal) && (sourceType == typeof(double) || sourceType == typeof(float)))
+        {
+            var method = ResolveConvertMethod(targetType, sourceType);
+            if (method != null)
+            {
+                return Expression.Call(method, rawValue);
+            }
+        }
+
+        if ((targetType == typeof(double) || targetType == typeof(float)) && sourceType == typeof(decimal))
+        {
+            var method = ResolveConvertMethod(targetType, sourceType);
+            if (method != null)
+            {
+                return Expression.Call(method, rawValue);
+            }
+        }
+
+        return Expression.ConvertChecked(rawValue, targetType);
+    }
+
+    private static MethodInfo? ResolveConvertMethod(Type targetType, Type sourceType)
+    {
+        var methodName = targetType switch
+        {
+            var t when t == typeof(byte) => nameof(Convert.ToByte),
+            var t when t == typeof(sbyte) => nameof(Convert.ToSByte),
+            var t when t == typeof(short) => nameof(Convert.ToInt16),
+            var t when t == typeof(ushort) => nameof(Convert.ToUInt16),
+            var t when t == typeof(int) => nameof(Convert.ToInt32),
+            var t when t == typeof(uint) => nameof(Convert.ToUInt32),
+            var t when t == typeof(long) => nameof(Convert.ToInt64),
+            var t when t == typeof(ulong) => nameof(Convert.ToUInt64),
+            var t when t == typeof(float) => nameof(Convert.ToSingle),
+            var t when t == typeof(double) => nameof(Convert.ToDouble),
+            var t when t == typeof(decimal) => nameof(Convert.ToDecimal),
+            _ => string.Empty
+        };
+
+        if (string.IsNullOrEmpty(methodName))
+        {
+            return null;
+        }
+
+        return typeof(Convert).GetMethod(methodName, new[] { sourceType });
+    }
+
+    private static bool IsNumericType(Type type)
+    {
+        return Type.GetTypeCode(type) switch
+        {
+            TypeCode.Byte => true,
+            TypeCode.SByte => true,
+            TypeCode.Int16 => true,
+            TypeCode.UInt16 => true,
+            TypeCode.Int32 => true,
+            TypeCode.UInt32 => true,
+            TypeCode.Int64 => true,
+            TypeCode.UInt64 => true,
+            TypeCode.Single => true,
+            TypeCode.Double => true,
+            TypeCode.Decimal => true,
+            _ => false
+        };
+    }
+
+    private static bool IsIntegralType(Type type)
+    {
+        return Type.GetTypeCode(type) switch
+        {
+            TypeCode.Byte => true,
+            TypeCode.SByte => true,
+            TypeCode.Int16 => true,
+            TypeCode.UInt16 => true,
+            TypeCode.Int32 => true,
+            TypeCode.UInt32 => true,
+            TypeCode.Int64 => true,
+            TypeCode.UInt64 => true,
+            _ => false
+        };
     }
 
     private static Type ResolveFieldType(DbDataReader reader, int ordinal)
@@ -546,6 +713,81 @@ public sealed class DataReaderMapper : IDataReaderMapper
         }
 
         return lookup;
+    }
+
+    /// <summary>
+    /// Attempts to build a typed expression tree for known source→target coercion pairs,
+    /// avoiding boxing of value-type return values compared to the
+    /// <c>GetValue() + Func&lt;object?,object?&gt;</c> coercer path.
+    /// </summary>
+    /// <returns>
+    /// <c>true</c> when a typed expression was built and <paramref name="valueExpression"/> is set;
+    /// <c>false</c> when the pair is not handled here and the caller should fall back to the
+    /// generic coercer path.
+    /// </returns>
+    private static bool TryBuildDirectReadExpression(
+        SetterCacheKey key,
+        ParameterExpression readerParam,
+        Type targetType,
+        Type underlyingTarget,
+        out Expression valueExpression)
+    {
+        var fieldType = key.FieldType;
+        var ordinalConst = Expression.Constant(key.Ordinal);
+        var isNullable = targetType != underlyingTarget; // targetType is Nullable<underlyingTarget>
+
+        // string → DateTime / DateTime?
+        if (fieldType == typeof(string) && underlyingTarget == typeof(DateTime))
+        {
+            var getStr = _getFieldValueGenericMethod.MakeGenericMethod(typeof(string));
+            var rawStr = Expression.Call(readerParam, getStr, ordinalConst);
+            var parsed = Expression.Call(_coerceDateTimeFromStringMethod, rawStr);
+            valueExpression = isNullable ? Expression.Convert(parsed, targetType) : parsed;
+            return true;
+        }
+
+        // string → DateTimeOffset / DateTimeOffset?
+        if (fieldType == typeof(string) && underlyingTarget == typeof(DateTimeOffset))
+        {
+            var getStr = _getFieldValueGenericMethod.MakeGenericMethod(typeof(string));
+            var rawStr = Expression.Call(readerParam, getStr, ordinalConst);
+            var parsed = Expression.Call(_coerceDateTimeOffsetFromStringMethod, rawStr);
+            valueExpression = isNullable ? Expression.Convert(parsed, targetType) : parsed;
+            return true;
+        }
+
+        // DateTime → DateTimeOffset / DateTimeOffset?
+        if (fieldType == typeof(DateTime) && underlyingTarget == typeof(DateTimeOffset))
+        {
+            var getDateTime = _getFieldValueGenericMethod.MakeGenericMethod(typeof(DateTime));
+            var rawDt = Expression.Call(readerParam, getDateTime, ordinalConst);
+            var converted = Expression.Call(_coerceDateTimeOffsetFromDateTimeMethod, rawDt);
+            valueExpression = isNullable ? Expression.Convert(converted, targetType) : converted;
+            return true;
+        }
+
+        // string → Guid / Guid?
+        if (fieldType == typeof(string) && underlyingTarget == typeof(Guid))
+        {
+            var getStr = _getFieldValueGenericMethod.MakeGenericMethod(typeof(string));
+            var rawStr = Expression.Call(readerParam, getStr, ordinalConst);
+            var parsed = Expression.Call(_guidParseMethod, rawStr);
+            valueExpression = isNullable ? Expression.Convert(parsed, targetType) : parsed;
+            return true;
+        }
+
+        // byte[] → Guid / Guid?
+        if (fieldType == typeof(byte[]) && underlyingTarget == typeof(Guid))
+        {
+            var getBytes = _getFieldValueGenericMethod.MakeGenericMethod(typeof(byte[]));
+            var rawBytes = Expression.Call(readerParam, getBytes, ordinalConst);
+            var newGuid = Expression.New(_guidFromBytesConstructor, rawBytes);
+            valueExpression = isNullable ? Expression.Convert(newGuid, targetType) : newGuid;
+            return true;
+        }
+
+        valueExpression = null!;
+        return false;
     }
 
     private static MethodInfo ResolveGetFieldValueMethod()

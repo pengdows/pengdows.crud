@@ -357,7 +357,9 @@ public static class TypeCoercionHelper
             case EnumParseFailureMode.Throw:
                 throw new ArgumentException($"Cannot convert '{value}' to enum {enumType}");
             case EnumParseFailureMode.SetDefaultValue:
-                return Enum.ToObject(enumType, Activator.CreateInstance(Enum.GetUnderlyingType(enumType))!);
+                return targetNullable
+                    ? null
+                    : Enum.ToObject(enumType, Activator.CreateInstance(Enum.GetUnderlyingType(enumType))!);
             case EnumParseFailureMode.SetNullAndLog:
                 TryLogWarning("Cannot convert '{Value}' to enum {EnumType}.", value, enumType);
                 return null;
@@ -525,6 +527,56 @@ public static class TypeCoercionHelper
                 throw new InvalidCastException($"Cannot convert value '{value}' to DateTime.");
         }
     }
+
+    /// <summary>
+    /// Typed DateTime parser for string source — used by compiled expression trees in
+    /// <see cref="DataReaderMapper"/> to avoid boxing the DateTime return value.
+    /// Applies the same UTC normalization as <see cref="CoerceDateTime"/> for the string case.
+    /// </summary>
+    internal static DateTime CoerceDateTimeFromString(string s)
+    {
+        if (string.IsNullOrWhiteSpace(s))
+        {
+            throw new InvalidCastException($"Cannot convert value '{s}' to DateTime.");
+        }
+
+        if (DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dto))
+        {
+            return DateTime.SpecifyKind(dto.UtcDateTime, DateTimeKind.Utc);
+        }
+
+        if (DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt))
+        {
+            return DateTime.SpecifyKind(ConvertToUtc(dt), DateTimeKind.Utc);
+        }
+
+        throw new InvalidCastException($"Cannot convert value '{s}' to DateTime.");
+    }
+
+    /// <summary>
+    /// Typed DateTimeOffset parser for string source — used by compiled expression trees in
+    /// <see cref="DataReaderMapper"/> to avoid boxing the DateTimeOffset return value.
+    /// </summary>
+    internal static DateTimeOffset CoerceDateTimeOffsetFromString(string s)
+    {
+        if (DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed))
+        {
+            return parsed;
+        }
+
+        if (DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt))
+        {
+            return CreateFlexibleOffset(dt);
+        }
+
+        throw new InvalidCastException($"Cannot convert value '{s}' to DateTimeOffset.");
+    }
+
+    /// <summary>
+    /// Typed DateTimeOffset converter for DateTime source — used by compiled expression trees in
+    /// <see cref="DataReaderMapper"/> to avoid boxing the DateTimeOffset return value.
+    /// </summary>
+    internal static DateTimeOffset CoerceDateTimeOffsetFromDateTime(DateTime dt) => CreateFlexibleOffset(dt);
 
     private static DateTime ConvertToUtc(DateTime dt)
     {
@@ -782,5 +834,64 @@ public static class TypeCoercionHelper
         // Convert.ChangeType, etc.  The registry lookups here are unavoidable for
         // types that have no registered coercion.
         return value => value == null ? null : Coerce(value, sourceType ?? value.GetType(), column, parseMode, options);
+    }
+
+    /// <summary>
+    /// Resolves a coercion delegate for a known source/target type pair.
+    /// This is used by DataReaderMapper to pre-bind the conversion path
+    /// once per plan and avoid repeated registry lookups on every row.
+    /// </summary>
+    internal static Func<object?, object?> ResolveCoercer(
+        Type sourceType,
+        Type targetType,
+        EnumParseFailureMode parseMode)
+    {
+        var runtimeTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
+
+        if (TryGetEnumType(targetType, out var enumType))
+        {
+            return value => Utils.IsNullOrDbNull(value) ? null : CoerceEnum(value!, enumType, parseMode, targetType);
+        }
+
+        if (runtimeTarget == typeof(DateTimeOffset))
+        {
+            return value => Utils.IsNullOrDbNull(value) ? null : CoerceDateTimeOffset(value!, TypeCoercionOptions.Default);
+        }
+
+        if (runtimeTarget == typeof(DateTime))
+        {
+            return value => Utils.IsNullOrDbNull(value) ? null : CoerceDateTime(value!, TypeCoercionOptions.Default);
+        }
+
+        if (runtimeTarget.IsAssignableFrom(sourceType) &&
+            runtimeTarget != typeof(DateTime) &&
+            runtimeTarget != typeof(DateTimeOffset))
+        {
+            return value => Utils.IsNullOrDbNull(value) ? null : value;
+        }
+
+        var coercion = types.coercion.CoercionRegistry.Shared.GetCoercion(runtimeTarget, SupportedDatabase.Unknown);
+        if (coercion != null)
+        {
+            return value =>
+            {
+                if (Utils.IsNullOrDbNull(value))
+                {
+                    return null;
+                }
+
+                var dbValue = new types.coercion.DbValue(value!, sourceType);
+                if (coercion.TryRead(in dbValue, runtimeTarget, out var result))
+                {
+                    return result;
+                }
+
+                return ConvertWithCache(value!, runtimeTarget);
+            };
+        }
+
+        return value => Utils.IsNullOrDbNull(value)
+            ? null
+            : Coerce(value!, sourceType, targetType, TypeCoercionOptions.Default);
     }
 }

@@ -29,6 +29,7 @@ using System.Data;
 using System.Data.Common;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.connection;
@@ -93,7 +94,10 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
     private readonly bool _isSharedConnection;
     private readonly Func<ILockerAsync> _lockFactory;
     private readonly ILogger<TrackedConnection> _logger;
-    private string _name;
+    internal static Action? OpenTimingHook;
+    private static long _nameCounter;
+    private string? _name;
+    private readonly string? _namePrefix;
     private readonly Action<DbConnection>? _onDispose;
     private readonly Action<DbConnection>? _onFirstOpen;
     private readonly StateChangeEventHandler? _onStateChange;
@@ -128,7 +132,8 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
         ModeContentionStats? modeContentionStats = null,
         DbMode mode = DbMode.Standard,
         TimeSpan? modeLockTimeout = null,
-        PoolPermit? permit = null
+        PoolPermit? permit = null,
+        string? namePrefix = null
     )
     {
         _connection = conn ?? throw new ArgumentNullException(nameof(conn));
@@ -136,8 +141,8 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
         _onFirstOpen = onFirstOpen;
         _onDispose = onDispose;
         _logger = logger ?? NullLogger<TrackedConnection>.Instance;
-        _name = Guid.NewGuid().ToString();
         _metricsCollector = metricsCollector;
+        _namePrefix = string.IsNullOrWhiteSpace(namePrefix) ? null : namePrefix;
         _modeContentionStats = modeContentionStats;
         _mode = mode;
         _modeLockTimeout = modeLockTimeout;
@@ -201,14 +206,40 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
     internal TrackedConnection(DbConnection conn, string name, ILogger logger)
         : this(conn, null, null, null, logger as ILogger<TrackedConnection> ?? NullLogger<TrackedConnection>.Instance)
     {
-        _name = name ?? _name;
+        if (!string.IsNullOrWhiteSpace(name))
+        {
+            _name = name;
+        }
     }
 
     public bool WasOpened => Interlocked.CompareExchange(ref _wasOpened, 0, 0) == 1;
 
+    private string GetName()
+    {
+        var existing = Volatile.Read(ref _name);
+        if (existing != null)
+        {
+            return existing;
+        }
+
+        var counter = Interlocked.Increment(ref _nameCounter);
+        var generated = _namePrefix == null
+            ? string.Concat("c", counter.ToString(CultureInfo.InvariantCulture))
+            : string.Concat(_namePrefix, ":", counter.ToString(CultureInfo.InvariantCulture));
+        var set = Interlocked.CompareExchange(ref _name, generated, null);
+        return set ?? generated;
+    }
+
     public void Open()
     {
-        var stopwatch = Stopwatch.StartNew();
+        var debugEnabled = _logger.IsEnabled(LogLevel.Debug);
+        var shouldTime = debugEnabled || _metricsCollector != null;
+        Stopwatch? stopwatch = null;
+        if (shouldTime)
+        {
+            OpenTimingHook?.Invoke();
+            stopwatch = Stopwatch.StartNew();
+        }
 
         try
         {
@@ -216,9 +247,16 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
         }
         finally
         {
-            stopwatch.Stop();
-            _logger.LogDebug("Connection opened in {ElapsedMilliseconds} ms", stopwatch.ElapsedMilliseconds);
-            _metricsCollector?.RecordConnectionOpenDuration(stopwatch.ElapsedMilliseconds);
+            if (stopwatch != null)
+            {
+                stopwatch.Stop();
+                if (debugEnabled)
+                {
+                    _logger.LogDebug("Connection opened in {ElapsedMilliseconds} ms", stopwatch.ElapsedMilliseconds);
+                }
+
+                _metricsCollector?.RecordConnectionOpenDuration(stopwatch.ElapsedMilliseconds);
+            }
         }
 
         TriggerFirstOpen();
@@ -226,7 +264,10 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
 
     protected override void DisposeManaged()
     {
-        _logger.LogDebug("Disposing connection {Name}", _name);
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug("Disposing connection {Name}", GetName());
+        }
 
         if (_connection == null)
         {
@@ -286,7 +327,14 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
 
     public async Task OpenAsync(CancellationToken cancellationToken = default)
     {
-        var stopwatch = Stopwatch.StartNew();
+        var debugEnabled = _logger.IsEnabled(LogLevel.Debug);
+        var shouldTime = debugEnabled || _metricsCollector != null;
+        Stopwatch? stopwatch = null;
+        if (shouldTime)
+        {
+            OpenTimingHook?.Invoke();
+            stopwatch = Stopwatch.StartNew();
+        }
 
         try
         {
@@ -294,9 +342,16 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
         }
         finally
         {
-            stopwatch.Stop();
-            _logger.LogDebug("Connection opened in {ElapsedMilliseconds} ms", stopwatch.ElapsedMilliseconds);
-            _metricsCollector?.RecordConnectionOpenDuration(stopwatch.ElapsedMilliseconds);
+            if (stopwatch != null)
+            {
+                stopwatch.Stop();
+                if (debugEnabled)
+                {
+                    _logger.LogDebug("Connection opened in {ElapsedMilliseconds} ms", stopwatch.ElapsedMilliseconds);
+                }
+
+                _metricsCollector?.RecordConnectionOpenDuration(stopwatch.ElapsedMilliseconds);
+            }
         }
 
         TriggerFirstOpen();
@@ -304,7 +359,10 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
 
     protected override async ValueTask DisposeManagedAsync()
     {
-        _logger.LogDebug("Async disposing connection {Name}", _name);
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug("Async disposing connection {Name}", GetName());
+        }
 
         if (_connection == null)
         {
@@ -346,8 +404,12 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
         }
         else
         {
-            _logger.LogWarning("Timed out waiting to dispose shared connection {Name}; retrying once lock is released.",
-                _name);
+            if (_logger.IsEnabled(LogLevel.Warning))
+            {
+                _logger.LogWarning(
+                    "Timed out waiting to dispose shared connection {Name}; retrying once lock is released.",
+                    GetName());
+            }
             await Task.Run(async () =>
             {
                 await _semaphoreSlim.WaitAsync().ConfigureAwait(false);
@@ -367,11 +429,14 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
     {
         try
         {
-            if (_connection.State != ConnectionState.Closed)
+        if (_connection.State != ConnectionState.Closed)
+        {
+            if (_logger.IsEnabled(LogLevel.Warning))
             {
-                _logger.LogWarning("Connection {Name} was still open during Dispose. Closing.", _name);
-                CloseWithMetrics();
+                _logger.LogWarning("Connection {Name} was still open during Dispose. Closing.", GetName());
             }
+            CloseWithMetrics();
+        }
         }
         catch (Exception ex)
         {
@@ -404,11 +469,14 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
 
         try
         {
-            if (_connection.State != ConnectionState.Closed)
+        if (_connection.State != ConnectionState.Closed)
+        {
+            if (_logger.IsEnabled(LogLevel.Warning))
             {
-                _logger.LogWarning("Connection {Name} was still open during DisposeAsync. Closing.", _name);
-                CloseWithMetrics();
+                _logger.LogWarning("Connection {Name} was still open during DisposeAsync. Closing.", GetName());
             }
+            CloseWithMetrics();
+        }
         }
         catch (Exception ex)
         {

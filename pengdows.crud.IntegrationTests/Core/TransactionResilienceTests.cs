@@ -22,7 +22,7 @@ public class TransactionResilienceTests : DatabaseTestBase
         await tableCreator.CreateTestTableAsync();
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task ThrowMidTransaction_RollsBack_AndConnectionIsReusable()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>

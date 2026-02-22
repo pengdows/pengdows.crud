@@ -16,6 +16,7 @@
 // - SupportsNamespaces: true (db.schema.table fully qualified)
 // =============================================================================
 
+using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
@@ -70,7 +71,7 @@ internal class SnowflakeDialect : SqlDialect
     // INSERT ... RETURNING is supported
     public override bool SupportsInsertReturning => true;
 
-    public override bool SupportsSavepoints => true;
+    public override bool SupportsSavepoints => false;
 
     public override bool SupportsDropTableIfExists => true;
 
@@ -117,6 +118,17 @@ internal class SnowflakeDialect : SqlDialect
     public override SqlStandardLevel GetDefaultStandardLevel()
     {
         return SqlStandardLevel.Sql2016;
+    }
+
+    public override object? PrepareParameterValue(object? value, DbType dbType)
+    {
+        if (value is DateTimeOffset dto)
+        {
+            // Snowflake TIMESTAMP_NTZ does not store offsets; normalize to UTC instant.
+            return dto.UtcDateTime;
+        }
+
+        return base.PrepareParameterValue(value, dbType);
     }
 
     /// <summary>

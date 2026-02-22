@@ -49,7 +49,12 @@ public abstract class DatabaseTestBase : IAsyncLifetime
 
         if (!contexts.Any())
         {
-            throw new InvalidOperationException("No database providers could be initialized for testing");
+            var requested = requestedProviders.Count == 0
+                ? "none (check INTEGRATION_ONLY env var or GetSupportedProviders override)"
+                : string.Join(", ", requestedProviders);
+            throw new Xunit.SkipException(
+                $"No database providers could be initialized for testing. Requested: {requested}. " +
+                "Ensure the required containers are running (Docker) or the databases are accessible.");
         }
 
         DatabaseContexts = contexts;

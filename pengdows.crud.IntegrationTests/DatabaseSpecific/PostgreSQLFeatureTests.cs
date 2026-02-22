@@ -31,7 +31,7 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
         await CreateTaggedItemTableWithArraysAsync(context);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task JSONB_NativeOperators_QueryPerformance()
     {
         await RunTestAgainstProviderAsync(SupportedDatabase.PostgreSql, async context =>
@@ -68,7 +68,7 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task JSONB_ComplexQueries_NestedPathAccess()
     {
         await RunTestAgainstProviderAsync(SupportedDatabase.PostgreSql, async context =>
@@ -101,7 +101,7 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Arrays_AnyOperator_MembershipQueries()
     {
         await RunTestAgainstProviderAsync(SupportedDatabase.PostgreSql, async context =>
@@ -132,7 +132,7 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Arrays_ContainsOperator_SubsetQueries()
     {
         await RunTestAgainstProviderAsync(SupportedDatabase.PostgreSql, async context =>
@@ -162,7 +162,7 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task FullTextSearch_NativeTSVector_SearchPerformance()
     {
         await RunTestAgainstProviderAsync(SupportedDatabase.PostgreSql, async context =>
@@ -193,7 +193,7 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task FullTextSearch_RankedResults_WithHighlighting()
     {
         await RunTestAgainstProviderAsync(SupportedDatabase.PostgreSql, async context =>
@@ -234,7 +234,7 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task UpsertWithConflictResolution_OnConflictDoUpdate()
     {
         await RunTestAgainstProviderAsync(SupportedDatabase.PostgreSql, async context =>

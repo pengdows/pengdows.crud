@@ -15,8 +15,9 @@ public class IntegrationTestFixtureTests
     [Fact]
     public async Task CreateDatabaseContextAsync_ReturnsSingletonPerProvider()
     {
-        var first = await _fixture.CreateDatabaseContextAsync(SupportedDatabase.Sqlite);
-        var second = await _fixture.CreateDatabaseContextAsync(SupportedDatabase.Sqlite);
+        var provider = IntegrationTestConfiguration.EnabledProviders.First();
+        var first = await _fixture.CreateDatabaseContextAsync(provider);
+        var second = await _fixture.CreateDatabaseContextAsync(provider);
 
         Assert.Same(first, second);
     }

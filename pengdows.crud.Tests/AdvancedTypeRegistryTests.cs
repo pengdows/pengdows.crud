@@ -204,6 +204,25 @@ public class AdvancedTypeRegistryTests
     }
 
     [Fact]
+    public void DefaultMappings_ShouldMapSnowflakeDateTimeOffsetToUtcDateTime()
+    {
+        var registry = AdvancedTypeRegistry.Shared;
+        var mapping = registry.GetMapping(typeof(DateTimeOffset), SupportedDatabase.Snowflake);
+
+        Assert.NotNull(mapping);
+
+        var parameter = new TestDbParameter();
+        var dto = new DateTimeOffset(2026, 2, 22, 12, 34, 56, TimeSpan.FromHours(-5));
+
+        var success = registry.TryConfigureParameter(parameter, typeof(DateTimeOffset), dto, SupportedDatabase.Snowflake);
+
+        Assert.True(success);
+        Assert.Equal(DbType.DateTime, parameter.DbType);
+        Assert.IsType<DateTime>(parameter.Value);
+        Assert.Equal(dto.UtcDateTime, (DateTime)parameter.Value);
+    }
+
+    [Fact]
     public void DefaultConverters_ShouldBeRegistered()
     {
         var registry = AdvancedTypeRegistry.Shared;

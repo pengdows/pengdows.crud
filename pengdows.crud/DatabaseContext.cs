@@ -142,6 +142,12 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private bool? _snapshotIsolationPrefetch;
     private int _initializing; // 0 = false, 1 = true
     private bool _sessionSettingsDetectionCompleted;
+    private string? _cachedReadOnlySessionSettings;
+    private string? _cachedReadWriteSessionSettings;
+    private int _cachedReadOnlySessionSettingsComputed;
+    private int _cachedReadWriteSessionSettingsComputed;
+    private string? _connectionNamePrefixWrite;
+    private string? _connectionNamePrefixRead;
     private readonly MetricsCollector? _metricsCollector;
     private readonly MetricsCollector? _readerMetricsCollector;
     private readonly MetricsCollector? _writerMetricsCollector;

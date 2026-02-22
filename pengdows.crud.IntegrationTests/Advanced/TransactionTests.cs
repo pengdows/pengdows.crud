@@ -26,7 +26,7 @@ public class TransactionTests : DatabaseTestBase
         await tableCreator.CreateTestTableAsync();
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Transaction_Commit_PersistsChanges()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -53,7 +53,7 @@ public class TransactionTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Transaction_Rollback_DiscardsChanges()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -79,7 +79,7 @@ public class TransactionTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Transaction_ReadCommitted_AllowsReadOperations()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -105,7 +105,7 @@ public class TransactionTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Transaction_ReadOnly_AllowsReads_PreventsWrites()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -142,7 +142,7 @@ public class TransactionTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Transaction_Serializable_ProvidesStrictIsolation()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -175,7 +175,7 @@ public class TransactionTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Transaction_Savepoint_RollsBackPartialWork()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -218,7 +218,7 @@ public class TransactionTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Transaction_MultipleSavepoints_RollbackCorrectly()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -262,7 +262,7 @@ public class TransactionTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Transaction_DisposeWithoutCommit_RollsBack()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -284,7 +284,7 @@ public class TransactionTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Transaction_MultipleOperations_AllOrNothing()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -319,7 +319,7 @@ public class TransactionTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Transaction_UpdateWithinTransaction_Visible()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -349,7 +349,7 @@ public class TransactionTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Transaction_DeleteWithinTransaction_NotVisibleOutside()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -371,7 +371,7 @@ public class TransactionTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Transaction_IsolationProfile_SafeNonBlockingReads_Works()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>

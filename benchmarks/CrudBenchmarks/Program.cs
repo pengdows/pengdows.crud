@@ -1,3 +1,5 @@
+using System.Reflection;
+using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Columns;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Exporters;
@@ -19,7 +21,33 @@ public class Program
             ? new InProcessConfig()
             : new BenchmarkConfig();
 
-        BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args, config);
+        var benchmarkTypes = GetBenchmarkTypes();
+        BenchmarkSwitcher.FromTypes(benchmarkTypes).Run(args, config);
+    }
+
+    private static Type[] GetBenchmarkTypes()
+    {
+        var assembly = typeof(Program).Assembly;
+        Type[] types;
+
+        try
+        {
+            types = assembly.GetTypes();
+        }
+        catch (ReflectionTypeLoadException ex)
+        {
+            types = ex.Types.Where(t => t != null).Cast<Type>().ToArray();
+        }
+
+        return types
+            .Where(type => !type.IsAbstract && HasBenchmarkMethods(type))
+            .ToArray();
+    }
+
+    private static bool HasBenchmarkMethods(Type type)
+    {
+        return type.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+            .Any(method => method.GetCustomAttributes(typeof(BenchmarkAttribute), inherit: true).Length != 0);
     }
 
     private static bool ShouldUseInProcess()

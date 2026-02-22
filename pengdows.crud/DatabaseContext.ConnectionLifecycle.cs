@@ -24,6 +24,7 @@
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
+using System.Threading;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.@internal;
@@ -142,7 +143,7 @@ public partial class DatabaseContext
             return;
         }
 
-        var settings = _dialect.GetConnectionSessionSettings(this, readOnly);
+        var settings = GetCachedSessionSettings(readOnly);
         var applied = false;
         if (!string.IsNullOrWhiteSpace(settings))
         {
@@ -170,6 +171,32 @@ public partial class DatabaseContext
         }
     }
 
+    private string GetCachedSessionSettings(bool readOnly)
+    {
+        if (readOnly)
+        {
+            if (Volatile.Read(ref _cachedReadOnlySessionSettingsComputed) == 1)
+            {
+                return _cachedReadOnlySessionSettings ?? string.Empty;
+            }
+
+            var settings = _dialect.GetConnectionSessionSettings(this, true);
+            _cachedReadOnlySessionSettings = settings;
+            Volatile.Write(ref _cachedReadOnlySessionSettingsComputed, 1);
+            return settings;
+        }
+
+        if (Volatile.Read(ref _cachedReadWriteSessionSettingsComputed) == 1)
+        {
+            return _cachedReadWriteSessionSettings ?? string.Empty;
+        }
+
+        var readWriteSettings = _dialect.GetConnectionSessionSettings(this, false);
+        _cachedReadWriteSessionSettings = readWriteSettings;
+        Volatile.Write(ref _cachedReadWriteSessionSettingsComputed, 1);
+        return readWriteSettings;
+    }
+
     /// <summary>
     /// Factory method to create a new tracked connection with state change monitoring and session settings.
     /// </summary>
@@ -189,7 +216,8 @@ public partial class DatabaseContext
         var activeConnectionString = string.IsNullOrWhiteSpace(connectionString)
             ? _connectionString
             : connectionString;
-        if (!string.IsNullOrWhiteSpace(activeConnectionString) &&
+        if (_logger.IsEnabled(LogLevel.Warning) &&
+            !string.IsNullOrWhiteSpace(activeConnectionString) &&
             activeConnectionString.IndexOf("password", StringComparison.OrdinalIgnoreCase) < 0)
         {
             _logger.LogWarning("Connection string missing password for {Name}: {ConnectionString}", Name,
@@ -256,6 +284,8 @@ public partial class DatabaseContext
         };
 
         var metricsCollector = executionType == ExecutionType.Read ? _readerMetricsCollector : _writerMetricsCollector;
+        var useReaderPrefix = readOnly && ShouldUseReaderConnectionString(readOnly);
+        var namePrefix = useReaderPrefix ? _connectionNamePrefixRead : _connectionNamePrefixWrite;
         var tracked = new TrackedConnection(
             connection,
             (sender, args) =>
@@ -288,7 +318,8 @@ public partial class DatabaseContext
             _modeContentionStats,
             ConnectionMode,
             _modeLockTimeout,
-            permit
+            permit,
+            namePrefix
         );
         trackedConnection = tracked;
         return tracked;

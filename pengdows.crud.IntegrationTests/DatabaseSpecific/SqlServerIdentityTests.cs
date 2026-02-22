@@ -45,7 +45,7 @@ CREATE TABLE [dbo].[user_info_temp] (
         await container.ExecuteNonQueryAsync();
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task CreateAsync_PopulatesIdentityIdAndStoresRow()
     {
         await RunTestAgainstProviderAsync(SupportedDatabase.SqlServer, async context =>

@@ -31,7 +31,7 @@ public class CompositeKeyTests : DatabaseTestBase
 
     #region Two-Column Composite Key Tests
 
-    [Fact]
+    [SkippableFact]
     public Task CreateAsync_CompositeKey_InsertsSuccessfully()
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -46,7 +46,7 @@ public class CompositeKeyTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public Task RetrieveOneAsync_ByCompositeKeyObject_ReturnsCorrectEntity()
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -68,7 +68,7 @@ public class CompositeKeyTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public Task RetrieveOneAsync_NonExistentCompositeKey_ReturnsNull()
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -81,7 +81,7 @@ public class CompositeKeyTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public Task UpdateAsync_CompositeKey_UpdatesCorrectRecord()
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -106,7 +106,7 @@ public class CompositeKeyTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public Task Delete_CompositeKey_DeletesCorrectRecord()
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -136,11 +136,17 @@ public class CompositeKeyTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public Task CreateAsync_DuplicateCompositeKey_Fails()
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
+            if (provider == SupportedDatabase.Snowflake)
+            {
+                Output.WriteLine("Skipping duplicate composite key test for Snowflake (constraints are not enforced)");
+                return;
+            }
+
             var helper = new TableGateway<OrderItem, long>(context);
             var item = CreateOrderItem(104, 204, 1, 9.99m);
             await helper.CreateAsync(item, context);
@@ -157,7 +163,7 @@ public class CompositeKeyTests : DatabaseTestBase
 
     #region Three-Column Composite Key Tests
 
-    [Fact]
+    [SkippableFact]
     public Task ThreeColumnKey_Create_Succeeds()
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -173,7 +179,7 @@ public class CompositeKeyTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public Task ThreeColumnKey_RetrieveOne_ReturnsCorrectEntity()
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -197,7 +203,7 @@ public class CompositeKeyTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public Task ThreeColumnKey_Update_UpdatesCorrectRecord()
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -220,7 +226,7 @@ public class CompositeKeyTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public Task ThreeColumnKey_Delete_DeletesOnlyMatchingRecord()
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -257,7 +263,7 @@ public class CompositeKeyTests : DatabaseTestBase
 
     #region Edge Cases
 
-    [Fact]
+    [SkippableFact]
     public Task CompositeKey_MultipleRecordsWithPartialKeyMatch_AreDistinct()
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -289,7 +295,7 @@ public class CompositeKeyTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public Task CompositeKey_UpdateNonKeyFields_DoesNotAffectKey()
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>

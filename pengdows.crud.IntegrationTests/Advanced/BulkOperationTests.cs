@@ -26,7 +26,7 @@ public class BulkOperationTests : DatabaseTestBase
         await tableCreator.CreateTestTableAsync();
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task BulkInsert_1000Records_AllPersisted()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -61,7 +61,7 @@ public class BulkOperationTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task BulkUpdate_500Records_AllUpdated()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -118,7 +118,7 @@ public class BulkOperationTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task BulkDelete_SingleCall_DeletesMultipleRecords()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -151,7 +151,7 @@ public class BulkOperationTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task BulkRetrieve_1000Ids_ReturnsAllMatching()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -185,7 +185,7 @@ public class BulkOperationTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task BatchProcessing_ChunksOf100_ProcessesAllRecords()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -249,7 +249,7 @@ public class BulkOperationTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task LargeTransaction_5000Operations_Commits()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -294,7 +294,7 @@ public class BulkOperationTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task BulkUpsert_MixedNewAndExisting_HandlesCorrectly()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -358,7 +358,7 @@ public class BulkOperationTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task ParallelBulkOperations_NoDataCorruption()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -395,7 +395,7 @@ public class BulkOperationTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task StreamProcessing_LargeResultSet_HandlesEfficiently()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -435,7 +435,7 @@ public class BulkOperationTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task RollbackLargeBulkOperation_NoDataLeaked()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>

@@ -6,116 +6,143 @@ namespace testbed.Snowflake;
 /// <summary>
 /// Snowflake test container that assumes Snowflake is already running externally.
 /// Credentials are supplied via environment variables; no Docker image is available.
-/// Required env vars: SNOWFLAKE_ACCOUNT, SNOWFLAKE_USER, SNOWFLAKE_PASSWORD, SNOWFLAKE_WAREHOUSE, SNOWFLAKE_DATABASE.
-/// Optional env vars: SNOWFLAKE_SCHEMA (default: PUBLIC).
+/// Required env vars: SNOWFLAKE_ACCOUNT, SNOWFLAKE_USER, SNOWFLAKE_PASSWORD, SNOWFLAKE_WAREHOUSE.
+/// Required when SNOWFLAKE_CREATE_DATABASE is false: SNOWFLAKE_DATABASE.
+/// Optional env vars:
+/// - SNOWFLAKE_CREATE_DATABASE (true/false, default: false)
+/// - SNOWFLAKE_ADMIN_DATABASE (admin connection database; defaults to SNOWFLAKE_DATABASE when present)
+/// - SNOWFLAKE_SCHEMA (schema for database mode; default: PUBLIC)
+/// - SNOWFLAKE_TEST_PREFIX (prefix for generated schema/database names; default: PENGDOWS_TEST)
 /// </summary>
 public class SnowflakeTestContainer : TestContainer
 {
-    private readonly string _connectionString;
-    private readonly string _testSchema;
+    private readonly SnowflakeTestConfiguration _config;
+    private Guid _cleanupId = Guid.Empty;
 
     public SnowflakeTestContainer()
     {
-        var account = Environment.GetEnvironmentVariable("SNOWFLAKE_ACCOUNT");
-        var user = Environment.GetEnvironmentVariable("SNOWFLAKE_USER");
-        var password = Environment.GetEnvironmentVariable("SNOWFLAKE_PASSWORD");
-        var warehouse = Environment.GetEnvironmentVariable("SNOWFLAKE_WAREHOUSE");
-        var database = Environment.GetEnvironmentVariable("SNOWFLAKE_DATABASE");
-        var schema = Environment.GetEnvironmentVariable("SNOWFLAKE_SCHEMA") ?? "PUBLIC";
-
-        var missing = new List<string>();
-        if (string.IsNullOrWhiteSpace(account)) missing.Add("SNOWFLAKE_ACCOUNT");
-        if (string.IsNullOrWhiteSpace(user)) missing.Add("SNOWFLAKE_USER");
-        if (string.IsNullOrWhiteSpace(password)) missing.Add("SNOWFLAKE_PASSWORD");
-        if (string.IsNullOrWhiteSpace(warehouse)) missing.Add("SNOWFLAKE_WAREHOUSE");
-        if (string.IsNullOrWhiteSpace(database)) missing.Add("SNOWFLAKE_DATABASE");
-
-        if (missing.Count > 0)
-        {
-            throw new InvalidOperationException(
-                $"[Snowflake] Missing required environment variables: {string.Join(", ", missing)}. " +
-                "Set INCLUDE_SNOWFLAKE=true and provide all SNOWFLAKE_* variables to enable Snowflake testing.");
-        }
-
-        // Each test run gets an isolated schema to avoid cross-run interference
-        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        _testSchema = $"PENGDOWS_TEST_{timestamp}";
-
-        _connectionString =
-            $"account={account};user={user};password={password};warehouse={warehouse};" +
-            $"db={database};schema={_testSchema}";
+        _config = SnowflakeTestConfiguration.FromEnvironment();
     }
 
     public override async Task StartAsync()
     {
+        var label = _config.UseDatabaseIsolation
+            ? $"database {_config.TestDatabase}"
+            : $"schema {_config.TestSchema}";
+
+        var dropSqls = _config.GetDropCommands().ToList();
+
         try
         {
-            // Use the base schema (PUBLIC) to create the test schema first
-            var account = Environment.GetEnvironmentVariable("SNOWFLAKE_ACCOUNT");
-            var user = Environment.GetEnvironmentVariable("SNOWFLAKE_USER");
-            var password = Environment.GetEnvironmentVariable("SNOWFLAKE_PASSWORD");
-            var warehouse = Environment.GetEnvironmentVariable("SNOWFLAKE_WAREHOUSE");
-            var database = Environment.GetEnvironmentVariable("SNOWFLAKE_DATABASE");
-
-            var adminConnString =
-                $"account={account};user={user};password={password};warehouse={warehouse};" +
-                $"db={database};schema=PUBLIC";
-
             await using var conn = SnowflakeDbFactory.Instance.CreateConnection();
-            conn.ConnectionString = adminConnString;
+            conn.ConnectionString = _config.AdminConnectionString;
             await conn.OpenAsync();
 
             await using var cmd = conn.CreateCommand();
-            cmd.CommandText = $"CREATE SCHEMA IF NOT EXISTS {_testSchema}";
-            await cmd.ExecuteNonQueryAsync();
+            var createCommands = _config.GetCreateCommands().ToList();
+
+            for (var i = 0; i < createCommands.Count; i++)
+            {
+                cmd.CommandText = createCommands[i];
+                await cmd.ExecuteNonQueryAsync();
+
+                // Register for emergency cleanup as soon as the first resource exists.
+                // This guarantees the process-exit handler can drop it even if the
+                // process is killed before DisposeAsyncCore runs.
+                if (i == 0)
+                {
+                    _cleanupId = SnowflakeDatabaseCleanupRegistry.Register(
+                        _config.AdminConnectionString, dropSqls, label);
+                }
+            }
 
             await conn.CloseAsync();
-
-            Console.WriteLine($"[Snowflake] Created test schema {_testSchema}");
+            Console.WriteLine($"[Snowflake] Created test {label}");
         }
         catch (Exception ex)
         {
+            // If the first resource was created but a subsequent step failed (e.g. CREATE
+            // DATABASE succeeded but CREATE SCHEMA failed), attempt an immediate cleanup
+            // rather than leaving the orphaned resource until process exit.
+            if (_cleanupId != Guid.Empty)
+            {
+                await TryDropAsync(dropSqls, label);
+                SnowflakeDatabaseCleanupRegistry.Deregister(_cleanupId);
+                _cleanupId = Guid.Empty;
+            }
+
             throw new InvalidOperationException(
-                $"[Snowflake] Cannot connect to Snowflake or create test schema. " +
+                $"[Snowflake] Cannot connect to Snowflake or create test {label}. " +
                 $"Error: {ex.Message}", ex);
         }
     }
 
     public override Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)
     {
-        var context = new DatabaseContext(_connectionString, SnowflakeDbFactory.Instance);
+        var context = new DatabaseContext(_config.TestConnectionString, SnowflakeDbFactory.Instance);
         return Task.FromResult<IDatabaseContext>(context);
     }
 
     protected override async ValueTask DisposeAsyncCore()
     {
+        var label = _config.UseDatabaseIsolation
+            ? $"database {_config.TestDatabase}"
+            : $"schema {_config.TestSchema}";
+
         try
         {
-            var account = Environment.GetEnvironmentVariable("SNOWFLAKE_ACCOUNT");
-            var user = Environment.GetEnvironmentVariable("SNOWFLAKE_USER");
-            var password = Environment.GetEnvironmentVariable("SNOWFLAKE_PASSWORD");
-            var warehouse = Environment.GetEnvironmentVariable("SNOWFLAKE_WAREHOUSE");
-            var database = Environment.GetEnvironmentVariable("SNOWFLAKE_DATABASE");
-
-            var adminConnString =
-                $"account={account};user={user};password={password};warehouse={warehouse};" +
-                $"db={database};schema=PUBLIC";
-
             await using var conn = SnowflakeDbFactory.Instance.CreateConnection();
-            conn.ConnectionString = adminConnString;
+            conn.ConnectionString = _config.AdminConnectionString;
             await conn.OpenAsync();
 
             await using var cmd = conn.CreateCommand();
-            cmd.CommandText = $"DROP SCHEMA IF EXISTS {_testSchema} CASCADE";
-            await cmd.ExecuteNonQueryAsync();
+            foreach (var sql in _config.GetDropCommands())
+            {
+                cmd.CommandText = sql;
+                await cmd.ExecuteNonQueryAsync();
+            }
 
             await conn.CloseAsync();
-
-            Console.WriteLine($"[Snowflake] Dropped test schema {_testSchema}");
+            Console.WriteLine($"[Snowflake] Dropped test {label}");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Snowflake] Warning: Failed to drop test schema {_testSchema}: {ex.Message}");
+            Console.WriteLine($"[Snowflake] Warning: Failed to drop test {label}: {ex.Message}");
+        }
+        finally
+        {
+            // Deregister regardless of success or failure so the process-exit handler
+            // does not attempt a second drop after DisposeAsyncCore already ran.
+            if (_cleanupId != Guid.Empty)
+            {
+                SnowflakeDatabaseCleanupRegistry.Deregister(_cleanupId);
+                _cleanupId = Guid.Empty;
+            }
+        }
+    }
+
+    private async Task TryDropAsync(IReadOnlyList<string> dropSqls, string label)
+    {
+        try
+        {
+            await using var conn = SnowflakeDbFactory.Instance.CreateConnection();
+            conn.ConnectionString = _config.AdminConnectionString;
+            await conn.OpenAsync();
+
+            await using var cmd = conn.CreateCommand();
+            foreach (var sql in dropSqls)
+            {
+                cmd.CommandText = sql;
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            await conn.CloseAsync();
+            Console.WriteLine($"[Snowflake] Cleaned up partial test {label} after startup failure");
+        }
+        catch (Exception dropEx)
+        {
+            Console.WriteLine(
+                $"[Snowflake] Warning: Failed to clean up partial test {label}: {dropEx.Message}");
         }
     }
 }
