@@ -20,6 +20,8 @@ riderModule.iml
 # Coverage
 TestResults/
 coverage-report/
+coveragereport*/
+coverage/
 
 .claude/
 mydb.sqlite

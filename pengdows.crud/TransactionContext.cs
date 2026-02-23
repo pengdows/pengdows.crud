@@ -21,10 +21,10 @@
 //   which is the key difference from non-transactional operations.
 // =============================================================================
 
-#region
-
+using System;
 using System.Data;
 using System.Data.Common;
+using System.Threading;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
@@ -34,8 +34,6 @@ using pengdows.crud.threading;
 using pengdows.crud.wrappers;
 using pengdows.crud.@internal;
 using pengdows.crud.metrics;
-
-#endregion
 
 namespace pengdows.crud;
 
@@ -81,8 +79,6 @@ namespace pengdows.crud;
 public class TransactionContext : ContextBase, ITransactionContext, IContextIdentity, ISqlDialectProvider,
     IMetricsCollectorAccessor, IInternalConnectionProvider, ITypeMapAccessor
 {
-    private const int CompletionLockTimeoutSeconds = 30;
-
     private readonly ITrackedConnection _connection;
     private readonly IDatabaseContext _context;
     private readonly ISqlDialect _dialect;
@@ -151,10 +147,8 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         _logger = logger ?? new NullLogger<TransactionContext>();
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _isReadOnly = isReadOnly;
-        var provider = context as ISqlDialectProvider
-                       ?? throw new InvalidOperationException(
-                           "IDatabaseContext must implement ISqlDialectProvider and expose a non-null Dialect.");
-        _dialect = provider.Dialect;
+        _dialect = context.Dialect ??
+                   throw new InvalidOperationException("IDatabaseContext must expose a non-null Dialect.");
         RootId = ((IContextIdentity)_context).RootId;
         var metricsAccessor = context as IMetricsCollectorAccessor;
         _metricsCollector = metricsAccessor?.MetricsCollector;
@@ -189,7 +183,16 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     {
         if (_isReadOnly)
         {
-            _dialect.TryEnterReadOnlyTransaction(this);
+            try
+            {
+                _dialect.TryEnterReadOnlyTransaction(this);
+            }
+            catch
+            {
+                _transaction.Rollback();
+                _context.CloseAndDisposeConnection(_connection);
+                throw;
+            }
         }
     }
 
@@ -614,7 +617,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     private void CompleteTransactionWithWait(Action action, bool markCommitted)
     {
         // Use internal completion lock only; do not contend with user lock
-        if (!_completionLock.Wait(TimeSpan.FromSeconds(CompletionLockTimeoutSeconds)))
+        if (!_completionLock.Wait(_context.ModeLockTimeout ?? Timeout.InfiniteTimeSpan))
         {
             throw new InvalidOperationException("Transaction completion timed out waiting for internal lock.");
         }
@@ -632,7 +635,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     private async Task CompleteTransactionWithWaitAsync(Func<Task> action, bool markCommitted,
         CancellationToken cancellationToken = default)
     {
-        if (!await _completionLock.WaitAsync(TimeSpan.FromSeconds(CompletionLockTimeoutSeconds), cancellationToken).ConfigureAwait(false))
+        if (!await _completionLock.WaitAsync(_context.ModeLockTimeout ?? Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false))
         {
             throw new InvalidOperationException("Transaction completion timed out waiting for internal lock.");
         }
@@ -653,20 +656,30 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             throw new InvalidOperationException("Transaction already completed.");
         }
 
-        action();
-
-        if (markCommitted)
+        try
         {
-            Interlocked.Exchange(ref _committed, 1);
-        }
-        else
-        {
-            Interlocked.Exchange(ref _rolledBack, 1);
-        }
+            action();
 
-        TryResetReadOnlySession();
-        _context.CloseAndDisposeConnection(_connection);
-        CompleteTransactionMetrics();
+            if (markCommitted)
+            {
+                Interlocked.Exchange(ref _committed, 1);
+            }
+            else
+            {
+                Interlocked.Exchange(ref _rolledBack, 1);
+            }
+        }
+        catch
+        {
+            Interlocked.Exchange(ref _completedState, 0);
+            throw;
+        }
+        finally
+        {
+            TryResetReadOnlySession();
+            _context.CloseAndDisposeConnection(_connection);
+            CompleteTransactionMetrics();
+        }
     }
 
     private async Task CompleteTransactionAsync(Func<Task> action, bool markCommitted)
@@ -676,20 +689,30 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             throw new InvalidOperationException("Transaction already completed.");
         }
 
-        await action().ConfigureAwait(false);
-
-        if (markCommitted)
+        try
         {
-            Interlocked.Exchange(ref _committed, 1);
-        }
-        else
-        {
-            Interlocked.Exchange(ref _rolledBack, 1);
-        }
+            await action().ConfigureAwait(false);
 
-        await TryResetReadOnlySessionAsync().ConfigureAwait(false);
-        await _context.CloseAndDisposeConnectionAsync(_connection).ConfigureAwait(false);
-        CompleteTransactionMetrics();
+            if (markCommitted)
+            {
+                Interlocked.Exchange(ref _committed, 1);
+            }
+            else
+            {
+                Interlocked.Exchange(ref _rolledBack, 1);
+            }
+        }
+        catch
+        {
+            Interlocked.Exchange(ref _completedState, 0);
+            throw;
+        }
+        finally
+        {
+            await TryResetReadOnlySessionAsync().ConfigureAwait(false);
+            await _context.CloseAndDisposeConnectionAsync(_connection).ConfigureAwait(false);
+            CompleteTransactionMetrics();
+        }
     }
 
     private void CompleteTransactionMetrics()
@@ -799,6 +822,9 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
 
     protected override ISqlDialect DialectCore => _dialect;
 
+    /// <inheritdoc />
+    public TimeSpan? ModeLockTimeout => _context.ModeLockTimeout;
+
     // Internal factory used by DatabaseContext
     internal static TransactionContext Create(
         IDatabaseContext context,
@@ -833,7 +859,18 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
 
         if (isReadOnly)
         {
-            await tx._dialect.TryEnterReadOnlyTransactionAsync(tx, cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await tx._dialect.TryEnterReadOnlyTransactionAsync(tx, cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                // Release the pinned connection and roll back — do NOT dispose the parent context,
+                // which is a singleton that must remain usable after a failed BeginTransactionAsync.
+                // (The sync constructor path only closes the connection; this matches that behaviour.)
+                await tx.DisposeAsync().ConfigureAwait(false);
+                throw;
+            }
         }
 
         return tx;

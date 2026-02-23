@@ -142,7 +142,6 @@ public partial class DatabaseContext
         {
             initLocker = GetLock();
             initLocker.Lock();
-            Interlocked.Exchange(ref _initializing, 1);
             if (configuration is null)
             {
                 throw new ArgumentNullException(nameof(configuration));
@@ -172,6 +171,7 @@ public partial class DatabaseContext
             _dataSourceProvided = dataSource != null;
             _forceManualPrepare = configuration.ForceManualPrepare;
             _disablePrepare = configuration.DisablePrepare;
+            _readerPlanCacheSize = configuration.ReaderPlanCacheSize;
             _poolAcquireTimeout = configuration.PoolAcquireTimeout;
             _modeLockTimeout = configuration.ModeLockTimeout;
             _enableSingleWriterFairness = configuration.EnableSingleWriterFairness;
@@ -198,7 +198,9 @@ public partial class DatabaseContext
 
             if (dialect != null && dataSourceInfo != null)
             {
-                _dialect = (SqlDialect)dialect;
+                _dialect = dialect as SqlDialect
+                    ?? throw new InvalidOperationException(
+                        $"Dialect returned by dialect detection must derive from SqlDialect; got {dialect.GetType().Name}.");
                 _dataSourceInfo = (DataSourceInformation)dataSourceInfo;
             }
             else
@@ -298,7 +300,6 @@ public partial class DatabaseContext
         }
         finally
         {
-            Interlocked.Exchange(ref _initializing, 0);
             if (initLocker is IAsyncDisposable iad)
             {
                 iad.DisposeAsync().GetAwaiter().GetResult();
@@ -435,7 +436,7 @@ public partial class DatabaseContext
             if (initConn != null && config.DbMode == DbMode.Standard)
             {
                 // Only do inline detection for Standard mode; SingleWriter mode will detect via main constructor
-                _dataSourceInfo = DataSourceInformation.Create(initConn, _factory!, _loggerFactory);
+                _dataSourceInfo = DataSourceInformation.Create(initConn, _factory, _loggerFactory);
                 _procWrappingStyle = _dataSourceInfo.ProcWrappingStyle;
                 Name = _dataSourceInfo.DatabaseProductName;
             }
@@ -1556,7 +1557,7 @@ public partial class DatabaseContext
     private DbConnectionStringBuilder GetFactoryConnectionStringBuilder(string connectionString)
     {
         var input = string.IsNullOrEmpty(connectionString) ? _connectionString : connectionString;
-        return ConnectionStringHelper.Create(_factory!, input);
+        return ConnectionStringHelper.Create(_factory, input);
     }
 
     private DbDataSource? TryCreateDataSource(DbProviderFactory factory, string connectionString)

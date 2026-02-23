@@ -215,12 +215,15 @@ ISqlContainer CreateSqlContainer(string? query = null);
 ### Properties
 
 ```csharp
+ISqlDialect Dialect { get; }          // SQL dialect in use for this context
+TimeSpan? ModeLockTimeout { get; }    // Mode/transaction lock timeout; null = wait indefinitely
 DbMode ConnectionMode { get; }
 ITypeMapRegistry TypeMapRegistry { get; }
 IDataSourceInfo DataSourceInfo { get; }
 SupportedDatabase Product { get; }
 int NumberOfOpenConnections { get; }
 int PeakOpenConnections { get; }
+int? ReaderPlanCacheSize { get; }     // Plan cache size for reader connections
 ```
 
 ## ITransactionContext
@@ -303,7 +306,8 @@ public interface IAuditValueResolver
 public interface IAuditValues
 {
     object UserId { get; init; }
-    DateTime UtcNow { get; }
+    DateTime UtcNow { get; }                 // Always UTC
+    DateTimeOffset? TimestampOffset { get; } // Always UTC offset; null falls back to UtcNow
     T As<T>() { return (T)UserId; }
 }
 ```

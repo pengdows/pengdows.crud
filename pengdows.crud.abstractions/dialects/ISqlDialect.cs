@@ -448,6 +448,11 @@ public interface ISqlDialect
     IDatabaseProductInfo DetectDatabaseInfo(ITrackedConnection connection);
 
     /// <summary>
+    /// Initializes fallback metadata when detection cannot run (e.g., offline scenarios).
+    /// </summary>
+    void InitializeUnknownProductInfo();
+
+    /// <summary>
     /// Parses a raw version string into a <see cref="Version"/> instance.
     /// </summary>
     /// <param name="versionString">Version string reported by the database.</param>

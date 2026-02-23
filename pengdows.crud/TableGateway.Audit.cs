@@ -71,17 +71,34 @@ public partial class TableGateway<TEntity, TRowID>
     }
 
     /// <summary>
-    /// Converts a DateTime to the correct boxed type for the target property.
+    /// Converts a DateTimeOffset to the correct boxed type for the target property.
     /// </summary>
-    private static object CoerceTimestamp(DateTime utcNow, Type propertyType)
+    private static object CoerceTimestamp(DateTimeOffset timestamp, Type propertyType)
     {
         var underlying = Nullable.GetUnderlyingType(propertyType) ?? propertyType;
         if (underlying == typeof(DateTimeOffset))
         {
-            return new DateTimeOffset(utcNow, TimeSpan.Zero);
+            return timestamp;
         }
 
-        return utcNow;
+        return timestamp.UtcDateTime;
+    }
+
+    private static DateTimeOffset ResolveAuditTimestamp(IAuditValues? auditValues)
+    {
+        if (auditValues?.TimestampOffset is DateTimeOffset offset)
+        {
+            if (offset.Offset != TimeSpan.Zero)
+            {
+                throw new InvalidOperationException(
+                    $"TimestampOffset must be UTC (Offset must be TimeSpan.Zero); got {offset.Offset}.");
+            }
+
+            return offset;
+        }
+
+        var utcNow = auditValues?.UtcNow ?? DateTime.UtcNow;
+        return new DateTimeOffset(utcNow, TimeSpan.Zero);
     }
 
     private void SetAuditFields(TEntity obj, bool updateOnly)
@@ -109,12 +126,12 @@ public partial class TableGateway<TEntity, TRowID>
 
         var auditValues = _auditValueResolver?.Resolve();
 
-        var utcNow = auditValues?.UtcNow ?? DateTime.UtcNow;
+        var timestamp = ResolveAuditTimestamp(auditValues);
 
         // Handle LastUpdated fields — use instance-cached setters to avoid per-call dictionary lookup
         if (_auditLastUpdatedOnSetter != null)
         {
-            var coercedTime = CoerceTimestamp(utcNow, _tableInfo.LastUpdatedOn!.PropertyInfo.PropertyType);
+            var coercedTime = CoerceTimestamp(timestamp, _tableInfo.LastUpdatedOn!.PropertyInfo.PropertyType);
             _auditLastUpdatedOnSetter(obj, coercedTime);
         }
 
@@ -136,7 +153,7 @@ public partial class TableGateway<TEntity, TRowID>
             var currentValue = _tableInfo.CreatedOn!.MakeParameterValueFromField(obj);
             if (IsDefaultTimestamp(currentValue))
             {
-                var coercedTime = CoerceTimestamp(utcNow, _tableInfo.CreatedOn.PropertyInfo.PropertyType);
+                var coercedTime = CoerceTimestamp(timestamp, _tableInfo.CreatedOn.PropertyInfo.PropertyType);
                 _auditCreatedOnSetter(obj, coercedTime);
             }
         }

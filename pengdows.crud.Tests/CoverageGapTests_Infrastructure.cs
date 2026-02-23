@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using pengdows.crud;
 using pengdows.crud.configuration;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 using pengdows.crud.@internal;
@@ -109,6 +110,8 @@ public class CoverageGapTests_Infrastructure
         public string Name { get; set; } = string.Empty;
         public DbDataSource? DataSource => null;
         public IDataSourceInformation DataSourceInfo => throw new NotImplementedException();
+        public ISqlDialect Dialect => throw new NotImplementedException();
+        public TimeSpan? ModeLockTimeout => null;
         public string SessionSettingsPreamble => string.Empty;
         public ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.Call;
         public int MaxParameterLimit => 2100;
@@ -503,27 +506,17 @@ public class CoverageGapTests_Infrastructure
     [Fact]
     public void DatabaseContext_ZeroMaxConcurrentReads_Throws()
     {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var config = new DatabaseContextConfiguration
-        {
-            ConnectionString = "Data Source=:memory:",
-            MaxConcurrentReads = 0
-        };
-
-        Assert.Throws<ArgumentOutOfRangeException>(() => new DatabaseContext(config, factory));
+        // Validation now happens at the setter (fail-fast) rather than at DatabaseContext construction.
+        var config = new DatabaseContextConfiguration();
+        Assert.Throws<ArgumentOutOfRangeException>(() => config.MaxConcurrentReads = 0);
     }
 
     [Fact]
     public void DatabaseContext_NegativeMaxConcurrentWrites_Throws()
     {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var config = new DatabaseContextConfiguration
-        {
-            ConnectionString = "Data Source=:memory:",
-            MaxConcurrentWrites = -1
-        };
-
-        Assert.Throws<ArgumentOutOfRangeException>(() => new DatabaseContext(config, factory));
+        // Validation now happens at the setter (fail-fast) rather than at DatabaseContext construction.
+        var config = new DatabaseContextConfiguration();
+        Assert.Throws<ArgumentOutOfRangeException>(() => config.MaxConcurrentWrites = -1);
     }
 
     [Fact]

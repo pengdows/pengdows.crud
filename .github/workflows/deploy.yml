@@ -20,6 +20,10 @@ jobs:
           fetch-tags: true
 
       - name: Setup .NET SDKs
+        # 8.0.x: primary target framework for all projects in this solution.
+        # 10.0.x: included for improved Roslyn analyzers and nullability checking;
+        #         the SDK can build net8.0 TFMs. Add net10.0 to csproj files when
+        #         ready to ship a net10.0 TFM.
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: |
@@ -143,6 +147,10 @@ jobs:
           fetch-tags: true
 
       - name: Setup .NET SDKs
+        # 8.0.x: primary target framework for all projects in this solution.
+        # 10.0.x: included for improved Roslyn analyzers and nullability checking;
+        #         the SDK can build net8.0 TFMs. Add net10.0 to csproj files when
+        #         ready to ship a net10.0 TFM.
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: |

@@ -70,7 +70,8 @@ private sealed class RecordingContext : IDatabaseContext, ISqlDialectProvider, I
 
         public bool? LastIsShared { get; private set; }
 
-        public ISqlDialect Dialect => ((ISqlDialectProvider)_context).Dialect;
+        public ISqlDialect Dialect => _context.Dialect;
+        public TimeSpan? ModeLockTimeout => _context.ModeLockTimeout;
 
         public DbMode ConnectionMode => _context.ConnectionMode;
         public Guid RootId => _context.RootId;

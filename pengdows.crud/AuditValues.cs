@@ -56,6 +56,11 @@ public sealed class AuditValues : IAuditValues
     public DateTime UtcNow { get; set; } = DateTime.UtcNow;
 
     /// <summary>
+    /// Optional UTC DateTimeOffset used when timestamp properties need offset precision.
+    /// </summary>
+    public DateTimeOffset? TimestampOffset { get; set; }
+
+    /// <summary>
     /// Gets the user identifier to use for CreatedBy and LastUpdatedBy audit columns.
     /// </summary>
     /// <value>

@@ -32,6 +32,8 @@ internal sealed class BoundedCache<TKey, TValue> where TKey : notnull
         _max = Math.Max(1, max);
     }
 
+    public int Capacity => _max;
+
     private sealed class CacheEntry
     {
         private readonly Lazy<TValue> _value;
@@ -58,6 +60,12 @@ internal sealed class BoundedCache<TKey, TValue> where TKey : notnull
         // Miss: create entry.  ConcurrentDictionary may discard our CacheEntry if
         // another thread wins the race; the Lazy inside the *kept* entry guarantees
         // the value factory runs exactly once regardless.
+        //
+        // Poisoned-Lazy note: if the factory throws, Lazy<T> with ExecutionAndPublication
+        // caches the exception and re-throws it on every subsequent access to .Value for
+        // that entry. The poisoned entry stays in the map until it is evicted by LRU.
+        // Callers should ensure their factory does not throw for transient errors; use a
+        // try/catch inside the factory and return a sentinel value if recovery is needed.
         var tick = Interlocked.Increment(ref _clock);
         var entry = _map.GetOrAdd(key, k => new CacheEntry(() => factory(k), tick));
 

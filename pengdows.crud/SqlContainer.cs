@@ -221,9 +221,9 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     internal static SqlContainer Create(IDatabaseContext context, string? query = "",
         ILogger<ISqlContainer>? logger = null)
     {
-        var dialect = (context as ISqlDialectProvider)?.Dialect
+        var dialect = context.Dialect
                       ?? throw new InvalidOperationException(
-                          "IDatabaseContext must implement ISqlDialectProvider and expose a non-null Dialect.");
+                          "IDatabaseContext must expose a non-null Dialect.");
         return new SqlContainer(context, dialect, query, logger);
     }
 
@@ -1761,8 +1761,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         var targetContext = context ?? _context;
 
         // Create a new container with the target context - let it get a StringBuilder from the pool
-        var targetDialect = (targetContext as ISqlDialectProvider)?.Dialect
-                            ?? _dialect;
+        var targetDialect = targetContext.Dialect ?? _dialect;
         var clone = new SqlContainer(targetContext, targetDialect, null, _logger);
 
         // OPTIMIZATION: Share cached command text instead of re-rendering

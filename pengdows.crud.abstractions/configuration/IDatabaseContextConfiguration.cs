@@ -52,6 +52,11 @@ public interface IDatabaseContextConfiguration
     bool? DisablePrepare { get; set; }
 
     /// <summary>
+    /// Maximum number of reader plan cache entries to maintain per TableGateway instance.
+    /// </summary>
+    int? ReaderPlanCacheSize { get; set; }
+
+    /// <summary>
     /// Gets or sets whether metrics collection is enabled for this context.
     /// When false (default), no metrics collection overhead is incurred.
     /// </summary>
@@ -152,6 +157,15 @@ public interface IDatabaseContextConfiguration
     /// (multiple callers racing for the single write slot), the turnstile gives the waiting writer
     /// priority over incoming readers by blocking new read attempts until the write slot is acquired.
     /// This reduces — but does not eliminate — writer starvation under sustained read pressure.
+    /// </para>
+    /// <para>
+    /// <b>Known limitation:</b> readers that are already queued on the semaphore at the moment a
+    /// writer acquires the turnstile are not displaced — they will complete before the writer runs.
+    /// Only readers that arrive <em>after</em> the writer has grabbed the turnstile are held back.
+    /// Under a sustained burst of reads, a writer may still experience transient delays before the
+    /// pre-queued readers drain. Monitor <c>PoolStatisticsSnapshot.TotalTurnstileTimeouts</c> to
+    /// detect contention and consider increasing <see cref="PoolAcquireTimeout"/> or reducing
+    /// <see cref="MaxConcurrentReads"/> if starvation persists.
     /// </para>
     /// </remarks>
     bool EnableSingleWriterFairness { get; set; }

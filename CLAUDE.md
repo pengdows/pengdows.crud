@@ -2,9 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Core Philosophy
+
+`pengdows.crud` is an opinionated, high-performance, SQL-first data access framework built on a **database-first** philosophy. It provides **"Prego features"** — expert-level, built-in solutions to difficult real-world data access problems that developers often assume are handled by their tools but usually are not. It is designed to be more robust and feature-rich than a micro-ORM like Dapper, while retaining high performance and developer control, without the pitfalls of heavier ORMs like EF Core.
+
+No LINQ, no tracking, no surprises — explicit SQL control with database-agnostic features.
+
 ## Project Overview
 
-pengdows.crud 2.0 is a SQL-first, strongly-typed, testable data access layer for .NET 8. It's designed for developers who want full control over SQL without ORM magic. The project consists of multiple components:
+pengdows.crud 2.0 is a SQL-first, strongly-typed, testable data access layer for .NET 8. The project consists of multiple components:
 
 - `pengdows.crud` - Core library with TableGateway, DatabaseContext, and SQL dialects
 - `pengdows.crud.abstractions` - Interfaces and enums (all public APIs live here)
@@ -22,6 +28,7 @@ pengdows.crud 2.0 is a SQL-first, strongly-typed, testable data access layer for
 - Several key interfaces refactored (see abstractions project)
 - API baseline enforcement via `tools/interface-api-check`
 - Separated integration tests into dedicated project
+- All hot-path execution methods return `ValueTask` (not `Task`)
 
 ## Core Architecture
 
@@ -31,6 +38,40 @@ The library follows an interface-first, layered architecture:
 - **DatabaseContext** (`IDatabaseContext`): Primary connection management class wrapping ADO.NET DbProviderFactory
 - **TableGateway<TEntity, TRowID>** (`ITableGateway<TEntity, TRowID>`): Generic CRUD operations for entities with strongly-typed row IDs
 - **SqlContainer** (`ISqlContainer`): SQL query builder with parameterization support
+
+### Three-Tier API (TableGateway)
+
+**Tier 1 — Build methods** (SQL generation only, no execution):
+Return `ISqlContainer`; nothing sent to the database. You inspect, modify, or execute the container yourself.
+
+```csharp
+ISqlContainer BuildCreate(entity);
+ISqlContainer BuildBaseRetrieve("alias");   // SELECT with no WHERE — starting point for custom queries
+ISqlContainer BuildRetrieve(ids, "alias");  // SELECT ... WHERE id IN (...)
+ISqlContainer BuildRetrieve(entities, "a"); // SELECT ... WHERE pk columns match
+ISqlContainer BuildDelete(id);
+ISqlContainer BuildUpsert(entity);
+ISqlContainer sc = await BuildUpdateAsync(entity);  // Only async Build method
+```
+
+**Tier 2 — Load methods** (execute a pre-built container, map results):
+```csharp
+TEntity? result                  = await LoadSingleAsync(container);
+List<TEntity> list               = await LoadListAsync(container);
+IAsyncEnumerable<TEntity> stream = LoadStreamAsync(container);  // Memory-efficient streaming
+```
+
+**Tier 3 — Convenience methods** (Build + Execute in one call):
+```csharp
+bool created = await CreateAsync(entity);
+int affected = await UpdateAsync(entity);
+int affected = await DeleteAsync(id);
+int affected = await UpsertAsync(entity);
+TEntity? e   = await RetrieveOneAsync(id);           // By [Id]
+TEntity? e   = await RetrieveOneAsync(entityLookup); // By [PrimaryKey]
+List<TEntity> list = await RetrieveAsync(ids);
+IAsyncEnumerable<TEntity> stream = RetrieveStreamAsync(ids);
+```
 
 ### Key Patterns
 - Program to interfaces; concrete types satisfy contracts in `pengdows.crud.abstractions`
@@ -64,58 +105,191 @@ dotnet test -c Release --results-directory TestResults -- DataCollectionRunSetti
 # Run integration suite (requires Docker)
 dotnet run -c Release --project testbed
 
-# Verify API baseline
+# Verify API baseline (run after any interface changes)
 dotnet run --project tools/interface-api-check/InterfaceApiCheck.csproj -c Release -- \
   --generate \
   --baseline pengdows.crud.abstractions/ApiBaseline/interfaces.txt \
   --assembly pengdows.crud.abstractions/bin/Release/net8.0/pengdows.crud.abstractions.dll
+
+# Verify no vendor directories committed
+dotnet run --project tools/verify-novendor
 ```
 
 ### Package Management
 ```bash
-# Restore packages
 dotnet restore
-
-# Pack projects for NuGet
 dotnet pack pengdows.crud/pengdows.crud.csproj -c Release
 dotnet pack pengdows.crud.abstractions/pengdows.crud.abstractions.csproj -c Release
 dotnet pack pengdows.crud.fakeDb/pengdows.crud.fakeDb.csproj -c Release
 ```
 
+## Coding Style & Naming Conventions
+
+- C# 12 on `net8.0`; `Nullable` and `ImplicitUsings` enabled.
+- File-scoped namespaces; keep lowercase namespaces (`pengdows.crud.*`).
+- Indentation: 4 spaces; follow existing brace style; prefer expression-bodied members when clearer.
+- Minimize public APIs; make types/members `internal` when possible. `WarningsAsErrors=true`.
+- Organize by domain folders: `attributes/`, `dialects/`, `connection/`, `threading/`, `exceptions/`.
+- Refer to the test mock package as `fakeDb` (lowercase f, uppercase D) in paths/docs.
+
+## API Visibility Principles
+
+- Program to interfaces whenever possible; concrete types exist only to satisfy the interface contracts.
+- Consumers should depend on abstractions in `pengdows.crud.abstractions`.
+- `ITableGateway`, `IDatabaseContext`, `ISqlContainer`, `ISqlDialect` etc. are the official surface area.
+- Hide implementation details as `internal` by default.
+- **Nothing outside of `DatabaseContext` should expose a public constructor** — objects should be resolved through factory helpers, DI, or internal constructors (exceptions require documented rationale).
+
+## CRITICAL: Pseudo Key (Row ID) vs Primary Key (Business Key)
+
+**DO NOT CONFUSE THESE CONCEPTS.**
+
+| Concept | Attribute | Columns | Purpose |
+|---------|-----------|---------|---------|
+| **Pseudo Key / Row ID** | `[Id]` | Always single | Surrogate identifier for TableGateway operations, FKs, easy lookup |
+| **Primary Key / Business Key** | `[PrimaryKey(n)]` | Can be composite | Natural key — why the row exists in business terms |
+
+**Key Rules:**
+1. `[Id]` and `[PrimaryKey]` are MUTUALLY EXCLUSIVE on a column — never both on the same property
+2. TableGateway REQUIRES `[Id]` for `CreateAsync`, `UpdateAsync`, `DeleteAsync(TRowID)`
+3. `[Id(false)]` = DB-generated (autoincrement); `[Id]` or `[Id(true)]` = client-provided
+4. `[PrimaryKey]` defines business uniqueness, enforced via UNIQUE constraint in DDL
+5. Both can coexist on different columns: pseudo key for operations, business key for domain integrity
+6. `RetrieveOneAsync(TEntity)` uses `[PrimaryKey]` columns; `DeleteAsync(TRowID)` uses `[Id]`
+
+```csharp
+[Table("order_items")]
+public class OrderItem
+{
+    [Id(false)]           // Pseudo key — DB auto-generates
+    [Column("id")] public long Id { get; set; }
+
+    [PrimaryKey(1)]       // Business key part 1
+    [Column("order_id")] public int OrderId { get; set; }
+
+    [PrimaryKey(2)]       // Business key part 2
+    [Column("product_id")] public int ProductId { get; set; }
+}
+```
+
+## Id Attribute: Writable vs Non-Writable
+
+| Attribute | Meaning | INSERT behavior |
+|-----------|---------|-----------------|
+| `[Id]` or `[Id(true)]` | Client provides value | Id column included in INSERT |
+| `[Id(false)]` | DB generates value (autoincrement/identity) | Id column omitted from INSERT |
+
+**SQL Server note:** Attempting to insert into an IDENTITY column throws unless `SET IDENTITY_INSERT ON`.
+
+## Version Column (Optimistic Concurrency)
+
+```csharp
+[Version]
+[Column("version")]
+public int Version { get; set; }
+```
+
+| Operation | Behavior |
+|-----------|----------|
+| **Create** | If version is null/0, automatically set to 1 |
+| **Update** | Increments version by 1 in SET clause; adds `WHERE version = @currentVersion` |
+
+**Conflict detection:** If `UpdateAsync` returns 0 rows affected, another process modified the row (version mismatch).
+
+## Upsert Behavior
+
+`UpsertAsync` / `BuildUpsert` determines insert vs update based on conflict key:
+
+1. **Primary choice:** `[PrimaryKey]` columns (if any defined)
+2. **Fallback:** `[Id]` column ONLY if writable (`[Id(true)]` or `[Id]`)
+3. **Error:** Throws if no `[PrimaryKey]` AND `[Id]` is not writable (`[Id(false)]`)
+
+**SQL generated depends on database:**
+- SQL Server/Oracle: `MERGE`
+- PostgreSQL: `INSERT ... ON CONFLICT`
+- MySQL/MariaDB: `INSERT ... ON DUPLICATE KEY UPDATE`
+
+## CRITICAL: Audit Field Behavior
+
+**BOTH CreatedBy/On AND LastUpdatedBy/On are set on CREATE.**
+
+This is intentional design — it allows "last modified" queries without checking if the entity was ever updated.
+
+| Operation | CreatedBy | CreatedOn | LastUpdatedBy | LastUpdatedOn |
+|-----------|-----------|-----------|---------------|---------------|
+| **Create** | SET | SET | SET | SET |
+| **Update** | unchanged | unchanged | SET | SET |
+
+**Requirements:**
+- If entity has `[CreatedBy]` or `[LastUpdatedBy]`, you MUST provide `IAuditValueResolver`
+- Without resolver + user audit fields = `InvalidOperationException` at runtime
+- Time-only audit fields (`[CreatedOn]`, `[LastUpdatedOn]`) work without resolver (uses `DateTime.UtcNow`)
+- The audit resolver ALWAYS returns UTC timestamps; DateTime, DateTimeOffset, and TimestampOffset are all supported.
+
+## Multi-Tenancy
+
+pengdows.crud uses **context-per-tenant** (not query filtering):
+
+- Each tenant gets a separate `DatabaseContext` (different connection string/database)
+- **No "WHERE tenant_id = X" injection** — tenants are physically separated
+- Each tenant can use a different database type (SQL Server, PostgreSQL, MySQL, etc.)
+- Use `ITenantContextRegistry` as a singleton to manage per-tenant `DatabaseContext` instances
+
+```csharp
+// Pass tenant context to CRUD methods to route to tenant's database
+var tenantCtx = registry.GetContext(tenantId);
+var order = await gateway.RetrieveOneAsync(orderId, tenantCtx);
+await gateway.CreateAsync(newOrder, tenantCtx);
+```
+
+## ExecutionType (Read vs Write)
+
+`ExecutionType` declares intent so the context can provide the appropriate connection:
+
+| Type | Intent | Connection behavior |
+|------|--------|---------------------|
+| `ExecutionType.Read` | Read-only operation | May get ephemeral or shared connection |
+| `ExecutionType.Write` | Modifying operation | Gets write-capable connection |
+
+In `SingleWriter` mode, this determines whether you get the pinned write connection or an ephemeral read connection.
+
+## TypeMapRegistry
+
+**Explicit registration is NOT required.** `GetTableInfo<T>()` uses `GetOrAdd` — auto-builds on first access.
+
+```csharp
+// These are all equivalent:
+typeMap.Register<MyEntity>();           // Explicit pre-registration
+typeMap.GetTableInfo<MyEntity>();       // Auto-registers on first call
+new TableGateway<MyEntity, long>(ctx);  // Also triggers auto-registration
+```
+
+## Enum Storage
+
+Enum storage format is determined by `DbType` in the `[Column]` attribute:
+
+| DbType | Storage |
+|--------|---------|
+| `DbType.String` | Stored as enum name (string) |
+| Numeric (`Int32`, etc.) | Stored as underlying numeric value |
+
+**Throws** if DbType is neither string nor numeric.
+
+## RetrieveOneAsync(TEntity) Requirements
+
+`RetrieveOneAsync(TEntity)` uses `[PrimaryKey]` columns to find the row.
+
+**If no `[PrimaryKey]` defined:** Throws `"No primary keys found for type {TypeName}"`
+
+Use `RetrieveOneAsync(TRowID id)` for lookup by pseudo key instead.
+
 ## API Reference and Patterns
 
 **IMPORTANT:** All interfaces in `pengdows.crud.abstractions` include comprehensive XML documentation. Refer to the XML comments for complete API documentation and implementation guidance.
 
-### TableGateway<TEntity, TRowID> Key Methods
+### ISqlContainer Key Methods
 
-**CRUD Operations (All async, return Task):**
-- `CreateAsync(TEntity entity, IDatabaseContext? context = null)` - Insert new entity, returns true if exactly 1 row affected
-- `DeleteAsync(TRowID id, IDatabaseContext? context = null)` - Delete by ID, returns affected row count
-- `DeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null)` - Bulk delete, returns affected row count
-- `RetrieveAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null)` - Load multiple entities by IDs
-- `UpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null)` - Update entity, returns affected row count
-- `UpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context = null)` - Update with original loading
-- `UpsertAsync(TEntity entity, IDatabaseContext? context = null)` - Insert or update, returns affected row count
-
-**Query Building (Return ISqlContainer for composition):**
-- `BuildCreate(TEntity objectToCreate, IDatabaseContext? context = null)` - Generate INSERT statement
-- `BuildBaseRetrieve(string alias, IDatabaseContext? context = null)` - Generate SELECT with no WHERE
-- `BuildRetrieve(IReadOnlyCollection<TRowID>? listOfIds, string alias, IDatabaseContext? context = null)` - SELECT by IDs
-- `BuildUpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null)` - Generate UPDATE statement
-- `BuildDelete(TRowID id, IDatabaseContext? context = null)` - Generate DELETE statement
-- `BuildUpsert(TEntity entity, IDatabaseContext? context = null)` - Generate provider-specific UPSERT
-
-**Data Loading:**
-- `LoadSingleAsync(ISqlContainer sc)` - Execute SQL and return single entity or null
-- `LoadListAsync(ISqlContainer sc)` - Execute SQL and return list of entities
-
-**Single Entity Retrieval:**
-- `RetrieveOneAsync(TEntity objectToRetrieve, IDatabaseContext? context = null)` - Load by composite key values
-- `RetrieveOneAsync(TRowID id, IDatabaseContext? context = null)` - Load by row ID
-
-### SqlContainer Key Methods
-
-**Query Execution:**
+**Query Execution (all return ValueTask):**
 - `ExecuteNonQueryAsync(CommandType commandType = CommandType.Text)` - Execute INSERT/UPDATE/DELETE, returns row count
 - `ExecuteScalarAsync<T>(CommandType commandType = CommandType.Text)` - Execute and return single value
 - `ExecuteReaderAsync(CommandType commandType = CommandType.Text)` - Execute and return ITrackedReader
@@ -124,85 +298,136 @@ dotnet pack pengdows.crud.fakeDb/pengdows.crud.fakeDb.csproj -c Release
 - `AddParameterWithValue<T>(DbType type, T value)` - Add parameter, returns DbParameter
 - `AddParameterWithValue<T>(string? name, DbType type, T value)` - Add named parameter
 - `CreateDbParameter<T>(string? name, DbType type, T value)` - Create parameter without adding
-- `CreateDbParameter<T>(DbType type, T value)` - Create unnamed parameter
 - `AddParameter(DbParameter parameter)` - Add pre-constructed parameter
-- `AddParameters(IEnumerable<DbParameter> list)` - Add multiple parameters
 
 **Query Building:**
 - `Query` property - StringBuilder for building SQL
 - `HasWhereAppended` - Indicates if WHERE clause already exists
-- `ParameterCount` - Current count of parameters
-- `WrapObjectName(string name)` - Quote identifiers safely
-- `MakeParameterName(DbParameter dbParameter)` - Format parameter names
-- `MakeParameterName(string parameterName)` - Format raw parameter names
+- `WrapObjectName(string name)` - Quote identifiers safely (handles schema and alias prefixes)
+- `MakeParameterName(DbParameter dbParameter)` - Format parameter name per dialect
+- `Clone()` / `Clone(IDatabaseContext)` - Reuse SQL structure with different params or context
 
-**Command Management:**
-- `CreateCommand(ITrackedConnection conn)` - Create DbCommand for connection
-- `Clear()` - Clear query and parameters
-- `WrapForStoredProc(ExecutionType executionType, bool includeParameters = true, bool captureReturn = false)` - Wrap for stored procedure execution
+**Parameter Naming Convention:**
+
+| Operation | Pattern | Example |
+|-----------|---------|---------|
+| INSERT | `i{n}` | `i0`, `i1`, `i2` |
+| UPDATE SET | `s{n}` | `s0`, `s1`, `s2` |
+| WHERE | `w{n}` | `w0`, `w1`, `w2` |
+| JOIN | `j{n}` | `j0`, `j1` |
+| KEY | `k{n}` | `k0`, `k1` |
+| VERSION | `v{n}` | `v0`, `v1` |
 
 ### DatabaseContext Key Methods
 
-**Connection Management:**
-- `GetConnection(ExecutionType executionType, bool isShared = false)` - Get tracked connection
-- `CloseAndDisposeConnection(ITrackedConnection? conn)` - Return connection to pool
-- `CloseAndDisposeConnectionAsync(ITrackedConnection? conn)` - Async version of connection cleanup
-
 **Transaction Management:**
-- `BeginTransaction(IsolationLevel? isolationLevel = null, ExecutionType executionType = ExecutionType.Write, bool? readOnly = null)` - Start transaction with native isolation level
-- `BeginTransaction(IsolationProfile isolationProfile, ExecutionType executionType = ExecutionType.Write, bool? readOnly = null)` - Start transaction with portable isolation profile
+- `BeginTransaction(IsolationLevel? isolationLevel = null, ...)` - Start transaction with native isolation level
+- `BeginTransaction(IsolationProfile isolationProfile, ...)` - Start transaction with portable isolation profile
 
 **SQL Container Creation:**
 - `CreateSqlContainer(string? query = null)` - Create new SQL builder
 
-**Identifier Handling:**
-- `WrapObjectName(string name)` - Quote identifiers safely
-- `MakeParameterName(DbParameter dbParameter)` - Format parameter names
-
-**Connection Properties:**
+**Key Properties on IDatabaseContext:**
+- `Dialect` - The `ISqlDialect` in use for this context
+- `ModeLockTimeout` - Timeout for mode/transaction completion locks; `null` = wait indefinitely
+- `ReaderPlanCacheSize` - Plan cache size for reader connections
 - `ConnectionMode` - Which DbMode this connection uses
-- `TypeMapRegistry` - Type mapping for compiled accessors and JSON handlers
-- `DataSourceInfo` - Metadata from connection.GetSchema and provider heuristics
 - `Product` - Detected database product (PostgreSQL, Oracle, etc.)
-- `NumberOfOpenConnections` - Current open connection count
-- `MaxNumberOfConnections` - Max observed concurrent connections
+- `NumberOfOpenConnections` / `PeakOpenConnections` - Connection pool observability
 
 ### Transaction Context (ITransactionContext)
 
-Extends IDatabaseContext for transactional operations:
-
-**Transaction State:**
-- `WasCommitted` - Whether transaction was committed
-- `WasRolledBack` - Whether transaction was rolled back
-- `IsCompleted` - Whether transaction is completed
+- `WasCommitted` / `WasRolledBack` / `IsCompleted` - Transaction state
 - `IsolationLevel` - Current isolation level
-
-**Transaction Control:**
-- `Commit()` - Commit transaction
-- `Rollback()` - Rollback transaction
-- `SavepointAsync(string name)` - Create savepoint
-- `RollbackToSavepointAsync(string name)` - Rollback to savepoint
+- `Commit()` / `Rollback()` - Transaction control
+- `SavepointAsync(string name)` / `RollbackToSavepointAsync(string name)` - Savepoints
 
 ## Connection Management and DbMode
 
 **Philosophy:** Open connections late, close them early. Respect database-specific quirks.
 
-**DbMode Enum:**
+| Mode | Value | Use Case |
+|------|-------|----------|
+| `Standard` | 0 | **Production default** — pool per operation |
+| `KeepAlive` | 1 | Embedded DBs needing sentinel connection |
+| `SingleWriter` | 2 | File-based SQLite/DuckDB — serializes writes via turnstile governor |
+| `SingleConnection` | 4 | In-memory `:memory:` databases |
+| `Best` | 15 | Auto-select optimal mode based on provider and connection string |
+
+- **SingleWriter**: The turnstile governor serializes write *tasks* (not connections) preventing database locking errors. Note: readers already queued before a writer grabs the turnstile are not displaced.
+- **Best**: Automatically selects the safest and most performant `DbMode` based on the provider and connection string.
+
+## Transactions
+
+Transactions are **operation-scoped** — create inside methods, never store as fields.
+
 ```csharp
-[Flags]
-public enum DbMode
+using var txn = Context.BeginTransaction();
+try
 {
-    Standard = 0,        // Recommended for production
-    KeepAlive = 1,       // Keeps one sentinel connection open
-    SingleWriter = 2,    // One pinned writer, concurrent ephemeral readers
-    SingleConnection = 4 // All work through one pinned connection
+    var order = await RetrieveOneAsync(orderId, txn);
+    order.Status = OrderStatus.Cancelled;
+    await UpdateAsync(order, txn);
+    txn.Commit();
 }
+catch
+{
+    txn.Rollback();
+    throw;
+}
+
+// Portable isolation profile
+using var txn = Context.BeginTransaction(IsolationProfile.SafeNonBlockingReads);
+
+// Savepoints
+await txn.SavepointAsync("checkpoint1");
+await txn.RollbackToSavepointAsync("checkpoint1");
 ```
 
-- **Standard**: Each operation opens a new connection from the pool and closes it after use. Fully supports parallelism.
-- **KeepAlive**: Keeps a single sentinel connection open to prevent unloads. Otherwise behaves like Standard.
-- **SingleWriter**: Persistent write connection + ephemeral read connections. Auto-selected for file-based SQLite/DuckDB.
-- **SingleConnection**: All work on a single pinned connection. Auto-selected for in-memory SQLite/DuckDB.
+**CRITICAL: Do NOT use `TransactionScope`**
+
+`TransactionScope` is incompatible with pengdows.crud's connection management. The "open late, close early" philosophy means each operation opens/closes its own connection, which causes:
+1. **Distributed transaction promotion** — Second connection within `TransactionScope` promotes to MSDTC
+2. **Performance overhead** — MSDTC has significant overhead; may not work in cloud environments
+3. **Broken semantics** — Connections closing between operations lose transactional guarantees
+
+Always use `Context.BeginTransaction()` which pins the connection for the transaction's lifetime.
+
+## DI Lifetime Rules
+
+| Component | Lifetime | Why |
+|-----------|----------|-----|
+| `DatabaseContext` | **Singleton** | Manages connection pool, metrics, DbMode state |
+| `TableGateway<T,TId>` | **Singleton** | Stateless, caches compiled accessors |
+| `IAuditValueResolver` | **Scoped** | Must resolve current user from request context |
+| `ITenantContextRegistry` | **Singleton** | Manages per-tenant contexts |
+
+## Extending TableGateway — The Correct Pattern
+
+**Inherit from TableGateway to add custom query methods.** Do not wrap it in a separate service class.
+
+```csharp
+public interface IOrderGateway : ITableGateway<Order, long>
+{
+    Task<List<Order>> GetCustomerOrdersAsync(long customerId);
+}
+
+public class OrderGateway : TableGateway<Order, long>, IOrderGateway
+{
+    public OrderGateway(IDatabaseContext context) : base(context) { }
+
+    public async Task<List<Order>> GetCustomerOrdersAsync(long customerId)
+    {
+        var sc = BuildBaseRetrieve("o");
+        sc.Query.Append(" WHERE ");
+        sc.Query.Append(sc.WrapObjectName("o.customer_id"));
+        sc.Query.Append(" = ");
+        var p = sc.AddParameterWithValue("cid", DbType.Int64, customerId);
+        sc.Query.Append(sc.MakeParameterName(p));
+        return await LoadListAsync(sc);
+    }
+}
+```
 
 ## Common Test Patterns
 
@@ -223,28 +448,77 @@ var result = await container.ExecuteScalarAsync<int>();
 ```csharp
 var helper = new TableGateway<TestEntity, int>(context);
 var entity = new TestEntity { Name = "Test" };
-
-// Insert
 var createContainer = helper.BuildCreate(entity);
 await createContainer.ExecuteNonQueryAsync();
 
-// Update
 var updateContainer = await helper.BuildUpdateAsync(entity);
 var rowsAffected = await updateContainer.ExecuteNonQueryAsync();
 
-// Delete
 var rowsDeleted = await helper.DeleteAsync(entity.Id);
-
-// Retrieve multiple
 var entities = await helper.RetrieveAsync(new[] { 1, 2, 3 });
 
-// Load with custom SQL
-var customContainer = helper.BuildBaseRetrieve("a");
-customContainer.Query.Append(" WHERE a.Name = ");
-customContainer.Query.Append(customContainer.MakeParameterName("name"));
-customContainer.AddParameterWithValue("name", DbType.String, "Test");
-var results = await helper.LoadListAsync(customContainer);
+// Custom SQL
+var sc = helper.BuildBaseRetrieve("a");
+sc.Query.Append(" WHERE a.Name = ");
+sc.Query.Append(sc.MakeParameterName("name"));
+sc.AddParameterWithValue("name", DbType.String, "Test");
+var results = await helper.LoadListAsync(sc);
 ```
+
+## CRITICAL: Test-Driven Development (TDD) — MANDATORY
+
+**ALL CODE MUST BE WRITTEN USING TDD. THIS IS NON-NEGOTIABLE.**
+
+### TDD Workflow (Follow This Exactly)
+1. **WRITE THE TEST FIRST** — Before ANY implementation code
+2. **RUN THE TEST** — Verify it fails (red)
+3. **WRITE MINIMAL IMPLEMENTATION** — Just enough to make the test pass (green)
+4. **REFACTOR** — Improve code while keeping tests green
+5. **REPEAT** — For every feature, bug fix, or change
+
+### TDD Rules
+- **NEVER** write implementation code before tests
+- **NEVER** skip writing tests for "simple" changes
+- **NEVER** commit code without corresponding tests
+
+### Testing Infrastructure
+- Framework: xUnit; mocks: Moq. Name files `*Tests.cs` and mirror source namespaces.
+- Prefer `pengdows.crud.fakeDb` for unit tests; avoid real DBs. Use `testbed/` for integration via Testcontainers.
+- Coverage artifacts live in `TestResults/`; CI publishes Cobertura from `TestResults/**/coverage.cobertura.xml`.
+- The entire unit-test suite currently finishes in under 30 seconds; if a run approaches three minutes, terminate it and investigate for locking/hanging issues.
+- CI enforces minimum **83% coverage**; target **95%** for new work.
+- Expand `fakeDb` when tests need behaviors it lacks — don't bypass its limitations.
+
+## Core Invariants
+
+1. **DatabaseContext is SINGLETON** — one per connection string
+2. **TableGateway is SINGLETON** — stateless, caches compiled accessors
+3. **Extend TableGateway** — put custom query methods in inherited class, not wrapper service
+4. **IAuditValueResolver is SCOPED** — must resolve current user per request
+5. **TenantContextRegistry is SINGLETON** — manages per-tenant contexts
+6. **Transactions are operation-scoped** — create inside methods, never store as fields
+7. **ITrackedReader is a lease** — pins connection until disposed, dispose promptly
+8. **DbMode.Best auto-selects** — SQLite `:memory:` = SingleConnection, file SQLite = SingleWriter
+9. **Always use WrapObjectName()** — for column names and aliases in custom SQL
+10. **NEVER use TransactionScope** — incompatible with connection management, use `Context.BeginTransaction()`
+11. **Execution methods return ValueTask** — not Task, for reduced allocations
+12. **All async methods have CancellationToken overloads** — pass tokens through for proper cancellation
+
+## Security & Configuration Tips
+
+- Never commit secrets or real connection strings; use environment variables and user-secrets. Strong-name via `SNK_PATH` (do not commit keys).
+- Do not hardcode identifier quoting. Use `WrapObjectName(...)` and `CompositeIdentifierSeparator`:
+  ```csharp
+  var full = ctx.WrapObjectName("schema") + ctx.CompositeIdentifierSeparator + ctx.WrapObjectName("table");
+  ```
+- Always parameterize values (`AddParameterWithValue`, `CreateDbParameter`); avoid string interpolation for SQL.
+- `WrapObjectName` behavior by database: SQL Server `[name]`, PostgreSQL `"name"`, MySQL `` `name` ``, Oracle `"name"`.
+
+## Commit & Pull Request Guidelines
+
+- Commits: short, imperative; optional prefixes `feat:`, `fix:`, `refactor:`, `chore:`.
+- PRs: clear description, rationale, scope; link issues; list behavioral/provider impacts; include tests.
+- Before review: ensure `dotnet build` and `dotnet test` pass locally.
 
 ## Key Implementation Details
 
@@ -252,20 +526,27 @@ var results = await helper.LoadListAsync(customContainer);
 - `TRowID` must be primitive integer, `Guid`, or `string` (nullable allowed)
 - Automatic type coercion between .NET types and database types
 - Enum support with configurable parsing behavior (string or numeric via DbType)
-- JSON serialization support for complex types
+- JSON serialization support for complex types via `[Json]` attribute
 
 ### SQL Generation
 - Database-agnostic SQL with dialect-specific optimizations
 - Automatic parameterization prevents SQL injection
 - Provider-specific UPSERT: MERGE (SQL Server/Oracle), ON CONFLICT (PostgreSQL), ON DUPLICATE KEY (MySQL/MariaDB)
 - Schema-aware operations with proper object name quoting
+- Dialect is accessible via `context.Dialect` (`ISqlDialect`) from any `IDatabaseContext`
 
-### Working with the Codebase
+### Advanced Features
+- **Intelligent Dialect System**: Portable upsert, optimized prepared statements per database, proc wrapping per vendor
+- **IsolationProfile**: Portable transaction isolation (maps to safest level for target DB)
+- **Uuid7Optimized**: Built-in RFC 9562-compliant UUIDv7 generator for time-ordered, index-friendly surrogate keys
+- **Comprehensive Metrics**: Connection counts, timings, pool contention, attribution stats
+
+## Working with the Codebase
 
 **Key Principles:**
-- All async operations return Task or Task<T>
-- IDatabaseContext parameter is often optional (defaults to instance context)
-- Use ISqlContainer for composable SQL building
+- All async hot-path operations return `ValueTask` or `ValueTask<T>`; `await` immediately, never store
+- `IDatabaseContext` parameter is often optional (defaults to instance context)
+- Use `ISqlContainer` for composable SQL building
 - Always dispose contexts and containers (preferably with `using`/`await using`)
 - Entity classes need proper attributes: `[Table]`, `[Id]`, `[Column]`, etc.
 - Program to interfaces (`IDatabaseContext`, `ITableGateway`, `ISqlContainer`)
@@ -273,6 +554,22 @@ var results = await helper.LoadListAsync(customContainer);
 **Common Mistakes to Avoid:**
 - Don't expose public constructors on implementation types (except DatabaseContext)
 - Use `RetrieveAsync` for multiple entities, `RetrieveOneAsync` for single by ID/key, `LoadSingleAsync` for custom SQL
-- Don't forget `TypeMapRegistry` in tests (though auto-registration handles most cases)
 - Use correct `ExecutionType` (Read vs Write) for connections
-- Don't confuse `[Id]` (pseudo key/row ID) with `[PrimaryKey]` (business key) - see AGENTS.md for details
+- Don't confuse `[Id]` (pseudo key/row ID) with `[PrimaryKey]` (business key)
+- Don't store `TransactionContext` as a field — create it inside the method that uses it
+
+## Related Projects
+
+- **`pengdows.poco.mint`**: Code generation tool that inspects a database schema and generates C# POCOs with the correct `[Table]`, `[Column]`, `[Id]`, and `[PrimaryKey]` attributes for use with `pengdows.crud`.
+- **`pengdows.crud.fakeDb`**: Standalone NuGet package providing a fake ADO.NET provider. Essential for fast, isolated unit tests for any data access logic based on ADO.NET interfaces.
+
+## AI Agent Files
+
+This repository contains guidance files for multiple AI coding assistants:
+- `CLAUDE.md` — Claude Code (this file)
+- `AGENTS.md` — OpenAI Codex / Agents
+- `GEMINI.md` — Google Gemini
+- `skills/claude/` — Claude Code skills (slash commands)
+- `skills/codex/` — Codex agent references
+
+All three guidance files share the same core technical information. The `skills/` directory provides structured reference material used by AI assistants during development sessions.

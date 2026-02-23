@@ -3,11 +3,15 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Text.RegularExpressions;
 using System.Data.Common;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using pengdows.crud;
 using pengdows.crud.configuration;
 using pengdows.crud.dialects;
 using pengdows.crud.@internal;
@@ -17,6 +21,8 @@ using pengdows.crud.strategies.connection;
 using pengdows.crud.Tests.Mocks;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
+using pengdows.crud.fakeDb;
+using pengdows.crud.metrics;
 using Xunit;
 
 #endregion
@@ -136,6 +142,78 @@ public class TransactionContextTests
     }
 
     [Fact]
+    public void CommitFailure_DoesNotCompleteTransaction()
+    {
+        var context = CreateTestContext(throwOnCommit: true);
+        var tx = TransactionContext.Create(context, IsolationLevel.ReadCommitted);
+
+        Assert.Throws<InvalidOperationException>(() => tx.Commit());
+        Assert.False(tx.IsCompleted);
+        Assert.False(tx.WasCommitted);
+        Assert.False(tx.WasRolledBack);
+        Assert.True(context.ConnectionReleased);
+
+        tx.Dispose();
+    }
+
+    [Fact]
+    public void RollbackFailure_DoesNotCompleteTransaction()
+    {
+        var context = CreateTestContext(throwOnRollback: true);
+        var tx = TransactionContext.Create(context, IsolationLevel.ReadCommitted);
+
+        Assert.Throws<InvalidOperationException>(() => tx.Rollback());
+        Assert.False(tx.IsCompleted);
+        Assert.False(tx.WasRolledBack);
+        Assert.True(context.ConnectionReleased);
+
+        tx.Dispose();
+    }
+
+    [Fact]
+    public async Task CreateAsync_ReadOnlyEnterFailure_CleansUpConnection()
+    {
+        var dialect = new ThrowingReadOnlySql92Dialect(new fakeDbFactory(SupportedDatabase.Unknown),
+            NullLogger<SqlDialect>.Instance);
+        var context = CreateTestContext(
+            throwOnCommit: false,
+            throwOnRollback: false,
+            isReadOnlyContext: true,
+            dialectOverride: dialect);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            await TransactionContext.CreateAsync(context, IsolationLevel.Serializable, ExecutionType.Read, true);
+        });
+
+        Assert.True(context.ConnectionReleased);
+        // context.IsDisposed is intentionally NOT asserted here — see DoesNotDisposeParentContext
+    }
+
+    [Fact]
+    public async Task CreateAsync_ReadOnlyEnterFailure_DoesNotDisposeParentContext()
+    {
+        // When TryEnterReadOnlyTransactionAsync throws, the CONNECTION must be released
+        // but the CONTEXT must remain alive and usable.
+        // The sync path only closes the connection; the async path must match.
+        var dialect = new ThrowingReadOnlySql92Dialect(new fakeDbFactory(SupportedDatabase.Unknown),
+            NullLogger<SqlDialect>.Instance);
+        var context = CreateTestContext(
+            throwOnCommit: false,
+            throwOnRollback: false,
+            isReadOnlyContext: true,
+            dialectOverride: dialect);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            await TransactionContext.CreateAsync(context, IsolationLevel.Serializable, ExecutionType.Read, true);
+        });
+
+        Assert.True(context.ConnectionReleased);  // connection released ✓
+        Assert.False(context.IsDisposed);         // context must remain usable ✓
+    }
+
+    [Fact]
     public void Commit_AfterDispose_Throws()
     {
         var tx = CreateContext(SupportedDatabase.Sqlite).BeginTransaction();
@@ -198,6 +276,366 @@ public class TransactionContextTests
         await tx.DisposeAsync();
 
         Assert.True(tx.IsCompleted);
+    }
+
+    private static TestDatabaseContext CreateTestContext(
+        bool throwOnCommit = false,
+        bool throwOnRollback = false,
+        bool isReadOnlyContext = false,
+        ISqlDialect? dialectOverride = null)
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
+        var connection = new TrackedConnection(
+            new ThrowingConnection(throwOnCommit, throwOnRollback),
+            logger: NullLogger<TrackedConnection>.Instance);
+
+        var dialect = dialectOverride ??
+                      new Sql92Dialect(factory, NullLogger<SqlDialect>.Instance);
+
+        return new TestDatabaseContext(connection, dialect, isReadOnlyContext);
+    }
+
+    private sealed class TestDatabaseContext : IDatabaseContext, IInternalConnectionProvider,
+        ISqlDialectProvider, IMetricsCollectorAccessor, ITypeMapAccessor, IContextIdentity
+    {
+        private readonly ITrackedConnection _connection;
+        private readonly ISqlDialect _dialect;
+        private readonly IDataSourceInformation _dataSourceInfo;
+        private readonly TypeMapRegistry _typeMapRegistry = new();
+        private readonly DatabaseMetrics _metrics;
+        private readonly bool _isReadOnlyContext;
+        private bool _disposed;
+        private EventHandler<DatabaseMetrics>? _metricsUpdated;
+
+        public TestDatabaseContext(ITrackedConnection connection, ISqlDialect dialect, bool isReadOnlyContext)
+        {
+            _connection = connection;
+            _dialect = dialect;
+            _dialect.InitializeUnknownProductInfo();
+            _dataSourceInfo = new DataSourceInformation(_dialect);
+            _metrics = BuildEmptyMetrics();
+            _isReadOnlyContext = isReadOnlyContext;
+        }
+
+        public bool ConnectionReleased { get; private set; }
+
+        public bool IsDisposed => _disposed;
+
+        public DbMode ConnectionMode => DbMode.Standard;
+
+        public Guid RootId { get; } = Guid.NewGuid();
+
+        public ReadWriteMode ReadWriteMode { get; set; } = ReadWriteMode.ReadWrite;
+
+        public string ConnectionString => "Data Source=test";
+
+        public string Name { get; set; } = "TestContext";
+
+        public DbDataSource? DataSource => null;
+
+        public IDataSourceInformation DataSourceInfo => _dataSourceInfo;
+        public ISqlDialect Dialect => _dialect;
+        public TimeSpan? ModeLockTimeout => null;
+
+        public string SessionSettingsPreamble => string.Empty;
+
+        public ProcWrappingStyle ProcWrappingStyle => _dialect.ProcWrappingStyle;
+
+        public int MaxParameterLimit => _dialect.MaxParameterLimit;
+
+        public int MaxOutputParameters => _dialect.MaxOutputParameters;
+
+        public long NumberOfOpenConnections => 1;
+
+        public DatabaseMetrics Metrics => _metrics;
+
+        public event EventHandler<DatabaseMetrics>? MetricsUpdated
+        {
+            add => _metricsUpdated += value;
+            remove => _metricsUpdated -= value;
+        }
+
+        public SupportedDatabase Product => _dialect.DatabaseType;
+
+        public long PeakOpenConnections => 1;
+
+        public bool SupportsInsertReturning => _dialect.SupportsInsertReturning;
+
+        public string QuotePrefix => _dialect.QuotePrefix;
+
+        public string QuoteSuffix => _dialect.QuoteSuffix;
+
+        public string CompositeIdentifierSeparator => _dialect.CompositeIdentifierSeparator;
+
+        public string WrapObjectName(string name) => _dialect.WrapObjectName(name);
+
+        public string MakeParameterName(DbParameter dbParameter) => _dialect.MakeParameterName(dbParameter);
+
+        public string MakeParameterName(string parameterName) => _dialect.MakeParameterName(parameterName);
+
+        public bool IsReadOnlyConnection => _isReadOnlyContext;
+
+        public bool RCSIEnabled => false;
+
+        public bool SnapshotIsolationEnabled => false;
+
+        public ILockerAsync GetLock() => NoOpAsyncLocker.Instance;
+
+        public ISqlContainer CreateSqlContainer(string? query = null)
+        {
+            return SqlContainer.Create(this, query, NullLogger<ISqlContainer>.Instance);
+        }
+
+        public DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
+        {
+            return _dialect.CreateDbParameter(name, type, value);
+        }
+
+        public DbParameter CreateDbParameter<T>(string? name, DbType type, T value, ParameterDirection direction)
+        {
+            var param = CreateDbParameter(name, type, value);
+            param.Direction = direction;
+            return param;
+        }
+
+        public DbParameter CreateDbParameter<T>(DbType type, T value)
+        {
+            return CreateDbParameter(null, type, value);
+        }
+
+        public ITransactionContext BeginTransaction(IsolationLevel? isolationLevel, ExecutionType executionType,
+            bool? readOnly)
+        {
+            throw new NotSupportedException();
+        }
+
+        public ITransactionContext BeginTransaction(IsolationProfile isolationProfile, ExecutionType executionType,
+            bool? readOnly)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<ITransactionContext> BeginTransactionAsync(IsolationLevel? isolationLevel,
+            ExecutionType executionType,
+            bool? readOnly, CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<ITransactionContext> BeginTransactionAsync(IsolationProfile isolationProfile,
+            ExecutionType executionType,
+            bool? readOnly, CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public string GenerateRandomName(int length = 5, int parameterNameMaxLength = 30)
+        {
+            return _dialect.GenerateRandomName(length, parameterNameMaxLength);
+        }
+
+        public void AssertIsWriteConnection()
+        {
+            if (_isReadOnlyContext)
+            {
+                throw new InvalidOperationException("Context is read-only.");
+            }
+        }
+
+        public void AssertIsReadConnection()
+        {
+            if (!_isReadOnlyContext)
+            {
+                throw new InvalidOperationException("Context is not readable.");
+            }
+        }
+
+        public void CloseAndDisposeConnection(ITrackedConnection? conn)
+        {
+            ConnectionReleased = true;
+            conn?.Dispose();
+        }
+
+        public ValueTask CloseAndDisposeConnectionAsync(ITrackedConnection? conn)
+        {
+            CloseAndDisposeConnection(conn);
+            return ValueTask.CompletedTask;
+        }
+
+        public string ParameterMarker => _dialect.ParameterMarker;
+
+        public int ParameterNameMaxLength => _dialect.ParameterNameMaxLength;
+
+        public Regex ParameterNamePattern => _dialect.ParameterNamePattern;
+
+        public bool PrepareStatements => _dataSourceInfo.PrepareStatements;
+
+        public bool? ForceManualPrepare => null;
+
+        public bool? DisablePrepare => null;
+
+        public bool SupportsNamedParameters => _dataSourceInfo.SupportsNamedParameters;
+
+        public bool SupportsRepeatedNamedParameters => _dataSourceInfo.SupportsRepeatedNamedParameters;
+
+        public string DatabaseProductName => _dataSourceInfo.DatabaseProductName;
+
+        public string DatabaseProductVersion => _dataSourceInfo.DatabaseProductVersion;
+
+        ISqlDialect ISqlDialectProvider.Dialect => _dialect;
+
+        public void Dispose()
+        {
+            _disposed = true;
+            _connection.Dispose();
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            Dispose();
+            await Task.CompletedTask;
+        }
+
+        public ITrackedConnection GetConnection(ExecutionType executionType, bool isShared = false)
+        {
+            return _connection;
+        }
+
+        ITrackedConnection IInternalConnectionProvider.GetConnection(ExecutionType executionType, bool isShared)
+        {
+            return GetConnection(executionType, isShared);
+        }
+
+        MetricsCollector? IMetricsCollectorAccessor.MetricsCollector => null;
+
+        MetricsCollector? IMetricsCollectorAccessor.ReadMetricsCollector => null;
+
+        MetricsCollector? IMetricsCollectorAccessor.WriteMetricsCollector => null;
+
+        MetricsCollector? IMetricsCollectorAccessor.GetMetricsCollector(ExecutionType executionType) => null;
+
+        public ITypeMapRegistry TypeMapRegistry => _typeMapRegistry;
+
+        private static DatabaseMetrics BuildEmptyMetrics()
+        {
+            var role = new DatabaseRoleMetrics(
+                0, 0, 0, 0,
+                0d, 0d, 0d, 0,
+                0, 0, 0, 0,
+                0d, 0d, 0d,
+                0, 0, 0, 0,
+                0, 0, 0, 0,
+                0d);
+
+            return new DatabaseMetrics(
+                role, role,
+                0, // ConnectionsCurrent
+                0, // PeakOpenConnections
+                0L, // ConnectionsOpened
+                0L, // ConnectionsClosed
+                0d, // AvgConnectionHoldMs
+                0d, // AvgConnectionOpenMs
+                0d, // AvgConnectionCloseMs
+                0L, // LongLivedConnections
+                0L, // CommandsExecuted
+                0L, // CommandsFailed
+                0L, // CommandsTimedOut
+                0L, // CommandsCancelled
+                0d, // AvgCommandMs
+                0d, // P95CommandMs
+                0d, // P99CommandMs
+                0, // MaxParametersObserved
+                0L, // RowsReadTotal
+                0L, // RowsAffectedTotal
+                0L, // PreparedStatements
+                0L, // StatementsCached
+                0L, // StatementsEvicted
+                0, // TransactionsActive
+                0, // TransactionsMax
+                0d); // AvgTransactionMs
+        }
+
+    }
+
+    private sealed class ThrowingReadOnlySql92Dialect : Sql92Dialect
+    {
+        public ThrowingReadOnlySql92Dialect(DbProviderFactory factory, ILogger logger)
+            : base(factory, logger)
+        {
+        }
+
+        public override Task TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
+            CancellationToken cancellationToken = default)
+        {
+            throw new InvalidOperationException("Simulated read-only session configuration failure.");
+        }
+    }
+
+    private sealed class ThrowingConnection : fakeDbConnection
+    {
+        private readonly bool _throwOnCommit;
+        private readonly bool _throwOnRollback;
+
+        public ThrowingConnection(bool throwOnCommit, bool throwOnRollback)
+        {
+            _throwOnCommit = throwOnCommit;
+            _throwOnRollback = throwOnRollback;
+        }
+
+        protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel)
+        {
+            var baseTransaction = base.BeginDbTransaction(isolationLevel);
+            return new ThrowingDbTransaction(baseTransaction, _throwOnCommit, _throwOnRollback);
+        }
+
+        public new Task<DbTransaction> BeginTransactionAsync(CancellationToken cancellationToken)
+        {
+            return Task.FromResult(BeginDbTransaction(IsolationLevel.Unspecified));
+        }
+
+        public new Task<DbTransaction> BeginTransactionAsync(IsolationLevel isolationLevel,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(BeginDbTransaction(isolationLevel));
+        }
+    }
+
+    private sealed class ThrowingDbTransaction : DbTransaction
+    {
+        private readonly DbTransaction _inner;
+        private readonly bool _throwOnCommit;
+        private readonly bool _throwOnRollback;
+
+        public ThrowingDbTransaction(DbTransaction inner, bool throwOnCommit, bool throwOnRollback)
+        {
+            _inner = inner;
+            _throwOnCommit = throwOnCommit;
+            _throwOnRollback = throwOnRollback;
+        }
+
+        protected override DbConnection DbConnection => _inner.Connection!;
+
+        public override IsolationLevel IsolationLevel => _inner.IsolationLevel;
+
+        public override void Commit()
+        {
+            if (_throwOnCommit)
+            {
+                throw new InvalidOperationException("Simulated commit failure");
+            }
+
+            _inner.Commit();
+        }
+
+        public override void Rollback()
+        {
+            if (_throwOnRollback)
+            {
+                throw new InvalidOperationException("Simulated rollback failure");
+            }
+
+            _inner.Rollback();
+        }
     }
 
     [Theory]

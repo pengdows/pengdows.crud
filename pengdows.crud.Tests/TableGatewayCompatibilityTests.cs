@@ -1,6 +1,7 @@
 using System;
 using Moq;
 using pengdows.crud.@internal;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using Xunit;
 
@@ -22,15 +23,16 @@ public class TableGatewayCompatibilityTests
     }
 
     [Fact]
-    public void TableGateway_ThrowsWhenContextMissingDialect()
+    public void TableGateway_ThrowsWhenContextDialectIsNull()
     {
         var typeMap = new TypeMapRegistry();
         var context = new Mock<IDatabaseContext>(MockBehavior.Strict);
         context.As<ITypeMapAccessor>().SetupGet(a => a.TypeMapRegistry).Returns(typeMap);
+        context.SetupGet(c => c.Dialect).Returns((ISqlDialect?)null!);
 
         var exception = Assert.Throws<InvalidOperationException>(() =>
             new TableGateway<TestEntity, int>(context.Object));
 
-        Assert.Contains("IDatabaseContext must implement ISqlDialectProvider", exception.Message);
+        Assert.Contains("IDatabaseContext must expose a non-null Dialect", exception.Message);
     }
 }

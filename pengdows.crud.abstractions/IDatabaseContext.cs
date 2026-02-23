@@ -2,6 +2,7 @@
 
 using System.Data;
 using System.Data.Common;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.metrics;
@@ -57,6 +58,18 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     IDataSourceInformation DataSourceInfo { get; }
 
     /// <summary>
+    /// The SQL dialect in use for this context.
+    /// </summary>
+    ISqlDialect Dialect { get; }
+
+    /// <summary>
+    /// Timeout for internal mode locks (SingleWriter / SingleConnection) and
+    /// transaction completion locks (Commit / Rollback). <c>null</c> means wait
+    /// indefinitely. Corresponds to <see cref="configuration.IDatabaseContextConfiguration.ModeLockTimeout"/>.
+    /// </summary>
+    TimeSpan? ModeLockTimeout { get; }
+
+    /// <summary>
     /// Provider-specific SQL preamble to unify connection behavior (e.g., SET flags).
     /// </summary>
     string SessionSettingsPreamble { get; }
@@ -110,6 +123,11 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// Peak observed number of concurrently open connections. Used for tuning.
     /// </summary>
     long PeakOpenConnections { get; }
+
+    /// <summary>
+    /// Maximum size of the reader plan cache that TableGateway instances should maintain.
+    /// </summary>
+    int? ReaderPlanCacheSize => null;
 
     /// <summary>
     /// The raw database product name (from metadata).

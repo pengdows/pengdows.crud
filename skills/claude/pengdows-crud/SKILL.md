@@ -683,7 +683,7 @@ Each uses optimal SQL syntax (MERGE vs ON CONFLICT vs ON DUPLICATE KEY UPDATE).
 5. Repeat
 
 - Minimum 83% coverage (CI enforced)
-- Target 90%+ for new features
+- Target 95%+ for new features
 - NO skipped tests
 
 ## Core Invariants

@@ -109,7 +109,7 @@ namespace pengdows.crud;
 public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextIdentity, ISqlDialectProvider,
     IMetricsCollectorAccessor, IInternalConnectionProvider, ITypeMapAccessor
 {
-    private readonly DbProviderFactory? _factory;
+    private readonly DbProviderFactory _factory = null!;
     private DbDataSource? _dataSource;
     private DbDataSource? _readerDataSource;
     private readonly bool _dataSourceProvided;
@@ -138,9 +138,9 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private long _totalConnectionTimeoutFailures;
     private readonly bool? _forceManualPrepare;
     private readonly bool? _disablePrepare;
+    private readonly int? _readerPlanCacheSize;
     private bool? _rcsiPrefetch;
     private bool? _snapshotIsolationPrefetch;
-    private int _initializing; // 0 = false, 1 = true
     private bool _sessionSettingsDetectionCompleted;
     private string? _cachedReadOnlySessionSettings;
     private string? _cachedReadWriteSessionSettings;
@@ -279,6 +279,9 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     public long NumberOfOpenConnections => Interlocked.Read(ref _connectionCount);
 
     /// <inheritdoc/>
+    public int? ReaderPlanCacheSize => _readerPlanCacheSize;
+
+    /// <inheritdoc/>
     public override string CompositeIdentifierSeparator => _dataSourceInfo.CompositeIdentifierSeparator;
 
     /// <inheritdoc/>
@@ -393,4 +396,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     }
 
     protected override ISqlDialect DialectCore => _dialect;
+
+    /// <inheritdoc />
+    public TimeSpan? ModeLockTimeout => _modeLockTimeout;
 }

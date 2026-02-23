@@ -127,8 +127,29 @@ public partial class TableGateway<TEntity, TRowID> :
     private readonly BoundedCache<ColumnCacheKey, string> _wrappedColumnNameCache = new(128);
 
     // Thread-safe cache for hybrid reader plans by recordset shape hash (long key avoids int-hash collisions)
-    private readonly BoundedCache<long, HybridRecordsetPlan> _readerPlans = new(MaxReaderPlans);
-    private const int MaxReaderPlans = 32;
+    private BoundedCache<long, HybridRecordsetPlan> _readerPlans =
+        new(DefaultReaderPlanCapacity);
+    private const int DefaultReaderPlanCapacity = 32;
+
+    private static int ResolveReaderPlanCacheSize(IDatabaseContext context)
+    {
+        int? configured = null;
+        try
+        {
+            configured = context.ReaderPlanCacheSize;
+        }
+        catch
+        {
+            // Ignore fallback property access failures (e.g., strict mocks).
+        }
+
+        if (configured is int size && size > 0)
+        {
+            return size;
+        }
+
+        return DefaultReaderPlanCapacity;
+    }
 
     // Cache key for wrapped column names: dialect + column name
     // Uses value-type struct to avoid tuple allocation on cache misses
@@ -307,10 +328,11 @@ public partial class TableGateway<TEntity, TRowID> :
                 "IDatabaseContext must expose an internal TypeMapRegistry.");
         }
 
-        _dialect = (databaseContext as ISqlDialectProvider)?.Dialect
+        _dialect = databaseContext.Dialect
                    ?? throw new InvalidOperationException(
-                       "IDatabaseContext must implement ISqlDialectProvider and expose a non-null Dialect.");
+                       "IDatabaseContext must expose a non-null Dialect.");
         _coercionOptions = _coercionOptions with { Provider = _dialect.DatabaseType };
+        _readerPlans = new BoundedCache<long, HybridRecordsetPlan>(ResolveReaderPlanCacheSize(databaseContext));
         _tableInfo = accessor.TypeMapRegistry.GetTableInfo<TEntity>() ??
                      throw new InvalidOperationException($"Type {typeof(TEntity).FullName} is not a table.");
         _columnsByNameCI =
@@ -537,14 +559,10 @@ public partial class TableGateway<TEntity, TRowID> :
 
         // Get the database-specific query for retrieving the last inserted ID
         var ctx = context ?? _context;
-        var provider = ctx as ISqlDialectProvider
-                       ?? throw new InvalidOperationException(
-                           "IDatabaseContext must implement ISqlDialectProvider and expose a non-null Dialect.");
-
         string lastIdQuery;
         try
         {
-            lastIdQuery = provider.Dialect.GetLastInsertedIdQuery();
+            lastIdQuery = ctx.Dialect.GetLastInsertedIdQuery();
         }
         catch (NotSupportedException)
         {
@@ -1735,9 +1753,9 @@ public partial class TableGateway<TEntity, TRowID> :
 
     private static ISqlDialect GetDialect(IDatabaseContext ctx)
     {
-        return (ctx as ISqlDialectProvider)?.Dialect
+        return ctx.Dialect
                ?? throw new InvalidOperationException(
-                   "IDatabaseContext must implement ISqlDialectProvider and expose a non-null Dialect.");
+                   "IDatabaseContext must expose a non-null Dialect.");
     }
 
     private static void ValidateRowIdType()

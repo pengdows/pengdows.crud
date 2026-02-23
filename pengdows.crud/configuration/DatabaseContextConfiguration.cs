@@ -97,6 +97,7 @@ public class DatabaseContextConfiguration : IDatabaseContextConfiguration
 
     public bool? ForceManualPrepare { get; set; }
     public bool? DisablePrepare { get; set; }
+    public int? ReaderPlanCacheSize { get; set; }
     public bool EnableMetrics { get; set; } = false;
     public IMetricsOptions MetricsOptions { get; set; } = metrics.MetricsOptions.Default;
 
@@ -107,14 +108,32 @@ public class DatabaseContextConfiguration : IDatabaseContextConfiguration
     public int? MaxConcurrentWrites
     {
         get => _maxConcurrentWrites;
-        set => _maxConcurrentWrites = value;
+        set
+        {
+            if (value is <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value),
+                    $"MaxConcurrentWrites must be a positive integer (got {value}). " +
+                    "Zero or negative values would grant no permits, causing a permanent deadlock.");
+            }
+            _maxConcurrentWrites = value;
+        }
     }
 
     /// <inheritdoc/>
     public int? MaxConcurrentReads
     {
         get => _maxConcurrentReads;
-        set => _maxConcurrentReads = value;
+        set
+        {
+            if (value is <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value),
+                    $"MaxConcurrentReads must be a positive integer (got {value}). " +
+                    "Zero or negative values would grant no permits, causing a permanent deadlock.");
+            }
+            _maxConcurrentReads = value;
+        }
     }
 
     /// <inheritdoc/>

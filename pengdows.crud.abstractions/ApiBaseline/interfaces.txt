@@ -179,6 +179,7 @@ method pengdows.crud.dialects.ISqlDialect::GetRollbackToSavepointSql(string) -> 
 method pengdows.crud.dialects.ISqlDialect::GetSavepointSql(string) -> string
 method pengdows.crud.dialects.ISqlDialect::GetVersionQuery() -> string
 method pengdows.crud.dialects.ISqlDialect::HasSessionScopedLastIdFunction() -> bool
+method pengdows.crud.dialects.ISqlDialect::InitializeUnknownProductInfo() -> void
 method pengdows.crud.dialects.ISqlDialect::IsReadCommittedSnapshotOn(pengdows.crud.wrappers.ITrackedConnection) -> bool
 method pengdows.crud.dialects.ISqlDialect::IsSnapshotIsolationOn(pengdows.crud.wrappers.ITrackedConnection) -> bool
 method pengdows.crud.dialects.ISqlDialect::IsUniqueViolation(System.Data.Common.DbException) -> bool
@@ -222,6 +223,7 @@ method pengdows.crud.wrappers.ITrackedConnection::Open() -> void
 method pengdows.crud.wrappers.ITrackedConnection::OpenAsync(System.Threading.CancellationToken) -> System.Threading.Tasks.Task
 method pengdows.crud.wrappers.ITrackedReader::ReadAsync() -> System.Threading.Tasks.Task`1<bool>
 method pengdows.crud.wrappers.ITrackedReader::ReadAsync(System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<bool>
+property pengdows.crud.IAuditValues::TimestampOffset : System.Nullable`1<System.DateTimeOffset> { get; }
 property pengdows.crud.IAuditValues::UserId : object { get; set; }
 property pengdows.crud.IAuditValues::UtcNow : System.DateTime { get; }
 property pengdows.crud.IColumnInfo::DbType : System.Data.DbType { get; set; }
@@ -276,12 +278,14 @@ property pengdows.crud.IDatabaseContext::ConnectionString : string { get; }
 property pengdows.crud.IDatabaseContext::DataSource : System.Data.Common.DbDataSource { get; }
 property pengdows.crud.IDatabaseContext::DataSourceInfo : pengdows.crud.IDataSourceInformation { get; }
 property pengdows.crud.IDatabaseContext::DatabaseProductName : string { get; }
+property pengdows.crud.IDatabaseContext::Dialect : pengdows.crud.dialects.ISqlDialect { get; }
 property pengdows.crud.IDatabaseContext::DisablePrepare : System.Nullable`1<bool> { get; }
 property pengdows.crud.IDatabaseContext::ForceManualPrepare : System.Nullable`1<bool> { get; }
 property pengdows.crud.IDatabaseContext::IsReadOnlyConnection : bool { get; }
 property pengdows.crud.IDatabaseContext::MaxOutputParameters : int { get; }
 property pengdows.crud.IDatabaseContext::MaxParameterLimit : int { get; }
 property pengdows.crud.IDatabaseContext::Metrics : pengdows.crud.metrics.DatabaseMetrics { get; }
+property pengdows.crud.IDatabaseContext::ModeLockTimeout : System.Nullable`1<System.TimeSpan> { get; }
 property pengdows.crud.IDatabaseContext::Name : string { get; set; }
 property pengdows.crud.IDatabaseContext::NumberOfOpenConnections : long { get; }
 property pengdows.crud.IDatabaseContext::PeakOpenConnections : long { get; }
@@ -292,6 +296,7 @@ property pengdows.crud.IDatabaseContext::QuotePrefix : string { get; }
 property pengdows.crud.IDatabaseContext::QuoteSuffix : string { get; }
 property pengdows.crud.IDatabaseContext::RCSIEnabled : bool { get; }
 property pengdows.crud.IDatabaseContext::ReadWriteMode : pengdows.crud.enums.ReadWriteMode { get; }
+property pengdows.crud.IDatabaseContext::ReaderPlanCacheSize : System.Nullable`1<int> { get; }
 property pengdows.crud.IDatabaseContext::RootId : System.Guid { get; }
 property pengdows.crud.IDatabaseContext::SessionSettingsPreamble : string { get; }
 property pengdows.crud.IDatabaseContext::SnapshotIsolationEnabled : bool { get; }
@@ -344,6 +349,7 @@ property pengdows.crud.configuration.IDatabaseContextConfiguration::PoolAcquireT
 property pengdows.crud.configuration.IDatabaseContextConfiguration::ProviderName : string { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::ReadOnlyConnectionString : string { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::ReadWriteMode : pengdows.crud.enums.ReadWriteMode { get; set; }
+property pengdows.crud.configuration.IDatabaseContextConfiguration::ReaderPlanCacheSize : System.Nullable`1<int> { get; set; }
 property pengdows.crud.connection.IConnectionLocalState::PrepareDisabled : bool { get; set; }
 property pengdows.crud.connection.IConnectionLocalState::SessionSettingsApplied : bool { get; set; }
 property pengdows.crud.dialects.IDatabaseProductInfo::DatabaseType : pengdows.crud.enums.SupportedDatabase { get; set; }
