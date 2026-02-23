@@ -119,8 +119,7 @@ public class ReusableAsyncLockerTests
         var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        await Assert.ThrowsAsync<TaskCanceledException>(
-            () => locker.LockAsync(cts.Token));
+        await Assert.ThrowsAsync<TaskCanceledException>(() => locker.LockAsync(cts.Token));
 
         // Semaphore should still be available — lock was never acquired
         Assert.Equal(1, sem.CurrentCount);
@@ -233,8 +232,7 @@ public class ReusableAsyncLockerTests
         var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        await Assert.ThrowsAsync<TaskCanceledException>(
-            () => locker.TryLockAsync(TimeSpan.FromSeconds(1), cts.Token));
+        await Assert.ThrowsAsync<TaskCanceledException>(() => locker.TryLockAsync(TimeSpan.FromSeconds(1), cts.Token));
 
         Assert.Equal(1, sem.CurrentCount);
     }

@@ -31,12 +31,16 @@ public partial class TableGateway<TEntity, TRowID>
         public string InsertSql = null!;
         public List<IColumnInfo> InsertColumns = null!;
         public List<string> InsertParameterNames = null!;
+        
+        public List<IColumnInfo> UpsertColumns = null!;
+        public List<string> UpsertParameterNames = null!;
+
         public string DeleteSql = null!;
 
         // UpdateSql split into prefix/suffix to allow direct StringBuilder appends,
         // eliminating the string.Format call and intermediate string allocation per UPDATE.
-        public string UpdateSqlPrefix = null!;   // "UPDATE tbl SET "
-        public string UpdateSqlSuffix = null!;   // " WHERE idcol = "
+        public string UpdateSqlPrefix = null!; // "UPDATE tbl SET "
+        public string UpdateSqlSuffix = null!; // " WHERE idcol = "
 
         // Pre-built version increment fragment (", vercol = vercol + 1") or null when not applicable.
         public string? VersionIncrementClause;
@@ -68,6 +72,7 @@ public partial class TableGateway<TEntity, TRowID>
         public ISqlContainer? GetByIdsTemplate;
         public ISqlContainer InsertTemplate = null!;
         public ISqlContainer? DeleteByIdTemplate;
+
         public ISqlContainer BaseRetrieveTemplate = null!;
         // Update and Upsert cannot be cached as templates because NULL inlining
         // in BuildSetClause makes the parameter structure vary per entity instance.
@@ -146,12 +151,13 @@ public partial class TableGateway<TEntity, TRowID>
         var insertColumns = _tableInfo.Columns.Values
             .Where(c => !c.IsNonInsertable && (!c.IsId || c.IsIdIsWritable))
             .Where(c => _auditValueResolver != null || (!c.IsCreatedBy && !c.IsLastUpdatedBy))
+            .OrderBy(c => c.Ordinal)
             .ToList();
 
         var wrappedCols = new List<string>(insertColumns.Count);
         for (var i = 0; i < insertColumns.Count; i++)
         {
-            wrappedCols.Add(dialect.WrapObjectName(insertColumns[i].Name));
+            wrappedCols.Add(dialect.WrapSimpleName(insertColumns[i].Name));
         }
 
         var paramNames = new List<string>(insertColumns.Count);
@@ -160,9 +166,7 @@ public partial class TableGateway<TEntity, TRowID>
         {
             var name = $"i{i}";
             paramNames.Add(name);
-            var placeholder = dialect.SupportsNamedParameters
-                ? dialect.ParameterMarker + name
-                : dialect.ParameterMarker;
+            var placeholder = dialect.MakeParameterName(name);
             if (insertColumns[i].IsJsonType)
             {
                 placeholder = dialect.RenderJsonArgument(placeholder, insertColumns[i]);
@@ -174,6 +178,14 @@ public partial class TableGateway<TEntity, TRowID>
         var insertSql =
             $"INSERT INTO {BuildWrappedTableName(dialect)} ({string.Join(", ", wrappedCols)}) VALUES ({string.Join(", ", valuePlaceholders)})";
 
+        // Upsert columns: everything ordered (includes primary keys + ID if writable)
+        var upsertColumns = _tableInfo.OrderedColumns.OrderBy(c => c.Ordinal).ToList();
+        var upsertParamNames = new List<string>(upsertColumns.Count);
+        for (var i = 0; i < upsertColumns.Count; i++)
+        {
+            upsertParamNames.Add($"i{i}");
+        }
+
         // Delete and Update SQL require an ID column; null when entity has no [Id]
         string? deleteSql = null;
         string? updateSqlPrefix = null;
@@ -183,15 +195,16 @@ public partial class TableGateway<TEntity, TRowID>
         if (idCol != null)
         {
             deleteSql =
-                $"DELETE FROM {BuildWrappedTableName(dialect)} WHERE {dialect.WrapObjectName(idCol.Name)} = {{0}}";
+                $"DELETE FROM {BuildWrappedTableName(dialect)} WHERE {dialect.WrapSimpleName(idCol.Name)} = {{0}}";
 
             updateColumns = _tableInfo.Columns.Values
                 .Where(c => !c.IsId && !c.IsVersion && !c.IsNonUpdateable && !c.IsCreatedBy && !c.IsCreatedOn)
+                .OrderBy(c => c.Ordinal)
                 .ToList();
 
             // Split into prefix/suffix for direct StringBuilder appends — eliminates string.Format per call
             updateSqlPrefix = $"UPDATE {BuildWrappedTableName(dialect)} SET ";
-            updateSqlSuffix = $" WHERE {dialect.WrapObjectName(idCol.Name)} = ";
+            updateSqlSuffix = $" WHERE {dialect.WrapSimpleName(idCol.Name)} = ";
         }
 
         // Pre-build single-ID equality WHERE body — dialect-specific, stored in CachedSqlTemplates
@@ -200,10 +213,8 @@ public partial class TableGateway<TEntity, TRowID>
         string? idEqualityNullableWhereBody = null;
         if (idCol != null)
         {
-            var wrappedIdName = dialect.WrapObjectName(idCol.Name);
-            var pName = dialect.SupportsNamedParameters
-                ? string.Concat(dialect.ParameterMarker, "p0")
-                : "?";
+            var wrappedIdName = dialect.WrapSimpleName(idCol.Name);
+            var pName = dialect.MakeParameterName("p0");
             idEqualityWhereBody = string.Concat(wrappedIdName, " = ", pName);
             idEqualityNullableWhereBody =
                 $"({wrappedIdName} = {pName}{SqlFragments.Or}{wrappedIdName} IS NULL)";
@@ -214,7 +225,7 @@ public partial class TableGateway<TEntity, TRowID>
         if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
         {
             versionIncrementClause =
-                $", {dialect.WrapObjectName(_versionColumn.Name)} = {dialect.WrapObjectName(_versionColumn.Name)} + 1";
+                $", {dialect.WrapSimpleName(_versionColumn.Name)} = {dialect.WrapSimpleName(_versionColumn.Name)} + 1";
         }
 
         // Pre-build the upsert UPDATE SET fragment (deterministic per dialect+entity+auditResolver config).
@@ -231,19 +242,19 @@ public partial class TableGateway<TEntity, TRowID>
                     if (_auditValueResolver == null && col.IsLastUpdatedBy) continue;
                     if (frag.Length > 0) frag.Append(", ");
                     frag.Append(tp);
-                    frag.Append(dialect.WrapObjectName(col.Name));
+                    frag.Append(dialect.WrapSimpleName(col.Name));
                     frag.Append(" = s.");
-                    frag.Append(dialect.WrapObjectName(col.Name));
+                    frag.Append(dialect.WrapSimpleName(col.Name));
                 }
 
                 if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
                 {
                     frag.Append(", ");
                     frag.Append(tp);
-                    frag.Append(dialect.WrapObjectName(_versionColumn.Name));
+                    frag.Append(dialect.WrapSimpleName(_versionColumn.Name));
                     frag.Append(" = ");
                     frag.Append(tp);
-                    frag.Append(dialect.WrapObjectName(_versionColumn.Name));
+                    frag.Append(dialect.WrapSimpleName(_versionColumn.Name));
                     frag.Append(" + 1");
                 }
             }
@@ -256,7 +267,7 @@ public partial class TableGateway<TEntity, TRowID>
                     {
                         if (_auditValueResolver == null && col.IsLastUpdatedBy) continue;
                         if (frag.Length > 0) frag.Append(", ");
-                        frag.Append(dialect.WrapObjectName(col.Name));
+                        frag.Append(dialect.WrapSimpleName(col.Name));
                         frag.Append(" = ");
                         frag.Append(dialect.UpsertIncomingColumn(col.Name));
                     }
@@ -264,9 +275,9 @@ public partial class TableGateway<TEntity, TRowID>
                     if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
                     {
                         frag.Append(", ");
-                        frag.Append(dialect.WrapObjectName(_versionColumn.Name));
+                        frag.Append(dialect.WrapSimpleName(_versionColumn.Name));
                         frag.Append(" = ");
-                        frag.Append(dialect.WrapObjectName(_versionColumn.Name));
+                        frag.Append(dialect.WrapSimpleName(_versionColumn.Name));
                         frag.Append(" + 1");
                     }
                 }
@@ -290,7 +301,7 @@ public partial class TableGateway<TEntity, TRowID>
             updateColumnWrappedNames = new string[updateColumns.Count];
             for (var i = 0; i < updateColumns.Count; i++)
             {
-                updateColumnWrappedNames[i] = dialect.WrapObjectName(updateColumns[i].Name);
+                updateColumnWrappedNames[i] = dialect.WrapSimpleName(updateColumns[i].Name);
             }
         }
         else
@@ -303,6 +314,8 @@ public partial class TableGateway<TEntity, TRowID>
             InsertSql = insertSql,
             InsertColumns = insertColumns,
             InsertParameterNames = paramNames,
+            UpsertColumns = upsertColumns,
+            UpsertParameterNames = upsertParamNames,
             DeleteSql = deleteSql!,
             UpdateSqlPrefix = updateSqlPrefix!,
             UpdateSqlSuffix = updateSqlSuffix!,

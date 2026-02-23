@@ -16,7 +16,7 @@ public class NewIsolationResolverTests
         Assert.Equal(IsolationLevel.ReadCommitted, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
         Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.StrictConsistency));
         Assert.Equal(IsolationLevel.ReadCommitted, resolver.Resolve(IsolationProfile.FastWithRisks));
-        
+
         var levels = resolver.GetSupportedLevels();
         Assert.Contains(IsolationLevel.ReadCommitted, levels);
         Assert.Contains(IsolationLevel.RepeatableRead, levels);
@@ -53,5 +53,4 @@ public class NewIsolationResolverTests
         Assert.DoesNotContain(IsolationLevel.ReadUncommitted, levels);
         Assert.DoesNotContain(IsolationLevel.RepeatableRead, levels);
     }
-
 }

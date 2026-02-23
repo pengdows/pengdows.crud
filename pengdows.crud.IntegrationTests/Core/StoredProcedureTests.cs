@@ -34,10 +34,12 @@ public class StoredProcedureTests : DatabaseTestBase
                 if (context.ProcWrappingStyle != ProcWrappingStyle.Exec)
                 {
                     var container = context.CreateSqlContainer("SomeProc");
-                    Assert.Throws<NotSupportedException>(() => 
-                        container.WrapForStoredProc(ExecutionType.Write, includeParameters: false, captureReturn: true));
+                    Assert.Throws<NotSupportedException>(() =>
+                        container.WrapForStoredProc(ExecutionType.Write, includeParameters: false,
+                            captureReturn: true));
                 }
-                return; 
+
+                return;
             }
 
             // Arrange: Create a simple proc that returns 42
@@ -51,10 +53,11 @@ public class StoredProcedureTests : DatabaseTestBase
             {
                 // Act: Use a container to call it and capture the return value
                 var container = context.CreateSqlContainer("TestReturnProc");
-                var wrappedSql = container.WrapForStoredProc(ExecutionType.Write, includeParameters: false, captureReturn: true);
-                
+                var wrappedSql =
+                    container.WrapForStoredProc(ExecutionType.Write, includeParameters: false, captureReturn: true);
+
                 await using var execContainer = context.CreateSqlContainer(wrappedSql);
-                
+
                 var returnValue = await execContainer.ExecuteScalarRequiredAsync<int>();
 
                 // Assert

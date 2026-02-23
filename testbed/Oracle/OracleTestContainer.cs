@@ -59,9 +59,10 @@ public class OracleTestContainer : TestContainer
         // Use TNS format for Oracle pluggable database
         _connectionString =
             $@"User Id={_username};Password={_password};Data Source=(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=localhost)(PORT={hostPort}))(CONNECT_DATA=(SERVICE_NAME={_sid})));";
-        
+
         // Wait for Oracle to be truly ready for connections
-        await WaitForDbToStart(OracleClientFactory.Instance, _connectionString, _container, 300); // Oracle can be slow to start
+        await WaitForDbToStart(OracleClientFactory.Instance, _connectionString, _container,
+            300); // Oracle can be slow to start
     }
 
     public override Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)

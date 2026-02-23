@@ -71,7 +71,8 @@ public partial class TableGateway<TEntity, TRowID>
 
     /// <inheritdoc/>
     public async Task<int> BatchCreateAsync(
-        IReadOnlyList<TEntity> entities, IDatabaseContext? context = null, CancellationToken cancellationToken = default)
+        IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
+        CancellationToken cancellationToken = default)
     {
         if (entities == null)
         {
@@ -153,7 +154,8 @@ public partial class TableGateway<TEntity, TRowID>
 
     /// <inheritdoc/>
     public async Task<int> BatchUpsertAsync(
-        IReadOnlyList<TEntity> entities, IDatabaseContext? context = null, CancellationToken cancellationToken = default)
+        IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
+        CancellationToken cancellationToken = default)
     {
         if (entities == null)
         {
@@ -231,7 +233,7 @@ public partial class TableGateway<TEntity, TRowID>
                 sc.Query.Append(", ");
             }
 
-            sc.Query.Append(dialect.WrapObjectName(insertableColumns[c].Name));
+            sc.Query.Append(dialect.WrapSimpleName(insertableColumns[c].Name));
         }
 
         sc.Query.Append(") VALUES ");
@@ -293,6 +295,7 @@ public partial class TableGateway<TEntity, TRowID>
         var ctx = context ?? _context;
         var dialect = GetDialect(ctx);
         var insertableColumns = GetCachedInsertableColumns();
+        var template = GetTemplatesForDialect(dialect);
 
         // Prepare all entities
         foreach (var entity in entities)
@@ -308,31 +311,6 @@ public partial class TableGateway<TEntity, TRowID>
         }
 
         var conflictCols = keys.Count > 0 ? keys : new List<IColumnInfo> { _idColumn! };
-
-        // Build update SET clause (shared across all rows)
-        var updateSet = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
-        foreach (var column in GetCachedUpdatableColumns())
-        {
-            if (_auditValueResolver == null && column.IsLastUpdatedBy)
-            {
-                continue;
-            }
-
-            if (updateSet.Length > 0)
-            {
-                updateSet.Append(", ");
-            }
-
-            updateSet.Append($"{dialect.WrapObjectName(column.Name)} = {dialect.UpsertIncomingColumn(column.Name)}");
-        }
-
-        if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
-        {
-            updateSet.Append(
-                $", {dialect.WrapObjectName(_versionColumn.Name)} = {dialect.WrapObjectName(_versionColumn.Name)} + 1");
-        }
-
-        var updateSetStr = updateSet.ToString();
 
         var chunks = ChunkList(entities, insertableColumns.Count, ctx.MaxParameterLimit);
         var result = new List<ISqlContainer>(chunks.Count);
@@ -350,10 +328,10 @@ public partial class TableGateway<TEntity, TRowID>
                     sc.Query.Append(", ");
                 }
 
-                sc.Query.Append(dialect.WrapObjectName(conflictCols[i].Name));
+                sc.Query.Append(dialect.WrapSimpleName(conflictCols[i].Name));
             }
 
-            sc.Query.Append(") DO UPDATE SET ").Append(updateSetStr);
+            sc.Query.Append(") DO UPDATE SET ").Append(template.UpsertUpdateFragment);
             result.Add(sc);
         }
 
@@ -366,37 +344,13 @@ public partial class TableGateway<TEntity, TRowID>
         var ctx = context ?? _context;
         var dialect = GetDialect(ctx);
         var insertableColumns = GetCachedInsertableColumns();
+        var template = GetTemplatesForDialect(dialect);
 
         // Prepare all entities
         foreach (var entity in entities)
         {
             PrepareForInsertOrUpsert(entity);
         }
-
-        // Build update SET clause
-        var updateSet = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
-        foreach (var column in GetCachedUpdatableColumns())
-        {
-            if (_auditValueResolver == null && column.IsLastUpdatedBy)
-            {
-                continue;
-            }
-
-            if (updateSet.Length > 0)
-            {
-                updateSet.Append(", ");
-            }
-
-            updateSet.Append($"{dialect.WrapObjectName(column.Name)} = {dialect.UpsertIncomingColumn(column.Name)}");
-        }
-
-        if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
-        {
-            updateSet.Append(
-                $", {dialect.WrapObjectName(_versionColumn.Name)} = {dialect.WrapObjectName(_versionColumn.Name)} + 1");
-        }
-
-        var updateSetStr = updateSet.ToString();
 
         var chunks = ChunkList(entities, insertableColumns.Count, ctx.MaxParameterLimit);
         var result = new List<ISqlContainer>(chunks.Count);
@@ -406,7 +360,7 @@ public partial class TableGateway<TEntity, TRowID>
             var sc = BuildBatchInsertContainer(chunk, insertableColumns, ctx, dialect);
 
             // Append ON DUPLICATE KEY UPDATE clause
-            sc.Query.Append(" ON DUPLICATE KEY UPDATE ").Append(updateSetStr);
+            sc.Query.Append(" ON DUPLICATE KEY UPDATE ").Append(template.UpsertUpdateFragment);
             result.Add(sc);
         }
 

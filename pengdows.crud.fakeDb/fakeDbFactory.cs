@@ -24,11 +24,13 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
     private readonly List<fakeDbConnection> _createdConnections = new();
     private Exception? _globalPersistentScalarException;
     public bool EnableDataPersistence { get; set; } = false;
+
     internal ConnectionStringBuilderBehavior ConnectionStringBuilderBehavior { get; set; } =
         ConnectionStringBuilderBehavior.None;
 
     // Shared data store across all connections from this factory
     private readonly FakeDataStore _sharedDataStore = new();
+
     private readonly Dictionary<string, Exception> _sharedCommandFailures =
         new(StringComparer.OrdinalIgnoreCase);
 

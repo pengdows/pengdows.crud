@@ -65,8 +65,7 @@ public class DatabaseContextFactoryNonNullableTests
             ConnectionString = "Data Source=:memory:;EmulatedProduct=Sqlite"
         };
 
-        Assert.Throws<ArgumentNullException>(
-            () => new DatabaseContext(config, null!));
+        Assert.Throws<ArgumentNullException>(() => new DatabaseContext(config, null!));
     }
 
     // -------------------------------------------------------------------------

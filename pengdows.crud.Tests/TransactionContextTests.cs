@@ -209,8 +209,8 @@ public class TransactionContextTests
             await TransactionContext.CreateAsync(context, IsolationLevel.Serializable, ExecutionType.Read, true);
         });
 
-        Assert.True(context.ConnectionReleased);  // connection released ✓
-        Assert.False(context.IsDisposed);         // context must remain usable ✓
+        Assert.True(context.ConnectionReleased); // connection released ✓
+        Assert.False(context.IsDisposed); // context must remain usable ✓
     }
 
     [Fact]
@@ -554,7 +554,6 @@ public class TransactionContextTests
                 0, // TransactionsMax
                 0d); // AvgTransactionMs
         }
-
     }
 
     private sealed class ThrowingReadOnlySql92Dialect : Sql92Dialect
@@ -564,7 +563,7 @@ public class TransactionContextTests
         {
         }
 
-        public override Task TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
+        public override ValueTask TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
             CancellationToken cancellationToken = default)
         {
             throw new InvalidOperationException("Simulated read-only session configuration failure.");

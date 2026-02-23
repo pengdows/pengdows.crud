@@ -19,7 +19,7 @@ public class TableGatewayCoreCoverageTests : SqlLiteContextTestBase
         var dialect = ((ISqlDialectProvider)Context).Dialect;
         var sql = "{Q}Name{q} = {S}value";
 
-        var replaced = gateway.ReplaceNeutralTokens(sql);
+        var replaced = dialect.ReplaceNeutralTokens(sql);
 
         var expected = $"{dialect.QuotePrefix}Name{dialect.QuoteSuffix} = {dialect.ParameterMarker}value";
         Assert.Equal(expected, replaced);
@@ -33,8 +33,8 @@ public class TableGatewayCoreCoverageTests : SqlLiteContextTestBase
         var gateway = new TableGateway<CoreCoverageEntity, int>(Context);
 
         var method = typeof(TableGateway<CoreCoverageEntity, int>).GetMethod(
-            "BuildWrappedTableName",
-            BindingFlags.NonPublic | BindingFlags.Instance) ??
+                         "BuildWrappedTableName",
+                         BindingFlags.NonPublic | BindingFlags.Instance) ??
                      throw new InvalidOperationException("Missing helper");
 
         var dialect = ((ISqlDialectProvider)Context).Dialect;
@@ -57,8 +57,8 @@ public class TableGatewayCoreCoverageTests : SqlLiteContextTestBase
         var gateway = new TableGateway<SchemaEntity, int>(Context);
 
         var method = typeof(TableGateway<SchemaEntity, int>).GetMethod(
-            "BuildWrappedTableName",
-            BindingFlags.NonPublic | BindingFlags.Instance) ??
+                         "BuildWrappedTableName",
+                         BindingFlags.NonPublic | BindingFlags.Instance) ??
                      throw new InvalidOperationException("Missing helper");
 
         var dialect = ((ISqlDialectProvider)Context).Dialect;
@@ -80,14 +80,14 @@ public class TableGatewayCoreCoverageTests : SqlLiteContextTestBase
     public void MaterializeDistinctIds_RemovesDuplicatesInOrder()
     {
         var method = typeof(TableGateway<CoreCoverageEntity, int>).GetMethod(
-            "MaterializeDistinctIds",
-            BindingFlags.NonPublic | BindingFlags.Static) ??
+                         "MaterializeDistinctIds",
+                         BindingFlags.NonPublic | BindingFlags.Static) ??
                      throw new InvalidOperationException("Missing helper");
 
-        var input = new[] {1, 2, 2, 3, 1};
-        var result = (System.Collections.Generic.List<int>)method.Invoke(null, new object?[] {input})!;
+        var input = new[] { 1, 2, 2, 3, 1 };
+        var result = (System.Collections.Generic.List<int>)method.Invoke(null, new object?[] { input })!;
 
-        Assert.Equal(new[] {1, 2, 3}, result);
+        Assert.Equal(new[] { 1, 2, 3 }, result);
     }
 
     [Fact]
@@ -95,8 +95,8 @@ public class TableGatewayCoreCoverageTests : SqlLiteContextTestBase
     {
         // TDD: Verify single-element collections use fast path without allocation
         var method = typeof(TableGateway<CoreCoverageEntity, int>).GetMethod(
-            "MaterializeDistinctIds",
-            BindingFlags.NonPublic | BindingFlags.Static) ??
+                         "MaterializeDistinctIds",
+                         BindingFlags.NonPublic | BindingFlags.Static) ??
                      throw new InvalidOperationException("Missing helper");
 
         var input = new System.Collections.Generic.List<int> { 42 };
@@ -112,8 +112,8 @@ public class TableGatewayCoreCoverageTests : SqlLiteContextTestBase
     {
         // TDD: Verify single-element arrays use fast path
         var method = typeof(TableGateway<CoreCoverageEntity, int>).GetMethod(
-            "MaterializeDistinctIds",
-            BindingFlags.NonPublic | BindingFlags.Static) ??
+                         "MaterializeDistinctIds",
+                         BindingFlags.NonPublic | BindingFlags.Static) ??
                      throw new InvalidOperationException("Missing helper");
 
         var input = new[] { 99 };
@@ -129,8 +129,8 @@ public class TableGatewayCoreCoverageTests : SqlLiteContextTestBase
     {
         // TDD: Verify empty collections work correctly
         var method = typeof(TableGateway<CoreCoverageEntity, int>).GetMethod(
-            "MaterializeDistinctIds",
-            BindingFlags.NonPublic | BindingFlags.Static) ??
+                         "MaterializeDistinctIds",
+                         BindingFlags.NonPublic | BindingFlags.Static) ??
                      throw new InvalidOperationException("Missing helper");
 
         var input = new int[] { };
@@ -145,8 +145,8 @@ public class TableGatewayCoreCoverageTests : SqlLiteContextTestBase
     {
         // TDD: Verify two-element case (common for composite keys)
         var method = typeof(TableGateway<CoreCoverageEntity, int>).GetMethod(
-            "MaterializeDistinctIds",
-            BindingFlags.NonPublic | BindingFlags.Static) ??
+                         "MaterializeDistinctIds",
+                         BindingFlags.NonPublic | BindingFlags.Static) ??
                      throw new InvalidOperationException("Missing helper");
 
         var input = new[] { 1, 2 };
@@ -166,7 +166,7 @@ public class TableGatewayCoreCoverageTests : SqlLiteContextTestBase
             "EnsureWritableIdHasValue",
             BindingFlags.NonPublic | BindingFlags.Instance) ?? throw new InvalidOperationException("Missing helper");
 
-        method.Invoke(gateway, new object?[] {entity});
+        method.Invoke(gateway, new object?[] { entity });
 
         Assert.NotEqual(Guid.Empty, entity.Id);
     }
@@ -181,7 +181,7 @@ public class TableGatewayCoreCoverageTests : SqlLiteContextTestBase
             "EnsureWritableIdHasValue",
             BindingFlags.NonPublic | BindingFlags.Instance) ?? throw new InvalidOperationException("Missing helper");
 
-        method.Invoke(gateway, new object?[] {entity});
+        method.Invoke(gateway, new object?[] { entity });
 
         Assert.False(string.IsNullOrWhiteSpace(entity.Id));
     }
@@ -201,8 +201,8 @@ public class TableGatewayCoreCoverageTests : SqlLiteContextTestBase
     {
         TypeMap.Register<CoreCoverageEntity>();
         var method = typeof(TableGateway<CoreCoverageEntity, int>)
-            .GetMethod("IsDefaultId", BindingFlags.NonPublic | BindingFlags.Static)
-            ?? throw new InvalidOperationException("Missing helper");
+                         .GetMethod("IsDefaultId", BindingFlags.NonPublic | BindingFlags.Static)
+                     ?? throw new InvalidOperationException("Missing helper");
 
         Assert.True((bool)method.Invoke(null, new object?[] { 0 })!);
         Assert.False((bool)method.Invoke(null, new object?[] { 42 })!);
@@ -213,8 +213,8 @@ public class TableGatewayCoreCoverageTests : SqlLiteContextTestBase
     public void TryParseMajorVersion_ReturnsMajorDigits()
     {
         var method = typeof(TableGateway<CoreCoverageEntity, int>)
-            .GetMethod("TryParseMajorVersion", BindingFlags.NonPublic | BindingFlags.Static)
-            ?? throw new InvalidOperationException("Missing helper");
+                         .GetMethod("TryParseMajorVersion", BindingFlags.NonPublic | BindingFlags.Static)
+                     ?? throw new InvalidOperationException("Missing helper");
 
         var parameters = new object?[] { "15.3.2", 0 };
         var success = (bool)method.Invoke(null, parameters)!;
@@ -234,8 +234,8 @@ public class TableGatewayCoreCoverageTests : SqlLiteContextTestBase
         var gateway = new TableGateway<SchemaEntity, int>(Context);
         var dialect = ((ISqlDialectProvider)Context).Dialect;
         var method = typeof(TableGateway<SchemaEntity, int>)
-            .GetMethod("BuildWrappedTableName", BindingFlags.NonPublic | BindingFlags.Instance)
-            ?? throw new InvalidOperationException("Missing helper");
+                         .GetMethod("BuildWrappedTableName", BindingFlags.NonPublic | BindingFlags.Instance)
+                     ?? throw new InvalidOperationException("Missing helper");
 
         var wrapped = (string)method.Invoke(gateway, new object?[] { dialect })!;
         var expected = dialect.WrapObjectName("schema") + dialect.CompositeIdentifierSeparator +
@@ -250,8 +250,7 @@ public class TableGatewayCoreCoverageTests : SqlLiteContextTestBase
         [Column("id", DbType.Int32)]
         public int Id { get; set; }
 
-        [Column("name", DbType.String)]
-        public string Name { get; set; } = string.Empty;
+        [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
     }
 
     [Table("core_guid")]
@@ -277,7 +276,6 @@ public class TableGatewayCoreCoverageTests : SqlLiteContextTestBase
         [Column("id", DbType.Int32)]
         public int Id { get; set; }
 
-        [Column("name", DbType.String)]
-        public string Name { get; set; } = string.Empty;
+        [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
     }
 }

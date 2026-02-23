@@ -143,8 +143,7 @@ public class BeginTransactionAsyncTests
         await using var tx = await context.BeginTransactionAsync();
 
         // Nested BeginTransactionAsync should throw
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => ((IDatabaseContext)tx).BeginTransactionAsync());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => ((IDatabaseContext)tx).BeginTransactionAsync());
 
         await tx.CommitAsync();
     }

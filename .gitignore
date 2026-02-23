@@ -31,6 +31,12 @@ benchmarks/CrudBenchmarks/mplconfig/
 benchmarks/**/*results*.txt
 benchmarks/**/*results*.md
 benchmarks/archive/
+*results*.txt
+*results*.csv
+*results*.html
+safety-vs-performance.txt
+test_*.cs
+coveragereport-history/
 
 BenchmarkDotNet.Artifacts/
 node_modules/

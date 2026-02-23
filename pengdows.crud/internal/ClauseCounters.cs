@@ -25,12 +25,12 @@ internal struct ClauseCounters
 {
     // Pre-built name caches: sizes cover all realistic entities.
     // >64 columns is exceptional; >256 batch params falls back to interpolation.
-    private static readonly string[] SetCache   = Build("s",  64);
-    private static readonly string[] WhereCache = Build("w",  64);
-    private static readonly string[] JoinCache  = Build("j",  16);
-    private static readonly string[] KeyCache   = Build("k",  16);
-    private static readonly string[] VerCache   = Build("v",   8);
-    private static readonly string[] InsCache   = Build("i",  64);
+    private static readonly string[] SetCache = Build("s", 64);
+    private static readonly string[] WhereCache = Build("w", 64);
+    private static readonly string[] JoinCache = Build("j", 16);
+    private static readonly string[] KeyCache = Build("k", 16);
+    private static readonly string[] VerCache = Build("v", 8);
+    private static readonly string[] InsCache = Build("i", 64);
     private static readonly string[] BatchCache = Build("b", 256);
 
     private static string[] Build(string prefix, int count)
@@ -52,11 +52,11 @@ internal struct ClauseCounters
     private int _ins;
     private int _batch;
 
-    public string NextSet()   => _set   < SetCache.Length   ? SetCache[_set++]     : $"s{_set++}";
+    public string NextSet() => _set < SetCache.Length ? SetCache[_set++] : $"s{_set++}";
     public string NextWhere() => _where < WhereCache.Length ? WhereCache[_where++] : $"w{_where++}";
-    public string NextJoin()  => _join  < JoinCache.Length  ? JoinCache[_join++]   : $"j{_join++}";
-    public string NextKey()   => _key   < KeyCache.Length   ? KeyCache[_key++]     : $"k{_key++}";
-    public string NextVer()   => _ver   < VerCache.Length   ? VerCache[_ver++]     : $"v{_ver++}";
-    public string NextIns()   => _ins   < InsCache.Length   ? InsCache[_ins++]     : $"i{_ins++}";
+    public string NextJoin() => _join < JoinCache.Length ? JoinCache[_join++] : $"j{_join++}";
+    public string NextKey() => _key < KeyCache.Length ? KeyCache[_key++] : $"k{_key++}";
+    public string NextVer() => _ver < VerCache.Length ? VerCache[_ver++] : $"v{_ver++}";
+    public string NextIns() => _ins < InsCache.Length ? InsCache[_ins++] : $"i{_ins++}";
     public string NextBatch() => _batch < BatchCache.Length ? BatchCache[_batch++] : $"b{_batch++}";
 }

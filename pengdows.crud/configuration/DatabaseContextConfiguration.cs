@@ -116,6 +116,7 @@ public class DatabaseContextConfiguration : IDatabaseContextConfiguration
                     $"MaxConcurrentWrites must be a positive integer (got {value}). " +
                     "Zero or negative values would grant no permits, causing a permanent deadlock.");
             }
+
             _maxConcurrentWrites = value;
         }
     }
@@ -132,6 +133,7 @@ public class DatabaseContextConfiguration : IDatabaseContextConfiguration
                     $"MaxConcurrentReads must be a positive integer (got {value}). " +
                     "Zero or negative values would grant no permits, causing a permanent deadlock.");
             }
+
             _maxConcurrentReads = value;
         }
     }

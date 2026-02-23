@@ -127,8 +127,10 @@ public partial class DatabaseContext
     /// Exposes the internal MetricsCollector for infrastructure use.
     /// </summary>
     MetricsCollector? IMetricsCollectorAccessor.MetricsCollector => _metricsCollector;
+
     MetricsCollector? IMetricsCollectorAccessor.ReadMetricsCollector => _readerMetricsCollector;
     MetricsCollector? IMetricsCollectorAccessor.WriteMetricsCollector => _writerMetricsCollector;
+
     MetricsCollector? IMetricsCollectorAccessor.GetMetricsCollector(ExecutionType executionType)
     {
         return executionType == ExecutionType.Read ? _readerMetricsCollector : _writerMetricsCollector;

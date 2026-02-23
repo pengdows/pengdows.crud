@@ -127,7 +127,7 @@ public class DateTimeOffsetCoercion : DbCoercion<DateTimeOffset>
                 return true;
             case DateTime dt:
                 // Treat as UTC by default for consistency with how we store them
-                value = dt.Kind == DateTimeKind.Unspecified 
+                value = dt.Kind == DateTimeKind.Unspecified
                     ? new DateTimeOffset(DateTime.SpecifyKind(dt, DateTimeKind.Utc))
                     : new DateTimeOffset(dt);
                 return true;

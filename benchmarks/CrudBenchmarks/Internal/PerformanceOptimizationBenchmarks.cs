@@ -181,6 +181,7 @@ public class PerformanceOptimizationBenchmarks
         {
             result = _dialect.WrapObjectName($"column_{i % 5}");
         }
+
         return result;
     }
 
@@ -197,8 +198,10 @@ public class PerformanceOptimizationBenchmarks
                 _structCache.GetOrAdd(new ColumnCacheKey(_dialect, columnName),
                     static k => k.Dialect.WrapObjectName(k.Name));
             }
+
             result = cached;
         }
+
         return result;
     }
 
@@ -236,8 +239,10 @@ public class PerformanceOptimizationBenchmarks
                 cached = _dialect.WrapObjectName(columnName);
                 _tupleCache.TryAdd((_dialect, columnName), cached);
             }
+
             result = cached;
         }
+
         return result;
     }
 
@@ -253,8 +258,10 @@ public class PerformanceOptimizationBenchmarks
             {
                 cached = _structCache.GetOrAdd(key, static k => k.Dialect.WrapObjectName(k.Name));
             }
+
             result = cached;
         }
+
         return result;
     }
 
@@ -327,9 +334,10 @@ public class PerformanceOptimizationBenchmarks
 
         // Simulate old string interpolation approach
         var setClause = $"{dialect.WrapObjectName("first_name")} = @p0, " +
-                       $"{dialect.WrapObjectName("last_name")} = @p1";
+                        $"{dialect.WrapObjectName("last_name")} = @p1";
 
-        var sql = $"UPDATE {dialect.WrapObjectName("test_entities")} SET {setClause} WHERE {dialect.WrapObjectName("id")} = @p2";
+        var sql =
+            $"UPDATE {dialect.WrapObjectName("test_entities")} SET {setClause} WHERE {dialect.WrapObjectName("id")} = @p2";
 
         sc.Query.Append(sql);
         sc.AddParameterWithValue("p0", DbType.String, entity.FirstName);
@@ -350,21 +358,17 @@ public class PerformanceOptimizationBenchmarks
         [Column("id", DbType.Int64)]
         public long Id { get; set; }
 
-        [Column("first_name", DbType.String)]
-        public string FirstName { get; set; } = string.Empty;
+        [Column("first_name", DbType.String)] public string FirstName { get; set; } = string.Empty;
 
-        [Column("last_name", DbType.String)]
-        public string LastName { get; set; } = string.Empty;
+        [Column("last_name", DbType.String)] public string LastName { get; set; } = string.Empty;
 
         [PrimaryKey(1)]
         [Column("email", DbType.String)]
         public string Email { get; set; } = string.Empty;
 
-        [Column("age", DbType.Int32)]
-        public int Age { get; set; }
+        [Column("age", DbType.Int32)] public int Age { get; set; }
 
-        [Column("active", DbType.Boolean)]
-        public bool Active { get; set; }
+        [Column("active", DbType.Boolean)] public bool Active { get; set; }
     }
 
     // ============================================================================
@@ -392,6 +396,7 @@ public class PerformanceOptimizationBenchmarks
             {
                 hash.Add(ch);
             }
+
             return hash.ToHashCode();
         }
 
@@ -405,6 +410,7 @@ public class PerformanceOptimizationBenchmarks
                     return s.AsSpan(1);
                 }
             }
+
             return s.AsSpan();
         }
     }
@@ -442,6 +448,7 @@ public class PerformanceOptimizationBenchmarks
                     return s.AsSpan(1);
                 }
             }
+
             return s.AsSpan();
         }
     }

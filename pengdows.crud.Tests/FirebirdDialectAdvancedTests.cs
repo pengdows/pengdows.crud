@@ -247,14 +247,14 @@ public class FirebirdDialectAdvancedTests
     }
 
     [Fact]
-    public void CreateDbParameter_Should_Convert_Guid_To_Binary()
+    public void CreateDbParameter_Should_Convert_Guid_To_String()
     {
         var guidValue = Guid.NewGuid();
 
         var parameter = _dialect.CreateDbParameter("test", DbType.Guid, guidValue);
 
-        Assert.Equal(DbType.Binary, parameter.DbType);
-        Assert.Equal(guidValue.ToByteArray(), parameter.Value);
+        Assert.Equal(DbType.String, parameter.DbType);
+        Assert.Equal(guidValue.ToString("D"), parameter.Value);
     }
 
     [Fact]

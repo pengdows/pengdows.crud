@@ -34,75 +34,75 @@ public class BrokenMappingBenchmarks : IDisposable
     // ============================================================================
 
     private const string InsertSqlTemplate = """
-        INSERT INTO "Weird Table Names" ("First Name", "Last Name", "Email Address", "Phone Number", "select", "Is Active")
-        VALUES ({firstName}, {lastName}, {emailAddress}, {phoneNumber}, {selectValue}, {isActive})
-        """;
+                                             INSERT INTO "Weird Table Names" ("First Name", "Last Name", "Email Address", "Phone Number", "select", "Is Active")
+                                             VALUES ({firstName}, {lastName}, {emailAddress}, {phoneNumber}, {selectValue}, {isActive})
+                                             """;
 
     private const string SelectSingleSqlTemplate = """
-        SELECT "id", "First Name", "Last Name", "Email Address", "Phone Number", "select", "Is Active"
-        FROM "Weird Table Names"
-        WHERE "id" = {id}
-        """;
+                                                   SELECT "id", "First Name", "Last Name", "Email Address", "Phone Number", "select", "Is Active"
+                                                   FROM "Weird Table Names"
+                                                   WHERE "id" = {id}
+                                                   """;
 
     private const string SelectAllSqlTemplate = """
-        SELECT "id", "First Name", "Last Name", "Email Address", "Phone Number", "select", "Is Active"
-        FROM "Weird Table Names"
-        """;
+                                                SELECT "id", "First Name", "Last Name", "Email Address", "Phone Number", "select", "Is Active"
+                                                FROM "Weird Table Names"
+                                                """;
 
     private const string UpdateSqlTemplate = """
-        UPDATE "Weird Table Names"
-        SET "First Name" = {firstName}, "Last Name" = {lastName}, "Email Address" = {emailAddress},
-            "Phone Number" = {phoneNumber}, "select" = {selectValue}, "Is Active" = {isActive}
-        WHERE "id" = {id}
-        """;
+                                             UPDATE "Weird Table Names"
+                                             SET "First Name" = {firstName}, "Last Name" = {lastName}, "Email Address" = {emailAddress},
+                                                 "Phone Number" = {phoneNumber}, "select" = {selectValue}, "Is Active" = {isActive}
+                                             WHERE "id" = {id}
+                                             """;
 
     private const string DeleteSqlTemplate = """
-        DELETE FROM "Weird Table Names" WHERE "id" = {id}
-        """;
+                                             DELETE FROM "Weird Table Names" WHERE "id" = {id}
+                                             """;
 
     private const string FilteredQuerySqlTemplate = """
-        SELECT "id", "First Name", "Last Name", "Email Address", "Phone Number", "select", "Is Active"
-        FROM "Weird Table Names"
-        WHERE "First Name" LIKE {firstName} AND "Is Active" = {isActive}
-        """;
+                                                    SELECT "id", "First Name", "Last Name", "Email Address", "Phone Number", "select", "Is Active"
+                                                    FROM "Weird Table Names"
+                                                    WHERE "First Name" LIKE {firstName} AND "Is Active" = {isActive}
+                                                    """;
 
     private const string UpsertSqlTemplate = """
-        INSERT INTO "Weird Table Names" ("id", "First Name", "Last Name", "Email Address", "Phone Number", "select", "Is Active")
-        VALUES ({id}, {firstName}, {lastName}, {emailAddress}, {phoneNumber}, {selectValue}, {isActive})
-        ON CONFLICT("id") DO UPDATE SET
-            "First Name" = excluded."First Name",
-            "Last Name" = excluded."Last Name",
-            "Email Address" = excluded."Email Address",
-            "Phone Number" = excluded."Phone Number",
-            "select" = excluded."select",
-            "Is Active" = excluded."Is Active"
-        """;
+                                             INSERT INTO "Weird Table Names" ("id", "First Name", "Last Name", "Email Address", "Phone Number", "select", "Is Active")
+                                             VALUES ({id}, {firstName}, {lastName}, {emailAddress}, {phoneNumber}, {selectValue}, {isActive})
+                                             ON CONFLICT("id") DO UPDATE SET
+                                                 "First Name" = excluded."First Name",
+                                                 "Last Name" = excluded."Last Name",
+                                                 "Email Address" = excluded."Email Address",
+                                                 "Phone Number" = excluded."Phone Number",
+                                                 "select" = excluded."select",
+                                                 "Is Active" = excluded."Is Active"
+                                             """;
 
     private const string AggregateCountSqlTemplate = """
-        SELECT COUNT(*) FROM "Weird Table Names" WHERE "Is Active" = {isActive}
-        """;
+                                                     SELECT COUNT(*) FROM "Weird Table Names" WHERE "Is Active" = {isActive}
+                                                     """;
 
     private const string ReadWithKeywordSqlTemplate = """
-        SELECT "id", "First Name", "Last Name", "Email Address", "Phone Number", "select", "Is Active"
-        FROM "Weird Table Names"
-        WHERE "select" = {selectValue}
-        """;
+                                                      SELECT "id", "First Name", "Last Name", "Email Address", "Phone Number", "select", "Is Active"
+                                                      FROM "Weird Table Names"
+                                                      WHERE "select" = {selectValue}
+                                                      """;
 
     private const string FilterByKeywordSqlTemplate = """
-        SELECT "id", "First Name", "Last Name", "Email Address", "Phone Number", "select", "Is Active"
-        FROM "Weird Table Names"
-        WHERE "select" > {selectValue}
-        """;
+                                                      SELECT "id", "First Name", "Last Name", "Email Address", "Phone Number", "select", "Is Active"
+                                                      FROM "Weird Table Names"
+                                                      WHERE "select" > {selectValue}
+                                                      """;
 
     private const string UpdateKeywordSqlTemplate = """
-        UPDATE "Weird Table Names"
-        SET "select" = {selectValue}
-        WHERE "id" = {id}
-        """;
+                                                    UPDATE "Weird Table Names"
+                                                    SET "select" = {selectValue}
+                                                    WHERE "id" = {id}
+                                                    """;
 
     private const string DeleteByKeywordSqlTemplate = """
-        DELETE FROM "Weird Table Names" WHERE "select" = {selectValue}
-        """;
+                                                      DELETE FROM "Weird Table Names" WHERE "select" = {selectValue}
+                                                      """;
 
     // ============================================================================
     // FIELDS
@@ -325,7 +325,8 @@ public class BrokenMappingBenchmarks : IDisposable
         try
         {
             var sql = BuildFilteredQuerySql(param => $"@{param}");
-            var rows = await _dapperConnection.QueryAsync<DapperWeirdEntity>(sql, new { firstName = "First%", isActive = 1 });
+            var rows = await _dapperConnection.QueryAsync<DapperWeirdEntity>(sql,
+                new { firstName = "First%", isActive = 1 });
             return rows.ToList();
         }
         catch (Exception ex)
@@ -497,7 +498,8 @@ public class BrokenMappingBenchmarks : IDisposable
         try
         {
             var sql = BuildFilteredQuerySql(param => $"@{param}");
-            var rows = await _dapperConnection.QueryAsync<DapperWeirdEntity>(sql, new { firstName = "First1%", isActive = 1 });
+            var rows = await _dapperConnection.QueryAsync<DapperWeirdEntity>(sql,
+                new { firstName = "First1%", isActive = 1 });
             return rows.ToList();
         }
         catch (Exception ex)
@@ -802,10 +804,12 @@ public class BrokenMappingBenchmarks : IDisposable
             await using var container = _pengdowsContext.CreateSqlContainer();
             var sql = BuildInsertSql(param => container.MakeParameterName(param));
             container.Query.Append(sql);
-            BindInsertParameters(container, $"Batch{i}", $"User{i}", $"batch{i}@example.com", $"555-B{i:D3}0", 300 + i, true);
+            BindInsertParameters(container, $"Batch{i}", $"User{i}", $"batch{i}@example.com", $"555-B{i:D3}0", 300 + i,
+                true);
             await container.ExecuteNonQueryAsync();
             count++;
         }
+
         return count;
     }
 
@@ -834,6 +838,7 @@ public class BrokenMappingBenchmarks : IDisposable
                 Console.WriteLine($"[BROKEN] Dapper BatchCreate[{i}]: {ex.Message}");
             }
         }
+
         return count;
     }
 
@@ -861,6 +866,7 @@ public class BrokenMappingBenchmarks : IDisposable
                 Console.WriteLine($"[BROKEN] EF BatchCreate[{i}]: {ex.Message}");
             }
         }
+
         return count;
     }
 
@@ -881,6 +887,7 @@ public class BrokenMappingBenchmarks : IDisposable
             var entity = await _pengdowsHelper.LoadSingleAsync(container);
             if (entity != null) results.Add(entity);
         }
+
         return results;
     }
 
@@ -901,6 +908,7 @@ public class BrokenMappingBenchmarks : IDisposable
                 Console.WriteLine($"[BROKEN] Dapper BatchRead[{id}]: {ex.Message}");
             }
         }
+
         return results;
     }
 
@@ -924,6 +932,7 @@ public class BrokenMappingBenchmarks : IDisposable
                 Console.WriteLine($"[BROKEN] EF BatchRead[{id}]: {ex.Message}");
             }
         }
+
         return results;
     }
 
@@ -1033,11 +1042,11 @@ public class BrokenMappingBenchmarks : IDisposable
     {
         await using var container = _pengdowsContext.CreateSqlContainer();
         var sql = $"""
-            INSERT INTO "Weird Table Names" ("id", "First Name", "Last Name", "Email Address", "Phone Number", "select", "Is Active")
-            VALUES ({container.MakeParameterName("id")}, {container.MakeParameterName("firstName")}, {container.MakeParameterName("lastName")},
-                    {container.MakeParameterName("emailAddress")}, {container.MakeParameterName("phoneNumber")},
-                    {container.MakeParameterName("selectValue")}, {container.MakeParameterName("isActive")})
-            """;
+                   INSERT INTO "Weird Table Names" ("id", "First Name", "Last Name", "Email Address", "Phone Number", "select", "Is Active")
+                   VALUES ({container.MakeParameterName("id")}, {container.MakeParameterName("firstName")}, {container.MakeParameterName("lastName")},
+                           {container.MakeParameterName("emailAddress")}, {container.MakeParameterName("phoneNumber")},
+                           {container.MakeParameterName("selectValue")}, {container.MakeParameterName("isActive")})
+                   """;
         container.Query.Append(sql);
         container.AddParameterWithValue("id", DbType.Int32, id);
         container.AddParameterWithValue("firstName", DbType.String, "ToDelete");
@@ -1053,11 +1062,11 @@ public class BrokenMappingBenchmarks : IDisposable
     {
         await using var container = _pengdowsContext.CreateSqlContainer();
         var sql = $"""
-            INSERT INTO "Weird Table Names" ("id", "First Name", "Last Name", "Email Address", "Phone Number", "select", "Is Active")
-            VALUES ({container.MakeParameterName("id")}, {container.MakeParameterName("firstName")}, {container.MakeParameterName("lastName")},
-                    {container.MakeParameterName("emailAddress")}, {container.MakeParameterName("phoneNumber")},
-                    {container.MakeParameterName("selectValue")}, {container.MakeParameterName("isActive")})
-            """;
+                   INSERT INTO "Weird Table Names" ("id", "First Name", "Last Name", "Email Address", "Phone Number", "select", "Is Active")
+                   VALUES ({container.MakeParameterName("id")}, {container.MakeParameterName("firstName")}, {container.MakeParameterName("lastName")},
+                           {container.MakeParameterName("emailAddress")}, {container.MakeParameterName("phoneNumber")},
+                           {container.MakeParameterName("selectValue")}, {container.MakeParameterName("isActive")})
+                   """;
         container.Query.Append(sql);
         container.AddParameterWithValue("id", DbType.Int32, id);
         container.AddParameterWithValue("firstName", DbType.String, "KeywordDel");
@@ -1189,11 +1198,9 @@ public class BrokenMappingBenchmarks : IDisposable
         [Column("id", DbType.Int32)]
         public int Id { get; set; }
 
-        [Column("First Name", DbType.String)]
-        public string FirstName { get; set; } = string.Empty;
+        [Column("First Name", DbType.String)] public string FirstName { get; set; } = string.Empty;
 
-        [Column("Last Name", DbType.String)]
-        public string LastName { get; set; } = string.Empty;
+        [Column("Last Name", DbType.String)] public string LastName { get; set; } = string.Empty;
 
         [Column("Email Address", DbType.String)]
         public string EmailAddress { get; set; } = string.Empty;
@@ -1201,11 +1208,9 @@ public class BrokenMappingBenchmarks : IDisposable
         [Column("Phone Number", DbType.String)]
         public string? PhoneNumber { get; set; }
 
-        [Column("select", DbType.Int32)]
-        public int Select { get; set; }
+        [Column("select", DbType.Int32)] public int Select { get; set; }
 
-        [Column("Is Active", DbType.Boolean)]
-        public bool IsActive { get; set; }
+        [Column("Is Active", DbType.Boolean)] public bool IsActive { get; set; }
     }
 
     /// <summary>
@@ -1244,7 +1249,9 @@ public class BrokenMappingBenchmarks : IDisposable
     /// </summary>
     public class EfBrokenWeirdContext : DbContext
     {
-        public EfBrokenWeirdContext(DbContextOptions<EfBrokenWeirdContext> options) : base(options) { }
+        public EfBrokenWeirdContext(DbContextOptions<EfBrokenWeirdContext> options) : base(options)
+        {
+        }
 
         public DbSet<EfBrokenWeirdEntity> WeirdEntities { get; set; } = null!;
 

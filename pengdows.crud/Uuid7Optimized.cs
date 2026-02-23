@@ -292,6 +292,7 @@ public static partial class Uuid7Optimized
         {
             tls.Counter = CounterMax + 1;
         }
+
         result = BuildSpecCompliantGuid(usedMs, randA, randB, rfc);
         return true;
     }
@@ -355,6 +356,7 @@ public static partial class Uuid7Optimized
         {
             tls.Counter = CounterMax + 1;
         }
+
         BuildRfcBytes(usedMs, randA, randB, rfc);
         rfc.CopyTo(dest);
     }

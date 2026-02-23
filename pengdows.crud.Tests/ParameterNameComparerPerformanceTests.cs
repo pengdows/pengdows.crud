@@ -35,7 +35,7 @@ public class ParameterNameComparerPerformanceTests : SqlLiteContextTestBase
         using var sc = Context.CreateSqlContainer("SELECT 1");
 
         sc.AddParameterWithValue("UserId", DbType.Int32, 42);
-        sc.AddParameterWithValue("userId", DbType.Int32, 43);  // Different case = different parameter
+        sc.AddParameterWithValue("userId", DbType.Int32, 43); // Different case = different parameter
         sc.AddParameterWithValue("USERID", DbType.Int32, 44);
 
         // Case-sensitive: each variation is a distinct parameter
@@ -55,7 +55,7 @@ public class ParameterNameComparerPerformanceTests : SqlLiteContextTestBase
 
         // Add multiple parameters with similar but distinct names
         sc.AddParameterWithValue("id", DbType.Int32, 1);
-        sc.AddParameterWithValue("Id", DbType.Int32, 2);  // Different case = different parameter
+        sc.AddParameterWithValue("Id", DbType.Int32, 2); // Different case = different parameter
         sc.AddParameterWithValue("name", DbType.String, "Alice");
         sc.AddParameterWithValue("value", DbType.Int32, 100);
         sc.AddParameterWithValue("count", DbType.Int32, 5);

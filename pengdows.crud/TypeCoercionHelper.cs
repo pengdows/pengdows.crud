@@ -76,7 +76,8 @@ public static class TypeCoercionHelper
     /// Cache of compiled type conversion delegates for faster Convert.ChangeType operations.
     /// Key: (sourceType, targetType), Value: compiled converter function.
     /// </summary>
-    private static readonly ConcurrentDictionary<(Type source, Type target), Func<object, object>> _conversionCache = new();
+    private static readonly ConcurrentDictionary<(Type source, Type target), Func<object, object>> _conversionCache =
+        new();
 
     private static ILogger _logger = NullLogger.Instance;
 
@@ -258,6 +259,24 @@ public static class TypeCoercionHelper
     {
         var underlyingTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
 
+        // Handle empty strings for non-string types
+        if (value is string s && string.IsNullOrWhiteSpace(s) && underlyingTarget != typeof(string))
+        {
+            if (underlyingTarget == typeof(decimal)) return 0m;
+            if (underlyingTarget == typeof(Guid)) return Guid.Empty;
+            if (underlyingTarget == typeof(DateTime)) return default(DateTime);
+            if (underlyingTarget == typeof(DateTimeOffset)) return default(DateTimeOffset);
+            if (underlyingTarget == typeof(int)) return 0;
+            if (underlyingTarget == typeof(long)) return 0L;
+            if (underlyingTarget == typeof(double)) return 0d;
+            if (underlyingTarget == typeof(float)) return 0f;
+            if (underlyingTarget == typeof(bool)) return false;
+            if (underlyingTarget == typeof(short)) return (short)0;
+            if (underlyingTarget == typeof(byte)) return (byte)0;
+            
+            return IsNumericClrType(underlyingTarget) ? Activator.CreateInstance(underlyingTarget) : null;
+        }
+
         // Don't take fast path for DateTime types as they may need UTC conversion
         if (underlyingTarget.IsInstanceOfType(value) && underlyingTarget != typeof(DateTime) &&
             underlyingTarget != typeof(DateTimeOffset))
@@ -309,6 +328,27 @@ public static class TypeCoercionHelper
         catch (Exception ex)
         {
             throw new InvalidCastException($"Cannot convert value '{value}' ({sourceType}) to {targetType}.", ex);
+        }
+    }
+
+    private static bool IsNumericClrType(Type type)
+    {
+        switch (Type.GetTypeCode(type))
+        {
+            case TypeCode.Byte:
+            case TypeCode.SByte:
+            case TypeCode.UInt16:
+            case TypeCode.UInt32:
+            case TypeCode.UInt64:
+            case TypeCode.Int16:
+            case TypeCode.Int32:
+            case TypeCode.Int64:
+            case TypeCode.Decimal:
+            case TypeCode.Double:
+            case TypeCode.Single:
+                return true;
+            default:
+                return false;
         }
     }
 
@@ -855,7 +895,8 @@ public static class TypeCoercionHelper
 
         if (runtimeTarget == typeof(DateTimeOffset))
         {
-            return value => Utils.IsNullOrDbNull(value) ? null : CoerceDateTimeOffset(value!, TypeCoercionOptions.Default);
+            return value =>
+                Utils.IsNullOrDbNull(value) ? null : CoerceDateTimeOffset(value!, TypeCoercionOptions.Default);
         }
 
         if (runtimeTarget == typeof(DateTime))

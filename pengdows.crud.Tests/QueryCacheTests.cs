@@ -111,7 +111,8 @@ public class QueryCacheTests : SqlLiteContextTestBase
         // to prevent cross-dialect cache pollution (e.g. SQLite "@" vs PostgreSQL ":" markers).
         Assert.False(cache.ContainsKey(wrapped), "Single-ID clause is in CachedSqlTemplates, not _queryCache");
         // Multi-ID uses "WhereQuery:{col}:{bucket}" in _queryCache.
-        Assert.True(cache.ContainsKey($"WhereQuery:{wrapped}:2"), "Two-ID clause should be cached under WhereQuery key");
+        Assert.True(cache.ContainsKey($"WhereQuery:{wrapped}:2"),
+            "Two-ID clause should be cached under WhereQuery key");
         // SQL output is structurally different (equality vs IN-list).
         Assert.NotEqual(sc1.Query.ToString(), sc2.Query.ToString());
     }
@@ -197,7 +198,8 @@ public class QueryCacheTests : SqlLiteContextTestBase
         // to prevent cross-dialect cache pollution (e.g. SQLite "@" vs PostgreSQL ":" markers).
         Assert.False(cache.ContainsKey(wrapped), $"Single-ID clause should be in CachedSqlTemplates, not _queryCache");
         // Multi-ID (count=2) caches the IN-list clause under "WhereQuery:{col}:2".
-        Assert.True(cache.ContainsKey($"WhereQuery:{wrapped}:2"), $"Two-ID clause should be cached under WhereQuery key");
+        Assert.True(cache.ContainsKey($"WhereQuery:{wrapped}:2"),
+            $"Two-ID clause should be cached under WhereQuery key");
     }
 
     [Fact]

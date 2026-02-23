@@ -221,7 +221,8 @@ public class TestTableCreator
                     {fromCol} TEXT,
                     {userCol} TEXT
                 )",
-            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb or SupportedDatabase.Snowflake => $@"
+            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb
+                or SupportedDatabase.Snowflake => $@"
                 CREATE TABLE IF NOT EXISTS {table} (
                     {idCol} BIGINT PRIMARY KEY,
                     {selectCol} VARCHAR(255),
@@ -289,7 +290,11 @@ public class TestTableCreator
                 await fbContainer.ExecuteNonQueryAsync();
                 tx.Commit();
             }
-            catch (Exception ex) when (ex.Message.Contains("already exists")) { /* ignore */ }
+            catch (Exception ex) when (ex.Message.Contains("already exists"))
+            {
+                /* ignore */
+            }
+
             return;
         }
 

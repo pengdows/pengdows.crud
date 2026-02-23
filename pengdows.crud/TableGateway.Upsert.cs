@@ -126,58 +126,33 @@ public partial class TableGateway<TEntity, TRowID>
         var dialect = GetDialect(ctx);
         PrepareForInsertOrUpsert(entity);
 
-        var insertableColumns = GetCachedInsertableColumns();
         var template = GetTemplatesForDialect(dialect);
+        var binder = GetOrBuildUpsertBinder(dialect, template);
 
-        // Use SbLites instead of List<string> for column/value lists — eliminates two heap allocations.
+        // Use pre-built column/value lists from template - NO MORE DYNAMIC LOOP
         var colSb = SbLite.Create(stackalloc char[512]);
-        var valSb = SbLite.Create(stackalloc char[256]);
-        var parameters = new List<DbParameter>(insertableColumns.Count);
-        var counters = new ClauseCounters();
-
-        foreach (var column in insertableColumns)
+        var valSb = SbLite.Create(stackalloc char[512]);
+        
+        for (var i = 0; i < template.UpsertColumns.Count; i++)
         {
-            var value = column.MakeParameterValueFromField(entity);
-
-            if (_auditValueResolver == null && (column.IsCreatedBy || column.IsLastUpdatedBy) &&
-                Utils.IsNullOrDbNull(value))
+            if (i > 0)
             {
-                continue;
+                colSb.Append(", ");
+                valSb.Append(", ");
             }
-
-            if (colSb.Length > 0) colSb.Append(", ");
-            if (valSb.Length > 0) valSb.Append(", ");
-            colSb.Append(dialect.WrapObjectName(column.Name));
-
-            if (Utils.IsNullOrDbNull(value))
+            colSb.Append(dialect.WrapSimpleName(template.UpsertColumns[i].Name));
+            
+            var pName = template.UpsertParameterNames[i];
+            var placeholder = dialect.MakeParameterName(pName);
+            if (template.UpsertColumns[i].IsJsonType)
             {
-                valSb.Append("NULL");
+                placeholder = dialect.RenderJsonArgument(placeholder, template.UpsertColumns[i]);
             }
-            else
-            {
-                var name = counters.NextIns();
-                var p = dialect.CreateDbParameter(name, column.DbType, value);
-                if (column.IsJsonType)
-                {
-                    dialect.TryMarkJsonParameter(p, column);
-                }
-
-                parameters.Add(p);
-                if (column.IsJsonType)
-                {
-                    valSb.Append(dialect.RenderJsonArgument(dialect.MakeParameterName(name), column));
-                }
-                else if (dialect.SupportsNamedParameters)
-                {
-                    valSb.Append(dialect.ParameterMarker);
-                    valSb.Append(name);
-                }
-                else
-                {
-                    valSb.Append('?');
-                }
-            }
+            valSb.Append(placeholder);
         }
+
+        var parameters = new List<DbParameter>(template.UpsertColumns.Count);
+        binder(entity, parameters);
 
         var keys = _tableInfo.PrimaryKeys;
         if (_idColumn == null && keys.Count == 0)
@@ -199,7 +174,7 @@ public partial class TableGateway<TEntity, TRowID>
         for (var i = 0; i < conflictCols.Count; i++)
         {
             if (i > 0) sc.Query.Append(", ");
-            sc.Query.Append(dialect.WrapObjectName(conflictCols[i].Name));
+            sc.Query.Append(dialect.WrapSimpleName(conflictCols[i].Name));
         }
 
         sc.Query.Append(") DO UPDATE SET ")
@@ -256,51 +231,32 @@ public partial class TableGateway<TEntity, TRowID>
         PrepareForInsertOrUpsert(entity);
 
         var template = GetTemplatesForDialect(dialect);
-        var capacity = _tableInfo.OrderedColumns.Count;
+        var binder = GetOrBuildUpsertBinder(dialect, template);
 
-        // Use SbLites instead of List<string> for column/value lists — eliminates two heap allocations.
+        // Use pre-built column/value lists from template - NO MORE DYNAMIC LOOP
         var colSb = SbLite.Create(stackalloc char[512]);
-        var valSb = SbLite.Create(stackalloc char[256]);
-        var parameters = new List<DbParameter>(capacity);
-        var counters = new ClauseCounters();
-
-        foreach (var column in _tableInfo.OrderedColumns)
+        var valSb = SbLite.Create(stackalloc char[512]);
+        
+        for (var i = 0; i < template.UpsertColumns.Count; i++)
         {
-            var value = column.MakeParameterValueFromField(entity);
-
-            if (colSb.Length > 0) colSb.Append(", ");
-            if (valSb.Length > 0) valSb.Append(", ");
-            colSb.Append(dialect.WrapObjectName(column.Name));
-
-            if (Utils.IsNullOrDbNull(value))
+            if (i > 0)
             {
-                valSb.Append(FormatFirebirdValueExpression("NULL", column));
+                colSb.Append(", ");
+                valSb.Append(", ");
             }
-            else
+            colSb.Append(dialect.WrapSimpleName(template.UpsertColumns[i].Name));
+            
+            var pName = template.UpsertParameterNames[i];
+            var placeholder = dialect.MakeParameterName(pName);
+            if (template.UpsertColumns[i].IsJsonType)
             {
-                var name = counters.NextIns();
-                var p = dialect.CreateDbParameter(name, column.DbType, value);
-                if (column.IsJsonType)
-                {
-                    dialect.TryMarkJsonParameter(p, column);
-                }
-
-                parameters.Add(p);
-                if (column.IsJsonType)
-                {
-                    valSb.Append(dialect.RenderJsonArgument(dialect.MakeParameterName(name), column));
-                }
-                else if (dialect.SupportsNamedParameters)
-                {
-                    valSb.Append(dialect.ParameterMarker);
-                    valSb.Append(name);
-                }
-                else
-                {
-                    valSb.Append('?');
-                }
+                placeholder = dialect.RenderJsonArgument(placeholder, template.UpsertColumns[i]);
             }
+            valSb.Append(placeholder);
         }
+
+        var parameters = new List<DbParameter>(template.UpsertColumns.Count);
+        binder(entity, parameters);
 
         var keys = _tableInfo.PrimaryKeys;
         if (_idColumn == null && keys.Count == 0)
@@ -320,7 +276,7 @@ public partial class TableGateway<TEntity, TRowID>
         var incomingAlias = dialect.UpsertIncomingAlias;
         if (!string.IsNullOrEmpty(incomingAlias))
         {
-            sc.Query.Append(" AS ").Append(dialect.WrapObjectName(incomingAlias));
+            sc.Query.Append(" AS ").Append(dialect.WrapSimpleName(incomingAlias));
         }
 
         sc.Query.Append(" ON DUPLICATE KEY UPDATE ")
@@ -342,54 +298,35 @@ public partial class TableGateway<TEntity, TRowID>
 
         PrepareForInsertOrUpsert(entity);
 
-        var capacity = _tableInfo.OrderedColumns.Count;
+        var template = GetTemplatesForDialect(dialect);
+        var binder = GetOrBuildUpsertBinder(dialect, template);
 
-        // Use SbLites instead of List<string> for src columns and values — eliminates two heap allocations.
+        // Use pre-built column/value lists from template - NO MORE DYNAMIC LOOP
         var srcColSb = SbLite.Create(stackalloc char[512]);
-        var valSb    = SbLite.Create(stackalloc char[256]);
-        var parameters = new List<DbParameter>(capacity);
-        var counters = new ClauseCounters();
-
-        foreach (var column in _tableInfo.OrderedColumns)
+        var valSb = SbLite.Create(stackalloc char[512]);
+        
+        for (var i = 0; i < template.UpsertColumns.Count; i++)
         {
-            var value = column.MakeParameterValueFromField(entity);
-
-            if (srcColSb.Length > 0) srcColSb.Append(", ");
-            if (valSb.Length > 0) valSb.Append(", ");
-            srcColSb.Append(dialect.WrapObjectName(column.Name));
-
-            if (Utils.IsNullOrDbNull(value))
+            if (i > 0)
             {
-                valSb.Append("NULL");
+                srcColSb.Append(", ");
+                valSb.Append(", ");
             }
-            else
+            srcColSb.Append(dialect.WrapSimpleName(template.UpsertColumns[i].Name));
+            
+            var pName = template.UpsertParameterNames[i];
+            var placeholder = dialect.MakeParameterName(pName);
+            if (template.UpsertColumns[i].IsJsonType)
             {
-                var name = counters.NextIns();
-                var p = dialect.CreateDbParameter(name, column.DbType, value);
-                if (column.IsJsonType)
-                {
-                    dialect.TryMarkJsonParameter(p, column);
-                }
-
-                parameters.Add(p);
-                if (column.IsJsonType)
-                {
-                    valSb.Append(dialect.RenderJsonArgument(dialect.MakeParameterName(name), column));
-                }
-                else if (dialect.SupportsNamedParameters)
-                {
-                    valSb.Append(dialect.ParameterMarker);
-                    valSb.Append(name);
-                }
-                else
-                {
-                    valSb.Append('?');
-                }
+                placeholder = dialect.RenderJsonArgument(placeholder, template.UpsertColumns[i]);
             }
+            valSb.Append(placeholder);
         }
 
+        var parameters = new List<DbParameter>(template.UpsertColumns.Count);
+        binder(entity, parameters);
+
         var insertableColumns = GetCachedInsertableColumns();
-        var template = GetTemplatesForDialect(dialect);
 
         // Use SbLites for insert columns and their s.col aliases — eliminates two List<string> allocations.
         var insertColSb = SbLite.Create(stackalloc char[512]);
@@ -398,7 +335,7 @@ public partial class TableGateway<TEntity, TRowID>
         {
             if (insertColSb.Length > 0) insertColSb.Append(", ");
             if (insertValSb.Length > 0) insertValSb.Append(", ");
-            var wrapped = dialect.WrapObjectName(column.Name);
+            var wrapped = dialect.WrapSimpleName(column.Name);
             insertColSb.Append(wrapped);
             insertValSb.Append("s.");
             insertValSb.Append(wrapped);
@@ -420,10 +357,10 @@ public partial class TableGateway<TEntity, TRowID>
             }
 
             join.Append("t.");
-            join.Append(dialect.WrapObjectName(joinCols[i].Name));
+            join.Append(dialect.WrapSimpleName(joinCols[i].Name));
             join.Append(SqlFragments.EqualsOp);
             join.Append("s.");
-            join.Append(dialect.WrapObjectName(joinCols[i].Name));
+            join.Append(dialect.WrapSimpleName(joinCols[i].Name));
         }
 
         var sc = ctx.CreateSqlContainer();
@@ -454,51 +391,33 @@ public partial class TableGateway<TEntity, TRowID>
 
         PrepareForInsertOrUpsert(entity);
 
-        var insertableColumns = GetCachedInsertableColumns();
+        var template = GetTemplatesForDialect(dialect);
+        var binder = GetOrBuildUpsertBinder(dialect, template);
 
-        // Use SbLites instead of List<string> — eliminates two heap allocations.
+        // Use pre-built column/value lists from template - NO MORE DYNAMIC LOOP
         var insertColSb = SbLite.Create(stackalloc char[512]);
-        var valSb = SbLite.Create(stackalloc char[256]);
-        var parameters = new List<DbParameter>(insertableColumns.Count);
-        var counters = new ClauseCounters();
-
-        foreach (var column in insertableColumns)
+        var valSb = SbLite.Create(stackalloc char[512]);
+        
+        for (var i = 0; i < template.UpsertColumns.Count; i++)
         {
-            var value = column.MakeParameterValueFromField(entity);
-
-            if (insertColSb.Length > 0) insertColSb.Append(", ");
-            if (valSb.Length > 0) valSb.Append(", ");
-            insertColSb.Append(dialect.WrapObjectName(column.Name));
-
-            if (Utils.IsNullOrDbNull(value))
+            if (i > 0)
             {
-                valSb.Append("NULL");
+                insertColSb.Append(", ");
+                valSb.Append(", ");
             }
-            else
+            insertColSb.Append(dialect.WrapSimpleName(template.UpsertColumns[i].Name));
+            
+            var pName = template.UpsertParameterNames[i];
+            var placeholder = dialect.MakeParameterName(pName);
+            if (template.UpsertColumns[i].IsJsonType)
             {
-                var name = counters.NextIns();
-                var p = dialect.CreateDbParameter(name, column.DbType, value);
-                if (column.IsJsonType)
-                {
-                    dialect.TryMarkJsonParameter(p, column);
-                }
-
-                parameters.Add(p);
-                if (column.IsJsonType)
-                {
-                    valSb.Append(dialect.RenderJsonArgument(dialect.MakeParameterName(name), column));
-                }
-                else if (dialect.SupportsNamedParameters)
-                {
-                    valSb.Append(dialect.ParameterMarker);
-                    valSb.Append(name);
-                }
-                else
-                {
-                    valSb.Append('?');
-                }
+                placeholder = dialect.RenderJsonArgument(placeholder, template.UpsertColumns[i]);
             }
+            valSb.Append(placeholder);
         }
+
+        var parameters = new List<DbParameter>(template.UpsertColumns.Count);
+        binder(entity, parameters);
 
         var keys = _tableInfo.PrimaryKeys;
         if (_idColumn == null && keys.Count == 0)
@@ -523,7 +442,7 @@ public partial class TableGateway<TEntity, TRowID>
                 sc.Query.Append(", ");
             }
 
-            sc.Query.Append(dialect.WrapObjectName(joinCols[i].Name));
+            sc.Query.Append(dialect.WrapSimpleName(joinCols[i].Name));
         }
 
         sc.Query.Append(");");

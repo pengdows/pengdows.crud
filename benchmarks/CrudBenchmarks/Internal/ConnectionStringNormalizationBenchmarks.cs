@@ -18,7 +18,9 @@ public class ConnectionStringNormalizationBenchmarks
         string readOnlySuffix,
         out Dictionary<string, string> normalized);
 
-    private const string ConnectionString = "Server=test;Database=benchmark;User Id=app;Password=secret;Application Name=tracing:ro";
+    private const string ConnectionString =
+        "Server=test;Database=benchmark;User Id=app;Password=secret;Application Name=tracing:ro";
+
     private readonly TryNormalize _normalize;
 
     public ConnectionStringNormalizationBenchmarks()

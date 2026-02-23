@@ -118,7 +118,13 @@ public class CoverageGapTests_Infrastructure
         public int MaxOutputParameters => 2100;
         public long NumberOfOpenConnections => 0;
         public DatabaseMetrics Metrics => throw new NotImplementedException();
-        public event EventHandler<DatabaseMetrics> MetricsUpdated { add { } remove { } }
+
+        public event EventHandler<DatabaseMetrics> MetricsUpdated
+        {
+            add { }
+            remove { }
+        }
+
         public SupportedDatabase Product => SupportedDatabase.Sqlite;
         public long PeakOpenConnections => 0;
         public bool? ForceManualPrepare => null;
@@ -134,22 +140,50 @@ public class CoverageGapTests_Infrastructure
 
         public ILockerAsync GetLock() => throw new NotImplementedException();
         public ISqlContainer CreateSqlContainer(string? query = null) => throw new NotImplementedException();
-        public DbParameter CreateDbParameter<T>(string? name, DbType type, T value) => throw new NotImplementedException();
-        public DbParameter CreateDbParameter<T>(string? name, DbType type, T value, ParameterDirection direction) => throw new NotImplementedException();
+
+        public DbParameter CreateDbParameter<T>(string? name, DbType type, T value) =>
+            throw new NotImplementedException();
+
+        public DbParameter CreateDbParameter<T>(string? name, DbType type, T value, ParameterDirection direction) =>
+            throw new NotImplementedException();
+
         public DbParameter CreateDbParameter<T>(DbType type, T value) => throw new NotImplementedException();
         public string WrapObjectName(string name) => throw new NotImplementedException();
         public string MakeParameterName(DbParameter dbParameter) => throw new NotImplementedException();
         public string MakeParameterName(string parameterName) => throw new NotImplementedException();
-        public ITransactionContext BeginTransaction(IsolationLevel? isolationLevel = null, ExecutionType executionType = ExecutionType.Write, bool? readOnly = null) => throw new NotImplementedException();
-        public ITransactionContext BeginTransaction(IsolationProfile isolationProfile, ExecutionType executionType = ExecutionType.Write, bool? readOnly = null) => throw new NotImplementedException();
-        public Task<ITransactionContext> BeginTransactionAsync(IsolationLevel? isolationLevel = null, ExecutionType executionType = ExecutionType.Write, bool? readOnly = null, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-        public Task<ITransactionContext> BeginTransactionAsync(IsolationProfile isolationProfile, ExecutionType executionType = ExecutionType.Write, bool? readOnly = null, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-        public string GenerateRandomName(int length = 5, int parameterNameMaxLength = 30) => throw new NotImplementedException();
+
+        public ITransactionContext BeginTransaction(IsolationLevel? isolationLevel = null,
+            ExecutionType executionType = ExecutionType.Write, bool? readOnly = null) =>
+            throw new NotImplementedException();
+
+        public ITransactionContext BeginTransaction(IsolationProfile isolationProfile,
+            ExecutionType executionType = ExecutionType.Write, bool? readOnly = null) =>
+            throw new NotImplementedException();
+
+        public Task<ITransactionContext> BeginTransactionAsync(IsolationLevel? isolationLevel = null,
+            ExecutionType executionType = ExecutionType.Write, bool? readOnly = null,
+            CancellationToken cancellationToken = default) => throw new NotImplementedException();
+
+        public Task<ITransactionContext> BeginTransactionAsync(IsolationProfile isolationProfile,
+            ExecutionType executionType = ExecutionType.Write, bool? readOnly = null,
+            CancellationToken cancellationToken = default) => throw new NotImplementedException();
+
+        public string GenerateRandomName(int length = 5, int parameterNameMaxLength = 30) =>
+            throw new NotImplementedException();
+
         public void AssertIsWriteConnection() => throw new NotImplementedException();
         public void AssertIsReadConnection() => throw new NotImplementedException();
-        public void CloseAndDisposeConnection(ITrackedConnection? conn) { }
+
+        public void CloseAndDisposeConnection(ITrackedConnection? conn)
+        {
+        }
+
         public ValueTask CloseAndDisposeConnectionAsync(ITrackedConnection? conn) => default;
-        public void Dispose() { }
+
+        public void Dispose()
+        {
+        }
+
         public ValueTask DisposeAsync() => default;
     }
 
@@ -158,8 +192,8 @@ public class CoverageGapTests_Infrastructure
     {
         IDatabaseContext stub = new NonProviderDatabaseContextStub();
 
-        var ex = Assert.Throws<InvalidOperationException>(
-            () => InternalConnectionExtensions.GetConnection(stub, ExecutionType.Read));
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            InternalConnectionExtensions.GetConnection(stub, ExecutionType.Read));
 
         Assert.Contains("IDatabaseContext must provide internal connection access", ex.Message);
     }
@@ -210,8 +244,8 @@ public class CoverageGapTests_Infrastructure
     {
         IDatabaseContext stub = new NonProviderDatabaseContextStub();
 
-        var ex = Assert.Throws<InvalidOperationException>(
-            () => DatabaseContextTypeMapExtensions.GetInternalTypeMapRegistry(stub));
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            DatabaseContextTypeMapExtensions.GetInternalTypeMapRegistry(stub));
 
         Assert.Contains("IDatabaseContext does not expose an internal TypeMapRegistry", ex.Message);
     }
@@ -232,8 +266,8 @@ public class CoverageGapTests_Infrastructure
     {
         IDatabaseContext stub = new NonProviderDatabaseContextStub();
 
-        Assert.Throws<InvalidOperationException>(
-            () => DatabaseContextTypeMapExtensions.RegisterEntity<SimpleTestEntity>(stub));
+        Assert.Throws<InvalidOperationException>(() =>
+            DatabaseContextTypeMapExtensions.RegisterEntity<SimpleTestEntity>(stub));
     }
 
     [Fact]
@@ -272,7 +306,8 @@ public class CoverageGapTests_Infrastructure
         Assert.Null(config.MaxConcurrentWrites);
         Assert.Null(config.MaxConcurrentReads);
         Assert.True(config.EnableSingleWriterFairness);
-        Assert.Equal(TimeSpan.FromSeconds(DatabaseContextConfiguration.DefaultPoolAcquireSeconds), config.PoolAcquireTimeout);
+        Assert.Equal(TimeSpan.FromSeconds(DatabaseContextConfiguration.DefaultPoolAcquireSeconds),
+            config.PoolAcquireTimeout);
         Assert.Equal(TimeSpan.FromSeconds(DatabaseContextConfiguration.DefaultModeLockSeconds), config.ModeLockTimeout);
         Assert.Equal(string.Empty, config.ApplicationName);
     }

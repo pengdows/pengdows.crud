@@ -35,9 +35,12 @@ public class TransactionResilienceTests : DatabaseTestBase
             await using (var tx = context.BeginTransaction())
             {
                 await helper.CreateAsync(new TestTable { Id = id, Name = NameEnum.Test, Value = 1 }, tx);
-                
+
                 // Verify row exists inside transaction
-                var countInside = await tx.CreateSqlContainer($"SELECT COUNT(*) FROM {context.WrapObjectName("test_table")} WHERE {context.WrapObjectName("id")} = {id}").ExecuteScalarRequiredAsync<long>();
+                var countInside = await tx
+                    .CreateSqlContainer(
+                        $"SELECT COUNT(*) FROM {context.WrapObjectName("test_table")} WHERE {context.WrapObjectName("id")} = {id}")
+                    .ExecuteScalarRequiredAsync<long>();
                 Assert.Equal(1, countInside);
 
                 // 2. Simulate failure (letting DisposeAsync handle the implicit rollback)
@@ -45,12 +48,16 @@ public class TransactionResilienceTests : DatabaseTestBase
             }
 
             // 3. Assert rollback: row should NOT exist in the main context
-            var countAfter = await context.CreateSqlContainer($"SELECT COUNT(*) FROM {context.WrapObjectName("test_table")} WHERE {context.WrapObjectName("id")} = {id}").ExecuteScalarRequiredAsync<long>();
+            var countAfter = await context
+                .CreateSqlContainer(
+                    $"SELECT COUNT(*) FROM {context.WrapObjectName("test_table")} WHERE {context.WrapObjectName("id")} = {id}")
+                .ExecuteScalarRequiredAsync<long>();
             Assert.Equal(0, countAfter);
 
             // 4. Verify connection reuse: insert a new row on the main context (should work)
             var newId = id + 1;
-            var success = await helper.CreateAsync(new TestTable { Id = newId, Name = NameEnum.Test2, Value = 2 }, context);
+            var success =
+                await helper.CreateAsync(new TestTable { Id = newId, Name = NameEnum.Test2, Value = 2 }, context);
             Assert.True(success);
 
             var retrieved = await helper.RetrieveOneAsync(newId, context);

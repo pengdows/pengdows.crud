@@ -154,14 +154,65 @@ public class ContextDialectAndLockTimeoutTests
     }
 
     // -------------------------------------------------------------------------
+    // ISqlDialect.TryEnterReadOnlyTransactionAsync must return ValueTask
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void ISqlDialect_TryEnterReadOnlyTransactionAsync_ReturnsValueTask()
+    {
+        var method = typeof(ISqlDialect).GetMethod(
+            "TryEnterReadOnlyTransactionAsync",
+            BindingFlags.Public | BindingFlags.Instance);
+        Assert.NotNull(method);
+        Assert.Equal(typeof(ValueTask), method!.ReturnType);
+    }
+
+    // -------------------------------------------------------------------------
+    // ISqlDialect.WrapSimpleName — fast path for attribute-sourced identifiers
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void ISqlDialect_HasWrapSimpleName_Method()
+    {
+        var method = typeof(ISqlDialect).GetMethod(
+            "WrapSimpleName",
+            BindingFlags.Public | BindingFlags.Instance);
+        Assert.NotNull(method);
+        Assert.Equal(typeof(string), method!.ReturnType);
+    }
+
+    [Fact]
+    public void ISqlDialect_WrapSimpleName_ReturnsQuotePrefixNameQuoteSuffix()
+    {
+        using var ctx = MakeContext();
+        var dialect = ctx.Dialect!;
+        var expected = dialect.QuotePrefix + "my_col" + dialect.QuoteSuffix;
+        Assert.Equal(expected, dialect.WrapSimpleName("my_col"));
+    }
+
+    [Fact]
+    public void ISqlDialect_WrapSimpleName_MatchesWrapObjectNameForSimpleIdentifiers()
+    {
+        using var ctx = MakeContext();
+        var dialect = ctx.Dialect!;
+        // For simple single-part names, WrapSimpleName must produce the same result as WrapObjectName.
+        Assert.Equal(dialect.WrapObjectName("my_col"), dialect.WrapSimpleName("my_col"));
+    }
+
+    // -------------------------------------------------------------------------
     // TableGateway accesses Dialect via context.Dialect, not internal cast
     // -------------------------------------------------------------------------
 
     [Table("DialectAccessEntity")]
     private class DialectAccessEntity
     {
-        [Id(false)][Column("Id", DbType.Int32)] public int Id { get; set; }
-        [PrimaryKey(1)][Column("Name", DbType.String)] public string Name { get; set; } = "";
+        [Id(false)]
+        [Column("Id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [PrimaryKey(1)]
+        [Column("Name", DbType.String)]
+        public string Name { get; set; } = "";
     }
 
     [Fact]

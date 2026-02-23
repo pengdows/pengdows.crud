@@ -255,7 +255,6 @@ WHERE {nameColumn} = ");
         [Column("id", DbType.Int64)]
         public long Id { get; set; }
 
-        [Column("name", DbType.String)]
-        public string Name { get; set; } = string.Empty;
+        [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
     }
 }

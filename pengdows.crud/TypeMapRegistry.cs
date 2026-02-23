@@ -547,9 +547,9 @@ public sealed class TypeMapRegistry : ITypeMapRegistry
     private static bool IsNumericClrType(Type type)
     {
         return type == typeof(byte) || type == typeof(sbyte)
-            || type == typeof(short) || type == typeof(ushort)
-            || type == typeof(int) || type == typeof(uint)
-            || type == typeof(long) || type == typeof(ulong);
+                                    || type == typeof(short) || type == typeof(ushort)
+                                    || type == typeof(int) || type == typeof(uint)
+                                    || type == typeof(long) || type == typeof(ulong);
     }
 
     private static void ValidateTimestampColumn(Type entityType, IColumnInfo? column)

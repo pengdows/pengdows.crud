@@ -51,8 +51,7 @@ public class EqualFootingCrudBenchmarks : IDisposable
     private int _batchIdSeed = 200_000;
     private bool _originalMatchNamesWithUnderscores;
 
-    [Params(1, 10, 100)]
-    public int RecordCount { get; set; }
+    [Params(1, 10, 100)] public int RecordCount { get; set; }
 
     // ========================================================================
     // SETUP / TEARDOWN
@@ -946,20 +945,15 @@ public class EqualFootingCrudBenchmarks : IDisposable
         [Column("id", DbType.Int32)]
         public int Id { get; set; }
 
-        [Column("name", DbType.String)]
-        public string Name { get; set; } = string.Empty;
+        [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
 
-        [Column("age", DbType.Int32)]
-        public int Age { get; set; }
+        [Column("age", DbType.Int32)] public int Age { get; set; }
 
-        [Column("salary", DbType.Double)]
-        public double Salary { get; set; }
+        [Column("salary", DbType.Double)] public double Salary { get; set; }
 
-        [Column("is_active", DbType.Boolean)]
-        public bool IsActive { get; set; }
+        [Column("is_active", DbType.Boolean)] public bool IsActive { get; set; }
 
-        [Column("created_at", DbType.String)]
-        public string CreatedAt { get; set; } = string.Empty;
+        [Column("created_at", DbType.String)] public string CreatedAt { get; set; } = string.Empty;
     }
 
     // ========================================================================
@@ -975,20 +969,15 @@ public class EqualFootingCrudBenchmarks : IDisposable
         [Column("id", DbType.Int64)]
         public long Id { get; set; }
 
-        [Column("name", DbType.String)]
-        public string Name { get; set; } = string.Empty;
+        [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
 
-        [Column("age", DbType.Int64)]
-        public long Age { get; set; }
+        [Column("age", DbType.Int64)] public long Age { get; set; }
 
-        [Column("salary", DbType.Double)]
-        public double Salary { get; set; }
+        [Column("salary", DbType.Double)] public double Salary { get; set; }
 
-        [Column("is_active", DbType.Int64)]
-        public long IsActive { get; set; }
+        [Column("is_active", DbType.Int64)] public long IsActive { get; set; }
 
-        [Column("created_at", DbType.String)]
-        public string CreatedAt { get; set; } = string.Empty;
+        [Column("created_at", DbType.String)] public string CreatedAt { get; set; } = string.Empty;
     }
 
     // ========================================================================

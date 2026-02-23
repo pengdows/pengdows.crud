@@ -39,11 +39,9 @@ public class SqliteConcurrencyBenchmark
     private long _efCoreSuccessCount;
     private long _efCoreErrorCount;
 
-    [Params(100)]
-    public int Operations;
+    [Params(100)] public int Operations;
 
-    [Params(16)]
-    public int Parallelism;
+    [Params(16)] public int Parallelism;
 
     [GlobalSetup]
     public void GlobalSetup()
@@ -59,7 +57,8 @@ public class SqliteConcurrencyBenchmark
         {
             connection.Open();
             var command = connection.CreateCommand();
-            command.CommandText = "CREATE TABLE TestEntities (Id INTEGER PRIMARY KEY AUTOINCREMENT, Name TEXT, Counter INTEGER)";
+            command.CommandText =
+                "CREATE TABLE TestEntities (Id INTEGER PRIMARY KEY AUTOINCREMENT, Name TEXT, Counter INTEGER)";
             command.ExecuteNonQuery();
         }
 
@@ -94,7 +93,7 @@ public class SqliteConcurrencyBenchmark
     {
         (_pengdowsContext as IDisposable)?.Dispose();
         // Give time for the file to be released
-        for(int i = 0; i < 5; i++)
+        for (int i = 0; i < 5; i++)
         {
             try
             {
@@ -102,9 +101,13 @@ public class SqliteConcurrencyBenchmark
                 {
                     File.Delete(DbFileName);
                 }
+
                 return;
             }
-            catch { Task.Delay(100).Wait(); }
+            catch
+            {
+                Task.Delay(100).Wait();
+            }
         }
     }
 
@@ -148,8 +151,10 @@ public class SqliteConcurrencyBenchmark
                 using (var connection = new SqliteConnection(_dapperConnectionString))
                 {
                     await connection.OpenAsync();
-                    await connection.ExecuteAsync("INSERT INTO TestEntities (Name, Counter) VALUES (@Name, @Counter);", new { Name = "dapper", Counter = 1 });
+                    await connection.ExecuteAsync("INSERT INTO TestEntities (Name, Counter) VALUES (@Name, @Counter);",
+                        new { Name = "dapper", Counter = 1 });
                 }
+
                 Interlocked.Increment(ref _dapperSuccessCount);
             },
             ex =>
@@ -171,6 +176,7 @@ public class SqliteConcurrencyBenchmark
                     context.Entities.Add(new TestEntity { Name = "efcore", Counter = 1 });
                     await context.SaveChangesAsync();
                 }
+
                 Interlocked.Increment(ref _efCoreSuccessCount);
             },
             ex =>
@@ -191,16 +197,16 @@ public class TestEntity
     [Column("Id", DbType.Int32)]
     public int Id { get; set; }
 
-    [Column("Name", DbType.String)]
-    public string Name { get; set; } = string.Empty;
+    [Column("Name", DbType.String)] public string Name { get; set; } = string.Empty;
 
-    [Column("Counter", DbType.Int32)]
-    public int Counter { get; set; }
+    [Column("Counter", DbType.Int32)] public int Counter { get; set; }
 }
 
 public class EfSqliteDbContext : DbContext
 {
-    public EfSqliteDbContext(DbContextOptions<EfSqliteDbContext> options) : base(options) { }
+    public EfSqliteDbContext(DbContextOptions<EfSqliteDbContext> options) : base(options)
+    {
+    }
 
     public DbSet<TestEntity> Entities { get; set; }
 

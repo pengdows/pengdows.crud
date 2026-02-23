@@ -28,7 +28,8 @@ internal static class IntegrationTestConfiguration
         string.Equals(Environment.GetEnvironmentVariable("INCLUDE_ORACLE"), "true", StringComparison.OrdinalIgnoreCase);
 
     public static bool ShouldIncludeSnowflake =>
-        string.Equals(Environment.GetEnvironmentVariable("INCLUDE_SNOWFLAKE"), "true", StringComparison.OrdinalIgnoreCase);
+        string.Equals(Environment.GetEnvironmentVariable("INCLUDE_SNOWFLAKE"), "true",
+            StringComparison.OrdinalIgnoreCase);
 
     internal static IReadOnlyList<SupportedDatabase> GetEnabledProviders(bool includeOracle, bool includeSnowflake)
     {

@@ -29,7 +29,8 @@ public class RenderParamsPerformanceTests : SqlLiteContextTestBase
     public void RenderParams_MultipleParameters_PreservesOrder()
     {
         using var container = Context.CreateSqlContainer() as SqlContainer;
-        container!.Query.Append("SELECT * FROM orders WHERE userId = {P}userId AND status = {P}status AND date > {P}minDate");
+        container!.Query.Append(
+            "SELECT * FROM orders WHERE userId = {P}userId AND status = {P}status AND date > {P}minDate");
 
         var rendered = container.RenderParams(container.Query.ToString());
 
@@ -187,6 +188,7 @@ public class RenderParamsPerformanceTests : SqlLiteContextTestBase
             if (i > 0) container.Query.Append(", ");
             container.Query.Append($"{{P}}p{i}");
         }
+
         container.Query.Append(")");
 
         var rendered = container.RenderParams(container.Query.ToString());
@@ -196,6 +198,7 @@ public class RenderParamsPerformanceTests : SqlLiteContextTestBase
         {
             Assert.Contains($"@p{i}", rendered);
         }
+
         Assert.Equal(50, container.ParamSequence.Count);
     }
 

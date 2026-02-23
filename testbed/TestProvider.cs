@@ -687,6 +687,7 @@ INSERT INTO {table} (
         {
             sc.AddParameterWithValue("p7", DbType.String, guidVal.ToString());
         }
+
         sc.AddParameterWithValue("p8", DbType.Binary, binVal);
         await sc.ExecuteNonQueryAsync();
 
@@ -747,7 +748,8 @@ INSERT INTO {table} (
     {
         if (!_context.SupportsRepeatedNamedParameters)
         {
-            Console.WriteLine("  [ParamBinding] Duplicate param: provider does not support repeated named parameters — skip");
+            Console.WriteLine(
+                "  [ParamBinding] Duplicate param: provider does not support repeated named parameters — skip");
             return;
         }
 
@@ -952,6 +954,7 @@ INSERT INTO {table} (
         {
             sc.AddParameterWithValue("p9", DbType.String, guidValue.ToString());
         }
+
         sc.AddParameterWithValue("p10", DbType.Binary, binValue);
         await sc.ExecuteNonQueryAsync();
 
@@ -1230,7 +1233,6 @@ INSERT INTO {table} (
 
     protected virtual async Task TestExtendedTransactions()
     {
-
         await TestRollbackOnException();
         await TestReadYourWrites();
         await TestSavepoints();

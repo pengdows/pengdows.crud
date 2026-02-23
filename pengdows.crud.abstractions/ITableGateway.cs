@@ -342,7 +342,8 @@ public interface ITableGateway<TEntity, TRowID>
     /// <param name="context">Optional database context override for transaction scenarios.</param>
     /// <returns>One or more SQL containers, each representing a chunk of the batch.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="entities"/> is null.</exception>
-    IReadOnlyList<ISqlContainer> BuildBatchDelete(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context = null);
+    IReadOnlyList<ISqlContainer> BuildBatchDelete(IReadOnlyCollection<TEntity> entities,
+        IDatabaseContext? context = null);
 
     /// <summary>
     /// Executes a DELETE for all provided object identities (primary keys) and returns the total number of affected rows.
@@ -556,11 +557,6 @@ public interface ITableGateway<TEntity, TRowID>
     /// </code>
     /// </example>
     IAsyncEnumerable<TEntity> LoadStreamAsync(ISqlContainer sc, CancellationToken cancellationToken);
-
-    /// <summary>
-    /// Generates a formatted parameter name based on the provided DbParameter.
-    /// </summary>
-    string MakeParameterName(DbParameter p);
 
     /// <summary>
     /// Returns a compiled setter delegate for a property.

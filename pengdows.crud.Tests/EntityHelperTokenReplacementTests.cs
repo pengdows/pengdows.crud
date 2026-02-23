@@ -24,8 +24,9 @@ public class TableGatewayTokenReplacementTests : SqlLiteContextTestBase
         TypeMap.Register<TokenEntity>();
         var helper = new TableGateway<TokenEntity, int>(Context);
         var dialect = ((ISqlDialectProvider)Context).Dialect;
-        var replaced = helper.ReplaceNeutralTokens("INSERT INTO {Q}Tokens{q} ({Q}Id{q}) VALUES ({S}i0)");
-        var expected = $"INSERT INTO {dialect.WrapObjectName("Tokens")} ({dialect.WrapObjectName("Id")}) VALUES ({dialect.ParameterMarker}i0)";
+        var replaced = dialect.ReplaceNeutralTokens("INSERT INTO {Q}Tokens{q} ({Q}Id{q}) VALUES ({S}i0)");
+        var expected =
+            $"INSERT INTO {dialect.WrapObjectName("Tokens")} ({dialect.WrapObjectName("Id")}) VALUES ({dialect.ParameterMarker}i0)";
         Assert.Equal(expected, replaced);
     }
 
@@ -33,6 +34,6 @@ public class TableGatewayTokenReplacementTests : SqlLiteContextTestBase
     public void ReplaceNeutralTokens_NullSql_Throws()
     {
         var helper = new TableGateway<TokenEntity, int>(Context);
-        Assert.Throws<ArgumentNullException>(() => helper.ReplaceNeutralTokens(null!));
+        Assert.Throws<ArgumentNullException>(() => Context.Dialect.ReplaceNeutralTokens(null!));
     }
 }

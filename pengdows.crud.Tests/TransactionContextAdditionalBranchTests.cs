@@ -147,7 +147,8 @@ public class TransactionContextAdditionalBranchTests
             return Task.FromResult(BeginTransaction());
         }
 
-        public Task<IDbTransaction> BeginTransactionAsync(IsolationLevel isolationLevel, CancellationToken cancellationToken = default)
+        public Task<IDbTransaction> BeginTransactionAsync(IsolationLevel isolationLevel,
+            CancellationToken cancellationToken = default)
         {
             return Task.FromResult(BeginTransaction(isolationLevel));
         }

@@ -41,20 +41,16 @@ public class SqlServerIdentityOutputClauseTests
         [Column("user_id", DbType.String)]
         public string Username { get; set; } = string.Empty;
 
-        [Column("user_pass", DbType.String)]
-        public string? Password { get; set; }
+        [Column("user_pass", DbType.String)] public string? Password { get; set; }
 
-        [Column("role", DbType.String)]
-        public string? Role { get; set; }
+        [Column("role", DbType.String)] public string? Role { get; set; }
 
-        [Column("mobile", DbType.String)]
-        public string? Mobile { get; set; }
+        [Column("mobile", DbType.String)] public string? Mobile { get; set; }
 
         [Column("daily_update", DbType.Boolean)]
         public bool? IsDailyUpdate { get; set; }
 
-        [Column("active", DbType.Boolean)]
-        public bool? IsActive { get; set; }
+        [Column("active", DbType.Boolean)] public bool? IsActive { get; set; }
 
         [Column("login_alert", DbType.Boolean)]
         public bool? IsLoginAlert { get; set; }
@@ -450,10 +446,10 @@ public class SqlServerIdentityOutputClauseTests
     // ============================================================================
 
     [Theory]
-    [InlineData(SupportedDatabase.SqlServer, "OUTPUT INSERTED.", true)]  // Before VALUES
-    [InlineData(SupportedDatabase.PostgreSql, " RETURNING ", false)]     // After VALUES
-    [InlineData(SupportedDatabase.Sqlite, " RETURNING ", false)]         // After VALUES
-    [InlineData(SupportedDatabase.Firebird, " RETURNING ", false)]       // After VALUES
+    [InlineData(SupportedDatabase.SqlServer, "OUTPUT INSERTED.", true)] // Before VALUES
+    [InlineData(SupportedDatabase.PostgreSql, " RETURNING ", false)] // After VALUES
+    [InlineData(SupportedDatabase.Sqlite, " RETURNING ", false)] // After VALUES
+    [InlineData(SupportedDatabase.Firebird, " RETURNING ", false)] // After VALUES
     public void BuildCreateWithReturning_GeneratesCorrectSyntaxForDialect(
         SupportedDatabase provider, string expectedClause, bool beforeValues)
     {
@@ -508,8 +504,11 @@ public class SqlServerIdentityOutputClauseTests
     public void BuildCreate_NeverContainsReturningClause()
     {
         // BuildCreate (without Returning) should never have OUTPUT or RETURNING
-        foreach (var provider in new[] { SupportedDatabase.SqlServer, SupportedDatabase.PostgreSql,
-            SupportedDatabase.Sqlite, SupportedDatabase.MySql })
+        foreach (var provider in new[]
+                 {
+                     SupportedDatabase.SqlServer, SupportedDatabase.PostgreSql,
+                     SupportedDatabase.Sqlite, SupportedDatabase.MySql
+                 })
         {
             var factory = new fakeDbFactory(provider);
             var context = new DatabaseContext($"Data Source=test;EmulatedProduct={provider}", factory, _typeMap);
@@ -598,8 +597,7 @@ public class SqlServerIdentityOutputClauseTests
         [Column("id", DbType.Int32)]
         public int Id { get; set; }
 
-        [Column("name", DbType.String)]
-        public string Name { get; set; } = string.Empty;
+        [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
     }
 
     [Table("test_guid_auto_id")]
@@ -609,8 +607,7 @@ public class SqlServerIdentityOutputClauseTests
         [Column("id", DbType.String)]
         public Guid Id { get; set; }
 
-        [Column("name", DbType.String)]
-        public string Name { get; set; } = string.Empty;
+        [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
     }
 
     [Table("test_writable_id")]
@@ -620,15 +617,13 @@ public class SqlServerIdentityOutputClauseTests
         [Column("id", DbType.Int32)]
         public int Id { get; set; }
 
-        [Column("name", DbType.String)]
-        public string Name { get; set; } = string.Empty;
+        [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
     }
 
     [Table("test_no_id")]
     public class TestEntityWithoutId
     {
-        [Column("name", DbType.String)]
-        public string Name { get; set; } = string.Empty;
+        [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
     }
 }
 #pragma warning restore CS0618

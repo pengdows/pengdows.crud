@@ -140,7 +140,8 @@ public class SqlContainerExtensionsTests : IAsyncLifetime
         mockContainer.Setup(x => x.ExecuteScalarOrNullAsync<string>(CommandType.Text, It.IsAny<CancellationToken>()))
             .Returns(new ValueTask<string?>("test"));
 
-        var result = await mockContainer.Object.ExecuteScalarOrNullAsync<string>(CommandType.Text, CancellationToken.None);
+        var result =
+            await mockContainer.Object.ExecuteScalarOrNullAsync<string>(CommandType.Text, CancellationToken.None);
 
         Assert.Equal("test", result);
         mockContainer.Verify(x => x.ExecuteScalarOrNullAsync<string>(CommandType.Text, It.IsAny<CancellationToken>()),
@@ -259,7 +260,8 @@ public class SqlContainerExtensionsTests : IAsyncLifetime
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        await Assert.ThrowsAsync<TaskCanceledException>(() => container.ExecuteReaderSingleRowAsync(cts.Token).AsTask());
+        await Assert.ThrowsAsync<TaskCanceledException>(() =>
+            container.ExecuteReaderSingleRowAsync(cts.Token).AsTask());
     }
 
     // Tests for ExecuteScalarRequiredAsync (now an interface method, extensions provide ExecutionType routing)

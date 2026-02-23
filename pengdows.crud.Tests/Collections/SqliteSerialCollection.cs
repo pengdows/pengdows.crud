@@ -7,4 +7,3 @@ public class SqliteSerialCollection
 {
     // Intentionally empty; used only for the collection definition.
 }
-

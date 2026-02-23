@@ -19,7 +19,8 @@ public class PerformanceOptimizationBenchmarksTests
         var start = contents.IndexOf("public class TestEntity", StringComparison.Ordinal);
         Assert.True(start >= 0, "Could not locate TestEntity definition in PerformanceOptimizationBenchmarks.cs.");
 
-        var end = contents.IndexOf("// ============================================================================", start, StringComparison.Ordinal);
+        var end = contents.IndexOf("// ============================================================================",
+            start, StringComparison.Ordinal);
         if (end < 0)
         {
             end = contents.Length;

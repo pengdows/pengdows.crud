@@ -35,7 +35,7 @@ public sealed class PoolGovernorTurnstileTests
             TimeSpan.FromMilliseconds(50),
             turnstile: turnstile, holdTurnstile: false);
 
-        using var wp = writer.Acquire();   // holds turnstile
+        using var wp = writer.Acquire(); // holds turnstile
 
         // Reader times out waiting for the TURNSTILE (not the slot semaphore).
         Assert.Throws<PoolSaturatedException>(() => reader.Acquire());
@@ -99,7 +99,7 @@ public sealed class PoolGovernorTurnstileTests
             TimeSpan.FromMilliseconds(50),
             turnstile: turnstile, holdTurnstile: false);
 
-        using var wp = writer.Acquire();   // holds turnstile
+        using var wp = writer.Acquire(); // holds turnstile
 
         var success = reader.TryAcquire(out var rp);
 
@@ -145,12 +145,12 @@ public sealed class PoolGovernorTurnstileTests
         using var w2 = new PoolGovernor(PoolLabel.Writer, "ts-w2", 1,
             TimeSpan.FromMilliseconds(30), turnstile: turnstile, holdTurnstile: true);
 
-        using var p1 = w1.Acquire();   // holds turnstile
+        using var p1 = w1.Acquire(); // holds turnstile
 
         // W2 cannot pass the turnstile — it is still held by W1's permit.
         Assert.Throws<PoolSaturatedException>(() => w2.Acquire());
         Assert.Equal(1, w2.GetSnapshot().TotalTurnstileTimeouts); // turnstile bottleneck
-        Assert.Equal(0, w2.GetSnapshot().TotalTimeouts);           // no permit timeout
+        Assert.Equal(0, w2.GetSnapshot().TotalTimeouts); // no permit timeout
     }
 
     [Fact]
@@ -169,7 +169,7 @@ public sealed class PoolGovernorTurnstileTests
         // W2 cannot pass the turnstile — it is still held by W1's permit.
         await Assert.ThrowsAsync<PoolSaturatedException>(() => w2.AcquireAsync());
         Assert.Equal(1, w2.GetSnapshot().TotalTurnstileTimeouts); // turnstile bottleneck
-        Assert.Equal(0, w2.GetSnapshot().TotalTimeouts);           // no permit timeout
+        Assert.Equal(0, w2.GetSnapshot().TotalTimeouts); // no permit timeout
 
         p1.Dispose();
     }
@@ -259,8 +259,8 @@ public sealed class PoolGovernorTurnstileTests
         var permit = writer.Acquire();
         Assert.False(turnstile.Wait(0)); // turnstile held
 
-        permit.Dispose();                // releases turnstile
-        Assert.True(turnstile.Wait(0));  // turnstile free
+        permit.Dispose(); // releases turnstile
+        Assert.True(turnstile.Wait(0)); // turnstile free
     }
 
     // ── Drain on disabled governor ─────────────────────────────────────────

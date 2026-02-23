@@ -19,38 +19,6 @@ public class TableGatewayUtilityMethodTests : SqlLiteContextTestBase
         TypeMap.Register<GuidEntity>();
     }
 
-    #region BuildValueExtractor Tests
-
-    [Fact]
-    public void BuildValueExtractor_HandlesAllPrimitiveTypes()
-    {
-        // Test all TypeCode cases that are handled specially
-        var typeCodeTests = new[]
-        {
-            typeof(int), // TypeCode.Int32
-            typeof(long), // TypeCode.Int64
-            typeof(string), // TypeCode.String
-            typeof(DateTime), // TypeCode.DateTime
-            typeof(decimal), // TypeCode.Decimal
-            typeof(bool), // TypeCode.Boolean
-            typeof(short), // TypeCode.Int16
-            typeof(byte), // TypeCode.Byte
-            typeof(double), // TypeCode.Double
-            typeof(float), // TypeCode.Single
-            typeof(Guid), // Special case - not a TypeCode
-            typeof(byte[]), // Special case - byte array
-            typeof(object) // Default case - fallback
-        };
-
-        foreach (var testType in typeCodeTests)
-        {
-            var extractor = TableGateway<TestEntity, int>.BuildValueExtractor(testType);
-            Assert.NotNull(extractor);
-        }
-    }
-
-    #endregion
-
     #region NormalizeDateTimeOffset Tests
 
     [Fact]

@@ -21,35 +21,35 @@ internal sealed class IndexedViewEnvironment : IAsyncDisposable
     private const int DefaultOrdersPerCustomer = 50;
 
     private static readonly string ViewTemplate = $$"""
-        SELECT customer_id as CustomerId,
-               order_count as OrderCount,
-               total_amount as TotalAmount,
-               sum_order_amount as SumOrderAmount,
-               count_for_avg as CountForAvg
-        FROM {{Schema}}.{{ViewName}}
-        WHERE customer_id = {customerId}
-        """;
+                                                    SELECT customer_id as CustomerId,
+                                                           order_count as OrderCount,
+                                                           total_amount as TotalAmount,
+                                                           sum_order_amount as SumOrderAmount,
+                                                           count_for_avg as CountForAvg
+                                                    FROM {{Schema}}.{{ViewName}}
+                                                    WHERE customer_id = {customerId}
+                                                    """;
 
     private static readonly string InsertOrderTemplate = $$"""
-        INSERT INTO {{Schema}}.Orders (customer_id, total_amount, status)
-        OUTPUT INSERTED.order_id
-        VALUES ({customerId}, {amount}, 'Active')
-        """;
+                                                           INSERT INTO {{Schema}}.Orders (customer_id, total_amount, status)
+                                                           OUTPUT INSERTED.order_id
+                                                           VALUES ({customerId}, {amount}, 'Active')
+                                                           """;
 
     private static readonly string DeleteOrderTemplate = $$"""
-        DELETE FROM {{Schema}}.Orders WHERE order_id = {orderId}
-        """;
+                                                           DELETE FROM {{Schema}}.Orders WHERE order_id = {orderId}
+                                                           """;
 
     private static readonly string BaseAggregateTemplate = $$"""
-        SELECT customer_id as CustomerId,
-               COUNT_BIG(*) as OrderCount,
-               SUM(total_amount) as TotalAmount,
-               SUM(total_amount) as SumOrderAmount,
-               COUNT_BIG(*) as CountForAvg
-        FROM {{Schema}}.Orders
-        WHERE status = 'Active' AND customer_id = {customerId}
-        GROUP BY customer_id
-        """;
+                                                             SELECT customer_id as CustomerId,
+                                                                    COUNT_BIG(*) as OrderCount,
+                                                                    SUM(total_amount) as TotalAmount,
+                                                                    SUM(total_amount) as SumOrderAmount,
+                                                                    COUNT_BIG(*) as CountForAvg
+                                                             FROM {{Schema}}.Orders
+                                                             WHERE status = 'Active' AND customer_id = {customerId}
+                                                             GROUP BY customer_id
+                                                             """;
 
     // Full aggregate — no WHERE customer_id filter.
     // Scans ALL orders grouped by customer_id. This matches the indexed view
@@ -57,24 +57,24 @@ internal sealed class IndexedViewEnvironment : IAsyncDisposable
     // substitute the indexed view (scan ~N pre-aggregated rows) instead of
     // scanning the entire Orders table.
     private static readonly string FullAggregateTemplate = $$"""
-        SELECT customer_id as CustomerId,
-               COUNT_BIG(*) as OrderCount,
-               SUM(total_amount) as TotalAmount,
-               SUM(total_amount) as SumOrderAmount,
-               COUNT_BIG(*) as CountForAvg
-        FROM {{Schema}}.Orders
-        WHERE status = 'Active'
-        GROUP BY customer_id
-        """;
+                                                             SELECT customer_id as CustomerId,
+                                                                    COUNT_BIG(*) as OrderCount,
+                                                                    SUM(total_amount) as TotalAmount,
+                                                                    SUM(total_amount) as SumOrderAmount,
+                                                                    COUNT_BIG(*) as CountForAvg
+                                                             FROM {{Schema}}.Orders
+                                                             WHERE status = 'Active'
+                                                             GROUP BY customer_id
+                                                             """;
 
     private static readonly string FullViewTemplate = $$"""
-        SELECT customer_id as CustomerId,
-               order_count as OrderCount,
-               total_amount as TotalAmount,
-               sum_order_amount as SumOrderAmount,
-               count_for_avg as CountForAvg
-        FROM {{Schema}}.{{ViewName}}
-        """;
+                                                        SELECT customer_id as CustomerId,
+                                                               order_count as OrderCount,
+                                                               total_amount as TotalAmount,
+                                                               sum_order_amount as SumOrderAmount,
+                                                               count_for_avg as CountForAvg
+                                                        FROM {{Schema}}.{{ViewName}}
+                                                        """;
 
     private readonly List<int> _customerIds = new();
     private readonly SemaphoreSlim _initLock = new(1, 1);
@@ -103,7 +103,8 @@ internal sealed class IndexedViewEnvironment : IAsyncDisposable
 
     public string ViewClusteredIndexName => _viewClusteredIndex;
 
-    public async Task InitializeAsync(int customerCount = DefaultCustomerCount, int ordersPerCustomer = DefaultOrdersPerCustomer)
+    public async Task InitializeAsync(int customerCount = DefaultCustomerCount,
+        int ordersPerCustomer = DefaultOrdersPerCustomer)
     {
         if (_initialized)
         {
@@ -146,7 +147,8 @@ internal sealed class IndexedViewEnvironment : IAsyncDisposable
         await _sqlServerContainer.StartAsync();
 
         var hostPort = _sqlServerContainer.GetMappedPublicPort(1433);
-        _baseConnectionString = $"Server=localhost,{hostPort};Database={Database};User Id=sa;Password={Password};TrustServerCertificate=true;Connection Timeout=30;";
+        _baseConnectionString =
+            $"Server=localhost,{hostPort};Database={Database};User Id=sa;Password={Password};TrustServerCertificate=true;Connection Timeout=30;";
         _connectionString = _baseConnectionString;
 
         Console.WriteLine($"[BENCHMARK] SQL Server container listening on port {hostPort}");
@@ -310,7 +312,8 @@ internal sealed class IndexedViewEnvironment : IAsyncDisposable
             await cmd.ExecuteNonQueryAsync();
         }
 
-        Console.WriteLine($"[BENCHMARK] Seeded {_customerIds.Count} customers, {orderRows.Count} orders. Updating statistics...");
+        Console.WriteLine(
+            $"[BENCHMARK] Seeded {_customerIds.Count} customers, {orderRows.Count} orders. Updating statistics...");
 
         await conn.ExecuteAsync(@"
             UPDATE STATISTICS dbo.Customers;

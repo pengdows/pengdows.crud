@@ -78,22 +78,16 @@ public partial class TableGateway<TEntity, TRowID>
     private string BuildBaseRetrieveSql(string alias, ISqlDialect dialect)
     {
         var hasAlias = !string.IsNullOrWhiteSpace(alias);
+        var wrappedAliasPrefix = hasAlias
+            ? dialect.WrapSimpleName(alias) + dialect.CompositeIdentifierSeparator
+            : string.Empty;
         var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
         sb.Append("SELECT ");
         for (var i = 0; i < _tableInfo.OrderedColumns.Count; i++)
         {
-            if (i > 0)
-            {
-                sb.Append(", ");
-            }
-
-            if (hasAlias)
-            {
-                sb.Append(dialect.WrapObjectName(alias));
-                sb.Append(dialect.CompositeIdentifierSeparator);
-            }
-
-            sb.Append(BuildWrappedColumnName(dialect, _tableInfo.OrderedColumns[i].Name));
+            if (i > 0) sb.Append(", ");
+            sb.Append(wrappedAliasPrefix);
+            sb.Append(dialect.WrapSimpleName(_tableInfo.OrderedColumns[i].Name));
         }
 
         sb.Append("\nFROM ");
@@ -101,7 +95,7 @@ public partial class TableGateway<TEntity, TRowID>
         if (hasAlias)
         {
             sb.Append(' ');
-            sb.Append(dialect.WrapObjectName(alias));
+            sb.Append(dialect.WrapSimpleName(alias));
         }
 
         return sb.ToString();
@@ -129,10 +123,10 @@ public partial class TableGateway<TEntity, TRowID>
         var wrappedAlias = "";
         if (!string.IsNullOrWhiteSpace(alias))
         {
-            wrappedAlias = sc.WrapObjectName(alias) + sc.CompositeIdentifierSeparator;
+            wrappedAlias = dialect.WrapSimpleName(alias) + dialect.CompositeIdentifierSeparator;
         }
 
-        var wrappedColumnName = wrappedAlias + BuildWrappedColumnName(dialect, _idColumn.Name);
+        var wrappedColumnName = wrappedAlias + dialect.WrapSimpleName(_idColumn.Name);
 
         if (listOfIds == null || listOfIds.Count == 0)
         {
@@ -185,8 +179,7 @@ public partial class TableGateway<TEntity, TRowID>
 
     public void BuildWhereByPrimaryKey(IReadOnlyCollection<TEntity>? listOfObjects, ISqlContainer sc, string alias = "")
     {
-        var dialectProvider = sc as ISqlDialectProvider;
-        var dialect = dialectProvider?.Dialect ?? _dialect;
+        var dialect = ((ISqlDialectProvider)sc).Dialect;
         BuildWhereByPrimaryKey(listOfObjects, sc, alias, dialect);
     }
 
@@ -250,7 +243,7 @@ public partial class TableGateway<TEntity, TRowID>
             return string.Empty;
         }
 
-        return dialect.WrapObjectName(alias) + ".";
+        return dialect.WrapSimpleName(alias) + ".";
     }
 
     private string BuildPrimaryKeyClause(TEntity entity, IReadOnlyList<IColumnInfo> keys, string alias,
@@ -271,7 +264,7 @@ public partial class TableGateway<TEntity, TRowID>
             var parameter = dialect.CreateDbParameter(name, pk.DbType, value);
 
             clause.Append(alias);
-            clause.Append(BuildWrappedColumnName(dialect, pk.Name));
+            clause.Append(dialect.WrapSimpleName(pk.Name));
 
             if (Utils.IsNullOrDbNull(value))
             {
@@ -280,15 +273,7 @@ public partial class TableGateway<TEntity, TRowID>
             else
             {
                 clause.Append(" = ");
-                if (dialect.SupportsNamedParameters)
-                {
-                    clause.Append(dialect.ParameterMarker);
-                    clause.Append(name);
-                }
-                else
-                {
-                    clause.Append('?');
-                }
+                clause.Append(dialect.MakeParameterName(name));
 
                 parameters.Add(parameter);
             }
@@ -473,6 +458,7 @@ public partial class TableGateway<TEntity, TRowID>
                 if (i > 0) sb.Append(SqlFragments.Comma);
                 sb.Append(names[i]);
             }
+
             sb.Append(SqlFragments.CloseParen);
             inCore = sb.ToString();
             inCache.GetOrAdd(queryKey, _ => inCore);

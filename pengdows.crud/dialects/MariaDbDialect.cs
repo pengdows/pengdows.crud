@@ -117,7 +117,7 @@ internal class MariaDbDialect : MySqlDialect
         TryExecuteReadOnlySql(transaction, SetSessionTransactionReadOnlySql, "MariaDB");
     }
 
-    public override Task TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
+    public override ValueTask TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
         CancellationToken cancellationToken = default)
     {
         return TryExecuteReadOnlySqlAsync(transaction, SetSessionTransactionReadOnlySql, "MariaDB", cancellationToken);

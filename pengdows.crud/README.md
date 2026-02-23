@@ -19,7 +19,9 @@ want **full control** over SQL, **predictable behavior** across databases, and *
 
 ## ✅ Key Features
 
-> Starting with v2.0, `TableGateway<TEntity, TRowID>` is the canonical CRUD gateway. The legacy `EntityHelper` alias has been removed.
+> Starting with v2.0, `TableGateway<TEntity, TRowID>` is the canonical CRUD gateway. The legacy `EntityHelper` alias has
+> been removed.
+
 - `TableGateway<TEntity, TRowID>`: automatic CRUD with custom SQL injection points.
 - Full support for:
     - Enums

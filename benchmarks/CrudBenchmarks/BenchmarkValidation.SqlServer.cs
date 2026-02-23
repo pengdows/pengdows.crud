@@ -35,6 +35,7 @@ internal sealed record SqlServerValidationResult(
 internal static class SqlServerBenchmarkValidation
 {
     private const string ValidationRoot = "BenchmarkDotNet.Artifacts";
+
     // SHOWPLAN XML nests every element inside this namespace.  Descendants("Object")
     // without it silently returns empty and all plan assertions pass vacuously.
     // Do not remove.
@@ -50,7 +51,8 @@ internal static class SqlServerBenchmarkValidation
         await using var connection = new SqlConnection(config.ConnectionString);
         await connection.OpenAsync();
 
-        var verifiedIndex = await EnsureViewHasUniqueClusteredIndexAsync(connection, config.ViewSchema, config.ViewName);
+        var verifiedIndex =
+            await EnsureViewHasUniqueClusteredIndexAsync(connection, config.ViewSchema, config.ViewName);
         var expectedIndex = config.ExpectedViewIndexName ?? verifiedIndex;
 
         if (config.SessionSetup != null)
@@ -68,12 +70,14 @@ internal static class SqlServerBenchmarkValidation
 
         var sessionOptions = await CaptureSessionOptionsAsync(connection);
         var optionsPath = Path.Combine(planDirectory, "session-options.txt");
-        var serializedOptions = string.Join(Environment.NewLine, sessionOptions.Select(kvp => $"{kvp.Key}: {kvp.Value}"));
+        var serializedOptions =
+            string.Join(Environment.NewLine, sessionOptions.Select(kvp => $"{kvp.Key}: {kvp.Value}"));
         await File.WriteAllTextAsync(optionsPath, serializedOptions);
 
         ValidateSessionOptions(sessionOptions, config, planPath, optionsPath);
 
-        Console.WriteLine($"[BENCHMARK] Validation pods: {config.BenchmarkFamily}/{config.Variant} plan={planPath} options={optionsPath}");
+        Console.WriteLine(
+            $"[BENCHMARK] Validation pods: {config.BenchmarkFamily}/{config.Variant} plan={planPath} options={optionsPath}");
 
         return new SqlServerValidationResult(planPath, optionsPath, sessionOptions, expectedIndex);
     }
@@ -174,7 +178,8 @@ internal static class SqlServerBenchmarkValidation
         return value;
     }
 
-    private static void ValidatePlanObjects(XDocument planDoc, SqlServerValidationConfig config, string expectedIndex, string planPath)
+    private static void ValidatePlanObjects(XDocument planDoc, SqlServerValidationConfig config, string expectedIndex,
+        string planPath)
     {
         var objects = planDoc.Descendants(ShowPlanNs + "Object")
             .Select(o => new
@@ -192,15 +197,18 @@ internal static class SqlServerBenchmarkValidation
 
         if (config.ExpectViewReference && !viewReferenced)
         {
-            throw CreateValidationException($"Plan missing indexed view reference for {config.ViewSchema}.{config.ViewName}", planPath);
+            throw CreateValidationException(
+                $"Plan missing indexed view reference for {config.ViewSchema}.{config.ViewName}", planPath);
         }
 
         if (config.ExpectNoViewReference && viewReferenced)
         {
-            throw CreateValidationException($"Plan unexpectedly referenced indexed view {config.ViewSchema}.{config.ViewName}", planPath);
+            throw CreateValidationException(
+                $"Plan unexpectedly referenced indexed view {config.ViewSchema}.{config.ViewName}", planPath);
         }
 
-        if (config.ExpectViewReference && !objects.Any(o => string.Equals(o.Index, expectedIndex, StringComparison.OrdinalIgnoreCase)))
+        if (config.ExpectViewReference &&
+            !objects.Any(o => string.Equals(o.Index, expectedIndex, StringComparison.OrdinalIgnoreCase)))
         {
             throw CreateValidationException($"Plan did not mention expected index '{expectedIndex}'", planPath);
         }
@@ -217,7 +225,8 @@ internal static class SqlServerBenchmarkValidation
         }
     }
 
-    private static async Task<string> EnsureViewHasUniqueClusteredIndexAsync(SqlConnection connection, string schema, string view)
+    private static async Task<string> EnsureViewHasUniqueClusteredIndexAsync(SqlConnection connection, string schema,
+        string view)
     {
         await using var command = connection.CreateCommand();
         command.CommandText = @"
@@ -240,7 +249,8 @@ internal static class SqlServerBenchmarkValidation
         return indexName;
     }
 
-    private static InvalidOperationException CreateValidationException(string message, string planPath, string? optionsPath = null)
+    private static InvalidOperationException CreateValidationException(string message, string planPath,
+        string? optionsPath = null)
     {
         var detail = $"{message}. Plan: {planPath}";
         if (!string.IsNullOrEmpty(optionsPath))

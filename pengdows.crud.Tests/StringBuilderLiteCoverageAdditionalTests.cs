@@ -19,7 +19,10 @@ public sealed class StringBuilderLiteCoverageAdditionalTests
             sb.AppendSpan(-1);
             Assert.Fail("Expected ArgumentOutOfRangeException");
         }
-        catch (ArgumentOutOfRangeException) { /* expected */ }
+        catch (ArgumentOutOfRangeException)
+        {
+            /* expected */
+        }
     }
 
     [Fact]
@@ -39,8 +42,8 @@ public sealed class StringBuilderLiteCoverageAdditionalTests
         var sb = SbLite.Create(stackalloc char[3]);
         sb.Append('A');
         sb.Append('B');
-        sb.Append('C');   // fills buffer
-        sb.Append('D');   // must grow
+        sb.Append('C'); // fills buffer
+        sb.Append('D'); // must grow
 
         Assert.Equal("ABCD", sb.ToString());
         Assert.Equal(4, sb.Length);
@@ -105,9 +108,9 @@ public sealed class StringBuilderLiteCoverageAdditionalTests
     {
         // Start tiny, grow multiple times
         var sb = SbLite.Create(stackalloc char[2]);
-        sb.Append("AA");       // fills 2
-        sb.Append("BB");       // grow to 4, fills 4
-        sb.Append("CCCC");     // grow to 8, fills 8
+        sb.Append("AA"); // fills 2
+        sb.Append("BB"); // grow to 4, fills 4
+        sb.Append("CCCC"); // grow to 8, fills 8
         sb.Append("DDDDDDDD"); // grow to 16, fills 16
         Assert.Equal("AABBCCCCDDDDDDDD", sb.ToString());
         Assert.Equal(16, sb.Length);

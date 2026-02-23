@@ -390,7 +390,8 @@ public class SqlContainerTests : SqlLiteContextTestBase, IDisposable
 
         container.Query.AppendFormat("SELECT {0}Id{1} FROM {0}Test{1} WHERE {0}Id{1} = -1", qp, qs);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(async () => await container.ExecuteScalarRequiredAsync<int>());
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await container.ExecuteScalarRequiredAsync<int>());
         AssertProperNumberOfConnectionsForMode();
     }
 
@@ -761,7 +762,8 @@ public class SqlContainerTests : SqlLiteContextTestBase, IDisposable
 
         await container.ExecuteNonQueryAsync();
 
-        Assert.DoesNotContain(mockLogger.LogEntries, entry => entry.StartsWith("Parameters:", StringComparison.Ordinal));
+        Assert.DoesNotContain(mockLogger.LogEntries,
+            entry => entry.StartsWith("Parameters:", StringComparison.Ordinal));
     }
 
     // removed: consolidated with parameterized tests above

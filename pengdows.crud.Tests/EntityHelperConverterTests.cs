@@ -158,8 +158,7 @@ public class TableGatewayConverterTests : SqlLiteContextTestBase
         [Column("Id", DbType.Int32)]
         public int Id { get; set; }
 
-        [Column("Data", DbType.Binary)]
-        public byte[] Data { get; set; } = Array.Empty<byte>();
+        [Column("Data", DbType.Binary)] public byte[] Data { get; set; } = Array.Empty<byte>();
     }
 
     internal sealed class FakeTrackedReader : fakeDbDataReader, ITrackedReader

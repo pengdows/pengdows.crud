@@ -40,7 +40,8 @@ public sealed class CoverageGapTests_ConnectionAndPooling
     [Fact]
     public void ConnectionStringHelper_Create_WithValidConnectionString_NullBuilder_ParsesNormally()
     {
-        var result = ConnectionStringHelper.Create((DbConnectionStringBuilder?)null, "Data Source=test;Initial Catalog=db");
+        var result =
+            ConnectionStringHelper.Create((DbConnectionStringBuilder?)null, "Data Source=test;Initial Catalog=db");
 
         Assert.NotNull(result);
         Assert.Equal("test", result["Data Source"]);

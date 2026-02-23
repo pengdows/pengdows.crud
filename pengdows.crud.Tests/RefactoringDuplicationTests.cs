@@ -112,8 +112,7 @@ public class RefactoringDuplicationTests
     [InlineData("   ")]
     public void ValidateAndWrap_ThrowsOnNullOrEmptyProcName(string? procName)
     {
-        var ex = Assert.Throws<ArgumentException>(
-            () => IProcWrappingStrategy.ValidateAndWrap(procName!, null));
+        var ex = Assert.Throws<ArgumentException>(() => IProcWrappingStrategy.ValidateAndWrap(procName!, null));
         Assert.Contains("Procedure name cannot be null or empty", ex.Message);
     }
 
@@ -142,12 +141,9 @@ public class RefactoringDuplicationTests
         var strategy = ProcWrappingStrategyFactory.Create(style);
 
         // Null/empty still throws
-        Assert.Throws<ArgumentException>(
-            () => strategy.Wrap(null!, ExecutionType.Write, ""));
-        Assert.Throws<ArgumentException>(
-            () => strategy.Wrap("", ExecutionType.Write, ""));
-        Assert.Throws<ArgumentException>(
-            () => strategy.Wrap("   ", ExecutionType.Write, ""));
+        Assert.Throws<ArgumentException>(() => strategy.Wrap(null!, ExecutionType.Write, ""));
+        Assert.Throws<ArgumentException>(() => strategy.Wrap("", ExecutionType.Write, ""));
+        Assert.Throws<ArgumentException>(() => strategy.Wrap("   ", ExecutionType.Write, ""));
 
         // Valid proc name works
         var result = strategy.Wrap("test_proc", ExecutionType.Write, "@p0, @p1");

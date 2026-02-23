@@ -57,9 +57,7 @@ public class MySqlGuidBinaryTests
     [Table("guid_entities")]
     private sealed class GuidBinaryEntity
     {
-        [Id(true)]
-        [Column("id", DbType.Guid)]
-        public Guid Id { get; set; }
+        [Id(true)] [Column("id", DbType.Guid)] public Guid Id { get; set; }
     }
 
     private sealed class FakeTrackedReader : fakeDbDataReader, ITrackedReader

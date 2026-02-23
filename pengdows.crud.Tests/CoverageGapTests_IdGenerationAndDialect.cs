@@ -22,23 +22,21 @@ public class CoverageGapTests_IdGenerationAndDialect
     [Table("gen_int")]
     public class IntIdEntity
     {
-        [Id(false)]  // database generates (triggers PopulateGeneratedIdAsync)
+        [Id(false)] // database generates (triggers PopulateGeneratedIdAsync)
         [Column("id", DbType.Int32)]
         public int Id { get; set; }
 
-        [Column("name", DbType.String)]
-        public string Name { get; set; } = string.Empty;
+        [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
     }
 
     [Table("gen_guid")]
     public class GuidIdEntity
     {
-        [Id(false)]  // database generates (triggers PopulateGeneratedIdAsync)
+        [Id(false)] // database generates (triggers PopulateGeneratedIdAsync)
         [Column("id", DbType.Guid)]
         public Guid Id { get; set; }
 
-        [Column("name", DbType.String)]
-        public string Name { get; set; } = string.Empty;
+        [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
     }
 
     // =========================================================================

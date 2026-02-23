@@ -91,26 +91,30 @@ public class TypeHandlingBenchmarks
     [Benchmark]
     public bool AdvancedType_Inet_Configure()
     {
-        return _advancedRegistry!.TryConfigureParameter(_parameter!, typeof(Inet), _inetValue, SupportedDatabase.PostgreSql);
+        return _advancedRegistry!.TryConfigureParameter(_parameter!, typeof(Inet), _inetValue,
+            SupportedDatabase.PostgreSql);
     }
 
     [Benchmark]
     public bool AdvancedType_Range_Configure()
     {
-        return _advancedRegistry!.TryConfigureParameter(_parameter!, typeof(Range<int>), _rangeValue, SupportedDatabase.PostgreSql);
+        return _advancedRegistry!.TryConfigureParameter(_parameter!, typeof(Range<int>), _rangeValue,
+            SupportedDatabase.PostgreSql);
     }
 
     [Benchmark]
     public bool AdvancedType_Geometry_Configure()
     {
-        return _advancedRegistry!.TryConfigureParameter(_parameter!, typeof(Geometry), _geometryValue!, _geometryProvider);
+        return _advancedRegistry!.TryConfigureParameter(_parameter!, typeof(Geometry), _geometryValue!,
+            _geometryProvider);
     }
 
     [Benchmark]
     public bool AdvancedType_RowVersion_Configure()
     {
         var rowVersion = RowVersion.FromBytes(_rowVersionBytes!);
-        return _advancedRegistry!.TryConfigureParameter(_parameter!, typeof(RowVersion), rowVersion, SupportedDatabase.SqlServer);
+        return _advancedRegistry!.TryConfigureParameter(_parameter!, typeof(RowVersion), rowVersion,
+            SupportedDatabase.SqlServer);
     }
 
     [Benchmark]
@@ -123,8 +127,12 @@ public class TypeHandlingBenchmarks
     public bool AdvancedType_Cached_Configure()
     {
         // Second call should be faster due to caching
-        var success1 = _advancedRegistry!.TryConfigureParameter(_parameter!, typeof(Inet), _inetValue, SupportedDatabase.PostgreSql);
-        var success2 = _advancedRegistry!.TryConfigureParameter(_parameter!, typeof(Inet), _inetValue, SupportedDatabase.PostgreSql);
+        var success1 =
+            _advancedRegistry!.TryConfigureParameter(_parameter!, typeof(Inet), _inetValue,
+                SupportedDatabase.PostgreSql);
+        var success2 =
+            _advancedRegistry!.TryConfigureParameter(_parameter!, typeof(Inet), _inetValue,
+                SupportedDatabase.PostgreSql);
         return success1 && success2;
     }
 
@@ -277,7 +285,8 @@ public class TypeHandlingBenchmarks
     [Benchmark]
     public object? Complex_HStoreParsing()
     {
-        var hstoreText = "\"key1\"=>\"simple\", \"key2\"=>\"value with, comma\", \"key3\"=>\"value with \\\"quotes\\\"\", \"key4\"=>NULL";
+        var hstoreText =
+            "\"key1\"=>\"simple\", \"key2\"=>\"value with, comma\", \"key3\"=>\"value with \\\"quotes\\\"\", \"key4\"=>NULL";
         var dbValue = new DbValue(hstoreText);
         return _coercionRegistry!.TryRead(dbValue, typeof(HStore), out _);
     }
@@ -340,6 +349,7 @@ public class TypeHandlingBenchmarks
         {
             success &= _coercionRegistry!.TryRead(dbValue, typeof(Guid), out _);
         }
+
         return success;
     }
 
@@ -348,7 +358,8 @@ public class TypeHandlingBenchmarks
     {
         // Simulate the actual call pattern from SqlDialect.AddParameterWithValue
         var runtimeType = _inetValue.GetType();
-        return _advancedRegistry!.TryConfigureParameter(_parameter!, runtimeType, _inetValue, SupportedDatabase.PostgreSql);
+        return _advancedRegistry!.TryConfigureParameter(_parameter!, runtimeType, _inetValue,
+            SupportedDatabase.PostgreSql);
     }
 
     // ============================================================================
@@ -396,7 +407,8 @@ public class TypeHandlingBenchmarks
     public bool Failure_UnregisteredType()
     {
         // This should fail fast and not cause performance issues
-        return _advancedRegistry!.TryConfigureParameter(_parameter!, typeof(Uri), new Uri("https://example.com"), SupportedDatabase.SqlServer);
+        return _advancedRegistry!.TryConfigureParameter(_parameter!, typeof(Uri), new Uri("https://example.com"),
+            SupportedDatabase.SqlServer);
     }
 
     // ============================================================================

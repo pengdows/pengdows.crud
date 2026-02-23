@@ -868,7 +868,8 @@ public class CoverageGapTests_TypesAndConverters
     public void GeographyConverter_TryConvertFromProvider_GeoJsonWithSrid()
     {
         var converter = new GeographyConverter();
-        var geoJson = "{\"type\":\"Point\",\"coordinates\":[-74.0060,40.7128],\"crs\":{\"properties\":{\"srid\":3857}}}";
+        var geoJson =
+            "{\"type\":\"Point\",\"coordinates\":[-74.0060,40.7128],\"crs\":{\"properties\":{\"srid\":3857}}}";
 
         var success = converter.TryConvertFromProvider(
             geoJson,

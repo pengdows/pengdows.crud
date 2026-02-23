@@ -37,14 +37,15 @@ public class TableGateway_IntegrationTests : RealSqliteContextTestBase, IAsyncLi
     }
 
     [Fact]
-    public void QuoteProperties_DelegateToContext()
+    public void QuoteProperties_AccessibleViaContextDialect()
     {
-        Assert.Equal(Context.QuotePrefix, entityHelper.QuotePrefix);
-        Assert.Equal(Context.QuoteSuffix, entityHelper.QuoteSuffix);
-        Assert.Equal(Context.CompositeIdentifierSeparator, entityHelper.CompositeIdentifierSeparator);
-        Assert.NotEqual("?", entityHelper.QuotePrefix);
-        Assert.NotEqual("?", entityHelper.QuoteSuffix);
-        Assert.NotEqual("?", entityHelper.CompositeIdentifierSeparator);
+        var dialect = Context.Dialect;
+        Assert.Equal(dialect.QuotePrefix, Context.QuotePrefix);
+        Assert.Equal(dialect.QuoteSuffix, Context.QuoteSuffix);
+        Assert.Equal(dialect.CompositeIdentifierSeparator, Context.CompositeIdentifierSeparator);
+        Assert.NotEqual("?", dialect.QuotePrefix);
+        Assert.NotEqual("?", dialect.QuoteSuffix);
+        Assert.NotEqual("?", dialect.CompositeIdentifierSeparator);
     }
 
     [Fact]

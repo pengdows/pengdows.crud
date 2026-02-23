@@ -72,6 +72,7 @@ public sealed class EphemeralSecureString : SafeAsyncDisposableBase, IEphemeralS
     /// Time-to-live in milliseconds before the cached plaintext is cleared.
     /// </summary>
     private const int TTL_MS = 750;
+
     private readonly byte[] _cipherText;
     private readonly Encoding _encoding;
     private readonly byte[] _iv;

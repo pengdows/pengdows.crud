@@ -55,23 +55,31 @@ public sealed class OrderedDictionary<TKey, TValue> :
     }
 
     private Entry[] _entries = Array.Empty<Entry>();
-    private int[] _buckets = Array.Empty<int>();        // hash-mode only: index+1
+    private int[] _buckets = Array.Empty<int>(); // hash-mode only: index+1
     private int[] _insertionOrder = Array.Empty<int>(); // hash-mode only: index+1
-    private int[] _orderIndex = Array.Empty<int>();     // hash-mode only: entryIndex -> orderSlot+1
+    private int[] _orderIndex = Array.Empty<int>(); // hash-mode only: entryIndex -> orderSlot+1
 
     private int _orderTail; // hash-mode only: order array length in use (includes tombstones)
     private ulong _fastModMul; // hash-mode only
 
-    private int _count;      // physical count (includes free slots in hash-mode)
-    private int _freeList;   // index+1
+    private int _count; // physical count (includes free slots in hash-mode)
+    private int _freeList; // index+1
     private int _freeCount;
     private int _version;
 
     private readonly IEqualityComparer<TKey> _comparer;
 
-    public OrderedDictionary() : this(0, null) { }
-    public OrderedDictionary(int capacity) : this(capacity, null) { }
-    public OrderedDictionary(IEqualityComparer<TKey>? comparer) : this(0, comparer) { }
+    public OrderedDictionary() : this(0, null)
+    {
+    }
+
+    public OrderedDictionary(int capacity) : this(capacity, null)
+    {
+    }
+
+    public OrderedDictionary(IEqualityComparer<TKey>? comparer) : this(0, comparer)
+    {
+    }
 
     public OrderedDictionary(int capacity, IEqualityComparer<TKey>? comparer)
     {
@@ -663,12 +671,14 @@ public sealed class OrderedDictionary<TKey, TValue> :
         };
 
         foreach (var p in primes)
-            if (p >= min) return p;
+            if (p >= min)
+                return p;
 
         if ((min & 1) == 0) min++;
 
         for (var c = min; c < int.MaxValue - 2; c += 2)
-            if (IsPrime(c)) return c;
+            if (IsPrime(c))
+                return c;
 
         return min;
     }
@@ -681,7 +691,8 @@ public sealed class OrderedDictionary<TKey, TValue> :
 
         var limit = (int)Math.Sqrt(candidate);
         for (var d = 3; d <= limit; d += 2)
-            if (candidate % d == 0) return false;
+            if (candidate % d == 0)
+                return false;
 
         return true;
     }
@@ -754,7 +765,9 @@ public sealed class OrderedDictionary<TKey, TValue> :
             _current = default;
         }
 
-        public readonly void Dispose() { }
+        public readonly void Dispose()
+        {
+        }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static void ThrowInvalidOperationException() =>
@@ -832,6 +845,7 @@ public sealed class OrderedDictionary<TKey, TValue> :
 
                 if (cmp.Equals(_d._entries[idx].Value, item)) return true;
             }
+
             return false;
         }
 
@@ -915,7 +929,9 @@ public sealed class OrderedDictionary<TKey, TValue> :
             _current = default!;
         }
 
-        public readonly void Dispose() { }
+        public readonly void Dispose()
+        {
+        }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static void ThrowInvalidOperationException() =>
@@ -974,7 +990,9 @@ public sealed class OrderedDictionary<TKey, TValue> :
             _current = default!;
         }
 
-        public readonly void Dispose() { }
+        public readonly void Dispose()
+        {
+        }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static void ThrowInvalidOperationException() =>

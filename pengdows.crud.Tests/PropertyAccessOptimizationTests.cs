@@ -35,8 +35,7 @@ public class PropertyAccessOptimizationTests : SqlLiteContextTestBase
         [Column("name", DbType.String)]
         public string Name { get; set; } = string.Empty;
 
-        [Column("value", DbType.Int32)]
-        public int Value { get; set; }
+        [Column("value", DbType.Int32)] public int Value { get; set; }
     }
 
     [Table("opt_versioned")]
@@ -106,9 +105,7 @@ public class PropertyAccessOptimizationTests : SqlLiteContextTestBase
     [Table("opt_writable_id")]
     private class WritableGuidIdEntity
     {
-        [Id]
-        [Column("id", DbType.Guid)]
-        public Guid Id { get; set; }
+        [Id] [Column("id", DbType.Guid)] public Guid Id { get; set; }
 
         [PrimaryKey(1)]
         [Column("name", DbType.String)]
@@ -267,8 +264,8 @@ public class PropertyAccessOptimizationTests : SqlLiteContextTestBase
         // Assert - LastUpdated populated; Created unchanged
         Assert.NotEqual(default, entity.LastUpdatedOn);
         Assert.NotEmpty(entity.LastUpdatedBy);
-        Assert.Equal(originalCreatedOn, entity.CreatedOn);  // must be preserved
-        Assert.Equal("creator", entity.CreatedBy);          // must be preserved
+        Assert.Equal(originalCreatedOn, entity.CreatedOn); // must be preserved
+        Assert.Equal("creator", entity.CreatedBy); // must be preserved
     }
 
     [Fact]

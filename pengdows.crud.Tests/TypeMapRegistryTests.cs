@@ -14,7 +14,6 @@ namespace pengdows.crud.Tests;
 
 public class TypeMapRegistryTests
 {
-
     [Fact]
     public void Register_AddsAndRetrievesTableInfo()
     {

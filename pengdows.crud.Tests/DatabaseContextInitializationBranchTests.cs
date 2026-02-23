@@ -26,5 +26,4 @@ public class DatabaseContextInitializationBranchTests
         Assert.NotNull(result);
         Assert.Equal(expected, result!.ToString());
     }
-
 }

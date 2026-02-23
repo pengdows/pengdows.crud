@@ -43,8 +43,7 @@ public class DuckDbReadBenchmarks : IDisposable
 
     private bool _originalMatchNamesWithUnderscores;
 
-    [Params(1, 10, 100)]
-    public int RecordCount { get; set; }
+    [Params(1, 10, 100)] public int RecordCount { get; set; }
 
     [GlobalSetup]
     public void GlobalSetup()
@@ -105,7 +104,14 @@ public class DuckDbReadBenchmarks : IDisposable
         {
             if (File.Exists(f))
             {
-                try { File.Delete(f); } catch { /* best-effort */ }
+                try
+                {
+                    File.Delete(f);
+                }
+                catch
+                {
+                    /* best-effort */
+                }
             }
         }
     }
@@ -189,17 +195,13 @@ public class DuckDbReadBenchmarks : IDisposable
         [Column("id", DbType.Int32)]
         public int Id { get; set; }
 
-        [Column("name", DbType.String)]
-        public string Name { get; set; } = string.Empty;
+        [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
 
-        [Column("age", DbType.Int32)]
-        public int Age { get; set; }
+        [Column("age", DbType.Int32)] public int Age { get; set; }
 
-        [Column("salary", DbType.Double)]
-        public double Salary { get; set; }
+        [Column("salary", DbType.Double)] public double Salary { get; set; }
 
-        [Column("is_active", DbType.Boolean)]
-        public bool IsActive { get; set; }
+        [Column("is_active", DbType.Boolean)] public bool IsActive { get; set; }
 
         [Column("created_at", DbType.DateTime)]
         public DateTime CreatedAt { get; set; }

@@ -113,11 +113,9 @@ public class InheritedEntityMappingTests
         [Column("subject", DbType.String)]
         public string Subject { get; set; } = string.Empty;
 
-        [Column("user_id", DbType.Guid)]
-        public Guid UserId { get; set; }
+        [Column("user_id", DbType.Guid)] public Guid UserId { get; set; }
 
-        [Column("email", DbType.String)]
-        public string? Email { get; set; }
+        [Column("email", DbType.String)] public string? Email { get; set; }
 
         [Column("display_name", DbType.String)]
         public string? DisplayName { get; set; }
@@ -129,8 +127,7 @@ public class InheritedEntityMappingTests
         [Column("last_used_on", DbType.DateTime)]
         public DateTime? LastUsedOn { get; set; }
 
-        [Column("last_used_by", DbType.Guid)]
-        public Guid? LastUsedBy { get; set; }
+        [Column("last_used_by", DbType.Guid)] public Guid? LastUsedBy { get; set; }
 
         [Version]
         [Column("version", DbType.Int32)]

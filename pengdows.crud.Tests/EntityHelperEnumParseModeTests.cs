@@ -86,8 +86,9 @@ public class TableGatewayEnumParseModeTests : SqlLiteContextTestBase
     {
         var helper = new TableGateway<EnumModeEntity, int>(Context);
         var dialect = ((ISqlDialectProvider)Context).Dialect;
-        var replaced = helper.ReplaceNeutralTokens("{Q}Name{q} FROM {Q}T{q} WHERE {Q}Id{q}={S}id");
-        var expected = $"{dialect.WrapObjectName("Name")} FROM {dialect.WrapObjectName("T")} WHERE {dialect.WrapObjectName("Id")}={dialect.ParameterMarker}id";
+        var replaced = dialect.ReplaceNeutralTokens("{Q}Name{q} FROM {Q}T{q} WHERE {Q}Id{q}={S}id");
+        var expected =
+            $"{dialect.WrapObjectName("Name")} FROM {dialect.WrapObjectName("T")} WHERE {dialect.WrapObjectName("Id")}={dialect.ParameterMarker}id";
         Assert.Equal(expected, replaced);
     }
 

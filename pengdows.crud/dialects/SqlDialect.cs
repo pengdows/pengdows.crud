@@ -686,6 +686,7 @@ internal abstract class SqlDialect : ISqlDialect
             {
                 // Ignore providers that don't support ResetDbType.
             }
+
             param.ParameterName = string.Empty;
             param.Value = null;
             param.DbType = DbType.Object;
@@ -717,7 +718,7 @@ internal abstract class SqlDialect : ISqlDialect
 
     [SuppressMessage("Security", "cs/exposure-of-private-information",
         Justification = "This method's purpose is to store user-supplied values in DbParameters. " +
-                         "No parameter values are written to logs — only timing metadata (DbType, elapsed).")]
+                        "No parameter values are written to logs — only timing metadata (DbType, elapsed).")]
     public virtual DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
         var traceTimings = Logger.IsEnabled(LogLevel.Debug) && IsParameterTimingEnabled();
@@ -751,6 +752,15 @@ internal abstract class SqlDialect : ISqlDialect
 
         // Performance: Inline null check to avoid method call overhead
         var valueIsNull = value == null || value is DBNull;
+
+        if (!valueIsNull)
+        {
+            // Validate CLR type compatibility with DbType before setting the value.
+            // Catches mismatches early with clear messages instead of deferring to
+            // provider-specific errors at execution time.
+            DbTypeValidator.Validate(type, value);
+        }
+
         var runtimeType = valueIsNull ? null : ResolveClrType(value);
         var handled = runtimeType != null &&
                       AdvancedTypes.IsMappedType(runtimeType) &&
@@ -758,16 +768,9 @@ internal abstract class SqlDialect : ISqlDialect
 
         if (!handled)
         {
-            // Validate CLR type compatibility with DbType before setting the value.
-            // Catches mismatches early with clear messages instead of deferring to
-            // provider-specific errors at execution time.
-            if (!valueIsNull)
-            {
-                DbTypeValidator.Validate(type, value);
-            }
-
             parameter.DbType = type;
-            parameter.Value = valueIsNull ? DBNull.Value : value!;
+            var preparedValue = PrepareParameterValue(value, type);
+            parameter.Value = preparedValue ?? DBNull.Value;
         }
 
         if (!SupportsNamedParameters)
@@ -780,7 +783,7 @@ internal abstract class SqlDialect : ISqlDialect
             }
         }
 
-        if (!handled && !valueIsNull)
+        if (!valueIsNull)
         {
             if (value is string s && (parameter.DbType == DbType.String || parameter.DbType == DbType.AnsiString ||
                                       parameter.DbType == DbType.StringFixedLength ||
@@ -788,26 +791,27 @@ internal abstract class SqlDialect : ISqlDialect
             {
                 parameter.Size = Math.Max(s.Length, 1);
             }
-            else if (parameter.DbType == DbType.Decimal && value is decimal dec)
-            {
-                // Microsoft.Data.SqlClient 6.x validates that the decimal value fits
-                // within the parameter's declared Precision/Scale before sending to the
-                // server.  When Precision=0, SqlClient treats the parameter as DECIMAL(1,0)
-                // (the minimum valid SQL decimal), which rejects any value requiring more
-                // than one significant digit (e.g. 10, 19.99, 100).
-                //
-                // Fix: always set Precision to at least 18 (the standard SQL Server
-                // DECIMAL column precision) so any value that fits in a typical column
-                // is accepted.  Scale is set to the value's natural fractional digits
-                // (e.g. 2 for 19.99m, 0 for 10m) so no silent rounding occurs.
-                //
-                // Using Precision=18 is the industry convention (used by Dapper, EF Core).
-                // All supported databases (SQL Server, PostgreSQL, Oracle, MySQL, etc.)
-                // accept DECIMAL(18,S) parameters for columns declared with P≤18.
-                var (inferredPrecision, inferredScale) = DecimalHelpers.Infer(dec);
-                parameter.Precision = (byte)Math.Max(inferredPrecision, 18);
-                parameter.Scale = (byte)inferredScale;
-            }
+        }
+
+        // Microsoft.Data.SqlClient 6.x validates that the decimal value fits
+        // within the parameter's declared Precision/Scale before sending to the
+        // server.  When Precision=0, SqlClient treats the parameter as DECIMAL(1,0)
+        // (the minimum valid SQL decimal), which rejects any value requiring more
+        // than one significant digit (e.g. 10, 19.99, 100).
+        //
+        // Fix: always set Precision to at least 18 (the standard SQL Server
+        // DECIMAL column precision) so any value that fits in a typical column
+        // is accepted.  Scale is set to the value's natural fractional digits
+        // (e.g. 2 for 19.99m, 0 for 10m) so no silent rounding occurs.
+        //
+        // Using Precision=18 is the industry convention (used by Dapper, EF Core).
+        // All supported databases (SQL Server, PostgreSQL, Oracle, MySQL, etc.)
+        // accept DECIMAL(18,S) parameters for columns declared with P≤18.
+        if (!valueIsNull && parameter.DbType == DbType.Decimal && value is decimal dec)
+        {
+            var (inferredPrecision, inferredScale) = DecimalHelpers.Infer(dec);
+            parameter.Precision = (byte)Math.Max(inferredPrecision, 18);
+            parameter.Scale = (byte)inferredScale;
         }
 
         if (traceTimings)
@@ -988,10 +992,10 @@ internal abstract class SqlDialect : ISqlDialect
     {
     }
 
-    public virtual Task TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
+    public virtual ValueTask TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
         CancellationToken cancellationToken = default)
     {
-        return Task.CompletedTask;
+        return ValueTask.CompletedTask;
     }
 
     /// <summary>
@@ -1031,7 +1035,7 @@ internal abstract class SqlDialect : ISqlDialect
     /// <summary>
     /// Async version of <see cref="TryExecuteReadOnlySql"/>.
     /// </summary>
-    protected async Task TryExecuteReadOnlySqlAsync(ITransactionContext transaction, string sql,
+    protected async ValueTask TryExecuteReadOnlySqlAsync(ITransactionContext transaction, string sql,
         string dialectName, CancellationToken cancellationToken = default)
     {
         try

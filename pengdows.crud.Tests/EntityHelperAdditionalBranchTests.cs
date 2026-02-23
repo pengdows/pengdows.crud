@@ -31,9 +31,7 @@ public class TableGatewayAdditionalBranchTests : SqlLiteContextTestBase
     [Table("GuidBranchTest")]
     private sealed class GuidBranchEntity
     {
-        [Id]
-        [Column("Id", DbType.Guid)]
-        public Guid Id { get; set; }
+        [Id] [Column("Id", DbType.Guid)] public Guid Id { get; set; }
 
         [Column("Name", DbType.String)] public string Name { get; set; } = string.Empty;
     }

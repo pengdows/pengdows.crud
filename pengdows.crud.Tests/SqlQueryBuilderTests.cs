@@ -239,7 +239,8 @@ public class SqlQueryBuilderTests
     {
         var builder = new SqlQueryBuilder();
         Assert.Throws<ArgumentNullException>(() => builder.AppendFormat((string)null!, "arg"));
-        Assert.Throws<ArgumentNullException>(() => builder.AppendFormat(CultureInfo.InvariantCulture, (string)null!, "arg"));
+        Assert.Throws<ArgumentNullException>(() =>
+            builder.AppendFormat(CultureInfo.InvariantCulture, (string)null!, "arg"));
     }
 
     [Fact]

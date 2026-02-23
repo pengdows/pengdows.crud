@@ -181,7 +181,7 @@ internal class OracleDialect : SqlDialect
         TryExecuteReadOnlySql(transaction, ReadOnlySessionSetting, "Oracle");
     }
 
-    public override Task TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
+    public override ValueTask TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
         CancellationToken cancellationToken = default)
     {
         return TryExecuteReadOnlySqlAsync(transaction, ReadOnlySessionSetting, "Oracle", cancellationToken);

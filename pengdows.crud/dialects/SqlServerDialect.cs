@@ -22,7 +22,7 @@
 using System.Data;
 using System.Data.Common;
 using System.Globalization;
-using System.Linq;
+using System.Text;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.wrappers;
@@ -48,6 +48,7 @@ internal class SqlServerDialect : SqlDialect
 {
     private const string RcsiQuery =
         "SELECT is_read_committed_snapshot_on FROM sys.databases WHERE name = DB_NAME()";
+
     private const string SnapshotIsolationQuery =
         "SELECT snapshot_isolation_state FROM sys.databases WHERE name = DB_NAME()";
 
@@ -55,20 +56,42 @@ internal class SqlServerDialect : SqlDialect
     // expected-state dictionary are derived from this array.
     private static readonly (string Name, string Value)[] SessionSettingsDef =
     {
-        ("ANSI_NULLS",              "ON"),
-        ("ANSI_PADDING",            "ON"),
-        ("ANSI_WARNINGS",           "ON"),
-        ("ARITHABORT",              "ON"),
+        ("ANSI_NULLS", "ON"),
+        ("ANSI_PADDING", "ON"),
+        ("ANSI_WARNINGS", "ON"),
+        ("ARITHABORT", "ON"),
         ("CONCAT_NULL_YIELDS_NULL", "ON"),
-        ("QUOTED_IDENTIFIER",       "ON"),
-        ("NUMERIC_ROUNDABORT",      "OFF"),
+        ("QUOTED_IDENTIFIER", "ON"),
+        ("NUMERIC_ROUNDABORT", "OFF"),
     };
 
     private static readonly string DefaultSessionSettings =
-        string.Join(";\n", Array.ConvertAll(SessionSettingsDef, s => $"SET {s.Name} {s.Value}")) + ";";
+        BuildDefaultSessionSettings();
 
     private static readonly IReadOnlyDictionary<string, string> ExpectedSessionSettings =
-        SessionSettingsDef.ToDictionary(s => s.Name, s => s.Value, StringComparer.OrdinalIgnoreCase);
+        BuildExpectedSessionSettings();
+
+    private static string BuildDefaultSessionSettings()
+    {
+        var sb = new StringBuilder();
+        for (var i = 0; i < SessionSettingsDef.Length; i++)
+        {
+            if (i > 0) sb.Append(";\n");
+            sb.Append("SET ").Append(SessionSettingsDef[i].Name).Append(' ').Append(SessionSettingsDef[i].Value);
+        }
+        sb.Append(';');
+        return sb.ToString();
+    }
+
+    private static IReadOnlyDictionary<string, string> BuildExpectedSessionSettings()
+    {
+        var dict = new Dictionary<string, string>(SessionSettingsDef.Length, StringComparer.OrdinalIgnoreCase);
+        foreach (var s in SessionSettingsDef)
+        {
+            dict[s.Name] = s.Value;
+        }
+        return dict;
+    }
 
     private string? _sessionSettings;
 
@@ -209,7 +232,8 @@ internal class SqlServerDialect : SqlDialect
             }
             else
             {
-                Logger.LogInformation("SQL Server session settings: already compliant; enforcing baseline on every checkout");
+                Logger.LogInformation(
+                    "SQL Server session settings: already compliant; enforcing baseline on every checkout");
             }
         }
 

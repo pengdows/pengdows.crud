@@ -43,7 +43,8 @@ public class TableGatewayBatchTests : IAsyncLifetime
 
         var sqlServerFactory = new fakeDbFactory(SupportedDatabase.SqlServer);
         sqlServerFactory.EnableDataPersistence = true;
-        _sqlServerContext = new DatabaseContext("Server=localhost;EmulatedProduct=SqlServer", sqlServerFactory, _typeMap);
+        _sqlServerContext =
+            new DatabaseContext("Server=localhost;EmulatedProduct=SqlServer", sqlServerFactory, _typeMap);
     }
 
     public Task InitializeAsync() => Task.CompletedTask;
@@ -75,8 +76,7 @@ public class TableGatewayBatchTests : IAsyncLifetime
     public async Task BatchCreateAsync_NullList_Throws()
     {
         var helper = new TableGateway<TestEntitySimple, int>(_sqliteContext);
-        await Assert.ThrowsAsync<ArgumentNullException>(
-            async () => await helper.BatchCreateAsync(null!));
+        await Assert.ThrowsAsync<ArgumentNullException>(async () => await helper.BatchCreateAsync(null!));
     }
 
     [Fact]
@@ -96,11 +96,10 @@ public class TableGatewayBatchTests : IAsyncLifetime
         var helper = new TableGateway<TestEntitySimple, int>(_sqliteContext);
         var cts = new CancellationTokenSource();
         cts.Cancel();
-        await Assert.ThrowsAsync<OperationCanceledException>(
-            async () => await helper.BatchCreateAsync(
-                new[] { new TestEntitySimple { Name = "test" } },
-                null,
-                cts.Token));
+        await Assert.ThrowsAsync<OperationCanceledException>(async () => await helper.BatchCreateAsync(
+            new[] { new TestEntitySimple { Name = "test" } },
+            null,
+            cts.Token));
     }
 
     // =========================================================================
@@ -399,8 +398,7 @@ public class TableGatewayBatchTests : IAsyncLifetime
     public async Task BatchUpsertAsync_NullList_Throws()
     {
         var helper = new TableGateway<TestEntity, int>(_pgContext, _audit);
-        await Assert.ThrowsAsync<ArgumentNullException>(
-            async () => await helper.BatchUpsertAsync(null!));
+        await Assert.ThrowsAsync<ArgumentNullException>(async () => await helper.BatchUpsertAsync(null!));
     }
 
     [Fact]
@@ -409,11 +407,10 @@ public class TableGatewayBatchTests : IAsyncLifetime
         var helper = new TableGateway<TestEntity, int>(_pgContext, _audit);
         var cts = new CancellationTokenSource();
         cts.Cancel();
-        await Assert.ThrowsAsync<OperationCanceledException>(
-            async () => await helper.BatchUpsertAsync(
-                new[] { new TestEntity { Name = "test" } },
-                null,
-                cts.Token));
+        await Assert.ThrowsAsync<OperationCanceledException>(async () => await helper.BatchUpsertAsync(
+            new[] { new TestEntity { Name = "test" } },
+            null,
+            cts.Token));
     }
 
     // =========================================================================
@@ -427,11 +424,9 @@ public class TableGatewayBatchTests : IAsyncLifetime
         [Column("id", DbType.Int32)]
         public int Id { get; set; }
 
-        [Column("name", DbType.String)]
-        public string Name { get; set; } = string.Empty;
+        [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
 
-        [Column("description", DbType.String)]
-        public string? Description { get; set; }
+        [Column("description", DbType.String)] public string? Description { get; set; }
     }
 
     [Table("no_key")]
@@ -441,7 +436,6 @@ public class TableGatewayBatchTests : IAsyncLifetime
         [Column("id", DbType.Int32)]
         public int Id { get; set; }
 
-        [Column("value", DbType.String)]
-        public string Value { get; set; } = string.Empty;
+        [Column("value", DbType.String)] public string Value { get; set; } = string.Empty;
     }
 }

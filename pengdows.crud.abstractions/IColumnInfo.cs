@@ -61,6 +61,11 @@ public interface IColumnInfo
     Type? EnumUnderlyingType { get; set; }
 
     /// <summary>
+    /// True when the enum should be stored as its string name rather than numeric value.
+    /// </summary>
+    bool EnumAsString { get; set; }
+
+    /// <summary>
     /// True when the column stores JSON data.
     /// </summary>
     bool IsJsonType { get; set; }

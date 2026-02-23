@@ -139,7 +139,6 @@ method pengdows.crud.ITableGateway`2<TEntity, TRowID>::LoadSingleAsync(pengdows.
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::LoadSingleAsync(pengdows.crud.ISqlContainer, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<TEntity>
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::LoadStreamAsync(pengdows.crud.ISqlContainer) -> System.Collections.Generic.IAsyncEnumerable`1<TEntity>
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::LoadStreamAsync(pengdows.crud.ISqlContainer, System.Threading.CancellationToken) -> System.Collections.Generic.IAsyncEnumerable`1<TEntity>
-method pengdows.crud.ITableGateway`2<TEntity, TRowID>::MakeParameterName(System.Data.Common.DbParameter) -> string
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::MapReaderToObject(pengdows.crud.wrappers.ITrackedReader) -> TEntity
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::RetrieveAsync(System.Collections.Generic.IEnumerable`1<TRowID>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<System.Collections.Generic.List`1<TEntity>>
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::RetrieveOneAsync(TEntity, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<TEntity>
@@ -190,12 +189,14 @@ method pengdows.crud.dialects.ISqlDialect::ParseVersion(string) -> System.Versio
 method pengdows.crud.dialects.ISqlDialect::PrepareParameterValue(object, System.Data.DbType) -> object
 method pengdows.crud.dialects.ISqlDialect::RenderInsertReturningClause(string) -> string
 method pengdows.crud.dialects.ISqlDialect::RenderJsonArgument(string, pengdows.crud.IColumnInfo) -> string
+method pengdows.crud.dialects.ISqlDialect::ReplaceNeutralTokens(string) -> string
 method pengdows.crud.dialects.ISqlDialect::ShouldDisablePrepareOn(System.Exception) -> bool
 method pengdows.crud.dialects.ISqlDialect::TryEnterReadOnlyTransaction(pengdows.crud.ITransactionContext) -> void
-method pengdows.crud.dialects.ISqlDialect::TryEnterReadOnlyTransactionAsync(pengdows.crud.ITransactionContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task
+method pengdows.crud.dialects.ISqlDialect::TryEnterReadOnlyTransactionAsync(pengdows.crud.ITransactionContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask
 method pengdows.crud.dialects.ISqlDialect::TryMarkJsonParameter(System.Data.Common.DbParameter, pengdows.crud.IColumnInfo) -> void
 method pengdows.crud.dialects.ISqlDialect::UpsertIncomingColumn(string) -> string
 method pengdows.crud.dialects.ISqlDialect::WrapObjectName(string) -> string
+method pengdows.crud.dialects.ISqlDialect::WrapSimpleName(string) -> string
 method pengdows.crud.isolation.IIsolationResolver::GetSupportedLevels() -> System.Collections.Generic.IReadOnlySet`1<System.Data.IsolationLevel>
 method pengdows.crud.isolation.IIsolationResolver::Resolve(pengdows.crud.enums.IsolationProfile) -> System.Data.IsolationLevel
 method pengdows.crud.isolation.IIsolationResolver::ResolveWithDetail(pengdows.crud.enums.IsolationProfile) -> pengdows.crud.isolation.IsolationResolution

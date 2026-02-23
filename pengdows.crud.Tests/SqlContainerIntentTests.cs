@@ -31,7 +31,9 @@ public class SqlContainerIntentTests
             var overloads = methods.Where(method => method.Name == name).ToArray();
             Assert.NotEmpty(overloads);
 
-            Assert.True(overloads.Any(method => method.GetParameters().Any(param => param.ParameterType == typeof(ExecutionType))),
+            Assert.True(
+                overloads.Any(method =>
+                    method.GetParameters().Any(param => param.ParameterType == typeof(ExecutionType))),
                 $"Expected {name} to expose ExecutionType intent overloads.");
         }
     }

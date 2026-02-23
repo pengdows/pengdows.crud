@@ -302,7 +302,8 @@ public interface ISqlContainer : ISafeAsyncDisposableBase
     /// <param name="executionType">Execution intent (Read/Write) for pool selection.</param>
     /// <param name="commandType">Type of command to execute.</param>
     /// <returns>A <see cref="ScalarResult{T}"/> with <see cref="ScalarStatus"/> indicating the outcome.</returns>
-    ValueTask<ScalarResult<T>> TryExecuteScalarAsync<T>(ExecutionType executionType, CommandType commandType = CommandType.Text);
+    ValueTask<ScalarResult<T>> TryExecuteScalarAsync<T>(ExecutionType executionType,
+        CommandType commandType = CommandType.Text);
 
     /// <summary>
     /// Executes the query and returns a <see cref="ScalarResult{T}"/> with an explicit execution intent and cancellation support.
@@ -374,7 +375,8 @@ public interface ISqlContainer : ISafeAsyncDisposableBase
     /// <param name="executionType">Execution intent (Read/Write) for pool selection.</param>
     /// <param name="commandType">Type of command to execute.</param>
     /// <returns>A tracked reader over the results.</returns>
-    ValueTask<ITrackedReader> ExecuteReaderAsync(ExecutionType executionType, CommandType commandType = CommandType.Text);
+    ValueTask<ITrackedReader> ExecuteReaderAsync(ExecutionType executionType,
+        CommandType commandType = CommandType.Text);
 
     /// <summary>
     /// Executes the query and returns a tracked data reader with an explicit execution intent and cancellation support.
@@ -391,6 +393,12 @@ public interface ISqlContainer : ISafeAsyncDisposableBase
     /// </summary>
     /// <param name="list">The parameters to add.</param>
     void AddParameters(IEnumerable<DbParameter> list);
+
+    /// <summary>
+    /// Adds multiple parameters to the container from a list.
+    /// </summary>
+    /// <param name="list">The parameters to add.</param>
+    void AddParameters(IList<DbParameter> list);
 
     /// <summary>
     /// Creates a <see cref="DbCommand"/> for the given tracked connection.

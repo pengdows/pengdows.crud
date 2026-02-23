@@ -29,7 +29,8 @@ public interface IDataReaderMapper
     /// <param name="options">Mapping options controlling hydration behavior.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>List of hydrated objects.</returns>
-    Task<List<T>> LoadAsync<T>(IDataReader reader, IMapperOptions options, CancellationToken cancellationToken = default)
+    Task<List<T>> LoadAsync<T>(IDataReader reader, IMapperOptions options,
+        CancellationToken cancellationToken = default)
         where T : class, new();
 
     /// <summary>

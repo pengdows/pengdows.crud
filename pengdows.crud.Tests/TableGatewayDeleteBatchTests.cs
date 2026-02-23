@@ -44,9 +44,7 @@ public class TableGatewayDeleteBatchTests : IAsyncLifetime
     [Table("test_delete_batch")]
     public class TestDeleteBatchEntity
     {
-        [Id]
-        [Column("id", DbType.Int32)]
-        public int Id { get; set; }
+        [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
 
         [PrimaryKey]
         [Column("name", DbType.String)]
@@ -72,7 +70,7 @@ public class TableGatewayDeleteBatchTests : IAsyncLifetime
         ResetFactory();
         var gateway = new TableGateway<TestDeleteBatchEntity, int>(_sqliteContext);
         var ids = Enumerable.Range(1, 1000).ToList();
-        
+
         // Act
         // MaxParameterLimit = 999. Headroom 10% -> 899.
         // 1000 IDs should result in 2 chunks (899 and 101)
@@ -80,8 +78,9 @@ public class TableGatewayDeleteBatchTests : IAsyncLifetime
 
         // Assert
         var connections = _sqliteFactory.CreatedConnections;
-        var totalCommands = connections.SelectMany(c => c.ExecutedNonQueryTexts).Count(text => text.StartsWith("DELETE", StringComparison.OrdinalIgnoreCase));
-        
+        var totalCommands = connections.SelectMany(c => c.ExecutedNonQueryTexts)
+            .Count(text => text.StartsWith("DELETE", StringComparison.OrdinalIgnoreCase));
+
         Assert.Equal(2, totalCommands);
     }
 
@@ -92,7 +91,7 @@ public class TableGatewayDeleteBatchTests : IAsyncLifetime
         ResetFactory();
         var gateway = new TableGateway<TestDeleteBatchEntity, int>(_sqliteContext);
         var entities = Enumerable.Range(1, 1000).Select(i => new TestDeleteBatchEntity { Id = i }).ToList();
-        
+
         // Act
         // For single-ID entities, paramsPerRow = 1
         var affected = await gateway.BatchDeleteAsync(entities);
@@ -101,7 +100,7 @@ public class TableGatewayDeleteBatchTests : IAsyncLifetime
         var totalCommands = _sqliteFactory.CreatedConnections
             .SelectMany(c => c.ExecutedNonQueryTexts)
             .Count(text => text.StartsWith("DELETE", StringComparison.OrdinalIgnoreCase));
-        
+
         Assert.Equal(2, totalCommands);
     }
 
@@ -113,8 +112,9 @@ public class TableGatewayDeleteBatchTests : IAsyncLifetime
         var gateway = new TableGateway<TestDeleteCompositeEntity, string>(_sqliteContext);
         // 2 params per row. Max 899 usable. rowsPerChunk = 899 / 2 = 449.
         // 500 entities should result in 2 chunks (449 and 51)
-        var entities = Enumerable.Range(1, 500).Select(i => new TestDeleteCompositeEntity { Key1 = i, Key2 = i }).ToList();
-        
+        var entities = Enumerable.Range(1, 500).Select(i => new TestDeleteCompositeEntity { Key1 = i, Key2 = i })
+            .ToList();
+
         // Act
         await gateway.BatchDeleteAsync(entities);
 
@@ -122,7 +122,7 @@ public class TableGatewayDeleteBatchTests : IAsyncLifetime
         var totalCommands = _sqliteFactory.CreatedConnections
             .SelectMany(c => c.ExecutedNonQueryTexts)
             .Count(text => text.StartsWith("DELETE", StringComparison.OrdinalIgnoreCase));
-        
+
         Assert.Equal(2, totalCommands);
     }
 

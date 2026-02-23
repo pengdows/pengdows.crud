@@ -43,7 +43,9 @@ public class TypeCoercionHelperCoverageTests
     {
         var options = new TypeCoercionOptions(TimeMappingPolicy.ForceUtcDateTime, JsonPassThrough.PreferDocument,
             SupportedDatabase.Sqlite);
-        var result = (DateTimeOffset)TypeCoercionHelper.Coerce("2026-02-07T03:00:00", typeof(string), typeof(DateTimeOffset), options)!;
+        var result =
+            (DateTimeOffset)TypeCoercionHelper.Coerce("2026-02-07T03:00:00", typeof(string), typeof(DateTimeOffset),
+                options)!;
         Assert.Equal(DateTimeKind.Utc, result.Offset == TimeSpan.Zero ? DateTimeKind.Utc : DateTimeKind.Utc);
     }
 
@@ -59,12 +61,14 @@ public class TypeCoercionHelperCoverageTests
     {
         var registry = new TypeMapRegistry();
         registry.Register<EnumHolder>();
-        var column = registry.GetTableInfo<EnumHolder>().Columns.Values.First(c => c.PropertyInfo.Name == nameof(EnumHolder.State));
+        var column = registry.GetTableInfo<EnumHolder>().Columns.Values
+            .First(c => c.PropertyInfo.Name == nameof(EnumHolder.State));
         var previousLogger = TypeCoercionHelper.Logger;
         try
         {
             TypeCoercionHelper.Logger = new ThrowingLogger();
-            var result = TypeCoercionHelper.Coerce("invalid", typeof(string), column, EnumParseFailureMode.SetNullAndLog);
+            var result =
+                TypeCoercionHelper.Coerce("invalid", typeof(string), column, EnumParseFailureMode.SetNullAndLog);
             Assert.Null(result);
         }
         finally
@@ -77,6 +81,7 @@ public class TypeCoercionHelperCoverageTests
     {
         IDisposable ILogger.BeginScope<TState>(TState state) => NoopDisposable.Instance;
         bool ILogger.IsEnabled(LogLevel logLevel) => true;
+
         void ILogger.Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
             Func<TState, Exception?, string> formatter)
         {
@@ -89,7 +94,10 @@ public class TypeCoercionHelperCoverageTests
         private sealed class NoopDisposable : IDisposable
         {
             public static NoopDisposable Instance { get; } = new();
-            public void Dispose() { }
+
+            public void Dispose()
+            {
+            }
         }
     }
 

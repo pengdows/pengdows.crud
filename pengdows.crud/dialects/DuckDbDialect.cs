@@ -168,7 +168,7 @@ internal class DuckDbDialect : SqlDialect
         TryExecuteReadOnlySql(transaction, ReadOnlySessionSetting, "DuckDB");
     }
 
-    public override Task TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
+    public override ValueTask TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
         CancellationToken cancellationToken = default)
     {
         return TryExecuteReadOnlySqlAsync(transaction, ReadOnlySessionSetting, "DuckDB", cancellationToken);
@@ -337,10 +337,8 @@ internal class DuckDbDialect : SqlDialect
             // DuckDB handles GUIDs as strings in UUID format
             parameter.DbType = DbType.String;
             // Use string.Create with Guid.TryFormat to avoid allocations
-            parameter.Value = string.Create(36, guidValue, static (span, guid) =>
-            {
-                guid.TryFormat(span, out _, "D");
-            });
+            parameter.Value =
+                string.Create(36, guidValue, static (span, guid) => { guid.TryFormat(span, out _, "D"); });
         }
         else if (type == DbType.Boolean && value is bool boolValue)
         {

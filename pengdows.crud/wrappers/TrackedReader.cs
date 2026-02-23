@@ -202,7 +202,10 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
                     return _reader.GetFieldValue<DateTime>(i);
                 }
             }
-            catch { }
+            catch
+            {
+            }
+
             throw;
         }
     }
@@ -312,7 +315,10 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
                     return _reader.GetFieldValue<DateTime>(i);
                 }
             }
-            catch { }
+            catch
+            {
+            }
+
             throw;
         }
     }
@@ -337,7 +343,9 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
                         return typeof(DateTime);
                     }
                 }
-                catch { }
+                catch
+                {
+                }
             }
 
             return type;
@@ -353,7 +361,10 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
                     return typeof(DateTime);
                 }
             }
-            catch { }
+            catch
+            {
+            }
+
             throw;
         }
     }

@@ -760,6 +760,7 @@ public class TypeCoercionHelperExtensiveTests : IDisposable
         public bool IsEnum { get; set; }
         public Type? EnumType { get; set; }
         public Type? EnumUnderlyingType { get; set; }
+        public bool EnumAsString { get; set; }
         public bool IsJsonType { get; set; }
         public JsonSerializerOptions JsonSerializerOptions { get; set; } = new();
         public bool IsIdIsWritable { get; set; }

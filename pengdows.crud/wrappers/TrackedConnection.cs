@@ -410,6 +410,7 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
                     "Timed out waiting to dispose shared connection {Name}; retrying once lock is released.",
                     GetName());
             }
+
             await Task.Run(async () =>
             {
                 await _semaphoreSlim.WaitAsync().ConfigureAwait(false);
@@ -429,14 +430,15 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
     {
         try
         {
-        if (_connection.State != ConnectionState.Closed)
-        {
-            if (_logger.IsEnabled(LogLevel.Warning))
+            if (_connection.State != ConnectionState.Closed)
             {
-                _logger.LogWarning("Connection {Name} was still open during Dispose. Closing.", GetName());
+                if (_logger.IsEnabled(LogLevel.Warning))
+                {
+                    _logger.LogWarning("Connection {Name} was still open during Dispose. Closing.", GetName());
+                }
+
+                CloseWithMetrics();
             }
-            CloseWithMetrics();
-        }
         }
         catch (Exception ex)
         {
@@ -469,14 +471,15 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection
 
         try
         {
-        if (_connection.State != ConnectionState.Closed)
-        {
-            if (_logger.IsEnabled(LogLevel.Warning))
+            if (_connection.State != ConnectionState.Closed)
             {
-                _logger.LogWarning("Connection {Name} was still open during DisposeAsync. Closing.", GetName());
+                if (_logger.IsEnabled(LogLevel.Warning))
+                {
+                    _logger.LogWarning("Connection {Name} was still open during DisposeAsync. Closing.", GetName());
+                }
+
+                CloseWithMetrics();
             }
-            CloseWithMetrics();
-        }
         }
         catch (Exception ex)
         {

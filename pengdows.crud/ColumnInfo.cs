@@ -99,8 +99,8 @@ public class ColumnInfo : IColumnInfo
         var method = cacheType.GetMethod(nameof(EnumStringCache<DayOfWeek>.GetOrAdd))!;
         // Compile: (object v) => EnumStringCache<TEnum>.GetOrAdd((TEnum)v)
         var param = Expression.Parameter(typeof(object), "v");
-        var cast = Expression.Convert(param, enumType);   // unbox object → TEnum
-        var call = Expression.Call(method, cast);          // static direct call
+        var cast = Expression.Convert(param, enumType); // unbox object → TEnum
+        var call = Expression.Call(method, cast); // static direct call
         return Expression.Lambda<Func<object, string>>(call, param).Compile();
     }
 

@@ -37,6 +37,7 @@ internal static class ConnectionPoolingConfiguration
 
     // Fallback connection-string key names when the dialect does not expose its own.
     private const string DefaultPoolingKey = "Pooling";
+
     private static readonly string[] MinPoolKeyCandidates =
     {
         "Min Pool Size",

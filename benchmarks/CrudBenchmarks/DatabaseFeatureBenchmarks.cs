@@ -28,60 +28,60 @@ namespace CrudBenchmarks;
 public class DatabaseFeatureBenchmarks : IAsyncDisposable
 {
     private const string ComplexQuerySqlTemplate = """
-        SELECT t.transaction_id, t.user_id, t.status::text AS status,
-               t.currency::text AS currency, t.amount,
-               t.metadata->>'risk_score' AS risk_score,
-               t.created_at, t.updated_at
-        FROM transactions t
-        WHERE t.status = {status}::transaction_status
-          AND t.metadata->>'risk_score' IS NOT NULL
-          AND {tag} = ANY(t.tags)
-        ORDER BY t.amount DESC
-        LIMIT 100
-        """;
+                                                   SELECT t.transaction_id, t.user_id, t.status::text AS status,
+                                                          t.currency::text AS currency, t.amount,
+                                                          t.metadata->>'risk_score' AS risk_score,
+                                                          t.created_at, t.updated_at
+                                                   FROM transactions t
+                                                   WHERE t.status = {status}::transaction_status
+                                                     AND t.metadata->>'risk_score' IS NOT NULL
+                                                     AND {tag} = ANY(t.tags)
+                                                   ORDER BY t.amount DESC
+                                                   LIMIT 100
+                                                   """;
 
     private const string FullTextSearchSqlTemplate = """
-        SELECT t.status::text AS status, COUNT(*) AS match_count,
-               AVG(ts_rank(t.search_vector, plainto_tsquery('english', {searchTerm}))) AS avg_rank
-        FROM transactions t
-        WHERE t.search_vector @@ plainto_tsquery('english', {searchTerm2})
-        GROUP BY t.status
-        ORDER BY avg_rank DESC
-        """;
+                                                     SELECT t.status::text AS status, COUNT(*) AS match_count,
+                                                            AVG(ts_rank(t.search_vector, plainto_tsquery('english', {searchTerm}))) AS avg_rank
+                                                     FROM transactions t
+                                                     WHERE t.search_vector @@ plainto_tsquery('english', {searchTerm2})
+                                                     GROUP BY t.status
+                                                     ORDER BY avg_rank DESC
+                                                     """;
 
     private const string BulkUpsertSqlTemplate = """
-        INSERT INTO transactions (transaction_id, user_id, status, currency, amount, metadata, tags, created_at, updated_at)
-        VALUES ({id}, {userId}, {status}::transaction_status, {currency}::currency_code,
-                {amount}, {metadata}::jsonb,
-                ARRAY[{tag1}, {tag2}]::text[],
-                NOW(), NOW())
-        ON CONFLICT (transaction_id) DO UPDATE SET
-            amount = EXCLUDED.amount,
-            metadata = EXCLUDED.metadata,
-            tags = EXCLUDED.tags,
-            updated_at = NOW()
-        """;
+                                                 INSERT INTO transactions (transaction_id, user_id, status, currency, amount, metadata, tags, created_at, updated_at)
+                                                 VALUES ({id}, {userId}, {status}::transaction_status, {currency}::currency_code,
+                                                         {amount}, {metadata}::jsonb,
+                                                         ARRAY[{tag1}, {tag2}]::text[],
+                                                         NOW(), NOW())
+                                                 ON CONFLICT (transaction_id) DO UPDATE SET
+                                                     amount = EXCLUDED.amount,
+                                                     metadata = EXCLUDED.metadata,
+                                                     tags = EXCLUDED.tags,
+                                                     updated_at = NOW()
+                                                 """;
 
     private const string JsonbQuerySqlTemplate = """
-        SELECT t.transaction_id, t.user_id, t.status::text AS status,
-               t.currency::text AS currency, t.amount,
-               t.metadata->>'risk_score' AS risk_score,
-               t.created_at, t.updated_at
-        FROM transactions t
-        WHERE (t.metadata->>'risk_score')::int > {minScore}
-        ORDER BY (t.metadata->>'risk_score')::int DESC
-        LIMIT 50
-        """;
+                                                 SELECT t.transaction_id, t.user_id, t.status::text AS status,
+                                                        t.currency::text AS currency, t.amount,
+                                                        t.metadata->>'risk_score' AS risk_score,
+                                                        t.created_at, t.updated_at
+                                                 FROM transactions t
+                                                 WHERE (t.metadata->>'risk_score')::int > {minScore}
+                                                 ORDER BY (t.metadata->>'risk_score')::int DESC
+                                                 LIMIT 50
+                                                 """;
 
     private const string ArrayContainsSqlTemplate = """
-        SELECT t.transaction_id, t.user_id, t.status::text AS status,
-               t.currency::text AS currency, t.amount,
-               t.created_at, t.updated_at
-        FROM transactions t
-        WHERE t.tags @> ARRAY[{tag}]::text[]
-        ORDER BY t.created_at DESC
-        LIMIT 50
-        """;
+                                                    SELECT t.transaction_id, t.user_id, t.status::text AS status,
+                                                           t.currency::text AS currency, t.amount,
+                                                           t.created_at, t.updated_at
+                                                    FROM transactions t
+                                                    WHERE t.tags @> ARRAY[{tag}]::text[]
+                                                    ORDER BY t.created_at DESC
+                                                    LIMIT 50
+                                                    """;
 
     private IContainer? _container;
     private string _baseConnStr = string.Empty;
@@ -217,7 +217,8 @@ public class DatabaseFeatureBenchmarks : IAsyncDisposable
         var random = new Random(42);
         var statuses = new[] { "pending", "completed", "failed", "refunded", "disputed" };
         var currencies = new[] { "USD", "EUR", "GBP", "JPY", "CAD", "AUD" };
-        var tagPool = new[] { "high-value", "recurring", "international", "flagged", "priority", "bulk", "retail", "wholesale" };
+        var tagPool = new[]
+            { "high-value", "recurring", "international", "flagged", "priority", "bulk", "retail", "wholesale" };
 
         for (var i = 1; i <= TransactionCount; i++)
         {
@@ -228,8 +229,8 @@ public class DatabaseFeatureBenchmarks : IAsyncDisposable
             var tags = tagPool.OrderBy(_ => random.Next()).Take(random.Next(1, 4)).ToArray();
 
             var metadata = $$"""
-                {"risk_score": {{riskScore}}, "source": "api", "version": "{{random.Next(1, 5)}}"}
-                """;
+                             {"risk_score": {{riskScore}}, "source": "api", "version": "{{random.Next(1, 5)}}"}
+                             """;
 
             var description = $"Transaction {i:D5} for user {random.Next(1, 500)}";
 
@@ -789,24 +790,19 @@ public class DatabaseFeatureBenchmarks : IAsyncDisposable
         [Column("transaction_id", DbType.Int64)]
         public long TransactionId { get; set; }
 
-        [Column("user_id", DbType.Int32)]
-        public int UserId { get; set; }
+        [Column("user_id", DbType.Int32)] public int UserId { get; set; }
 
-        [Column("status", DbType.String)]
-        public string Status { get; set; } = string.Empty;
+        [Column("status", DbType.String)] public string Status { get; set; } = string.Empty;
 
-        [Column("currency", DbType.String)]
-        public string Currency { get; set; } = string.Empty;
+        [Column("currency", DbType.String)] public string Currency { get; set; } = string.Empty;
 
-        [Column("amount", DbType.Decimal)]
-        public decimal Amount { get; set; }
+        [Column("amount", DbType.Decimal)] public decimal Amount { get; set; }
 
         [Column("metadata", DbType.Object)]
         [Json]
         public string? Metadata { get; set; }
 
-        [Column("tags", DbType.Object)]
-        public string[]? Tags { get; set; }
+        [Column("tags", DbType.Object)] public string[]? Tags { get; set; }
 
         [Column("created_at", DbType.DateTime)]
         public DateTime CreatedAt { get; set; }
@@ -828,20 +824,15 @@ public class DatabaseFeatureBenchmarks : IAsyncDisposable
         [Column("transaction_id", DbType.Int64)]
         public long TransactionId { get; set; }
 
-        [Column("user_id", DbType.Int32)]
-        public int UserId { get; set; }
+        [Column("user_id", DbType.Int32)] public int UserId { get; set; }
 
-        [Column("status", DbType.String)]
-        public string Status { get; set; } = string.Empty;
+        [Column("status", DbType.String)] public string Status { get; set; } = string.Empty;
 
-        [Column("currency", DbType.String)]
-        public string Currency { get; set; } = string.Empty;
+        [Column("currency", DbType.String)] public string Currency { get; set; } = string.Empty;
 
-        [Column("amount", DbType.Decimal)]
-        public decimal Amount { get; set; }
+        [Column("amount", DbType.Decimal)] public decimal Amount { get; set; }
 
-        [Column("risk_score", DbType.String)]
-        public string? RiskScore { get; set; }
+        [Column("risk_score", DbType.String)] public string? RiskScore { get; set; }
 
         [Column("created_at", DbType.DateTime)]
         public DateTime CreatedAt { get; set; }
@@ -860,11 +851,9 @@ public class DatabaseFeatureBenchmarks : IAsyncDisposable
         [Column("status", DbType.String)]
         public string Status { get; set; } = string.Empty;
 
-        [Column("match_count", DbType.Int64)]
-        public long MatchCount { get; set; }
+        [Column("match_count", DbType.Int64)] public long MatchCount { get; set; }
 
-        [Column("avg_rank", DbType.Double)]
-        public double AvgRank { get; set; }
+        [Column("avg_rank", DbType.Double)] public double AvgRank { get; set; }
     }
 
     // ========================================================================
@@ -908,6 +897,7 @@ public class DatabaseFeatureBenchmarks : IAsyncDisposable
         public string? Metadata { get; set; }
         public string[]? Tags { get; set; }
         public DateTime CreatedAt { get; set; }
+
         public DateTime UpdatedAt { get; set; }
         // NO SearchVector property - EF cannot map TSVECTOR
     }

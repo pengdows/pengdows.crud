@@ -132,7 +132,8 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Error disposing tenant context during invalidation for tenant '{Tenant}'.", tenant);
+                _logger.LogWarning(ex, "Error disposing tenant context during invalidation for tenant '{Tenant}'.",
+                    tenant);
             }
         }
     }

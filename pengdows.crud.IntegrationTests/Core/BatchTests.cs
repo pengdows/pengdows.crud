@@ -29,7 +29,7 @@ public class BatchTests : DatabaseTestBase
         {
             var auditResolver = GetAuditResolver();
             var helper = new TableGateway<TestTable, long>(context, auditResolver);
-            
+
             // 1. Create two entities
             var e1 = new TestTable { Id = 3001, Name = NameEnum.Test, Value = 100, CreatedOn = DateTime.UtcNow };
             var e2 = new TestTable { Id = 3002, Name = NameEnum.Test2, Value = 200, CreatedOn = DateTime.UtcNow };
@@ -44,14 +44,15 @@ public class BatchTests : DatabaseTestBase
             var valCol = context.WrapObjectName("value");
             var actCol = context.WrapObjectName("is_active");
             var dateCol = context.WrapObjectName("created_at");
-            
+
             var pId = context.MakeParameterName("id");
             var pName = context.MakeParameterName("name");
             var pVal = context.MakeParameterName("value");
             var pAct = context.MakeParameterName("is_active");
             var pDate = context.MakeParameterName("created_at");
 
-            var sql = $"INSERT INTO {table} ({idCol}, {nameCol}, {valCol}, {actCol}, {dateCol}) VALUES ({pId}, {pName}, {pVal}, {pAct}, {pDate})";
+            var sql =
+                $"INSERT INTO {table} ({idCol}, {nameCol}, {valCol}, {actCol}, {dateCol}) VALUES ({pId}, {pName}, {pVal}, {pAct}, {pDate})";
             container.Query.Append(sql);
 
             // 3. Execute with first set of params
@@ -61,7 +62,7 @@ public class BatchTests : DatabaseTestBase
             container.AddParameterWithValue("is_active", DbType.Boolean, e1.IsActive);
             container.AddParameterWithValue("created_at", DbType.DateTime, e1.CreatedOn);
             await container.ExecuteNonQueryAsync();
-            
+
             // 4. Update parameters and execute again (reuse container)
             container.SetParameterValue("id", e2.Id);
             container.SetParameterValue("name", (int)e2.Name);
@@ -84,10 +85,10 @@ public class BatchTests : DatabaseTestBase
         {
             var auditResolver = GetAuditResolver();
             var helper = new TableGateway<TestTable, long>(context, auditResolver);
-            
+
             // Use a transaction to force same connection
             await using var tx = context.BeginTransaction();
-            
+
             var table = context.WrapObjectName("test_table");
             var idCol = context.WrapObjectName("id");
             var valCol = context.WrapObjectName("value");
@@ -97,22 +98,22 @@ public class BatchTests : DatabaseTestBase
             // Command 1: Use framework for insertion (handles all dialect/audit complexity)
             var entity = new TestTable { Id = 4001, Name = NameEnum.Test, Value = 0 };
             await helper.CreateAsync(entity, tx);
-            
+
             // Command 2: Parameterized manual UPDATE
             var updateSql = $"UPDATE {table} SET {valCol} = {pVal} WHERE {idCol} = {pId}";
             await using var c2 = tx.CreateSqlContainer(updateSql);
             c2.AddParameterWithValue("val", DbType.Int32, 42);
             c2.AddParameterWithValue("id", DbType.Int64, entity.Id);
             await c2.ExecuteNonQueryAsync();
-            
+
             // Command 3: Parameterized manual SELECT
             var selectSql = $"SELECT {valCol} FROM {table} WHERE {idCol} = {pId}";
             await using var c3 = tx.CreateSqlContainer(selectSql);
             c3.AddParameterWithValue("id", DbType.Int64, entity.Id);
             var val = await c3.ExecuteScalarRequiredAsync<int>();
-            
+
             Assert.Equal(42, val);
-            
+
             tx.Commit();
         });
     }

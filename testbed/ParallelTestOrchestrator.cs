@@ -22,7 +22,8 @@ public class ParallelTestOrchestrator
     private readonly bool _includeOracle;
     private readonly bool _includeSnowflake;
 
-    public ParallelTestOrchestrator(IServiceProvider services, bool includeOracle = false, bool includeSnowflake = false)
+    public ParallelTestOrchestrator(IServiceProvider services, bool includeOracle = false,
+        bool includeSnowflake = false)
     {
         _services = services;
         _includeOracle = includeOracle;

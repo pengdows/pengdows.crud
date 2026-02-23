@@ -47,6 +47,7 @@ public static class ProfileHarness
                     $"INSERT INTO benchmark (id, name, age) VALUES ({i}, 'Person {i}', {20 + (i % 50)})";
                 cmd.ExecuteNonQuery();
             }
+
             tx.Commit();
         }
 
@@ -73,6 +74,7 @@ public static class ProfileHarness
             sc.AddParameterWithValue("id", DbType.Int32, (i % SeedRows) + 1);
             await gateway.LoadSingleAsync(sc);
         }
+
         for (var i = 0; i < 100; i++)
         {
             await using var conn = new SqliteConnection(ConnStr);
@@ -92,8 +94,10 @@ public static class ProfileHarness
             sc.AddParameterWithValue("id", DbType.Int32, (i % SeedRows) + 1);
             await gateway.LoadSingleAsync(sc);
         }
+
         sw.Stop();
-        Console.WriteLine($"Pengdows: {sw.ElapsedMilliseconds}ms total, {sw.Elapsed.TotalMicroseconds / Iterations:F2}us/op");
+        Console.WriteLine(
+            $"Pengdows: {sw.ElapsedMilliseconds}ms total, {sw.Elapsed.TotalMicroseconds / Iterations:F2}us/op");
 
         // === DAPPER PHASE ===
         Console.WriteLine("Running Dapper...");
@@ -104,8 +108,10 @@ public static class ProfileHarness
             await conn.OpenAsync();
             await conn.QuerySingleOrDefaultAsync<DapperProfileEntity>(dapperSql, new { id = (i % SeedRows) + 1 });
         }
+
         sw.Stop();
-        Console.WriteLine($"Dapper: {sw.ElapsedMilliseconds}ms total, {sw.Elapsed.TotalMicroseconds / Iterations:F2}us/op");
+        Console.WriteLine(
+            $"Dapper: {sw.ElapsedMilliseconds}ms total, {sw.Elapsed.TotalMicroseconds / Iterations:F2}us/op");
     }
 
     [Table("benchmark")]
@@ -115,11 +121,9 @@ public static class ProfileHarness
         [Column("id", DbType.Int32)]
         public int Id { get; set; }
 
-        [Column("name", DbType.String)]
-        public string Name { get; set; } = string.Empty;
+        [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
 
-        [Column("age", DbType.Int32)]
-        public int Age { get; set; }
+        [Column("age", DbType.Int32)] public int Age { get; set; }
     }
 
     public sealed class DapperProfileEntity

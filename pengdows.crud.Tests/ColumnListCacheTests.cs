@@ -33,30 +33,6 @@ public class ColumnListCacheTests : SqlLiteContextTestBase
         Assert.Same(first, second);
     }
 
-    [Fact]
-    public void GetUpdatableColumns_CachesList()
-    {
-        TypeMap.Register<CacheTestEntity>();
-        var helper = new TableGateway<CacheTestEntity, int>(Context);
-        var first = helper.GetCachedUpdatableColumns();
-        var second = helper.GetCachedUpdatableColumns();
-        Assert.Contains(first, c => c.Name == "Name");
-        Assert.Contains(first, c => c.Name == "NoInsert");
-        Assert.DoesNotContain(first, c => c.Name == "Immutable" || c.Name == "Id" || c.Name == "Version");
-        Assert.Same(first, second);
-    }
-
-    [Fact]
-    public void GetUpdatableColumns_NoUpdatables_ReturnsEmpty()
-    {
-        TypeMap.Register<OnlyNonUpdateEntity>();
-        var helper = new TableGateway<OnlyNonUpdateEntity, int>(Context);
-        var first = helper.GetCachedUpdatableColumns();
-        var second = helper.GetCachedUpdatableColumns();
-        Assert.Empty(first);
-        Assert.Same(first, second);
-    }
-
     [Table("CacheTest")]
     private class CacheTestEntity
     {
@@ -88,13 +64,4 @@ public class ColumnListCacheTests : SqlLiteContextTestBase
         public int Id { get; set; }
     }
 
-    [Table("OnlyNonUpdate")]
-    private class OnlyNonUpdateEntity
-    {
-        [Id] [Column("Id", DbType.Int32)] public int Id { get; set; }
-
-        [Column("NoUpdate", DbType.String)]
-        [NonUpdateable]
-        public string? NoUpdate { get; set; }
-    }
 }

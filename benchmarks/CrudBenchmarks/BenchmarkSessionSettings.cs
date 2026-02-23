@@ -18,7 +18,8 @@ internal static class BenchmarkSessionSettings
         "SET standard_conforming_strings = on;\n" +
         "SET client_min_messages = warning;";
 
-    internal static async Task ApplyAsync(DbConnection connection, string sql, CancellationToken cancellationToken = default)
+    internal static async Task ApplyAsync(DbConnection connection, string sql,
+        CancellationToken cancellationToken = default)
     {
         await using var cmd = connection.CreateCommand();
         cmd.CommandText = sql;

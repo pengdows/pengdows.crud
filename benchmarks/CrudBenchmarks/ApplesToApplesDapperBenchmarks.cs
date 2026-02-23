@@ -44,8 +44,7 @@ public class ApplesToApplesDapperBenchmarks : IDisposable
     private int _idSeed;
     private string? _fieldTypeDump;
 
-    [Params(1, 10, 100)]
-    public int RecordCount { get; set; }
+    [Params(1, 10, 100)] public int RecordCount { get; set; }
 
     [GlobalSetup]
     public void GlobalSetup()
@@ -85,7 +84,7 @@ public class ApplesToApplesDapperBenchmarks : IDisposable
 
         _typeMap = new TypeMapRegistry();
         _typeMap.Register<BenchEntity>();
-        
+
         // Standard Context: Connection-per-op (Includes Governor + Open/Close overhead)
         var cfgStandard = new DatabaseContextConfiguration
         {
@@ -181,7 +180,7 @@ public class ApplesToApplesDapperBenchmarks : IDisposable
         {
             var id = NextId();
             await using var conn = _factory.CreateConnection()
-                ?? throw new InvalidOperationException("Failed to create Sqlite connection.");
+                                   ?? throw new InvalidOperationException("Failed to create Sqlite connection.");
             conn.ConnectionString = _connectionString;
             await conn.OpenAsync();
             var row = await conn.QuerySingleOrDefaultAsync<DapperBenchEntity>(_dapperSql, new { id });
@@ -285,11 +284,9 @@ public class ApplesToApplesDapperBenchmarks : IDisposable
         [Column("id", DbType.Int32)]
         public int Id { get; set; }
 
-        [Column("name", DbType.String)]
-        public string Name { get; set; } = string.Empty;
+        [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
 
-        [Column("age", DbType.Int32)]
-        public int Age { get; set; }
+        [Column("age", DbType.Int32)] public int Age { get; set; }
     }
 
     public sealed class DapperBenchEntity

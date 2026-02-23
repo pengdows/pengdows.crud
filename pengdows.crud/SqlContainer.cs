@@ -103,7 +103,8 @@ namespace pengdows.crud;
 /// <seealso cref="TableGateway{TEntity,TRowID}"/>
 public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectProvider, IReaderLifetimeListener
 {
-    private static readonly ConcurrentDictionary<Type, Action<DbParameter, DbParameter>> ProviderSpecificCopiers = new();
+    private static readonly ConcurrentDictionary<Type, Action<DbParameter, DbParameter>>
+        ProviderSpecificCopiers = new();
 
     private readonly IDatabaseContext _context;
     private readonly ISqlDialect _dialect;
@@ -112,6 +113,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
     private readonly IDictionary<string, DbParameter> _parameters =
         new pengdows.crud.collections.OrderedDictionary<string, DbParameter>(ParameterNameComparer.Instance);
+
     private readonly Dictionary<DbParameter, DbParameterCollection?> _parameterOwners =
         new(ParameterReferenceComparer.Instance);
 
@@ -318,7 +320,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 nameEnd++;
 
             sb ??= new StringBuilder(sql.Length + 32);
-            sb.Append(span[cursor..matchStart]);  // literal text before {P}NAME
+            sb.Append(span[cursor..matchStart]); // literal text before {P}NAME
 
             var name = sql[nameStart..nameEnd];
             ParamSequence.Add(name);
@@ -449,8 +451,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         do
         {
             name = GenerateParameterName();
-        }
-        while (usedNames.Contains(name) || _parameters.ContainsKey(name));
+        } while (usedNames.Contains(name) || _parameters.ContainsKey(name));
 
         return name;
     }
@@ -506,7 +507,6 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }
 
         _parameters.Add(parameter.ParameterName, parameter);
-
     }
 
     public DbParameter AddParameterWithValue<T>(DbType type, T value,
@@ -1356,7 +1356,9 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             var isSingleConnection = _context.ConnectionMode == DbMode.SingleConnection;
             var behavior = isTransaction || isSingleConnection
                 ? (singleRow ? CommandBehavior.SingleRow : CommandBehavior.Default)
-                : (singleRow ? CommandBehavior.CloseConnection | CommandBehavior.SingleRow : CommandBehavior.CloseConnection);
+                : (singleRow
+                    ? CommandBehavior.CloseConnection | CommandBehavior.SingleRow
+                    : CommandBehavior.CloseConnection);
 
             // if this is our single connection to the database, for a transaction
             //or sqlCe mode, or single connection mode, we will NOT close the connection.
@@ -1421,6 +1423,17 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             {
                 AddParameter(p);
             }
+        }
+    }
+
+    public void AddParameters(IList<DbParameter> list)
+    {
+        if (list == null) return;
+        
+        // Optimize for the common case of monolithic binders
+        for (var i = 0; i < list.Count; i++)
+        {
+            AddParameter(list[i]);
         }
     }
 
@@ -1729,7 +1742,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                     cmd.Connection = null;
                 }
                 catch
-                { /* ignore */
+                {
+                    /* ignore */
                 }
 
                 cmd.Dispose();

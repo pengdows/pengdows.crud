@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using Moq;
 using pengdows.crud.@internal;
 using pengdows.crud.dialects;
@@ -20,6 +21,18 @@ public class TableGatewayCompatibilityTests
 
         Assert.IsAssignableFrom<ITableGateway<TestEntity, int>>(gateway);
         Assert.Contains("Test", gateway.WrappedTableName, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TableGateway_DoesNotContain_ResolveUpsertKey_MOVED()
+    {
+        // ResolveUpsertKey() was moved to TableGateway.Upsert.cs.
+        // The _MOVED-suffixed dead-code copy in TableGateway.Core.cs must not exist.
+        var method = typeof(TableGateway<TestEntity, int>).GetMethod(
+            "ResolveUpsertKey_MOVED",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        Assert.Null(method);
     }
 
     [Fact]

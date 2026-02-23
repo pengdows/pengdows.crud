@@ -239,7 +239,7 @@ public sealed class PostgresProcWrappingStrategyCoverageTests
 file class WpEntity
 {
     [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
-    [Column("name", DbType.String)]   public string Name { get; set; } = string.Empty;
+    [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
 }
 
 public sealed class SqlContainerWrapForStoredProcTests

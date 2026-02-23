@@ -80,7 +80,7 @@ public class DialectCoverageTests
                 "\"",
                 true,
                 ":",
-                false),  // Snowflake does not support savepoints
+                false), // Snowflake does not support savepoints
             _ => throw new ArgumentOutOfRangeException(nameof(db), db, null)
         };
     }

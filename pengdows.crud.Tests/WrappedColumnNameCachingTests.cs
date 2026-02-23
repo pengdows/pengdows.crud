@@ -23,17 +23,13 @@ public class WrappedColumnNameCachingTests : SqlLiteContextTestBase
         [Column("id", DbType.Int64)]
         public long Id { get; set; }
 
-        [Column("user_id", DbType.Int64)]
-        public long UserId { get; set; }
+        [Column("user_id", DbType.Int64)] public long UserId { get; set; }
 
-        [Column("first_name", DbType.String)]
-        public string FirstName { get; set; } = string.Empty;
+        [Column("first_name", DbType.String)] public string FirstName { get; set; } = string.Empty;
 
-        [Column("last_name", DbType.String)]
-        public string LastName { get; set; } = string.Empty;
+        [Column("last_name", DbType.String)] public string LastName { get; set; } = string.Empty;
 
-        [Column("email", DbType.String)]
-        public string Email { get; set; } = string.Empty;
+        [Column("email", DbType.String)] public string Email { get; set; } = string.Empty;
 
         [Column("created_at", DbType.DateTime)]
         public DateTime CreatedAt { get; set; }
@@ -120,7 +116,7 @@ public class WrappedColumnNameCachingTests : SqlLiteContextTestBase
         Assert.NotEmpty(deleteSql);
 
         // Verify the same column name is quoted the same way across operations
-        var idQuoted = "\"id\"";  // SQLite uses double quotes
+        var idQuoted = "\"id\""; // SQLite uses double quotes
         if (createSql.Contains(idQuoted))
         {
             Assert.Contains(idQuoted, retrieveSql);

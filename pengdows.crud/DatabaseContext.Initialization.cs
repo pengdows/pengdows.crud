@@ -80,7 +80,6 @@ public partial class DatabaseContext
     }
 
 
-
     // Convenience overloads for reflection-based tests and ease of use
     public DatabaseContext(string connectionString, DbProviderFactory factory, string? readOnlyConnectionString = null)
         : this(new DatabaseContextConfiguration
@@ -199,8 +198,8 @@ public partial class DatabaseContext
             if (dialect != null && dataSourceInfo != null)
             {
                 _dialect = dialect as SqlDialect
-                    ?? throw new InvalidOperationException(
-                        $"Dialect returned by dialect detection must derive from SqlDialect; got {dialect.GetType().Name}.");
+                           ?? throw new InvalidOperationException(
+                               $"Dialect returned by dialect detection must derive from SqlDialect; got {dialect.GetType().Name}.");
                 _dataSourceInfo = (DataSourceInformation)dataSourceInfo;
             }
             else
@@ -324,13 +323,14 @@ public partial class DatabaseContext
     /// <param name="dataSource">Data source for creating connections (e.g., NpgsqlDataSource)</param>
     /// <param name="factory">Provider factory for creating parameters and other objects</param>
     /// <param name="loggerFactory">Optional logger factory</param>
-        public DatabaseContext(
+    public DatabaseContext(
         IDatabaseContextConfiguration configuration,
         DbDataSource dataSource,
         DbProviderFactory factory,
         ILoggerFactory? loggerFactory = null)
         : this(configuration, factory, loggerFactory, new TypeMapRegistry(), dataSource ??
-            throw new ArgumentNullException(nameof(dataSource)))
+                                                                             throw new ArgumentNullException(
+                                                                                 nameof(dataSource)))
     {
     }
 
@@ -341,7 +341,8 @@ public partial class DatabaseContext
         ILoggerFactory? loggerFactory,
         ITypeMapRegistry typeMapRegistry)
         : this(configuration, factory, loggerFactory, typeMapRegistry, dataSource ??
-            throw new ArgumentNullException(nameof(dataSource)))
+                                                                       throw new ArgumentNullException(
+                                                                           nameof(dataSource)))
     {
     }
 
@@ -410,7 +411,8 @@ public partial class DatabaseContext
                     };
                 }
                 catch
-                { /* ignore prefetch failures */
+                {
+                    /* ignore prefetch failures */
                 }
 
                 try
@@ -426,7 +428,8 @@ public partial class DatabaseContext
                     snapshotIsolation = state == 1;
                 }
                 catch
-                { /* ignore prefetch failures */
+                {
+                    /* ignore prefetch failures */
                 }
             }
 
@@ -490,7 +493,8 @@ public partial class DatabaseContext
                 initConn?.Dispose();
             }
             catch
-            { /* ignore */
+            {
+                /* ignore */
             }
 
             throw;
@@ -685,6 +689,7 @@ public partial class DatabaseContext
         {
             writeMaxPoolSize = 1;
         }
+
         var writerBuilder = GetFactoryConnectionStringBuilder(_connectionString);
         _connectionString = ConnectionPoolingConfiguration.ApplyMaxPoolSize(
             _connectionString,
@@ -819,7 +824,8 @@ public partial class DatabaseContext
                 }
             }
             catch
-            { /* fall through */
+            {
+                /* fall through */
             }
         }
 

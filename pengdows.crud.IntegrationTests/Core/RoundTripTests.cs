@@ -89,12 +89,14 @@ public class RoundTripTests : DatabaseTestBase
                 or SupportedDatabase.Snowflake)
             {
                 // Discard offset, check UTC instant within 1ms
-                Assert.Equal(original.DateTimeOffsetValue.UtcDateTime, retrieved.DateTimeOffsetValue.UtcDateTime, TimeSpan.FromMilliseconds(1));
+                Assert.Equal(original.DateTimeOffsetValue.UtcDateTime, retrieved.DateTimeOffsetValue.UtcDateTime,
+                    TimeSpan.FromMilliseconds(1));
             }
             else if (provider == SupportedDatabase.Sqlite)
             {
                 // SQLite stores as ISO-8601 string, precision might be lost
-                Assert.Equal(original.DateTimeOffsetValue.UtcDateTime, retrieved.DateTimeOffsetValue.UtcDateTime, TimeSpan.FromMilliseconds(1));
+                Assert.Equal(original.DateTimeOffsetValue.UtcDateTime, retrieved.DateTimeOffsetValue.UtcDateTime,
+                    TimeSpan.FromMilliseconds(1));
             }
             else
             {
@@ -133,7 +135,7 @@ public class RoundTripTests : DatabaseTestBase
             // Assert
             Assert.NotNull(retrieved);
             Assert.Equal(original.Id, retrieved!.Id);
-            
+
             if (provider == SupportedDatabase.Oracle)
             {
                 // Oracle treats empty string as NULL
@@ -153,7 +155,7 @@ public class RoundTripTests : DatabaseTestBase
             Assert.Equal(0m, retrieved.DecimalValue);
             Assert.False(retrieved.BoolValue);
             Assert.Equal(Guid.Empty, retrieved.GuidValue);
-            
+
             // Note: some providers return null for empty binary, others empty array
             if (retrieved.BinaryValue != null)
             {

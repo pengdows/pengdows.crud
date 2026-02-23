@@ -357,7 +357,8 @@ internal class PostgreSqlDialect : SqlDialect
             }
         }
         catch
-        { /* ignore */
+        {
+            /* ignore */
         }
     }
 

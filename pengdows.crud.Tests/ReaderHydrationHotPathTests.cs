@@ -170,11 +170,9 @@ public class ReaderHydrationHotPathTests : SqlLiteContextTestBase
         [Column("Id", DbType.Int32)]
         public int Id { get; set; }
 
-        [Column("Name", DbType.String)]
-        public string? Name { get; set; }
+        [Column("Name", DbType.String)] public string? Name { get; set; }
 
-        [Column("Value", DbType.Int32)]
-        public int Value { get; set; }
+        [Column("Value", DbType.Int32)] public int Value { get; set; }
     }
 
     private enum EntityStatus
@@ -190,8 +188,7 @@ public class ReaderHydrationHotPathTests : SqlLiteContextTestBase
         [Column("Id", DbType.Int32)]
         public int Id { get; set; }
 
-        [Column("Status", DbType.String)]
-        public EntityStatus Status { get; set; }
+        [Column("Status", DbType.String)] public EntityStatus Status { get; set; }
     }
 
     [Table("DtoEntity")]
@@ -201,8 +198,7 @@ public class ReaderHydrationHotPathTests : SqlLiteContextTestBase
         [Column("Id", DbType.Int32)]
         public int Id { get; set; }
 
-        [Column("Created", DbType.DateTime)]
-        public DateTimeOffset Created { get; set; }
+        [Column("Created", DbType.DateTime)] public DateTimeOffset Created { get; set; }
     }
 
     // Property-name matching only — no attributes needed for DataReaderMapper
@@ -222,7 +218,9 @@ public class ReaderHydrationHotPathTests : SqlLiteContextTestBase
         private int _getFieldTypeCount;
         private int _getNameCount;
 
-        public InstrumentedReader(IEnumerable<Dictionary<string, object>> rows) : base(rows) { }
+        public InstrumentedReader(IEnumerable<Dictionary<string, object>> rows) : base(rows)
+        {
+        }
 
         public int GetFieldTypeCallCount => Interlocked.CompareExchange(ref _getFieldTypeCount, 0, 0);
         public int GetNameCallCount => Interlocked.CompareExchange(ref _getNameCount, 0, 0);

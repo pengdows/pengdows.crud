@@ -99,6 +99,7 @@ public class DataSourceInformation : IDataSourceInformation
 
     /// <inheritdoc />
     public string ParameterMarkerPattern { get; }
+
     public string QuotePrefix => _dialect.QuotePrefix;
     public string QuoteSuffix => _dialect.QuoteSuffix;
     public bool SupportsNamedParameters => _dialect.SupportsNamedParameters;

@@ -97,20 +97,16 @@ WHERE [user_id] = ");
         [Column("user_id", DbType.String)]
         public string Username { get; set; } = string.Empty;
 
-        [Column("user_pass", DbType.String)]
-        public string Password { get; set; } = string.Empty;
+        [Column("user_pass", DbType.String)] public string Password { get; set; } = string.Empty;
 
-        [Column("role", DbType.String)]
-        public string Role { get; set; } = string.Empty;
+        [Column("role", DbType.String)] public string Role { get; set; } = string.Empty;
 
-        [Column("mobile", DbType.String)]
-        public string? Mobile { get; set; }
+        [Column("mobile", DbType.String)] public string? Mobile { get; set; }
 
         [Column("daily_update", DbType.Boolean)]
         public bool? IsDailyUpdate { get; set; }
 
-        [Column("active", DbType.Boolean)]
-        public bool? IsActive { get; set; }
+        [Column("active", DbType.Boolean)] public bool? IsActive { get; set; }
 
         [Column("login_alert", DbType.Boolean)]
         public bool? IsLoginAlert { get; set; }

@@ -29,9 +29,9 @@ public class TableGatewayWhereClauseTests : SqlLiteContextTestBase
         var wrapped = container.WrapObjectName("id");
 
         IEnumerable<long>? ids = null;
-        #pragma warning disable CS8604
+#pragma warning disable CS8604
         helper.BuildWhere(wrapped, ids!, container);
-        #pragma warning restore CS8604
+#pragma warning restore CS8604
 
         Assert.Equal(original, container.Query.ToString());
     }
@@ -92,8 +92,7 @@ public class TableGatewayWhereClauseTests : SqlLiteContextTestBase
         [Column("id", DbType.Int64)]
         public long Id { get; set; }
 
-        [Column("value", DbType.String)]
-        public string Value { get; set; } = string.Empty;
+        [Column("value", DbType.String)] public string Value { get; set; } = string.Empty;
     }
 
     [Table("nullable_where_entities")]
@@ -103,7 +102,6 @@ public class TableGatewayWhereClauseTests : SqlLiteContextTestBase
         [Column("id", DbType.Int64)]
         public long? Id { get; set; }
 
-        [Column("value", DbType.String)]
-        public string Value { get; set; } = string.Empty;
+        [Column("value", DbType.String)] public string Value { get; set; } = string.Empty;
     }
 }

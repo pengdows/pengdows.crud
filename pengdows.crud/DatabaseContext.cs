@@ -260,6 +260,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
 
     /// <inheritdoc/>
     public IDataSourceInformation DataSourceInfo => _dataSourceInfo;
+
     /// <inheritdoc/>
     public string SessionSettingsPreamble => _dialect.GetConnectionSessionSettings(this, IsReadOnlyConnection);
 
@@ -271,10 +272,13 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     // ProcWrappingStyle is defined below with a setter to update strategy
     /// <inheritdoc/>
     public int MaxParameterLimit => _dataSourceInfo.MaxParameterLimit;
+
     /// <inheritdoc/>
     public override int MaxOutputParameters => _dataSourceInfo.MaxOutputParameters;
+
     /// <inheritdoc/>
     public long PeakOpenConnections => Interlocked.Read(ref _peakOpenConnections);
+
     /// <inheritdoc/>
     public long NumberOfOpenConnections => Interlocked.Read(ref _connectionCount);
 
@@ -286,6 +290,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
 
     /// <inheritdoc/>
     public bool? ForceManualPrepare => _forceManualPrepare;
+
     /// <inheritdoc/>
     public bool? DisablePrepare => _disablePrepare;
 

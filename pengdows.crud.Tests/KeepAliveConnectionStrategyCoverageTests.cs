@@ -19,7 +19,8 @@ public class KeepAliveConnectionStrategyCoverageTests
     [Fact]
     public async Task GetConnectionAsync_OpenFailure_DISPOSES_AND_RETHROWS()
     {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite, ConnectionFailureMode.FailAfterCount, failAfterCount: 1);
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite, ConnectionFailureMode.FailAfterCount,
+            failAfterCount: 1);
         var cfg = new DatabaseContextConfiguration
         {
             ConnectionString = "Data Source=keepalive.db;EmulatedProduct=Sqlite",

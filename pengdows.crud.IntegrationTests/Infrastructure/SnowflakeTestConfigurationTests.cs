@@ -62,8 +62,8 @@ public class SnowflakeTestConfigurationTests
             ["SNOWFLAKE_WAREHOUSE"] = "wh"
         };
 
-        var ex = Assert.Throws<InvalidOperationException>(
-            () => SnowflakeTestConfiguration.FromEnvironment(env.GetValueOrDefault, () => 1));
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            SnowflakeTestConfiguration.FromEnvironment(env.GetValueOrDefault, () => 1));
 
         Assert.Contains("SNOWFLAKE_DATABASE", ex.Message, StringComparison.OrdinalIgnoreCase);
     }

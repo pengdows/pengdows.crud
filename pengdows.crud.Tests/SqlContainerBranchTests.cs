@@ -120,7 +120,8 @@ public class SqlContainerBranchTests
         using var ctx = CreateContext(SupportedDatabase.Sqlite, connection);
         var container = ctx.CreateSqlContainer("SELECT scalar_test");
 
-        await Assert.ThrowsAsync<InvalidOperationException>(async () => await container.ExecuteScalarRequiredAsync<int>());
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await container.ExecuteScalarRequiredAsync<int>());
     }
 
     [Fact]
@@ -198,7 +199,8 @@ public class SqlContainerBranchTests
         using var ctx = CreateContext(SupportedDatabase.PostgreSql);
         var container = ctx.CreateSqlContainer("SELECT 1");
 
-        await Assert.ThrowsAsync<NotSupportedException>(async () => await container.ExecuteNonQueryAsync(CommandType.TableDirect));
+        await Assert.ThrowsAsync<NotSupportedException>(async () =>
+            await container.ExecuteNonQueryAsync(CommandType.TableDirect));
     }
 
     [Fact]

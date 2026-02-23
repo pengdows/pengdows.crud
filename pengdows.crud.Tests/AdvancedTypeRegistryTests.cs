@@ -214,7 +214,8 @@ public class AdvancedTypeRegistryTests
         var parameter = new TestDbParameter();
         var dto = new DateTimeOffset(2026, 2, 22, 12, 34, 56, TimeSpan.FromHours(-5));
 
-        var success = registry.TryConfigureParameter(parameter, typeof(DateTimeOffset), dto, SupportedDatabase.Snowflake);
+        var success =
+            registry.TryConfigureParameter(parameter, typeof(DateTimeOffset), dto, SupportedDatabase.Snowflake);
 
         Assert.True(success);
         Assert.Equal(DbType.DateTime, parameter.DbType);

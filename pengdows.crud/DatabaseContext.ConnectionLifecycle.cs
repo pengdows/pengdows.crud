@@ -202,7 +202,7 @@ public partial class DatabaseContext
     /// </summary>
     [SuppressMessage("Security", "cs/clear-text-storage-of-sensitive-information",
         Justification = "Connection strings are redacted via RedactConnectionString() before logging. " +
-                         "The raw connection string is only used for DbConnection.ConnectionString assignment.")]
+                        "The raw connection string is only used for DbConnection.ConnectionString assignment.")]
     private ITrackedConnection FactoryCreateConnection(
         ExecutionType executionType,
         string? connectionString = null,
@@ -223,11 +223,13 @@ public partial class DatabaseContext
             _logger.LogWarning("Connection string missing password for {Name}: {ConnectionString}", Name,
                 RedactConnectionString(activeConnectionString));
         }
+
         if (_logger.IsEnabled(LogLevel.Debug))
         {
             _logger.LogDebug("Preparing connection for {ExecutionType} with string: {ConnectionString}", executionType,
                 RedactConnectionString(activeConnectionString));
         }
+
         var dataSource = ResolveDataSource(readOnly);
 
         // Prefer DataSource over Factory for better performance (shared prepared statement cache)

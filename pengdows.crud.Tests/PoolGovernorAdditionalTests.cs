@@ -231,6 +231,7 @@ public class PoolGovernorAdditionalTests
                             c = local;
                             break;
                         }
+
                         Thread.Yield();
                     }
                 })

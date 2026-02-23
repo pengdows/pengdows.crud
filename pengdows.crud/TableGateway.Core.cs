@@ -116,19 +116,22 @@ public partial class TableGateway<TEntity, TRowID> :
     // (identifier quoting, parameter markers).  Sharing within the same dialect is intentional.
     private readonly ConcurrentDictionary<SupportedDatabase, BoundedCache<string, string>> _queryCache = new();
 
-    private readonly ConcurrentDictionary<SupportedDatabase, BoundedCache<string, string[]>> _whereParameterNames = new();
+    private readonly ConcurrentDictionary<SupportedDatabase, BoundedCache<string, string[]>> _whereParameterNames =
+        new();
 
     // Cache for wrapped table names per dialect (table name + schema never change, only dialect quoting varies)
     // Expected 3-5% reduction in SQL generation when the same TableGateway is used with different contexts/dialects
     private readonly ConcurrentDictionary<ISqlDialect, string> _wrappedTableNameCache = new();
 
-    // Cache for wrapped column names (per dialect + column name)
-    // Expected 10-15% reduction in SQL generation for complex queries with many columns
-    private readonly BoundedCache<ColumnCacheKey, string> _wrappedColumnNameCache = new(128);
-
     // Thread-safe cache for hybrid reader plans by recordset shape hash (long key avoids int-hash collisions)
     private BoundedCache<long, HybridRecordsetPlan> _readerPlans =
         new(DefaultReaderPlanCapacity);
+
+    // Monolithic parameter binders, cached per dialect
+    private readonly ConcurrentDictionary<SupportedDatabase, CompiledBinderFactory<TEntity>.Binder> _insertBinders = new();
+    private readonly ConcurrentDictionary<SupportedDatabase, CompiledBinderFactory<TEntity>.Binder> _upsertBinders = new();
+    private readonly ConcurrentDictionary<SupportedDatabase, CompiledBinderFactory<TEntity>.UpdateBinder> _updateBinders = new();
+
     private const int DefaultReaderPlanCapacity = 32;
 
     private static int ResolveReaderPlanCacheSize(IDatabaseContext context)
@@ -151,149 +154,20 @@ public partial class TableGateway<TEntity, TRowID> :
         return DefaultReaderPlanCapacity;
     }
 
-    // Cache key for wrapped column names: dialect + column name
-    // Uses value-type struct to avoid tuple allocation on cache misses
-    private readonly struct ColumnCacheKey : IEquatable<ColumnCacheKey>
-    {
-        public readonly ISqlDialect Dialect;
-        public readonly string Name;
-
-        public ColumnCacheKey(ISqlDialect dialect, string name)
-        {
-            Dialect = dialect;
-            Name = name;
-        }
-
-        public bool Equals(ColumnCacheKey other) =>
-            ReferenceEquals(Dialect, other.Dialect) && Name == other.Name;
-
-        public override bool Equals(object? obj) =>
-            obj is ColumnCacheKey other && Equals(other);
-
-        public override int GetHashCode() =>
-            HashCode.Combine(Dialect, Name);
-    }
-
-    // Hybrid plan: Compiled expression for direct columns + delegates for coercion columns
-    // Decision made once at plan-build time for maximum performance
+    // Hybrid plan: Monolithic compiled expression that handles all columns (direct and coerced).
+    // Compiled once per schema shape for maximum performance.
     private sealed class HybridRecordsetPlan
     {
-        // Compiled mapper for all direct-match columns (zero delegate overhead)
-        public Func<ITrackedReader, TEntity>? CompiledMapper { get; }
+        // Compiled mapper for all columns (zero delegate overhead)
+        public Func<ITrackedReader, TEntity> CompiledMapper { get; }
 
-        // Delegate-based plans for columns needing coercion (JSON, enums, type conversion)
-        public CoercedColumnPlan[]? CoercionPlans { get; }
-
-        public HybridRecordsetPlan(Func<ITrackedReader, TEntity>? compiledMapper, CoercedColumnPlan[]? coercionPlans)
+        public HybridRecordsetPlan(Func<ITrackedReader, TEntity> compiledMapper)
         {
-            CompiledMapper = compiledMapper;
-            CoercionPlans = coercionPlans;
+            CompiledMapper = compiledMapper ?? throw new ArgumentNullException(nameof(compiledMapper));
         }
     }
 
-    // Optimized execution plan with pre-compiled delegates for blazing fast per-row execution
-    // Abstract base - decision made at plan-build time, not per-row
-    private abstract class ColumnPlan
-    {
-        public int Ordinal { get; }
-
-        protected ColumnPlan(int ordinal)
-        {
-            Ordinal = ordinal;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public abstract void Apply(ITrackedReader reader, object target);
-    }
-
-    // Fast path: Direct type match, no coercion
-    private sealed class DirectColumnPlan : ColumnPlan
-    {
-        private readonly Func<ITrackedReader, int, object?> _valueExtractor;
-        private readonly Action<object, object?> _setter;
-
-        public DirectColumnPlan(int ordinal, Func<ITrackedReader, int, object?> valueExtractor,
-            Action<object, object?> setter)
-            : base(ordinal)
-        {
-            _valueExtractor = valueExtractor;
-            _setter = setter;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public override void Apply(ITrackedReader reader, object target)
-        {
-            if (!reader.IsDBNull(Ordinal))
-            {
-                try
-                {
-                    var value = _valueExtractor(reader, Ordinal);
-                    _setter(target, value);
-                }
-                catch (Exception ex)
-                {
-                    if (ex is ArgumentException)
-                    {
-                        throw;
-                    }
-
-                    var columnName = reader.GetName(Ordinal);
-                    throw new InvalidValueException(
-                        $"Unable to set property from value that was stored in the database: {columnName} :{ex.Message}");
-                }
-            }
-        }
-    }
-
-    // Slow path: Type coercion required (JSON, enum, type mismatch, etc.)
-    private sealed class CoercedColumnPlan : ColumnPlan
-    {
-        private readonly Func<ITrackedReader, int, object?> _valueExtractor;
-        private readonly Func<object?, object?> _coercer;
-        private readonly Action<object, object?> _setter;
-        private readonly Type _propertyType;
-
-        public CoercedColumnPlan(int ordinal, Func<ITrackedReader, int, object?> valueExtractor,
-            Func<object?, object?> coercer, Action<object, object?> setter, Type propertyType)
-            : base(ordinal)
-        {
-            _valueExtractor = valueExtractor;
-            _coercer = coercer;
-            _setter = setter;
-            _propertyType = propertyType;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public override void Apply(ITrackedReader reader, object target)
-        {
-            if (!reader.IsDBNull(Ordinal))
-            {
-                try
-                {
-                    var raw = _valueExtractor(reader, Ordinal);
-                    var value = _coercer(raw);
-                    if (value == null && _propertyType.IsValueType &&
-                        Nullable.GetUnderlyingType(_propertyType) == null)
-                    {
-                        return;
-                    }
-
-                    _setter(target, value);
-                }
-                catch (Exception ex)
-                {
-                    if (ex is ArgumentException)
-                    {
-                        throw;
-                    }
-
-                    var columnName = reader.GetName(Ordinal);
-                    throw new InvalidValueException(
-                        $"Unable to set property from value that was stored in the database: {columnName} :{ex.Message}");
-                }
-            }
-        }
-    }
+    // Per-dialect templates are cached in _templatesByDialect
 
     // SQL templates cached per dialect to support context overrides
     private readonly ConcurrentDictionary<SupportedDatabase, Lazy<CachedSqlTemplates>> _templatesByDialect = new();
@@ -348,10 +222,10 @@ public partial class TableGateway<TEntity, TRowID> :
         }
 
         WrappedTableName = (!string.IsNullOrEmpty(_tableInfo.Schema)
-                               ? WrapObjectName(_tableInfo.Schema) +
+                               ? _dialect.WrapSimpleName(_tableInfo.Schema) +
                                  _dialect.CompositeIdentifierSeparator
                                : "")
-                           + WrapObjectName(_tableInfo.Name);
+                           + _dialect.WrapSimpleName(_tableInfo.Name);
 
         _idColumn = _tableInfo.Columns.Values.FirstOrDefault(itm => itm.IsId);
         _versionColumn = _tableInfo.Columns.Values.FirstOrDefault(itm => itm.IsVersion);
@@ -382,62 +256,12 @@ public partial class TableGateway<TEntity, TRowID> :
     /// <inheritdoc/>
     public EnumParseFailureMode EnumParseBehavior { get; set; }
 
-    public string QuotePrefix => _dialect.QuotePrefix;
-
-    public string QuoteSuffix => _dialect.QuoteSuffix;
-
-    public string CompositeIdentifierSeparator => _dialect.CompositeIdentifierSeparator;
-
-    public string MakeParameterName(DbParameter p)
-    {
-        return _dialect.MakeParameterName(p);
-    }
-
-    /// <summary>
-    /// Replaces neutral tokens ({Q}/{q}/{S}) with dialect-specific quoting and parameter markers.
-    /// </summary>
-    public string ReplaceNeutralTokens(string sql)
-    {
-        if (sql == null)
-        {
-            throw new ArgumentNullException(nameof(sql));
-        }
-
-        var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
-
-        for (var i = 0; i < sql.Length; i++)
-        {
-            if (sql[i] == '{' && i + 2 < sql.Length && sql[i + 2] == '}')
-            {
-                var token = sql[i + 1];
-                switch (token)
-                {
-                    case 'Q':
-                        sb.Append(_dialect.QuotePrefix);
-                        i += 2;
-                        continue;
-                    case 'q':
-                        sb.Append(_dialect.QuoteSuffix);
-                        i += 2;
-                        continue;
-                    case 'S':
-                        sb.Append(_dialect.ParameterMarker);
-                        i += 2;
-                        continue;
-                }
-            }
-
-            sb.Append(sql[i]);
-        }
-
-        return sb.ToString();
-    }
-
     private BoundedCache<string, string> GetOrCreateQueryCache(ISqlDialect dialect) =>
         _queryCache.GetOrAdd(dialect.DatabaseType, static _ => new BoundedCache<string, string>(MaxCacheSize));
 
     private BoundedCache<string, string[]> GetOrCreateParamNamesCache(ISqlDialect dialect) =>
-        _whereParameterNames.GetOrAdd(dialect.DatabaseType, static _ => new BoundedCache<string, string[]>(MaxCacheSize));
+        _whereParameterNames.GetOrAdd(dialect.DatabaseType,
+            static _ => new BoundedCache<string, string[]>(MaxCacheSize));
 
 
     /// <inheritdoc/>
@@ -524,7 +348,8 @@ public partial class TableGateway<TEntity, TRowID> :
         if (_idColumn != null && !_idColumn.IsIdIsWritable && dialect.SupportsInsertReturning)
         {
             var sc = BuildCreateWithReturning(entity, true, ctx);
-            var generatedId = await sc.ExecuteScalarOrNullAsync<object>(ExecutionType.Write, CommandType.Text, cancellationToken)
+            var generatedId = await sc
+                .ExecuteScalarOrNullAsync<object>(ExecutionType.Write, CommandType.Text, cancellationToken)
                 .ConfigureAwait(false);
             if (generatedId != null && generatedId != DBNull.Value)
             {
@@ -617,8 +442,10 @@ public partial class TableGateway<TEntity, TRowID> :
 
 
     // Placeholders for identity-returning clauses in INSERT statements
-    private const string OutputClausePlaceholder = "{output}";      // SQL Server: OUTPUT INSERTED.id (before VALUES)
-    private const string ReturningClausePlaceholder = "{returning}"; // PostgreSQL/SQLite/etc: RETURNING id (after VALUES)
+    private const string OutputClausePlaceholder = "{output}"; // SQL Server: OUTPUT INSERTED.id (before VALUES)
+
+    private const string
+        ReturningClausePlaceholder = "{returning}"; // PostgreSQL/SQLite/etc: RETURNING id (after VALUES)
 
     /// <inheritdoc/>
     public ISqlContainer BuildCreate(TEntity entity, IDatabaseContext? context = null)
@@ -633,7 +460,8 @@ public partial class TableGateway<TEntity, TRowID> :
     /// template is cloned for better performance. When false, placeholders remain for
     /// BuildCreateWithReturning to replace.
     /// </summary>
-    private (ISqlContainer sc, ISqlDialect dialect) PrepareInsertContainer(TEntity entity, IDatabaseContext? context, bool stripPlaceholders)
+    private (ISqlContainer sc, ISqlDialect dialect) PrepareInsertContainer(TEntity entity, IDatabaseContext? context,
+        bool stripPlaceholders)
     {
         if (entity == null)
         {
@@ -653,12 +481,16 @@ public partial class TableGateway<TEntity, TRowID> :
         {
             var containerTemplates = GetContainerTemplatesForDialect(dialect, ctx);
             var sc = containerTemplates.InsertTemplate.Clone(ctx);
-
-            for (var i = 0; i < sqlTemplate.InsertColumns.Count; i++)
-            {
-                var value = sqlTemplate.InsertColumns[i].MakeParameterValueFromField(entity);
-                sc.SetParameterValue(sqlTemplate.InsertParameterNames[i], value);
-            }
+            
+            // Optimized monolithic binding: bypass sc.SetParameterValue dictionary lookups.
+            // We clear the cloned parameters and re-add them using the fast binder.
+            sc.Clear(); 
+            ((SqlQueryBuilder)sc.Query).CopyFrom((SqlQueryBuilder)containerTemplates.InsertTemplate.Query); // Restore query after Clear()
+            
+            var binder = GetOrBuildInsertBinder(dialect, sqlTemplate);
+            var parameters = new List<DbParameter>(sqlTemplate.InsertColumns.Count);
+            binder(entity, parameters);
+            sc.AddParameters(parameters);
 
             return (sc, dialect);
         }
@@ -727,7 +559,7 @@ public partial class TableGateway<TEntity, TRowID> :
                 sc.Query.Append(", ");
             }
 
-            sc.Query.Append(dialect.WrapObjectName(column.Name));
+            sc.Query.Append(dialect.WrapSimpleName(column.Name));
         }
 
         // Insert OUTPUT placeholder (for SQL Server) between column list and VALUES
@@ -748,14 +580,9 @@ public partial class TableGateway<TEntity, TRowID> :
             {
                 sc.Query.Append(dialect.RenderJsonArgument(dialect.MakeParameterName(paramName), column));
             }
-            else if (dialect.SupportsNamedParameters)
-            {
-                sc.Query.Append(dialect.ParameterMarker);
-                sc.Query.Append(paramName);
-            }
             else
             {
-                sc.Query.Append('?');
+                sc.Query.Append(dialect.MakeParameterName(paramName));
             }
         }
 
@@ -819,16 +646,16 @@ public partial class TableGateway<TEntity, TRowID> :
 
         if (withReturning && _idColumn != null && !_idColumn.IsIdIsWritable && dialect.SupportsInsertReturning)
         {
-            var idWrapped = dialect.WrapObjectName(_idColumn.Name);
+            var idWrapped = dialect.WrapSimpleName(_idColumn.Name);
             var clause = dialect.RenderInsertReturningClause(idWrapped);
 
             if (dialect.DatabaseType == SupportedDatabase.SqlServer)
             {
-                outputClause = clause;  // SQL Server: OUTPUT goes before VALUES
+                outputClause = clause; // SQL Server: OUTPUT goes before VALUES
             }
             else
             {
-                returningClause = clause;  // Others: RETURNING goes after VALUES
+                returningClause = clause; // Others: RETURNING goes after VALUES
             }
         }
 
@@ -844,13 +671,14 @@ public partial class TableGateway<TEntity, TRowID> :
     /// <inheritdoc/>
     public ISqlContainer BuildDelete(TRowID id, IDatabaseContext? context = null)
     {
-        if (_idColumn == null)
-        {
-            throw new InvalidOperationException($"row identity column for table {WrappedTableName} not found");
-        }
-
         var ctx = context ?? _context;
         var dialect = GetDialect(ctx);
+
+        if (_idColumn == null)
+        {
+            throw new InvalidOperationException(
+                $"row identity column for table {BuildWrappedTableName(dialect)} not found");
+        }
 
         var containerTemplates = GetContainerTemplatesForDialect(dialect, ctx);
         var template = containerTemplates.DeleteByIdTemplate;
@@ -876,7 +704,8 @@ public partial class TableGateway<TEntity, TRowID> :
 
         if (_idColumn == null)
         {
-            throw new InvalidOperationException($"row identity column for table {WrappedTableName} not found");
+            throw new InvalidOperationException(
+                $"row identity column for table {BuildWrappedTableName(dialect)} not found");
         }
 
         var counters = new ClauseCounters();
@@ -890,6 +719,7 @@ public partial class TableGateway<TEntity, TRowID> :
             sql = string.Format(GetTemplatesForDialect(dialect).DeleteSql, dialect.MakeParameterName(param));
             deleteCache.GetOrAdd("DeleteById", _ => sql);
         }
+
         sc.Query.Append(sql);
         return sc;
     }
@@ -995,7 +825,8 @@ public partial class TableGateway<TEntity, TRowID> :
     }
 
     /// <inheritdoc/>
-    public async IAsyncEnumerable<TEntity> RetrieveStreamAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null,
+    public async IAsyncEnumerable<TEntity> RetrieveStreamAsync(IEnumerable<TRowID> ids,
+        IDatabaseContext? context = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         if (ids == null)
@@ -1095,7 +926,7 @@ public partial class TableGateway<TEntity, TRowID> :
         }
 
         var dialect = GetDialect(ctx);
-        var wrappedIdColumnName = dialect.WrapObjectName(_idColumn.Name);
+        var wrappedIdColumnName = dialect.WrapSimpleName(_idColumn.Name);
 
         // Chunk by max parameter limit (with 10% headroom, similar to BatchCreate)
         var chunks = ChunkList(list, 1, ctx.MaxParameterLimit);
@@ -1226,6 +1057,7 @@ public partial class TableGateway<TEntity, TRowID> :
                         singleResult.Add(enumerator.Current);
                     }
                 }
+
                 return singleResult;
             }
         }
@@ -1305,9 +1137,10 @@ public partial class TableGateway<TEntity, TRowID> :
 
         // Fast path: generate simple equality SQL directly instead of using expensive templates
         using var container = BuildBaseRetrieve("", ctx);
+        var dialect = GetDialect(ctx);
 
         // Add simple WHERE clause: column = @p0
-        var wrappedColumnName = container.WrapObjectName(_idColumn.Name);
+        var wrappedColumnName = dialect.WrapSimpleName(_idColumn.Name);
         var paramName = container.MakeParameterName("p0");
         container.Query.Append(SqlFragments.Where);
         container.Query.Append(wrappedColumnName);
@@ -1488,24 +1321,22 @@ public partial class TableGateway<TEntity, TRowID> :
         return _columnListCache.GetOrAdd("Insertable", _ => insertable);
     }
 
-    internal IReadOnlyList<IColumnInfo> GetCachedUpdatableColumns()
+    private CompiledBinderFactory<TEntity>.Binder GetOrBuildInsertBinder(ISqlDialect dialect, CachedSqlTemplates template)
     {
-        if (_columnListCache.TryGet("Updatable", out var cached))
-        {
-            return cached;
-        }
+        return _insertBinders.GetOrAdd(dialect.DatabaseType, _ => 
+            CompiledBinderFactory<TEntity>.CreateInsertBinder(template.InsertColumns, template.InsertParameterNames, dialect));
+    }
 
-        // Avoid LINQ allocations in hot path (5-8% CPU savings)
-        var updatable = new List<IColumnInfo>(_tableInfo.OrderedColumns.Count);
-        foreach (var c in _tableInfo.OrderedColumns)
-        {
-            if (!(c.IsId || c.IsVersion || c.IsNonUpdateable || c.IsCreatedBy || c.IsCreatedOn))
-            {
-                updatable.Add(c);
-            }
-        }
+    private CompiledBinderFactory<TEntity>.Binder GetOrBuildUpsertBinder(ISqlDialect dialect, CachedSqlTemplates template)
+    {
+        return _upsertBinders.GetOrAdd(dialect.DatabaseType, _ => 
+            CompiledBinderFactory<TEntity>.CreateInsertBinder(template.UpsertColumns, template.UpsertParameterNames, dialect));
+    }
 
-        return _columnListCache.GetOrAdd("Updatable", _ => updatable);
+    private CompiledBinderFactory<TEntity>.UpdateBinder GetOrBuildUpdateBinder(ISqlDialect dialect, CachedSqlTemplates template)
+    {
+        return _updateBinders.GetOrAdd(dialect.DatabaseType, _ => 
+            CompiledBinderFactory<TEntity>.CreateUpdateBinder(template.UpdateColumns, template.UpdateColumnWrappedNames, dialect));
     }
 
     private void CheckParameterLimit(ISqlContainer sc, int? toAdd)
@@ -1561,23 +1392,6 @@ public partial class TableGateway<TEntity, TRowID> :
 
     // moved to TableGateway.Upsert.cs
 
-// moved to TableGateway.Upsert.cs
-    private IReadOnlyList<IColumnInfo> ResolveUpsertKey_MOVED()
-    {
-        if (_idColumn != null && _idColumn.IsIdIsWritable)
-        {
-            return new List<IColumnInfo> { _idColumn! };
-        }
-
-        var keys = _tableInfo.PrimaryKeys;
-        if (keys.Count > 0)
-        {
-            return keys;
-        }
-
-        throw new NotSupportedException(UpsertNoWritableKeyMessage);
-    }
-
     private (string sql, List<DbParameter> parameters) BuildUpdateByKey(TEntity updated,
         IReadOnlyList<IColumnInfo> keyCols, ISqlDialect dialect)
     {
@@ -1613,10 +1427,9 @@ public partial class TableGateway<TEntity, TRowID> :
             var name = counters.NextKey();
             var p = dialect.CreateDbParameter(name, key.DbType, v);
             parameters.Add(p);
-            where.Append(dialect.WrapObjectName(key.Name));
+            where.Append(dialect.WrapSimpleName(key.Name));
             where.Append(" = ");
-            if (dialect.SupportsNamedParameters) { where.Append(dialect.ParameterMarker); where.Append(name); }
-            else { where.Append('?'); }
+            where.Append(dialect.MakeParameterName(name));
         }
 
         var sqlBuf = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
@@ -1634,10 +1447,9 @@ public partial class TableGateway<TEntity, TRowID> :
             var p = dialect.CreateDbParameter(name, _versionColumn.DbType, vv);
             parameters.Add(p);
             sqlBuf.Append(" AND ");
-            sqlBuf.Append(dialect.WrapObjectName(_versionColumn.Name));
+            sqlBuf.Append(dialect.WrapSimpleName(_versionColumn.Name));
             sqlBuf.Append(" = ");
-            if (dialect.SupportsNamedParameters) { sqlBuf.Append(dialect.ParameterMarker); sqlBuf.Append(name); }
-            else { sqlBuf.Append('?'); }
+            sqlBuf.Append(dialect.MakeParameterName(name));
         }
 
         return (sqlBuf.ToString(), parameters);
@@ -1663,10 +1475,6 @@ public partial class TableGateway<TEntity, TRowID> :
     // moved to TableGateway.Audit.cs
 
     // moved to TableGateway.Audit.cs
-    private string WrapObjectName(string objectName)
-    {
-        return _dialect.WrapObjectName(objectName);
-    }
 
     private static bool IsDefaultId(object? value)
     {
@@ -1728,27 +1536,15 @@ public partial class TableGateway<TEntity, TRowID> :
         {
             if (string.IsNullOrWhiteSpace(_tableInfo.Schema))
             {
-                return d.WrapObjectName(_tableInfo.Name);
+                return d.WrapSimpleName(_tableInfo.Name);
             }
 
             var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
-            sb.Append(d.WrapObjectName(_tableInfo.Schema));
+            sb.Append(d.WrapSimpleName(_tableInfo.Schema));
             sb.Append(d.CompositeIdentifierSeparator);
-            sb.Append(d.WrapObjectName(_tableInfo.Name));
+            sb.Append(d.WrapSimpleName(_tableInfo.Name));
             return sb.ToString();
         });
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private string BuildWrappedColumnName(ISqlDialect dialect, string columnName)
-    {
-        var key = new ColumnCacheKey(dialect, columnName);
-        if (_wrappedColumnNameCache.TryGet(key, out var cached))
-        {
-            return cached;
-        }
-
-        return _wrappedColumnNameCache.GetOrAdd(key, static k => k.Dialect.WrapObjectName(k.Name));
     }
 
     private static ISqlDialect GetDialect(IDatabaseContext ctx)

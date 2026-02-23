@@ -239,5 +239,4 @@ public static class SqlContainerExtensions
 
         return container.ExecuteReaderAsync(executionType, CommandType.Text, cancellationToken);
     }
-
 }

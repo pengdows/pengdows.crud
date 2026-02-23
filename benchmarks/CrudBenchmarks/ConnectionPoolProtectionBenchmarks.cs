@@ -43,20 +43,20 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
     private const int BusyTimeoutMs = 10;
 
     private const string ReadSqlTemplate = """
-        SELECT id, value FROM stress_test WHERE id = {id}
-        """;
+                                           SELECT id, value FROM stress_test WHERE id = {id}
+                                           """;
 
     private const string InsertSqlTemplate = """
-        INSERT INTO stress_test (value) VALUES ({value})
-        """;
+                                             INSERT INTO stress_test (value) VALUES ({value})
+                                             """;
 
     private const string UpdateSqlTemplate = """
-        UPDATE stress_test SET value = {value} WHERE id = {id}
-        """;
+                                             UPDATE stress_test SET value = {value} WHERE id = {id}
+                                             """;
 
     private const string ListSqlTemplate = """
-        SELECT id, value FROM stress_test WHERE value > {min}
-        """;
+                                           SELECT id, value FROM stress_test WHERE value > {min}
+                                           """;
 
     private static string BusyTimeoutSql => $"PRAGMA busy_timeout={BusyTimeoutMs};";
 
@@ -229,9 +229,6 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
                 container.AddParameterWithValue("value", DbType.Int32, (i * 1000) + j);
                 container.AddParameterWithValue("id", DbType.Int32, (j % 100) + 1);
                 await container.ExecuteNonQueryAsync();
-
-
-
             }
 
             tx.Commit();
@@ -255,9 +252,6 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
                     sql,
                     new { value = (i * 1000) + j, id = (j % 100) + 1 },
                     transaction: tx);
-
-
-
             }
 
             await tx.CommitAsync();
@@ -281,9 +275,6 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
                     sql,
                     new SqliteParameter("value", (i * 1000) + j),
                     new SqliteParameter("id", (j % 100) + 1));
-
-
-
             }
 
             await tx.CommitAsync();
@@ -658,8 +649,7 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
         [Column("id", DbType.Int32)]
         public int Id { get; set; }
 
-        [Column("value", DbType.Int32)]
-        public int Value { get; set; }
+        [Column("value", DbType.Int32)] public int Value { get; set; }
     }
 
     public class EfPoolProtectEntity

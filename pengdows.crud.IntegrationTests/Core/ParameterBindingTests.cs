@@ -34,16 +34,24 @@ public class ParameterBindingTests : DatabaseTestBase
 
             // Derive specific marker from MakeParameterName
             var marker = context.MakeParameterName("p").Substring(0, 1);
-            if (!char.IsLetterOrDigit(marker[0])) { /* standard prefix */ } else { marker = ""; /* positional or weird */ }
-            
+            if (!char.IsLetterOrDigit(marker[0]))
+            {
+                /* standard prefix */
+            }
+            else
+            {
+                marker = ""; /* positional or weird */
+            }
+
             // Safer way: just use the context to format names
             var p0 = context.MakeParameterName("p0");
-            var sql = $"SELECT COUNT(*) FROM {context.WrapObjectName("round_trip_entity")} WHERE {context.WrapObjectName("id")} = {p0} OR {context.WrapObjectName("id")} = {p0}";
+            var sql =
+                $"SELECT COUNT(*) FROM {context.WrapObjectName("round_trip_entity")} WHERE {context.WrapObjectName("id")} = {p0} OR {context.WrapObjectName("id")} = {p0}";
 
             // Act
             await using var container = context.CreateSqlContainer(sql);
             container.AddParameterWithValue("p0", DbType.Int64, id);
-            
+
             var count = await container.ExecuteScalarRequiredAsync<long>();
 
             // Assert
@@ -59,7 +67,8 @@ public class ParameterBindingTests : DatabaseTestBase
             // Arrange
             var helper = new TableGateway<RoundTripEntity, long>(context);
             var id = DateTime.UtcNow.Ticks + 1;
-            await helper.CreateAsync(new RoundTripEntity { Id = id, TextValue = "NullTest", TextNullable = null }, context);
+            await helper.CreateAsync(new RoundTripEntity { Id = id, TextValue = "NullTest", TextNullable = null },
+                context);
 
             var p0 = context.MakeParameterName("p0");
             var table = context.WrapObjectName("round_trip_entity");
@@ -95,7 +104,7 @@ public class ParameterBindingTests : DatabaseTestBase
             var sql = provider == SupportedDatabase.Firebird
                 ? $"SELECT CAST({pInt} AS INTEGER), CAST({pLong} AS BIGINT), CAST({pDecimal} AS DECIMAL(18,4)), CAST({pBool} AS SMALLINT), CAST({pString} AS VARCHAR(100)) FROM RDB$DATABASE"
                 : $"SELECT {pInt}, {pLong}, {pDecimal}, {pBool}, {pString}";
-            
+
             if (provider == SupportedDatabase.Oracle)
             {
                 sql += " FROM DUAL";
@@ -110,7 +119,7 @@ public class ParameterBindingTests : DatabaseTestBase
 
             await using var reader = await container.ExecuteReaderAsync();
             Assert.True(await reader.ReadAsync());
-            
+
             // Just verify we can read them back - coercion is tested in RoundTripTests
             Assert.NotNull(reader.GetValue(0));
             Assert.NotNull(reader.GetValue(1));

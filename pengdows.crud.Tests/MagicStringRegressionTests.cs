@@ -193,7 +193,7 @@ public class MagicStringRegressionTests
     private class PinEntity
     {
         [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
-        [Column("name", DbType.String)]   public string Name { get; set; } = string.Empty;
+        [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
     }
 
     [Fact]

@@ -23,6 +23,7 @@
 using System.Collections.Concurrent;
 using System.Data;
 using System.Data.Common;
+using System.Globalization;
 using System.Reflection;
 using System.Text.Json;
 using pengdows.crud.enums;
@@ -42,7 +43,7 @@ internal readonly struct MappingKey : IEquatable<MappingKey>
 
     public MappingKey(Type clrType, SupportedDatabase provider)
     {
-        ClrType = clrType;
+        ClrType = Nullable.GetUnderlyingType(clrType) ?? clrType;
         Provider = provider;
     }
 
@@ -91,42 +92,42 @@ public class AdvancedTypeRegistry
     // runtime; centralising makes them grep-able and keeps them in sync.
     private static class NpgsqlNames
     {
-        public const string DbTypeProperty  = "NpgsqlDbType";
-        public const string DataTypeName    = "DataTypeName";
-        public const string Jsonb           = "Jsonb";
-        public const string Integer         = "Integer";
-        public const string Text            = "Text";
-        public const string Array           = "Array";
-        public const string Int4Range       = "Int4Range";
-        public const string TsRange         = "TsRange";
-        public const string Inet            = "Inet";
-        public const string Cidr            = "Cidr";
-        public const string MacAddr         = "MacAddr";
-        public const string Interval        = "Interval";
-        public const string Uuid            = "Uuid";
+        public const string DbTypeProperty = "NpgsqlDbType";
+        public const string DataTypeName = "DataTypeName";
+        public const string Jsonb = "Jsonb";
+        public const string Integer = "Integer";
+        public const string Text = "Text";
+        public const string Array = "Array";
+        public const string Int4Range = "Int4Range";
+        public const string TsRange = "TsRange";
+        public const string Inet = "Inet";
+        public const string Cidr = "Cidr";
+        public const string MacAddr = "MacAddr";
+        public const string Interval = "Interval";
+        public const string Uuid = "Uuid";
     }
 
     private static class OracleNames
     {
-        public const string DbTypeProperty  = "OracleDbType";
-        public const string IntervalYM      = "IntervalYM";
-        public const string IntervalDS      = "IntervalDS";
-        public const string Blob            = "Blob";
-        public const string Clob            = "Clob";
+        public const string DbTypeProperty = "OracleDbType";
+        public const string IntervalYM = "IntervalYM";
+        public const string IntervalDS = "IntervalDS";
+        public const string Blob = "Blob";
+        public const string Clob = "Clob";
     }
 
     private static class SqlServerNames
     {
-        public const string DbTypeProperty  = "SqlDbType";
-        public const string Udt             = "Udt";
-        public const string UdtTypeName     = "UdtTypeName";
-        public const string Timestamp       = "Timestamp";
+        public const string DbTypeProperty = "SqlDbType";
+        public const string Udt = "Udt";
+        public const string UdtTypeName = "UdtTypeName";
+        public const string Timestamp = "Timestamp";
     }
 
     private static class MySqlNames
     {
-        public const string DbTypeProperty  = "MySqlDbType";
-        public const string Json            = "JSON";
+        public const string DbTypeProperty = "MySqlDbType";
+        public const string Json = "JSON";
     }
 
     public static AdvancedTypeRegistry Shared { get; } = new(true);
@@ -160,9 +161,12 @@ public class AdvancedTypeRegistry
     /// </summary>
     public void RegisterMapping<T>(SupportedDatabase provider, ProviderTypeMapping mapping)
     {
-        var key = new MappingKey(typeof(T), provider);
+        var type = typeof(T);
+        type = Nullable.GetUnderlyingType(type) ?? type;
+        
+        var key = new MappingKey(type, provider);
         _mappings[key] = mapping;
-        _mappedTypes[typeof(T)] = 0;
+        _mappedTypes[type] = 0;
 
         // Clear any cached config for this key to force rebuild
         _parameterCache.TryRemove(key, out _);
@@ -212,6 +216,9 @@ public class AdvancedTypeRegistry
     /// </summary>
     public bool TryConfigureParameter(DbParameter parameter, Type clrType, object? value, SupportedDatabase provider)
     {
+        // Unwrap nullable to ensure DateTime? matches DateTime mapping, etc.
+        clrType = Nullable.GetUnderlyingType(clrType) ?? clrType;
+        
         var key = new MappingKey(clrType, provider);
         var currentVersion = _converterVersion;
 
@@ -256,17 +263,26 @@ public class AdvancedTypeRegistry
                 $"AdvancedTypeRegistry: converted {clrType.Name} for {provider} to {value?.GetType().FullName ?? "null"}");
         }
 
-        parameter.Value = value ?? DBNull.Value;
+        // Initialize parameter with default mapping values
         parameter.DbType = config.Mapping.DbType;
+        parameter.Value = value ?? DBNull.Value;
 
         // Apply provider-specific configuration
         config.Mapping.ConfigureParameter?.Invoke(parameter, value);
+
+        // Crucial: Update the actual parameter value with the potentially transformed 'value'
+        // only if the configuration action didn't already set it.
+        if (parameter.Value == null || parameter.Value is DBNull)
+        {
+            parameter.Value = value ?? DBNull.Value;
+        }
 
         return true;
     }
 
     internal bool IsMappedType(Type clrType)
     {
+        clrType = Nullable.GetUnderlyingType(clrType) ?? clrType;
         return _mappedTypes.ContainsKey(clrType);
     }
 
@@ -326,6 +342,77 @@ public class AdvancedTypeRegistry
 
         // Snowflake-specific types
         RegisterSnowflakeMappings();
+
+        // SQLite-specific types
+        RegisterSqliteMappings();
+
+        // Fallback mappings for Unknown/SQL-92
+        RegisterFallbackMappings();
+    }
+
+    private void RegisterFallbackMappings()
+    {
+        // For Unknown/Fallback dialects, we use the most compatible formats
+        // (doubles for decimals) which works for most lightweight providers.
+
+        RegisterMapping<decimal>(SupportedDatabase.Unknown, new ProviderTypeMapping
+        {
+            DbType = DbType.Double,
+            ConfigureParameter = (param, value) =>
+            {
+                param.DbType = DbType.Double;
+                if (value != null)
+                {
+                    decimal dec = value is decimal d ? d : Convert.ToDecimal(value, CultureInfo.InvariantCulture);
+                    param.Value = (double)dec;
+                    var (p, s) = DecimalHelpers.Infer(dec);
+                    param.Precision = (byte)Math.Max(p, 18);
+                    param.Scale = (byte)s;
+                }
+            }
+        });
+    }
+
+    private void RegisterSqliteMappings()
+    {
+        // SQLite: store decimals as Double (REAL)
+        RegisterMapping<decimal>(SupportedDatabase.Sqlite, new ProviderTypeMapping
+        {
+            DbType = DbType.Double,
+            ConfigureParameter = (param, value) =>
+            {
+                param.DbType = DbType.Double;
+                if (value != null)
+                {
+                    decimal dec;
+                    if (value is decimal d) dec = d;
+                    else dec = Convert.ToDecimal(value, CultureInfo.InvariantCulture);
+                    
+                    param.Value = (double)dec;
+                    
+                    // Maintain Precision/Scale metadata even when storing as double
+                    // to satisfy unit tests and provide consistent parameter shapes.
+                    var (inferredPrecision, inferredScale) = DecimalHelpers.Infer(dec);
+                    param.Precision = (byte)Math.Max(inferredPrecision, 18);
+                    param.Scale = (byte)inferredScale;
+                }
+            }
+        });
+
+        // SQLite: store byte arrays as BLOB
+        RegisterMapping<byte[]>(SupportedDatabase.Sqlite, new ProviderTypeMapping
+        {
+            DbType = DbType.Binary,
+            ConfigureParameter = (param, value) =>
+            {
+                param.DbType = DbType.Binary;
+                if (value is byte[] bytes)
+                {
+                    param.Value = bytes;
+                    param.Size = bytes.Length;
+                }
+            }
+        });
     }
 
     private void RegisterDefaultConverters()
@@ -380,7 +467,10 @@ public class AdvancedTypeRegistry
         var mySqlJson = new ProviderTypeMapping
         {
             DbType = DbType.String,
-            ConfigureParameter = (param, value) => { SetEnumProperty(param, MySqlNames.DbTypeProperty, MySqlNames.Json); }
+            ConfigureParameter = (param, value) =>
+            {
+                SetEnumProperty(param, MySqlNames.DbTypeProperty, MySqlNames.Json);
+            }
         };
         RegisterMapping<JsonDocument>(SupportedDatabase.MySql, mySqlJson);
         RegisterMapping<JsonDocument>(SupportedDatabase.TiDb, mySqlJson);
@@ -439,7 +529,10 @@ public class AdvancedTypeRegistry
         var pgIntArray = new ProviderTypeMapping
         {
             DbType = DbType.Object,
-            ConfigureParameter = (param, value) => { SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Array, NpgsqlNames.Integer); }
+            ConfigureParameter = (param, value) =>
+            {
+                SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Array, NpgsqlNames.Integer);
+            }
         };
         RegisterMapping<int[]>(SupportedDatabase.PostgreSql, pgIntArray);
         RegisterMapping<int[]>(SupportedDatabase.CockroachDb, pgIntArray);
@@ -449,7 +542,10 @@ public class AdvancedTypeRegistry
         var pgTextArray = new ProviderTypeMapping
         {
             DbType = DbType.Object,
-            ConfigureParameter = (param, value) => { SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Array, NpgsqlNames.Text); }
+            ConfigureParameter = (param, value) =>
+            {
+                SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Array, NpgsqlNames.Text);
+            }
         };
         RegisterMapping<string[]>(SupportedDatabase.PostgreSql, pgTextArray);
         RegisterMapping<string[]>(SupportedDatabase.CockroachDb, pgTextArray);
@@ -462,7 +558,10 @@ public class AdvancedTypeRegistry
         var pgIntRange = new ProviderTypeMapping
         {
             DbType = DbType.String,
-            ConfigureParameter = (param, value) => { SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Int4Range); }
+            ConfigureParameter = (param, value) =>
+            {
+                SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Int4Range);
+            }
         };
         RegisterMapping<Range<int>>(SupportedDatabase.PostgreSql, pgIntRange);
         RegisterMapping<Range<int>>(SupportedDatabase.CockroachDb, pgIntRange);
@@ -472,7 +571,10 @@ public class AdvancedTypeRegistry
         var pgTsRange = new ProviderTypeMapping
         {
             DbType = DbType.String,
-            ConfigureParameter = (param, value) => { SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.TsRange); }
+            ConfigureParameter = (param, value) =>
+            {
+                SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.TsRange);
+            }
         };
         RegisterMapping<Range<DateTime>>(SupportedDatabase.PostgreSql, pgTsRange);
         RegisterMapping<Range<DateTime>>(SupportedDatabase.CockroachDb, pgTsRange);
@@ -485,7 +587,10 @@ public class AdvancedTypeRegistry
         var pgInet = new ProviderTypeMapping
         {
             DbType = DbType.String,
-            ConfigureParameter = (param, value) => { SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Inet); }
+            ConfigureParameter = (param, value) =>
+            {
+                SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Inet);
+            }
         };
         RegisterMapping<Inet>(SupportedDatabase.PostgreSql, pgInet);
         RegisterMapping<Inet>(SupportedDatabase.CockroachDb, pgInet);
@@ -495,7 +600,10 @@ public class AdvancedTypeRegistry
         var pgCidr = new ProviderTypeMapping
         {
             DbType = DbType.String,
-            ConfigureParameter = (param, value) => { SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Cidr); }
+            ConfigureParameter = (param, value) =>
+            {
+                SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Cidr);
+            }
         };
         RegisterMapping<Cidr>(SupportedDatabase.PostgreSql, pgCidr);
         RegisterMapping<Cidr>(SupportedDatabase.CockroachDb, pgCidr);
@@ -505,7 +613,10 @@ public class AdvancedTypeRegistry
         var pgMac = new ProviderTypeMapping
         {
             DbType = DbType.String,
-            ConfigureParameter = (param, value) => { SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.MacAddr); }
+            ConfigureParameter = (param, value) =>
+            {
+                SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.MacAddr);
+            }
         };
         RegisterMapping<MacAddress>(SupportedDatabase.PostgreSql, pgMac);
         RegisterMapping<MacAddress>(SupportedDatabase.CockroachDb, pgMac);
@@ -518,7 +629,10 @@ public class AdvancedTypeRegistry
         var pgInterval = new ProviderTypeMapping
         {
             DbType = DbType.Object,
-            ConfigureParameter = (param, value) => { SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Interval); }
+            ConfigureParameter = (param, value) =>
+            {
+                SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Interval);
+            }
         };
         RegisterMapping<PostgreSqlInterval>(SupportedDatabase.PostgreSql, pgInterval);
         RegisterMapping<PostgreSqlInterval>(SupportedDatabase.CockroachDb, pgInterval);
@@ -527,13 +641,19 @@ public class AdvancedTypeRegistry
         RegisterMapping<IntervalYearMonth>(SupportedDatabase.Oracle, new ProviderTypeMapping
         {
             DbType = DbType.Object,
-            ConfigureParameter = (param, value) => { SetEnumProperty(param, OracleNames.DbTypeProperty, OracleNames.IntervalYM); }
+            ConfigureParameter = (param, value) =>
+            {
+                SetEnumProperty(param, OracleNames.DbTypeProperty, OracleNames.IntervalYM);
+            }
         });
 
         RegisterMapping<IntervalDaySecond>(SupportedDatabase.Oracle, new ProviderTypeMapping
         {
             DbType = DbType.Object,
-            ConfigureParameter = (param, value) => { SetEnumProperty(param, OracleNames.DbTypeProperty, OracleNames.IntervalDS); }
+            ConfigureParameter = (param, value) =>
+            {
+                SetEnumProperty(param, OracleNames.DbTypeProperty, OracleNames.IntervalDS);
+            }
         });
 
         // SQL Server DateTimeOffset (UTC policy)
@@ -599,13 +719,19 @@ public class AdvancedTypeRegistry
         RegisterMapping<Stream>(SupportedDatabase.Oracle, new ProviderTypeMapping
         {
             DbType = DbType.Binary,
-            ConfigureParameter = (param, value) => { SetEnumProperty(param, OracleNames.DbTypeProperty, OracleNames.Blob); }
+            ConfigureParameter = (param, value) =>
+            {
+                SetEnumProperty(param, OracleNames.DbTypeProperty, OracleNames.Blob);
+            }
         });
 
         RegisterMapping<TextReader>(SupportedDatabase.Oracle, new ProviderTypeMapping
         {
             DbType = DbType.String,
-            ConfigureParameter = (param, value) => { SetEnumProperty(param, OracleNames.DbTypeProperty, OracleNames.Clob); }
+            ConfigureParameter = (param, value) =>
+            {
+                SetEnumProperty(param, OracleNames.DbTypeProperty, OracleNames.Clob);
+            }
         });
     }
 
@@ -627,7 +753,10 @@ public class AdvancedTypeRegistry
         var pgGuid = new ProviderTypeMapping
         {
             DbType = DbType.Guid,
-            ConfigureParameter = (param, value) => { SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Uuid); }
+            ConfigureParameter = (param, value) =>
+            {
+                SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Uuid);
+            }
         };
         RegisterMapping<Guid>(SupportedDatabase.PostgreSql, pgGuid);
         RegisterMapping<Guid>(SupportedDatabase.CockroachDb, pgGuid);

@@ -27,45 +27,45 @@ public class ServerExecutionTimeBenchmarks : IAsyncDisposable
 {
     // SQL templates with {param} placeholders
     private const string SingleReadSqlTemplate = """
-        SELECT film_id, title, length
-        FROM film
-        WHERE film_id = {id}
-        """;
+                                                 SELECT film_id, title, length
+                                                 FROM film
+                                                 WHERE film_id = {id}
+                                                 """;
 
     private const string CompositeKeyReadSqlTemplate = """
-        SELECT actor_id, film_id
-        FROM film_actor
-        WHERE actor_id = {actorId} AND film_id = {filmId}
-        """;
+                                                       SELECT actor_id, film_id
+                                                       FROM film_actor
+                                                       WHERE actor_id = {actorId} AND film_id = {filmId}
+                                                       """;
 
     private const string ListReadSqlTemplate = """
-        SELECT film_id, title, length
-        FROM film
-        WHERE length > {minLength}
-        LIMIT 50
-        """;
+                                               SELECT film_id, title, length
+                                               FROM film
+                                               WHERE length > {minLength}
+                                               LIMIT 50
+                                               """;
 
     private const string InsertSqlTemplate = """
-        INSERT INTO film(title, length)
-        VALUES ({title}, {length})
-        RETURNING film_id
-        """;
+                                             INSERT INTO film(title, length)
+                                             VALUES ({title}, {length})
+                                             RETURNING film_id
+                                             """;
 
     private const string UpdateSqlTemplate = """
-        UPDATE film SET length = {len}
-        WHERE film_id = {id}
-        """;
+                                             UPDATE film SET length = {len}
+                                             WHERE film_id = {id}
+                                             """;
 
     private const string DeleteSqlTemplate = """
-        DELETE FROM film
-        WHERE film_id = {id}
-        """;
+                                             DELETE FROM film
+                                             WHERE film_id = {id}
+                                             """;
 
     private const string TempInsertSqlTemplate = """
-        INSERT INTO film(title, length)
-        VALUES ({title}, {length})
-        RETURNING film_id
-        """;
+                                                 INSERT INTO film(title, length)
+                                                 VALUES ({title}, {length})
+                                                 RETURNING film_id
+                                                 """;
 
     private IContainer? _container;
     private string _baseConnStr = string.Empty;

@@ -12,7 +12,8 @@ public class ConcatCodeScriptTests
     {
         var scriptPath = GetScriptPath();
         var lines = File.ReadAllLines(scriptPath);
-        var line = lines.FirstOrDefault(value => value.TrimStart().StartsWith("declare -a code_exts=", StringComparison.Ordinal));
+        var line = lines.FirstOrDefault(value =>
+            value.TrimStart().StartsWith("declare -a code_exts=", StringComparison.Ordinal));
 
         Assert.False(string.IsNullOrWhiteSpace(line), "Expected concat-code.sh to declare code_exts.");
 

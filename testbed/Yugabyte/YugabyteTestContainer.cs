@@ -58,7 +58,7 @@ public class YugabyteTestContainer : TestContainer
                 await Task.Delay(2000);
             }
         }
-        
+
         throw new TimeoutException("Yugabyte YSQL did not become ready in time.");
     }
 

@@ -281,7 +281,8 @@ public class SpatialConverterEdgeCaseTests
     {
         var converter = new GeometryConverter();
 
-        var success = converter.TryConvertFromProvider("SRID=4326;POINT(1 2)", SupportedDatabase.Sqlite, out var result);
+        var success =
+            converter.TryConvertFromProvider("SRID=4326;POINT(1 2)", SupportedDatabase.Sqlite, out var result);
         Assert.True(success);
         Assert.Equal(4326, result.Srid);
     }

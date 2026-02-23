@@ -37,8 +37,8 @@ public class ExecuteReaderWriteConnectionLeakTests
         await using var container = context.CreateSqlContainer("SELECT 1");
 
         // Act: Execute reader with Write execution type — should throw
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await container.ExecuteReaderAsync(ExecutionType.Write));
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await container.ExecuteReaderAsync(ExecutionType.Write));
 
         // Assert: The write connection should have been disposed on failure
         Assert.True(opConnection.DisposeCount > 0,
@@ -72,8 +72,8 @@ public class ExecuteReaderWriteConnectionLeakTests
         await using var container = context.CreateSqlContainer("SELECT 1");
 
         // Act: Execute reader with Read execution type — should throw
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await container.ExecuteReaderAsync(ExecutionType.Read));
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await container.ExecuteReaderAsync(ExecutionType.Read));
 
         // Assert: The read connection should have been disposed on failure
         // (no TrackedReader was created to take ownership)

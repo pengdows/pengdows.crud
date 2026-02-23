@@ -51,11 +51,9 @@ public class IndexedViewPerformanceBenchmarks : IAsyncDisposable
     private string _efConnStr = string.Empty;
     private string _dapperConnStr = string.Empty;
 
-    [Params(5000, 10000)]
-    public int CustomerCount;
+    [Params(5000, 10000)] public int CustomerCount;
 
-    [Params(50)]
-    public int OrdersPerCustomer;
+    [Params(50)] public int OrdersPerCustomer;
 
     [GlobalSetup]
     public async Task GlobalSetup()
@@ -414,27 +412,27 @@ public class IndexedViewPerformanceBenchmarks : IAsyncDisposable
 public class MaterializedViewPerformanceBenchmarks : IAsyncDisposable
 {
     private const string TableScanSqlTemplate = """
-        SELECT
-            customer_id as customer_id,
-            COUNT(*) as order_count,
-            SUM(total_amount) as total_amount,
-            AVG(total_amount) as avg_order_amount,
-            MAX(order_date) as last_order_date
-        FROM orders
-        WHERE customer_id = {customerId} AND status = {status}
-        GROUP BY customer_id
-        """;
+                                                SELECT
+                                                    customer_id as customer_id,
+                                                    COUNT(*) as order_count,
+                                                    SUM(total_amount) as total_amount,
+                                                    AVG(total_amount) as avg_order_amount,
+                                                    MAX(order_date) as last_order_date
+                                                FROM orders
+                                                WHERE customer_id = {customerId} AND status = {status}
+                                                GROUP BY customer_id
+                                                """;
 
     private const string MaterializedViewSqlTemplate = """
-        SELECT
-            customer_id as customer_id,
-            order_count as order_count,
-            total_amount as total_amount,
-            avg_order_amount as avg_order_amount,
-            last_order_date as last_order_date
-        FROM customer_order_summary
-        WHERE customer_id = {customerId}
-        """;
+                                                       SELECT
+                                                           customer_id as customer_id,
+                                                           order_count as order_count,
+                                                           total_amount as total_amount,
+                                                           avg_order_amount as avg_order_amount,
+                                                           last_order_date as last_order_date
+                                                       FROM customer_order_summary
+                                                       WHERE customer_id = {customerId}
+                                                       """;
 
     private IContainer? _container;
     private string _connStr = string.Empty;
@@ -449,17 +447,13 @@ public class MaterializedViewPerformanceBenchmarks : IAsyncDisposable
     private readonly List<int> _customerIds = new();
     private int _testCustomerId;
 
-    [Params(2000, 5000)]
-    public int CustomerCount;
+    [Params(2000, 5000)] public int CustomerCount;
 
-    [Params(15)]
-    public int OrdersPerCustomer;
+    [Params(15)] public int OrdersPerCustomer;
 
-    [Params(16)]
-    public int Parallelism;
+    [Params(16)] public int Parallelism;
 
-    [Params(64)]
-    public int OperationsPerRun;
+    [Params(64)] public int OperationsPerRun;
 
     [GlobalSetup]
     public async Task GlobalSetup()
@@ -824,8 +818,7 @@ public class MaterializedViewPerformanceBenchmarks : IAsyncDisposable
         [Column("customer_id", DbType.Int32)]
         public int CustomerId { get; set; }
 
-        [Column("order_count", DbType.Int64)]
-        public long OrderCount { get; set; }
+        [Column("order_count", DbType.Int64)] public long OrderCount { get; set; }
 
         [Column("total_amount", DbType.Decimal)]
         public decimal TotalAmount { get; set; }

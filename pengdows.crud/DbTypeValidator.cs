@@ -60,11 +60,11 @@ internal static class DbTypeValidator
             [DbType.AnsiStringFixedLength] = new() { typeof(string), typeof(char), typeof(char[]), typeof(Guid) },
             [DbType.Xml] = new() { typeof(string) },
 
-            [DbType.DateTime] = new() { typeof(DateTime), typeof(DateTimeOffset) },
-            [DbType.DateTime2] = new() { typeof(DateTime), typeof(DateTimeOffset) },
-            [DbType.Date] = new() { typeof(DateTime), typeof(DateTimeOffset) },
-            [DbType.Time] = new() { typeof(TimeSpan), typeof(DateTime) },
-            [DbType.DateTimeOffset] = new() { typeof(DateTimeOffset), typeof(DateTime) },
+            [DbType.DateTime] = new() { typeof(DateTime), typeof(DateTimeOffset), typeof(string) },
+            [DbType.DateTime2] = new() { typeof(DateTime), typeof(DateTimeOffset), typeof(string) },
+            [DbType.Date] = new() { typeof(DateTime), typeof(DateTimeOffset), typeof(string) },
+            [DbType.Time] = new() { typeof(TimeSpan), typeof(DateTime), typeof(string) },
+            [DbType.DateTimeOffset] = new() { typeof(DateTimeOffset), typeof(DateTime), typeof(string) },
 
             [DbType.Guid] = new() { typeof(Guid), typeof(string), typeof(byte[]) },
 

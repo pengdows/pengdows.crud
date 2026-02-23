@@ -129,7 +129,8 @@ public class OutputParameterTests
             "EXEC get_data {P}inputVal, {P}outId OUTPUT, {P}outName OUTPUT, {P}outCount OUTPUT");
         container.AddParameterWithValue("inputVal", DbType.Int32, 1);
         var outId = container.AddParameterWithValue("outId", DbType.Int32, 0, ParameterDirection.Output);
-        var outName = container.AddParameterWithValue<string?>("outName", DbType.String, null, ParameterDirection.Output);
+        var outName =
+            container.AddParameterWithValue<string?>("outName", DbType.String, null, ParameterDirection.Output);
         var outCount = container.AddParameterWithValue("outCount", DbType.Int32, 0, ParameterDirection.Output);
 
         await container.ExecuteNonQueryAsync();
@@ -207,7 +208,8 @@ public class OutputParameterTests
 
         // Act
         await using var container = context.CreateSqlContainer("EXEC my_proc {P}nullableOutput OUTPUT");
-        var outputParam = container.AddParameterWithValue<string?>("nullableOutput", DbType.String, null, ParameterDirection.Output);
+        var outputParam =
+            container.AddParameterWithValue<string?>("nullableOutput", DbType.String, null, ParameterDirection.Output);
 
         await container.ExecuteNonQueryAsync();
 
@@ -323,7 +325,8 @@ public class OutputParameterTests
 
         // Act
         await using var container = context.CreateSqlContainer("EXEC my_proc");
-        var returnParam = container.AddParameterWithValue("returnValue", DbType.Int32, -1, ParameterDirection.ReturnValue);
+        var returnParam =
+            container.AddParameterWithValue("returnValue", DbType.Int32, -1, ParameterDirection.ReturnValue);
 
         await container.ExecuteNonQueryAsync();
 
@@ -386,7 +389,7 @@ public class OutputParameterTests
         connection.EnqueueOutputParameterResult(new Dictionary<string, object?>
         {
             ["inputParam"] = 999, // Should NOT modify input parameter
-            ["outputParam"] = 42  // Should modify output parameter
+            ["outputParam"] = 42 // Should modify output parameter
         });
         connection.EnqueueNonQueryResult(1);
 
@@ -445,7 +448,8 @@ public class OutputParameterTests
 
         // Act
         await using var container = context.CreateSqlContainer("EXEC my_proc {P}result OUTPUT");
-        var resultParam = container.AddParameterWithValue("result", dbType, GetDefaultValue(dbType), ParameterDirection.Output);
+        var resultParam =
+            container.AddParameterWithValue("result", dbType, GetDefaultValue(dbType), ParameterDirection.Output);
 
         await container.ExecuteNonQueryAsync();
 

@@ -14,12 +14,9 @@ public class TortureEntity
     [Column("Group By", DbType.Int64)]
     public long Id { get; set; }
 
-    [Column("Select", DbType.String)]
-    public string SelectValue { get; set; } = string.Empty;
+    [Column("Select", DbType.String)] public string SelectValue { get; set; } = string.Empty;
 
-    [Column("From", DbType.String)]
-    public string FromValue { get; set; } = string.Empty;
+    [Column("From", DbType.String)] public string FromValue { get; set; } = string.Empty;
 
-    [Column("User Name", DbType.String)]
-    public string MixedCase { get; set; } = string.Empty;
+    [Column("User Name", DbType.String)] public string MixedCase { get; set; } = string.Empty;
 }

@@ -116,7 +116,7 @@ internal static class DatabaseDetectionService
             {
                 var productName = schema.Rows[0].Field<string>("DataSourceProductName");
                 var productVersion = schema.Rows[0].Field<string>("DataSourceProductVersion");
-                
+
                 var sv = string.Empty;
                 if (connection is DbConnection dbc) sv = dbc.ServerVersion;
                 else if (connection is ITrackedConnection tc) sv = tc.ServerVersion;
@@ -132,6 +132,7 @@ internal static class DatabaseDetectionService
                     {
                         return SupportedDatabase.MariaDb;
                     }
+
                     var flavor = DetectFlavor(connection);
                     if (flavor != SupportedDatabase.Unknown) return flavor;
                 }
@@ -164,23 +165,27 @@ internal static class DatabaseDetectionService
             var serverVersion = string.Empty;
             if (connection is DbConnection dbConn) serverVersion = dbConn.ServerVersion;
             else if (connection is ITrackedConnection tracked) serverVersion = tracked.ServerVersion;
-            else if (connection.GetType().GetProperty("ServerVersion") is { } prop) 
+            else if (connection.GetType().GetProperty("ServerVersion") is { } prop)
                 serverVersion = prop.GetValue(connection)?.ToString() ?? string.Empty;
 
             if (!string.IsNullOrEmpty(serverVersion))
             {
                 if (serverVersion.Contains("TiDB", StringComparison.OrdinalIgnoreCase)) return SupportedDatabase.TiDb;
-                if (serverVersion.Contains("-YB-", StringComparison.OrdinalIgnoreCase) || serverVersion.Contains("Yugabyte", StringComparison.OrdinalIgnoreCase)) return SupportedDatabase.YugabyteDb;
-                if (serverVersion.Contains("Cockroach", StringComparison.OrdinalIgnoreCase)) return SupportedDatabase.CockroachDb;
+                if (serverVersion.Contains("-YB-", StringComparison.OrdinalIgnoreCase) ||
+                    serverVersion.Contains("Yugabyte", StringComparison.OrdinalIgnoreCase))
+                    return SupportedDatabase.YugabyteDb;
+                if (serverVersion.Contains("Cockroach", StringComparison.OrdinalIgnoreCase))
+                    return SupportedDatabase.CockroachDb;
             }
 
             // Deep check via query
             using var cmd = connection.CreateCommand();
             cmd.CommandText = "SELECT version()";
             var version = cmd.ExecuteScalar()?.ToString() ?? string.Empty;
-            
+
             if (version.Contains("TiDB", StringComparison.OrdinalIgnoreCase)) return SupportedDatabase.TiDb;
-            if (version.Contains("-YB-", StringComparison.OrdinalIgnoreCase) || version.Contains("Yugabyte", StringComparison.OrdinalIgnoreCase)) return SupportedDatabase.YugabyteDb;
+            if (version.Contains("-YB-", StringComparison.OrdinalIgnoreCase) ||
+                version.Contains("Yugabyte", StringComparison.OrdinalIgnoreCase)) return SupportedDatabase.YugabyteDb;
             if (version.Contains("Cockroach", StringComparison.OrdinalIgnoreCase)) return SupportedDatabase.CockroachDb;
         }
         catch

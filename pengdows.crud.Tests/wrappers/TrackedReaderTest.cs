@@ -84,7 +84,8 @@ public class TrackedReaderTests
             throw new NotImplementedException();
         }
 
-        public Task<IDbTransaction> BeginTransactionAsync(IsolationLevel isolationLevel, CancellationToken cancellationToken = default)
+        public Task<IDbTransaction> BeginTransactionAsync(IsolationLevel isolationLevel,
+            CancellationToken cancellationToken = default)
         {
             throw new NotImplementedException();
         }

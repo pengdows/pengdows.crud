@@ -84,7 +84,8 @@ internal class KeepAliveConnectionStrategy : StandardConnectionStrategy
                 conn.Dispose();
             }
             catch
-            { /* ignore */
+            {
+                /* ignore */
             }
 
             throw;
@@ -157,7 +158,8 @@ internal class KeepAliveConnectionStrategy : StandardConnectionStrategy
                     detectionTarget.Dispose();
                 }
                 catch
-                { /* ignore */
+                {
+                    /* ignore */
                 }
             }
         }

@@ -308,6 +308,51 @@ public interface ISqlDialect
     string WrapObjectName(string name);
 
     /// <summary>
+    /// Wraps a simple, single-part identifier with the dialect's quoting characters.
+    /// Use this instead of <see cref="WrapObjectName"/> when the identifier is known to be
+    /// a simple name with no dots or existing quotes — for example, a column name from a
+    /// <c>[Column]</c> attribute or a caller-provided table alias.
+    /// </summary>
+    /// <param name="name">Simple identifier to wrap (no dots, no existing quotes).</param>
+    /// <returns>Quoted identifier, e.g. <c>"name"</c>, <c>[name]</c>, or <c>`name`</c>.</returns>
+    string WrapSimpleName(string name) => QuotePrefix + name + QuoteSuffix;
+
+    /// <summary>
+    /// Replaces neutral SQL tokens with dialect-specific quoting and parameter markers:
+    /// <c>{Q}</c> → <see cref="QuotePrefix"/>, <c>{q}</c> → <see cref="QuoteSuffix"/>,
+    /// <c>{S}</c> → <see cref="ParameterMarker"/>.
+    /// Allows writing dialect-agnostic SQL strings without <c>TableGateway</c>.
+    /// </summary>
+    /// <param name="sql">SQL containing neutral tokens.</param>
+    /// <returns>SQL with tokens replaced by dialect-specific characters.</returns>
+    string ReplaceNeutralTokens(string sql)
+    {
+        if (sql == null)
+        {
+            throw new ArgumentNullException(nameof(sql));
+        }
+
+        var qp = QuotePrefix;
+        var qs = QuoteSuffix;
+        var pm = ParameterMarker;
+        var result = new System.Text.StringBuilder(sql.Length + 8);
+        for (var i = 0; i < sql.Length; i++)
+        {
+            if (sql[i] == '{' && i + 2 < sql.Length && sql[i + 2] == '}')
+            {
+                switch (sql[i + 1])
+                {
+                    case 'Q': result.Append(qp); i += 2; continue;
+                    case 'q': result.Append(qs); i += 2; continue;
+                    case 'S': result.Append(pm); i += 2; continue;
+                }
+            }
+            result.Append(sql[i]);
+        }
+        return result.ToString();
+    }
+
+    /// <summary>
     /// Formats a parameter name according to dialect rules.
     /// </summary>
     /// <param name="parameterName">Unformatted parameter name.</param>
@@ -409,7 +454,7 @@ public interface ISqlDialect
     /// </summary>
     /// <param name="transaction">Transaction context.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    Task TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
+    ValueTask TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
         CancellationToken cancellationToken = default);
 
     /// <summary>

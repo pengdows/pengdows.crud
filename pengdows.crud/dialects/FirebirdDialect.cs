@@ -92,8 +92,10 @@ internal class FirebirdDialect : SqlDialect
 
     private const string EngineVersionQuery =
         "SELECT rdb$get_context('SYSTEM', 'ENGINE_VERSION') FROM rdb$database";
+
     private const string DatabaseInfoQuery = "SELECT * FROM rdb$database";
     private const string MonitorVersionQuery = "SELECT mon$server_version FROM mon$database";
+
     private const string DefaultSessionSettings =
         "SET TRANSACTION ISOLATION LEVEL READ COMMITTED;\nSET SQL DIALECT 3;";
 
@@ -271,10 +273,10 @@ internal class FirebirdDialect : SqlDialect
         }
         else if (type == DbType.Guid)
         {
-            targetType = DbType.Binary;
+            targetType = DbType.String;
             if (value is Guid guidValue)
             {
-                targetValue = guidValue.ToByteArray();
+                targetValue = guidValue.ToString("D");
             }
         }
         else if (type == DbType.DateTimeOffset)

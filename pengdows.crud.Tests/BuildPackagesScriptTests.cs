@@ -13,9 +13,11 @@ public class BuildPackagesScriptTests
         var contents = File.ReadAllText(scriptPath);
 
         Assert.Contains("dotnet pack", contents, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("pengdows.crud.abstractions/pengdows.crud.abstractions.csproj", contents, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("pengdows.crud.abstractions/pengdows.crud.abstractions.csproj", contents,
+            StringComparison.OrdinalIgnoreCase);
         Assert.Contains("pengdows.crud/pengdows.crud.csproj", contents, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("pengdows.crud.fakeDb/pengdows.crud.fakeDb.csproj", contents, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("pengdows.crud.fakeDb/pengdows.crud.fakeDb.csproj", contents,
+            StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

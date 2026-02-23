@@ -37,7 +37,7 @@ public class DiagnosticsTests : DatabaseTestBase
             }
 
             await using var container = context.CreateSqlContainer(sql);
-            
+
             await Assert.ThrowsAnyAsync<DbException>(async () => await container.ExecuteNonQueryAsync());
         });
     }
@@ -62,7 +62,7 @@ public class DiagnosticsTests : DatabaseTestBase
 
             // Act & Assert: Insert duplicate ID
             var duplicate = new TestTable { Id = id, Name = NameEnum.Test2, Value = 2 };
-            
+
             await Assert.ThrowsAnyAsync<DbException>(async () => await helper.CreateAsync(duplicate, context));
         });
     }

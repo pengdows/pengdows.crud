@@ -224,11 +224,27 @@ internal class SqliteDialect : SqlDialect
 
         if (value is DateTimeOffset dto)
         {
-            return base.CreateDbParameter(name, DbType.String,
-                dto.UtcDateTime.ToString("o", CultureInfo.InvariantCulture));
+            return base.CreateDbParameter(name, DbType.String, dto.UtcDateTime.ToString("o", CultureInfo.InvariantCulture));
         }
 
-        return base.CreateDbParameter(name, type, value);
+        if (value is Guid guid)
+        {
+            return base.CreateDbParameter(name, DbType.String, guid.ToString("D"));
+        }
+
+        var p = base.CreateDbParameter(name, type, value);
+
+        if (value is byte[] bytes && (type == DbType.Binary || type == DbType.Object))
+        {
+            p.Size = bytes.Length;
+        }
+
+        return p;
+    }
+
+    public override object? PrepareParameterValue(object? value, DbType dbType)
+    {
+        return base.PrepareParameterValue(value, dbType);
     }
 
     private static bool IsNumericDbType(DbType type)

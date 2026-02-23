@@ -72,7 +72,7 @@ internal class MySqlDialect : SqlDialect
     internal MySqlDialect(DbProviderFactory factory, ILogger logger)
         : this(factory, logger,
             (factory.GetType().Namespace ?? string.Empty)
-                .Contains("MySqlConnector", StringComparison.OrdinalIgnoreCase))
+            .Contains("MySqlConnector", StringComparison.OrdinalIgnoreCase))
     {
     }
 
@@ -138,7 +138,8 @@ internal class MySqlDialect : SqlDialect
             }
             else
             {
-                Logger.LogInformation("MySQL session settings: already compliant; enforcing baseline on every checkout");
+                Logger.LogInformation(
+                    "MySQL session settings: already compliant; enforcing baseline on every checkout");
             }
         }
 
@@ -238,7 +239,7 @@ internal class MySqlDialect : SqlDialect
         TryExecuteReadOnlySql(transaction, SetSessionTransactionReadOnlySql, "MySQL");
     }
 
-    public override Task TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
+    public override ValueTask TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
         CancellationToken cancellationToken = default)
     {
         return TryExecuteReadOnlySqlAsync(transaction, SetSessionTransactionReadOnlySql, "MySQL", cancellationToken);
@@ -253,6 +254,7 @@ internal class MySqlDialect : SqlDialect
     // SupportsExternalPooling, PoolingSettingName, DefaultMaxPoolSize inherited from base (true, "Pooling", 100)
     public override string? MinPoolSizeSettingName => _isMySqlConnector ? "MinimumPoolSize" : "Min Pool Size";
     public override string? MaxPoolSizeSettingName => _isMySqlConnector ? "MaximumPoolSize" : "Max Pool Size";
+
     public override string? ApplicationNameSettingName =>
         _isMySqlConnector ? "Application Name" : null;
 

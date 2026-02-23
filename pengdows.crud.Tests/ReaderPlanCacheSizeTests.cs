@@ -15,9 +15,41 @@ public class ReaderPlanCacheSizeTests
 {
     // Three minimal entities that differ only in column shape so each produces
     // a distinct reader plan cache key.
-    [Table("A")] private class EntityA { [Id(false)][Column("Id", DbType.Int32)] public int Id { get; set; } [PrimaryKey(1)][Column("X", DbType.String)] public string X { get; set; } = ""; }
-    [Table("B")] private class EntityB { [Id(false)][Column("Id", DbType.Int32)] public int Id { get; set; } [PrimaryKey(1)][Column("Y", DbType.String)] public string Y { get; set; } = ""; }
-    [Table("C")] private class EntityC { [Id(false)][Column("Id", DbType.Int32)] public int Id { get; set; } [PrimaryKey(1)][Column("Z", DbType.String)] public string Z { get; set; } = ""; }
+    [Table("A")]
+    private class EntityA
+    {
+        [Id(false)]
+        [Column("Id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [PrimaryKey(1)]
+        [Column("X", DbType.String)]
+        public string X { get; set; } = "";
+    }
+
+    [Table("B")]
+    private class EntityB
+    {
+        [Id(false)]
+        [Column("Id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [PrimaryKey(1)]
+        [Column("Y", DbType.String)]
+        public string Y { get; set; } = "";
+    }
+
+    [Table("C")]
+    private class EntityC
+    {
+        [Id(false)]
+        [Column("Id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [PrimaryKey(1)]
+        [Column("Z", DbType.String)]
+        public string Z { get; set; } = "";
+    }
 
     private static DatabaseContext MakeContext(int? readerPlanCacheSize = null)
     {

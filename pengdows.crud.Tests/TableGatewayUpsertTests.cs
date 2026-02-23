@@ -54,8 +54,7 @@ public class TableGatewayUpsertTests
         [Column("id", DbType.Int64)]
         public long Id { get; set; }
 
-        [Column("value", DbType.String)]
-        public string Value { get; set; } = string.Empty;
+        [Column("value", DbType.String)] public string Value { get; set; } = string.Empty;
 
         [PrimaryKey(1)]
         [Column("external_key", DbType.String)]

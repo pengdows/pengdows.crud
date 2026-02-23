@@ -45,8 +45,7 @@ public sealed class PoolGovernorFairnessTests
 
         // Reader tries to acquire - should remain blocked until cancellation
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
-        await Assert.ThrowsAsync<OperationCanceledException>(
-            () => readerGovernor.AcquireAsync(cts.Token));
+        await Assert.ThrowsAsync<OperationCanceledException>(() => readerGovernor.AcquireAsync(cts.Token));
 
         // Release writer - now reader should complete
         await writerPermit.DisposeAsync();
@@ -279,8 +278,7 @@ public sealed class PoolGovernorFairnessTests
         sharedSemaphore.Wait();
 
         // Act: Acquire should get turnstile but timeout on semaphore
-        await Assert.ThrowsAsync<pengdows.crud.exceptions.PoolSaturatedException>(
-            () => governor.AcquireAsync());
+        await Assert.ThrowsAsync<pengdows.crud.exceptions.PoolSaturatedException>(() => governor.AcquireAsync());
 
         // Verify turnstile was released by checking we can acquire it
         Assert.True(turnstile.Wait(0), "Turnstile should have been released after semaphore timeout");

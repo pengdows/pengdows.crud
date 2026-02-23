@@ -61,7 +61,7 @@ internal sealed class PoolGovernor : IDisposable
     private long _peakInUse;
     private long _queued;
     private long _totalAcquired;
-    private long _totalPermitTimeouts;    // timed out waiting for a connection slot
+    private long _totalPermitTimeouts; // timed out waiting for a connection slot
     private long _totalTurnstileTimeouts; // timed out waiting for the fairness turnstile
     private long _totalCanceledWaits;
 
@@ -421,8 +421,8 @@ internal sealed class PoolGovernor : IDisposable
                 await signal.Task.WaitAsync(effectiveToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (timeoutCts != null
-                                                      && timeoutCts.IsCancellationRequested
-                                                      && !cancellationToken.IsCancellationRequested)
+                                                     && timeoutCts.IsCancellationRequested
+                                                     && !cancellationToken.IsCancellationRequested)
             {
                 throw new TimeoutException("Drain timeout");
             }

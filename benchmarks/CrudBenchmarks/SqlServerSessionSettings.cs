@@ -19,14 +19,15 @@ internal static class SqlServerSessionSettings
     // DBCC USEROPTIONS returns "SET" for enabled options and omits options
     // that are at their default value.  numeric_roundabort OFF is the default,
     // so it never appears in the result set and cannot be asserted here.
-    public static IReadOnlyDictionary<string, string> RequiredOptions { get; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-    {
-        ["arithabort"] = "SET",
-        ["ansi_warnings"] = "SET",
-        ["ansi_nulls"] = "SET",
-        ["quoted_identifier"] = "SET",
-        ["concat_null_yields_null"] = "SET"
-    };
+    public static IReadOnlyDictionary<string, string> RequiredOptions { get; } =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["arithabort"] = "SET",
+            ["ansi_warnings"] = "SET",
+            ["ansi_nulls"] = "SET",
+            ["quoted_identifier"] = "SET",
+            ["concat_null_yields_null"] = "SET"
+        };
 
     public static async Task ApplyAsync(DbConnection connection)
     {

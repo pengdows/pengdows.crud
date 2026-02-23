@@ -459,6 +459,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     MetricsCollector? IMetricsCollectorAccessor.MetricsCollector => _metricsCollector;
     MetricsCollector? IMetricsCollectorAccessor.ReadMetricsCollector => _readMetricsCollector;
     MetricsCollector? IMetricsCollectorAccessor.WriteMetricsCollector => _writeMetricsCollector;
+
     MetricsCollector? IMetricsCollectorAccessor.GetMetricsCollector(ExecutionType executionType)
     {
         return executionType == ExecutionType.Read ? _readMetricsCollector : _writeMetricsCollector;
@@ -635,10 +636,12 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     private async Task CompleteTransactionWithWaitAsync(Func<Task> action, bool markCommitted,
         CancellationToken cancellationToken = default)
     {
-        if (!await _completionLock.WaitAsync(_context.ModeLockTimeout ?? Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false))
+        if (!await _completionLock.WaitAsync(_context.ModeLockTimeout ?? Timeout.InfiniteTimeSpan, cancellationToken)
+                .ConfigureAwait(false))
         {
             throw new InvalidOperationException("Transaction completion timed out waiting for internal lock.");
         }
+
         try
         {
             await CompleteTransactionAsync(action, markCommitted).ConfigureAwait(false);
@@ -876,7 +879,8 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         return tx;
     }
 
-    private static async Task OpenConnectionWithOptionalLockAsync(IDatabaseContext context, ITrackedConnection connection,
+    private static async Task OpenConnectionWithOptionalLockAsync(IDatabaseContext context,
+        ITrackedConnection connection,
         CancellationToken cancellationToken)
     {
         if (connection.State == ConnectionState.Open)

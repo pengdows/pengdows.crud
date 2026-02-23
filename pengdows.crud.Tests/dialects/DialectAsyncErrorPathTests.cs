@@ -30,7 +30,7 @@ public class DialectAsyncErrorPathTests
     }
 
     [Fact]
-    public void FirebirdDialect_CreateDbParameter_GuidType_ConvertsToBinary()
+    public void FirebirdDialect_CreateDbParameter_GuidType_ConvertsToString()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Firebird.ToString());
         var dialect = new FirebirdDialect(factory, NullLogger.Instance);
@@ -38,8 +38,8 @@ public class DialectAsyncErrorPathTests
 
         var param = dialect.CreateDbParameter("test", DbType.Guid, testGuid);
 
-        Assert.Equal(DbType.Binary, param.DbType);
-        Assert.Equal(testGuid.ToByteArray(), param.Value);
+        Assert.Equal(DbType.String, param.DbType);
+        Assert.Equal(testGuid.ToString("D"), param.Value);
     }
 
     [Fact]
