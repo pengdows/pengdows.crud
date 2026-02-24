@@ -39,6 +39,22 @@ public class NonInsertableNonUpdateableColumnTests : SqlLiteContextTestBase
     }
 
     [Fact]
+    public void BuildUpsert_SkipsNonInsertableColumn()
+    {
+        TypeMap.Register<NonInsertableColumnEntity>();
+        var helper = new TableGateway<NonInsertableColumnEntity, int>(Context);
+        var entity = new NonInsertableColumnEntity { Id = 1, Name = "Foo", Secret = "Bar" };
+
+        using var sc = helper.BuildUpsert(entity);
+        var sql = sc.Query.ToString();
+
+        var columnSecret = Context.WrapObjectName("Secret");
+        var columnName = Context.WrapObjectName("Name");
+        Assert.DoesNotContain(columnSecret, sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(columnName, sql, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task BuildUpdateAsync_OnlyNonUpdateableChanged_Throws()
     {
         TypeMap.Register<NonInsertableColumnEntity>();

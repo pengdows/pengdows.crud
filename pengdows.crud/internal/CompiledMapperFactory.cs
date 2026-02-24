@@ -22,6 +22,13 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
         new[] { typeof(object), typeof(Type), typeof(Type), typeof(TypeCoercionOptions) },
         null)!;
 
+    private static readonly MethodInfo NormalizeDateTimeMethod = typeof(TypeCoercionHelper).GetMethod(
+        nameof(TypeCoercionHelper.NormalizeDateTime),
+        BindingFlags.NonPublic | BindingFlags.Static,
+        null,
+        new[] { typeof(DateTime) },
+        null)!;
+
     public static Func<TReader, TEntity> Create<TReader>(
         TReader reader,
         IReadOnlyDictionary<string, IColumnInfo> columnsByName,
@@ -237,6 +244,17 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
         if (sourceType == underlyingTargetType)
         {
             var result = value.Type != sourceType ? Expression.Convert(value, sourceType) : value;
+
+            // Normalize DateTime: treat Unspecified as UTC, convert Local to UTC.
+            // Many drivers (Snowflake TIMESTAMP_NTZ, SQL Server datetime, MySQL, Oracle)
+            // return DateTimeKind.Unspecified for timezone-naive columns that store UTC values.
+            // Without this, calling .ToUniversalTime() on the entity property would incorrectly
+            // apply the host's local timezone offset (e.g. UTC-6 → +6 hour drift).
+            if (underlyingTargetType == typeof(DateTime))
+            {
+                result = Expression.Call(NormalizeDateTimeMethod, result);
+            }
+
             return targetType != underlyingTargetType
                 ? Expression.Convert(result, targetType)
                 : result;

@@ -286,7 +286,12 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Returns a randomly generated, collision-safe parameter/alias name.
+    /// Generates a unique parameter name for the current operation (e.g., p1, p2, p42).
+    /// </summary>
+    string GenerateParameterName();
+
+    /// <summary>
+    /// Generates a random object name that conforms to the provider's identifier rules.
     /// </summary>
     string GenerateRandomName(int length = 5, int parameterNameMaxLength = 30);
 

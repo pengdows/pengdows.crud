@@ -11,7 +11,7 @@ public sealed class PoolGovernorCancellationTests
     [Fact]
     public async Task Acquire_CanceledWhileQueued_IncrementsTotalCanceledWaits()
     {
-        var governor = new PoolGovernor(PoolLabel.Reader, "cancel-sync", 1, TimeSpan.FromSeconds(5));
+        var governor = new PoolGovernor(PoolLabel.Reader, "cancel-sync", 1, TimeSpan.FromSeconds(5), trackMetrics: true);
 
         using var permit = governor.Acquire();
 
@@ -45,7 +45,7 @@ public sealed class PoolGovernorCancellationTests
     [Fact]
     public async Task AcquireAsync_CanceledWhileQueued_IncrementsTotalCanceledWaits()
     {
-        var governor = new PoolGovernor(PoolLabel.Reader, "cancel-test", 1, TimeSpan.FromSeconds(5));
+        var governor = new PoolGovernor(PoolLabel.Reader, "cancel-test", 1, TimeSpan.FromSeconds(5), trackMetrics: true);
 
         using var permit = governor.Acquire();
 

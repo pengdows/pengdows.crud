@@ -146,6 +146,50 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
         Assert.Equal(expected, sql);
     }
 
+    [Fact]
+    public void BuildUpsert_Merge_DoesNotUpdateConflictKey()
+    {
+        var typeMap = new TypeMapRegistry();
+        typeMap.Register<UpsertNaturalKeyEntity>();
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        using var context = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory, typeMap);
+        var helper = new TableGateway<UpsertNaturalKeyEntity, int>(context);
+        var entity = new UpsertNaturalKeyEntity { Id = 1, NaturalKey = "k", Value = 7 };
+
+        var sc = helper.BuildUpsert(entity);
+        var sql = sc.Query.ToString();
+
+        var dialect = ((ISqlDialectProvider)context).Dialect;
+        var targetPrefix = dialect.MergeUpdateRequiresTargetAlias ? "t." : "";
+        var wrappedKey = context.WrapObjectName("NaturalKey");
+        var wrappedValue = context.WrapObjectName("Value");
+
+        var updateSetStart = sql.IndexOf("UPDATE SET ", StringComparison.Ordinal);
+        var updateSetEnd = sql.IndexOf(" WHEN NOT MATCHED", StringComparison.Ordinal);
+        Assert.True(updateSetStart >= 0 && updateSetEnd > updateSetStart);
+        var updateSet = sql.Substring(updateSetStart, updateSetEnd - updateSetStart);
+
+        Assert.DoesNotContain($"{targetPrefix}{wrappedKey} = s.{wrappedKey}", updateSet);
+        Assert.Contains($"{targetPrefix}{wrappedValue} = s.{wrappedValue}", updateSet);
+    }
+
+    [Fact]
+    public void BuildUpsert_Merge_Oracle_UsesSelectFromDual()
+    {
+        var typeMap = new TypeMapRegistry();
+        typeMap.Register<UpsertLiteEntity>();
+        var factory = new fakeDbFactory(SupportedDatabase.Oracle);
+        using var context = new DatabaseContext("Data Source=test;EmulatedProduct=Oracle", factory, typeMap);
+        var helper = new TableGateway<UpsertLiteEntity, int>(context);
+        var entity = new UpsertLiteEntity { Id = 1, Name = "v", Version = 1 };
+        var sc = helper.BuildUpsert(entity);
+        var sql = sc.Query.ToString();
+
+        Assert.Contains("USING (SELECT", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("FROM DUAL", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("USING (VALUES", sql, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static string BuildInsertColumns(IDatabaseContext context)
     {
         return string.Join(", ", new[]
@@ -204,5 +248,17 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
         [Version]
         [Column("Version", DbType.Int32)]
         public int Version { get; set; }
+    }
+
+    [Table("UpsertNaturalKey")]
+    private class UpsertNaturalKeyEntity
+    {
+        [Id] [Column("Id", DbType.Int32)] public int Id { get; set; }
+
+        [PrimaryKey(1)]
+        [Column("NaturalKey", DbType.String)]
+        public string NaturalKey { get; set; } = string.Empty;
+
+        [Column("Value", DbType.Int32)] public int Value { get; set; }
     }
 }

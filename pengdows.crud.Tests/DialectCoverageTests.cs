@@ -48,8 +48,8 @@ public class DialectCoverageTests
             SupportedDatabase.Unknown => new DialectTestConfig(
                 new Sql92Dialect(factory, NullLogger<Sql92Dialect>.Instance),
                 "\"",
-                true,
-                "@",
+                false, // positional — SupportsNamedParameters = false
+                "?",   // ParameterMarker = "?"
                 false),
             SupportedDatabase.PostgreSql => new DialectTestConfig(
                 new PostgreSqlDialect(factory, NullLogger<PostgreSqlDialect>.Instance),

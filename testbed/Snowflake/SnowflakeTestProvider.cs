@@ -17,6 +17,8 @@ public class SnowflakeTestProvider : TestProvider
         var sqlContainer = databaseContext.CreateSqlContainer();
         var qp = databaseContext.QuotePrefix;
         var qs = databaseContext.QuoteSuffix;
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        SnowflakeDebugLog.Log("[Snowflake] CreateTable start");
 
         // Snowflake supports DROP TABLE IF EXISTS
         sqlContainer.Query.AppendFormat("DROP TABLE IF EXISTS {0}test_table{1}", qp, qs);
@@ -45,5 +47,7 @@ CREATE TABLE {qp}test_table{qs} (
     PRIMARY KEY ({qp}id{qs})
 )");
         await sqlContainer.ExecuteNonQueryAsync();
+        Console.WriteLine($"[Snowflake] CreateTable completed in {sw.ElapsedMilliseconds}ms");
+        SnowflakeDebugLog.Log($"[Snowflake] CreateTable completed in {sw.ElapsedMilliseconds}ms");
     }
 }

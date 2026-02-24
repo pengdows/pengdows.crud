@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using pengdows.crud.enums;
 using testbed;
+using System.Runtime.CompilerServices;
 using Xunit.Abstractions;
 
 namespace pengdows.crud.IntegrationTests.Infrastructure;
@@ -129,7 +130,9 @@ public abstract class DatabaseTestBase : IAsyncLifetime
     /// <summary>
     /// Run a test against all configured database providers
     /// </summary>
-    protected async Task RunTestAgainstAllProvidersAsync(Func<SupportedDatabase, IDatabaseContext, Task> testAction)
+    protected async Task RunTestAgainstAllProvidersAsync(
+        Func<SupportedDatabase, IDatabaseContext, Task> testAction,
+        [CallerMemberName] string? testName = null)
     {
         var failures = new List<(SupportedDatabase Provider, Exception Error)>();
         var testStart = DateTime.UtcNow;
@@ -139,6 +142,7 @@ public abstract class DatabaseTestBase : IAsyncLifetime
             try
             {
                 var providerStart = DateTime.UtcNow;
+                SnowflakeDebug(provider, $"[Snowflake][Test] {testName ?? "<unknown>"} start");
                 Output.WriteLine($"[{providerStart:HH:mm:ss.fff}] ▶️ {provider} test starting");
                 Output.WriteLine($"[{providerStart:HH:mm:ss.fff}] Running test against {provider}...");
                 Output.WriteLine(
@@ -149,12 +153,15 @@ public abstract class DatabaseTestBase : IAsyncLifetime
                     $"[{DateTime.UtcNow:HH:mm:ss.fff}] {provider} connections after test: {context.NumberOfOpenConnections} open, peak {context.PeakOpenConnections}");
                 Output.WriteLine(
                     $"[{DateTime.UtcNow:HH:mm:ss.fff}] ✅ {provider} test completed successfully (took {(DateTime.UtcNow - providerStart).TotalMilliseconds:F0}ms)");
+                SnowflakeDebug(provider,
+                    $"[Snowflake][Test] {testName ?? "<unknown>"} done in {(DateTime.UtcNow - providerStart).TotalMilliseconds:F0}ms");
             }
             catch (Exception ex)
             {
                 Output.WriteLine($"[{DateTime.UtcNow:HH:mm:ss.fff}] ❌ {provider} test failed: {ex.Message}");
                 Output.WriteLine(
                     $"[{DateTime.UtcNow:HH:mm:ss.fff}] {provider} connections at failure: {context.NumberOfOpenConnections} open, peak {context.PeakOpenConnections}");
+                SnowflakeDebug(provider, $"[Snowflake][Test] {testName ?? "<unknown>"} failed: {ex.Message}");
                 failures.Add((provider, ex));
             }
         }
@@ -173,15 +180,21 @@ public abstract class DatabaseTestBase : IAsyncLifetime
     /// <summary>
     /// Run a test against a specific database provider
     /// </summary>
-    protected async Task RunTestAgainstProviderAsync(SupportedDatabase provider,
-        Func<IDatabaseContext, Task> testAction)
+    protected async Task RunTestAgainstProviderAsync(
+        SupportedDatabase provider,
+        Func<IDatabaseContext, Task> testAction,
+        [CallerMemberName] string? testName = null)
     {
         if (!DatabaseContexts.TryGetValue(provider, out var context))
         {
             throw new InvalidOperationException($"Provider {provider} is not available for testing");
         }
 
+        var start = DateTime.UtcNow;
+        SnowflakeDebug(provider, $"[Snowflake][Test] {testName ?? "<unknown>"} start");
         await testAction(context);
+        SnowflakeDebug(provider,
+            $"[Snowflake][Test] {testName ?? "<unknown>"} done in {(DateTime.UtcNow - start).TotalMilliseconds:F0}ms");
     }
 
     protected IAuditValueResolver GetAuditResolver()
@@ -222,5 +235,34 @@ public abstract class DatabaseTestBase : IAsyncLifetime
                || message.Contains("table not found")
                || message.Contains("invalid object name")
                || message.Contains("ora-00942");
+    }
+
+    private static bool IsSnowflakeDebugEnabled =>
+        string.Equals(Environment.GetEnvironmentVariable("SNOWFLAKE_DEBUG"), "true",
+            StringComparison.OrdinalIgnoreCase);
+
+    private static readonly object SnowflakeLogGate = new();
+
+    private static void SnowflakeDebug(SupportedDatabase provider, string message)
+    {
+        if (provider != SupportedDatabase.Snowflake || !IsSnowflakeDebugEnabled)
+        {
+            return;
+        }
+
+        var line = $"[{DateTime.UtcNow:O}] {message}";
+        try
+        {
+            lock (SnowflakeLogGate)
+            {
+                File.AppendAllText("/tmp/snowflake-debug.log", line + Environment.NewLine);
+            }
+        }
+        catch
+        {
+            // Ignore logging failures.
+        }
+
+        Console.WriteLine(line);
     }
 }

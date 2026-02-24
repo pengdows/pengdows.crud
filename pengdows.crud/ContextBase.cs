@@ -94,6 +94,12 @@ public abstract class ContextBase : SafeAsyncDisposableBase
     }
 
     /// <inheritdoc/>
+    public string GenerateParameterName()
+    {
+        return DialectCore.GenerateParameterName();
+    }
+
+    /// <inheritdoc/>
     public string GenerateRandomName(int length = 5, int parameterNameMaxLength = 30)
     {
         return DialectCore.GenerateRandomName(length, parameterNameMaxLength);

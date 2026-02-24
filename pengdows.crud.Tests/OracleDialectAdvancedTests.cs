@@ -362,7 +362,7 @@ public class OracleDialectAdvancedTests
         var boolParam = _dialect.CreateDbParameter("bool_param", DbType.Boolean, true);
 
         Assert.NotNull(boolParam);
-        Assert.Equal(DbType.Boolean, boolParam.DbType);
+        Assert.Equal(DbType.Int16, boolParam.DbType);
     }
 
     [Fact]
@@ -584,11 +584,11 @@ public class OracleDialectAdvancedTests
     [Fact]
     public void Guid_Type_Handling_Should_Work_With_Oracle()
     {
-        // Oracle typically stores GUIDs as RAW(16) or VARCHAR2(36)
+        // Oracle stores GUIDs as VARCHAR2(36)
         var guidValue = Guid.NewGuid();
         var guidParam = _dialect.CreateDbParameter("guid_param", DbType.Guid, guidValue);
 
-        Assert.Equal(DbType.Guid, guidParam.DbType);
-        Assert.Equal(guidValue, guidParam.Value);
+        Assert.Equal(DbType.String, guidParam.DbType);
+        Assert.Equal(guidValue.ToString("D"), guidParam.Value);
     }
 }

@@ -48,6 +48,7 @@ internal sealed class PoolGovernor : IDisposable
     private readonly TimeSpan _acquireTimeout;
     private readonly int _maxPermits;
     private readonly bool _disabled;
+    private readonly bool _trackMetrics;
     private readonly bool _ownsSemaphore;
     private readonly bool _ownsTurnstile;
     private readonly object _drainLock = new();
@@ -60,7 +61,12 @@ internal sealed class PoolGovernor : IDisposable
     private long _inUse;
     private long _peakInUse;
     private long _queued;
+    private long _peakQueued;
+    private long _turnstileQueued;
+    private long _peakTurnstileQueued;
     private long _totalAcquired;
+    private long _totalWaitTicks;
+    private long _totalHoldTicks;
     private long _totalPermitTimeouts; // timed out waiting for a connection slot
     private long _totalTurnstileTimeouts; // timed out waiting for the fairness turnstile
     private long _totalCanceledWaits;
@@ -71,6 +77,7 @@ internal sealed class PoolGovernor : IDisposable
         int maxPermits,
         TimeSpan acquireTimeout,
         bool disabled = false,
+        bool trackMetrics = false,
         SemaphoreSlim? sharedSemaphore = null,
         SemaphoreSlim? turnstile = null,
         bool holdTurnstile = false,
@@ -80,6 +87,7 @@ internal sealed class PoolGovernor : IDisposable
         _poolKeyHash = poolKeyHash;
         _acquireTimeout = acquireTimeout;
         _disabled = disabled;
+        _trackMetrics = trackMetrics;
         _turnstile = turnstile;
         _holdTurnstile = holdTurnstile;
         _ownsTurnstile = ownsTurnstile;
@@ -137,20 +145,34 @@ internal sealed class PoolGovernor : IDisposable
             throw new InvalidOperationException(NotInitializedMessage);
         }
 
+        var waitStart = _trackMetrics ? Stopwatch.GetTimestamp() : 0;
+
         // Turnstile fairness: acquire turnstile first to reduce writer starvation risk.
         // Writers hold the turnstile for their entire permit lifetime; readers touch-and-release.
         // NOTE: readers already queued on the semaphore when the writer grabs the turnstile
         // are not displaced — only NEW reader attempts are gated.
         var turnstileAcquired = false;
+        long turnstileAcquiredAt = 0;
         if (_turnstile != null)
         {
-            if (!_turnstile.Wait(_acquireTimeout, cancellationToken))
+            var tQueued = _trackMetrics ? Interlocked.Increment(ref _turnstileQueued) : 0;
+            if (_trackMetrics) UpdatePeak(ref _peakTurnstileQueued, tQueued);
+
+            try
             {
-                Interlocked.Increment(ref _totalTurnstileTimeouts);
-                throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
+                if (!_turnstile.Wait(_acquireTimeout, cancellationToken))
+                {
+                    Interlocked.Increment(ref _totalTurnstileTimeouts);
+                    throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
+                }
+            }
+            finally
+            {
+                if (_trackMetrics) Interlocked.Decrement(ref _turnstileQueued);
             }
 
             turnstileAcquired = true;
+            if (_trackMetrics) turnstileAcquiredAt = Stopwatch.GetTimestamp();
 
             // Readers touch-and-release; writers hold until permit released
             if (!_holdTurnstile)
@@ -164,11 +186,11 @@ internal sealed class PoolGovernor : IDisposable
         {
             if (_semaphore.Wait(0, cancellationToken))
             {
-                return OnAcquired();
+                return OnAcquired(waitStart);
             }
 
-            var waitStart = Stopwatch.GetTimestamp();
-            Interlocked.Increment(ref _queued);
+            var queued = _trackMetrics ? Interlocked.Increment(ref _queued) : 0;
+            if (_trackMetrics) UpdatePeak(ref _peakQueued, queued);
 
             try
             {
@@ -181,7 +203,7 @@ internal sealed class PoolGovernor : IDisposable
                         throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
                     }
 
-                    return OnAcquired();
+                    return OnAcquired(waitStart);
                 }
                 catch (OperationCanceledException)
                 {
@@ -191,15 +213,14 @@ internal sealed class PoolGovernor : IDisposable
             }
             finally
             {
-                Interlocked.Decrement(ref _queued);
-                _ = waitStart; // keep for parity with async; no extra metrics today
+                if (_trackMetrics) Interlocked.Decrement(ref _queued);
             }
         }
-        catch
-        {
+        catch {
             // On failure, release turnstile if we're still holding it (writers only)
             if (turnstileAcquired && _turnstile != null)
             {
+                if (_trackMetrics) RecordWaitAndHold(waitStart, turnstileAcquiredAt, Stopwatch.GetTimestamp());
                 _turnstile.Release();
             }
 
@@ -220,7 +241,9 @@ internal sealed class PoolGovernor : IDisposable
             throw new InvalidOperationException(NotInitializedMessage);
         }
 
+        var waitStart = _trackMetrics ? Stopwatch.GetTimestamp() : 0;
         var turnstileAcquired = false;
+        long turnstileAcquiredAt = 0;
         if (_turnstile != null)
         {
             if (!_turnstile.Wait(0, cancellationToken))
@@ -230,6 +253,7 @@ internal sealed class PoolGovernor : IDisposable
             }
 
             turnstileAcquired = true;
+            if (_trackMetrics) turnstileAcquiredAt = Stopwatch.GetTimestamp();
 
             if (!_holdTurnstile)
             {
@@ -240,12 +264,13 @@ internal sealed class PoolGovernor : IDisposable
 
         if (_semaphore.Wait(0, cancellationToken))
         {
-            permit = OnAcquired();
+            permit = OnAcquired(waitStart);
             return true;
         }
 
         if (turnstileAcquired && _turnstile != null)
         {
+            if (_trackMetrics) RecordWaitAndHold(waitStart, turnstileAcquiredAt, Stopwatch.GetTimestamp());
             _turnstile.Release();
         }
 
@@ -265,20 +290,34 @@ internal sealed class PoolGovernor : IDisposable
             throw new InvalidOperationException(NotInitializedMessage);
         }
 
+        var waitStart = _trackMetrics ? Stopwatch.GetTimestamp() : 0;
+
         // Turnstile fairness: acquire turnstile first to reduce writer starvation risk.
         // Writers hold the turnstile for their entire permit lifetime; readers touch-and-release.
         // NOTE: readers already queued on the semaphore when the writer grabs the turnstile
         // are not displaced — only NEW reader attempts are gated.
         var turnstileAcquired = false;
+        long turnstileAcquiredAt = 0;
         if (_turnstile != null)
         {
-            if (!await _turnstile.WaitAsync(_acquireTimeout, cancellationToken).ConfigureAwait(false))
+            var tQueued = _trackMetrics ? Interlocked.Increment(ref _turnstileQueued) : 0;
+            if (_trackMetrics) UpdatePeak(ref _peakTurnstileQueued, tQueued);
+
+            try
             {
-                Interlocked.Increment(ref _totalTurnstileTimeouts);
-                throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
+                if (!await _turnstile.WaitAsync(_acquireTimeout, cancellationToken).ConfigureAwait(false))
+                {
+                    Interlocked.Increment(ref _totalTurnstileTimeouts);
+                    throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
+                }
+            }
+            finally
+            {
+                if (_trackMetrics) Interlocked.Decrement(ref _turnstileQueued);
             }
 
             turnstileAcquired = true;
+            if (_trackMetrics) turnstileAcquiredAt = Stopwatch.GetTimestamp();
 
             // Readers touch-and-release; writers hold until permit released
             if (!_holdTurnstile)
@@ -294,11 +333,11 @@ internal sealed class PoolGovernor : IDisposable
             // (Wait(0, ct) can throw OperationCanceledException synchronously)
             if (await _semaphore.WaitAsync(0, cancellationToken).ConfigureAwait(false))
             {
-                return OnAcquired();
+                return OnAcquired(waitStart);
             }
 
-            var waitStart = Stopwatch.GetTimestamp();
-            Interlocked.Increment(ref _queued);
+            var queued = _trackMetrics ? Interlocked.Increment(ref _queued) : 0;
+            if (_trackMetrics) UpdatePeak(ref _peakQueued, queued);
 
             try
             {
@@ -311,7 +350,7 @@ internal sealed class PoolGovernor : IDisposable
                         throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
                     }
 
-                    return OnAcquired();
+                    return OnAcquired(waitStart);
                 }
                 catch (OperationCanceledException)
                 {
@@ -321,15 +360,14 @@ internal sealed class PoolGovernor : IDisposable
             }
             finally
             {
-                Interlocked.Decrement(ref _queued);
-                _ = waitStart; // keep for parity with sync path
+                if (_trackMetrics) Interlocked.Decrement(ref _queued);
             }
         }
-        catch
-        {
+        catch {
             // On failure, release turnstile if we're still holding it (writers only)
             if (turnstileAcquired && _turnstile != null)
             {
+                if (_trackMetrics) RecordWaitAndHold(waitStart, turnstileAcquiredAt, Stopwatch.GetTimestamp());
                 _turnstile.Release();
             }
 
@@ -349,7 +387,9 @@ internal sealed class PoolGovernor : IDisposable
             throw new InvalidOperationException(NotInitializedMessage);
         }
 
+        var waitStart = _trackMetrics ? Stopwatch.GetTimestamp() : 0;
         var turnstileAcquired = false;
+        long turnstileAcquiredAt = 0;
         if (_turnstile != null)
         {
             if (!await _turnstile.WaitAsync(0, cancellationToken).ConfigureAwait(false))
@@ -358,6 +398,7 @@ internal sealed class PoolGovernor : IDisposable
             }
 
             turnstileAcquired = true;
+            if (_trackMetrics) turnstileAcquiredAt = Stopwatch.GetTimestamp();
 
             if (!_holdTurnstile)
             {
@@ -368,11 +409,12 @@ internal sealed class PoolGovernor : IDisposable
 
         if (await _semaphore.WaitAsync(0, cancellationToken).ConfigureAwait(false))
         {
-            return (true, OnAcquired());
+            return (true, OnAcquired(waitStart));
         }
 
         if (turnstileAcquired && _turnstile != null)
         {
+            if (_trackMetrics) RecordWaitAndHold(waitStart, turnstileAcquiredAt, Stopwatch.GetTimestamp());
             _turnstile.Release();
         }
 
@@ -437,17 +479,27 @@ internal sealed class PoolGovernor : IDisposable
         }
     }
 
-    private PoolPermit OnAcquired()
+    private void RecordWaitAndHold(long waitStart, long acquiredAt, long releasedAt)
+    {
+        var waitTicks = acquiredAt - waitStart;
+        var holdTicks = releasedAt - acquiredAt;
+
+        if (waitTicks > 0) Interlocked.Add(ref _totalWaitTicks, waitTicks);
+        if (holdTicks > 0) Interlocked.Add(ref _totalHoldTicks, holdTicks);
+    }
+
+    private PoolPermit OnAcquired(long waitStart)
     {
         var inUse = Interlocked.Increment(ref _inUse);
         ResetDrainSignalIfNeeded();
         UpdatePeak(ref _peakInUse, inUse);
         Interlocked.Increment(ref _totalAcquired);
-        return new PoolPermit(new PoolPermit.PoolPermitToken(this));
+        return new PoolPermit(new PoolPermit.PoolPermitToken(this, waitStart));
     }
 
-    internal void Release()
+    internal void ReleaseToken(long waitStart, long acquiredAt, long releasedAt)
     {
+        RecordWaitAndHold(waitStart, acquiredAt, releasedAt);
         Interlocked.Decrement(ref _inUse);
 
         // Signal drain-waiters only if _inUse is still zero at the instant
@@ -482,7 +534,12 @@ internal sealed class PoolGovernor : IDisposable
             (int)Math.Clamp(Interlocked.Read(ref _inUse), 0L, int.MaxValue),
             (int)Math.Clamp(Interlocked.Read(ref _peakInUse), 0L, int.MaxValue),
             (int)Math.Clamp(Interlocked.Read(ref _queued), 0L, int.MaxValue),
+            (int)Math.Clamp(Interlocked.Read(ref _peakQueued), 0L, int.MaxValue),
+            (int)Math.Clamp(Interlocked.Read(ref _turnstileQueued), 0L, int.MaxValue),
+            (int)Math.Clamp(Interlocked.Read(ref _peakTurnstileQueued), 0L, int.MaxValue),
             Interlocked.Read(ref _totalAcquired),
+            Interlocked.Read(ref _totalWaitTicks),
+            Interlocked.Read(ref _totalHoldTicks),
             Interlocked.Read(ref _totalPermitTimeouts),
             Interlocked.Read(ref _totalTurnstileTimeouts),
             Interlocked.Read(ref _totalCanceledWaits),

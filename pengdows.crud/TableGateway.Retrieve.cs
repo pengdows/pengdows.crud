@@ -334,7 +334,17 @@ public partial class TableGateway<TEntity, TRowID>
             // _queryCache key would embed the wrong parameter marker for the second dialect.
             var template1 = GetTemplatesForDialect(dialect1);
             AppendWherePrefix(sqlContainer);
-            sqlContainer.Query.Append(template1.IdEqualityWhereBody!);
+            var wrappedIdName = dialect1.WrapSimpleName(_idColumn!.Name);
+            if (string.Equals(wrappedColumnName, wrappedIdName, StringComparison.Ordinal))
+            {
+                sqlContainer.Query.Append(template1.IdEqualityWhereBody!);
+            }
+            else
+            {
+                sqlContainer.Query.Append(wrappedColumnName)
+                    .Append(" = ")
+                    .Append(dialect1.MakeParameterName("p0"));
+            }
             var parameter = dialect1.CreateDbParameter("p0", _idColumn!.DbType, singleId);
             sqlContainer.AddParameter(parameter);
             return sqlContainer;
@@ -488,7 +498,9 @@ public partial class TableGateway<TEntity, TRowID>
 
             if (isPositional)
             {
-                var parameter = sqlContainer.CreateDbParameter(name, dbType, value);
+                // For positional providers, names[i] is "?" (the SQL marker), not a parameter name.
+                // Use the raw logical name so the ordered-dictionary tracking stays correct.
+                var parameter = sqlContainer.CreateDbParameter($"w{i}", dbType, value);
                 sqlContainer.AddParameter(parameter);
                 continue;
             }

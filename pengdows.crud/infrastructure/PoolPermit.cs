@@ -12,6 +12,8 @@
 // - Null token (default struct) is valid no-op for disabled governors.
 // =============================================================================
 
+using System.Diagnostics;
+
 namespace pengdows.crud.infrastructure;
 
 internal readonly struct PoolPermit : IDisposable, IAsyncDisposable
@@ -37,18 +39,23 @@ internal readonly struct PoolPermit : IDisposable, IAsyncDisposable
     internal sealed class PoolPermitToken
     {
         private readonly PoolGovernor _governor;
+        private readonly long _waitStart;
+        private readonly long _acquiredAt;
         private int _released;
 
-        internal PoolPermitToken(PoolGovernor governor)
+        internal PoolPermitToken(PoolGovernor governor, long waitStart)
         {
             _governor = governor;
+            _waitStart = waitStart;
+            _acquiredAt = Stopwatch.GetTimestamp();
         }
 
         public void Release()
         {
             if (Interlocked.Exchange(ref _released, 1) == 0)
             {
-                _governor.Release();
+                var releasedAt = Stopwatch.GetTimestamp();
+                _governor.ReleaseToken(_waitStart, _acquiredAt, releasedAt);
             }
         }
     }

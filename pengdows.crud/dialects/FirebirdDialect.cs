@@ -74,6 +74,8 @@ internal class FirebirdDialect : SqlDialect
     public override bool SupportsArrayTypes => true;
     public override bool SupportsInsertReturning => true;
 
+    public override GeneratedKeyPlan GetGeneratedKeyPlan() => GeneratedKeyPlan.Returning;
+
     public override string? UpsertIncomingAlias => "src";
 
     public override string UpsertIncomingColumn(string columnName)

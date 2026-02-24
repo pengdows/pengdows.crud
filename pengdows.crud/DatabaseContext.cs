@@ -30,6 +30,7 @@
 #region
 
 using System.Data.Common;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.configuration;
@@ -124,6 +125,9 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private long _connectionCount;
     private string _connectionString = string.Empty;
     private string _readerConnectionString = string.Empty;
+    private string _redactedConnectionString = string.Empty;
+    private string _redactedReaderConnectionString = string.Empty;
+    private readonly Action<DbConnection> _disposeHandler;
     private DataSourceInformation _dataSourceInfo = null!;
     private readonly SqlDialect _dialect = null!;
     private IIsolationResolver _isolationResolver = null!;
@@ -157,6 +161,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private PoolGovernor? _writerGovernor;
     private readonly ModeContentionStats _modeContentionStats = new();
     private readonly AttributionStats _attributionStats = new();
+    private readonly ConditionalWeakTable<DbConnection, string> _initializedConnections = new();
     private TimeSpan _poolAcquireTimeout = TimeSpan.FromSeconds(DatabaseContextConfiguration.DefaultPoolAcquireSeconds);
     private TimeSpan? _modeLockTimeout = TimeSpan.FromSeconds(DatabaseContextConfiguration.DefaultModeLockSeconds);
     private bool _effectivePoolGovernorEnabled = true;

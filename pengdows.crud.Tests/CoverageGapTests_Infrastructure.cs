@@ -168,6 +168,8 @@ public class CoverageGapTests_Infrastructure
             ExecutionType executionType = ExecutionType.Write, bool? readOnly = null,
             CancellationToken cancellationToken = default) => throw new NotImplementedException();
 
+        public string GenerateParameterName() => throw new NotImplementedException();
+
         public string GenerateRandomName(int length = 5, int parameterNameMaxLength = 30) =>
             throw new NotImplementedException();
 

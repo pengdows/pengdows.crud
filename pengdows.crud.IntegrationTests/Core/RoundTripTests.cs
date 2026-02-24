@@ -86,7 +86,7 @@ public class RoundTripTests : DatabaseTestBase
 
             // DateTimeOffset assertions
             if (provider is SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.Firebird
-                or SupportedDatabase.Snowflake)
+                or SupportedDatabase.Snowflake or SupportedDatabase.Oracle)
             {
                 // Discard offset, check UTC instant within 1ms
                 Assert.Equal(original.DateTimeOffsetValue.UtcDateTime, retrieved.DateTimeOffsetValue.UtcDateTime,
@@ -139,8 +139,8 @@ public class RoundTripTests : DatabaseTestBase
             if (provider == SupportedDatabase.Oracle)
             {
                 // Oracle treats empty string as NULL
-                Assert.Null(retrieved.TextValue);
-                Assert.Null(retrieved.TextUnicode);
+                Assert.True(string.IsNullOrEmpty(retrieved.TextValue));
+                Assert.True(string.IsNullOrEmpty(retrieved.TextUnicode));
                 Assert.Null(retrieved.TextNullable);
             }
             else

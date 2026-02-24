@@ -19,6 +19,7 @@
 using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
+using pengdows.crud.@internal;
 using pengdows.crud.enums;
 
 namespace pengdows.crud.dialects;
@@ -82,9 +83,71 @@ internal class OracleDialect : SqlDialect
     public override bool SupportsSavepoints => true;
     public override bool SupportsInsertReturning => true;
 
+    public override string RenderMergeSource(IReadOnlyList<IColumnInfo> columns,
+        IReadOnlyList<string> parameterNames)
+    {
+        if (columns == null)
+        {
+            throw new ArgumentNullException(nameof(columns));
+        }
+
+        if (parameterNames == null)
+        {
+            throw new ArgumentNullException(nameof(parameterNames));
+        }
+
+        if (columns.Count != parameterNames.Count)
+        {
+            throw new ArgumentException("Column and parameter counts must match.");
+        }
+
+        var select = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+        for (var i = 0; i < columns.Count; i++)
+        {
+            if (i > 0)
+            {
+                select.Append(", ");
+            }
+
+            var placeholder = MakeParameterName(parameterNames[i]);
+            if (columns[i].IsJsonType)
+            {
+                placeholder = RenderJsonArgument(placeholder, columns[i]);
+            }
+
+            select.Append(placeholder);
+            select.Append(" AS ");
+            select.Append(WrapObjectName(columns[i].Name));
+        }
+
+        return string.Concat("USING (SELECT ", select.ToString(), " FROM DUAL) s");
+    }
+
+    public override string RenderMergeOnClause(string predicate)
+    {
+        if (predicate == null)
+        {
+            throw new ArgumentNullException(nameof(predicate));
+        }
+
+        return string.Concat("(", predicate, ")");
+    }
+
     public override string GetInsertReturningClause(string idColumnName)
     {
         return $"RETURNING {WrapObjectName(idColumnName)} INTO :1";
+    }
+
+    /// <summary>
+    /// Oracle RETURNING INTO requires a named output parameter bound by the driver,
+    /// not a generic positional placeholder. Override base to provide the correct syntax.
+    /// Note: In normal operation Oracle uses PrefetchSequence (GetGeneratedKeyPlan returns
+    /// PrefetchSequence), so this path is only reached when the caller explicitly renders
+    /// the clause.
+    /// </summary>
+    public override string RenderInsertReturningClause(string idColumnWrapped)
+    {
+        return $" RETURNING {idColumnWrapped} INTO :1";
     }
 
     public override string GetLastInsertedIdQuery()

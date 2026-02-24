@@ -379,6 +379,62 @@ public interface ISqlDialect
     string? UpsertIncomingAlias { get; }
 
     /// <summary>
+    /// Builds the MERGE source clause (USING ...) for MERGE-based upserts.
+    /// </summary>
+    /// <param name="columns">Columns included in the source row.</param>
+    /// <param name="parameterNames">Parameter names (without markers) corresponding to columns.</param>
+    /// <returns>Dialect-specific USING clause with source alias 's'.</returns>
+    string RenderMergeSource(IReadOnlyList<IColumnInfo> columns, IReadOnlyList<string> parameterNames)
+    {
+        if (columns == null)
+        {
+            throw new ArgumentNullException(nameof(columns));
+        }
+
+        if (parameterNames == null)
+        {
+            throw new ArgumentNullException(nameof(parameterNames));
+        }
+
+        if (columns.Count != parameterNames.Count)
+        {
+            throw new ArgumentException("Column and parameter counts must match.");
+        }
+
+        var values = new string[columns.Count];
+        var names = new string[columns.Count];
+
+        for (var i = 0; i < columns.Count; i++)
+        {
+            var placeholder = MakeParameterName(parameterNames[i]);
+            if (columns[i].IsJsonType)
+            {
+                placeholder = RenderJsonArgument(placeholder, columns[i]);
+            }
+
+            values[i] = placeholder;
+            names[i] = WrapSimpleName(columns[i].Name);
+        }
+
+        return $"USING (VALUES ({string.Join(", ", values)})) AS s ({string.Join(", ", names)})";
+    }
+
+    /// <summary>
+    /// Formats the MERGE ON clause predicate for the dialect.
+    /// </summary>
+    /// <param name="predicate">Join predicate (e.g., "t.id = s.id").</param>
+    /// <returns>Dialect-specific ON clause predicate.</returns>
+    string RenderMergeOnClause(string predicate)
+    {
+        if (predicate == null)
+        {
+            throw new ArgumentNullException(nameof(predicate));
+        }
+
+        return predicate;
+    }
+
+    /// <summary>
     /// Creates a parameter with the specified name, type, and value.
     /// </summary>
     /// <typeparam name="T">Parameter value type.</typeparam>
@@ -510,6 +566,12 @@ public interface ISqlDialect
     /// <param name="versionString">Version string reported by the database.</param>
     /// <returns>Major version or null if unavailable.</returns>
     int? GetMajorVersion(string versionString);
+
+    /// <summary>
+    /// Generates a unique parameter name for the current operation.
+    /// </summary>
+    /// <returns>A unique parameter name (e.g., p1, p2, p42).</returns>
+    string GenerateParameterName();
 
     /// <summary>
     /// Generates a random identifier respecting name length limits.

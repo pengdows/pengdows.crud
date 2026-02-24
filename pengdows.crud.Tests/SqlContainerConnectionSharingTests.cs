@@ -194,6 +194,11 @@ public class SqlContainerConnectionSharingTests
             return _context.BeginTransactionAsync(isolationProfile, executionType, readOnly, cancellationToken);
         }
 
+        public string GenerateParameterName()
+        {
+            return _context.GenerateParameterName();
+        }
+
         public string GenerateRandomName(int length = 5, int parameterNameMaxLength = 30)
         {
             return _context.GenerateRandomName(length, parameterNameMaxLength);

@@ -429,6 +429,11 @@ public class TransactionContextTests
             throw new NotSupportedException();
         }
 
+        public string GenerateParameterName()
+        {
+            return _dialect.GenerateParameterName();
+        }
+
         public string GenerateRandomName(int length = 5, int parameterNameMaxLength = 30)
         {
             return _dialect.GenerateRandomName(length, parameterNameMaxLength);

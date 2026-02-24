@@ -21,6 +21,7 @@ internal static class DatabaseSchemaHelper
         "tagged_items",
         "accounts",
         "round_trip_entity",
+        "type_hydration",
         "Default Order"
     };
 

@@ -178,8 +178,8 @@ public partial class TableGateway<TEntity, TRowID>
         var insertSql =
             $"INSERT INTO {BuildWrappedTableName(dialect)} ({string.Join(", ", wrappedCols)}) VALUES ({string.Join(", ", valuePlaceholders)})";
 
-        // Upsert columns: everything ordered (includes primary keys + ID if writable)
-        var upsertColumns = _tableInfo.OrderedColumns.OrderBy(c => c.Ordinal).ToList();
+        // Upsert columns: align with insertable columns (exclude non-insertable, non-writable Id, audit rules)
+        var upsertColumns = insertColumns;
         var upsertParamNames = new List<string>(upsertColumns.Count);
         for (var i = 0; i < upsertColumns.Count; i++)
         {
@@ -228,6 +228,16 @@ public partial class TableGateway<TEntity, TRowID>
                 $", {dialect.WrapSimpleName(_versionColumn.Name)} = {dialect.WrapSimpleName(_versionColumn.Name)} + 1";
         }
 
+        // Upsert should never update conflict key columns (e.g., Oracle MERGE forbids it).
+        var upsertKeyColumns = _tableInfo.PrimaryKeys.Count > 0
+            ? _tableInfo.PrimaryKeys
+            : _idColumn != null
+                ? new[] { _idColumn }
+                : Array.Empty<IColumnInfo>();
+        HashSet<IColumnInfo>? upsertKeySet = upsertKeyColumns.Count > 0
+            ? new HashSet<IColumnInfo>(upsertKeyColumns)
+            : null;
+
         // Pre-build the upsert UPDATE SET fragment (deterministic per dialect+entity+auditResolver config).
         // Eliminates the per-call SbLite loop in BuildUpsertOnConflict/OnDuplicate/Merge.
         string? upsertUpdateFragment = null;
@@ -239,6 +249,7 @@ public partial class TableGateway<TEntity, TRowID>
                 var tp = dialect.MergeUpdateRequiresTargetAlias ? "t." : "";
                 foreach (var col in updateColumns)
                 {
+                    if (upsertKeySet?.Contains(col) == true) continue;
                     if (_auditValueResolver == null && col.IsLastUpdatedBy) continue;
                     if (frag.Length > 0) frag.Append(", ");
                     frag.Append(tp);
@@ -265,6 +276,7 @@ public partial class TableGateway<TEntity, TRowID>
                 {
                     foreach (var col in updateColumns)
                     {
+                        if (upsertKeySet?.Contains(col) == true) continue;
                         if (_auditValueResolver == null && col.IsLastUpdatedBy) continue;
                         if (frag.Length > 0) frag.Append(", ");
                         frag.Append(dialect.WrapSimpleName(col.Name));

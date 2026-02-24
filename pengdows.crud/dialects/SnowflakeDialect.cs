@@ -8,8 +8,8 @@
 //   * Parameter marker: : (colon prefix, Snowflake.Data standard)
 //   * Identifier quoting: "name" (double-quotes; unquoted identifiers fold to UPPERCASE)
 //   * MERGE statement for upserts (uses src.{col} alias pattern)
-//   * INSERT ... RETURNING for generated key retrieval
-//   * Savepoints supported
+//   * LAST_INSERT_ID() fallback for generated key retrieval (no RETURNING support)
+//   * Savepoints NOT supported
 //   * No Docker image available; uses credential-based external connection
 // - Uses plain DbType mappings (Snowflake.Data driver, not Npgsql)
 // - PrepareStatements enabled for performance
@@ -68,8 +68,9 @@ internal class SnowflakeDialect : SqlDialect
     public override bool SupportsMergeReturning => false;
     public override bool SupportsInsertOnConflict => false;
 
-    // INSERT ... RETURNING is supported
-    public override bool SupportsInsertReturning => true;
+    // Snowflake does NOT support INSERT...RETURNING or LAST_INSERT_ID().
+    // Use client-generated IDs ([Id(true)] with UUID/Snowflake IDs) for reliable key capture.
+    public override bool SupportsInsertReturning => false;
 
     public override bool SupportsSavepoints => false;
 

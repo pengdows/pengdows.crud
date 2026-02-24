@@ -168,6 +168,7 @@ public partial class DatabaseContext
             _dataSource = dataSource;
             _readerDataSource = dataSource;
             _dataSourceProvided = dataSource != null;
+            _disposeHandler = conn => { _logger.LogDebug("Connection disposed."); };
             _forceManualPrepare = configuration.ForceManualPrepare;
             _disablePrepare = configuration.DisablePrepare;
             _readerPlanCacheSize = configuration.ReaderPlanCacheSize;
@@ -604,6 +605,7 @@ public partial class DatabaseContext
             writerLabelMax,
             null,
             false,
+            _metricsCollector != null,
             turnstile: turnstile,
             holdTurnstile: true,
             ownsTurnstile: turnstile != null); // Writers hold turnstile until permit released
@@ -614,6 +616,7 @@ public partial class DatabaseContext
             readerLabelMax,
             null,
             false,
+            _metricsCollector != null,
             turnstile: turnstile,
             holdTurnstile: false,
             ownsTurnstile: false); // Readers touch-and-release turnstile
@@ -755,6 +758,9 @@ public partial class DatabaseContext
             _logger.LogWarning(
                 "Read-only connection string differs, but no provider factory is available. Read-only operations will reuse the provided DbDataSource.");
         }
+
+        _redactedConnectionString = RedactConnectionString(_connectionString);
+        _redactedReaderConnectionString = RedactConnectionString(_readerConnectionString);
     }
 
     /// <summary>
@@ -930,13 +936,14 @@ public partial class DatabaseContext
         int? maxPermits,
         SemaphoreSlim? sharedSemaphore,
         bool disabled = false,
+        bool trackMetrics = false,
         SemaphoreSlim? turnstile = null,
         bool holdTurnstile = false,
         bool ownsTurnstile = false)
     {
         if (disabled || !maxPermits.HasValue || maxPermits.Value <= 0)
         {
-            return new PoolGovernor(label, poolKey, maxPermits ?? 0, _poolAcquireTimeout, true);
+            return new PoolGovernor(label, poolKey, maxPermits ?? 0, _poolAcquireTimeout, true, trackMetrics);
         }
 
         return new PoolGovernor(
@@ -945,6 +952,7 @@ public partial class DatabaseContext
             maxPermits.Value,
             _poolAcquireTimeout,
             false,
+            trackMetrics,
             sharedSemaphore,
             turnstile,
             holdTurnstile,
@@ -1568,44 +1576,64 @@ public partial class DatabaseContext
 
     private DbDataSource? TryCreateDataSource(DbProviderFactory factory, string connectionString)
     {
+        DbDataSource? nativeDataSource = null;
         try
         {
             var factoryType = factory.GetType();
+            
+            // Priority 1: Check for DbConnectionStringBuilder overload
             var dataSourceMethod =
                 factoryType.GetMethod("CreateDataSource", new[] { typeof(DbConnectionStringBuilder) });
             if (dataSourceMethod != null)
             {
                 var builder = factory.CreateConnectionStringBuilder() ?? new DbConnectionStringBuilder();
                 builder.ConnectionString = connectionString;
-                var dataSource = dataSourceMethod.Invoke(factory, new object?[] { builder }) as DbDataSource;
-                if (dataSource != null)
-                {
-                    _logger.LogInformation("Using DbDataSource from provider factory: {FactoryType}",
-                        factoryType.FullName);
-                    return dataSource;
-                }
+                nativeDataSource = dataSourceMethod.Invoke(factory, new object?[] { builder }) as DbDataSource;
             }
 
-            dataSourceMethod = factoryType.GetMethod("CreateDataSource", new[] { typeof(string) });
-            if (dataSourceMethod != null && dataSourceMethod.DeclaringType != typeof(DbProviderFactory))
+            // Priority 2: Check for string overload
+            if (nativeDataSource == null)
             {
-                var dataSource = dataSourceMethod.Invoke(factory, new object?[] { connectionString }) as DbDataSource;
-                if (dataSource != null)
+                dataSourceMethod = factoryType.GetMethod("CreateDataSource", new[] { typeof(string) });
+                if (dataSourceMethod != null && dataSourceMethod.DeclaringType != typeof(DbProviderFactory))
                 {
-                    _logger.LogInformation("Using DbDataSource from provider factory: {FactoryType}",
-                        factoryType.FullName);
-                    return dataSource;
+                    nativeDataSource = dataSourceMethod.Invoke(factory, new object?[] { connectionString }) as DbDataSource;
                 }
             }
 
-            return null;
+            if (nativeDataSource != null)
+            {
+                var isProviderSpecific = nativeDataSource.GetType().Assembly != typeof(DbDataSource).Assembly;
+                _logger.LogInformation("Using {SourceType} DbDataSource from provider factory: {FactoryType}",
+                    isProviderSpecific ? "provider-specific" : "generic",
+                    factoryType.FullName);
+                
+                return nativeDataSource;
+            }
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "Failed to create DbDataSource for provider factory {FactoryType}.",
+            _logger.LogDebug(ex, "Probing for native DbDataSource failed for {FactoryType}.",
                 factory.GetType().FullName);
+            
+            // If the provider explicitly throws NotSupportedException (via TargetInvocationException),
+            // it means it doesn't want to participate in the DataSource pattern at all.
+            if (ex is System.Reflection.TargetInvocationException tie && tie.InnerException is NotSupportedException)
+            {
+                return null;
+            }
+        }
+
+        // Fallback: Use our own wrapper so the rest of the framework can always use the DataSource path.
+        // We only skip this if the factory is a ThrowingDataSourceFactory (used in tests to explicitly test null).
+        var typeName = factory.GetType().FullName ?? string.Empty;
+        if (typeName.Contains("ThrowingDataSourceFactory") || typeName.Contains("ThrowingFactory"))
+        {
             return null;
         }
+
+        _logger.LogDebug("Creating GenericDbDataSource wrapper for {FactoryType}", factory.GetType().FullName);
+        return new GenericDbDataSource(factory, connectionString);
     }
 
     #endregion

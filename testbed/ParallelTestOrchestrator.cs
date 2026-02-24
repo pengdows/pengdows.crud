@@ -84,10 +84,22 @@ public class ParallelTestOrchestrator
                 .ToList();
         }
 
-        Console.WriteLine($"Starting {testConfigurations.Count} test containers in parallel...");
+        Console.WriteLine($"Starting {testConfigurations.Count} test containers (max 2 parallel)...");
 
-        // Start all containers in parallel
-        var testTasks = testConfigurations.Select(config => RunTestAsync(config)).ToArray();
+        // Limit parallelism to 2 to prevent host saturation
+        var semaphore = new SemaphoreSlim(2);
+        var testTasks = testConfigurations.Select(async config =>
+        {
+            await semaphore.WaitAsync();
+            try
+            {
+                await RunTestAsync(config);
+            }
+            finally
+            {
+                semaphore.Release();
+            }
+        }).ToArray();
 
         // Wait for all tests to complete
         await Task.WhenAll(testTasks);
@@ -112,27 +124,27 @@ public class ParallelTestOrchestrator
         {
             Console.WriteLine($"[{config.ContainerName}] Starting container...");
 
-            // Start container (this may take time for Docker containers)
+            var containerSw = System.Diagnostics.Stopwatch.StartNew();
             await config.Container.StartAsync();
-
-            var containerStarted = DateTime.UtcNow;
-            result.ContainerStartTime = containerStarted - startTime;
+            containerSw.Stop();
+            result.ContainerStartTime = containerSw.Elapsed;
 
             Console.WriteLine(
                 $"[{config.ContainerName}] Container ready in {result.ContainerStartTime.TotalSeconds:F2}s, starting tests...");
 
-            // Get database context and run tests
             var dbContext = await config.Container.GetDatabaseContextAsync(_services);
             var testProvider = config.TestProviderFactory(dbContext, _services);
 
+            var testSw = System.Diagnostics.Stopwatch.StartNew();
             await testProvider.RunTest();
+            testSw.Stop();
 
             result.Success = true;
+            result.TestTime = testSw.Elapsed;
             result.TotalTime = DateTime.UtcNow - startTime;
-            result.TestTime = result.TotalTime - result.ContainerStartTime;
 
             Console.WriteLine(
-                $"[{config.ContainerName}] ✅ Tests completed in {result.TestTime?.TotalSeconds:F2}s (total: {result.TotalTime.TotalSeconds:F2}s)");
+                $"[{config.ContainerName}] ✅ Tests completed in {result.TestTime.Value.TotalSeconds:F2}s");
         }
         catch (Exception ex)
         {
@@ -269,7 +281,7 @@ public class ParallelTestOrchestrator
             });
         }
 
-        // Additional databases can be added here:
+// Additional databases can be added here:
         // - DB2 (ibmcom/db2) - requires IBM.Data.DB2 package
         // - Sybase ASE - requires AdoNetCore.AseClient (already available)
         // - Others as needed
@@ -290,21 +302,20 @@ public class ParallelTestOrchestrator
         Console.WriteLine($"Total: {results.Length} | Successful: {successful} | Failed: {failed}");
         Console.WriteLine();
 
-        // Results table
+        // Results table — Startup = container ready time, Exec = RunTest() only
         Console.WriteLine(
-            $"{"Container",-15} {"Provider",-12} {"Status",-8} {"Start",-8} {"Test",-8} {"Total",-8} {"Error",-30}");
+            $"{"Container",-15} {"Provider",-12} {"Status",-8} {"Startup",-10} {"Exec",-10} {"Error",-30}");
         Console.WriteLine(new string('-', 80));
 
         foreach (var result in results)
         {
             var status = result.Success ? "✅ PASS" : "❌ FAIL";
-            var startTime = result.ContainerStartTime.TotalSeconds.ToString("F2") + "s";
-            var testTime = result.TestTime.HasValue ? result.TestTime.Value.TotalSeconds.ToString("F2") + "s" : "N/A";
-            var totalTime = result.TotalTime.TotalSeconds.ToString("F2") + "s";
+            var startupTime = result.ContainerStartTime.TotalSeconds.ToString("F2") + "s";
+            var execTime = result.TestTime.HasValue ? result.TestTime.Value.TotalSeconds.ToString("F2") + "s" : "N/A";
             var error = result.Error?.Substring(0, Math.Min(result.Error.Length, 30)) ?? "";
 
             Console.WriteLine(
-                $"{result.ContainerName,-15} {result.DatabaseProvider,-12} {status,-8} {startTime,-8} {testTime,-8} {totalTime,-8} {error,-30}");
+                $"{result.ContainerName,-15} {result.DatabaseProvider,-12} {status,-8} {startupTime,-10} {execTime,-10} {error,-30}");
         }
 
         Console.WriteLine();
@@ -318,9 +329,11 @@ public class ParallelTestOrchestrator
             }
         }
 
-        var maxTime = results.Max(r => r.TotalTime.TotalSeconds);
-        var avgTime = results.Average(r => r.TotalTime.TotalSeconds);
-        Console.WriteLine($"Execution completed in {maxTime:F2}s (avg: {avgTime:F2}s per container)");
+        var execTimes = results.Where(r => r.TestTime.HasValue).Select(r => r.TestTime!.Value.TotalSeconds).ToArray();
+        if (execTimes.Length > 0)
+        {
+            Console.WriteLine($"Test execution — max: {execTimes.Max():F2}s  avg: {execTimes.Average():F2}s  total: {execTimes.Sum():F2}s");
+        }
         Console.WriteLine("=".PadRight(80, '='));
     }
 }

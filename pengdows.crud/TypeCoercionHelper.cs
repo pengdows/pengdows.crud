@@ -618,6 +618,14 @@ public static class TypeCoercionHelper
     /// </summary>
     internal static DateTimeOffset CoerceDateTimeOffsetFromDateTime(DateTime dt) => CreateFlexibleOffset(dt);
 
+    /// <summary>
+    /// Normalizes a DateTime returned by a database driver to DateTimeKind.Utc.
+    /// Many drivers (Snowflake, SQL Server, MySQL, Oracle) return TIMESTAMP/DATETIME columns
+    /// as DateTimeKind.Unspecified. Treating Unspecified as UTC matches the convention that
+    /// all datetime values stored in the database represent UTC instants.
+    /// </summary>
+    internal static DateTime NormalizeDateTime(DateTime dt) => ConvertToUtc(dt);
+
     private static DateTime ConvertToUtc(DateTime dt)
     {
         return dt.Kind switch

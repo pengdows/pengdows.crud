@@ -112,6 +112,7 @@ public class AdvancedTypeRegistry
         public const string DbTypeProperty = "OracleDbType";
         public const string IntervalYM = "IntervalYM";
         public const string IntervalDS = "IntervalDS";
+        public const string TimeStampTZ = "TimeStampTZ";
         public const string Blob = "Blob";
         public const string Clob = "Clob";
     }
@@ -346,6 +347,9 @@ public class AdvancedTypeRegistry
         // SQLite-specific types
         RegisterSqliteMappings();
 
+        // Oracle-specific types
+        RegisterOracleMappings();
+
         // Fallback mappings for Unknown/SQL-92
         RegisterFallbackMappings();
     }
@@ -410,6 +414,38 @@ public class AdvancedTypeRegistry
                 {
                     param.Value = bytes;
                     param.Size = bytes.Length;
+                }
+            }
+        });
+    }
+
+    private void RegisterOracleMappings()
+    {
+        // Oracle: map bool to NUMBER(1) via Int16
+        RegisterMapping<bool>(SupportedDatabase.Oracle, new ProviderTypeMapping
+        {
+            DbType = DbType.Int16,
+            ConfigureParameter = (param, value) =>
+            {
+                param.DbType = DbType.Int16;
+                if (value is bool b)
+                {
+                    param.Value = b ? 1 : 0;
+                }
+            }
+        });
+
+        // Oracle: store GUIDs as VARCHAR2(36)
+        RegisterMapping<Guid>(SupportedDatabase.Oracle, new ProviderTypeMapping
+        {
+            DbType = DbType.String,
+            ConfigureParameter = (param, value) =>
+            {
+                param.DbType = DbType.String;
+                param.Size = 36;
+                if (value is Guid guid)
+                {
+                    param.Value = guid.ToString("D");
                 }
             }
         });
@@ -665,6 +701,21 @@ public class AdvancedTypeRegistry
                 param.DbType = DbType.DateTimeOffset;
                 // Note: The value arriving here is typed as DateTimeOffset (the registered CLR type),
                 // so a `value is DateTime` branch can never match and has been removed.
+            }
+        });
+
+        // Oracle DateTimeOffset uses TIMESTAMP WITH TIME ZONE (OracleDbType.TimeStampTZ)
+        RegisterMapping<DateTimeOffset>(SupportedDatabase.Oracle, new ProviderTypeMapping
+        {
+            DbType = DbType.Object,
+            ConfigureParameter = (param, value) =>
+            {
+                if (value is DateTimeOffset dto)
+                {
+                    // Normalize to UTC to avoid offset loss on round-trip.
+                    param.Value = dto.ToUniversalTime();
+                }
+                SetEnumProperty(param, OracleNames.DbTypeProperty, OracleNames.TimeStampTZ);
             }
         });
     }

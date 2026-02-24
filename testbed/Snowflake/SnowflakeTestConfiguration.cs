@@ -12,6 +12,7 @@ public sealed class SnowflakeTestConfiguration
         string user,
         string password,
         string warehouse,
+        string? role,
         string? adminDatabase,
         string testDatabase,
         string testSchema,
@@ -23,6 +24,7 @@ public sealed class SnowflakeTestConfiguration
         User = user;
         Password = password;
         Warehouse = warehouse;
+        Role = role;
         AdminDatabase = adminDatabase;
         TestDatabase = testDatabase;
         TestSchema = testSchema;
@@ -35,6 +37,7 @@ public sealed class SnowflakeTestConfiguration
     public string User { get; }
     public string Password { get; }
     public string Warehouse { get; }
+    public string? Role { get; }
     public string? AdminDatabase { get; }
     public string TestDatabase { get; }
     public string TestSchema { get; }
@@ -52,6 +55,7 @@ public sealed class SnowflakeTestConfiguration
         var user = getEnv("SNOWFLAKE_USER");
         var password = getEnv("SNOWFLAKE_PASSWORD");
         var warehouse = getEnv("SNOWFLAKE_WAREHOUSE");
+        var role = getEnv("SNOWFLAKE_ROLE");
 
         var createDatabase = string.Equals(getEnv("SNOWFLAKE_CREATE_DATABASE"), "true",
             StringComparison.OrdinalIgnoreCase);
@@ -83,15 +87,16 @@ public sealed class SnowflakeTestConfiguration
 
         var adminSchema = string.IsNullOrWhiteSpace(adminDatabase) ? null : DefaultSchema;
         var adminConnectionString =
-            BuildConnectionString(account!, user!, password!, warehouse!, adminDatabase, adminSchema);
+            BuildConnectionString(account!, user!, password!, warehouse!, role, adminDatabase, adminSchema);
         var testConnectionString =
-            BuildConnectionString(account!, user!, password!, warehouse!, testDatabase, testSchema);
+            BuildConnectionString(account!, user!, password!, warehouse!, role, testDatabase, testSchema);
 
         return new SnowflakeTestConfiguration(
             account!,
             user!,
             password!,
             warehouse!,
+            role,
             adminDatabase,
             testDatabase,
             testSchema,
@@ -131,6 +136,7 @@ public sealed class SnowflakeTestConfiguration
         string user,
         string password,
         string warehouse,
+        string? role,
         string? database,
         string? schema)
     {
@@ -141,6 +147,11 @@ public sealed class SnowflakeTestConfiguration
             $"password={password}",
             $"warehouse={warehouse}"
         };
+
+        if (!string.IsNullOrWhiteSpace(role))
+        {
+            parts.Add($"role={role}");
+        }
 
         if (!string.IsNullOrWhiteSpace(database))
         {

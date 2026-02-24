@@ -31,12 +31,19 @@ public class SnowflakeTestContainer : TestContainer
             : $"schema {_config.TestSchema}";
 
         var dropSqls = _config.GetDropCommands().ToList();
+        var totalSw = System.Diagnostics.Stopwatch.StartNew();
+
+        SnowflakeDebugLog.Log($"[Snowflake] StartAsync: using {label}");
+        SnowflakeDebugLog.Log($"[Snowflake] Warehouse={_config.Warehouse}");
 
         try
         {
             await using var conn = SnowflakeDbFactory.Instance.CreateConnection();
             conn.ConnectionString = _config.AdminConnectionString;
+            SnowflakeDebugLog.Log("[Snowflake] Opening admin connection...");
+            var openSw = System.Diagnostics.Stopwatch.StartNew();
             await conn.OpenAsync();
+            SnowflakeDebugLog.Log($"[Snowflake] Admin connection opened in {openSw.ElapsedMilliseconds}ms");
 
             await using var cmd = conn.CreateCommand();
             var createCommands = _config.GetCreateCommands().ToList();
@@ -44,7 +51,13 @@ public class SnowflakeTestContainer : TestContainer
             for (var i = 0; i < createCommands.Count; i++)
             {
                 cmd.CommandText = createCommands[i];
+                SnowflakeDebugLog.Log(
+                    $"[Snowflake] Create ({i + 1}/{createCommands.Count}) start: {DescribeCommand(cmd.CommandText)}");
+                var cmdSw = System.Diagnostics.Stopwatch.StartNew();
                 await cmd.ExecuteNonQueryAsync();
+                SnowflakeDebugLog.Log(
+                    $"[Snowflake] Create ({i + 1}/{createCommands.Count}) " +
+                    $"completed in {cmdSw.ElapsedMilliseconds}ms");
 
                 // Register for emergency cleanup as soon as the first resource exists.
                 // This guarantees the process-exit handler can drop it even if the
@@ -57,7 +70,7 @@ public class SnowflakeTestContainer : TestContainer
             }
 
             await conn.CloseAsync();
-            Console.WriteLine($"[Snowflake] Created test {label}");
+            Console.WriteLine($"[Snowflake] Created test {label} in {totalSw.ElapsedMilliseconds}ms");
         }
         catch (Exception ex)
         {
@@ -70,6 +83,8 @@ public class SnowflakeTestContainer : TestContainer
                 SnowflakeDatabaseCleanupRegistry.Deregister(_cleanupId);
                 _cleanupId = Guid.Empty;
             }
+
+            SnowflakeDebugLog.Log($"[Snowflake] Admin connection or DDL failed: {ex}");
 
             throw new InvalidOperationException(
                 $"[Snowflake] Cannot connect to Snowflake or create test {label}. " +
@@ -93,13 +108,21 @@ public class SnowflakeTestContainer : TestContainer
         {
             await using var conn = SnowflakeDbFactory.Instance.CreateConnection();
             conn.ConnectionString = _config.AdminConnectionString;
+            var openSw = System.Diagnostics.Stopwatch.StartNew();
             await conn.OpenAsync();
+            SnowflakeDebugLog.Log($"[Snowflake] Admin connection opened in {openSw.ElapsedMilliseconds}ms");
 
             await using var cmd = conn.CreateCommand();
-            foreach (var sql in _config.GetDropCommands())
+            var dropCommands = _config.GetDropCommands().ToList();
+            for (var i = 0; i < dropCommands.Count; i++)
             {
-                cmd.CommandText = sql;
+                cmd.CommandText = dropCommands[i];
+                SnowflakeDebugLog.Log(
+                    $"[Snowflake] Drop ({i + 1}/{dropCommands.Count}) start: {DescribeCommand(cmd.CommandText)}");
+                var cmdSw = System.Diagnostics.Stopwatch.StartNew();
                 await cmd.ExecuteNonQueryAsync();
+                SnowflakeDebugLog.Log(
+                    $"[Snowflake] Drop ({i + 1}/{dropCommands.Count}) completed in {cmdSw.ElapsedMilliseconds}ms");
             }
 
             await conn.CloseAsync();
@@ -127,13 +150,20 @@ public class SnowflakeTestContainer : TestContainer
         {
             await using var conn = SnowflakeDbFactory.Instance.CreateConnection();
             conn.ConnectionString = _config.AdminConnectionString;
+            var openSw = System.Diagnostics.Stopwatch.StartNew();
             await conn.OpenAsync();
+            SnowflakeDebugLog.Log($"[Snowflake] Admin connection opened in {openSw.ElapsedMilliseconds}ms");
 
             await using var cmd = conn.CreateCommand();
-            foreach (var sql in dropSqls)
+            for (var i = 0; i < dropSqls.Count; i++)
             {
-                cmd.CommandText = sql;
+                cmd.CommandText = dropSqls[i];
+                SnowflakeDebugLog.Log(
+                    $"[Snowflake] Cleanup ({i + 1}/{dropSqls.Count}) start: {DescribeCommand(cmd.CommandText)}");
+                var cmdSw = System.Diagnostics.Stopwatch.StartNew();
                 await cmd.ExecuteNonQueryAsync();
+                SnowflakeDebugLog.Log(
+                    $"[Snowflake] Cleanup ({i + 1}/{dropSqls.Count}) completed in {cmdSw.ElapsedMilliseconds}ms");
             }
 
             await conn.CloseAsync();
@@ -144,5 +174,16 @@ public class SnowflakeTestContainer : TestContainer
             Console.WriteLine(
                 $"[Snowflake] Warning: Failed to clean up partial test {label}: {dropEx.Message}");
         }
+    }
+
+    private static string DescribeCommand(string sql)
+    {
+        if (string.IsNullOrWhiteSpace(sql))
+        {
+            return "<empty>";
+        }
+
+        var trimmed = sql.Trim().Replace(Environment.NewLine, " ");
+        return trimmed.Length <= 160 ? trimmed : trimmed[..160] + "...";
     }
 }

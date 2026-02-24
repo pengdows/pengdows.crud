@@ -301,27 +301,7 @@ public partial class TableGateway<TEntity, TRowID>
         var template = GetTemplatesForDialect(dialect);
         var binder = GetOrBuildUpsertBinder(dialect, template);
 
-        // Use pre-built column/value lists from template - NO MORE DYNAMIC LOOP
-        var srcColSb = SbLite.Create(stackalloc char[512]);
-        var valSb = SbLite.Create(stackalloc char[512]);
-        
-        for (var i = 0; i < template.UpsertColumns.Count; i++)
-        {
-            if (i > 0)
-            {
-                srcColSb.Append(", ");
-                valSb.Append(", ");
-            }
-            srcColSb.Append(dialect.WrapSimpleName(template.UpsertColumns[i].Name));
-            
-            var pName = template.UpsertParameterNames[i];
-            var placeholder = dialect.MakeParameterName(pName);
-            if (template.UpsertColumns[i].IsJsonType)
-            {
-                placeholder = dialect.RenderJsonArgument(placeholder, template.UpsertColumns[i]);
-            }
-            valSb.Append(placeholder);
-        }
+        var mergeSource = dialect.RenderMergeSource(template.UpsertColumns, template.UpsertParameterNames);
 
         var parameters = new List<DbParameter>(template.UpsertColumns.Count);
         binder(entity, parameters);
@@ -363,15 +343,15 @@ public partial class TableGateway<TEntity, TRowID>
             join.Append(dialect.WrapSimpleName(joinCols[i].Name));
         }
 
+        var onClause = dialect.RenderMergeOnClause(join.ToString());
+
         var sc = ctx.CreateSqlContainer();
         sc.Query.Append("MERGE INTO ")
             .Append(BuildWrappedTableName(dialect))
-            .Append(" t USING (VALUES (")
-            .Append(valSb.AsSpan())
-            .Append(")) AS s (")
-            .Append(srcColSb.AsSpan())
-            .Append(") ON ")
-            .Append(join.AsSpan())
+            .Append(" t ")
+            .Append(mergeSource)
+            .Append(" ON ")
+            .Append(onClause)
             .Append(" WHEN MATCHED THEN UPDATE SET ")
             .Append(template.UpsertUpdateFragment)
             .Append(" WHEN NOT MATCHED THEN INSERT (")

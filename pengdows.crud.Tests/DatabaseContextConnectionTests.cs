@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Data;
+using System.Data.Common;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
@@ -105,12 +106,16 @@ public class DatabaseContextConnectionTests
         context.ExecuteSessionSettings(connection, false);
         Assert.Single(connection.ExecutedStatements);
 
-        // Second call should be skipped (CapturingConnection is not ITrackedConnection,
-        // so the flag won't be checked — use a real tracked connection for that test)
-        // For a plain IDbConnection, it applies each time since there's no LocalState
+        // Second call should be skipped because the context remembers this PHYSICAL connection object.
+        // Even if we clear the list, it won't re-execute.
         connection.ExecutedStatements.Clear();
         context.ExecuteSessionSettings(connection, false);
-        Assert.Single(connection.ExecutedStatements);
+        Assert.Empty(connection.ExecutedStatements);
+        
+        // A DIFFERENT physical connection should still get initialized
+        var connection2 = new CapturingConnection();
+        context.ExecuteSessionSettings(connection2, false);
+        Assert.Single(connection2.ExecutedStatements);
     }
 
     [Fact]
@@ -157,56 +162,48 @@ public class DatabaseContextConnectionTests
         Assert.False(tracked.LocalState.SessionSettingsApplied);
     }
 
-    private sealed class CapturingConnection : IDbConnection
+    private sealed class CapturingConnection : DbConnection
     {
         public List<string> ExecutedStatements { get; } = new();
         private string _connectionString = string.Empty;
 
         [AllowNull]
-        public string ConnectionString
+        public override string ConnectionString
         {
             get => _connectionString;
             set => _connectionString = value ?? string.Empty;
         }
 
-        public int ConnectionTimeout => 30;
-        public string Database => "capturing";
-        public ConnectionState State => ConnectionState.Open;
-        public string DataSource => "capturing";
+        public override int ConnectionTimeout => 30;
+        public override string Database => "capturing";
+        public override ConnectionState State => ConnectionState.Open;
+        public override string DataSource => "capturing";
+        public override string ServerVersion => "1.0";
 
-        public IDbTransaction BeginTransaction()
+        protected override DbTransaction BeginDbTransaction(IsolationLevel il)
         {
             throw new NotSupportedException();
         }
 
-        public IDbTransaction BeginTransaction(IsolationLevel il)
-        {
-            throw new NotSupportedException();
-        }
-
-        public void ChangeDatabase(string databaseName)
+        public override void ChangeDatabase(string databaseName)
         {
         }
 
-        public void Close()
+        public override void Close()
         {
         }
 
-        public void Open()
+        public override void Open()
         {
         }
 
-        public IDbCommand CreateCommand()
+        protected override DbCommand CreateDbCommand()
         {
             return new CapturingCommand(ExecutedStatements);
         }
-
-        public void Dispose()
-        {
-        }
     }
 
-    private sealed class CapturingCommand : IDbCommand
+    private sealed class CapturingCommand : DbCommand
     {
         private readonly List<string> _executed;
 
@@ -218,55 +215,47 @@ public class DatabaseContextConnectionTests
         private string _commandText = string.Empty;
 
         [AllowNull]
-        public string CommandText
+        public override string CommandText
         {
             get => _commandText;
             set => _commandText = value ?? string.Empty;
         }
 
-        public int CommandTimeout { get; set; }
-        public CommandType CommandType { get; set; } = CommandType.Text;
-        public IDbConnection? Connection { get; set; }
-        public IDataParameterCollection Parameters => throw new NotSupportedException();
-        public IDbTransaction? Transaction { get; set; }
-        public UpdateRowSource UpdatedRowSource { get; set; }
+        public override int CommandTimeout { get; set; }
+        public override CommandType CommandType { get; set; } = CommandType.Text;
+        public override bool DesignTimeVisible { get; set; }
 
-        public void Cancel()
+        protected override DbConnection? DbConnection { get; set; }
+        protected override DbParameterCollection DbParameterCollection => throw new NotSupportedException();
+        protected override DbTransaction? DbTransaction { get; set; }
+        public override UpdateRowSource UpdatedRowSource { get; set; }
+
+        public override void Cancel()
         {
         }
 
-        public IDbDataParameter CreateParameter()
+        protected override DbParameter CreateDbParameter()
         {
             throw new NotSupportedException();
         }
 
-        public void Dispose()
-        {
-        }
-
-        public int ExecuteNonQuery()
+        public override int ExecuteNonQuery()
         {
             _executed.Add(CommandText.Trim());
             return 0;
         }
 
-        public IDataReader ExecuteReader()
+        protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior)
         {
             throw new NotSupportedException();
         }
 
-        public IDataReader ExecuteReader(CommandBehavior behavior)
+        public override object? ExecuteScalar()
         {
             throw new NotSupportedException();
         }
 
-        public object ExecuteScalar()
+        public override void Prepare()
         {
-            throw new NotSupportedException();
-        }
-
-        public void Prepare()
-        {
-        }
-    }
-}
+            }
+        }}

@@ -130,9 +130,12 @@ public class MergeConflictTests : DatabaseTestBase
         var stringType = GetStringType(provider);
         var versionType = GetIntType(provider);
 
-        var versionDefinition = provider == SupportedDatabase.Firebird
-            ? $"{versionColumn} {versionType} NOT NULL"
-            : $"{versionColumn} {versionType} NOT NULL DEFAULT 1";
+        var versionDefinition = provider switch
+        {
+            SupportedDatabase.Firebird => $"{versionColumn} {versionType} NOT NULL",
+            SupportedDatabase.Oracle => $"{versionColumn} {versionType} DEFAULT 1 NOT NULL",
+            _ => $"{versionColumn} {versionType} NOT NULL DEFAULT 1"
+        };
 
         return $@"
 CREATE TABLE {table} (

@@ -137,13 +137,39 @@ public partial class DatabaseContext
             return;
         }
 
-        var tracked = connection as ITrackedConnection;
-        if (tracked?.LocalState.SessionSettingsApplied == true)
+        // Get the real physical connection from any wrapper (like TrackedConnection)
+        // to check if we've already initialized THIS physical instance in the pool.
+        var current = (object)connection;
+        while (current is IInternalConnectionWrapper wrapper)
         {
+            current = wrapper.UnderlyingConnection;
+        }
+
+        if (current is not DbConnection physicalConnection)
+        {
+            // If it's not a DbConnection (unlikely), we can't track it via ConditionalWeakTable safely.
             return;
         }
 
         var settings = GetCachedSessionSettings(readOnly);
+        var settingsKey = settings ?? string.Empty;
+
+        // ConditionalWeakTable uses reference equality on the physical object.
+        if (_initializedConnections.TryGetValue(physicalConnection, out var lastSettings))
+        {
+            if (string.Equals(lastSettings, settingsKey, StringComparison.Ordinal))
+            {
+                if (connection is ITrackedConnection tc)
+                {
+                    tc.LocalState.SessionSettingsApplied = true;
+                }
+                return;
+            }
+            
+            // If we are here, the physical connection was last used with DIFFERENT settings
+            // (e.g. it was Read and now it's Write). We MUST re-initialize.
+        }
+
         var applied = false;
         if (!string.IsNullOrWhiteSpace(settings))
         {
@@ -165,9 +191,13 @@ public partial class DatabaseContext
             applied = true;
         }
 
-        if (tracked != null && applied)
+        if (applied)
         {
-            tracked.LocalState.SessionSettingsApplied = true;
+            _initializedConnections.AddOrUpdate(physicalConnection, settingsKey);
+            if (connection is ITrackedConnection tc)
+            {
+                tc.LocalState.SessionSettingsApplied = true;
+            }
         }
     }
 
@@ -216,18 +246,28 @@ public partial class DatabaseContext
         var activeConnectionString = string.IsNullOrWhiteSpace(connectionString)
             ? _connectionString
             : connectionString;
+
+        var isCustomConnectionString = !string.IsNullOrWhiteSpace(connectionString);
+        var useReaderCS = ShouldUseReaderConnectionString(readOnly);
+
         if (_logger.IsEnabled(LogLevel.Warning) &&
             !string.IsNullOrWhiteSpace(activeConnectionString) &&
             activeConnectionString.IndexOf("password", StringComparison.OrdinalIgnoreCase) < 0)
         {
-            _logger.LogWarning("Connection string missing password for {Name}: {ConnectionString}", Name,
-                RedactConnectionString(activeConnectionString));
+            var redacted = isCustomConnectionString
+                ? RedactConnectionString(activeConnectionString)
+                : (useReaderCS ? _redactedReaderConnectionString : _redactedConnectionString);
+
+            _logger.LogWarning("Connection string missing password for {Name}: {ConnectionString}", Name, redacted);
         }
 
         if (_logger.IsEnabled(LogLevel.Debug))
         {
-            _logger.LogDebug("Preparing connection for {ExecutionType} with string: {ConnectionString}", executionType,
-                RedactConnectionString(activeConnectionString));
+            var redacted = isCustomConnectionString
+                ? RedactConnectionString(activeConnectionString)
+                : (useReaderCS ? _redactedReaderConnectionString : _redactedConnectionString);
+
+            _logger.LogDebug("Preparing connection for {ExecutionType} with string: {ConnectionString}", executionType, redacted);
         }
 
         var dataSource = ResolveDataSource(readOnly);
@@ -313,7 +353,7 @@ public partial class DatabaseContext
                 }
             },
             firstOpenHandler,
-            conn => { _logger.LogDebug("Connection disposed."); },
+            _disposeHandler,
             null,
             isSharedConnection,
             metricsCollector,

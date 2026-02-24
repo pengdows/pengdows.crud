@@ -48,6 +48,7 @@ method pengdows.crud.IDatabaseContext::CreateDbParameter<T>(System.Data.DbType, 
 method pengdows.crud.IDatabaseContext::CreateDbParameter<T>(string, System.Data.DbType, T) -> System.Data.Common.DbParameter
 method pengdows.crud.IDatabaseContext::CreateDbParameter<T>(string, System.Data.DbType, T, System.Data.ParameterDirection) -> System.Data.Common.DbParameter
 method pengdows.crud.IDatabaseContext::CreateSqlContainer(string) -> pengdows.crud.ISqlContainer
+method pengdows.crud.IDatabaseContext::GenerateParameterName() -> string
 method pengdows.crud.IDatabaseContext::GenerateRandomName(int, int) -> string
 method pengdows.crud.IDatabaseContext::GetLock() -> pengdows.crud.threading.ILockerAsync
 method pengdows.crud.IDatabaseContext::MakeParameterName(System.Data.Common.DbParameter) -> string
@@ -62,6 +63,7 @@ method pengdows.crud.ISqlContainer::AddParameterWithValue<T>(System.Data.DbType,
 method pengdows.crud.ISqlContainer::AddParameterWithValue<T>(string, System.Data.DbType, T) -> System.Data.Common.DbParameter
 method pengdows.crud.ISqlContainer::AddParameterWithValue<T>(string, System.Data.DbType, T, System.Data.ParameterDirection) -> System.Data.Common.DbParameter
 method pengdows.crud.ISqlContainer::AddParameters(System.Collections.Generic.IEnumerable`1<System.Data.Common.DbParameter>) -> void
+method pengdows.crud.ISqlContainer::AddParameters(System.Collections.Generic.IList`1<System.Data.Common.DbParameter>) -> void
 method pengdows.crud.ISqlContainer::Clear() -> void
 method pengdows.crud.ISqlContainer::Clone() -> pengdows.crud.ISqlContainer
 method pengdows.crud.ISqlContainer::Clone(pengdows.crud.IDatabaseContext) -> pengdows.crud.ISqlContainer
@@ -163,6 +165,7 @@ method pengdows.crud.dialects.ISqlDialect::CreateDbParameter<T>(System.Data.DbTy
 method pengdows.crud.dialects.ISqlDialect::CreateDbParameter<T>(string, System.Data.DbType, T) -> System.Data.Common.DbParameter
 method pengdows.crud.dialects.ISqlDialect::DetectDatabaseInfo(pengdows.crud.wrappers.ITrackedConnection) -> pengdows.crud.dialects.IDatabaseProductInfo
 method pengdows.crud.dialects.ISqlDialect::DetectDatabaseInfoAsync(pengdows.crud.wrappers.ITrackedConnection) -> System.Threading.Tasks.Task`1<pengdows.crud.dialects.IDatabaseProductInfo>
+method pengdows.crud.dialects.ISqlDialect::GenerateParameterName() -> string
 method pengdows.crud.dialects.ISqlDialect::GenerateRandomName(int, int) -> string
 method pengdows.crud.dialects.ISqlDialect::GetCompatibilityWarning() -> string
 method pengdows.crud.dialects.ISqlDialect::GetConnectionSessionSettings(pengdows.crud.IDatabaseContext, bool) -> string
@@ -189,6 +192,8 @@ method pengdows.crud.dialects.ISqlDialect::ParseVersion(string) -> System.Versio
 method pengdows.crud.dialects.ISqlDialect::PrepareParameterValue(object, System.Data.DbType) -> object
 method pengdows.crud.dialects.ISqlDialect::RenderInsertReturningClause(string) -> string
 method pengdows.crud.dialects.ISqlDialect::RenderJsonArgument(string, pengdows.crud.IColumnInfo) -> string
+method pengdows.crud.dialects.ISqlDialect::RenderMergeOnClause(string) -> string
+method pengdows.crud.dialects.ISqlDialect::RenderMergeSource(System.Collections.Generic.IReadOnlyList`1<pengdows.crud.IColumnInfo>, System.Collections.Generic.IReadOnlyList`1<string>) -> string
 method pengdows.crud.dialects.ISqlDialect::ReplaceNeutralTokens(string) -> string
 method pengdows.crud.dialects.ISqlDialect::ShouldDisablePrepareOn(System.Exception) -> bool
 method pengdows.crud.dialects.ISqlDialect::TryEnterReadOnlyTransaction(pengdows.crud.ITransactionContext) -> void
@@ -228,6 +233,7 @@ property pengdows.crud.IAuditValues::TimestampOffset : System.Nullable`1<System.
 property pengdows.crud.IAuditValues::UserId : object { get; set; }
 property pengdows.crud.IAuditValues::UtcNow : System.DateTime { get; }
 property pengdows.crud.IColumnInfo::DbType : System.Data.DbType { get; set; }
+property pengdows.crud.IColumnInfo::EnumAsString : bool { get; set; }
 property pengdows.crud.IColumnInfo::EnumType : System.Type { get; set; }
 property pengdows.crud.IColumnInfo::EnumUnderlyingType : System.Type { get; set; }
 property pengdows.crud.IColumnInfo::IsCreatedBy : bool { get; set; }

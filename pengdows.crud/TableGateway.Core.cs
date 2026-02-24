@@ -285,7 +285,17 @@ public partial class TableGateway<TEntity, TRowID> :
         if (_idColumn != null && !_idColumn.IsIdIsWritable && dialect.SupportsInsertReturning)
         {
             var sc = BuildCreateWithReturning(entity, true, ctx);
-            var generatedId = await sc.ExecuteScalarOrNullAsync<object>(ExecutionType.Write);
+
+            object? generatedId;
+            if (dialect.DatabaseType == SupportedDatabase.Oracle)
+            {
+                await sc.ExecuteNonQueryAsync(ExecutionType.Write).ConfigureAwait(false);
+                generatedId = sc.GetParameterValue(OracleReturningParameterName);
+            }
+            else
+            {
+                generatedId = await sc.ExecuteScalarOrNullAsync<object>(ExecutionType.Write).ConfigureAwait(false);
+            }
 
             if (generatedId != null && generatedId != DBNull.Value)
             {
@@ -348,9 +358,21 @@ public partial class TableGateway<TEntity, TRowID> :
         if (_idColumn != null && !_idColumn.IsIdIsWritable && dialect.SupportsInsertReturning)
         {
             var sc = BuildCreateWithReturning(entity, true, ctx);
-            var generatedId = await sc
-                .ExecuteScalarOrNullAsync<object>(ExecutionType.Write, CommandType.Text, cancellationToken)
-                .ConfigureAwait(false);
+
+            object? generatedId;
+            if (dialect.DatabaseType == SupportedDatabase.Oracle)
+            {
+                await sc.ExecuteNonQueryAsync(ExecutionType.Write, CommandType.Text, cancellationToken)
+                    .ConfigureAwait(false);
+                generatedId = sc.GetParameterValue(OracleReturningParameterName);
+            }
+            else
+            {
+                generatedId = await sc
+                    .ExecuteScalarOrNullAsync<object>(ExecutionType.Write, CommandType.Text, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
             if (generatedId != null && generatedId != DBNull.Value)
             {
                 var converted = TypeCoercionHelper.ConvertWithCache(generatedId, _idColumn.PropertyInfo.PropertyType);
@@ -446,6 +468,8 @@ public partial class TableGateway<TEntity, TRowID> :
 
     private const string
         ReturningClausePlaceholder = "{returning}"; // PostgreSQL/SQLite/etc: RETURNING id (after VALUES)
+
+    private const string OracleReturningParameterName = "o0";
 
     /// <inheritdoc/>
     public ISqlContainer BuildCreate(TEntity entity, IDatabaseContext? context = null)
@@ -652,6 +676,13 @@ public partial class TableGateway<TEntity, TRowID> :
             if (dialect.DatabaseType == SupportedDatabase.SqlServer)
             {
                 outputClause = clause; // SQL Server: OUTPUT goes before VALUES
+            }
+            else if (dialect.DatabaseType == SupportedDatabase.Oracle)
+            {
+                returningClause = clause.Replace("?", dialect.MakeParameterName(OracleReturningParameterName),
+                    StringComparison.Ordinal);
+                sc.AddParameterWithValue<object?>(OracleReturningParameterName, _idColumn.DbType, null,
+                    ParameterDirection.Output);
             }
             else
             {

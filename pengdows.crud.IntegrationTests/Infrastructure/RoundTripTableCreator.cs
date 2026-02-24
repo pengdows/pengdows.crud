@@ -203,8 +203,8 @@ BEGIN
         EXECUTE IMMEDIATE '
             CREATE TABLE {0}round_trip_entity{1} (
                 {0}id{1}                   NUMBER(19)               NOT NULL,
-                {0}text_value{1}           NVARCHAR2(500)           NOT NULL,
-                {0}text_unicode{1}         NVARCHAR2(500)           NOT NULL,
+                {0}text_value{1}           NVARCHAR2(500),
+                {0}text_unicode{1}         NVARCHAR2(500),
                 {0}text_nullable{1}        NVARCHAR2(500),
                 {0}int_value{1}            NUMBER(10)               NOT NULL,
                 {0}long_value{1}           NUMBER(19)               NOT NULL,
@@ -212,7 +212,7 @@ BEGIN
                 {0}bool_value{1}           NUMBER(1)                NOT NULL,
                 {0}datetimeoffset_value{1} TIMESTAMP WITH TIME ZONE NOT NULL,
                 {0}guid_value{1}           VARCHAR2(36)             NOT NULL,
-                {0}binary_value{1}         RAW(256)                 NOT NULL,
+                {0}binary_value{1}         RAW(256),
                 CONSTRAINT pk_round_trip_entity PRIMARY KEY ({0}id{1})
             )';
     END IF;

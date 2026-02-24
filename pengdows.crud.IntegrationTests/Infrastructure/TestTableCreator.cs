@@ -170,16 +170,16 @@ public class TestTableCreator
                         EXECUTE IMMEDIATE '
                             CREATE TABLE {table} (
                                 {idCol} NUMBER PRIMARY KEY,
-                                {textCol} VARCHAR2(255) NOT NULL,
-                                {unicodeCol} NVARCHAR2(255) NOT NULL,
+                                {textCol} VARCHAR2(255),
+                                {unicodeCol} NVARCHAR2(255),
                                 {nullCol} VARCHAR2(255),
                                 {intCol} NUMBER(10) NOT NULL,
                                 {longCol} NUMBER(19) NOT NULL,
                                 {decimalCol} NUMBER(18,8) NOT NULL,
                                 {boolCol} NUMBER(1) NOT NULL,
                                 {dtoCol} TIMESTAMP WITH TIME ZONE NOT NULL,
-                                {guidCol} RAW(16) NOT NULL,
-                                {binCol} RAW(256) NOT NULL
+                                {guidCol} VARCHAR2(36) NOT NULL,
+                                {binCol} RAW(256)
                             )';
                     END IF;
                 END;",

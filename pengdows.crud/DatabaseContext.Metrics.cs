@@ -144,15 +144,20 @@ public partial class DatabaseContext
             return new PoolStatisticsSnapshot(
                 label,
                 string.Empty,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
+                0, // MaxPermits
+                0, // InUse
+                0, // PeakInUse
+                0, // Queued
+                0, // PeakQueued
+                0, // TurnstileQueued
+                0, // PeakTurnstileQueued
+                0, // TotalAcquired
+                0, // TotalWaitTicks
+                0, // TotalHoldTicks
+                0, // TotalTimeouts
                 0, // TotalTurnstileTimeouts
-                0,
-                true);
+                0, // TotalCanceledWaits
+                true); // Disabled
         }
 
         return governor.GetSnapshot();

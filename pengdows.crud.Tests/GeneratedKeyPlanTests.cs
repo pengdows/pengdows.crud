@@ -191,7 +191,8 @@ public class GeneratedKeyPlanTests
             (SupportedDatabase.SqlServer, GeneratedKeyPlan.OutputInserted, "OUTPUT INSERTED.\"id\""),
             (SupportedDatabase.Firebird, GeneratedKeyPlan.Returning, "RETURNING \"id\""),
             (SupportedDatabase.DuckDB, GeneratedKeyPlan.Returning, "RETURNING \"id\""),
-            (SupportedDatabase.Snowflake, GeneratedKeyPlan.Returning, "RETURNING \"id\""),
+            // Snowflake does not support INSERT...RETURNING; falls back to correlation token
+            (SupportedDatabase.Snowflake, GeneratedKeyPlan.CorrelationToken, null),
 
             // Session-scoped functions (safe fallback)
             (SupportedDatabase.MySql, GeneratedKeyPlan.SessionScopedFunction, "SELECT LAST_INSERT_ID()"),

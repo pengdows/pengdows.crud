@@ -6,6 +6,7 @@ using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using pengdows.crud;
 using pengdows.crud.enums;
+using testbed.Snowflake;
 
 #endregion
 
@@ -36,15 +37,19 @@ public class TestProvider : IAsyncTestProvider
         {
             stepSw.Restart();
             Console.WriteLine("Running Create table");
+            SnowflakeStep("Create table: start");
             await CreateTable();
             Console.WriteLine($"  Create table: {stepSw.ElapsedMilliseconds}ms");
+            SnowflakeStep($"Create table: done in {stepSw.ElapsedMilliseconds}ms");
 
             stepSw.Restart();
             Console.WriteLine("Running Insert rows");
+            SnowflakeStep("Insert rows: start");
             var before = await CountTestRows();
             var id = await InsertTestRows();
             var afterInsert = await CountTestRows();
             Console.WriteLine($"  Insert rows: {stepSw.ElapsedMilliseconds}ms");
+            SnowflakeStep($"Insert rows: done in {stepSw.ElapsedMilliseconds}ms");
             if (afterInsert != before + 1)
             {
                 throw new Exception("Insert did not affect expected row count");
@@ -52,8 +57,10 @@ public class TestProvider : IAsyncTestProvider
 
             stepSw.Restart();
             Console.WriteLine("Running retrieve rows");
+            SnowflakeStep("Retrieve rows: start");
             var obj = await RetrieveRows(id);
             Console.WriteLine($"  Retrieve rows: {stepSw.ElapsedMilliseconds}ms");
+            SnowflakeStep($"Retrieve rows: done in {stepSw.ElapsedMilliseconds}ms");
             if (obj.Id != id)
             {
                 throw new Exception("Retrieved row did not match inserted id");
@@ -61,9 +68,11 @@ public class TestProvider : IAsyncTestProvider
 
             stepSw.Restart();
             Console.WriteLine("Running delete rows");
+            SnowflakeStep("Delete rows: start");
             await DeletedRow(obj);
             var afterDelete = await CountTestRows();
             Console.WriteLine($"  Delete rows: {stepSw.ElapsedMilliseconds}ms");
+            SnowflakeStep($"Delete rows: done in {stepSw.ElapsedMilliseconds}ms");
             if (afterDelete != before)
             {
                 throw new Exception("Delete did not affect expected row count");
@@ -71,53 +80,73 @@ public class TestProvider : IAsyncTestProvider
 
             stepSw.Restart();
             Console.WriteLine("Running Transaction rows");
+            SnowflakeStep("Transactions: start");
             await TestTransactions();
             Console.WriteLine($"  Transactions: {stepSw.ElapsedMilliseconds}ms");
+            SnowflakeStep($"Transactions: done in {stepSw.ElapsedMilliseconds}ms");
 
             stepSw.Restart();
             Console.WriteLine("Running stored procedure return value test");
+            SnowflakeStep("Stored procedure: start");
             await TestStoredProcReturnValue();
             Console.WriteLine($"  Stored procedure: {stepSw.ElapsedMilliseconds}ms");
+            SnowflakeStep($"Stored procedure: done in {stepSw.ElapsedMilliseconds}ms");
 
             stepSw.Restart();
             Console.WriteLine("Running parameter binding");
+            SnowflakeStep("Parameter binding: start");
             await TestParameterBinding();
             Console.WriteLine($"  Parameter binding: {stepSw.ElapsedMilliseconds}ms");
+            SnowflakeStep($"Parameter binding: done in {stepSw.ElapsedMilliseconds}ms");
 
             stepSw.Restart();
             Console.WriteLine("Running row round-trip fidelity");
+            SnowflakeStep("Row round-trip: start");
             await TestRowRoundTrip();
             Console.WriteLine($"  Row round-trip: {stepSw.ElapsedMilliseconds}ms");
+            SnowflakeStep($"Row round-trip: done in {stepSw.ElapsedMilliseconds}ms");
 
             stepSw.Restart();
             Console.WriteLine("Running extended transactions");
+            SnowflakeStep("Extended transactions: start");
             await TestExtendedTransactions();
             Console.WriteLine($"  Extended transactions: {stepSw.ElapsedMilliseconds}ms");
+            SnowflakeStep($"Extended transactions: done in {stepSw.ElapsedMilliseconds}ms");
 
             stepSw.Restart();
             Console.WriteLine("Running concurrency");
+            SnowflakeStep("Concurrency: start");
             await TestConcurrency();
             Console.WriteLine($"  Concurrency: {stepSw.ElapsedMilliseconds}ms");
+            SnowflakeStep($"Concurrency: done in {stepSw.ElapsedMilliseconds}ms");
 
             stepSw.Restart();
             Console.WriteLine("Running command reuse");
+            SnowflakeStep("Command reuse: start");
             await TestCommandReuse();
             Console.WriteLine($"  Command reuse: {stepSw.ElapsedMilliseconds}ms");
+            SnowflakeStep($"Command reuse: done in {stepSw.ElapsedMilliseconds}ms");
 
             stepSw.Restart();
             Console.WriteLine("Running capability probes");
+            SnowflakeStep("Capability probes: start");
             await TestCapabilityProbes();
             Console.WriteLine($"  Capability probes: {stepSw.ElapsedMilliseconds}ms");
+            SnowflakeStep($"Capability probes: done in {stepSw.ElapsedMilliseconds}ms");
 
             stepSw.Restart();
             Console.WriteLine("Running error mapping");
+            SnowflakeStep("Error mapping: start");
             await TestErrorMapping();
             Console.WriteLine($"  Error mapping: {stepSw.ElapsedMilliseconds}ms");
+            SnowflakeStep($"Error mapping: done in {stepSw.ElapsedMilliseconds}ms");
 
             stepSw.Restart();
             Console.WriteLine("Running identifier quoting");
+            SnowflakeStep("Identifier quoting: start");
             await TestIdentifierQuoting();
             Console.WriteLine($"  Identifier quoting: {stepSw.ElapsedMilliseconds}ms");
+            SnowflakeStep($"Identifier quoting: done in {stepSw.ElapsedMilliseconds}ms");
         }
         catch (Exception ex)
         {
@@ -128,6 +157,16 @@ public class TestProvider : IAsyncTestProvider
         {
             Console.WriteLine($"[{_context.Product}] Test run completed in {totalSw.ElapsedMilliseconds}ms");
         }
+    }
+
+    private void SnowflakeStep(string message)
+    {
+        if (_context.Product != SupportedDatabase.Snowflake)
+        {
+            return;
+        }
+
+        SnowflakeDebugLog.Log($"[Snowflake][Step] {message}");
     }
 
     protected virtual async Task TestTransactions()
@@ -195,13 +234,15 @@ public class TestProvider : IAsyncTestProvider
 
         sqlContainer.Clear();
         var dateType = GetDateTimeType(databaseContext.Product);
+        var intType = GetIntType(databaseContext.Product);
+        var longType = GetLongType(databaseContext.Product);
         var boolType = GetBooleanType(databaseContext.Product);
         sqlContainer.Query.Append($@"
 CREATE TABLE {qp}test_table{qs} (
-    {qp}id{qs} BIGINT NOT NULL,
+    {qp}id{qs} {longType} NOT NULL,
     {qp}name{qs} VARCHAR(100) NOT NULL,
     {qp}description{qs} VARCHAR(1000) NOT NULL,
-    {qp}value{qs} INT NOT NULL,
+    {qp}value{qs} {intType} NOT NULL,
     {qp}is_active{qs} {boolType} NOT NULL,
     {qp}created_at{qs} {dateType} NOT NULL,
     {qp}created_by{qs} VARCHAR(100) NOT NULL,
@@ -263,6 +304,28 @@ CREATE TABLE {qp}test_table{qs} (
         {
             SupportedDatabase.PostgreSql => "TIMESTAMP WITH TIME ZONE",
             _ => "DATETIME"
+        };
+    }
+
+    private static string GetIntType(SupportedDatabase product)
+    {
+        return product switch
+        {
+            SupportedDatabase.Sqlite => "INTEGER",
+            SupportedDatabase.Oracle => "NUMBER(10)",
+            SupportedDatabase.Firebird => "INTEGER",
+            _ => "INT"
+        };
+    }
+
+    private static string GetLongType(SupportedDatabase product)
+    {
+        return product switch
+        {
+            SupportedDatabase.Sqlite => "INTEGER",
+            SupportedDatabase.Oracle => "NUMBER(19)",
+            SupportedDatabase.Firebird => "BIGINT",
+            _ => "BIGINT"
         };
     }
 
@@ -397,7 +460,7 @@ CREATE TABLE {qp}test_table{qs} (
             SupportedDatabase.CockroachDb => "UUID",
             SupportedDatabase.YugabyteDb => "UUID",
             SupportedDatabase.DuckDB => "UUID",
-            SupportedDatabase.Oracle => "RAW(16)",
+            SupportedDatabase.Oracle => "VARCHAR2(36)",
             SupportedDatabase.Sqlite => "TEXT",
             _ => "UUID"
         };
@@ -611,9 +674,9 @@ CREATE TABLE {qp}test_table{qs} (
         var sc = _context.CreateSqlContainer();
         sc.Query.Append($@"
 CREATE TABLE {table} (
-    {_context.WrapObjectName("id")} BIGINT NOT NULL,
-    {_context.WrapObjectName("int_val")} INT NOT NULL,
-    {_context.WrapObjectName("long_val")} BIGINT NOT NULL,
+    {_context.WrapObjectName("id")} {GetLongType(_context.Product)} NOT NULL,
+    {_context.WrapObjectName("int_val")} {GetIntType(_context.Product)} NOT NULL,
+    {_context.WrapObjectName("long_val")} {GetLongType(_context.Product)} NOT NULL,
     {_context.WrapObjectName("dec_val")} {GetDecimalType(_context.Product)} NOT NULL,
     {_context.WrapObjectName("bool_val")} {GetBooleanType(_context.Product)} NOT NULL,
     {_context.WrapObjectName("text_val")} {GetTextType(_context.Product, 200)} NOT NULL,
@@ -869,7 +932,7 @@ INSERT INTO {table} (
         var sc = _context.CreateSqlContainer();
         sc.Query.Append($@"
 CREATE TABLE {table} (
-    {_context.WrapObjectName("id")} BIGINT NOT NULL,
+    {_context.WrapObjectName("id")} {GetLongType(_context.Product)} NOT NULL,
     {_context.WrapObjectName("unicode_text")} {GetTextType(_context.Product, 200)} NOT NULL,
     {_context.WrapObjectName("empty_text")} {GetTextType(_context.Product, 200)},
     {_context.WrapObjectName("null_text")} {GetTextType(_context.Product, 200)},
@@ -986,7 +1049,8 @@ INSERT INTO {table} (
                 }
 
                 var actualUnicode = reader.GetString(0);
-                var actualEmpty = reader.GetString(1);
+                var emptyIsDbNull = reader.IsDBNull(1);
+                var actualEmpty = emptyIsDbNull ? "" : reader.GetString(1);
                 var actualNullIsDbNull = reader.IsDBNull(2);
                 var actualPadded = reader.GetString(3);
                 var actualDecimal = Convert.ToDecimal(reader.GetValue(4));
@@ -999,9 +1063,19 @@ INSERT INTO {table} (
                 if (actualUnicode != unicodeText)
                     throw new Exception(
                         $"[RoundTrip] Unicode mismatch: expected '{unicodeText}', got '{actualUnicode}'");
-                if (actualEmpty != emptyText)
+                if (_context.Product == SupportedDatabase.Oracle)
+                {
+                    if (!emptyIsDbNull && actualEmpty != emptyText)
+                    {
+                        throw new Exception(
+                            $"[RoundTrip] Empty string mismatch: expected '{emptyText}' or NULL, got '{actualEmpty}'");
+                    }
+                }
+                else if (actualEmpty != emptyText)
+                {
                     throw new Exception(
                         $"[RoundTrip] Empty string mismatch: expected '{emptyText}', got '{actualEmpty}'");
+                }
                 if (!actualNullIsDbNull)
                     throw new Exception("[RoundTrip] Null string mismatch: expected NULL");
                 if (actualPadded != paddedText)
