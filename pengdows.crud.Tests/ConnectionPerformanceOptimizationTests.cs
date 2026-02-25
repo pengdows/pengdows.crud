@@ -264,7 +264,7 @@ public sealed class ConnectionPerformanceOptimizationTests
         ctx.ExecuteSessionSettings(conn, readOnly: false);
         ctx.ExecuteSessionSettings(conn, readOnly: false);
 
-        Assert.Equal(1, dialect.ReadWriteCalls);
+        Assert.Equal(1, dialect.BaseCalls);
 
         ctx.ExecuteSessionSettings(conn, readOnly: true);
         ctx.ExecuteSessionSettings(conn, readOnly: true);
@@ -333,7 +333,7 @@ public sealed class ConnectionPerformanceOptimizationTests
     private sealed class CountingDialect : Sql92Dialect
     {
         private int _readOnlyCalls;
-        private int _readWriteCalls;
+        private int _baseCalls;
 
         public CountingDialect(DbProviderFactory factory)
             : base(factory, NullLoggerFactory.Instance.CreateLogger<SqlDialect>())
@@ -341,20 +341,23 @@ public sealed class ConnectionPerformanceOptimizationTests
         }
 
         public int ReadOnlyCalls => _readOnlyCalls;
-        public int ReadWriteCalls => _readWriteCalls;
+        public int BaseCalls => _baseCalls;
 
-        public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
+        public override string GetBaseSessionSettings()
         {
-            if (readOnly)
-            {
-                Interlocked.Increment(ref _readOnlyCalls);
-            }
-            else
-            {
-                Interlocked.Increment(ref _readWriteCalls);
-            }
+            Interlocked.Increment(ref _baseCalls);
+            return "SET BASE=1";
+        }
 
-            return string.Empty;
+        public override string GetReadOnlySessionSettings()
+        {
+            Interlocked.Increment(ref _readOnlyCalls);
+            return "SET READONLY=1";
+        }
+
+        internal override string? GetReadOnlyTransactionResetSql()
+        {
+            return "SET READONLY=0";
         }
     }
 }

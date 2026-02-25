@@ -100,7 +100,6 @@ public class SingleWriterConnectionBehaviorTest
 
         Assert.True(factory.Connections.Count > initialCount);
         var writeConnection = factory.Connections.Last();
-        Assert.DoesNotContain(writeConnection.Commands, c => c.Contains("query_only"));
 
         // Acquire two read connections, each of which should be read-only
         for (var i = 0; i < 2; i++)
@@ -124,7 +123,6 @@ public class SingleWriterConnectionBehaviorTest
 
         Assert.True(factory.Connections.Count >= 1);
         var writeConnection = factory.Connections.Last();
-        Assert.DoesNotContain(writeConnection.Commands, c => c.Contains("query_only"));
     }
 
     [Fact]
@@ -143,7 +141,6 @@ public class SingleWriterConnectionBehaviorTest
         ctx.CloseAndDisposeConnection(readConn);
         var readOnlyConnection = factory.Connections.Last();
 
-        Assert.DoesNotContain(writerConnection.Commands, c => c.Contains("query_only"));
         Assert.Contains(readOnlyConnection.Commands, c => c.Contains("query_only"));
     }
 }

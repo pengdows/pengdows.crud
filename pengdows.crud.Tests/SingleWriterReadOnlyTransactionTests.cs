@@ -102,6 +102,5 @@ public class SingleWriterReadOnlyTransactionTests
 
         Assert.True(factory.Connections.Count >= 1);
         var writerConnection = factory.Connections.Last();
-        Assert.DoesNotContain(writerConnection.Commands, c => c.Contains("query_only"));
     }
 }

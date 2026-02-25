@@ -268,23 +268,19 @@ public class FirebirdDialectAdvancedTests
     }
 
     [Fact]
-    public void GetConnectionSessionSettings_Should_Return_Transaction_And_Dialect_Settings()
+    public void GetBaseSessionSettings_Should_Return_Expected_Settings()
     {
-        var context = new DatabaseContext("test", _factory);
+        var settings = _dialect.GetBaseSessionSettings();
 
-        var settings = _dialect.GetConnectionSessionSettings(context, true);
-
-        Assert.Equal("SET TRANSACTION ISOLATION LEVEL READ COMMITTED;\nSET SQL DIALECT 3;", settings);
+        Assert.Equal("SET NAMES UTF8;\nSET SQL DIALECT 3;", settings);
     }
 
     [Fact]
-    public void GetConnectionSessionSettings_Should_Return_Same_For_ReadWrite()
+    public void GetReadOnlySessionSettings_Should_Return_ReadOnly_Transaction()
     {
-        var context = new DatabaseContext("test", _factory);
+        var settings = _dialect.GetReadOnlySessionSettings();
 
-        var settings = _dialect.GetConnectionSessionSettings(context, false);
-
-        Assert.Equal("SET TRANSACTION ISOLATION LEVEL READ COMMITTED;\nSET SQL DIALECT 3;", settings);
+        Assert.Equal("SET TRANSACTION READ ONLY;", settings);
     }
 
     [Fact]

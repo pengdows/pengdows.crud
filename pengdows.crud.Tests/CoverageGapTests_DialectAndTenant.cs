@@ -376,30 +376,26 @@ public class CoverageGapTests_DialectAndTenant
     }
 
     [Fact]
-    public void FirebirdDialect_GetConnectionSessionSettings_WithContext_ReturnsDefaultSettings()
+    public void FirebirdDialect_GetBaseSessionSettings_ReturnsDefaultSettings()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Firebird);
         var dialect = CreateFirebirdDialect(factory);
-        var context = new DatabaseContext("Data Source=test;EmulatedProduct=Firebird", factory);
 
-        var settings = dialect.GetConnectionSessionSettings(context, false);
+        var settings = dialect.GetBaseSessionSettings();
 
-        Assert.Contains("SET TRANSACTION ISOLATION LEVEL READ COMMITTED", settings);
+        Assert.Contains("SET NAMES UTF8", settings);
         Assert.Contains("SET SQL DIALECT 3", settings);
     }
 
     [Fact]
-    public void FirebirdDialect_GetConnectionSessionSettings_ReadOnly_ReturnsSameAsReadWrite()
+    public void FirebirdDialect_GetReadOnlySessionSettings_ReturnsReadOnlyTransaction()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Firebird);
         var dialect = CreateFirebirdDialect(factory);
-        var context = new DatabaseContext("Data Source=test;EmulatedProduct=Firebird", factory);
 
-        var settingsReadOnly = dialect.GetConnectionSessionSettings(context, true);
-        var settingsReadWrite = dialect.GetConnectionSessionSettings(context, false);
+        var settings = dialect.GetReadOnlySessionSettings();
 
-        // Firebird has no session-level read-only enforcement
-        Assert.Equal(settingsReadWrite, settingsReadOnly);
+        Assert.Contains("SET TRANSACTION READ ONLY", settings);
     }
 
     #endregion

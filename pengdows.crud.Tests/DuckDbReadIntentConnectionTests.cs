@@ -87,9 +87,10 @@ public sealed class DuckDbReadIntentConnectionTests
 
         await using var ctx = new DatabaseContext(config, factory);
 
-        var read = ctx.GetConnection(ExecutionType.Read);
-        await read.OpenAsync();
-        ctx.CloseAndDisposeConnection(read);
+        // Explicitly request WRITE to ensure READ ONLY settings are NOT applied
+        var write = ctx.GetConnection(ExecutionType.Write);
+        await write.OpenAsync();
+        ctx.CloseAndDisposeConnection(write);
 
         var allConnectionStrings = factory.Connections.SelectMany(c => c.ConnectionStrings);
         var allCommands = factory.Connections.SelectMany(c => c.Commands);

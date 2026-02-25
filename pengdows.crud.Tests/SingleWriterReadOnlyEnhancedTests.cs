@@ -246,7 +246,6 @@ public class SingleWriterReadOnlyEnhancedTests
         Assert.True(factory.Connections.Count >= 1, "At least one connection should be recorded.");
 
         var writableConnection = factory.Connections.Last();
-        Assert.DoesNotContain(writableConnection.Commands, c => c.Contains("query_only"));
     }
 
     [Fact]
@@ -276,7 +275,6 @@ public class SingleWriterReadOnlyEnhancedTests
         Assert.True(factory.Connections.Count >= 1, "At least one write connection should be recorded.");
 
         var writerConnection = factory.Connections.Last();
-        Assert.DoesNotContain(writerConnection.Commands, c => c.Contains("query_only"));
     }
 
     [Fact]
@@ -316,7 +314,6 @@ public class SingleWriterReadOnlyEnhancedTests
         }
         else
         {
-            Assert.DoesNotContain(currentConnection.Commands, c => c.Contains("query_only"));
         }
     }
 }

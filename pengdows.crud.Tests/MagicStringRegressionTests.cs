@@ -88,20 +88,14 @@ public class MagicStringRegressionTests
     public void OracleDialect_ReadWriteSettings_IsNlsOnly()
     {
         var d = CreateOracleDialect();
-        using var ctx = CreateContext(SupportedDatabase.Oracle);
-        Assert.Equal(
-            "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD';",
-            d.GetConnectionSessionSettings(ctx, readOnly: false));
+        Assert.Equal("ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD';", d.GetBaseSessionSettings());
     }
 
     [Fact]
     public void OracleDialect_ReadOnlySettings_AppendsReadOnly()
     {
         var d = CreateOracleDialect();
-        using var ctx = CreateContext(SupportedDatabase.Oracle);
-        Assert.Equal(
-            "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD';\nALTER SESSION SET READ ONLY;",
-            d.GetConnectionSessionSettings(ctx, readOnly: true));
+        Assert.Equal("ALTER SESSION SET READ ONLY;", d.GetReadOnlySessionSettings());
     }
 
     [Fact]
@@ -126,10 +120,10 @@ public class MagicStringRegressionTests
     public void FirebirdDialect_SessionSettings_SameForReadOnlyAndReadWrite()
     {
         var d = CreateFirebirdDialect();
-        using var ctx = CreateContext(SupportedDatabase.Firebird);
-        var expected = "SET TRANSACTION ISOLATION LEVEL READ COMMITTED;\nSET SQL DIALECT 3;";
-        Assert.Equal(expected, d.GetConnectionSessionSettings(ctx, readOnly: false));
-        Assert.Equal(expected, d.GetConnectionSessionSettings(ctx, readOnly: true));
+        var expectedBase = "SET NAMES UTF8;\nSET SQL DIALECT 3;";
+        Assert.Equal(expectedBase, d.GetBaseSessionSettings());
+        Assert.Equal("SET TRANSACTION READ ONLY;", d.GetReadOnlySessionSettings());
+        Assert.Equal("SET TRANSACTION READ WRITE;", d.GetReadOnlyTransactionResetSql());
     }
 
     [Fact]
@@ -169,16 +163,14 @@ public class MagicStringRegressionTests
     public void DuckDbDialect_ReadOnlySessionSettings_IsSetAccessMode()
     {
         var d = CreateDuckDbDialect();
-        using var ctx = CreateContext(SupportedDatabase.DuckDB);
-        Assert.Equal("SET access_mode = 'read_only';", d.GetConnectionSessionSettings(ctx, readOnly: true));
+        Assert.Equal("SET access_mode = 'read_only';", d.GetReadOnlySessionSettings());
     }
 
     [Fact]
-    public void DuckDbDialect_ReadWriteSessionSettings_IsEmpty()
+    public void DuckDbDialect_ReadWriteSessionSettings_IsAccessModeReadWrite()
     {
         var d = CreateDuckDbDialect();
-        using var ctx = CreateContext(SupportedDatabase.DuckDB);
-        Assert.Equal(string.Empty, d.GetConnectionSessionSettings(ctx, readOnly: false));
+        Assert.Equal("SET access_mode = 'read_write';", d.GetReadOnlyTransactionResetSql());
     }
 
     [Fact]
