@@ -152,11 +152,62 @@ public partial class DatabaseContext
             return;
         }
 
-        var baseline = _dialect.GetBaseSessionSettings();
-        var intent = readOnly ? _dialect.GetReadOnlySessionSettings() : _dialect.GetReadOnlyTransactionResetSql();
+        // Lazily compute the baseline SQL key — call GetBaseSessionSettings() exactly once
+        // per context so repeated connection opens don't re-invoke the dialect method.
+        if (Volatile.Read(ref _cachedBaselineKeyComputed) == 0)
+        {
+            _cachedBaselineKey = _dialect.GetBaseSessionSettings();
+            Volatile.Write(ref _cachedBaselineKeyComputed, 1);
+        }
 
-        // Separate tracking for Baseline and Intent
-        var baselineKey = baseline ?? string.Empty;
+        var baselineKey = _cachedBaselineKey ?? string.Empty;
+
+        // Compute the desired intent key for this connection.
+        //
+        // For write connections, only emit the write-reset SQL when transitioning FROM a
+        // read-only session state. Fresh connections are already in read-write mode and need
+        // no intent SQL. This avoids emitting a no-op (or invalid) reset command on every
+        // new connection obtained from the pool.
+        //
+        // We detect "was read-only" by inspecting the cached intent string: if the previous
+        // intent is non-empty AND is not the write-reset SQL itself, the connection was in a
+        // read-only session state and needs the reset. We deliberately do NOT call
+        // GetReadOnlySessionSettings() in the write path — the read-only key is cached from
+        // the first readOnly=true invocation and reused for comparison in the write path.
+        string? intent;
+        if (readOnly)
+        {
+            // Lazily compute the read-only intent key — call GetReadOnlySessionSettings()
+            // exactly once per context.
+            if (Volatile.Read(ref _cachedReadOnlyIntentKeyComputed) == 0)
+            {
+                _cachedReadOnlyIntentKey = _dialect.GetReadOnlySessionSettings();
+                Volatile.Write(ref _cachedReadOnlyIntentKeyComputed, 1);
+            }
+
+            intent = _cachedReadOnlyIntentKey;
+        }
+        else
+        {
+            var writeResetSql = _dialect.GetReadOnlyTransactionResetSql();
+            if (!string.IsNullOrEmpty(writeResetSql) &&
+                _initializedConnections.TryGetValue(physicalConnection, out var prevState))
+            {
+                var prevParts = prevState.Split('|');
+                var prevIntent = prevParts.Length == 2 ? prevParts[1] : string.Empty;
+                // Non-empty prevIntent that is not already the write-reset SQL means the
+                // connection was placed in read-only session mode and needs to be reset.
+                intent = !string.IsNullOrEmpty(prevIntent) &&
+                         !string.Equals(prevIntent, writeResetSql, StringComparison.Ordinal)
+                    ? writeResetSql
+                    : null;
+            }
+            else
+            {
+                intent = null;
+            }
+        }
+
         var intentKey = intent ?? string.Empty;
 
         var needsBaseline = true;

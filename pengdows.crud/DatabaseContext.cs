@@ -152,6 +152,13 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private string? _cachedReadWriteSessionSettings;
     private int _cachedReadOnlySessionSettingsComputed;
     private int _cachedReadWriteSessionSettingsComputed;
+    // Cached session SQL keys — computed once per context after dialect detection so that
+    // ExecuteSessionSettings never calls GetBaseSessionSettings() or GetReadOnlySessionSettings()
+    // more than once per context regardless of how many connections are opened.
+    private string? _cachedBaselineKey;
+    private int _cachedBaselineKeyComputed;
+    private string? _cachedReadOnlyIntentKey;
+    private int _cachedReadOnlyIntentKeyComputed;
     private string? _connectionNamePrefixWrite;
     private string? _connectionNamePrefixRead;
     private readonly MetricsCollector? _metricsCollector;
