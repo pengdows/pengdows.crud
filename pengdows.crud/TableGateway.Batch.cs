@@ -45,13 +45,16 @@ public partial class TableGateway<TEntity, TRowID>
         var dialect = GetDialect(ctx);
         var insertableColumns = GetCachedInsertableColumns();
 
+        // Resolve audit values once for the whole batch (not once per entity)
+        var auditValues = _hasAuditColumns ? ResolveAuditValuesForBatch() : null;
+
         // Prepare all entities (audit, version, writable ID)
         foreach (var entity in entities)
         {
             EnsureWritableIdHasValue(entity);
             if (_hasAuditColumns)
             {
-                SetAuditFields(entity, false);
+                SetAuditFields(entity, false, auditValues);
             }
 
             PrepareVersionForCreate(entity);
@@ -297,10 +300,15 @@ public partial class TableGateway<TEntity, TRowID>
         var insertableColumns = GetCachedInsertableColumns();
         var template = GetTemplatesForDialect(dialect);
 
+        // Resolve audit values once for the whole batch (not once per entity)
+        var auditValues = _auditValueResolver != null && _hasAuditColumns
+            ? ResolveAuditValuesForBatch()
+            : null;
+
         // Prepare all entities
         foreach (var entity in entities)
         {
-            PrepareForInsertOrUpsert(entity);
+            PrepareForInsertOrUpsert(entity, auditValues);
         }
 
         // Resolve conflict key
@@ -346,10 +354,15 @@ public partial class TableGateway<TEntity, TRowID>
         var insertableColumns = GetCachedInsertableColumns();
         var template = GetTemplatesForDialect(dialect);
 
+        // Resolve audit values once for the whole batch (not once per entity)
+        var auditValues = _auditValueResolver != null && _hasAuditColumns
+            ? ResolveAuditValuesForBatch()
+            : null;
+
         // Prepare all entities
         foreach (var entity in entities)
         {
-            PrepareForInsertOrUpsert(entity);
+            PrepareForInsertOrUpsert(entity, auditValues);
         }
 
         var chunks = ChunkList(entities, insertableColumns.Count, ctx.MaxParameterLimit);

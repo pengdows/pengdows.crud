@@ -121,6 +121,30 @@ public partial class TableGateway<TEntity, TRowID>
         }
     }
 
+    /// <summary>
+    /// Batch variant: applies pre-resolved audit values instead of calling Resolve() per entity.
+    /// </summary>
+    private void PrepareForInsertOrUpsert(TEntity e, IAuditValues? cachedAuditValues)
+    {
+        if (_auditValueResolver != null)
+        {
+            SetAuditFields(e, false, cachedAuditValues);
+        }
+
+        if (_versionColumn == null || _versionColumn.PropertyInfo.PropertyType == typeof(byte[]))
+        {
+            return;
+        }
+
+        var v = _versionColumn.MakeParameterValueFromField(e);
+        if (v == null || Utils.IsZeroNumeric(v))
+        {
+            var t = Nullable.GetUnderlyingType(_versionColumn.PropertyInfo.PropertyType) ??
+                    _versionColumn.PropertyInfo.PropertyType;
+            _versionColumn.PropertyInfo.SetValue(e, TypeCoercionHelper.ConvertWithCache(1, t));
+        }
+    }
+
     private ISqlContainer BuildUpsertOnConflict(TEntity entity, IDatabaseContext context)
     {
         var ctx = context ?? _context;

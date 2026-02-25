@@ -125,6 +125,24 @@ public partial class TableGateway<TEntity, TRowID>
         }
 
         var auditValues = _auditValueResolver?.Resolve();
+        SetAuditFields(obj, updateOnly, auditValues);
+    }
+
+    /// <summary>
+    /// Applies pre-resolved audit values to a single entity. Used by batch operations to
+    /// avoid calling <see cref="IAuditValueResolver.Resolve"/> once per entity.
+    /// </summary>
+    private void SetAuditFields(TEntity obj, bool updateOnly, IAuditValues? auditValues)
+    {
+        if (obj == null)
+        {
+            return;
+        }
+
+        if (!_hasAuditColumns)
+        {
+            return;
+        }
 
         var timestamp = ResolveAuditTimestamp(auditValues);
 
@@ -137,10 +155,9 @@ public partial class TableGateway<TEntity, TRowID>
 
         if (_auditLastUpdatedBySetter != null && auditValues != null)
         {
-            var coercedUserId = Coerce(auditValues!.UserId, _tableInfo.LastUpdatedBy!.PropertyInfo.PropertyType);
+            var coercedUserId = Coerce(auditValues.UserId, _tableInfo.LastUpdatedBy!.PropertyInfo.PropertyType);
             _auditLastUpdatedBySetter(obj, coercedUserId);
         }
-        // When no resolver is provided, we've already thrown above if user audit fields exist
 
         if (updateOnly)
         {
@@ -170,5 +187,25 @@ public partial class TableGateway<TEntity, TRowID>
                 _auditCreatedBySetter(obj, coercedUserId);
             }
         }
+    }
+
+    /// <summary>
+    /// Validates audit resolver requirements and resolves audit values once for use
+    /// across an entire batch. Returns null when no resolver is configured.
+    /// </summary>
+    private IAuditValues? ResolveAuditValuesForBatch()
+    {
+        if (!_hasAuditColumns)
+        {
+            return null;
+        }
+
+        var hasUserAuditFields = _tableInfo.CreatedBy != null || _tableInfo.LastUpdatedBy != null;
+        if (hasUserAuditFields && _auditValueResolver is null)
+        {
+            throw new InvalidOperationException("AuditValues resolver is required for user-based audit fields.");
+        }
+
+        return _auditValueResolver?.Resolve();
     }
 }
