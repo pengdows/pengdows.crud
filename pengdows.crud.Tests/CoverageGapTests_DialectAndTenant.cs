@@ -9,6 +9,7 @@ using pengdows.crud;
 using pengdows.crud.configuration;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using pengdows.crud.tenant;
 using pengdows.crud.wrappers;

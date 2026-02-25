@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using pengdows.crud.attributes;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.isolation;
 using Xunit;
 

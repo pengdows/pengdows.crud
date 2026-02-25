@@ -24,6 +24,7 @@ using System.Data.Common;
 using System.Globalization;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
 
 namespace pengdows.crud.dialects;
@@ -99,6 +100,11 @@ internal class SqliteDialect : SqlDialect
     public override string GetReadOnlySessionSettings()
     {
         return "PRAGMA query_only = ON;";
+    }
+
+    internal override string? GetReadOnlyTransactionResetSql()
+    {
+        return "PRAGMA query_only = OFF;";
     }
 
     public override string? GetReadOnlyConnectionParameter()

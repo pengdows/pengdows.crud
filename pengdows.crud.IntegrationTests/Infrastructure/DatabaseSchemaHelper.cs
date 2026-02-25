@@ -1,5 +1,6 @@
 using System.Data.Common;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 
 namespace pengdows.crud.IntegrationTests.Infrastructure;
 

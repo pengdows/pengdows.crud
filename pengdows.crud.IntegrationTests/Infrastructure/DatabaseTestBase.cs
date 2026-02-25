@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using testbed;
 using System.Runtime.CompilerServices;
 using Xunit.Abstractions;

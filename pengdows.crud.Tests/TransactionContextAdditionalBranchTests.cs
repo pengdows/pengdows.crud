@@ -11,6 +11,7 @@ using pengdows.crud.connection;
 using pengdows.crud.configuration;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using pengdows.crud.strategies.connection;
 using pengdows.crud.threading;

@@ -2,6 +2,7 @@ using Microsoft.Data.Sqlite;
 using pengdows.crud;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 
 namespace testbed;
 

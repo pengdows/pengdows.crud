@@ -1,13 +1,13 @@
 using System;
+using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using System.Data;
 using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
 using pengdows.crud.configuration;
 using pengdows.crud.dialects;
-using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
-using pengdows.crud.infrastructure;
 using pengdows.crud.metrics;
 using pengdows.crud.threading;
 using pengdows.crud.@internal;
@@ -92,6 +92,8 @@ public class SqlContainerConnectionSharingTests
 
         public IDataSourceInformation DataSourceInfo => _context.DataSourceInfo;
         public string SessionSettingsPreamble => _context.SessionSettingsPreamble;
+        public string GetBaseSessionSettings() => _context.GetBaseSessionSettings();
+        public string GetReadOnlySessionSettings() => _context.GetReadOnlySessionSettings();
         public ProcWrappingStyle ProcWrappingStyle => _context.ProcWrappingStyle;
         public int MaxParameterLimit => _context.MaxParameterLimit;
         public int MaxOutputParameters => _context.MaxOutputParameters;

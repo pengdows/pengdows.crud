@@ -1,4 +1,5 @@
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.IntegrationTests.Infrastructure;
 using pengdows.crud.wrappers;
 using System.Data;

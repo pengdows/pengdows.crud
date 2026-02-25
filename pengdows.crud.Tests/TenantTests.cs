@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using pengdows.crud;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.tenant;
 using Xunit;
 

@@ -1,4 +1,6 @@
 #region
+using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 
 using System;
 using System.Collections.Generic;
@@ -15,8 +17,6 @@ using pengdows.crud;
 using pengdows.crud.configuration;
 using pengdows.crud.dialects;
 using pengdows.crud.@internal;
-using pengdows.crud.enums;
-using pengdows.crud.infrastructure;
 using pengdows.crud.strategies.connection;
 using pengdows.crud.Tests.Mocks;
 using pengdows.crud.threading;
@@ -338,6 +338,10 @@ public class TransactionContextTests
         public TimeSpan? ModeLockTimeout => null;
 
         public string SessionSettingsPreamble => string.Empty;
+
+        public string GetBaseSessionSettings() => string.Empty;
+
+        public string GetReadOnlySessionSettings() => string.Empty;
 
         public ProcWrappingStyle ProcWrappingStyle => _dialect.ProcWrappingStyle;
 
@@ -1046,7 +1050,9 @@ public class TransactionContextTests
         Assert.NotNull(tx.GetInternalTypeMapRegistry());
         Assert.Equal(context.DataSourceInfo, tx.DataSourceInfo);
         Assert.NotNull(tx.DataSourceInfo);
+#pragma warning disable CS0618
         Assert.Equal(context.SessionSettingsPreamble, tx.SessionSettingsPreamble);
+#pragma warning restore CS0618
         Assert.Equal(identity.RootId, tx.RootId);
         Assert.NotEqual(Guid.Empty, tx.TransactionId);
     }

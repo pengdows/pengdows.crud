@@ -23,6 +23,7 @@
 //     TotalTurnstileTimeouts = timed out waiting for the fairness turnstile
 // =============================================================================
 
+using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 
 namespace pengdows.crud.metrics;

@@ -10,7 +10,7 @@
 // - Enables separate pool limits for read and write operations.
 // =============================================================================
 
-namespace pengdows.crud.infrastructure;
+namespace pengdows.crud.enums;
 
 public enum PoolLabel
 {

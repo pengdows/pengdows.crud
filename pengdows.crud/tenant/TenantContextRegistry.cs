@@ -24,6 +24,7 @@ using System.Data.Common;
 using System;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 
 namespace pengdows.crud.tenant;

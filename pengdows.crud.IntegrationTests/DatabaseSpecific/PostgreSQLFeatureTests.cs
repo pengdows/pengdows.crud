@@ -1,6 +1,7 @@
 using System.Data;
 using System.Text.Json;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.IntegrationTests.Infrastructure;
 using Xunit.Abstractions;
 

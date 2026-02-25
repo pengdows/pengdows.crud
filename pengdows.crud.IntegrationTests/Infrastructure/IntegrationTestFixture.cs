@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using testbed;
 
 namespace pengdows.crud.IntegrationTests.Infrastructure;

@@ -1,4 +1,6 @@
 using System;
+using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using System.Data;
 using System.Data.Common;
 using System.Threading;
@@ -6,10 +8,8 @@ using System.Threading.Tasks;
 using pengdows.crud;
 using pengdows.crud.configuration;
 using pengdows.crud.dialects;
-using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 using pengdows.crud.@internal;
-using pengdows.crud.infrastructure;
 using pengdows.crud.metrics;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
@@ -113,6 +113,8 @@ public class CoverageGapTests_Infrastructure
         public ISqlDialect Dialect => throw new NotImplementedException();
         public TimeSpan? ModeLockTimeout => null;
         public string SessionSettingsPreamble => string.Empty;
+        public string GetBaseSessionSettings() => string.Empty;
+        public string GetReadOnlySessionSettings() => string.Empty;
         public ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.Call;
         public int MaxParameterLimit => 2100;
         public int MaxOutputParameters => 2100;

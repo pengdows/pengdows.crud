@@ -20,6 +20,7 @@ using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
 
 namespace pengdows.crud.dialects;
@@ -58,6 +59,8 @@ internal class MySqlDialect : SqlDialect
     protected const string SetSessionTransactionReadWriteSql = "SET SESSION TRANSACTION READ WRITE;";
 
     private static readonly Version UpsertAliasVersionThreshold = new(8, 0, 20);
+    private const int MaxPreparedStatementCountErrorCode = 1461;
+    private const string MaxPreparedStatementCountToken = "max_prepared_stmt_count";
 
     private const int DefaultMySqlConnectionTimeout = 15;
 
@@ -69,6 +72,7 @@ internal class MySqlDialect : SqlDialect
     private string? _sessionSettings;
     private readonly bool _isMySqlConnector;
     private readonly SupportedDatabase _flavor;
+    private volatile bool _prepareDisabledByServerLimit;
 
     internal MySqlDialect(DbProviderFactory factory, ILogger logger, SupportedDatabase flavor = SupportedDatabase.MySql)
         : this(factory, logger,
@@ -103,7 +107,7 @@ internal class MySqlDialect : SqlDialect
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.Call;
 
     // MySQL benefits from server-side prepared statements
-    public override bool PrepareStatements => true;
+    public override bool PrepareStatements => !_prepareDisabledByServerLimit;
 
     public override bool SupportsNamespaces => true;
 
@@ -122,6 +126,28 @@ internal class MySqlDialect : SqlDialect
     public override string GetVersionQuery()
     {
         return "SELECT VERSION()";
+    }
+
+    public override bool ShouldDisablePrepareOn(Exception ex)
+    {
+        if (base.ShouldDisablePrepareOn(ex))
+        {
+            return true;
+        }
+
+        if (!IsMaxPreparedStatementLimit(ex))
+        {
+            return false;
+        }
+
+        if (!_prepareDisabledByServerLimit)
+        {
+            _prepareDisabledByServerLimit = true;
+            Logger.LogWarning(ex,
+                "Disabling prepare for MySQL dialect after max_prepared_stmt_count limit was reached.");
+        }
+
+        return true;
     }
 
     public override async Task<IDatabaseProductInfo> DetectDatabaseInfoAsync(ITrackedConnection connection)
@@ -164,9 +190,26 @@ internal class MySqlDialect : SqlDialect
                     [SqlModeSettingName] = currentSqlMode
                 };
 
-                var script = SqlModeContainsAll(currentSqlMode, ExpectedSqlMode)
-                    ? string.Empty
-                    : DefaultSqlMode;
+                // Surgical Delta: Only apply what is missing
+                var currentModes = currentSqlMode.Split(',')
+                    .Select(m => m.Trim())
+                    .Where(m => !string.IsNullOrEmpty(m))
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                var expectedModes = ExpectedSqlMode.Split(',')
+                    .Select(m => m.Trim())
+                    .Where(m => !string.IsNullOrEmpty(m));
+
+                var missingModes = expectedModes.Where(m => !currentModes.Contains(m)).ToList();
+
+                if (missingModes.Count == 0)
+                {
+                    return new SessionSettingsResult(string.Empty, snapshot, false);
+                }
+
+                // Building the new mode: current + missing
+                var newMode = string.Join(",", currentModes.Concat(missingModes));
+                var script = $"SET SESSION {SqlModeSettingName} = '{newMode}';";
 
                 return new SessionSettingsResult(script, snapshot, false);
             },
@@ -180,27 +223,48 @@ internal class MySqlDialect : SqlDialect
             "Failed to check MySQL session settings, applying default settings");
     }
 
-    private static bool SqlModeContainsAll(string currentMode, string expectedMode)
+    private static bool IsMaxPreparedStatementLimit(Exception ex)
     {
-        var currentModes = currentMode.Split(',').Select(m => m.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var expectedModes = expectedMode.Split(',').Select(m => m.Trim());
-
-        return expectedModes.All(expectedModes => currentModes.Contains(expectedModes));
-    }
-
-    public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
-    {
-        var baseSettings = string.IsNullOrWhiteSpace(_sessionSettings) ? DefaultSqlMode : _sessionSettings;
-
-        if (readOnly)
+        for (Exception? current = ex; current != null; current = current.InnerException)
         {
-            return $"{baseSettings}\nSET SESSION TRANSACTION READ ONLY;";
+            if (current.Message.Contains(MaxPreparedStatementCountToken, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (TryGetProviderErrorCode(current) == MaxPreparedStatementCountErrorCode)
+            {
+                return true;
+            }
         }
 
-        // Explicitly reset read-only state: provider-pooled connections retain SESSION
-        // variables across checkouts, so a prior read connection's
-        // "SET SESSION TRANSACTION READ ONLY" persists until cleared.
-        return $"{baseSettings}\nSET SESSION TRANSACTION READ WRITE;";
+        return false;
+    }
+
+    private static int? TryGetProviderErrorCode(Exception ex)
+    {
+        var numberProperty = ex.GetType().GetProperty("Number");
+        if (numberProperty?.PropertyType == typeof(int) && numberProperty.GetValue(ex) is int number)
+        {
+            return number;
+        }
+
+        return null;
+    }
+
+    public override string GetBaseSessionSettings()
+    {
+        return string.IsNullOrWhiteSpace(_sessionSettings) ? DefaultSqlMode : _sessionSettings;
+    }
+
+    public override string GetReadOnlySessionSettings()
+    {
+        return SetSessionTransactionReadOnlySql;
+    }
+
+    internal override string? GetReadOnlyTransactionResetSql()
+    {
+        return SetSessionTransactionReadWriteSql;
     }
 
     public override SqlStandardLevel DetermineStandardCompliance(Version? version)
@@ -246,11 +310,6 @@ internal class MySqlDialect : SqlDialect
         CancellationToken cancellationToken = default)
     {
         return TryExecuteReadOnlySqlAsync(transaction, SetSessionTransactionReadOnlySql, "MySQL", cancellationToken);
-    }
-
-    internal override string? GetReadOnlyTransactionResetSql()
-    {
-        return SetSessionTransactionReadWriteSql;
     }
 
     // Connection pooling properties for MySQL (provider-aware)

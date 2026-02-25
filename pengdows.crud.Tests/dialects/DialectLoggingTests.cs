@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using pengdows.crud.configuration;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using pengdows.crud.Tests.fakeDb;
 using pengdows.crud.Tests.Logging;

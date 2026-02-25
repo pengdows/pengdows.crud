@@ -12,6 +12,7 @@
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 
 namespace pengdows.crud.dialects;
 
@@ -31,6 +32,12 @@ internal class TiDbDialect : MySqlDialect
     // but benefits from a "Pessimistic" transaction mode for correctness
     // in complex distributed workloads.
 
-    // MySql.Data provider has a bug/incompatibility with TiDB when preparing statements
-    public override bool PrepareStatements => false;
-}
+        // MySql.Data provider has a bug/incompatibility with TiDB when preparing statements
+        public override bool PrepareStatements => false;
+    
+        public override string GetBaseSessionSettings()
+        {
+            return $"{base.GetBaseSessionSettings()}\nSET tidb_pessimistic_txn_default = ON;";
+        }
+    }
+    

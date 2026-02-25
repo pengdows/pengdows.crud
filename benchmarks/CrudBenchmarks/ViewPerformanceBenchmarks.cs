@@ -10,6 +10,7 @@ using pengdows.crud;
 using pengdows.crud.attributes;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 
 namespace CrudBenchmarks;
 

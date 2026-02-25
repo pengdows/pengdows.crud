@@ -10,6 +10,7 @@ using pengdows.crud.configuration;
 using pengdows.crud.connection;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using pengdows.crud.@internal;
 using pengdows.crud.metrics;

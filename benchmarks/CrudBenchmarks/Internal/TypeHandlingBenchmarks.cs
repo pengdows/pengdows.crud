@@ -6,6 +6,7 @@ using System.Net;
 using BenchmarkDotNet.Attributes;
 using pengdows.crud;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.types;
 using pengdows.crud.types.coercion;
 using pengdows.crud.types.valueobjects;

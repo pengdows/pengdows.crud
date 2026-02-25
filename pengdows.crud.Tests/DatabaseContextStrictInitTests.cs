@@ -1,6 +1,7 @@
 using System;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.exceptions;
 using pengdows.crud.fakeDb;
 using Xunit;

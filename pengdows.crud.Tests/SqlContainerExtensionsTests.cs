@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Moq;
 using pengdows.crud.wrappers;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using Xunit;
 
 #endregion

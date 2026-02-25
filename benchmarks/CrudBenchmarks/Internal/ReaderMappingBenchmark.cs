@@ -7,6 +7,7 @@ using pengdows.crud;
 using pengdows.crud.attributes;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using pengdows.crud.wrappers;
 using pengdows.crud.connection;

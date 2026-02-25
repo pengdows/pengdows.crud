@@ -164,6 +164,65 @@ public class BenchmarkFairnessTests
         });
     }
 
+    [Fact]
+    public void BenchmarkProgram_SupportsOptInBenchmarks()
+    {
+        const string fileName = "Program.cs";
+        var text = LoadBenchmarkText(fileName);
+
+        AssertAllPresent(fileName, text, new[]
+        {
+            "OptInBenchmarkAttribute",
+            "IsOptInBenchmarkEnabled",
+            "--include-opt-in",
+            "CRUD_BENCH_INCLUDE_OPT_IN"
+        });
+    }
+
+    [Fact]
+    public void OptInBenchmarkAttribute_IsDefined()
+    {
+        const string fileName = "OptInBenchmarkAttribute.cs";
+        var text = LoadBenchmarkText(fileName);
+
+        AssertAllPresent(fileName, text, new[]
+        {
+            "AttributeUsage(AttributeTargets.Class",
+            "public sealed class OptInBenchmarkAttribute : Attribute"
+        });
+    }
+
+    [Fact]
+    public void MySqlDefaultConcurrencyBenchmarks_DefinesThreeScenarios()
+    {
+        const string fileName = "MySqlDefaultConcurrencyBenchmarks.cs";
+        var text = LoadBenchmarkText(fileName);
+
+        AssertAllPresent(fileName, text, new[]
+        {
+            "[OptInBenchmark]",
+            "public class MySqlDefaultConcurrencyBenchmarks",
+            "public async Task ReadOnly_Pengdows_MySql()",
+            "public async Task WriteOnly_Pengdows_MySql()",
+            "public async Task RandomMix_Pengdows_MySql()"
+        });
+    }
+
+    [Fact]
+    public void MySqlDefaultConcurrencyBenchmarks_UsesDefaultMySqlContainerAndProvider()
+    {
+        const string fileName = "MySqlDefaultConcurrencyBenchmarks.cs";
+        var text = LoadBenchmarkText(fileName);
+
+        AssertAllPresent(fileName, text, new[]
+        {
+            "mysql:8.0",
+            "MySqlClientFactory.Instance",
+            "[Params(32, 64, 128, 256)]",
+            "RunConcurrentWithErrors"
+        });
+    }
+
     private static List<string> FindOffenders(IEnumerable<string> tokens, HashSet<string> excludedFiles)
     {
         var benchmarksDir = GetBenchmarksDirectory();

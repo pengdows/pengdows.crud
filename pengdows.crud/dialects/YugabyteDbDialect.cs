@@ -12,6 +12,7 @@
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 
 namespace pengdows.crud.dialects;
 
@@ -30,7 +31,13 @@ internal class YugabyteDbDialect : PostgreSqlDialect
     // YugabyteDB (YSQL) is built on PostgreSQL 11+ and supports most PG features.
     // It has specific performance characteristics for distributed primary keys.
 
-    // Disable prepared statements for YugabyteDB to avoid potential "Connection is not open" issues
-    // or other distributed SQL planning quirks.
-    public override bool PrepareStatements => false;
-}
+        // Disable prepared statements for YugabyteDB to avoid potential "Connection is not open" issues
+        // or other distributed SQL planning quirks.
+        public override bool PrepareStatements => false;
+    
+        public override string GetBaseSessionSettings()
+        {
+            return $"{base.GetBaseSessionSettings()}\nSET client_encoding = 'UTF8';\nSET lock_timeout = '30s';";
+        }
+    }
+    

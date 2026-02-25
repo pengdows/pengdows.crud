@@ -21,6 +21,7 @@ using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.@internal;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 
 namespace pengdows.crud.dialects;
 
@@ -180,11 +181,19 @@ internal class OracleDialect : SqlDialect
     private const string ReadOnlySessionSetting = "ALTER SESSION SET READ ONLY;";
     private const string ReadWriteSessionSetting = "ALTER SESSION SET READ WRITE;";
 
-    public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
+    public override string GetBaseSessionSettings()
     {
-        return readOnly
-            ? $"{NlsDateFormatSetting}\n{ReadOnlySessionSetting}"
-            : NlsDateFormatSetting;
+        return NlsDateFormatSetting;
+    }
+
+    public override string GetReadOnlySessionSettings()
+    {
+        return ReadOnlySessionSetting;
+    }
+
+    internal override string? GetReadOnlyTransactionResetSql()
+    {
+        return ReadWriteSessionSetting;
     }
 
     internal override void ApplyConnectionSettingsCore(
@@ -248,11 +257,6 @@ internal class OracleDialect : SqlDialect
         CancellationToken cancellationToken = default)
     {
         return TryExecuteReadOnlySqlAsync(transaction, ReadOnlySessionSetting, "Oracle", cancellationToken);
-    }
-
-    internal override string? GetReadOnlyTransactionResetSql()
-    {
-        return ReadWriteSessionSetting;
     }
 
     // Connection pooling properties for Oracle

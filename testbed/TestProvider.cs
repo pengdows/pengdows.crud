@@ -6,6 +6,7 @@ using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using pengdows.crud;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using testbed.Snowflake;
 
 #endregion

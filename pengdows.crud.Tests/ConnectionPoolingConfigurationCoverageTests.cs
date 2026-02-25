@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Data.Common;
 using pengdows.crud.@internal;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using Xunit;
 
 namespace pengdows.crud.Tests;

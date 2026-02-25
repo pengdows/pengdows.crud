@@ -1,4 +1,5 @@
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.IntegrationTests.Infrastructure;
 using System.Collections.Concurrent;
 using System.Data;

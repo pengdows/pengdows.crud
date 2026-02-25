@@ -16,6 +16,7 @@
 // =============================================================================
 
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 
 namespace pengdows.crud.strategies.proc;
 

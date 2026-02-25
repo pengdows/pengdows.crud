@@ -3,6 +3,7 @@
 using System;
 using System.Buffers.Binary;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.types.converters;
 using Xunit;
 

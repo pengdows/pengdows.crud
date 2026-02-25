@@ -1,3 +1,4 @@
+using pengdows.crud.enums;
 // =============================================================================
 // FILE: PoolGovernor.cs
 // PURPOSE: Semaphore-based pool governor limiting concurrent connection usage.

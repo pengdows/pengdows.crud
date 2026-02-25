@@ -1,6 +1,7 @@
 using System.Data;
 using pengdows.crud;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 
 namespace testbed.Snowflake;
 

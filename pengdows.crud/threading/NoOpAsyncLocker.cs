@@ -15,6 +15,7 @@
 // - Zero overhead: No semaphore, no allocation, no contention.
 // =============================================================================
 
+using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 
 namespace pengdows.crud.threading;

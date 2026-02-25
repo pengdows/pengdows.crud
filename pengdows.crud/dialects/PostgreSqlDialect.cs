@@ -21,6 +21,7 @@ using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
 
 namespace pengdows.crud.dialects;
@@ -281,17 +282,17 @@ internal class PostgreSqlDialect : SqlDialect
         return $"SET {ReadOnlyTransactionSetting} = on";
     }
 
+    internal override string? GetReadOnlyTransactionResetSql()
+    {
+        return $"SET {ReadOnlyTransactionSetting} = off";
+    }
+
     public override string? GetReadOnlyConnectionParameter()
     {
         return $"Options='-c {ReadOnlyTransactionSetting}=on'";
     }
 
-    public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
-    {
-        var baseSettings = GetBaseSessionSettings();
-
-        return BuildSessionSettings(baseSettings, GetReadOnlySessionSettings(), readOnly);
-    }
+    /// <summary>
 
     /// <summary>
     /// Bakes Npgsql-specific settings (auto-prepare, multiplexing) into the connection

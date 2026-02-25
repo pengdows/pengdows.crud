@@ -17,15 +17,18 @@ public class Program
 {
     public static void Main(string[] args)
     {
+        var includeOptInBenchmarks = IsOptInBenchmarkEnabled(args);
+        var switcherArgs = RemoveOptInFlag(args);
+
         IConfig config = ShouldUseInProcess()
             ? new InProcessConfig()
             : new BenchmarkConfig();
 
-        var benchmarkTypes = GetBenchmarkTypes();
-        BenchmarkSwitcher.FromTypes(benchmarkTypes).Run(args, config);
+        var benchmarkTypes = GetBenchmarkTypes(includeOptInBenchmarks);
+        BenchmarkSwitcher.FromTypes(benchmarkTypes).Run(switcherArgs, config);
     }
 
-    private static Type[] GetBenchmarkTypes()
+    private static Type[] GetBenchmarkTypes(bool includeOptInBenchmarks)
     {
         var assembly = typeof(Program).Assembly;
         Type[] types;
@@ -41,13 +44,38 @@ public class Program
 
         return types
             .Where(type => !type.IsAbstract && HasBenchmarkMethods(type))
+            .Where(type => includeOptInBenchmarks || !IsOptInBenchmark(type))
             .ToArray();
+    }
+
+    private static bool IsOptInBenchmark(Type type)
+    {
+        return type.GetCustomAttributes(typeof(OptInBenchmarkAttribute), inherit: true).Length != 0;
     }
 
     private static bool HasBenchmarkMethods(Type type)
     {
         return type.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
             .Any(method => method.GetCustomAttributes(typeof(BenchmarkAttribute), inherit: true).Length != 0);
+    }
+
+    private static bool IsOptInBenchmarkEnabled(string[] args)
+    {
+        if (args.Any(arg => string.Equals(arg, "--include-opt-in", StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
+        var value = Environment.GetEnvironmentVariable("CRUD_BENCH_INCLUDE_OPT_IN");
+        return string.Equals(value, "1", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string[] RemoveOptInFlag(string[] args)
+    {
+        return args
+            .Where(arg => !string.Equals(arg, "--include-opt-in", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
     }
 
     private static bool ShouldUseInProcess()

@@ -21,6 +21,7 @@ using System.Data.Common;
 using System.Globalization;
 using System.Reflection;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 
 namespace pengdows.crud.@internal;
 

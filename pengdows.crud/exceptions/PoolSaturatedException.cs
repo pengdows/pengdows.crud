@@ -15,6 +15,7 @@
 // - Use metrics snapshot to diagnose pool pressure patterns.
 // =============================================================================
 
+using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.metrics;
 

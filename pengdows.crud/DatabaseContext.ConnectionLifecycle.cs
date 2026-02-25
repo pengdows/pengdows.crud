@@ -27,7 +27,9 @@ using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.@internal;
+using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
@@ -147,57 +149,89 @@ public partial class DatabaseContext
 
         if (current is not DbConnection physicalConnection)
         {
-            // If it's not a DbConnection (unlikely), we can't track it via ConditionalWeakTable safely.
             return;
         }
 
-        var settings = GetCachedSessionSettings(readOnly);
-        var settingsKey = settings ?? string.Empty;
+        var baseline = _dialect.GetBaseSessionSettings();
+        var intent = readOnly ? _dialect.GetReadOnlySessionSettings() : _dialect.GetReadOnlyTransactionResetSql();
 
-        // ConditionalWeakTable uses reference equality on the physical object.
-        if (_initializedConnections.TryGetValue(physicalConnection, out var lastSettings))
+        // Separate tracking for Baseline and Intent
+        var baselineKey = baseline ?? string.Empty;
+        var intentKey = intent ?? string.Empty;
+
+        var needsBaseline = true;
+        var needsIntent = true;
+
+        if (_initializedConnections.TryGetValue(physicalConnection, out var lastFullSettings))
         {
-            if (string.Equals(lastSettings, settingsKey, StringComparison.Ordinal))
+            // Format: "baseline|intent"
+            var parts = lastFullSettings.Split('|');
+            if (parts.Length == 2)
             {
-                if (connection is ITrackedConnection tc)
+                if (string.Equals(parts[0], baselineKey, StringComparison.Ordinal))
                 {
-                    tc.LocalState.MarkSessionSettingsApplied();
+                    needsBaseline = false;
                 }
-                return;
+                if (string.Equals(parts[1], intentKey, StringComparison.Ordinal))
+                {
+                    needsIntent = false;
+                }
             }
-            
-            // If we are here, the physical connection was last used with DIFFERENT settings
-            // (e.g. it was Read and now it's Write). We MUST re-initialize.
         }
 
-        var applied = false;
-        if (!string.IsNullOrWhiteSpace(settings))
+        if (!needsBaseline && !needsIntent)
         {
-            _logger.LogInformation("Applying session settings for {Name}", Name);
-            try
-            {
-                using var cmd = connection.CreateCommand();
-                cmd.CommandText = settings;
-                cmd.ExecuteNonQuery();
-                applied = true;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to apply session settings for {Name}", Name);
-            }
-        }
-        else
-        {
-            applied = true;
-        }
-
-        if (applied)
-        {
-            _initializedConnections.AddOrUpdate(physicalConnection, settingsKey);
             if (connection is ITrackedConnection tc)
             {
                 tc.LocalState.MarkSessionSettingsApplied();
             }
+            return;
+        }
+
+        var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+        try
+        {
+            if (needsBaseline && !string.IsNullOrWhiteSpace(baselineKey))
+            {
+                sb.Append(baselineKey);
+            }
+
+            if (needsIntent && !string.IsNullOrWhiteSpace(intentKey))
+            {
+                if (sb.Length > 0) sb.AppendLine();
+                sb.Append(intentKey);
+            }
+
+            if (sb.Length > 0)
+            {
+                var settingsToApply = sb.ToString();
+                _logger.LogInformation("Applying session settings for {Name} (Baseline: {Baseline}, Intent: {Intent})", 
+                    Name, needsBaseline, needsIntent);
+                
+                try
+                {
+                    using var cmd = connection.CreateCommand();
+                    cmd.CommandText = settingsToApply;
+                    cmd.ExecuteNonQuery();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to apply session settings for {Name}", Name);
+                    return;
+                }
+            }
+
+            // Update the cache with the new composite state
+            _initializedConnections.AddOrUpdate(physicalConnection, $"{baselineKey}|{intentKey}");
+            
+            if (connection is ITrackedConnection tc)
+            {
+                tc.LocalState.MarkSessionSettingsApplied();
+            }
+        }
+        finally
+        {
+            sb.Dispose();
         }
     }
 

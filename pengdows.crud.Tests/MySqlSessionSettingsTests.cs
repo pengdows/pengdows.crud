@@ -3,6 +3,7 @@ using System.Data.Common;
 using System.Linq;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using Xunit;
 

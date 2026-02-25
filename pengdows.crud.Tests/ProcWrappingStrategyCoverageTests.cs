@@ -7,6 +7,7 @@ using System.Data;
 using pengdows.crud;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using pengdows.crud.strategies.proc;
 using Xunit;

@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using pengdows.crud.collections;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using pengdows.crud.metrics;
 using Xunit;

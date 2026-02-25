@@ -61,11 +61,25 @@ cd CrudBenchmarks
 dotnet run -c Release
 ```
 
+To include opt-in benchmarks (excluded by default), add `--include-opt-in` after `--`:
+
+```bash
+cd CrudBenchmarks
+dotnet run -c Release -- --include-opt-in
+```
+
 To run a specific benchmark:
 
 ```bash
 cd CrudBenchmarks
 dotnet run -c Release --filter "*BenchmarkName*"
+```
+
+To run the opt-in MySQL default concurrency stress benchmark:
+
+```bash
+cd CrudBenchmarks
+dotnet run -c Release -- --include-opt-in --filter "*MySqlDefaultConcurrencyBenchmarks*"
 ```
 
 ### Available Benchmarks

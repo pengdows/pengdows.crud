@@ -1,8 +1,8 @@
 using System.Data.Common;
-using pengdows.crud.configuration;
-using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
+using pengdows.crud.configuration;
+using pengdows.crud.dialects;
 using Xunit;
 
 namespace pengdows.crud.Tests;

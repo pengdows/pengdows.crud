@@ -2,6 +2,7 @@
 
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 

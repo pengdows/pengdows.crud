@@ -20,6 +20,7 @@
 using System.Data;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.exceptions;
 
 namespace pengdows.crud;

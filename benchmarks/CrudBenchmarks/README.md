@@ -49,6 +49,34 @@ dotnet run -c Release --filter "*AutomaticViewMatching*"
 
 # Database-Specific Features (requires PostgreSQL)
 dotnet run -c Release --filter "*DatabaseSpecificFeatureBenchmarks*"
+
+# MySQL default concurrency stress (opt-in benchmark)
+dotnet run -c Release -- --include-opt-in --filter "*MySqlDefaultConcurrencyBenchmarks*"
+```
+
+### Opt-in only benchmarks (excluded from normal runs)
+
+Mark a benchmark class with `[OptInBenchmark]` to keep it out of default runs.
+
+```csharp
+[OptInBenchmark]
+public class MyExperimentalBenchmarks
+{
+    [Benchmark]
+    public void Scenario() { }
+}
+```
+
+Run it only when explicitly enabled:
+
+```bash
+dotnet run -c Release -- --include-opt-in --filter "*MyExperimentalBenchmarks*"
+```
+
+You can also enable opt-in classes via environment variable:
+
+```bash
+CRUD_BENCH_INCLUDE_OPT_IN=1 dotnet run -c Release --filter "*MyExperimentalBenchmarks*"
 ```
 
 ### Run with custom iterations
@@ -85,6 +113,13 @@ dotnet run -c Release -- --job long   # More iterations, more accurate
 - **RealWorldScenarioBenchmarks**: Common CRUD scenarios across databases
 - **IsolationBenchmarks**: Transaction isolation level handling
 
+### MySQL Required (Testcontainers - automatic)
+
+- **MySqlDefaultConcurrencyBenchmarks**: Finds error onset under default MySQL settings with:
+  - Read-only concurrent load
+  - Write-only concurrent load
+  - Random mixed read/write/update load
+
 ## Notable Benchmarks
 
 - **PagilaBenchmarks**: Basic CRUD operations vs Dapper/EF using PostgreSQL
@@ -113,4 +148,3 @@ Benchmark results are saved to `BenchmarkDotNet.Artifacts/results/` with multipl
 - **No manual setup**: Just run the benchmarks, containers are handled automatically
 - **Sequential execution**: Benchmarks run one at a time to avoid resource conflicts
 - Some benchmarks may take several minutes to complete due to container startup and data seeding
-

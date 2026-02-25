@@ -6,6 +6,7 @@ using System.Net.NetworkInformation;
 using System.Text.Json;
 using Moq;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.types.coercion;
 using pengdows.crud.types.valueobjects;
 using Xunit;

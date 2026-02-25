@@ -116,7 +116,14 @@ public class EqualFootingCrudBenchmarks : IDisposable
     public void GlobalCleanup()
     {
         DefaultTypeMap.MatchNamesWithUnderscores = _originalMatchNamesWithUnderscores;
-        DumpPengdowsMetrics();
+        if (_pengdowsContext != null)
+        {
+            BenchmarkMetricsWriter.Write(
+                nameof(EqualFootingCrudBenchmarks),
+                _pengdowsContext,
+                $"RecordCount={RecordCount}");
+        }
+
         _pengdowsContext?.Dispose();
         _sentinel?.Dispose();
     }
@@ -922,17 +929,6 @@ public class EqualFootingCrudBenchmarks : IDisposable
     // ========================================================================
     // HELPERS
     // ========================================================================
-
-    private void DumpPengdowsMetrics()
-    {
-        var metrics = _pengdowsContext.Metrics;
-        Console.WriteLine(
-            $"[METRICS] EqualFooting " +
-            $"conn_hold_avg={metrics.AvgConnectionHoldMs:0.000}ms " +
-            $"cmd_avg={metrics.AvgCommandMs:0.000}ms " +
-            $"p95={metrics.P95CommandMs:0.000}ms p99={metrics.P99CommandMs:0.000}ms " +
-            $"conns_opened={metrics.ConnectionsOpened} conns_closed={metrics.ConnectionsClosed}");
-    }
 
     // ========================================================================
     // ENTITY: pengdows.crud

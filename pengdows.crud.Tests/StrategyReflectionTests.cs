@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Threading.Tasks;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.strategies.connection;
 using Xunit;
 

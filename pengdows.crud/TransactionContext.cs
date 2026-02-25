@@ -30,6 +30,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
+using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
 using pengdows.crud.@internal;
@@ -317,6 +319,12 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
 
     /// <inheritdoc/>
     public string SessionSettingsPreamble => _context.SessionSettingsPreamble;
+
+    /// <inheritdoc/>
+    public string GetBaseSessionSettings() => _context.GetBaseSessionSettings();
+
+    /// <inheritdoc/>
+    public string GetReadOnlySessionSettings() => _context.GetReadOnlySessionSettings();
 
     /// <inheritdoc/>
     public DatabaseMetrics Metrics => _context.Metrics;

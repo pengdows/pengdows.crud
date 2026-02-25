@@ -35,8 +35,10 @@ using System.Threading;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.dialects;
 using pengdows.crud.@internal;
+using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.isolation;
 using pengdows.crud.threading;
@@ -270,6 +272,12 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
 
     /// <inheritdoc/>
     public string SessionSettingsPreamble => _dialect.GetConnectionSessionSettings(this, IsReadOnlyConnection);
+
+    /// <inheritdoc/>
+    public string GetBaseSessionSettings() => _dialect.GetBaseSessionSettings();
+
+    /// <inheritdoc/>
+    public string GetReadOnlySessionSettings() => _dialect.GetReadOnlySessionSettings();
 
     /// <inheritdoc/>
     public SupportedDatabase Product => _dataSourceInfo?.Product ?? SupportedDatabase.Unknown;

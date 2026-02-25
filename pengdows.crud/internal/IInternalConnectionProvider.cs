@@ -13,6 +13,7 @@
 // =============================================================================
 
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
 
 namespace pengdows.crud.@internal;

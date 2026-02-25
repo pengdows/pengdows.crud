@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using pengdows.crud.exceptions;
+using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using Xunit;
 

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.tenant;
 using Xunit;
 

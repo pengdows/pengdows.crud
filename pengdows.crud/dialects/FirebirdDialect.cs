@@ -21,6 +21,7 @@ using System.Data.Common;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
 
 namespace pengdows.crud.dialects;
@@ -113,14 +114,19 @@ internal class FirebirdDialect : SqlDialect
         return query.Replace(" LIMIT 1", " ROWS 1", StringComparison.Ordinal);
     }
 
-    public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
+    public override string GetBaseSessionSettings()
     {
-        // Firebird has no session-level read-only enforcement mechanism.
-        // SET TRANSACTION READ ONLY starts a NEW transaction rather than modifying
-        // the current one, so it cannot be used after IDbConnection.BeginTransaction().
-        // Read-only enforcement would require provider-specific FbTransactionOptions,
-        // which is outside the generic ADO.NET abstraction.
-        return DefaultSessionSettings;
+        return "SET NAMES UTF8;\nSET SQL DIALECT 3;";
+    }
+
+    public override string GetReadOnlySessionSettings()
+    {
+        return "SET TRANSACTION READ ONLY;";
+    }
+
+    internal override string? GetReadOnlyTransactionResetSql()
+    {
+        return "SET TRANSACTION READ WRITE;";
     }
 
     public override async Task<string?> GetProductNameAsync(ITrackedConnection connection)

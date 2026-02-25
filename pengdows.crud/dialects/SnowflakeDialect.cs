@@ -20,6 +20,7 @@ using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 
 namespace pengdows.crud.dialects;
 
@@ -138,6 +139,23 @@ internal class SnowflakeDialect : SqlDialect
     internal override string PrepareConnectionStringForDataSource(string connectionString)
     {
         return connectionString;
+    }
+
+    public override string GetBaseSessionSettings()
+    {
+        return "SET TIMEZONE = 'UTC';\n" +
+               "SET TIMESTAMP_OUTPUT_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF3';\n" +
+               "SET LOCK_TIMEOUT = 30000;";
+    }
+
+    public override string GetReadOnlySessionSettings()
+    {
+        return "SET TRANSACTION READ ONLY;";
+    }
+
+    internal override string? GetReadOnlyTransactionResetSql()
+    {
+        return "SET TRANSACTION READ WRITE;";
     }
 
     // Connection pooling properties for Snowflake

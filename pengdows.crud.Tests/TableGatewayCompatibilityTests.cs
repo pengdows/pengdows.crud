@@ -4,6 +4,7 @@ using Moq;
 using pengdows.crud.@internal;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using Xunit;
 
 namespace pengdows.crud.Tests;

@@ -1,12 +1,12 @@
 using System;
+using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using System.Data.Common;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
-using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
-using pengdows.crud.infrastructure;
 using Xunit;
 
 namespace pengdows.crud.Tests;

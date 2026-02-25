@@ -6,6 +6,7 @@ using System.Data.Common;
 using System.Linq;
 using pengdows.crud.collections;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using Xunit;
 
 #endregion

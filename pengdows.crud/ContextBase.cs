@@ -14,6 +14,7 @@ using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.dialects;
+using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 
 namespace pengdows.crud;

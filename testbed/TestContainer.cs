@@ -6,6 +6,7 @@ using DotNet.Testcontainers.Containers;
 using FirebirdSql.Data.FirebirdClient;
 using Oracle.ManagedDataAccess.Client;
 using pengdows.crud;
+using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 
 #endregion

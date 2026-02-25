@@ -116,6 +116,11 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
     [GlobalCleanup]
     public void Cleanup()
     {
+        if (_pengdowsContext != null)
+        {
+            BenchmarkMetricsWriter.Write(nameof(ConnectionPoolProtectionBenchmarks), _pengdowsContext);
+        }
+
         _pengdowsContext?.Dispose();
         _sentinelConnection?.Dispose();
     }
@@ -237,12 +242,7 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
             tx.Commit();
         });
 
-        var s = _pengdowsContext.GetPoolStatisticsSnapshot(PoolLabel.Writer);
-        var avgWaitMs = s.TotalAcquired == 0 ? 0 : (s.TotalWaitTicks * 1000.0 / Stopwatch.Frequency) / s.TotalAcquired;
-        var avgHoldMs = s.TotalAcquired == 0 ? 0 : (s.TotalHoldTicks * 1000.0 / Stopwatch.Frequency) / s.TotalAcquired;
-
-        Console.WriteLine($"[METRICS] WriteStorm writer: peakInUse={s.PeakInUse} peakQueued={s.PeakQueued} peakTurnstileQueued={s.PeakTurnstileQueued} timeouts={s.TotalSlotTimeouts}");
-        Console.WriteLine($"[METRICS] WriteStorm timing: avgWait={avgWaitMs:F2}ms avgHold={avgHoldMs:F2}ms totalAcquired={s.TotalAcquired}");
+        // Metrics are captured in GlobalCleanup via BenchmarkMetricsWriter.
     }
 
     [Benchmark]

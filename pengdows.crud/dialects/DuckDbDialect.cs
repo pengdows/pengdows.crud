@@ -22,6 +22,7 @@ using System.Data.Common;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
 
 namespace pengdows.crud.dialects;
@@ -156,11 +157,6 @@ internal class DuckDbDialect : SqlDialect
     public override string GetReadOnlySessionSettings()
     {
         return ReadOnlySessionSetting;
-    }
-
-    public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
-    {
-        return BuildSessionSettings(GetBaseSessionSettings(), GetReadOnlySessionSettings(), readOnly);
     }
 
     public override void TryEnterReadOnlyTransaction(ITransactionContext transaction)

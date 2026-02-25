@@ -5,6 +5,7 @@ using System.Data;
 using System.Threading;
 using System.Threading.Tasks;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.configuration;
 using pengdows.crud.attributes;
 using pengdows.crud.metrics;

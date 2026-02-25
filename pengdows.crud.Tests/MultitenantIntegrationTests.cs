@@ -1,4 +1,6 @@
 using System;
+using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
@@ -7,8 +9,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using pengdows.crud;
 using pengdows.crud.attributes;
-using pengdows.crud.enums;
-using pengdows.crud.infrastructure;
 using pengdows.crud.tenant;
 using Xunit;
 

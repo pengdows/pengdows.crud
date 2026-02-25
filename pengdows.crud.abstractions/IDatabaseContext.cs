@@ -66,11 +66,6 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     TimeSpan? ModeLockTimeout { get; }
 
     /// <summary>
-    /// Provider-specific SQL preamble to unify connection behavior (e.g., SET flags).
-    /// </summary>
-    string SessionSettingsPreamble { get; }
-
-    /// <summary>
     /// Stored Procedure wrapping style (CALL vs EXEC vs plain SELECT).
     /// </summary>
     ProcWrappingStyle ProcWrappingStyle { get; }
@@ -198,6 +193,23 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// True if read committed snapshot isolation (RCSI) is enabled on the database.
     /// </summary>
     bool RCSIEnabled { get; }
+
+    /// <summary>
+    /// Returns the session settings SQL preamble for the current context.
+    /// </summary>
+    [Obsolete("Use GetBaseSessionSettings() and GetReadOnlySessionSettings() instead.")]
+    string SessionSettingsPreamble { get; }
+
+    /// <summary>
+    /// Returns the baseline session settings SQL for the current context.
+    /// These are settings that apply regardless of execution intent (e.g. syntax, quoting).
+    /// </summary>
+    string GetBaseSessionSettings();
+
+    /// <summary>
+    /// Returns the read-only intent session settings SQL for the current context.
+    /// </summary>
+    string GetReadOnlySessionSettings();
 
     /// <summary>
     /// True if snapshot isolation is enabled on the database.

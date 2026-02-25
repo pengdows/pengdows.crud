@@ -9,6 +9,7 @@ using pengdows.crud;
 using pengdows.crud.attributes;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 
 namespace CrudBenchmarks;
 
@@ -747,6 +748,14 @@ public class DatabaseFeatureBenchmarks : IAsyncDisposable
     [GlobalCleanup]
     public async Task GlobalCleanup()
     {
+        if (_pengdowsContext is DatabaseContext dc)
+        {
+            BenchmarkMetricsWriter.Write(
+                nameof(DatabaseFeatureBenchmarks),
+                dc,
+                $"TransactionCount={TransactionCount} Parallelism={Parallelism} OpsPerRun={OperationsPerRun}");
+        }
+
         if (_pengdowsContext is IAsyncDisposable pad)
         {
             await pad.DisposeAsync();
