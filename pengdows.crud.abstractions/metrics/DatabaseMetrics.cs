@@ -29,6 +29,11 @@ namespace pengdows.crud.metrics;
 /// <param name="TransactionsActive">Current active transactions.</param>
 /// <param name="TransactionsMax">Historical max concurrent transactions.</param>
 /// <param name="AvgTransactionMs">Exponential weighted moving average of transaction duration in milliseconds.</param>
+/// <param name="TransactionsCommitted">Total transactions successfully committed.</param>
+/// <param name="TransactionsRolledBack">Total transactions rolled back.</param>
+/// <param name="SlowCommandsTotal">Total commands that exceeded the slow-command threshold.</param>
+/// <param name="P95TransactionMs">Approximate 95th percentile transaction duration (milliseconds).</param>
+/// <param name="P99TransactionMs">Approximate 99th percentile transaction duration (milliseconds).</param>
 public sealed record DatabaseMetrics(
     DatabaseRoleMetrics Read,
     DatabaseRoleMetrics Write,
@@ -55,4 +60,9 @@ public sealed record DatabaseMetrics(
     long StatementsEvicted,
     int TransactionsActive,
     int TransactionsMax,
-    double AvgTransactionMs);
+    double AvgTransactionMs,
+    long TransactionsCommitted,
+    long TransactionsRolledBack,
+    long SlowCommandsTotal,
+    double P95TransactionMs,
+    double P99TransactionMs);

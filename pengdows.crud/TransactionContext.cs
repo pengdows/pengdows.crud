@@ -738,7 +738,14 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             return;
         }
 
-        _metricsCollector.TransactionCompleted(_transactionMetricsStart);
+        if (Volatile.Read(ref _committed) == 1)
+        {
+            _metricsCollector.TransactionCommitted(_transactionMetricsStart);
+        }
+        else
+        {
+            _metricsCollector.TransactionRolledBack(_transactionMetricsStart);
+        }
     }
 
     // Kept for backward compatibility with existing internal calls

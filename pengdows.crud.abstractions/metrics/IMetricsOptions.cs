@@ -1,3 +1,5 @@
+using System;
+
 namespace pengdows.crud.metrics;
 
 /// <summary>
@@ -20,4 +22,10 @@ public interface IMetricsOptions
     /// Sliding window size for percentile approximation. Must be a power of two.
     /// </summary>
     int PercentileWindowSize { get; }
+
+    /// <summary>
+    /// Commands that exceed this duration are counted as slow.
+    /// Defaults to 1 second. Must be positive.
+    /// </summary>
+    TimeSpan SlowCommandThreshold { get; }
 }

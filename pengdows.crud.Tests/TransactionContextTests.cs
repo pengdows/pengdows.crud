@@ -528,40 +528,14 @@ public class TransactionContextTests
         private static DatabaseMetrics BuildEmptyMetrics()
         {
             var role = new DatabaseRoleMetrics(
-                0, 0, 0, 0,
-                0d, 0d, 0d, 0,
-                0, 0, 0, 0,
-                0d, 0d, 0d,
-                0, 0, 0, 0,
-                0, 0, 0, 0,
-                0d);
+                0, 0, 0, 0, 0d, 0d, 0d, 0, 0, 0, 0, 0, 0d, 0d, 0d, 
+                0, 0, 0, 0, 0, 0, 0, 0, 0d, 0, 0, 0, 0d, 0d);
 
             return new DatabaseMetrics(
                 role, role,
-                0, // ConnectionsCurrent
-                0, // PeakOpenConnections
-                0L, // ConnectionsOpened
-                0L, // ConnectionsClosed
-                0d, // AvgConnectionHoldMs
-                0d, // AvgConnectionOpenMs
-                0d, // AvgConnectionCloseMs
-                0L, // LongLivedConnections
-                0L, // CommandsExecuted
-                0L, // CommandsFailed
-                0L, // CommandsTimedOut
-                0L, // CommandsCancelled
-                0d, // AvgCommandMs
-                0d, // P95CommandMs
-                0d, // P99CommandMs
-                0, // MaxParametersObserved
-                0L, // RowsReadTotal
-                0L, // RowsAffectedTotal
-                0L, // PreparedStatements
-                0L, // StatementsCached
-                0L, // StatementsEvicted
-                0, // TransactionsActive
-                0, // TransactionsMax
-                0d); // AvgTransactionMs
+                0, 0, 0, 0, 0d, 0d, 0d, 0, 0, 0, 
+                0, 0, 0d, 0d, 0d, 0, 0, 0, 0, 
+                0, 0, 0, 0, 0d, 0, 0, 0, 0d, 0d);
         }
     }
 

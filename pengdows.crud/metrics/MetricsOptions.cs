@@ -48,6 +48,26 @@ public sealed class MetricsOptions : IMetricsOptions
         }
     }
 
+    private TimeSpan _slowCommandThreshold = TimeSpan.FromSeconds(1);
+
+    /// <summary>
+    /// Commands that exceed this duration are counted as slow.
+    /// Defaults to 1 second. Must be positive.
+    /// </summary>
+    public TimeSpan SlowCommandThreshold
+    {
+        get => _slowCommandThreshold;
+        init
+        {
+            if (value <= TimeSpan.Zero)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value), "Threshold must be positive.");
+            }
+
+            _slowCommandThreshold = value;
+        }
+    }
+
     /// <summary>
     /// Returns a fresh copy of the default options.
     /// </summary>

@@ -38,6 +38,7 @@ internal sealed class MetricsCollector
     private readonly Ewma _connectionCloseDuration = new(64);
     private readonly Ewma _transactionDuration = new(32);
     private readonly PercentileRing? _percentileRing;
+    private readonly PercentileRing? _transactionPercentileRing;
     private Action? _metricsChanged;
 
     private int _connectionsCurrent;
@@ -57,8 +58,12 @@ internal sealed class MetricsCollector
     private long _statementsCached;
     private long _statementsEvicted;
 
+    private long _slowCommandsTotal;
+
     private int _transactionsActive;
     private int _transactionsMax;
+    private long _transactionsCommitted;
+    private long _transactionsRolledBack;
 
     internal MetricsCollector(IMetricsOptions options, MetricsCollector? parent = null)
     {
@@ -67,6 +72,7 @@ internal sealed class MetricsCollector
         if (_options.EnableApproxPercentiles)
         {
             _percentileRing = new PercentileRing(_options.PercentileWindowSize);
+            _transactionPercentileRing = new PercentileRing(_options.PercentileWindowSize);
         }
     }
 
@@ -250,14 +256,28 @@ internal sealed class MetricsCollector
         return Stopwatch.GetTimestamp();
     }
 
-    internal void TransactionCompleted(long startTimestamp)
+    internal void TransactionCommitted(long startTimestamp)
     {
-        _parent?.TransactionCompleted(startTimestamp);
+        _parent?.TransactionCommitted(startTimestamp);
+        Interlocked.Increment(ref _transactionsCommitted);
+        CompleteTransactionInternal(startTimestamp);
+    }
+
+    internal void TransactionRolledBack(long startTimestamp)
+    {
+        _parent?.TransactionRolledBack(startTimestamp);
+        Interlocked.Increment(ref _transactionsRolledBack);
+        CompleteTransactionInternal(startTimestamp);
+    }
+
+    private void CompleteTransactionInternal(long startTimestamp)
+    {
         Decrement(ref _transactionsActive);
         var duration = ToMilliseconds(Stopwatch.GetTimestamp() - startTimestamp);
         if (duration > 0d)
         {
             _transactionDuration.AddSample(duration);
+            _transactionPercentileRing?.Add(duration);
         }
 
         NotifyUpdated();
@@ -266,6 +286,7 @@ internal sealed class MetricsCollector
     internal MetricsSnapshot CreateSnapshot()
     {
         var percentiles = _percentileRing?.CreateSnapshot() ?? PercentileSnapshot.Empty;
+        var txnPercentiles = _transactionPercentileRing?.CreateSnapshot() ?? PercentileSnapshot.Empty;
         return new MetricsSnapshot(
             Volatile.Read(ref _connectionsCurrent),
             Volatile.Read(ref _connectionsMax),
@@ -290,7 +311,12 @@ internal sealed class MetricsCollector
             Interlocked.Read(ref _statementsEvicted),
             Volatile.Read(ref _transactionsActive),
             Volatile.Read(ref _transactionsMax),
-            _transactionDuration.GetValue());
+            _transactionDuration.GetValue(),
+            Interlocked.Read(ref _transactionsCommitted),
+            Interlocked.Read(ref _transactionsRolledBack),
+            Interlocked.Read(ref _slowCommandsTotal),
+            txnPercentiles.P95,
+            txnPercentiles.P99);
     }
 
     private static void AddHandler(ref Action? field, Action handler)
@@ -349,6 +375,11 @@ internal sealed class MetricsCollector
         {
             _percentileRing?.Add(elapsed);
         }
+
+        if (elapsed >= _options.SlowCommandThreshold.TotalMilliseconds)
+        {
+            Interlocked.Increment(ref _slowCommandsTotal);
+        }
     }
 
     private static void UpdateMax(ref int target, int candidate)
@@ -400,7 +431,12 @@ internal sealed class MetricsCollector
         long StatementsEvicted,
         int TransactionsActive,
         int TransactionsMax,
-        double AvgTransactionMs)
+        double AvgTransactionMs,
+        long TransactionsCommitted,
+        long TransactionsRolledBack,
+        long SlowCommandsTotal,
+        double P95TransactionMs,
+        double P99TransactionMs)
     {
         public int ConnectionsCurrent { get; } = ConnectionsCurrent;
         public int PeakOpenConnections { get; } = PeakOpenConnections;
@@ -426,6 +462,11 @@ internal sealed class MetricsCollector
         public int TransactionsActive { get; } = TransactionsActive;
         public int TransactionsMax { get; } = TransactionsMax;
         public double AvgTransactionMs { get; } = AvgTransactionMs;
+        public long TransactionsCommitted { get; } = TransactionsCommitted;
+        public long TransactionsRolledBack { get; } = TransactionsRolledBack;
+        public long SlowCommandsTotal { get; } = SlowCommandsTotal;
+        public double P95TransactionMs { get; } = P95TransactionMs;
+        public double P99TransactionMs { get; } = P99TransactionMs;
     }
 
     private sealed class Ewma

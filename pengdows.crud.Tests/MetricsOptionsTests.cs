@@ -38,4 +38,35 @@ public class MetricsOptionsTests
             };
         });
     }
+
+    [Fact]
+    public void SlowCommandThreshold_DefaultIsOneSecond()
+    {
+        var options = MetricsOptions.Default;
+        Assert.Equal(TimeSpan.FromSeconds(1), options.SlowCommandThreshold);
+    }
+
+    [Fact]
+    public void SlowCommandThreshold_MustBePositive()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+        {
+            _ = new MetricsOptions
+            {
+                SlowCommandThreshold = TimeSpan.Zero
+            };
+        });
+    }
+
+    [Fact]
+    public void SlowCommandThreshold_NegativeThrows()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+        {
+            _ = new MetricsOptions
+            {
+                SlowCommandThreshold = TimeSpan.FromSeconds(-1)
+            };
+        });
+    }
 }

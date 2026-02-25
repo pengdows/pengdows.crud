@@ -48,7 +48,9 @@ method pengdows.crud.IDatabaseContext::CreateDbParameter<T>(string, System.Data.
 method pengdows.crud.IDatabaseContext::CreateSqlContainer(string) -> pengdows.crud.ISqlContainer
 method pengdows.crud.IDatabaseContext::GenerateParameterName() -> string
 method pengdows.crud.IDatabaseContext::GenerateRandomName(int, int) -> string
+method pengdows.crud.IDatabaseContext::GetBaseSessionSettings() -> string
 method pengdows.crud.IDatabaseContext::GetLock() -> pengdows.crud.threading.ILockerAsync
+method pengdows.crud.IDatabaseContext::GetReadOnlySessionSettings() -> string
 method pengdows.crud.IDatabaseContext::MakeParameterName(System.Data.Common.DbParameter) -> string
 method pengdows.crud.IDatabaseContext::MakeParameterName(string) -> string
 method pengdows.crud.IDatabaseContext::WrapObjectName(string) -> string
@@ -428,6 +430,7 @@ property pengdows.crud.infrastructure.ISafeAsyncDisposableBase::IsDisposed : boo
 property pengdows.crud.metrics.IMetricsOptions::EnableApproxPercentiles : bool { get; }
 property pengdows.crud.metrics.IMetricsOptions::LongConnectionThreshold : System.TimeSpan { get; }
 property pengdows.crud.metrics.IMetricsOptions::PercentileWindowSize : int { get; }
+property pengdows.crud.metrics.IMetricsOptions::SlowCommandThreshold : System.TimeSpan { get; }
 property pengdows.crud.wrappers.ITrackedConnection::ConnectionString : string { get; set; }
 property pengdows.crud.wrappers.ITrackedConnection::ConnectionTimeout : int { get; }
 property pengdows.crud.wrappers.ITrackedConnection::DataSource : string { get; }

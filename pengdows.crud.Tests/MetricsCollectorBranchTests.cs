@@ -86,11 +86,11 @@ public class MetricsCollectorBranchTests
     }
 
     [Fact]
-    public void TransactionCompleted_RecordsDuration()
+    public void TransactionCommitted_RecordsDuration()
     {
         var collector = new MetricsCollector(MetricsOptions.Default);
         var start = collector.TransactionStarted();
-        collector.TransactionCompleted(start);
+        collector.TransactionCommitted(start);
 
         var snapshot = collector.CreateSnapshot();
         Assert.Equal(0, snapshot.TransactionsActive);

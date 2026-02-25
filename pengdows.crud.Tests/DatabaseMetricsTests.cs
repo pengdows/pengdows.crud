@@ -382,84 +382,20 @@ public class DatabaseMetricsTests
     public void DatabaseMetrics_RecordExposesConstructorValues()
     {
         var read = new DatabaseRoleMetrics(
-            101,
-            102,
-            103,
-            104,
-            105,
-            106,
-            107,
-            108,
-            109,
-            110,
-            111,
-            112,
-            113,
-            114,
-            115,
-            116,
-            117,
-            118,
-            119,
-            120,
-            121,
-            122,
-            123,
-            124);
+            101, 102, 103, 104, 105, 106, 107, 108, 109, 110,
+            111, 112, 113, 114, 115, 116, 117, 118, 119, 120,
+            121, 122, 123, 124, 125, 126, 127, 128, 129);
 
         var write = new DatabaseRoleMetrics(
-            201,
-            202,
-            203,
-            204,
-            205,
-            206,
-            207,
-            208,
-            209,
-            210,
-            211,
-            212,
-            213,
-            214,
-            215,
-            216,
-            217,
-            218,
-            219,
-            220,
-            221,
-            222,
-            223,
-            224);
+            201, 202, 203, 204, 205, 206, 207, 208, 209, 210,
+            211, 212, 213, 214, 215, 216, 217, 218, 219, 220,
+            221, 222, 223, 224, 225, 226, 227, 228, 229);
 
         var metrics = new DatabaseMetrics(
-            read,
-            write,
-            1,
-            2,
-            3,
-            4,
-            5,
-            6,
-            7,
-            8,
-            9,
-            10,
-            11,
-            12,
-            13,
-            14,
-            15,
-            16,
-            17,
-            18,
-            19,
-            20,
-            21,
-            22,
-            23,
-            24);
+            read, write,
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+            11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+            21, 22, 23, 24, 25, 26, 27, 28, 29);
 
         Assert.Equal(read, metrics.Read);
         Assert.Equal(write, metrics.Write);
@@ -487,5 +423,10 @@ public class DatabaseMetricsTests
         Assert.Equal(22, metrics.TransactionsActive);
         Assert.Equal(23, metrics.TransactionsMax);
         Assert.Equal(24, metrics.AvgTransactionMs);
+        Assert.Equal(25, metrics.TransactionsCommitted);
+        Assert.Equal(26, metrics.TransactionsRolledBack);
+        Assert.Equal(27, metrics.SlowCommandsTotal);
+        Assert.Equal(28, metrics.P95TransactionMs);
+        Assert.Equal(29, metrics.P99TransactionMs);
     }
 }

@@ -51,7 +51,12 @@ public class CoverageGapTests_MetricsAndConnections
             StatementsEvicted: 21,
             TransactionsActive: 22,
             TransactionsMax: 23,
-            AvgTransactionMs: 24.0);
+            AvgTransactionMs: 24.0,
+            TransactionsCommitted: 25,
+            TransactionsRolledBack: 26,
+            SlowCommandsTotal: 27,
+            P95TransactionMs: 28.0,
+            P99TransactionMs: 29.0);
 
         Assert.Equal(1, rm.ConnectionsCurrent);
         Assert.Equal(2, rm.PeakOpenConnections);
@@ -116,7 +121,8 @@ public class CoverageGapTests_MetricsAndConnections
             (int)seed, (int)seed, seed, seed, seed, seed, seed, seed,
             seed, seed, seed, seed, seed, seed, seed,
             (int)seed, seed, seed, seed, seed, seed,
-            (int)seed, (int)seed, seed);
+            (int)seed, (int)seed, seed,
+            seed, seed, seed, seed, seed);
 
     // =========================================================================
     // MetricsCollector internals — via DatabaseContext
