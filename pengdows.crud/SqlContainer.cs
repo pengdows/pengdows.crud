@@ -1656,6 +1656,13 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     /// </summary>
     private bool ComputeEffectivePrepareSettings()
     {
+        // Hard veto from dialect (e.g. MySQL max_prepared_stmt_count exhaustion).
+        // Overrides ForceManualPrepare — retrying after server exhaustion only makes things worse.
+        if (_dialect.IsPrepareExhausted)
+        {
+            return false;
+        }
+
         // Check if prepare is hard-disabled via configuration
         if (_context.DisablePrepare == true)
         {

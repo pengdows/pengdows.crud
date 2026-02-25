@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Linq;
 using System.Threading.Tasks;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
@@ -248,7 +249,8 @@ public class PrepareBehaviorTests
         {
             ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.MySql}",
             DbMode = DbMode.Standard,
-            ReadWriteMode = ReadWriteMode.ReadWrite
+            ReadWriteMode = ReadWriteMode.ReadWrite,
+            ForceManualPrepare = true  // MySQL defaults to OFF; opt-in required to test degradation
         };
         await using var ctx = new DatabaseContext(cfg, factory);
 
@@ -288,7 +290,8 @@ public class PrepareBehaviorTests
         {
             ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.MySql}",
             DbMode = DbMode.Standard,
-            ReadWriteMode = ReadWriteMode.ReadWrite
+            ReadWriteMode = ReadWriteMode.ReadWrite,
+            ForceManualPrepare = true  // MySQL defaults to OFF; opt-in required to test this path
         };
         await using var ctx = new DatabaseContext(cfg, factory);
 
@@ -318,6 +321,29 @@ public class PrepareBehaviorTests
         }
 
         Assert.Equal(2, attempts);
+    }
+
+    [Fact]
+    public async Task MySql_DefaultPrepare_IsDisabled()
+    {
+        // MySQL defaults to PrepareStatements = false to avoid max_prepared_stmt_count exhaustion.
+        // No ForceManualPrepare — just the dialect default.
+        var factory = new RecordingPrepareFactory(SupportedDatabase.MySql);
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.MySql}",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+        await using var ctx = new DatabaseContext(cfg, factory);
+
+        await using var tx = ctx.BeginTransaction(readOnly: false);
+        await using var sc = tx.CreateSqlContainer("SELECT @p0") as SqlContainer;
+        sc!.AddParameterWithValue("p0", DbType.Int32, 1);
+        _ = await sc.ExecuteNonQueryAsync();
+
+        var attempts = factory.Connections.Sum(c => c.Commands.Sum(cmd => cmd.PrepareAttempts));
+        Assert.Equal(0, attempts);
     }
 
     private sealed class FakeMySqlDbException : DbException

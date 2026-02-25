@@ -114,6 +114,15 @@ public interface ISqlDialect
     bool PrepareStatements { get; }
 
     /// <summary>
+    /// True when the dialect has permanently disabled prepare at runtime due to a server-level
+    /// exhaustion error (e.g. MySQL error 1461 — <c>max_prepared_stmt_count</c> reached).
+    /// Unlike <see cref="PrepareStatements"/>, this veto overrides
+    /// <see cref="IDatabaseContext.ForceManualPrepare"/> because retrying after exhaustion
+    /// would only compound the problem. Default implementation returns <see langword="false"/>.
+    /// </summary>
+    bool IsPrepareExhausted => false;
+
+    /// <summary>
     /// Regular expression describing valid parameter names.
     /// </summary>
     Regex ParameterNamePattern { get; }

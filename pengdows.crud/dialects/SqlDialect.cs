@@ -205,6 +205,9 @@ internal abstract class SqlDialect : ISqlDialect
     public virtual string CompositeIdentifierSeparator => "."; // SQL-92 standard
     public virtual bool PrepareStatements => false;
 
+    // Overridden by MySqlDialect to veto prepare after error 1461 fires, even when ForceManualPrepare is set.
+    public virtual bool IsPrepareExhausted => false;
+
     // SQL standard parameter name pattern (SQL-92)
     public virtual Regex ParameterNamePattern => new("^[a-zA-Z][a-zA-Z0-9_]*$", RegexOptions.Compiled);
 

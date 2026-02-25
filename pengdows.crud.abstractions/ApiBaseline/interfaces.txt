@@ -378,6 +378,7 @@ property pengdows.crud.dialects.ISqlDialect::HasBasicCompatibility : bool { get;
 property pengdows.crud.dialects.ISqlDialect::InsertReturningClauseBeforeValues : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::IsFallbackDialect : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::IsInitialized : bool { get; }
+property pengdows.crud.dialects.ISqlDialect::IsPrepareExhausted : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::MaxOutputParameters : int { get; }
 property pengdows.crud.dialects.ISqlDialect::MaxParameterLimit : int { get; }
 property pengdows.crud.dialects.ISqlDialect::MaxPoolSizeSettingName : string { get; }

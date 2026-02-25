@@ -71,4 +71,45 @@ public sealed class PoolGovernorTests
         var after = governor.GetSnapshot();
         Assert.Equal(1, after.InUse);
     }
+
+    [Fact]
+    public async Task AcquireAsync_WhenTimeout_DoesNotPolluteTotalWaitAndHoldTicks()
+    {
+        // Slot saturation: fill pool, then let a second acquire time out.
+        // Hold/wait ticks must only reflect successful slot acquisitions, not failed ones.
+        var governor = new PoolGovernor(PoolLabel.Writer, "writer-key", 1,
+            TimeSpan.FromMilliseconds(25), trackMetrics: true);
+
+        // First acquire succeeds immediately (no contention yet)
+        await using var first = await governor.AcquireAsync();
+
+        // Second acquire times out — should NOT update wait/hold ticks
+        await Assert.ThrowsAsync<PoolSaturatedException>(() => governor.AcquireAsync());
+
+        // Check metrics BEFORE releasing first slot (ReleaseToken records hold on dispose)
+        // If the timed-out attempt had called RecordWaitAndHold, these would be non-zero
+        var snapshot = governor.GetSnapshot();
+        Assert.Equal(1, snapshot.TotalSlotTimeouts);  // timeout was counted
+        Assert.Equal(0, snapshot.TotalHoldTicks);     // no hold recorded yet (first still held)
+        Assert.Equal(0, snapshot.TotalWaitTicks);     // first was acquired with no wait
+        Assert.Equal(1, snapshot.TotalAcquired);      // only one successful acquisition
+    }
+
+    [Fact]
+    public void Acquire_WhenTimeout_DoesNotPolluteTotalWaitAndHoldTicks()
+    {
+        // Same as async variant but exercises the synchronous Acquire() code path
+        var governor = new PoolGovernor(PoolLabel.Writer, "writer-key", 1,
+            TimeSpan.FromMilliseconds(25), trackMetrics: true);
+
+        using var first = governor.Acquire();
+
+        Assert.Throws<PoolSaturatedException>(() => governor.Acquire());
+
+        var snapshot = governor.GetSnapshot();
+        Assert.Equal(1, snapshot.TotalSlotTimeouts);
+        Assert.Equal(0, snapshot.TotalHoldTicks);
+        Assert.Equal(0, snapshot.TotalWaitTicks);
+        Assert.Equal(1, snapshot.TotalAcquired);
+    }
 }

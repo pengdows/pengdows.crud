@@ -53,6 +53,10 @@ internal class MariaDbDialect : MySqlDialect
     // Only override what's different from MySQL
     public override SupportedDatabase DatabaseType => SupportedDatabase.MariaDb;
 
+    // MariaDB does not have the same max_prepared_stmt_count exhaustion concern as MySQL;
+    // prepared statements default ON here (MySQL defaults to OFF for safety).
+    public override bool PrepareStatements => true;
+
     // MariaDB inherits ANSI double-quote quoting from MySqlDialect (matches ANSI_QUOTES sql_mode)
 
     // MariaDB uses LAST_INSERT_ID() like MySQL

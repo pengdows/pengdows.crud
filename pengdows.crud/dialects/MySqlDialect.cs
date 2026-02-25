@@ -106,8 +106,14 @@ internal class MySqlDialect : SqlDialect
     public override int ParameterNameMaxLength => 64;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.Call;
 
-    // MySQL benefits from server-side prepared statements
-    public override bool PrepareStatements => !_prepareDisabledByServerLimit;
+    // MySQL prepared statements default OFF to avoid max_prepared_stmt_count exhaustion.
+    // Opt-in via DatabaseContextConfiguration.ForceManualPrepare = true.
+    // ShouldDisablePrepareOn() still guards the opt-in path against error 1461.
+    public override bool PrepareStatements => false;
+
+    // Once MySQL error 1461 fires, veto ALL future prepare attempts — including ForceManualPrepare.
+    // Retrying after exhaustion only compounds the problem.
+    public override bool IsPrepareExhausted => _prepareDisabledByServerLimit;
 
     public override bool SupportsNamespaces => true;
 
