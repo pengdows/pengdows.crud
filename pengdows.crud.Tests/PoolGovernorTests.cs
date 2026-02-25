@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using pengdows.crud.exceptions;
 using pengdows.crud.enums;
@@ -111,5 +112,70 @@ public sealed class PoolGovernorTests
         Assert.Equal(0, snapshot.TotalHoldTicks);
         Assert.Equal(0, snapshot.TotalWaitTicks);
         Assert.Equal(1, snapshot.TotalAcquired);
+    }
+
+    [Fact]
+    public async Task AcquireAsync_SaturationThenRecovery_InUseReturnsToZero()
+    {
+        // Fill pool, exhaust it with a timeout, release all slots, prove recovery.
+        // This is the "no death spiral" proof: the governor must be fully re-entrant
+        // after saturating, with InUse and Queued both returning to 0.
+        var governor = new PoolGovernor(PoolLabel.Reader, "reader-key", 2,
+            TimeSpan.FromMilliseconds(25), trackMetrics: true);
+
+        await using var first = await governor.AcquireAsync();
+        await using var second = await governor.AcquireAsync();
+
+        // Pool is full — a third acquisition must timeout
+        var ex = await Assert.ThrowsAsync<PoolSaturatedException>(() => governor.AcquireAsync());
+        Assert.Equal(2, ex.Snapshot.InUse);
+        Assert.Equal(1, governor.GetSnapshot().TotalSlotTimeouts);
+
+        // Release both slots
+        await first.DisposeAsync();
+        await second.DisposeAsync();
+
+        var afterRelease = governor.GetSnapshot();
+        Assert.Equal(0, afterRelease.InUse);
+        Assert.Equal(0, afterRelease.Queued);
+
+        // Governor must accept new acquisitions immediately — no residual saturation state
+        await using var recovered = await governor.AcquireAsync();
+        Assert.Equal(1, governor.GetSnapshot().InUse);
+        Assert.Equal(3, governor.GetSnapshot().TotalAcquired); // first + second + recovered
+    }
+
+    [Fact]
+    public async Task AcquireAsync_WhenCanceled_IncrementsCanceledWaitsAndLeavesNoLeak()
+    {
+        // Cancellation must increment TotalCanceledWaits and must NOT leak the slot.
+        // After cancel: InUse stays at 1 (the held slot), Queued returns to 0.
+        var governor = new PoolGovernor(PoolLabel.Reader, "reader-key", 1,
+            TimeSpan.FromSeconds(5), trackMetrics: true);
+
+        // Hold the only slot
+        await using var first = await governor.AcquireAsync();
+
+        // Queue a second acquire — will block because pool is full
+        using var cts = new CancellationTokenSource();
+        var waiter = governor.AcquireAsync(cts.Token);
+
+        // Give the waiter time to enter the semaphore queue
+        await Task.Delay(50);
+        Assert.True(governor.GetSnapshot().Queued >= 1);
+
+        cts.Cancel();
+        await Assert.ThrowsAsync<OperationCanceledException>(() => waiter);
+
+        var snapshot = governor.GetSnapshot();
+        Assert.Equal(1, snapshot.TotalCanceledWaits);    // cancellation, not timeout
+        Assert.Equal(0, snapshot.TotalSlotTimeouts);      // no timeout fired
+        Assert.Equal(0, snapshot.Queued);                 // waiter dequeued on cancel
+        Assert.Equal(1, snapshot.InUse);                  // first still held
+        Assert.Equal(0, snapshot.TotalHoldTicks);         // hold ticks: first still active, none released yet
+
+        // Release the held slot — InUse must drop to 0
+        await first.DisposeAsync();
+        Assert.Equal(0, governor.GetSnapshot().InUse);
     }
 }
