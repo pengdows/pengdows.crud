@@ -24,6 +24,7 @@
 // =============================================================================
 
 using System.Diagnostics;
+using pengdows.crud.enums;
 using pengdows.crud.metrics;
 
 namespace pengdows.crud.@internal;
@@ -59,6 +60,9 @@ internal sealed class MetricsCollector
     private long _statementsEvicted;
 
     private long _slowCommandsTotal;
+    private long _errorDeadlocks;
+    private long _errorSerializationFailures;
+    private long _errorConstraintViolations;
 
     private int _transactionsActive;
     private int _transactionsMax;
@@ -197,6 +201,26 @@ internal sealed class MetricsCollector
         NotifyUpdated();
     }
 
+    internal void RecordDbError(DbErrorCategory category)
+    {
+        _parent?.RecordDbError(category);
+        switch (category)
+        {
+            case DbErrorCategory.Deadlock:
+                Interlocked.Increment(ref _errorDeadlocks);
+                NotifyUpdated();
+                break;
+            case DbErrorCategory.SerializationFailure:
+                Interlocked.Increment(ref _errorSerializationFailures);
+                NotifyUpdated();
+                break;
+            case DbErrorCategory.ConstraintViolation:
+                Interlocked.Increment(ref _errorConstraintViolations);
+                NotifyUpdated();
+                break;
+        }
+    }
+
     internal void RecordRowsRead(long count)
     {
         _parent?.RecordRowsRead(count);
@@ -316,7 +340,10 @@ internal sealed class MetricsCollector
             Interlocked.Read(ref _transactionsRolledBack),
             Interlocked.Read(ref _slowCommandsTotal),
             txnPercentiles.P95,
-            txnPercentiles.P99);
+            txnPercentiles.P99,
+            Interlocked.Read(ref _errorDeadlocks),
+            Interlocked.Read(ref _errorSerializationFailures),
+            Interlocked.Read(ref _errorConstraintViolations));
     }
 
     private static void AddHandler(ref Action? field, Action handler)
@@ -436,7 +463,10 @@ internal sealed class MetricsCollector
         long TransactionsRolledBack,
         long SlowCommandsTotal,
         double P95TransactionMs,
-        double P99TransactionMs)
+        double P99TransactionMs,
+        long ErrorDeadlocks,
+        long ErrorSerializationFailures,
+        long ErrorConstraintViolations)
     {
         public int ConnectionsCurrent { get; } = ConnectionsCurrent;
         public int PeakOpenConnections { get; } = PeakOpenConnections;
@@ -467,6 +497,9 @@ internal sealed class MetricsCollector
         public long SlowCommandsTotal { get; } = SlowCommandsTotal;
         public double P95TransactionMs { get; } = P95TransactionMs;
         public double P99TransactionMs { get; } = P99TransactionMs;
+        public long ErrorDeadlocks { get; } = ErrorDeadlocks;
+        public long ErrorSerializationFailures { get; } = ErrorSerializationFailures;
+        public long ErrorConstraintViolations { get; } = ErrorConstraintViolations;
     }
 
     private sealed class Ewma

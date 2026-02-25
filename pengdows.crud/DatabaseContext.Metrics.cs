@@ -207,7 +207,7 @@ public partial class DatabaseContext
                 SaturateToInt(NumberOfOpenConnections),
                 SaturateToInt(PeakOpenConnections),
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0);
+                0, 0, 0, 0, 0, 0, 0, 0);
         }
 
         var snapshot = _metricsCollector.CreateSnapshot();
@@ -248,7 +248,10 @@ public partial class DatabaseContext
             snapshot.TransactionsRolledBack,
             snapshot.SlowCommandsTotal,
             snapshot.P95TransactionMs,
-            snapshot.P99TransactionMs);
+            snapshot.P99TransactionMs,
+            snapshot.ErrorDeadlocks,
+            snapshot.ErrorSerializationFailures,
+            snapshot.ErrorConstraintViolations);
     }
 
     private static DatabaseRoleMetrics CreateRoleMetrics(in MetricsCollector.MetricsSnapshot snapshot)
@@ -282,7 +285,10 @@ public partial class DatabaseContext
             snapshot.TransactionsRolledBack,
             snapshot.SlowCommandsTotal,
             snapshot.P95TransactionMs,
-            snapshot.P99TransactionMs);
+            snapshot.P99TransactionMs,
+            snapshot.ErrorDeadlocks,
+            snapshot.ErrorSerializationFailures,
+            snapshot.ErrorConstraintViolations);
     }
 
     private void OnMetricsCollectorUpdated()

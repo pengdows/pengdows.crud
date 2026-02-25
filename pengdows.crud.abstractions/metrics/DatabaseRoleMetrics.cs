@@ -32,6 +32,9 @@ namespace pengdows.crud.metrics;
 /// <param name="SlowCommandsTotal">Total commands that exceeded the slow-command threshold.</param>
 /// <param name="P95TransactionMs">Approximate 95th percentile transaction duration (milliseconds).</param>
 /// <param name="P99TransactionMs">Approximate 99th percentile transaction duration (milliseconds).</param>
+/// <param name="ErrorDeadlocks">Total deadlock errors detected.</param>
+/// <param name="ErrorSerializationFailures">Total serialization failures (snapshot isolation conflicts).</param>
+/// <param name="ErrorConstraintViolations">Total constraint violation errors (unique, FK, not-null, check).</param>
 public sealed record DatabaseRoleMetrics(
     int ConnectionsCurrent,
     int PeakOpenConnections,
@@ -61,7 +64,10 @@ public sealed record DatabaseRoleMetrics(
     long TransactionsRolledBack,
     long SlowCommandsTotal,
     double P95TransactionMs,
-    double P99TransactionMs)
+    double P99TransactionMs,
+    long ErrorDeadlocks,
+    long ErrorSerializationFailures,
+    long ErrorConstraintViolations)
 {
     /// <summary>
     /// Represents an empty role metrics snapshot (no role-specific tracking active).
@@ -70,5 +76,5 @@ public sealed record DatabaseRoleMetrics(
         0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0);
+        0, 0, 0, 0, 0, 0, 0, 0);
 }

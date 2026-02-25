@@ -1124,9 +1124,14 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             metrics?.CommandTimedOut(startTimestamp);
             throw;
         }
-        catch
+        catch (Exception ex)
         {
             metrics?.CommandFailed(startTimestamp);
+            if (metrics != null)
+            {
+                metrics.RecordDbError(_context.Dialect.ClassifyException(ex));
+            }
+
             throw;
         }
         finally
@@ -1391,9 +1396,14 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             metrics?.CommandTimedOut(startTimestamp);
             throw;
         }
-        catch
+        catch (Exception ex)
         {
             metrics?.CommandFailed(startTimestamp);
+            if (metrics != null)
+            {
+                metrics.RecordDbError(_context.Dialect.ClassifyException(ex));
+            }
+
             throw;
         }
         finally

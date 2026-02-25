@@ -261,6 +261,10 @@ public sealed class ConnectionPerformanceOptimizationTests
         using var conn = factory.CreateConnection();
         conn.ConnectionString = config.ConnectionString;
 
+        // Reset counters after any initialization logic (like DetectDatabaseInfoAsync)
+        // so we measure pure application/caching.
+        dialect.ResetCounters();
+
         ctx.ExecuteSessionSettings(conn, readOnly: false);
         ctx.ExecuteSessionSettings(conn, readOnly: false);
 
@@ -342,6 +346,12 @@ public sealed class ConnectionPerformanceOptimizationTests
 
         public int ReadOnlyCalls => _readOnlyCalls;
         public int BaseCalls => _baseCalls;
+
+        public void ResetCounters()
+        {
+            _readOnlyCalls = 0;
+            _baseCalls = 0;
+        }
 
         public override string GetBaseSessionSettings()
         {

@@ -1,3 +1,4 @@
+using System;
 using System.Data;
 using System.Data.Common;
 using System.Text.RegularExpressions;
@@ -680,4 +681,53 @@ public interface ISqlDialect
     /// Provider-specific (e.g., "Max Pool Size" vs "MaximumPoolSize"), null if not supported.
     /// </summary>
     string? MaxPoolSizeSettingName { get; }
+
+    /// <summary>
+    /// Classifies an exception into a well-known error category for metrics and observability.
+    /// </summary>
+    /// <param name="exception">The exception thrown by the database operation.</param>
+    /// <returns>
+    /// A <see cref="DbErrorCategory"/> value indicating the type of error.
+    /// Returns <see cref="DbErrorCategory.None"/> for <see cref="OperationCanceledException"/>
+    /// (cancellations are tracked separately).
+    /// The default implementation uses message heuristics; database-specific dialects
+    /// should override this to use error codes for accurate classification.
+    /// </returns>
+    DbErrorCategory ClassifyException(Exception exception)
+    {
+        if (exception is OperationCanceledException)
+        {
+            return DbErrorCategory.None;
+        }
+
+        var message = exception.Message;
+
+        if (message.Contains("deadlock", StringComparison.OrdinalIgnoreCase))
+        {
+            return DbErrorCategory.Deadlock;
+        }
+
+        if (message.Contains("serializ", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("serialize", StringComparison.OrdinalIgnoreCase))
+        {
+            return DbErrorCategory.SerializationFailure;
+        }
+
+        if (message.Contains("constraint", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("unique ", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("foreign key", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("not-null", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("violates", StringComparison.OrdinalIgnoreCase))
+        {
+            return DbErrorCategory.ConstraintViolation;
+        }
+
+        if (message.Contains("timeout", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("timed out", StringComparison.OrdinalIgnoreCase))
+        {
+            return DbErrorCategory.Timeout;
+        }
+
+        return DbErrorCategory.Unknown;
+    }
 }
