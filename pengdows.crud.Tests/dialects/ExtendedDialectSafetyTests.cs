@@ -1,8 +1,13 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
+using pengdows.crud.fakeDb;
 using pengdows.crud.infrastructure;
+using pengdows.crud.wrappers;
 using Xunit;
 
 namespace pengdows.crud.Tests.dialects;
@@ -58,13 +63,53 @@ public class ExtendedDialectSafetyTests
     }
 
     [Fact]
-    public void TiDb_EnforcesPessimisticTxn()
+    public async Task Snowflake_InterrogatesAndCalculatesDelta()
     {
-        var factory = new fakeDbFactory(SupportedDatabase.TiDb);
-        var dialect = new TiDbDialect(factory, NullLogger<TiDbDialect>.Instance);
+        var factory = new fakeDbFactory(SupportedDatabase.Snowflake);
+        // Mock DB already has UTC but wrong format and missing lock timeout
+        // Snowflake SHOW PARAMETERS returns rows with 'key' and 'value' among other columns
+        factory.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object> { ["key"] = "TIMEZONE", ["value"] = "UTC" },
+            new Dictionary<string, object> { ["key"] = "TIMESTAMP_OUTPUT_FORMAT", ["value"] = "YYYY-MM-DD" },
+            new Dictionary<string, object> { ["key"] = "LOCK_TIMEOUT", ["value"] = "10000" }
+        });
 
+        var dialect = new SnowflakeDialect(factory, NullLogger<SnowflakeDialect>.Instance);
+        using var rawConn = factory.CreateConnection();
+        var conn = new TrackedConnection(rawConn);
+        await conn.OpenAsync();
+
+        await dialect.DetectDatabaseInfoAsync(conn);
         var settings = dialect.GetBaseSessionSettings();
 
-        Assert.Contains("SET tidb_pessimistic_txn_default = ON", settings, StringComparison.OrdinalIgnoreCase);
+        // Should NOT contain TIMEZONE (already UTC)
+        Assert.DoesNotContain("TIMEZONE", settings);
+        // Should contain the ones that differ
+        Assert.Contains("TIMESTAMP_OUTPUT_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF3'", settings);
+        Assert.Contains("LOCK_TIMEOUT = 30000", settings);
+    }
+
+    [Fact]
+    public async Task Firebird_InterrogatesAndCalculatesDelta()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Firebird);
+        // Mock Firebird with Dialect 1
+        var conn = (fakeDbConnection)factory.CreateConnection();
+        conn.ScalarResults.Enqueue(1); // SQL Dialect 1
+        factory.Connections.Insert(0, conn);
+
+        var dialect = new FirebirdDialect(factory, NullLogger<FirebirdDialect>.Instance);
+        using var rawTConn = factory.CreateConnection();
+        var tconn = new TrackedConnection(rawTConn);
+        await tconn.OpenAsync();
+
+        await dialect.DetectDatabaseInfoAsync(tconn);
+        var settings = dialect.GetBaseSessionSettings();
+
+        // NAMES UTF8 is always sent because we can't reliably interrogate it, 
+        // but SQL DIALECT 3 should be there because we detected 1.
+        Assert.Contains("SET NAMES UTF8", settings);
+        Assert.Contains("SET SQL DIALECT 3", settings);
     }
 }

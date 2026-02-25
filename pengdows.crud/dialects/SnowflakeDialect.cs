@@ -21,6 +21,8 @@ using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
+using pengdows.crud.@internal;
+using pengdows.crud.wrappers;
 
 namespace pengdows.crud.dialects;
 
@@ -141,11 +143,90 @@ internal class SnowflakeDialect : SqlDialect
         return connectionString;
     }
 
+    private string? _sessionSettings;
+
+    public override async Task<IDatabaseProductInfo> DetectDatabaseInfoAsync(ITrackedConnection connection)
+    {
+        var productInfo = await base.DetectDatabaseInfoAsync(connection);
+
+        if (_sessionSettings == null)
+        {
+            var result = GetSnowflakeSessionSettings(connection);
+            _sessionSettings = result.Settings;
+
+            if (!string.IsNullOrWhiteSpace(_sessionSettings))
+            {
+                Logger.LogInformation("Applying Snowflake session settings on first connect:\n{Settings}",
+                    _sessionSettings);
+            }
+        }
+
+        return productInfo;
+    }
+
+    private SessionSettingsResult GetSnowflakeSessionSettings(IDbConnection connection)
+    {
+        return EvaluateSessionSettings(
+            connection,
+            conn =>
+            {
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SHOW PARAMETERS IN SESSION";
+
+                var snapshot = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                using (var reader = cmd.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        var key = reader["key"]?.ToString();
+                        var val = reader["value"]?.ToString();
+                        if (key != null && val != null)
+                        {
+                            snapshot[key] = val;
+                        }
+                    }
+                }
+
+                var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+                try
+                {
+                    if (!snapshot.TryGetValue("TIMEZONE", out var tz) ||
+                        !string.Equals(tz, "UTC", StringComparison.OrdinalIgnoreCase))
+                    {
+                        sb.Append("SET TIMEZONE = 'UTC';");
+                    }
+
+                    if (!snapshot.TryGetValue("TIMESTAMP_OUTPUT_FORMAT", out var fmt) ||
+                        !string.Equals(fmt, "YYYY-MM-DD HH24:MI:SS.FF3", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (sb.Length > 0) sb.AppendLine();
+                        sb.Append("SET TIMESTAMP_OUTPUT_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF3';");
+                    }
+
+                    if (!snapshot.TryGetValue("LOCK_TIMEOUT", out var lt) ||
+                        !string.Equals(lt, "30000", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (sb.Length > 0) sb.AppendLine();
+                        sb.Append("SET LOCK_TIMEOUT = 30000;");
+                    }
+
+                    return new SessionSettingsResult(sb.ToString(), snapshot, false);
+                }
+                finally
+                {
+                    sb.Dispose();
+                }
+            },
+            () => new SessionSettingsResult(
+                "SET TIMEZONE = 'UTC';\nSET TIMESTAMP_OUTPUT_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF3';\nSET LOCK_TIMEOUT = 30000;",
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
+                true),
+            "Failed to check Snowflake session settings");
+    }
+
     public override string GetBaseSessionSettings()
     {
-        return "SET TIMEZONE = 'UTC';\n" +
-               "SET TIMESTAMP_OUTPUT_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF3';\n" +
-               "SET LOCK_TIMEOUT = 30000;";
+        return _sessionSettings ?? "SET TIMEZONE = 'UTC';\nSET TIMESTAMP_OUTPUT_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF3';\nSET LOCK_TIMEOUT = 30000;";
     }
 
     public override string GetReadOnlySessionSettings()

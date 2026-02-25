@@ -162,6 +162,13 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
         return _sharedCommandFailures.TryGetValue(commandText, out exception);
     }
 
+    public void EnqueueReaderResult(IEnumerable<Dictionary<string, object>> rows)
+    {
+        var conn = (fakeDbConnection)CreateConnection();
+        conn.ReaderResults.Enqueue(rows);
+        _connections.Insert(0, conn);
+    }
+
     public override DbParameter CreateParameter()
     {
         return new fakeDbParameter();

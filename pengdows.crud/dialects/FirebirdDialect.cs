@@ -22,6 +22,7 @@ using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
+using pengdows.crud.@internal;
 using pengdows.crud.wrappers;
 
 namespace pengdows.crud.dialects;
@@ -114,9 +115,73 @@ internal class FirebirdDialect : SqlDialect
         return query.Replace(" LIMIT 1", " ROWS 1", StringComparison.Ordinal);
     }
 
+    private string? _sessionSettings;
+
+    public override async Task<IDatabaseProductInfo> DetectDatabaseInfoAsync(ITrackedConnection connection)
+    {
+        var productInfo = await base.DetectDatabaseInfoAsync(connection);
+
+        if (_sessionSettings == null)
+        {
+            var result = GetFirebirdSessionSettings(connection);
+            _sessionSettings = result.Settings;
+
+            if (!string.IsNullOrWhiteSpace(_sessionSettings))
+            {
+                Logger.LogInformation("Applying Firebird session settings on first connect:\n{Settings}",
+                    _sessionSettings);
+            }
+        }
+
+        return productInfo;
+    }
+
+    private SessionSettingsResult GetFirebirdSessionSettings(IDbConnection connection)
+    {
+        return EvaluateSessionSettings(
+            connection,
+            conn =>
+            {
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT mon$sql_dialect FROM mon$database";
+
+                var dialectValue = cmd.ExecuteScalar();
+                var currentDialect = dialectValue != null ? Convert.ToInt32(dialectValue) : 3;
+
+                var snapshot = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["mon$sql_dialect"] = currentDialect.ToString()
+                };
+
+                var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+                try
+                {
+                    // SET NAMES UTF8 is mandatory as we can't easily interrogate the session charset
+                    sb.Append("SET NAMES UTF8;");
+
+                    if (currentDialect != 3)
+                    {
+                        sb.AppendLine();
+                        sb.Append("SET SQL DIALECT 3;");
+                    }
+
+                    return new SessionSettingsResult(sb.ToString(), snapshot, false);
+                }
+                finally
+                {
+                    sb.Dispose();
+                }
+            },
+            () => new SessionSettingsResult(
+                "SET NAMES UTF8;\nSET SQL DIALECT 3;",
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
+                true),
+            "Failed to check Firebird session settings");
+    }
+
     public override string GetBaseSessionSettings()
     {
-        return "SET NAMES UTF8;\nSET SQL DIALECT 3;";
+        return _sessionSettings ?? "SET NAMES UTF8;\nSET SQL DIALECT 3;";
     }
 
     public override string GetReadOnlySessionSettings()
