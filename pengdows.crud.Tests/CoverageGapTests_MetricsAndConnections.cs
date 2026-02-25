@@ -56,7 +56,10 @@ public class CoverageGapTests_MetricsAndConnections
             TransactionsRolledBack: 26,
             SlowCommandsTotal: 27,
             P95TransactionMs: 28.0,
-            P99TransactionMs: 29.0);
+            P99TransactionMs: 29.0,
+            ErrorDeadlocks: 30,
+            ErrorSerializationFailures: 31,
+            ErrorConstraintViolations: 32);
 
         Assert.Equal(1, rm.ConnectionsCurrent);
         Assert.Equal(2, rm.PeakOpenConnections);
@@ -82,6 +85,14 @@ public class CoverageGapTests_MetricsAndConnections
         Assert.Equal(22, rm.TransactionsActive);
         Assert.Equal(23, rm.TransactionsMax);
         Assert.Equal(24.0, rm.AvgTransactionMs);
+        Assert.Equal(25, rm.TransactionsCommitted);
+        Assert.Equal(26, rm.TransactionsRolledBack);
+        Assert.Equal(27, rm.SlowCommandsTotal);
+        Assert.Equal(28.0, rm.P95TransactionMs);
+        Assert.Equal(29.0, rm.P99TransactionMs);
+        Assert.Equal(30, rm.ErrorDeadlocks);
+        Assert.Equal(31, rm.ErrorSerializationFailures);
+        Assert.Equal(32, rm.ErrorConstraintViolations);
     }
 
     [Fact]
@@ -122,7 +133,7 @@ public class CoverageGapTests_MetricsAndConnections
             seed, seed, seed, seed, seed, seed, seed,
             (int)seed, seed, seed, seed, seed, seed,
             (int)seed, (int)seed, seed,
-            seed, seed, seed, seed, seed);
+            seed, seed, seed, seed, seed, seed, seed, seed);
 
     // =========================================================================
     // MetricsCollector internals — via DatabaseContext

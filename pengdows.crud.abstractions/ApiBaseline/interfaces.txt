@@ -165,6 +165,7 @@ method pengdows.crud.connection.IConnectionLocalState::MarkSessionSettingsApplie
 method pengdows.crud.connection.IConnectionLocalState::MarkShapePrepared(string) -> System.ValueTuple`2<bool, int>
 method pengdows.crud.connection.IConnectionLocalState::Reset() -> void
 method pengdows.crud.dialects.ISqlDialect::ApplyConnectionSettings(System.Data.IDbConnection, pengdows.crud.IDatabaseContext, bool) -> void
+method pengdows.crud.dialects.ISqlDialect::ClassifyException(System.Exception) -> pengdows.crud.enums.DbErrorCategory
 method pengdows.crud.dialects.ISqlDialect::CreateDbParameter<T>(System.Data.DbType, T) -> System.Data.Common.DbParameter
 method pengdows.crud.dialects.ISqlDialect::CreateDbParameter<T>(string, System.Data.DbType, T) -> System.Data.Common.DbParameter
 method pengdows.crud.dialects.ISqlDialect::DetectDatabaseInfo(pengdows.crud.wrappers.ITrackedConnection) -> pengdows.crud.dialects.IDatabaseProductInfo

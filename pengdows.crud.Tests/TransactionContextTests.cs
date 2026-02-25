@@ -528,14 +528,14 @@ public class TransactionContextTests
         private static DatabaseMetrics BuildEmptyMetrics()
         {
             var role = new DatabaseRoleMetrics(
-                0, 0, 0, 0, 0d, 0d, 0d, 0, 0, 0, 0, 0, 0d, 0d, 0d, 
-                0, 0, 0, 0, 0, 0, 0, 0, 0d, 0, 0, 0, 0d, 0d);
+                0, 0, 0, 0, 0d, 0d, 0d, 0, 0, 0, 0, 0, 0d, 0d, 0d,
+                0, 0, 0, 0, 0, 0, 0, 0, 0d, 0, 0, 0, 0d, 0d, 0, 0, 0);
 
             return new DatabaseMetrics(
                 role, role,
-                0, 0, 0, 0, 0d, 0d, 0d, 0, 0, 0, 
-                0, 0, 0d, 0d, 0d, 0, 0, 0, 0, 
-                0, 0, 0, 0, 0d, 0, 0, 0, 0d, 0d);
+                0, 0, 0, 0, 0d, 0d, 0d, 0, 0, 0,
+                0, 0, 0d, 0d, 0d, 0, 0, 0, 0,
+                0, 0, 0, 0, 0d, 0, 0, 0, 0d, 0d, 0, 0, 0);
         }
     }
 
