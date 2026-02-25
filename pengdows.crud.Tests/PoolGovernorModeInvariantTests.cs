@@ -33,7 +33,7 @@ public sealed class PoolGovernorModeInvariantTests
     public void SingleWriter_UsesStandardLifecycle_WithSingleWriteSlot()
     {
         // SingleWriter mode now uses Standard lifecycle with governor policy:
-        // - Each write acquires/releases a permit (no pinned connection)
+        // - Each write acquires/releases a slot (no pinned connection)
         // - WriteSlots = 1 enforces single-writer rule
         // - Turnstile provides writer preference fairness
 
@@ -52,8 +52,8 @@ public sealed class PoolGovernorModeInvariantTests
         var writer = ctx.GetPoolStatisticsSnapshot(PoolLabel.Writer);
 
         Assert.False(reader.Disabled);
-        Assert.Equal(1, writer.MaxPermits); // SingleWriter enforces single write slot
-        Assert.Equal(0, writer.TotalAcquired); // No pre-acquired pinned permit
+        Assert.Equal(1, writer.MaxSlots); // SingleWriter enforces single write slot
+        Assert.Equal(0, writer.TotalAcquired); // No pre-acquired pinned slot
 
         // Acquire and release a write connection
         var writeConn1 = ctx.GetConnection(ExecutionType.Write);
@@ -66,7 +66,7 @@ public sealed class PoolGovernorModeInvariantTests
         Assert.Equal(1, ctx.GetPoolStatisticsSnapshot(PoolLabel.Writer).InUse);
         ctx.CloseAndDisposeConnection(writeConn2);
 
-        // Total write permits acquired should be 2 (one per connection)
+        // Total write slots acquired should be 2 (one per connection)
         Assert.Equal(2, ctx.GetPoolStatisticsSnapshot(PoolLabel.Writer).TotalAcquired);
 
         // Reads also work

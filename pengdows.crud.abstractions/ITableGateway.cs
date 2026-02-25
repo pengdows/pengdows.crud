@@ -49,6 +49,12 @@ public interface ITableGateway<TEntity, TRowID>
     ISqlContainer BuildCreate(TEntity objectToCreate, IDatabaseContext? context = null);
 
     /// <summary>
+    /// Executes a SQL INSERT for the given object.
+    /// Returns true when exactly one row was affected.
+    /// </summary>
+    Task<bool> CreateAsync(TEntity entity);
+
+    /// <summary>
     /// Executes a SQL INSERT for the given object with cancellation support.
     /// Returns true when exactly one row was affected.
     /// </summary>
@@ -162,6 +168,9 @@ public interface ITableGateway<TEntity, TRowID>
     /// before issuing it. Override <paramref name="context"/> only for execution
     /// within a transaction derived from the parent context.
     /// </remarks>
+    /// <param name="objectToUpdate">The entity whose current values generate the UPDATE.</param>
+    /// <param name="context">Optional context override for transaction scenarios.</param>
+    /// <param name="cancellationToken">Token to cancel the build operation.</param>
     /// <example>
     /// <code>
     /// var sc = await helper.BuildUpdateAsync(entity);
@@ -169,9 +178,6 @@ public interface ITableGateway<TEntity, TRowID>
     /// var rows = await sc.ExecuteNonQueryAsync();
     /// </code>
     /// </example>
-    /// <summary>
-    /// Builds an UPDATE statement asynchronously with cancellation support.
-    /// </summary>
     Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
@@ -185,6 +191,10 @@ public interface ITableGateway<TEntity, TRowID>
     /// modified. Supply <paramref name="context"/> only when running within a
     /// transaction created from the parent context.
     /// </remarks>
+    /// <param name="objectToUpdate">The entity whose current values generate the UPDATE.</param>
+    /// <param name="loadOriginal">When true, reloads the original row before building the statement.</param>
+    /// <param name="context">Optional context override for transaction scenarios.</param>
+    /// <param name="cancellationToken">Token to cancel the build operation.</param>
     /// <example>
     /// <code>
     /// var sc = await helper.BuildUpdateAsync(entity, loadOriginal: true);
@@ -192,9 +202,6 @@ public interface ITableGateway<TEntity, TRowID>
     /// var rows = await sc.ExecuteNonQueryAsync();
     /// </code>
     /// </example>
-    /// <summary>
-    /// Builds an UPDATE statement, optionally reloading the original, with cancellation support.
-    /// </summary>
     Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
@@ -221,14 +228,14 @@ public interface ITableGateway<TEntity, TRowID>
     /// <remarks>
     /// Use for deleting a single row by its identifier.
     /// </remarks>
+    /// <param name="id">The pseudo key of the row to delete.</param>
+    /// <param name="context">Optional context override for transaction scenarios.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <example>
     /// <code>
     /// var rows = await helper.DeleteAsync(42);
     /// </code>
     /// </example>
-    /// <summary>
-    /// Executes a DELETE for the given row identifier with cancellation support.
-    /// </summary>
     Task<int> DeleteAsync(TRowID id, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
@@ -241,70 +248,45 @@ public interface ITableGateway<TEntity, TRowID>
     /// <paramref name="context"/> only when executing within a transaction
     /// created from the parent database context.
     /// </remarks>
+    /// <param name="ids">The row IDs to retrieve.</param>
+    /// <param name="context">Optional context override for transaction scenarios.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <example>
     /// <code>
     /// var entities = await helper.RetrieveAsync(new[] { 1, 2 });
     /// </code>
     /// </example>
-    /// <summary>
-    /// Loads all entities matching the provided row IDs with cancellation support.
-    /// </summary>
     Task<List<TEntity>> RetrieveAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Streams entities matching the provided row IDs, yielding results as they are read from the database.
-    /// This method is memory-efficient for large ID lists as it does not materialize the entire list in memory.
+    /// Memory-efficient for large ID lists as it does not materialize the entire result set.
     /// </summary>
-    /// <param name="ids">Collection of row IDs to retrieve</param>
-    /// <param name="context">Optional database context. If null, uses the helper's default context.</param>
-    /// <returns>An async stream of entities matching the provided IDs</returns>
     /// <remarks>
     /// <para>
-    /// This method is ideal for processing large sets of entities without loading them all into memory at once.
-    /// It internally builds a SELECT statement with the provided IDs and streams results using <see cref="LoadStreamAsync"/>.
+    /// Ideal for processing large sets of entities without loading them all into memory at once.
+    /// Internally builds a SELECT statement and streams results via <see cref="LoadStreamAsync"/>.
     /// </para>
     /// <para>
-    /// The stream can be enumerated multiple times, with each enumeration executing a new database query.
-    /// Breaking from the enumeration early will dispose the reader and stop processing remaining results.
+    /// The stream can be enumerated multiple times; each enumeration issues a new database query.
+    /// Breaking from the enumeration early disposes the reader and stops processing remaining results.
+    /// Cancellation is observed during database operations and iteration.
     /// </para>
     /// <para>
     /// Override <paramref name="context"/> only when executing within a transaction created from the parent database context.
     /// </para>
     /// </remarks>
+    /// <param name="ids">Collection of row IDs to retrieve.</param>
+    /// <param name="context">Optional context override for transaction scenarios.</param>
+    /// <param name="cancellationToken">Token to cancel the streaming operation.</param>
+    /// <returns>An async stream of entities matching the provided IDs.</returns>
     /// <example>
-    /// Process a large number of entities without loading all into memory:
     /// <code>
-    /// // Stream 10,000 orders without loading all into memory
-    /// var orderIds = await GetAllOrderIdsAsync();
-    /// await foreach (var order in helper.RetrieveStreamAsync(orderIds))
+    /// await foreach (var order in helper.RetrieveStreamAsync(orderIds, cancellationToken: cts.Token))
     /// {
     ///     await ProcessOrderAsync(order);
-    ///
-    ///     // Can break early without loading remaining orders
-    ///     if (shouldStop)
-    ///         break;
-    /// }
-    /// </code>
-    /// </example>
-    /// <summary>
-    /// Streams entities matching the provided row IDs with cancellation support.
-    /// </summary>
-    /// <param name="ids">Collection of row IDs to retrieve</param>
-    /// <param name="context">Optional database context. If null, uses the helper's default context.</param>
-    /// <param name="cancellationToken">Cancellation token to observe during enumeration</param>
-    /// <returns>An async stream of entities matching the provided IDs</returns>
-    /// <remarks>
-    /// This method supports cancellation via the provided token. The cancellation will be observed
-    /// during database operations and iteration. Cancelling will dispose resources and stop enumeration.
-    /// </remarks>
-    /// <example>
-    /// Stream with cancellation support:
-    /// <code>
-    /// var cts = new CancellationTokenSource();
-    /// await foreach (var entity in helper.RetrieveStreamAsync(ids, null, cts.Token))
-    /// {
-    ///     await ProcessAsync(entity);
+    ///     if (shouldStop) break;
     /// }
     /// </code>
     /// </example>
@@ -317,14 +299,14 @@ public interface ITableGateway<TEntity, TRowID>
     /// <remarks>
     /// Allows batch deletion of multiple rows in a single statement.
     /// </remarks>
+    /// <param name="ids">The row IDs to delete.</param>
+    /// <param name="context">Optional context override for transaction scenarios.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <example>
     /// <code>
     /// var rows = await helper.DeleteAsync(new[] { 1, 2, 3 });
     /// </code>
     /// </example>
-    /// <summary>
-    /// Executes a DELETE for all provided row IDs with cancellation support.
-    /// </summary>
     Task<int> DeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
@@ -352,11 +334,9 @@ public interface ITableGateway<TEntity, TRowID>
     /// Empty lists return 0. Multiple entities are chunked and executed sequentially to respect parameter limits.
     /// </remarks>
     /// <param name="entities">The entities to delete. Must not be null.</param>
-    /// <param name="context">Optional database context override for transaction scenarios.</param>
+    /// <param name="context">Optional context override for transaction scenarios.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <returns>Total number of affected rows across all chunks.</returns>
-    /// <summary>
-    /// Executes a DELETE for all provided object identities with cancellation support.
-    /// </summary>
     Task<int> BatchDeleteAsync(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
@@ -368,14 +348,14 @@ public interface ITableGateway<TEntity, TRowID>
     /// Executes an UPDATE using the values currently on
     /// <paramref name="objectToUpdate"/> without reloading the original entity.
     /// </remarks>
+    /// <param name="objectToUpdate">The entity whose current values generate the UPDATE.</param>
+    /// <param name="context">Optional context override for transaction scenarios.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <example>
     /// <code>
     /// var rows = await helper.UpdateAsync(entity);
     /// </code>
     /// </example>
-    /// <summary>
-    /// Executes an UPDATE for the given object with cancellation support.
-    /// </summary>
     Task<int> UpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
@@ -387,14 +367,15 @@ public interface ITableGateway<TEntity, TRowID>
     /// Setting <paramref name="loadOriginal"/> to <c>true</c> reloads the
     /// original row so that differences can be detected before executing the update.
     /// </remarks>
+    /// <param name="objectToUpdate">The entity whose current values generate the UPDATE.</param>
+    /// <param name="loadOriginal">When true, reloads the original row before building the update.</param>
+    /// <param name="context">Optional context override for transaction scenarios.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <example>
     /// <code>
     /// var rows = await helper.UpdateAsync(entity, loadOriginal: true);
     /// </code>
     /// </example>
-    /// <summary>
-    /// Executes an UPDATE for the given object, optionally reloading the original, with cancellation support.
-    /// </summary>
     Task<int> UpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
@@ -416,16 +397,16 @@ public interface ITableGateway<TEntity, TRowID>
     ISqlContainer BuildUpsert(TEntity entity, IDatabaseContext? context = null);
 
     /// <summary>
-    /// Inserts the entity if the ID is null or default, otherwise updates it. Returns the affected row count.
+    /// Executes a provider-specific UPSERT for the given entity and returns the affected row count.
     /// </summary>
-    /// <summary>
-    /// Inserts the entity if the ID is null or default, otherwise updates it, with cancellation support.
-    /// </summary>
+    /// <param name="entity">The entity to insert or update.</param>
+    /// <param name="context">Optional context override for transaction scenarios.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
     Task<int> UpsertAsync(TEntity entity, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Loads a single object from the database using primary key values.
+    /// Loads a single object from the database using its <c>[PrimaryKey]</c> column values.
     /// </summary>
     /// <remarks>
     /// Use when the entity has a composite key or when the values are already
@@ -434,34 +415,34 @@ public interface ITableGateway<TEntity, TRowID>
     /// Supply <paramref name="context"/> only for transactions derived from the
     /// parent context.
     /// </remarks>
+    /// <param name="objectToRetrieve">Entity instance with primary key values populated.</param>
+    /// <param name="context">Optional context override for transaction scenarios.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <example>
     /// <code>
     /// var found = await helper.RetrieveOneAsync(entity);
     /// </code>
     /// </example>
-    /// <summary>
-    /// Loads a single object from the database using primary key values with cancellation support.
-    /// </summary>
     Task<TEntity?> RetrieveOneAsync(TEntity objectToRetrieve, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Loads a single object from the database using the row ID.
+    /// Loads a single object from the database using the row ID (<c>[Id]</c> pseudo key).
     /// </summary>
     /// <remarks>
-    /// Simpler overload when only the row ID is known. This convenience method
-    /// builds the query and calls <see cref="LoadSingleAsync"/>. Override
+    /// Use this overload when only the row ID is known. Builds the query and delegates
+    /// materialization to <see cref="LoadSingleAsync"/>. Override
     /// <paramref name="context"/> only when running inside a transaction from
     /// the parent context.
     /// </remarks>
+    /// <param name="id">The pseudo key of the row to retrieve.</param>
+    /// <param name="context">Optional context override for transaction scenarios.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <example>
     /// <code>
     /// var found = await helper.RetrieveOneAsync(42);
     /// </code>
     /// </example>
-    /// <summary>
-    /// Loads a single object from the database using the row ID with cancellation support.
-    /// </summary>
     Task<TEntity?> RetrieveOneAsync(TRowID id, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
@@ -609,11 +590,9 @@ public interface ITableGateway<TEntity, TRowID>
     /// Multiple entities are chunked and executed sequentially.
     /// </remarks>
     /// <param name="entities">The entities to insert. Must not be null.</param>
-    /// <param name="context">Optional database context override for transaction scenarios.</param>
+    /// <param name="context">Optional context override for transaction scenarios.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <returns>Total number of affected rows across all chunks.</returns>
-    /// <summary>
-    /// Executes a batch INSERT for the given entities with cancellation support.
-    /// </summary>
     Task<int> BatchCreateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
@@ -643,9 +622,9 @@ public interface ITableGateway<TEntity, TRowID>
     /// <summary>
     /// Executes a batch UPSERT for the given entities and returns the total number of affected rows.
     /// </summary>
-    /// <summary>
-    /// Executes a batch UPSERT for the given entities with cancellation support.
-    /// </summary>
+    /// <param name="entities">The entities to upsert. Must not be null.</param>
+    /// <param name="context">Optional context override for transaction scenarios.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
     Task<int> BatchUpsertAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 

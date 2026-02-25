@@ -1,5 +1,25 @@
 namespace pengdows.crud.enums;
 
+/// <summary>
+/// Identifies a supported database product.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The <c>[Flags]</c> attribute is intentional. Values can be combined with bitwise OR for
+/// multi-product matching or filtering — for example:
+/// <code>
+/// var mysqlFamily = SupportedDatabase.MySql | SupportedDatabase.AuroraMySql | SupportedDatabase.MariaDb;
+/// bool isMysqlCompatible = (mysqlFamily &amp; context.Product) != 0;
+/// </code>
+/// </para>
+/// <para>
+/// <c>Unknown = 0</c> is the correct zero value for a flags enum and means the database
+/// product has not yet been detected or is not recognised.
+/// </para>
+/// <para>
+/// Values are ordered roughly by SQL standard compliance, from most to least standard-conforming.
+/// </para>
+/// </remarks>
 [Flags]
 public enum SupportedDatabase
 {
@@ -15,5 +35,7 @@ public enum SupportedDatabase
     DuckDB = 256, // Modern analytical database with excellent SQL:2016 compliance
     YugabyteDb = 512, // Distributed SQL database (PostgreSQL-compatible)
     TiDb = 1024, // Distributed SQL database (MySQL-compatible)
-    Snowflake = 2048 // Cloud data warehouse with strong SQL:2016 compliance
+    Snowflake = 2048, // Cloud data warehouse with strong SQL:2016 compliance
+    AuroraMySql = 4096, // AWS Aurora MySQL flavor
+    AuroraPostgreSql = 8192 // AWS Aurora PostgreSQL flavor
 }

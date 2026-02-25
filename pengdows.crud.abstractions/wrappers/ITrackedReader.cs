@@ -1,8 +1,4 @@
-#region
-
 using System.Data;
-
-#endregion
 
 namespace pengdows.crud.wrappers;
 

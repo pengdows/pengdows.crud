@@ -72,12 +72,14 @@ public static class SqlDialectFactory
             SupportedDatabase.YugabyteDb => new YugabyteDbDialect(factory, logger),
             SupportedDatabase.TiDb => new TiDbDialect(factory, logger),
             SupportedDatabase.MySql => new MySqlDialect(factory, logger),
+            SupportedDatabase.AuroraMySql => new MySqlDialect(factory, logger, SupportedDatabase.AuroraMySql),
             SupportedDatabase.MariaDb => new MariaDbDialect(factory, logger),
             SupportedDatabase.Sqlite => new SqliteDialect(factory, logger),
             SupportedDatabase.Oracle => new OracleDialect(factory, logger),
             SupportedDatabase.Firebird => new FirebirdDialect(factory, logger),
             SupportedDatabase.DuckDB => new DuckDbDialect(factory, logger),
             SupportedDatabase.Snowflake => new SnowflakeDialect(factory, logger),
+            SupportedDatabase.AuroraPostgreSql => new PostgreSqlDialect(factory, logger, SupportedDatabase.AuroraPostgreSql),
             _ => new Sql92Dialect(factory, logger)
         };
     }

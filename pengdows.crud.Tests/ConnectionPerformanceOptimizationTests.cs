@@ -47,7 +47,7 @@ public sealed class ConnectionPerformanceOptimizationTests
         Assert.Null(preparedField.GetValue(state));
         Assert.Null(orderField.GetValue(state));
 
-        var added = state.MarkShapePrepared("SELECT 1", out var evicted);
+        var (added, evicted) = state.MarkShapePrepared("SELECT 1");
         Assert.True(added);
         Assert.Equal(0, evicted);
 

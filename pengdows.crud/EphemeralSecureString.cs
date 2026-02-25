@@ -17,13 +17,9 @@
 //   string without storing it in a variable.
 // =============================================================================
 
-#region
-
 using System.Security.Cryptography;
 using System.Text;
 using pengdows.crud.infrastructure;
-
-#endregion
 
 namespace pengdows.crud;
 
@@ -130,6 +126,12 @@ public sealed class EphemeralSecureString : SafeAsyncDisposableBase, IEphemeralS
     {
         var plain = Reveal();
         use(plain);
+    }
+
+    public ValueTask WithRevealedAsync(Func<string, ValueTask> use)
+    {
+        var plain = Reveal();
+        return use(plain);
     }
 
     private void ClearPlainText(object? _)

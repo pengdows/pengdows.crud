@@ -21,7 +21,7 @@ namespace pengdows.crud.dialects;
 internal class CockroachDbDialect : PostgreSqlDialect
 {
     internal CockroachDbDialect(DbProviderFactory factory, ILogger logger)
-        : base(factory, logger)
+        : base(factory, logger, SupportedDatabase.CockroachDb)
     {
     }
 

@@ -27,7 +27,7 @@ namespace pengdows.crud.metrics;
 /// <param name="TransactionsActive">Current active transactions.</param>
 /// <param name="TransactionsMax">Historical max concurrent transactions.</param>
 /// <param name="AvgTransactionMs">Exponential weighted moving average of transaction duration in milliseconds.</param>
-public readonly record struct DatabaseRoleMetrics(
+public sealed record DatabaseRoleMetrics(
     int ConnectionsCurrent,
     int PeakOpenConnections,
     long ConnectionsOpened,
@@ -51,4 +51,13 @@ public readonly record struct DatabaseRoleMetrics(
     long StatementsEvicted,
     int TransactionsActive,
     int TransactionsMax,
-    double AvgTransactionMs);
+    double AvgTransactionMs)
+{
+    /// <summary>
+    /// Represents an empty role metrics snapshot (no role-specific tracking active).
+    /// </summary>
+    public static readonly DatabaseRoleMetrics None = new(
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0);
+}

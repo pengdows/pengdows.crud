@@ -5,7 +5,7 @@
 // AI SUMMARY:
 // - High-performance string builder optimized for SQL generation.
 // - Ref struct: stack-allocated, no heap for small strings (<1KB default).
-// - Initial buffer is stack-allocated Span<char>; grows to heap if needed.
+// - Initial buffer is stack-allocated Span<char>; grows via ArrayPool if needed.
 // - Key methods:
 //   * Append(char), Append(string), Append(ReadOnlySpan<char>)
 //   * Append(int), Append(long) - formatted with InvariantCulture
@@ -13,12 +13,14 @@
 //   * AppendSpan(length) - reserves space, returns writable span
 //   * Clear() - resets position without deallocating
 //   * ToString() - returns built string
+//   * Dispose() - returns rented buffer to ArrayPool
 // - 60-70% fewer allocations than StringBuilder for typical SQL workloads.
-// - Grow() doubles capacity, moves to heap array when stack is exhausted.
+// - Grow() doubles capacity, moves to ArrayPool when stack is exhausted.
 // - Thread-safe (each instance is independent, ref struct not shared).
 // =============================================================================
 
 #nullable enable
+using System.Buffers;
 using System.Diagnostics;
 using System.Globalization;
 
@@ -26,13 +28,13 @@ namespace pengdows.crud.@internal;
 
 internal ref struct StringBuilderLite
 {
-    private char[]? _heap;
+    private char[]? _rented;
     private Span<char> _buf;
     private int _pos;
 
     public StringBuilderLite(Span<char> initial)
     {
-        _heap = null;
+        _rented = null;
         _buf = initial;
         _pos = 0;
     }
@@ -141,6 +143,16 @@ internal ref struct StringBuilderLite
         return _buf.Slice(0, _pos).ToString();
     }
 
+    public void Dispose()
+    {
+        if (_rented != null)
+        {
+            var arr = _rented;
+            _rented = null;
+            ArrayPool<char>.Shared.Return(arr);
+        }
+    }
+
     private void Grow(int minCapacity)
     {
         Debug.Assert(minCapacity > _buf.Length);
@@ -151,10 +163,15 @@ internal ref struct StringBuilderLite
             newCap = minCapacity;
         }
 
-        var arr = new char[newCap];
-        _buf.Slice(0, _pos).CopyTo(arr);
+        var next = ArrayPool<char>.Shared.Rent(newCap);
+        _buf.Slice(0, _pos).CopyTo(next);
 
-        _heap = arr;
-        _buf = arr;
+        if (_rented != null)
+        {
+            ArrayPool<char>.Shared.Return(_rented);
+        }
+
+        _rented = next;
+        _buf = next;
     }
 }

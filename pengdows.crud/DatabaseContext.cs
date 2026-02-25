@@ -175,6 +175,8 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     /// <inheritdoc/>
     public Guid RootId { get; } = Guid.NewGuid();
 
+    internal DbProviderFactory Factory => _factory;
+
     private ReadWriteMode _readWriteMode = ReadWriteMode.ReadWrite;
 
     /// <inheritdoc/>

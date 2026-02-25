@@ -82,13 +82,13 @@ public class TrackedWrapperTests
     }
 
     [Fact]
-    public void TrackedConnection_Dispose_ReleasesPermit_WhenUnderlyingDisposeThrows()
+    public void TrackedConnection_Dispose_ReleasesSlot_WhenUnderlyingDisposeThrows()
     {
         var fake = new fakeDbConnection();
         fake.SetFailOnClose(new InvalidOperationException("boom"));
         var governor = new PoolGovernor(PoolLabel.Writer, "test", 1, TimeSpan.FromMilliseconds(100));
-        var permit = governor.Acquire();
-        var tracked = new TrackedConnection(fake, permit: permit);
+        var slot = governor.Acquire();
+        var tracked = new TrackedConnection(fake, slot: slot);
 
         var before = governor.GetSnapshot();
         Assert.Equal(1, before.InUse);

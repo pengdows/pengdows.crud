@@ -143,15 +143,11 @@ public class TrackedReaderTests
             // No-op for test
         }
 
-        public Task LockAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.CompletedTask;
-        }
+        public ValueTask LockAsync(CancellationToken cancellationToken = default)
+            => ValueTask.CompletedTask;
 
-        public Task<bool> TryLockAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(true);
-        }
+        public ValueTask<bool> TryLockAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+            => ValueTask.FromResult(true);
 
         public void Dispose()
         {
@@ -188,15 +184,11 @@ public class TrackedReaderTests
             // No-op for test
         }
 
-        public Task LockAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.CompletedTask;
-        }
+        public ValueTask LockAsync(CancellationToken cancellationToken = default)
+            => ValueTask.CompletedTask;
 
-        public Task<bool> TryLockAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(true);
-        }
+        public ValueTask<bool> TryLockAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+            => ValueTask.FromResult(true);
 
         public void Dispose()
         {

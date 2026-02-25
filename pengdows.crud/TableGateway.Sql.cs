@@ -244,65 +244,72 @@ public partial class TableGateway<TEntity, TRowID>
         if (updateColumns != null)
         {
             var frag = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
-            if (dialect.SupportsMerge)
+            try
             {
-                var tp = dialect.MergeUpdateRequiresTargetAlias ? "t." : "";
-                foreach (var col in updateColumns)
+                if (dialect.SupportsMerge)
                 {
-                    if (upsertKeySet?.Contains(col) == true) continue;
-                    if (_auditValueResolver == null && col.IsLastUpdatedBy) continue;
-                    if (frag.Length > 0) frag.Append(", ");
-                    frag.Append(tp);
-                    frag.Append(dialect.WrapSimpleName(col.Name));
-                    frag.Append(" = s.");
-                    frag.Append(dialect.WrapSimpleName(col.Name));
-                }
-
-                if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
-                {
-                    frag.Append(", ");
-                    frag.Append(tp);
-                    frag.Append(dialect.WrapSimpleName(_versionColumn.Name));
-                    frag.Append(" = ");
-                    frag.Append(tp);
-                    frag.Append(dialect.WrapSimpleName(_versionColumn.Name));
-                    frag.Append(" + 1");
-                }
-            }
-            else
-            {
-                // ON CONFLICT (PostgreSQL/CockroachDB) or ON DUPLICATE KEY UPDATE (MySQL/MariaDB)
-                try
-                {
+                    var tp = dialect.MergeUpdateRequiresTargetAlias ? "t." : "";
                     foreach (var col in updateColumns)
                     {
                         if (upsertKeySet?.Contains(col) == true) continue;
                         if (_auditValueResolver == null && col.IsLastUpdatedBy) continue;
                         if (frag.Length > 0) frag.Append(", ");
+                        frag.Append(tp);
                         frag.Append(dialect.WrapSimpleName(col.Name));
-                        frag.Append(" = ");
-                        frag.Append(dialect.UpsertIncomingColumn(col.Name));
+                        frag.Append(" = s.");
+                        frag.Append(dialect.WrapSimpleName(col.Name));
                     }
 
                     if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
                     {
                         frag.Append(", ");
+                        frag.Append(tp);
                         frag.Append(dialect.WrapSimpleName(_versionColumn.Name));
                         frag.Append(" = ");
+                        frag.Append(tp);
                         frag.Append(dialect.WrapSimpleName(_versionColumn.Name));
                         frag.Append(" + 1");
                     }
                 }
-                catch (NotSupportedException)
+                else
                 {
-                    // Dialect doesn't support upsert (e.g., FakeDb default dialect)
-                    frag.Clear();
+                    // ON CONFLICT (PostgreSQL/CockroachDB) or ON DUPLICATE KEY UPDATE (MySQL/MariaDB)
+                    try
+                    {
+                        foreach (var col in updateColumns)
+                        {
+                            if (upsertKeySet?.Contains(col) == true) continue;
+                            if (_auditValueResolver == null && col.IsLastUpdatedBy) continue;
+                            if (frag.Length > 0) frag.Append(", ");
+                            frag.Append(dialect.WrapSimpleName(col.Name));
+                            frag.Append(" = ");
+                            frag.Append(dialect.UpsertIncomingColumn(col.Name));
+                        }
+
+                        if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
+                        {
+                            frag.Append(", ");
+                            frag.Append(dialect.WrapSimpleName(_versionColumn.Name));
+                            frag.Append(" = ");
+                            frag.Append(dialect.WrapSimpleName(_versionColumn.Name));
+                            frag.Append(" + 1");
+                        }
+                    }
+                    catch (NotSupportedException)
+                    {
+                        // Dialect doesn't support upsert (e.g., FakeDb default dialect)
+                        frag.Clear();
+                    }
+                }
+
+                if (frag.Length > 0)
+                {
+                    upsertUpdateFragment = frag.ToString();
                 }
             }
-
-            if (frag.Length > 0)
+            finally
             {
-                upsertUpdateFragment = frag.ToString();
+                frag.Dispose();
             }
         }
 

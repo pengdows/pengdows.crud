@@ -132,56 +132,65 @@ public partial class TableGateway<TEntity, TRowID>
         // Use pre-built column/value lists from template - NO MORE DYNAMIC LOOP
         var colSb = SbLite.Create(stackalloc char[512]);
         var valSb = SbLite.Create(stackalloc char[512]);
-        
-        for (var i = 0; i < template.UpsertColumns.Count; i++)
+        try
         {
-            if (i > 0)
+            for (var i = 0; i < template.UpsertColumns.Count; i++)
             {
-                colSb.Append(", ");
-                valSb.Append(", ");
+                if (i > 0)
+                {
+                    colSb.Append(", ");
+                    valSb.Append(", ");
+                }
+
+                colSb.Append(dialect.WrapSimpleName(template.UpsertColumns[i].Name));
+
+                var pName = template.UpsertParameterNames[i];
+                var placeholder = dialect.MakeParameterName(pName);
+                if (template.UpsertColumns[i].IsJsonType)
+                {
+                    placeholder = dialect.RenderJsonArgument(placeholder, template.UpsertColumns[i]);
+                }
+
+                valSb.Append(placeholder);
             }
-            colSb.Append(dialect.WrapSimpleName(template.UpsertColumns[i].Name));
-            
-            var pName = template.UpsertParameterNames[i];
-            var placeholder = dialect.MakeParameterName(pName);
-            if (template.UpsertColumns[i].IsJsonType)
+
+            var parameters = new List<DbParameter>(template.UpsertColumns.Count);
+            binder(entity, parameters);
+
+            var keys = _tableInfo.PrimaryKeys;
+            if (_idColumn == null && keys.Count == 0)
             {
-                placeholder = dialect.RenderJsonArgument(placeholder, template.UpsertColumns[i]);
+                throw new NotSupportedException(UpsertNoKeyMessage);
             }
-            valSb.Append(placeholder);
+
+            var conflictCols = keys.Count > 0 ? keys : new List<IColumnInfo> { _idColumn! };
+
+            var sc = ctx.CreateSqlContainer();
+            sc.Query.Append("INSERT INTO ")
+                .Append(BuildWrappedTableName(dialect))
+                .Append(" (")
+                .Append(colSb.AsSpan())
+                .Append(") VALUES (")
+                .Append(valSb.AsSpan())
+                .Append(") ON CONFLICT (");
+
+            for (var i = 0; i < conflictCols.Count; i++)
+            {
+                if (i > 0) sc.Query.Append(", ");
+                sc.Query.Append(dialect.WrapSimpleName(conflictCols[i].Name));
+            }
+
+            sc.Query.Append(") DO UPDATE SET ")
+                .Append(template.UpsertUpdateFragment);
+
+            sc.AddParameters(parameters);
+            return sc;
         }
-
-        var parameters = new List<DbParameter>(template.UpsertColumns.Count);
-        binder(entity, parameters);
-
-        var keys = _tableInfo.PrimaryKeys;
-        if (_idColumn == null && keys.Count == 0)
+        finally
         {
-            throw new NotSupportedException(UpsertNoKeyMessage);
+            colSb.Dispose();
+            valSb.Dispose();
         }
-
-        var conflictCols = keys.Count > 0 ? keys : new List<IColumnInfo> { _idColumn! };
-
-        var sc = ctx.CreateSqlContainer();
-        sc.Query.Append("INSERT INTO ")
-            .Append(BuildWrappedTableName(dialect))
-            .Append(" (")
-            .Append(colSb.AsSpan())
-            .Append(") VALUES (")
-            .Append(valSb.AsSpan())
-            .Append(") ON CONFLICT (");
-
-        for (var i = 0; i < conflictCols.Count; i++)
-        {
-            if (i > 0) sc.Query.Append(", ");
-            sc.Query.Append(dialect.WrapSimpleName(conflictCols[i].Name));
-        }
-
-        sc.Query.Append(") DO UPDATE SET ")
-            .Append(template.UpsertUpdateFragment);
-
-        sc.AddParameters(parameters);
-        return sc;
     }
 
     private static string FormatFirebirdValueExpression(string placeholder, IColumnInfo column)
@@ -236,54 +245,63 @@ public partial class TableGateway<TEntity, TRowID>
         // Use pre-built column/value lists from template - NO MORE DYNAMIC LOOP
         var colSb = SbLite.Create(stackalloc char[512]);
         var valSb = SbLite.Create(stackalloc char[512]);
-        
-        for (var i = 0; i < template.UpsertColumns.Count; i++)
+        try
         {
-            if (i > 0)
+            for (var i = 0; i < template.UpsertColumns.Count; i++)
             {
-                colSb.Append(", ");
-                valSb.Append(", ");
+                if (i > 0)
+                {
+                    colSb.Append(", ");
+                    valSb.Append(", ");
+                }
+
+                colSb.Append(dialect.WrapSimpleName(template.UpsertColumns[i].Name));
+
+                var pName = template.UpsertParameterNames[i];
+                var placeholder = dialect.MakeParameterName(pName);
+                if (template.UpsertColumns[i].IsJsonType)
+                {
+                    placeholder = dialect.RenderJsonArgument(placeholder, template.UpsertColumns[i]);
+                }
+
+                valSb.Append(placeholder);
             }
-            colSb.Append(dialect.WrapSimpleName(template.UpsertColumns[i].Name));
-            
-            var pName = template.UpsertParameterNames[i];
-            var placeholder = dialect.MakeParameterName(pName);
-            if (template.UpsertColumns[i].IsJsonType)
+
+            var parameters = new List<DbParameter>(template.UpsertColumns.Count);
+            binder(entity, parameters);
+
+            var keys = _tableInfo.PrimaryKeys;
+            if (_idColumn == null && keys.Count == 0)
             {
-                placeholder = dialect.RenderJsonArgument(placeholder, template.UpsertColumns[i]);
+                throw new NotSupportedException(UpsertNoKeyMessage);
             }
-            valSb.Append(placeholder);
+
+            var sc = ctx.CreateSqlContainer();
+            sc.Query.Append("INSERT INTO ")
+                .Append(BuildWrappedTableName(dialect))
+                .Append(" (")
+                .Append(colSb.AsSpan())
+                .Append(") VALUES (")
+                .Append(valSb.AsSpan())
+                .Append(")");
+
+            var incomingAlias = dialect.UpsertIncomingAlias;
+            if (!string.IsNullOrEmpty(incomingAlias))
+            {
+                sc.Query.Append(" AS ").Append(dialect.WrapSimpleName(incomingAlias));
+            }
+
+            sc.Query.Append(" ON DUPLICATE KEY UPDATE ")
+                .Append(template.UpsertUpdateFragment);
+
+            sc.AddParameters(parameters);
+            return sc;
         }
-
-        var parameters = new List<DbParameter>(template.UpsertColumns.Count);
-        binder(entity, parameters);
-
-        var keys = _tableInfo.PrimaryKeys;
-        if (_idColumn == null && keys.Count == 0)
+        finally
         {
-            throw new NotSupportedException(UpsertNoKeyMessage);
+            colSb.Dispose();
+            valSb.Dispose();
         }
-
-        var sc = ctx.CreateSqlContainer();
-        sc.Query.Append("INSERT INTO ")
-            .Append(BuildWrappedTableName(dialect))
-            .Append(" (")
-            .Append(colSb.AsSpan())
-            .Append(") VALUES (")
-            .Append(valSb.AsSpan())
-            .Append(")");
-
-        var incomingAlias = dialect.UpsertIncomingAlias;
-        if (!string.IsNullOrEmpty(incomingAlias))
-        {
-            sc.Query.Append(" AS ").Append(dialect.WrapSimpleName(incomingAlias));
-        }
-
-        sc.Query.Append(" ON DUPLICATE KEY UPDATE ")
-            .Append(template.UpsertUpdateFragment);
-
-        sc.AddParameters(parameters);
-        return sc;
     }
 
     private ISqlContainer BuildUpsertMerge(TEntity entity, IDatabaseContext context)
@@ -311,57 +329,66 @@ public partial class TableGateway<TEntity, TRowID>
         // Use SbLites for insert columns and their s.col aliases — eliminates two List<string> allocations.
         var insertColSb = SbLite.Create(stackalloc char[512]);
         var insertValSb = SbLite.Create(stackalloc char[512]);
-        foreach (var column in insertableColumns)
-        {
-            if (insertColSb.Length > 0) insertColSb.Append(", ");
-            if (insertValSb.Length > 0) insertValSb.Append(", ");
-            var wrapped = dialect.WrapSimpleName(column.Name);
-            insertColSb.Append(wrapped);
-            insertValSb.Append("s.");
-            insertValSb.Append(wrapped);
-        }
-
-        var keys = _tableInfo.PrimaryKeys;
-        if (_idColumn == null && keys.Count == 0)
-        {
-            throw new NotSupportedException(UpsertNoKeyMessage);
-        }
-
-        var joinCols = keys.Count > 0 ? keys : new List<IColumnInfo> { _idColumn! };
         var join = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
-        for (var i = 0; i < joinCols.Count; i++)
+        try
         {
-            if (i > 0)
+            foreach (var column in insertableColumns)
             {
-                join.Append(SqlFragments.And);
+                if (insertColSb.Length > 0) insertColSb.Append(", ");
+                if (insertValSb.Length > 0) insertValSb.Append(", ");
+                var wrapped = dialect.WrapSimpleName(column.Name);
+                insertColSb.Append(wrapped);
+                insertValSb.Append("s.");
+                insertValSb.Append(wrapped);
             }
 
-            join.Append("t.");
-            join.Append(dialect.WrapSimpleName(joinCols[i].Name));
-            join.Append(SqlFragments.EqualsOp);
-            join.Append("s.");
-            join.Append(dialect.WrapSimpleName(joinCols[i].Name));
+            var keys = _tableInfo.PrimaryKeys;
+            if (_idColumn == null && keys.Count == 0)
+            {
+                throw new NotSupportedException(UpsertNoKeyMessage);
+            }
+
+            var joinCols = keys.Count > 0 ? keys : new List<IColumnInfo> { _idColumn! };
+            for (var i = 0; i < joinCols.Count; i++)
+            {
+                if (i > 0)
+                {
+                    join.Append(SqlFragments.And);
+                }
+
+                join.Append("t.");
+                join.Append(dialect.WrapSimpleName(joinCols[i].Name));
+                join.Append(SqlFragments.EqualsOp);
+                join.Append("s.");
+                join.Append(dialect.WrapSimpleName(joinCols[i].Name));
+            }
+
+            var onClause = dialect.RenderMergeOnClause(join.ToString());
+
+            var sc = ctx.CreateSqlContainer();
+            sc.Query.Append("MERGE INTO ")
+                .Append(BuildWrappedTableName(dialect))
+                .Append(" t ")
+                .Append(mergeSource)
+                .Append(" ON ")
+                .Append(onClause)
+                .Append(" WHEN MATCHED THEN UPDATE SET ")
+                .Append(template.UpsertUpdateFragment)
+                .Append(" WHEN NOT MATCHED THEN INSERT (")
+                .Append(insertColSb.AsSpan())
+                .Append(") VALUES (")
+                .Append(insertValSb.AsSpan())
+                .Append(");");
+
+            sc.AddParameters(parameters);
+            return sc;
         }
-
-        var onClause = dialect.RenderMergeOnClause(join.ToString());
-
-        var sc = ctx.CreateSqlContainer();
-        sc.Query.Append("MERGE INTO ")
-            .Append(BuildWrappedTableName(dialect))
-            .Append(" t ")
-            .Append(mergeSource)
-            .Append(" ON ")
-            .Append(onClause)
-            .Append(" WHEN MATCHED THEN UPDATE SET ")
-            .Append(template.UpsertUpdateFragment)
-            .Append(" WHEN NOT MATCHED THEN INSERT (")
-            .Append(insertColSb.AsSpan())
-            .Append(") VALUES (")
-            .Append(insertValSb.AsSpan())
-            .Append(");");
-
-        sc.AddParameters(parameters);
-        return sc;
+        finally
+        {
+            insertColSb.Dispose();
+            insertValSb.Dispose();
+            join.Dispose();
+        }
     }
 
     private ISqlContainer BuildFirebirdMergeUpsert(TEntity entity, IDatabaseContext context)
@@ -377,57 +404,66 @@ public partial class TableGateway<TEntity, TRowID>
         // Use pre-built column/value lists from template - NO MORE DYNAMIC LOOP
         var insertColSb = SbLite.Create(stackalloc char[512]);
         var valSb = SbLite.Create(stackalloc char[512]);
-        
-        for (var i = 0; i < template.UpsertColumns.Count; i++)
+        try
         {
-            if (i > 0)
+            for (var i = 0; i < template.UpsertColumns.Count; i++)
             {
-                insertColSb.Append(", ");
-                valSb.Append(", ");
-            }
-            insertColSb.Append(dialect.WrapSimpleName(template.UpsertColumns[i].Name));
-            
-            var pName = template.UpsertParameterNames[i];
-            var placeholder = dialect.MakeParameterName(pName);
-            if (template.UpsertColumns[i].IsJsonType)
-            {
-                placeholder = dialect.RenderJsonArgument(placeholder, template.UpsertColumns[i]);
-            }
-            valSb.Append(placeholder);
-        }
+                if (i > 0)
+                {
+                    insertColSb.Append(", ");
+                    valSb.Append(", ");
+                }
 
-        var parameters = new List<DbParameter>(template.UpsertColumns.Count);
-        binder(entity, parameters);
+                insertColSb.Append(dialect.WrapSimpleName(template.UpsertColumns[i].Name));
 
-        var keys = _tableInfo.PrimaryKeys;
-        if (_idColumn == null && keys.Count == 0)
-        {
-            throw new NotSupportedException(UpsertNoKeyMessage);
-        }
+                var pName = template.UpsertParameterNames[i];
+                var placeholder = dialect.MakeParameterName(pName);
+                if (template.UpsertColumns[i].IsJsonType)
+                {
+                    placeholder = dialect.RenderJsonArgument(placeholder, template.UpsertColumns[i]);
+                }
 
-        var joinCols = keys.Count > 0 ? keys : new List<IColumnInfo> { _idColumn! };
-
-        var sc = ctx.CreateSqlContainer();
-        sc.Query.Append("UPDATE OR INSERT INTO ")
-            .Append(BuildWrappedTableName(dialect))
-            .Append(" (")
-            .Append(insertColSb.AsSpan())
-            .Append(") VALUES (")
-            .Append(valSb.AsSpan())
-            .Append(") MATCHING (");
-        for (var i = 0; i < joinCols.Count; i++)
-        {
-            if (i > 0)
-            {
-                sc.Query.Append(", ");
+                valSb.Append(placeholder);
             }
 
-            sc.Query.Append(dialect.WrapSimpleName(joinCols[i].Name));
+            var parameters = new List<DbParameter>(template.UpsertColumns.Count);
+            binder(entity, parameters);
+
+            var keys = _tableInfo.PrimaryKeys;
+            if (_idColumn == null && keys.Count == 0)
+            {
+                throw new NotSupportedException(UpsertNoKeyMessage);
+            }
+
+            var joinCols = keys.Count > 0 ? keys : new List<IColumnInfo> { _idColumn! };
+
+            var sc = ctx.CreateSqlContainer();
+            sc.Query.Append("UPDATE OR INSERT INTO ")
+                .Append(BuildWrappedTableName(dialect))
+                .Append(" (")
+                .Append(insertColSb.AsSpan())
+                .Append(") VALUES (")
+                .Append(valSb.AsSpan())
+                .Append(") MATCHING (");
+            for (var i = 0; i < joinCols.Count; i++)
+            {
+                if (i > 0)
+                {
+                    sc.Query.Append(", ");
+                }
+
+                sc.Query.Append(dialect.WrapSimpleName(joinCols[i].Name));
+            }
+
+            sc.Query.Append(");");
+
+            sc.AddParameters(parameters);
+            return sc;
         }
-
-        sc.Query.Append(");");
-
-        sc.AddParameters(parameters);
-        return sc;
+        finally
+        {
+            insertColSb.Dispose();
+            valSb.Dispose();
+        }
     }
 }

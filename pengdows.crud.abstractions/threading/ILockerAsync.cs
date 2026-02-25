@@ -29,14 +29,22 @@ public interface ILockerAsync : IDisposable, IAsyncDisposable
     /// <summary>
     /// Acquires the lock asynchronously, awaiting if necessary.
     /// </summary>
+    /// <remarks>
+    /// Returns <see cref="ValueTask.CompletedTask"/> immediately when there is no contention,
+    /// avoiding a heap allocation on the common uncontended path.
+    /// </remarks>
     /// <param name="cancellationToken">Token to cancel the lock acquisition.</param>
-    Task LockAsync(CancellationToken cancellationToken = default);
+    ValueTask LockAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Attempts to acquire the lock within the specified timeout.
     /// </summary>
+    /// <remarks>
+    /// Returns a completed <see cref="ValueTask{TResult}"/> immediately when the lock is
+    /// available without contention, avoiding a heap allocation on the common uncontended path.
+    /// </remarks>
     /// <param name="timeout">How long to wait for the lock.</param>
     /// <param name="cancellationToken">Token used to cancel the wait.</param>
     /// <returns>True if the lock was acquired; false if the timeout elapsed.</returns>
-    Task<bool> TryLockAsync(TimeSpan timeout, CancellationToken cancellationToken = default);
+    ValueTask<bool> TryLockAsync(TimeSpan timeout, CancellationToken cancellationToken = default);
 }

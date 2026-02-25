@@ -587,7 +587,7 @@ var context = new DatabaseContext(connectionString, factory, config);
 - Throws `PoolSaturatedException` when timeout expires
 - Turnstile fairness prevents writer starvation under reader pressure
 - Real-time metrics: in-use, peak, queued, timeouts, cancellations
-- RAII pattern via `PoolPermit` struct ensures permits are always released
+- RAII pattern via `PoolSlot` struct ensures slots are always released
 
 ## UUIDv7 (RFC 9562)
 

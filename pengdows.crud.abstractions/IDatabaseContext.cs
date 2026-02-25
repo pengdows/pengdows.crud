@@ -1,6 +1,4 @@
-﻿#region
-
-using System.Data;
+﻿using System.Data;
 using System.Data.Common;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
@@ -8,8 +6,6 @@ using pengdows.crud.infrastructure;
 using pengdows.crud.metrics;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
-
-#endregion
 
 namespace pengdows.crud;
 
@@ -88,15 +84,6 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// The hard limit of output parameters this provider supports per statement.
     /// </summary>
     int MaxOutputParameters { get; }
-
-    /// <summary>
-    /// The hard limit of output parameters this provider supports per statement.
-    /// </summary>
-    /// <remarks>
-    /// Intentionally not part of the public interface to preserve compatibility.
-    /// Query the active dialect for limits when needed.
-    /// </remarks>
-    // int MaxOutputParameters { get; }
 
     /// <summary>
     /// Current number of open connections. Usually 0 for DbMode.Standard, 1 otherwise.
@@ -242,13 +229,6 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// Creates a positional DbParameter (no name specified).
     /// </summary>
     DbParameter CreateDbParameter<T>(DbType type, T value);
-
-    // /// <summary>
-    // /// Returns a tracked connection for the given execution type.
-    // /// Optionally reused depending on mode.
-    // /// </summary>
-    // ITrackedConnection GetConnection(ExecutionType executionType, bool isShared = false);
-
 
     /// <summary>
     /// Begins a transaction using the native ADO.NET IsolationLevel.

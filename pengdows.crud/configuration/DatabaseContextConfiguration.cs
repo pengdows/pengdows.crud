@@ -13,9 +13,9 @@
 // - Statement preparation:
 //   * ForceManualPrepare, DisablePrepare: Override provider defaults
 // - Connection governor (admission control — NOT ADO.NET pool sizing):
-//   * MaxConcurrentWrites: Governor permit limit for write connections
-//   * MaxConcurrentReads: Governor permit limit for read connections
-//   * PoolAcquireTimeout: How long to wait for a governor permit
+//   * MaxConcurrentWrites: Governor slot limit for write connections
+//   * MaxConcurrentReads: Governor slot limit for read connections
+//   * PoolAcquireTimeout: How long to wait for a governor slot
 //   NOTE: These do NOT set ADO.NET Max Pool Size. Configure ADO.NET pool size
 //         in the connection string and keep these values aligned with it.
 // - Mode locking (SingleWriter / SingleConnection):
@@ -114,7 +114,7 @@ public class DatabaseContextConfiguration : IDatabaseContextConfiguration
             {
                 throw new ArgumentOutOfRangeException(nameof(value),
                     $"MaxConcurrentWrites must be a positive integer (got {value}). " +
-                    "Zero or negative values would grant no permits, causing a permanent deadlock.");
+                    "Zero or negative values would grant no slots, causing a permanent deadlock.");
             }
 
             _maxConcurrentWrites = value;
@@ -131,7 +131,7 @@ public class DatabaseContextConfiguration : IDatabaseContextConfiguration
             {
                 throw new ArgumentOutOfRangeException(nameof(value),
                     $"MaxConcurrentReads must be a positive integer (got {value}). " +
-                    "Zero or negative values would grant no permits, causing a permanent deadlock.");
+                    "Zero or negative values would grant no slots, causing a permanent deadlock.");
             }
 
             _maxConcurrentReads = value;

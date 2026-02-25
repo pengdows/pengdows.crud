@@ -27,6 +27,8 @@ public interface IAuditValues
     /// <returns>The user identifier as the requested type.</returns>
     T As<T>()
     {
+        if (UserId is null)
+            throw new InvalidOperationException($"UserId is null; cannot cast to {typeof(T).Name}.");
         return (T)UserId;
     }
 }

@@ -36,8 +36,10 @@ public static class DataSourceTestData
         {
             SupportedDatabase.SqlServer => "SQL Server",
             SupportedDatabase.MySql => "MySQL",
+            SupportedDatabase.AuroraMySql => "MySQL",
             SupportedDatabase.MariaDb => "MariaDB",
             SupportedDatabase.PostgreSql => "PostgreSQL",
+            SupportedDatabase.AuroraPostgreSql => "PostgreSQL",
             SupportedDatabase.CockroachDb => "CockroachDB",
             SupportedDatabase.YugabyteDb => "YugabyteDB",
             SupportedDatabase.TiDb => "TiDB",
@@ -50,7 +52,8 @@ public static class DataSourceTestData
 
         var markerFormat = db switch
         {
-            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb
+            SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql
+                or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb
                 or SupportedDatabase.Oracle or SupportedDatabase.Snowflake => ":{0}",
             SupportedDatabase.DuckDB => "$" + "{0}",
             _ => "@{0}"
@@ -73,9 +76,11 @@ public static class DataSourceTestData
         {
             SupportedDatabase.SqlServer => new SqlServerDialect(factory, NullLogger.Instance),
             SupportedDatabase.MySql => new MySqlDialect(factory, NullLogger.Instance),
+            SupportedDatabase.AuroraMySql => new MySqlDialect(factory, NullLogger.Instance, SupportedDatabase.AuroraMySql),
             SupportedDatabase.MariaDb => new MariaDbDialect(factory, NullLogger.Instance),
             SupportedDatabase.TiDb => new TiDbDialect(factory, NullLogger.Instance),
             SupportedDatabase.PostgreSql => new PostgreSqlDialect(factory, NullLogger.Instance),
+            SupportedDatabase.AuroraPostgreSql => new PostgreSqlDialect(factory, NullLogger.Instance, SupportedDatabase.AuroraPostgreSql),
             SupportedDatabase.CockroachDb => new CockroachDbDialect(factory, NullLogger.Instance),
             SupportedDatabase.YugabyteDb => new YugabyteDbDialect(factory, NullLogger.Instance),
             SupportedDatabase.Sqlite => new SqliteDialect(factory, NullLogger.Instance),
@@ -90,7 +95,7 @@ public static class DataSourceTestData
 
         var versionString = db switch
         {
-            SupportedDatabase.PostgreSql => "PostgreSQL 15.0",
+            SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql => "PostgreSQL 15.0",
             _ => $"{db} v1.2.3"
         };
 
@@ -128,7 +133,8 @@ public class DataSourceInformationTests
         // Assert: parameter marker
         var expectedMarker = db switch
         {
-            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb
+            SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql
+                or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb
                 or SupportedDatabase.Oracle or SupportedDatabase.Snowflake => ":",
             SupportedDatabase.DuckDB => "$",
             _ => "@"
@@ -136,7 +142,7 @@ public class DataSourceInformationTests
         Assert.Equal(expectedMarker, info.ParameterMarker);
 
         // Assert: major version parsing
-        var expectedMajor = db == SupportedDatabase.PostgreSql ? 15 : 1;
+        var expectedMajor = (db == SupportedDatabase.PostgreSql || db == SupportedDatabase.AuroraPostgreSql) ? 15 : 1;
         Assert.Equal(expectedMajor, info.ParsedVersion?.Major);
 
         // Assert: merge support
@@ -144,7 +150,7 @@ public class DataSourceInformationTests
                        || db == SupportedDatabase.Oracle
                        || db == SupportedDatabase.Snowflake
                        || (db == SupportedDatabase.Firebird && info.ParsedVersion?.Major >= 2)
-                       || (db == SupportedDatabase.PostgreSql && info.ParsedVersion?.Major > 14)
+                       || ((db == SupportedDatabase.PostgreSql || db == SupportedDatabase.AuroraPostgreSql) && info.ParsedVersion?.Major > 14)
                        || (db == SupportedDatabase.YugabyteDb && info.ParsedVersion?.Major > 14);
         Assert.Equal(canMerge, info.SupportsMerge);
         Assert.NotEqual(!canMerge, info.SupportsMerge);
@@ -153,6 +159,7 @@ public class DataSourceInformationTests
         var canConflict = new[]
         {
             SupportedDatabase.PostgreSql,
+            SupportedDatabase.AuroraPostgreSql,
             SupportedDatabase.CockroachDb,
             SupportedDatabase.YugabyteDb,
             SupportedDatabase.Sqlite,
@@ -163,6 +170,7 @@ public class DataSourceInformationTests
         var canOnDuplicateKey = new[]
         {
             SupportedDatabase.MySql,
+            SupportedDatabase.AuroraMySql,
             SupportedDatabase.MariaDb,
             SupportedDatabase.TiDb
         }.Contains(db);
@@ -173,18 +181,21 @@ public class DataSourceInformationTests
         {
             SupportedDatabase.SqlServer => ProcWrappingStyle.Exec,
             SupportedDatabase.Oracle => ProcWrappingStyle.Oracle,
-            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb => ProcWrappingStyle.Call,
-            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb
-                => ProcWrappingStyle.PostgreSQL,
+            SupportedDatabase.MySql or SupportedDatabase.AuroraMySql
+                or SupportedDatabase.MariaDb or SupportedDatabase.TiDb => ProcWrappingStyle.Call,
+            SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql
+                or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => ProcWrappingStyle.PostgreSQL,
             SupportedDatabase.Firebird => ProcWrappingStyle.ExecuteProcedure,
             _ => ProcWrappingStyle.None
         };
         var expectedRequiresStoredProcParameterNameMatch = db switch
         {
             SupportedDatabase.Firebird or SupportedDatabase.Sqlite or SupportedDatabase.SqlServer
-                or SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.DuckDB
+                or SupportedDatabase.MySql or SupportedDatabase.AuroraMySql
+                or SupportedDatabase.MariaDb or SupportedDatabase.DuckDB
                 or SupportedDatabase.TiDb or SupportedDatabase.Snowflake => false,
-            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb
+            SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql
+                or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb
                 or SupportedDatabase.Oracle => true,
             _ => true
         };
@@ -200,9 +211,10 @@ public class DataSourceInformationTests
         var expectedOutputParams = db switch
         {
             SupportedDatabase.SqlServer => 1024,
-            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb => 65535,
-            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb
-                => 100,
+            SupportedDatabase.MySql or SupportedDatabase.AuroraMySql
+                or SupportedDatabase.MariaDb or SupportedDatabase.TiDb => 65535,
+            SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql
+                or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => 100,
             SupportedDatabase.Oracle => 1024,
             SupportedDatabase.Sqlite => 0,
             SupportedDatabase.Firebird => 1499,

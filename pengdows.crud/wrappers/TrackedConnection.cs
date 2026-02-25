@@ -14,9 +14,9 @@
 //   * Ephemeral connections (per-op): NoOpAsyncLocker, zero overhead
 // - GetLock(): Returns appropriate locker for connection type.
 // - LocalState: Per-connection state for prepare behavior tracking.
-// - Pool permit integration:
-//   * AttachPermit(): Associates governor permit with connection
-//   * ReleasePermit(): Returns permit on dispose (once only)
+// - Pool slot integration:
+//   * AttachSlot(): Associates governor slot with connection
+//   * ReleaseSlot(): Returns slot on dispose (once only)
 // - Metrics collection:
 //   * Open/close duration timing
 //   * Connection hold duration
@@ -115,9 +115,9 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, II
     private readonly ModeContentionStats? _modeContentionStats;
     private readonly DbMode _mode;
     private readonly TimeSpan? _modeLockTimeout;
-    private PoolPermit _permit;
-    private int _permitAttached;
-    private int _permitReleased;
+    private PoolSlot _slot;
+    private int _slotAttached;
+    private int _slotReleased;
 
     /// <summary>
     /// Per-connection state for prepare behavior tracking
@@ -136,7 +136,7 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, II
         ModeContentionStats? modeContentionStats = null,
         DbMode mode = DbMode.Standard,
         TimeSpan? modeLockTimeout = null,
-        PoolPermit? permit = null,
+        PoolSlot? slot = null,
         string? namePrefix = null
     )
     {
@@ -172,9 +172,9 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, II
             _connection.StateChange += _metricsHandler;
         }
 
-        if (permit.HasValue)
+        if (slot.HasValue)
         {
-            AttachPermit(permit.Value);
+            AttachSlot(slot.Value);
         }
     }
 
@@ -462,7 +462,7 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, II
         finally
         {
             DetachMetricsHandler();
-            ReleasePermit();
+            ReleaseSlot();
         }
     }
 
@@ -511,7 +511,7 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, II
         }
 
         DetachMetricsHandler();
-        ReleasePermit();
+        ReleaseSlot();
     }
 
     private void DetachMetricsHandler()
@@ -522,18 +522,18 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, II
         }
     }
 
-    internal void AttachPermit(PoolPermit permit)
+    internal void AttachSlot(PoolSlot slot)
     {
-        _permit = permit;
-        Interlocked.Exchange(ref _permitAttached, 1);
+        _slot = slot;
+        Interlocked.Exchange(ref _slotAttached, 1);
     }
 
-    private void ReleasePermit()
+    private void ReleaseSlot()
     {
-        if (Interlocked.Exchange(ref _permitReleased, 1) == 0 &&
-            Interlocked.CompareExchange(ref _permitAttached, 0, 0) == 1)
+        if (Interlocked.Exchange(ref _slotReleased, 1) == 0 &&
+            Interlocked.CompareExchange(ref _slotAttached, 0, 0) == 1)
         {
-            _permit.Dispose();
+            _slot.Dispose();
         }
     }
 

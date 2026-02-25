@@ -130,7 +130,7 @@ public class ThreadingTests
         var locker = new RealAsyncLocker(semaphore);
         await locker.DisposeAsync();
 
-        await Assert.ThrowsAsync<ObjectDisposedException>(() => locker.LockAsync());
+        await Assert.ThrowsAsync<ObjectDisposedException>(async () => await locker.LockAsync());
     }
 
     [Fact]
@@ -140,7 +140,7 @@ public class ThreadingTests
         var locker = new RealAsyncLocker(semaphore);
         await locker.DisposeAsync();
 
-        await Assert.ThrowsAsync<ObjectDisposedException>(() => locker.TryLockAsync(TimeSpan.FromSeconds(1)));
+        await Assert.ThrowsAsync<ObjectDisposedException>(async () => await locker.TryLockAsync(TimeSpan.FromSeconds(1)));
     }
 
     [Fact]

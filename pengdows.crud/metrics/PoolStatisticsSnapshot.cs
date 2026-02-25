@@ -7,13 +7,13 @@
 // - Fields:
 //   * Label: PoolLabel (Reader or Writer)
 //   * PoolKeyHash: Hashed identifier for the pool
-//   * MaxPermits: Configured maximum pool size
-//   * InUse: Currently acquired permits
+//   * MaxSlots: Configured maximum pool size
+//   * InUse: Currently acquired slots
 //   * PeakInUse: Highest concurrent usage observed
-//   * Queued: Operations waiting for permits
-//   * TotalAcquired: Lifetime permit acquisitions
-//   * TotalTimeouts: Permit (semaphore) acquisition timeout count
-//   * TotalTurnstileTimeouts: Turnstile acquisition timeout count (separate from permit timeouts)
+//   * Queued: Operations waiting for slots
+//   * TotalAcquired: Lifetime slot acquisitions
+//   * TotalSlotTimeouts: Slot (semaphore) acquisition timeout count
+//   * TotalTurnstileTimeouts: Turnstile acquisition timeout count (separate from slot timeouts)
 //   * TotalCanceledWaits: Canceled acquisition count
 //   * Disabled: Whether governor is disabled
 // - Used by PoolSaturatedException for diagnostic context.
@@ -30,7 +30,7 @@ namespace pengdows.crud.metrics;
 public readonly record struct PoolStatisticsSnapshot(
     PoolLabel Label,
     string PoolKeyHash,
-    int MaxPermits,
+    int MaxSlots,
     int InUse,
     int PeakInUse,
     int Queued,
@@ -40,7 +40,7 @@ public readonly record struct PoolStatisticsSnapshot(
     long TotalAcquired,
     long TotalWaitTicks,
     long TotalHoldTicks,
-    long TotalTimeouts,
+    long TotalSlotTimeouts,
     long TotalTurnstileTimeouts,
     long TotalCanceledWaits,
     bool Disabled);

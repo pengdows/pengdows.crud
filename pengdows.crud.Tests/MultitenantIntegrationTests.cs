@@ -129,7 +129,7 @@ public class MultitenantIntegrationTests : IAsyncLifetime
 
             var dbContext = Assert.IsType<DatabaseContext>(ctx);
             var writerSnapshot = dbContext.GetPoolStatisticsSnapshot(PoolLabel.Writer);
-            Assert.True(writerSnapshot.TotalAcquired >= 2, "Each write should acquire its own permit.");
+            Assert.True(writerSnapshot.TotalAcquired >= 2, "Each write should acquire its own slot.");
 
             var r = ctx.GetConnection(ExecutionType.Read);
             Assert.NotSame(w2, r); // read connection should be independent

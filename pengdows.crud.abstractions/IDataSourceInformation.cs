@@ -1,11 +1,5 @@
-#region
-
-using System.Data;
 using System.Text.RegularExpressions;
 using pengdows.crud.enums;
-using pengdows.crud.wrappers;
-
-#endregion
 
 namespace pengdows.crud;
 
@@ -156,10 +150,4 @@ public interface IDataSourceInformation
     /// </summary>
     bool HasBasicCompatibility { get; }
 
-    /// <summary>
-    /// Retrieves the data source information schema for the specified connection.
-    /// </summary>
-    /// <param name="connection">The connection to query.</param>
-    /// <returns>A <see cref="DataTable"/> containing the information schema.</returns>
-    DataTable GetSchema(ITrackedConnection connection);
 }

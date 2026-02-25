@@ -62,13 +62,15 @@ internal class PostgreSqlDialect : SqlDialect
         };
 
     private string? _sessionSettings;
+    private readonly SupportedDatabase _flavor;
 
-    internal PostgreSqlDialect(DbProviderFactory factory, ILogger logger)
+    internal PostgreSqlDialect(DbProviderFactory factory, ILogger logger, SupportedDatabase flavor = SupportedDatabase.PostgreSql)
         : base(factory, logger)
     {
+        _flavor = flavor;
     }
 
-    public override SupportedDatabase DatabaseType => SupportedDatabase.PostgreSql;
+    public override SupportedDatabase DatabaseType => _flavor;
 
     // Use ':' parameter marker; Npgsql supports ':' and existing integrations rely on it
     public override string ParameterMarker => ":";
@@ -96,7 +98,7 @@ internal class PostgreSqlDialect : SqlDialect
     public override bool SupportsNamespaces => true;
 
     public override bool SupportsInsertOnConflict => true;
-    public override bool SupportsMerge => IsVersionAtLeast(15);
+    public override bool SupportsMerge => DatabaseType != SupportedDatabase.CockroachDb && IsVersionAtLeast(15);
     public override bool SupportsSavepoints => true;
     public override bool SupportsJsonTypes => IsVersionAtLeast(9);
     public override bool SupportsSqlJsonConstructors => IsVersionAtLeast(18);

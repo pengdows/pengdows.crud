@@ -1,9 +1,5 @@
-#region
-
 using System.Data;
 using System.Threading;
-
-#endregion
 
 namespace pengdows.crud;
 

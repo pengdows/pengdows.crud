@@ -49,7 +49,7 @@ public sealed class PoolGovernorMetricsTests
     [Fact]
     public async Task GetSnapshot_WhenSingleWriterMode_TracksPeakTurnstileQueued()
     {
-        // Arrange: SingleWriter mode (maxPermits=1, holdTurnstile=true)
+        // Arrange: SingleWriter mode (maxSlots=1, holdTurnstile=true)
         var turnstile = new SemaphoreSlim(1, 1);
         var governor = new PoolGovernor(
             PoolLabel.Writer,

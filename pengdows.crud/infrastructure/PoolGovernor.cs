@@ -6,22 +6,22 @@
 // - Controls maximum concurrent connections via SemaphoreSlim.
 // - Thread-safe: all counters use Interlocked operations.
 // - Key methods:
-//   * Acquire(ct): Sync permit acquisition with timeout
+//   * Acquire(ct): Sync slot acquisition with timeout
 //   * AcquireAsync(ct): Async permit acquisition with timeout (uses WaitAsync throughout)
-//   * Release(): Returns permit to pool (called by PoolPermit)
+//   * Release(): Returns permit to pool (called by PoolSlot)
 //   * GetSnapshot(): Returns current pool statistics
-// - Throws PoolSaturatedException when timeout expires waiting for permit.
-// - Tracks: inUse, peakInUse, queued, totalAcquired, totalPermitTimeouts, totalTurnstileTimeouts.
-//   * TotalTimeouts in snapshot = semaphore (permit) acquisition timeouts.
+// - Throws PoolSaturatedException when timeout expires waiting for slot.
+// - Tracks: inUse, peakInUse, queued, totalAcquired, totalSlotTimeouts, totalTurnstileTimeouts.
+//   * TotalTimeouts in snapshot = semaphore (slot) acquisition timeouts.
 //   * TotalTurnstileTimeouts in snapshot = turnstile acquisition timeouts.
-// - Can be disabled (returns default permits without blocking).
+// - Can be disabled (returns default slots without blocking).
 // - Shared semaphore support:
 //   * OwnsSemaphore: true if governor created its own semaphore
-//   * When using shared semaphore, caller must ensure maxPermits matches actual capacity
-//   * Telemetry uses maxPermits as reported capacity (not verified at runtime)
+//   * When using shared semaphore, caller must ensure maxSlots matches actual capacity
+//   * Telemetry uses maxSlots as reported capacity (not verified at runtime)
 // - Turnstile fairness support (optional):
 //   * Reduces writer starvation risk under sustained reader pressure.
-//   * Writers (holdTurnstile=true): hold turnstile for the duration of their permit.
+//   * Writers (holdTurnstile=true): hold turnstile for the duration of their slot.
 //     - While a writer holds its slot, new readers cannot pass the turnstile.
 //     - IMPORTANT: This does NOT drain readers already queued on the semaphore before
 //       the writer acquired the turnstile. Starvation is reduced, not eliminated.
@@ -29,7 +29,7 @@
 //   * Only effective when reader and writer governors share the same turnstile instance
 //     and target the same connection pool (same pool key). Governors targeting separate
 //     connection pools (e.g., primary + read replica) should use independent turnstiles.
-// - PoolPermit: RAII struct ensuring permit release on dispose.
+// - PoolSlot: RAII struct ensuring slot release on dispose.
 // =============================================================================
 
 using System.Diagnostics;
@@ -46,7 +46,7 @@ internal sealed class PoolGovernor : IDisposable
     private readonly string _poolKeyHash;
     private readonly SemaphoreSlim? _semaphore;
     private readonly TimeSpan _acquireTimeout;
-    private readonly int _maxPermits;
+    private readonly int _maxSlots;
     private readonly bool _disabled;
     private readonly bool _trackMetrics;
     private readonly bool _ownsSemaphore;
@@ -67,14 +67,14 @@ internal sealed class PoolGovernor : IDisposable
     private long _totalAcquired;
     private long _totalWaitTicks;
     private long _totalHoldTicks;
-    private long _totalPermitTimeouts; // timed out waiting for a connection slot
+    private long _totalSlotTimeouts; // timed out waiting for a connection slot
     private long _totalTurnstileTimeouts; // timed out waiting for the fairness turnstile
     private long _totalCanceledWaits;
 
     public PoolGovernor(
         PoolLabel label,
         string poolKeyHash,
-        int maxPermits,
+        int maxSlots,
         TimeSpan acquireTimeout,
         bool disabled = false,
         bool trackMetrics = false,
@@ -95,45 +95,45 @@ internal sealed class PoolGovernor : IDisposable
 
         if (disabled)
         {
-            _maxPermits = 0;
+            _maxSlots = 0;
             _semaphore = null;
             _ownsSemaphore = false;
             return;
         }
 
-        if (maxPermits <= 0)
+        if (maxSlots <= 0)
         {
-            throw new ArgumentOutOfRangeException(nameof(maxPermits), "Pool governor requires at least one permit.");
+            throw new ArgumentOutOfRangeException(nameof(maxSlots), "Pool governor requires at least one slot.");
         }
 
-        _maxPermits = maxPermits;
+        _maxSlots = maxSlots;
 
         if (sharedSemaphore != null)
         {
-            // Shared semaphore: caller is responsible for ensuring maxPermits matches
+            // Shared semaphore: caller is responsible for ensuring maxSlots matches
             // the semaphore's actual capacity. We cannot verify this at runtime since
-            // SemaphoreSlim does not expose its max count. Telemetry will use maxPermits
+            // SemaphoreSlim does not expose its max count. Telemetry will use maxSlots
             // as the reported capacity - caller must ensure consistency.
             _semaphore = sharedSemaphore;
             _ownsSemaphore = false;
         }
         else
         {
-            _semaphore = new SemaphoreSlim(maxPermits, maxPermits);
+            _semaphore = new SemaphoreSlim(maxSlots, maxSlots);
             _ownsSemaphore = true;
         }
     }
 
     /// <summary>
     /// Whether this governor owns its semaphore (vs using a shared one).
-    /// When false, telemetry maxPermits may not reflect actual semaphore capacity.
+    /// When false, telemetry maxSlots may not reflect actual semaphore capacity.
     /// </summary>
     internal bool OwnsSemaphore => _ownsSemaphore;
 
     public PoolLabel Label => _label;
     public string PoolKeyHash => _poolKeyHash;
 
-    public PoolPermit Acquire(CancellationToken cancellationToken = default)
+    public PoolSlot Acquire(CancellationToken cancellationToken = default)
     {
         if (_disabled)
         {
@@ -148,11 +148,10 @@ internal sealed class PoolGovernor : IDisposable
         var waitStart = _trackMetrics ? Stopwatch.GetTimestamp() : 0;
 
         // Turnstile fairness: acquire turnstile first to reduce writer starvation risk.
-        // Writers hold the turnstile for their entire permit lifetime; readers touch-and-release.
+        // Writers hold the turnstile for their entire slot lifetime; readers touch-and-release.
         // NOTE: readers already queued on the semaphore when the writer grabs the turnstile
         // are not displaced — only NEW reader attempts are gated.
         var turnstileAcquired = false;
-        long turnstileAcquiredAt = 0;
         if (_turnstile != null)
         {
             var tQueued = _trackMetrics ? Interlocked.Increment(ref _turnstileQueued) : 0;
@@ -172,9 +171,8 @@ internal sealed class PoolGovernor : IDisposable
             }
 
             turnstileAcquired = true;
-            if (_trackMetrics) turnstileAcquiredAt = Stopwatch.GetTimestamp();
 
-            // Readers touch-and-release; writers hold until permit released
+            // Readers touch-and-release; writers hold until slot released
             if (!_holdTurnstile)
             {
                 _turnstile.Release();
@@ -199,7 +197,7 @@ internal sealed class PoolGovernor : IDisposable
                     var acquired = _semaphore.Wait(_acquireTimeout, cancellationToken);
                     if (!acquired)
                     {
-                        Interlocked.Increment(ref _totalPermitTimeouts);
+                        Interlocked.Increment(ref _totalSlotTimeouts);
                         throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
                     }
 
@@ -217,10 +215,10 @@ internal sealed class PoolGovernor : IDisposable
             }
         }
         catch {
-            // On failure, release turnstile if we're still holding it (writers only)
+            // On failure, release turnstile if we're still holding it (writers only).
+            // Do NOT record wait/hold metrics here — failure duration is not slot hold time.
             if (turnstileAcquired && _turnstile != null)
             {
-                if (_trackMetrics) RecordWaitAndHold(waitStart, turnstileAcquiredAt, Stopwatch.GetTimestamp());
                 _turnstile.Release();
             }
 
@@ -228,11 +226,11 @@ internal sealed class PoolGovernor : IDisposable
         }
     }
 
-    public bool TryAcquire(out PoolPermit permit, CancellationToken cancellationToken = default)
+    public bool TryAcquire(out PoolSlot slot, CancellationToken cancellationToken = default)
     {
         if (_disabled)
         {
-            permit = default;
+            slot = default;
             return true;
         }
 
@@ -243,17 +241,15 @@ internal sealed class PoolGovernor : IDisposable
 
         var waitStart = _trackMetrics ? Stopwatch.GetTimestamp() : 0;
         var turnstileAcquired = false;
-        long turnstileAcquiredAt = 0;
         if (_turnstile != null)
         {
             if (!_turnstile.Wait(0, cancellationToken))
             {
-                permit = default;
+                slot = default;
                 return false;
             }
 
             turnstileAcquired = true;
-            if (_trackMetrics) turnstileAcquiredAt = Stopwatch.GetTimestamp();
 
             if (!_holdTurnstile)
             {
@@ -264,21 +260,22 @@ internal sealed class PoolGovernor : IDisposable
 
         if (_semaphore.Wait(0, cancellationToken))
         {
-            permit = OnAcquired(waitStart);
+            slot = OnAcquired(waitStart);
             return true;
         }
 
+        // Slot miss — release turnstile without recording hold metrics.
+        // Failure duration is not slot hold time.
         if (turnstileAcquired && _turnstile != null)
         {
-            if (_trackMetrics) RecordWaitAndHold(waitStart, turnstileAcquiredAt, Stopwatch.GetTimestamp());
             _turnstile.Release();
         }
 
-        permit = default;
+        slot = default;
         return false;
     }
 
-    public async Task<PoolPermit> AcquireAsync(CancellationToken cancellationToken = default)
+    public async Task<PoolSlot> AcquireAsync(CancellationToken cancellationToken = default)
     {
         if (_disabled)
         {
@@ -293,11 +290,10 @@ internal sealed class PoolGovernor : IDisposable
         var waitStart = _trackMetrics ? Stopwatch.GetTimestamp() : 0;
 
         // Turnstile fairness: acquire turnstile first to reduce writer starvation risk.
-        // Writers hold the turnstile for their entire permit lifetime; readers touch-and-release.
+        // Writers hold the turnstile for their entire slot lifetime; readers touch-and-release.
         // NOTE: readers already queued on the semaphore when the writer grabs the turnstile
         // are not displaced — only NEW reader attempts are gated.
         var turnstileAcquired = false;
-        long turnstileAcquiredAt = 0;
         if (_turnstile != null)
         {
             var tQueued = _trackMetrics ? Interlocked.Increment(ref _turnstileQueued) : 0;
@@ -317,9 +313,8 @@ internal sealed class PoolGovernor : IDisposable
             }
 
             turnstileAcquired = true;
-            if (_trackMetrics) turnstileAcquiredAt = Stopwatch.GetTimestamp();
 
-            // Readers touch-and-release; writers hold until permit released
+            // Readers touch-and-release; writers hold until slot released
             if (!_holdTurnstile)
             {
                 _turnstile.Release();
@@ -346,7 +341,7 @@ internal sealed class PoolGovernor : IDisposable
                     var acquired = await _semaphore.WaitAsync(_acquireTimeout, cancellationToken).ConfigureAwait(false);
                     if (!acquired)
                     {
-                        Interlocked.Increment(ref _totalPermitTimeouts);
+                        Interlocked.Increment(ref _totalSlotTimeouts);
                         throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
                     }
 
@@ -364,10 +359,10 @@ internal sealed class PoolGovernor : IDisposable
             }
         }
         catch {
-            // On failure, release turnstile if we're still holding it (writers only)
+            // On failure, release turnstile if we're still holding it (writers only).
+            // Do NOT record wait/hold metrics here — failure duration is not slot hold time.
             if (turnstileAcquired && _turnstile != null)
             {
-                if (_trackMetrics) RecordWaitAndHold(waitStart, turnstileAcquiredAt, Stopwatch.GetTimestamp());
                 _turnstile.Release();
             }
 
@@ -375,7 +370,7 @@ internal sealed class PoolGovernor : IDisposable
         }
     }
 
-    public async Task<(bool Success, PoolPermit Permit)> TryAcquireAsync(CancellationToken cancellationToken = default)
+    public async Task<(bool Success, PoolSlot Permit)> TryAcquireAsync(CancellationToken cancellationToken = default)
     {
         if (_disabled)
         {
@@ -389,7 +384,6 @@ internal sealed class PoolGovernor : IDisposable
 
         var waitStart = _trackMetrics ? Stopwatch.GetTimestamp() : 0;
         var turnstileAcquired = false;
-        long turnstileAcquiredAt = 0;
         if (_turnstile != null)
         {
             if (!await _turnstile.WaitAsync(0, cancellationToken).ConfigureAwait(false))
@@ -398,7 +392,6 @@ internal sealed class PoolGovernor : IDisposable
             }
 
             turnstileAcquired = true;
-            if (_trackMetrics) turnstileAcquiredAt = Stopwatch.GetTimestamp();
 
             if (!_holdTurnstile)
             {
@@ -412,9 +405,10 @@ internal sealed class PoolGovernor : IDisposable
             return (true, OnAcquired(waitStart));
         }
 
+        // Slot miss — release turnstile without recording hold metrics.
+        // Do NOT record wait/hold metrics here — failure duration is not slot hold time.
         if (turnstileAcquired && _turnstile != null)
         {
-            if (_trackMetrics) RecordWaitAndHold(waitStart, turnstileAcquiredAt, Stopwatch.GetTimestamp());
             _turnstile.Release();
         }
 
@@ -488,13 +482,13 @@ internal sealed class PoolGovernor : IDisposable
         if (holdTicks > 0) Interlocked.Add(ref _totalHoldTicks, holdTicks);
     }
 
-    private PoolPermit OnAcquired(long waitStart)
+    private PoolSlot OnAcquired(long waitStart)
     {
         var inUse = Interlocked.Increment(ref _inUse);
         ResetDrainSignalIfNeeded();
         UpdatePeak(ref _peakInUse, inUse);
         Interlocked.Increment(ref _totalAcquired);
-        return new PoolPermit(new PoolPermit.PoolPermitToken(this, waitStart));
+            return new PoolSlot(new PoolSlot.PoolSlotToken(this, waitStart));
     }
 
     internal void ReleaseToken(long waitStart, long acquiredAt, long releasedAt)
@@ -518,7 +512,7 @@ internal sealed class PoolGovernor : IDisposable
 
         _semaphore?.Release();
 
-        // Writers release turnstile when permit is released
+        // Writers release turnstile when slot is released
         if (_holdTurnstile && _turnstile != null)
         {
             _turnstile.Release();
@@ -530,7 +524,7 @@ internal sealed class PoolGovernor : IDisposable
         return new PoolStatisticsSnapshot(
             _label,
             _poolKeyHash,
-            _maxPermits,
+            _maxSlots,
             (int)Math.Clamp(Interlocked.Read(ref _inUse), 0L, int.MaxValue),
             (int)Math.Clamp(Interlocked.Read(ref _peakInUse), 0L, int.MaxValue),
             (int)Math.Clamp(Interlocked.Read(ref _queued), 0L, int.MaxValue),
@@ -540,7 +534,7 @@ internal sealed class PoolGovernor : IDisposable
             Interlocked.Read(ref _totalAcquired),
             Interlocked.Read(ref _totalWaitTicks),
             Interlocked.Read(ref _totalHoldTicks),
-            Interlocked.Read(ref _totalPermitTimeouts),
+            Interlocked.Read(ref _totalSlotTimeouts),
             Interlocked.Read(ref _totalTurnstileTimeouts),
             Interlocked.Read(ref _totalCanceledWaits),
             _disabled);

@@ -119,7 +119,7 @@ public class ReusableAsyncLockerTests
         var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        await Assert.ThrowsAsync<TaskCanceledException>(() => locker.LockAsync(cts.Token));
+        await Assert.ThrowsAsync<TaskCanceledException>(async () => await locker.LockAsync(cts.Token));
 
         // Semaphore should still be available — lock was never acquired
         Assert.Equal(1, sem.CurrentCount);
@@ -135,7 +135,7 @@ public class ReusableAsyncLockerTests
         // Exhaust the semaphore to force slow path
         sem.Wait();
 
-        var lockTask = locker.LockAsync(cts.Token);
+        var lockTask = locker.LockAsync(cts.Token).AsTask();
 
         // Give the task time to enter wait
         await Task.Delay(50);
@@ -232,7 +232,7 @@ public class ReusableAsyncLockerTests
         var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        await Assert.ThrowsAsync<TaskCanceledException>(() => locker.TryLockAsync(TimeSpan.FromSeconds(1), cts.Token));
+        await Assert.ThrowsAsync<TaskCanceledException>(async () => await locker.TryLockAsync(TimeSpan.FromSeconds(1), cts.Token));
 
         Assert.Equal(1, sem.CurrentCount);
     }
@@ -247,7 +247,7 @@ public class ReusableAsyncLockerTests
         // Exhaust semaphore to force slow path
         sem.Wait();
 
-        var tryTask = locker.TryLockAsync(TimeSpan.FromSeconds(30), cts.Token);
+        var tryTask = locker.TryLockAsync(TimeSpan.FromSeconds(30), cts.Token).AsTask();
 
         await Task.Delay(50);
         cts.Cancel();

@@ -26,8 +26,6 @@
 // - Thread-safe: All caches use thread-safe data structures.
 // =============================================================================
 
-#region
-
 using System.Data;
 using System.Data.Common;
 using System.Linq.Expressions;
@@ -37,8 +35,6 @@ using Microsoft.Extensions.Logging;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
 using pengdows.crud.@internal;
-
-#endregion
 
 namespace pengdows.crud;
 
@@ -141,7 +137,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
         CancellationToken cancellationToken = default)
         where T : class, new()
     {
-        return Instance.LoadObjectsFromDataReaderAsync<T>(reader, cancellationToken);
+        return Instance.LoadAsync<T>(reader, cancellationToken);
     }
 
     public static Task<List<T>> LoadAsync<T>(
@@ -170,7 +166,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
         return Instance.StreamAsync<T>(reader, options, cancellationToken);
     }
 
-    Task<List<T>> IDataReaderMapper.LoadObjectsFromDataReaderAsync<T>(
+    Task<List<T>> IDataReaderMapper.LoadAsync<T>(
         IDataReader reader,
         CancellationToken cancellationToken)
     {

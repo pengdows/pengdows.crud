@@ -1,12 +1,12 @@
 // Tests for the turnstile-fairness paths in PoolGovernor.
 // A writer (holdTurnstile=true) holds the turnstile for the duration of its
-// permit; readers (holdTurnstile=false) touch-and-release it.
+// slot; readers (holdTurnstile=false) touch-and-release it.
 // This reduces writer starvation risk: while a writer holds its slot, new
 // readers are gated at the turnstile.  Readers already queued on the semaphore
 // before the writer grabbed the turnstile are NOT displaced.
 //
 // Metrics note: TotalTurnstileTimeouts counts turnstile waits that timed out;
-// TotalTimeouts counts semaphore (permit slot) waits that timed out.  These are
+// TotalSlotTimeouts counts semaphore slot waits that timed out.  These are
 // tracked separately so operators can distinguish the two bottlenecks.
 
 using System;
@@ -40,7 +40,7 @@ public sealed class PoolGovernorTurnstileTests
         // Reader times out waiting for the TURNSTILE (not the slot semaphore).
         Assert.Throws<PoolSaturatedException>(() => reader.Acquire());
         Assert.Equal(1, reader.GetSnapshot().TotalTurnstileTimeouts);
-        Assert.Equal(0, reader.GetSnapshot().TotalTimeouts); // no permit timeout
+        Assert.Equal(0, reader.GetSnapshot().TotalSlotTimeouts); // no slot timeout
     }
 
     [Fact]
@@ -61,7 +61,7 @@ public sealed class PoolGovernorTurnstileTests
         // Reader times out waiting for the TURNSTILE (not the slot semaphore).
         await Assert.ThrowsAsync<PoolSaturatedException>(() => reader.AcquireAsync());
         Assert.Equal(1, reader.GetSnapshot().TotalTurnstileTimeouts);
-        Assert.Equal(0, reader.GetSnapshot().TotalTimeouts); // no permit timeout
+        Assert.Equal(0, reader.GetSnapshot().TotalSlotTimeouts); // no slot timeout
 
         wp.Dispose();
     }
@@ -105,7 +105,7 @@ public sealed class PoolGovernorTurnstileTests
 
         Assert.False(success);
         Assert.Equal(default, rp);
-        Assert.Equal(0, reader.GetSnapshot().TotalTimeouts); // TryAcquire never counts timeouts
+        Assert.Equal(0, reader.GetSnapshot().TotalSlotTimeouts); // TryAcquire never counts timeouts
     }
 
     [Fact]
@@ -126,13 +126,13 @@ public sealed class PoolGovernorTurnstileTests
         var result = await reader.TryAcquireAsync();
 
         Assert.False(result.Success);
-        Assert.Equal(0, reader.GetSnapshot().TotalTimeouts);
+        Assert.Equal(0, reader.GetSnapshot().TotalSlotTimeouts);
 
         wp.Dispose();
     }
 
     // ── Second writer times out waiting ───────────────────────────────────
-    // W1 holds the turnstile (permit held).  W2 times out on the turnstile.
+// W1 holds the turnstile (slot held).  W2 times out on the turnstile.
 
     [Fact]
     public void Acquire_SecondWriterTimesOutWaiting()
@@ -147,10 +147,10 @@ public sealed class PoolGovernorTurnstileTests
 
         using var p1 = w1.Acquire(); // holds turnstile
 
-        // W2 cannot pass the turnstile — it is still held by W1's permit.
+        // W2 cannot pass the turnstile — it is still held by W1's slot.
         Assert.Throws<PoolSaturatedException>(() => w2.Acquire());
         Assert.Equal(1, w2.GetSnapshot().TotalTurnstileTimeouts); // turnstile bottleneck
-        Assert.Equal(0, w2.GetSnapshot().TotalTimeouts); // no permit timeout
+        Assert.Equal(0, w2.GetSnapshot().TotalSlotTimeouts); // no slot timeout
     }
 
     [Fact]
@@ -166,12 +166,90 @@ public sealed class PoolGovernorTurnstileTests
 
         var p1 = await w1.AcquireAsync();
 
-        // W2 cannot pass the turnstile — it is still held by W1's permit.
+        // W2 cannot pass the turnstile — it is still held by W1's slot.
         await Assert.ThrowsAsync<PoolSaturatedException>(() => w2.AcquireAsync());
         Assert.Equal(1, w2.GetSnapshot().TotalTurnstileTimeouts); // turnstile bottleneck
-        Assert.Equal(0, w2.GetSnapshot().TotalTimeouts); // no permit timeout
+        Assert.Equal(0, w2.GetSnapshot().TotalSlotTimeouts); // no slot timeout
 
         p1.Dispose();
+    }
+
+    // ── Failure-path metrics isolation ─────────────────────────────────────
+    // When a writer grabs the turnstile but fails to acquire the slot,
+    // TotalHoldTicks must NOT be incremented — failure duration is not slot hold time.
+
+    [Fact]
+    public void Acquire_SlotSaturated_HoldMetricsNotContaminated()
+    {
+        using var turnstile = new SemaphoreSlim(1, 1);
+        using var exhaustedSem = new SemaphoreSlim(0, 1);
+
+        using var writer = new PoolGovernor(PoolLabel.Writer, "m-fail", 1,
+            TimeSpan.FromMilliseconds(20),
+            trackMetrics: true,
+            sharedSemaphore: exhaustedSem,
+            turnstile: turnstile, holdTurnstile: true);
+
+        Assert.Throws<PoolSaturatedException>(() => writer.Acquire());
+
+        Assert.Equal(0, writer.GetSnapshot().TotalHoldTicks);
+        Assert.Equal(0, writer.GetSnapshot().TotalWaitTicks);
+    }
+
+    [Fact]
+    public async Task AcquireAsync_SlotSaturated_HoldMetricsNotContaminated()
+    {
+        using var turnstile = new SemaphoreSlim(1, 1);
+        using var exhaustedSem = new SemaphoreSlim(0, 1);
+
+        using var writer = new PoolGovernor(PoolLabel.Writer, "m-fail-a", 1,
+            TimeSpan.FromMilliseconds(20),
+            trackMetrics: true,
+            sharedSemaphore: exhaustedSem,
+            turnstile: turnstile, holdTurnstile: true);
+
+        await Assert.ThrowsAsync<PoolSaturatedException>(() => writer.AcquireAsync());
+
+        Assert.Equal(0, writer.GetSnapshot().TotalHoldTicks);
+        Assert.Equal(0, writer.GetSnapshot().TotalWaitTicks);
+    }
+
+    [Fact]
+    public void TryAcquire_SlotMiss_HoldMetricsNotContaminated()
+    {
+        using var turnstile = new SemaphoreSlim(1, 1);
+        using var exhaustedSem = new SemaphoreSlim(0, 1);
+
+        using var writer = new PoolGovernor(PoolLabel.Writer, "m-try-fail", 1,
+            TimeSpan.FromMilliseconds(10),
+            trackMetrics: true,
+            sharedSemaphore: exhaustedSem,
+            turnstile: turnstile, holdTurnstile: true);
+
+        var success = writer.TryAcquire(out _);
+
+        Assert.False(success);
+        Assert.Equal(0, writer.GetSnapshot().TotalHoldTicks);
+        Assert.Equal(0, writer.GetSnapshot().TotalWaitTicks);
+    }
+
+    [Fact]
+    public async Task TryAcquireAsync_SlotMiss_HoldMetricsNotContaminated()
+    {
+        using var turnstile = new SemaphoreSlim(1, 1);
+        using var exhaustedSem = new SemaphoreSlim(0, 1);
+
+        using var writer = new PoolGovernor(PoolLabel.Writer, "m-trya-fail", 1,
+            TimeSpan.FromMilliseconds(10),
+            trackMetrics: true,
+            sharedSemaphore: exhaustedSem,
+            turnstile: turnstile, holdTurnstile: true);
+
+        var (success, _) = await writer.TryAcquireAsync();
+
+        Assert.False(success);
+        Assert.Equal(0, writer.GetSnapshot().TotalHoldTicks);
+        Assert.Equal(0, writer.GetSnapshot().TotalWaitTicks);
     }
 
     // ── Turnstile released on slot-acquisition failure ────────────────────
@@ -222,7 +300,7 @@ public sealed class PoolGovernorTurnstileTests
             sharedSemaphore: exhaustedSem,
             turnstile: turnstile, holdTurnstile: true);
 
-        var success = writer.TryAcquire(out var permit);
+        var success = writer.TryAcquire(out var slot);
 
         Assert.False(success);
         Assert.True(turnstile.Wait(0), "Turnstile was not released after TryAcquire slot miss.");
@@ -245,10 +323,10 @@ public sealed class PoolGovernorTurnstileTests
         Assert.True(turnstile.Wait(0), "Turnstile was not released after async TryAcquire slot miss.");
     }
 
-    // ── Writer permit disposal releases turnstile ─────────────────────────
+    // ── Writer slot disposal releases turnstile ─────────────────────────
 
     [Fact]
-    public void Dispose_WriterPermit_ReleasesTurnstile()
+    public void Dispose_WriterSlot_ReleasesTurnstile()
     {
         using var turnstile = new SemaphoreSlim(1, 1);
 
@@ -256,10 +334,10 @@ public sealed class PoolGovernorTurnstileTests
             TimeSpan.FromMilliseconds(50),
             turnstile: turnstile, holdTurnstile: true);
 
-        var permit = writer.Acquire();
+        var slot = writer.Acquire();
         Assert.False(turnstile.Wait(0)); // turnstile held
 
-        permit.Dispose(); // releases turnstile
+        slot.Dispose(); // releases turnstile
         Assert.True(turnstile.Wait(0)); // turnstile free
     }
 
@@ -320,10 +398,10 @@ public sealed class PoolGovernorTurnstileTests
         using var gov = new PoolGovernor(PoolLabel.Reader, "dis", 1,
             TimeSpan.FromMilliseconds(10), disabled: true);
 
-        var (success, permit) = await gov.TryAcquireAsync();
+        var (success, slot) = await gov.TryAcquireAsync();
 
         Assert.True(success);
-        Assert.Equal(default, permit);
+        Assert.Equal(default, slot);
     }
 
     // ── TryAcquireAsync reader touch-and-release succeeds ─────────────────
@@ -338,14 +416,14 @@ public sealed class PoolGovernorTurnstileTests
             TimeSpan.FromMilliseconds(50),
             turnstile: turnstile, holdTurnstile: false);
 
-        var (success, permit) = await reader.TryAcquireAsync();
+        var (success, slot) = await reader.TryAcquireAsync();
 
         Assert.True(success);
         // Turnstile must still be available (reader released it after touching)
         Assert.True(turnstile.Wait(0));
         turnstile.Release();
 
-        permit.Dispose();
+        slot.Dispose();
     }
 
     // ── TryAcquire disabled path (sync counterpart) ───────────────────────
@@ -356,23 +434,23 @@ public sealed class PoolGovernorTurnstileTests
         using var gov = new PoolGovernor(PoolLabel.Reader, "dis-s", 1,
             TimeSpan.FromMilliseconds(10), disabled: true);
 
-        var success = gov.TryAcquire(out var permit);
+        var success = gov.TryAcquire(out var slot);
 
         Assert.True(success);
-        Assert.Equal(default, permit);
+        Assert.Equal(default, slot);
     }
 
     // ── Constructor validation ─────────────────────────────────────────────
 
     [Fact]
-    public void Constructor_ZeroPermits_Throws()
+    public void Constructor_ZeroSlots_Throws()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() =>
             new PoolGovernor(PoolLabel.Reader, "z", 0, TimeSpan.FromMilliseconds(10)));
     }
 
     [Fact]
-    public void Constructor_NegativePermits_Throws()
+    public void Constructor_NegativeSlots_Throws()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() =>
             new PoolGovernor(PoolLabel.Reader, "n", -5, TimeSpan.FromMilliseconds(10)));

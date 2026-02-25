@@ -378,66 +378,73 @@ public partial class TableGateway<TEntity, TRowID>
         ISqlDialect dialect, ref ClauseCounters counters)
     {
         var clause = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
-        var template = GetTemplatesForDialect(dialect);
-
-        // Hoist dialect properties outside loop — constant per dialect, avoid N virtual calls
-        var supportsNamed = dialect.SupportsNamedParameters;
-        var paramMarker = dialect.ParameterMarker;
-
-        var parameters = new List<DbParameter>(template.UpdateColumns.Count);
-
-        for (var i = 0; i < template.UpdateColumns.Count; i++)
+        try
         {
-            var column = template.UpdateColumns[i];
-            var newValue = column.MakeParameterValueFromField(updated);
-            var originalValue = original != null ? column.MakeParameterValueFromField(original) : null;
+            var template = GetTemplatesForDialect(dialect);
 
-            if (original != null && ValuesAreEqual(newValue, originalValue, column.DbType))
-            {
-                continue;
-            }
+            // Hoist dialect properties outside loop — constant per dialect, avoid N virtual calls
+            var supportsNamed = dialect.SupportsNamedParameters;
+            var paramMarker = dialect.ParameterMarker;
 
-            if (clause.Length > 0)
-            {
-                clause.Append(SqlFragments.Comma);
-            }
+            var parameters = new List<DbParameter>(template.UpdateColumns.Count);
 
-            if (Utils.IsNullOrDbNull(newValue))
+            for (var i = 0; i < template.UpdateColumns.Count; i++)
             {
-                clause.Append(template.UpdateColumnWrappedNames[i]);
-                clause.Append(" = NULL");
-            }
-            else
-            {
-                var name = counters.NextSet();
-                var param = dialect.CreateDbParameter(name, column.DbType, newValue);
-                if (column.IsJsonType)
+                var column = template.UpdateColumns[i];
+                var newValue = column.MakeParameterValueFromField(updated);
+                var originalValue = original != null ? column.MakeParameterValueFromField(original) : null;
+
+                if (original != null && ValuesAreEqual(newValue, originalValue, column.DbType))
                 {
-                    dialect.TryMarkJsonParameter(param, column);
+                    continue;
                 }
 
-                parameters.Add(param);
-
-                clause.Append(template.UpdateColumnWrappedNames[i]);
-                clause.Append(SqlFragments.EqualsOp);
-                if (column.IsJsonType)
+                if (clause.Length > 0)
                 {
-                    clause.Append(dialect.RenderJsonArgument(dialect.MakeParameterName(name), column));
+                    clause.Append(SqlFragments.Comma);
                 }
-                else if (supportsNamed)
+
+                if (Utils.IsNullOrDbNull(newValue))
                 {
-                    // Direct append — eliminates MakeParameterName's Replace+Concat per column
-                    clause.Append(paramMarker);
-                    clause.Append(name);
+                    clause.Append(template.UpdateColumnWrappedNames[i]);
+                    clause.Append(" = NULL");
                 }
                 else
                 {
-                    clause.Append('?');
+                    var name = counters.NextSet();
+                    var param = dialect.CreateDbParameter(name, column.DbType, newValue);
+                    if (column.IsJsonType)
+                    {
+                        dialect.TryMarkJsonParameter(param, column);
+                    }
+
+                    parameters.Add(param);
+
+                    clause.Append(template.UpdateColumnWrappedNames[i]);
+                    clause.Append(SqlFragments.EqualsOp);
+                    if (column.IsJsonType)
+                    {
+                        clause.Append(dialect.RenderJsonArgument(dialect.MakeParameterName(name), column));
+                    }
+                    else if (supportsNamed)
+                    {
+                        // Direct append — eliminates MakeParameterName's Replace+Concat per column
+                        clause.Append(paramMarker);
+                        clause.Append(name);
+                    }
+                    else
+                    {
+                        clause.Append('?');
+                    }
                 }
             }
-        }
 
-        return (clause.ToString(), parameters);
+            return (clause.ToString(), parameters);
+        }
+        finally
+        {
+            clause.Dispose();
+        }
     }
 
     // Used by BuildUpdateByKey (upsert-by-key path in Core.cs).

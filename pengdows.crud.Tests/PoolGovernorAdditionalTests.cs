@@ -10,11 +10,11 @@ namespace pengdows.crud.Tests;
 public class PoolGovernorAdditionalTests
 {
     [Fact]
-    public void Acquire_DisabledGovernor_ReturnsDefaultPermit()
+    public void Acquire_DisabledGovernor_ReturnsDefaultSlot()
     {
         var governor = new PoolGovernor(PoolLabel.Reader, "hash", 1, TimeSpan.FromMilliseconds(1), true);
-        var permit = governor.Acquire();
-        Assert.Equal(default, permit);
+        var slot = governor.Acquire();
+        Assert.Equal(default, slot);
 
         var snapshot = governor.GetSnapshot();
         Assert.True(snapshot.Disabled);
@@ -22,15 +22,15 @@ public class PoolGovernorAdditionalTests
     }
 
     [Fact]
-    public void Acquire_TracksUsageAndReleasesPermit()
+    public void Acquire_TracksUsageAndReleasesSlot()
     {
         var governor = new PoolGovernor(PoolLabel.Writer, "writer-hash", 1, TimeSpan.FromSeconds(1));
-        var permit = governor.Acquire();
+        var slot = governor.Acquire();
         var active = governor.GetSnapshot();
         Assert.Equal(1, active.InUse);
         Assert.Equal(1, active.TotalAcquired);
 
-        permit.Dispose();
+        slot.Dispose();
         var drained = governor.GetSnapshot();
         Assert.Equal(0, drained.InUse);
         Assert.Equal(1, drained.TotalAcquired);
@@ -40,28 +40,28 @@ public class PoolGovernorAdditionalTests
     public void Acquire_WhenPoolSaturated_ThrowsPoolSaturatedException()
     {
         var governor = new PoolGovernor(PoolLabel.Reader, "hash", 1, TimeSpan.FromMilliseconds(50));
-        var permit = governor.Acquire();
+        var slot = governor.Acquire();
 
         var ex = Assert.Throws<PoolSaturatedException>(() => governor.Acquire());
         Assert.Equal("hash", ex.PoolKeyHash);
 
-        permit.Dispose();
+        slot.Dispose();
         var snapshot = governor.GetSnapshot();
-        Assert.Equal(1, snapshot.TotalTimeouts);
+        Assert.Equal(1, snapshot.TotalSlotTimeouts);
     }
 
     [Fact]
     public async Task AcquireAsync_WhenPoolSaturated_ThrowsPoolSaturatedException()
     {
         var governor = new PoolGovernor(PoolLabel.Writer, "writer-hash", 1, TimeSpan.FromMilliseconds(50));
-        var permit = await governor.AcquireAsync();
+        var slot = await governor.AcquireAsync();
 
         var ex = await Assert.ThrowsAsync<PoolSaturatedException>(() => governor.AcquireAsync());
         Assert.Equal("writer-hash", ex.PoolKeyHash);
 
-        permit.Dispose();
+        slot.Dispose();
         var snapshot = governor.GetSnapshot();
-        Assert.Equal(1, snapshot.TotalTimeouts);
+        Assert.Equal(1, snapshot.TotalSlotTimeouts);
     }
 
     [Fact]
@@ -73,22 +73,22 @@ public class PoolGovernorAdditionalTests
 
         Assert.False(governor.OwnsSemaphore);
 
-        using var permit = governor.Acquire();
+        using var slot = governor.Acquire();
         var snapshot = governor.GetSnapshot();
-        Assert.Equal(1, snapshot.MaxPermits);
+        Assert.Equal(1, snapshot.MaxSlots);
         Assert.Equal(1, snapshot.InUse);
 
         Assert.Throws<PoolSaturatedException>(() => governor.Acquire());
     }
 
     [Fact]
-    public void Permit_DisposeTwice_DoesNotOverRelease()
+    public void Slot_DisposeTwice_DoesNotOverRelease()
     {
         var governor = new PoolGovernor(PoolLabel.Reader, "double-release", 1, TimeSpan.FromMilliseconds(20));
 
-        var permit = governor.Acquire();
-        permit.Dispose();
-        permit.Dispose();
+        var slot = governor.Acquire();
+        slot.Dispose();
+        slot.Dispose();
 
         using var second = governor.Acquire();
 
@@ -96,34 +96,34 @@ public class PoolGovernorAdditionalTests
     }
 
     [Fact]
-    public void TryAcquire_WhenPermitAvailable_ReturnsTrueAndPermit()
+    public void TryAcquire_WhenSlotAvailable_ReturnsTrueAndSlot()
     {
         var governor = new PoolGovernor(PoolLabel.Reader, "try-reader", 1, TimeSpan.FromMilliseconds(50));
 
-        var acquired = governor.TryAcquire(out var permit);
+        var acquired = governor.TryAcquire(out var slot);
 
         Assert.True(acquired);
-        Assert.NotEqual(default, permit);
+        Assert.NotEqual(default, slot);
         Assert.Equal(1, governor.GetSnapshot().InUse);
 
-        permit.Dispose();
+        slot.Dispose();
     }
 
     [Fact]
     public void TryAcquire_WhenSaturated_ReturnsFalse()
     {
         var governor = new PoolGovernor(PoolLabel.Reader, "try-reader", 1, TimeSpan.FromMilliseconds(10));
-        using var permit = governor.Acquire();
+        using var slot = governor.Acquire();
 
         var acquired = governor.TryAcquire(out var second);
 
         Assert.False(acquired);
         Assert.Equal(default, second);
-        Assert.Equal(0, governor.GetSnapshot().TotalTimeouts);
+        Assert.Equal(0, governor.GetSnapshot().TotalSlotTimeouts);
     }
 
     [Fact]
-    public async Task TryAcquireAsync_WhenPermitAvailable_ReturnsTrueAndPermit()
+    public async Task TryAcquireAsync_WhenSlotAvailable_ReturnsTrueAndSlot()
     {
         var governor = new PoolGovernor(PoolLabel.Writer, "try-writer", 1, TimeSpan.FromMilliseconds(50));
 
@@ -140,25 +140,25 @@ public class PoolGovernorAdditionalTests
     public async Task TryAcquireAsync_WhenSaturated_ReturnsFalse()
     {
         var governor = new PoolGovernor(PoolLabel.Writer, "try-writer", 1, TimeSpan.FromMilliseconds(10));
-        await using var permit = await governor.AcquireAsync();
+        await using var slot = await governor.AcquireAsync();
 
         var acquired = await governor.TryAcquireAsync();
 
         Assert.False(acquired.Success);
         Assert.Equal(default, acquired.Permit);
-        Assert.Equal(0, governor.GetSnapshot().TotalTimeouts);
+        Assert.Equal(0, governor.GetSnapshot().TotalSlotTimeouts);
     }
 
     [Fact]
     public async Task WaitForDrainAsync_CompletesAfterRelease()
     {
         var governor = new PoolGovernor(PoolLabel.Reader, "drain", 1, TimeSpan.FromMilliseconds(50));
-        var permit = governor.Acquire();
+        var slot = governor.Acquire();
 
         var waitTask = governor.WaitForDrainAsync();
 
         Assert.False(waitTask.IsCompleted);
-        permit.Dispose();
+        slot.Dispose();
 
         await waitTask;
         Assert.Equal(0, governor.GetSnapshot().InUse);
@@ -168,7 +168,7 @@ public class PoolGovernorAdditionalTests
     public async Task WaitForDrainAsync_WhenCanceled_Throws()
     {
         var governor = new PoolGovernor(PoolLabel.Reader, "drain-cancel", 1, TimeSpan.FromMilliseconds(50));
-        using var permit = governor.Acquire();
+        using var slot = governor.Acquire();
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(20));
 
         await Assert.ThrowsAsync<OperationCanceledException>(() => governor.WaitForDrainAsync(null, cts.Token));
@@ -178,7 +178,7 @@ public class PoolGovernorAdditionalTests
     public async Task WaitForDrainAsync_WhenTimedOut_Throws()
     {
         var governor = new PoolGovernor(PoolLabel.Reader, "drain-timeout", 1, TimeSpan.FromMilliseconds(50));
-        using var permit = governor.Acquire();
+        using var slot = governor.Acquire();
 
         await Assert.ThrowsAsync<TimeoutException>(() => governor.WaitForDrainAsync(TimeSpan.FromMilliseconds(25)));
     }
@@ -186,7 +186,7 @@ public class PoolGovernorAdditionalTests
     // ── drain-signal race regression ──────────────────────────────────────
     // Release() decrements _inUse and calls TrySetResult on the drain signal
     // non-atomically.  A concurrent Acquire that increments _inUse between
-    // those two steps can leave the signal completed while a permit is live.
+    // those two steps can leave the signal completed while a slot is live.
     //
     // Setup (capacity 2):
     //   1. Acquire A and B          (inUse=2, sem=0)
@@ -219,7 +219,7 @@ public class PoolGovernorAdditionalTests
             a.Dispose();
 
             // Race B's release against C's acquire.
-            PoolPermit c = default;
+            PoolSlot c = default;
             await Task.WhenAll(
                 Task.Run(() => b.Dispose()),
                 Task.Run(() =>

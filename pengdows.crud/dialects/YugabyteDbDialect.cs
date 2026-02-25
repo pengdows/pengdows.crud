@@ -21,7 +21,7 @@ namespace pengdows.crud.dialects;
 internal class YugabyteDbDialect : PostgreSqlDialect
 {
     internal YugabyteDbDialect(DbProviderFactory factory, ILogger logger)
-        : base(factory, logger)
+        : base(factory, logger, SupportedDatabase.YugabyteDb)
     {
     }
 

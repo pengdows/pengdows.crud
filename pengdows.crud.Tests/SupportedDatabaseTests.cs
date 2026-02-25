@@ -53,7 +53,9 @@ public class SupportedDatabaseTests
                 "DuckDB",
                 "YugabyteDb",
                 "TiDb",
-                "Snowflake"
+                "Snowflake",
+                "AuroraMySql",
+                "AuroraPostgreSql"
             },
             names);
     }

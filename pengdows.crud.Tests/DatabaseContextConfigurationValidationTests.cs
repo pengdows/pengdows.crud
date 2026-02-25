@@ -6,7 +6,7 @@ namespace pengdows.crud.Tests;
 
 /// <summary>
 /// Validates that MaxConcurrentWrites/Reads reject zero and negative values,
-/// which would cause permanent deadlock (0 permits never granted) or undefined
+/// which would cause permanent deadlock (0 slots never granted) or undefined
 /// behavior.
 /// </summary>
 public class DatabaseContextConfigurationValidationTests

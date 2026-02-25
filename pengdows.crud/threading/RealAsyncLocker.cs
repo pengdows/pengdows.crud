@@ -110,12 +110,12 @@ internal sealed class RealAsyncLocker : SafeAsyncDisposableBase, ILockerAsync
         _logger.LogTrace("Lock acquired (sync)");
     }
 
-    public async Task LockAsync(CancellationToken cancellationToken = default)
+    public ValueTask LockAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
         if (cancellationToken.IsCancellationRequested)
         {
-            throw new TaskCanceledException();
+            return ValueTask.FromCanceled(cancellationToken);
         }
 
         _logger.LogTrace("Waiting for lock");
@@ -123,9 +123,14 @@ internal sealed class RealAsyncLocker : SafeAsyncDisposableBase, ILockerAsync
         {
             AcquireLockState();
             _logger.LogTrace("Lock acquired");
-            return;
+            return ValueTask.CompletedTask;
         }
 
+        return new ValueTask(LockAsyncSlow(cancellationToken));
+    }
+
+    private async Task LockAsyncSlow(CancellationToken cancellationToken)
+    {
         _stats?.RecordWaitStart();
         var start = Stopwatch.GetTimestamp();
         var acquired = false;
@@ -187,12 +192,12 @@ internal sealed class RealAsyncLocker : SafeAsyncDisposableBase, ILockerAsync
         }
     }
 
-    public async Task<bool> TryLockAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+    public ValueTask<bool> TryLockAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
         if (cancellationToken.IsCancellationRequested)
         {
-            throw new TaskCanceledException();
+            return ValueTask.FromCanceled<bool>(cancellationToken);
         }
 
         _logger.LogTrace("Attempting lock with timeout {Timeout}", timeout);
@@ -200,9 +205,14 @@ internal sealed class RealAsyncLocker : SafeAsyncDisposableBase, ILockerAsync
         {
             AcquireLockState();
             _logger.LogTrace("Lock acquired");
-            return true;
+            return ValueTask.FromResult(true);
         }
 
+        return new ValueTask<bool>(TryLockAsyncSlow(timeout, cancellationToken));
+    }
+
+    private async Task<bool> TryLockAsyncSlow(TimeSpan timeout, CancellationToken cancellationToken)
+    {
         _stats?.RecordWaitStart();
         var start = Stopwatch.GetTimestamp();
         bool acquired;

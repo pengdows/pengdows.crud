@@ -683,6 +683,7 @@ public class SqlDialectHelperTests
         public JsonSerializerOptions JsonSerializerOptions { get; set; } = new();
         public bool IsIdIsWritable { get; set; }
         public bool IsPrimaryKey { get; set; }
+        public bool IsCorrelationToken { get; set; }
         public int PkOrder { get; set; }
         public bool IsVersion { get; set; }
         public bool IsCreatedBy { get; set; }

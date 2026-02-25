@@ -460,6 +460,13 @@ public interface ISqlDialect
     string GetVersionQuery();
 
     /// <summary>
+    /// Gets the SQL query to retrieve the next value from a sequence.
+    /// </summary>
+    /// <param name="sequenceName">The name of the sequence.</param>
+    /// <returns>The SQL query text.</returns>
+    string GetSequenceNextValQuery(string sequenceName);
+
+    /// <summary>
     /// Reads the database version from the connection.
     /// </summary>
     /// <param name="connection">Connection to inspect.</param>
@@ -595,8 +602,16 @@ public interface ISqlDialect
     /// <summary>
     /// Generates the RETURNING or OUTPUT clause for INSERT statements to capture identity values.
     /// </summary>
-    /// <param name="idColumnWrapped">Quoted identity column name</param>
-    /// <returns>SQL clause like " RETURNING id" or " OUTPUT INSERTED.id"</returns>
+    /// <param name="idColumnWrapped">
+    /// The identity column name already quoted with dialect-specific identifiers
+    /// (e.g., <c>"id"</c>, <c>[id]</c>, or <c>`id`</c>). Use <see cref="WrapObjectName"/>
+    /// or <see cref="WrapSimpleName"/> to produce this value before calling.
+    /// </param>
+    /// <returns>
+    /// Dialect-specific SQL fragment ready for direct concatenation into an INSERT statement,
+    /// for example <c>" RETURNING &quot;id&quot;"</c> or <c>"OUTPUT INSERTED.[id]"</c>.
+    /// Returns an empty string when <see cref="SupportsInsertReturning"/> is false.
+    /// </returns>
     string RenderInsertReturningClause(string idColumnWrapped);
 
     /// <summary>
@@ -618,11 +633,6 @@ public interface ISqlDialect
     /// Indicates whether the dialect has a safe session-scoped last-id function.
     /// </summary>
     bool HasSessionScopedLastIdFunction();
-
-    /// <summary>
-    /// Gets the SQL syntax for RETURNING/OUTPUT clause to retrieve the inserted ID.
-    /// </summary>
-    string GetInsertReturningClause(string idColumnName);
 
     /// <summary>
     /// Generates a correlation token lookup query for the specified table.

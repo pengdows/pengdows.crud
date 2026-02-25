@@ -1,13 +1,13 @@
 // =============================================================================
-// FILE: PoolPermit.cs
+// FILE: PoolSlot.cs
 // PURPOSE: RAII struct representing an acquired pool slot.
 //
 // AI SUMMARY:
 // - Readonly struct implementing IDisposable and IAsyncDisposable.
 // - Returned by PoolGovernor.Acquire/AcquireAsync.
 // - Dispose(): Releases permit back to governor (once only).
-// - PoolPermitToken: Inner class ensuring single release via Interlocked.
-// - Usage: using var permit = await governor.AcquireAsync();
+// - PoolSlotToken: Inner class ensuring single release via Interlocked.
+// - Usage: using var slot = await governor.AcquireAsync();
 // - Struct design: efficient, stack-allocated, no heap pressure.
 // - Null token (default struct) is valid no-op for disabled governors.
 // =============================================================================
@@ -16,11 +16,11 @@ using System.Diagnostics;
 
 namespace pengdows.crud.infrastructure;
 
-internal readonly struct PoolPermit : IDisposable, IAsyncDisposable
+internal readonly struct PoolSlot : IDisposable, IAsyncDisposable
 {
-    private readonly PoolPermitToken? _token;
+    private readonly PoolSlotToken? _token;
 
-    internal PoolPermit(PoolPermitToken token)
+    internal PoolSlot(PoolSlotToken token)
     {
         _token = token;
     }
@@ -36,14 +36,14 @@ internal readonly struct PoolPermit : IDisposable, IAsyncDisposable
         return ValueTask.CompletedTask;
     }
 
-    internal sealed class PoolPermitToken
+    internal sealed class PoolSlotToken
     {
         private readonly PoolGovernor _governor;
         private readonly long _waitStart;
         private readonly long _acquiredAt;
         private int _released;
 
-        internal PoolPermitToken(PoolGovernor governor, long waitStart)
+        internal PoolSlotToken(PoolGovernor governor, long waitStart)
         {
             _governor = governor;
             _waitStart = waitStart;

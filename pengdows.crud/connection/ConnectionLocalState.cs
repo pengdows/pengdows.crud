@@ -40,17 +40,23 @@ public sealed class ConnectionLocalState : IConnectionLocalState
         return prepared != null && prepared.ContainsKey(shapeHash);
     }
 
+    /// <inheritdoc/>
+    public void DisablePrepare() => PrepareDisabled = true;
+
+    /// <inheritdoc/>
+    public void MarkSessionSettingsApplied() => SessionSettingsApplied = true;
+
     /// <summary>
     /// Marks this shape as prepared
     /// </summary>
-    public bool MarkShapePrepared(string shapeHash, out int evicted)
+    public (bool Added, int Evicted) MarkShapePrepared(string shapeHash)
     {
-        evicted = 0;
         var prepared = GetPreparedCache();
         var order = GetPreparedOrder();
         if (prepared.TryAdd(shapeHash, 0))
         {
             order.Enqueue(shapeHash);
+            var evicted = 0;
             while (prepared.Count > _maxPrepared && order.TryDequeue(out var old))
             {
                 if (prepared.TryRemove(old, out _))
@@ -59,11 +65,10 @@ public sealed class ConnectionLocalState : IConnectionLocalState
                 }
             }
 
-            return true;
+            return (true, evicted);
         }
 
-        evicted = 0;
-        return false;
+        return (false, 0);
     }
 
     /// <summary>

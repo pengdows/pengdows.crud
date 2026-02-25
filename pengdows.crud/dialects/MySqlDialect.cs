@@ -68,21 +68,24 @@ internal class MySqlDialect : SqlDialect
 
     private string? _sessionSettings;
     private readonly bool _isMySqlConnector;
+    private readonly SupportedDatabase _flavor;
 
-    internal MySqlDialect(DbProviderFactory factory, ILogger logger)
+    internal MySqlDialect(DbProviderFactory factory, ILogger logger, SupportedDatabase flavor = SupportedDatabase.MySql)
         : this(factory, logger,
             (factory.GetType().Namespace ?? string.Empty)
-            .Contains("MySqlConnector", StringComparison.OrdinalIgnoreCase))
+            .Contains("MySqlConnector", StringComparison.OrdinalIgnoreCase),
+            flavor)
     {
     }
 
-    internal MySqlDialect(DbProviderFactory factory, ILogger logger, bool isMySqlConnector)
+    internal MySqlDialect(DbProviderFactory factory, ILogger logger, bool isMySqlConnector, SupportedDatabase flavor = SupportedDatabase.MySql)
         : base(factory, logger)
     {
         _isMySqlConnector = isMySqlConnector;
+        _flavor = flavor;
     }
 
-    public override SupportedDatabase DatabaseType => SupportedDatabase.MySql;
+    public override SupportedDatabase DatabaseType => _flavor;
     public override string QuotePrefix => "\"";
     public override string QuoteSuffix => "\"";
     public override string ParameterMarker => "@";
@@ -107,7 +110,7 @@ internal class MySqlDialect : SqlDialect
     public override bool SupportsOnDuplicateKey => true; // Available since MySQL 4.1 (2004) - safe to assume
     public override bool SupportsMerge => false;
     public override bool SupportsSavepoints => true; // Available since MySQL 5.0.3 (2005)
-    public override bool SupportsJsonTypes => IsInitialized && ProductInfo.ParsedVersion?.Major >= 5;
+    public override bool SupportsJsonTypes => IsInitialized && IsVersionAtLeast(5, 7, 8);
     public override bool SupportsWindowFunctions => IsInitialized && ProductInfo.ParsedVersion?.Major >= 8;
     public override bool SupportsCommonTableExpressions => IsInitialized && ProductInfo.ParsedVersion?.Major >= 8;
 

@@ -95,6 +95,6 @@ public class DatabaseContextLifecycleCoverageTests
 
         Assert.Equal(PoolLabel.Reader, readerSnapshot.Label);
         Assert.Equal(PoolLabel.Writer, writerSnapshot.Label);
-        Assert.True(readerSnapshot.Disabled || readerSnapshot.MaxPermits >= 0);
+        Assert.True(readerSnapshot.Disabled || readerSnapshot.MaxSlots >= 0);
     }
 }

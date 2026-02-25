@@ -47,7 +47,7 @@ public class RealAsyncLockerTests
         var locker = new RealAsyncLocker(semaphore);
 
         await locker.LockAsync(cts.Token);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => locker.LockAsync(cts.Token));
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await locker.LockAsync(cts.Token));
         Assert.Equal(1, semaphore.CurrentCount);
 
         await locker.DisposeAsync();
@@ -62,7 +62,7 @@ public class RealAsyncLockerTests
         await semaphore.WaitAsync(ctsWait.Token);
         var locker = new RealAsyncLocker(semaphore);
         using var cts = new CancellationTokenSource(50);
-        await Assert.ThrowsAsync<TaskCanceledException>(() => locker.LockAsync(cts.Token));
+        await Assert.ThrowsAsync<TaskCanceledException>(async () => await locker.LockAsync(cts.Token));
         semaphore.Release();
     }
 
@@ -100,8 +100,8 @@ public class RealAsyncLockerTests
 
         var first = await locker.TryLockAsync(TimeSpan.FromSeconds(1), cts.Token);
         Assert.True(first);
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            locker.TryLockAsync(TimeSpan.FromSeconds(1), cts.Token));
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await locker.TryLockAsync(TimeSpan.FromSeconds(1), cts.Token));
         Assert.Equal(1, semaphore.CurrentCount);
 
         await locker.DisposeAsync();
@@ -126,7 +126,7 @@ public class RealAsyncLockerTests
         await semaphore.WaitAsync(ctsWait.Token);
         var locker = new RealAsyncLocker(semaphore);
         using var cts = new CancellationTokenSource(50);
-        await Assert.ThrowsAsync<TaskCanceledException>(() => locker.TryLockAsync(TimeSpan.FromSeconds(1), cts.Token));
+        await Assert.ThrowsAsync<TaskCanceledException>(async () => await locker.TryLockAsync(TimeSpan.FromSeconds(1), cts.Token));
         semaphore.Release();
     }
 
@@ -154,7 +154,7 @@ public class RealAsyncLockerTests
         await locker.LockAsync(cts.Token);
         await locker.DisposeAsync();
 
-        await Assert.ThrowsAsync<ObjectDisposedException>(() => locker.LockAsync(cts.Token));
+        await Assert.ThrowsAsync<ObjectDisposedException>(async () => await locker.LockAsync(cts.Token));
     }
 
     [Fact]
@@ -184,7 +184,7 @@ public class RealAsyncLockerTests
         locker.Dispose(); // synchronous dispose path
 
         Assert.Equal(1, semaphore.CurrentCount);
-        await Assert.ThrowsAsync<ObjectDisposedException>(() => locker.LockAsync(cts.Token));
+        await Assert.ThrowsAsync<ObjectDisposedException>(async () => await locker.LockAsync(cts.Token));
     }
 
     [Fact]

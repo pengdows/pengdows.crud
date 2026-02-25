@@ -229,15 +229,11 @@ public class TableGatewayBatchTests : IAsyncLifetime
     [Fact]
     public void BuildBatchCreate_ChunksWhenExceedingParameterLimit()
     {
-        // SQLite has 999 parameter limit. With TestEntitySimple (1 insertable column: "name"),
-        // we can fit 999 rows per chunk. With 1000 rows we should get 2 chunks.
-        // But with more columns we need fewer entities. Let's use a concrete calculation:
-        // TestEntitySimple insertable columns = 1 (name only, id is autoincrement)
-        // usableParams = 999 * 0.9 = 899
-        // rowsPerChunk = 899 / 1 = 899
-        // So 900 entities should produce 2 chunks.
-        var helper = new TableGateway<TestEntitySimple, int>(_sqliteContext);
-        var entities = Enumerable.Range(0, 900)
+        // SQL Server has a 2100 parameter limit. With TestEntitySimple (1 insertable column: "name"),
+        // usableParams = 2100 * 0.9 = 1890, rowsPerChunk = 1890.
+        // 2000 entities should produce 2 chunks (1890 + 110).
+        var helper = new TableGateway<TestEntitySimple, int>(_sqlServerContext);
+        var entities = Enumerable.Range(0, 2000)
             .Select(i => new TestEntitySimple { Name = $"entity_{i}" })
             .ToList();
 

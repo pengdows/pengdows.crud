@@ -280,9 +280,25 @@ public partial class TableGateway<TEntity, TRowID> :
 
         var ctx = context ?? _context;
         var dialect = GetDialect(ctx);
+        var plan = dialect.GetGeneratedKeyPlan();
 
-        // Use RETURNING clause if supported to avoid race condition
-        if (_idColumn != null && !_idColumn.IsIdIsWritable && dialect.SupportsInsertReturning)
+        // 1. Handle PREFETCH plans (Oracle)
+        if (plan == GeneratedKeyPlan.PrefetchSequence && _idColumn != null)
+        {
+            var seqQuery = dialect.GetSequenceNextValQuery(GetSequenceName());
+            using var seqSc = ctx.CreateSqlContainer(seqQuery);
+            var nextVal = await seqSc.ExecuteScalarRequiredAsync<object>(ExecutionType.Read).ConfigureAwait(false);
+            var converted = TypeCoercionHelper.ConvertWithCache(nextVal, _idColumn.PropertyInfo.PropertyType);
+            _idColumn.PropertyInfo.SetValue(entity, converted);
+            
+            // Proceed with standard insert since ID is now populated
+            var sc = BuildCreate(entity, ctx);
+            return await sc.ExecuteNonQueryAsync().ConfigureAwait(false) == 1;
+        }
+
+        // 2. Handle INLINE plans (Postgres, SQL Server, etc.)
+        if ((plan == GeneratedKeyPlan.Returning || plan == GeneratedKeyPlan.OutputInserted) && 
+            _idColumn != null && !_idColumn.IsIdIsWritable)
         {
             var sc = BuildCreateWithReturning(entity, true, ctx);
 
@@ -300,43 +316,48 @@ public partial class TableGateway<TEntity, TRowID> :
             if (generatedId != null && generatedId != DBNull.Value)
             {
                 var targetType = _idColumn.PropertyInfo.PropertyType;
-                if (targetType == typeof(Guid))
-                {
-                    if (generatedId is Guid g)
-                    {
-                        _idColumn.PropertyInfo.SetValue(entity, g);
-                    }
-                    else if (Guid.TryParse(generatedId.ToString(), out var parsed))
-                    {
-                        _idColumn.PropertyInfo.SetValue(entity, parsed);
-                    }
-                }
-                else
-                {
-                    var converted = TypeCoercionHelper.ConvertWithCache(generatedId, targetType);
-                    _idColumn.PropertyInfo.SetValue(entity, converted);
-                }
-            }
-            else
-            {
-                // Fallback: some providers/tests return null from INSERT ... RETURNING under fakeDb
-                // Attempt to populate via provider-specific last-insert-id query
-                await PopulateGeneratedIdAsync(entity, ctx).ConfigureAwait(false);
+                var converted = TypeCoercionHelper.ConvertWithCache(generatedId, targetType);
+                _idColumn.PropertyInfo.SetValue(entity, converted);
+                return true;
             }
 
-            // Insert succeeded if we reached here; ID may be null, which is acceptable
+            // Fallback: PopulateGeneratedIdAsync for test/fake scenarios
+            await PopulateGeneratedIdAsync(entity, ctx).ConfigureAwait(false);
             return true;
         }
-        else
-        {
-            // Fallback to old behavior for databases that don't support RETURNING
-            var sc = BuildCreate(entity, ctx);
-            var rowsAffected = await sc.ExecuteNonQueryAsync();
 
-            // For non-writable ID columns, retrieve the generated ID and populate it on the entity
+        // 3. Handle CORRELATION TOKEN plan
+        if (plan == GeneratedKeyPlan.CorrelationToken && _tableInfo.CorrelationColumn != null && _idColumn != null)
+        {
+            var token = Guid.NewGuid().ToString("N");
+            _tableInfo.CorrelationColumn.PropertyInfo.SetValue(entity, token);
+            
+            var sc = BuildCreate(entity, ctx);
+            if (await sc.ExecuteNonQueryAsync().ConfigureAwait(false) != 1) return false;
+            
+            var lookupSql = dialect.GetCorrelationTokenLookupQuery(
+                _tableInfo.Name, 
+                _idColumn.Name, 
+                _tableInfo.CorrelationColumn.Name, 
+                dialect.MakeParameterName("p1"));
+                
+            using var lookupSc = ctx.CreateSqlContainer(lookupSql);
+            lookupSc.AddParameterWithValue("p1", DbType.String, token);
+            
+            var generatedId = await lookupSc.ExecuteScalarRequiredAsync<object>(ExecutionType.Read).ConfigureAwait(false);
+            var converted = TypeCoercionHelper.ConvertWithCache(generatedId, _idColumn.PropertyInfo.PropertyType);
+            _idColumn.PropertyInfo.SetValue(entity, converted);
+            return true;
+        }
+
+        // 4. Default path: standard insert followed by optional session-scoped retrieval
+        {
+            var sc = BuildCreate(entity, ctx);
+            var rowsAffected = await sc.ExecuteNonQueryAsync().ConfigureAwait(false);
+
             if (rowsAffected == 1 && _idColumn != null && !_idColumn.IsIdIsWritable)
             {
-                await PopulateGeneratedIdAsync(entity, ctx);
+                await PopulateGeneratedIdAsync(entity, ctx).ConfigureAwait(false);
             }
 
             return rowsAffected == 1;
@@ -354,8 +375,24 @@ public partial class TableGateway<TEntity, TRowID> :
 
         var ctx = context ?? _context;
         var dialect = GetDialect(ctx);
+        var plan = dialect.GetGeneratedKeyPlan();
 
-        if (_idColumn != null && !_idColumn.IsIdIsWritable && dialect.SupportsInsertReturning)
+        // 1. Handle PREFETCH plans (Oracle)
+        if (plan == GeneratedKeyPlan.PrefetchSequence && _idColumn != null)
+        {
+            var seqQuery = dialect.GetSequenceNextValQuery(GetSequenceName());
+            using var seqSc = ctx.CreateSqlContainer(seqQuery);
+            var nextVal = await seqSc.ExecuteScalarRequiredAsync<object>(ExecutionType.Read, CommandType.Text, cancellationToken).ConfigureAwait(false);
+            var converted = TypeCoercionHelper.ConvertWithCache(nextVal, _idColumn.PropertyInfo.PropertyType);
+            _idColumn.PropertyInfo.SetValue(entity, converted);
+            
+            var sc = BuildCreate(entity, ctx);
+            return await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false) == 1;
+        }
+
+        // 2. Handle INLINE plans (Postgres, SQL Server, etc.)
+        if ((plan == GeneratedKeyPlan.Returning || plan == GeneratedKeyPlan.OutputInserted) && 
+            _idColumn != null && !_idColumn.IsIdIsWritable)
         {
             var sc = BuildCreateWithReturning(entity, true, ctx);
 
@@ -380,11 +417,36 @@ public partial class TableGateway<TEntity, TRowID> :
                 return true;
             }
 
-            // Fallback path: try last-insert-id
+            // Fallback: PopulateGeneratedIdAsync for test/fake scenarios
             await PopulateGeneratedIdAsync(entity, ctx).ConfigureAwait(false);
             return true;
         }
-        else
+
+        // 3. Handle CORRELATION TOKEN plan
+        if (plan == GeneratedKeyPlan.CorrelationToken && _tableInfo.CorrelationColumn != null && _idColumn != null)
+        {
+            var token = Guid.NewGuid().ToString("N");
+            _tableInfo.CorrelationColumn.PropertyInfo.SetValue(entity, token);
+            
+            var sc = BuildCreate(entity, ctx);
+            if (await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false) != 1) return false;
+            
+            var lookupSql = dialect.GetCorrelationTokenLookupQuery(
+                _tableInfo.Name, 
+                _idColumn.Name, 
+                _tableInfo.CorrelationColumn.Name, 
+                dialect.MakeParameterName("p1"));
+                
+            using var lookupSc = ctx.CreateSqlContainer(lookupSql);
+            lookupSc.AddParameterWithValue("p1", DbType.String, token);
+            
+            var generatedId = await lookupSc.ExecuteScalarRequiredAsync<object>(ExecutionType.Read, CommandType.Text, cancellationToken).ConfigureAwait(false);
+            var converted = TypeCoercionHelper.ConvertWithCache(generatedId, _idColumn.PropertyInfo.PropertyType);
+            _idColumn.PropertyInfo.SetValue(entity, converted);
+            return true;
+        }
+
+        // 4. Default path: standard insert followed by optional session-scoped retrieval
         {
             var sc = BuildCreate(entity, ctx);
             var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
@@ -1069,27 +1131,15 @@ public partial class TableGateway<TEntity, TRowID> :
 
     private static List<TRowID> MaterializeDistinctIds(IEnumerable<TRowID> ids)
     {
-        // Fast path for single-element or empty collections (15-20% improvement for single-ID queries)
-        if (ids is ICollection<TRowID> collection)
+        // Optimization: Fast path for common collection types to avoid double-enumeration or 
+        // unnecessary allocations for single-element lists.
+        if (ids is IReadOnlyCollection<TRowID> roc)
         {
-            if (collection.Count == 0)
+            if (roc.Count == 0) return new List<TRowID>(0);
+            if (roc.Count == 1)
             {
-                return new List<TRowID>();
-            }
-
-            if (collection.Count == 1)
-            {
-                // Most common pattern: RetrieveOneAsync(id) - no need for deduplication
-                var singleResult = new List<TRowID>(1);
-                using (var enumerator = collection.GetEnumerator())
-                {
-                    if (enumerator.MoveNext())
-                    {
-                        singleResult.Add(enumerator.Current);
-                    }
-                }
-
-                return singleResult;
+                var id = roc is IList<TRowID> list ? list[0] : roc.First();
+                return new List<TRowID>(1) { id };
             }
         }
 
@@ -1108,26 +1158,28 @@ public partial class TableGateway<TEntity, TRowID> :
                 continue;
             }
 
-            if (seen is null)
+            // Threshold-based deduplication:
+            // 1. Very small lists (< 16): Use linear search on result list (faster than HashSet overhead)
+            // 2. Larger lists (>= 16): Switch to HashSet for O(1) lookups
+            if (seen == null)
             {
-                var duplicate = false;
-                foreach (var existing in result)
+                if (result.Count < 16)
                 {
-                    if (comparer.Equals(existing, id))
+                    var found = false;
+                    for (int i = 0; i < result.Count; i++)
                     {
-                        seen = new HashSet<TRowID>(result, comparer);
-                        duplicate = true;
-                        break;
+                        if (comparer.Equals(result[i], id))
+                        {
+                            found = true;
+                            break;
+                        }
                     }
-                }
-
-                if (duplicate)
-                {
+                    if (!found) result.Add(id);
                     continue;
                 }
 
-                result.Add(id);
-                continue;
+                // Transition to HashSet
+                seen = new HashSet<TRowID>(result, comparer);
             }
 
             if (seen.Add(id))
@@ -1446,44 +1498,52 @@ public partial class TableGateway<TEntity, TRowID> :
         }
 
         var where = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
-        for (var i = 0; i < keyCols.Count; i++)
+        var sqlBuf = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+        try
         {
-            if (i > 0)
+            for (var i = 0; i < keyCols.Count; i++)
             {
-                where.Append(SqlFragments.And);
+                if (i > 0)
+                {
+                    where.Append(SqlFragments.And);
+                }
+
+                var key = keyCols[i];
+                var v = key.MakeParameterValueFromField(updated);
+                var name = counters.NextKey();
+                var p = dialect.CreateDbParameter(name, key.DbType, v);
+                parameters.Add(p);
+                where.Append(dialect.WrapSimpleName(key.Name));
+                where.Append(" = ");
+                where.Append(dialect.MakeParameterName(name));
             }
 
-            var key = keyCols[i];
-            var v = key.MakeParameterValueFromField(updated);
-            var name = counters.NextKey();
-            var p = dialect.CreateDbParameter(name, key.DbType, v);
-            parameters.Add(p);
-            where.Append(dialect.WrapSimpleName(key.Name));
-            where.Append(" = ");
-            where.Append(dialect.MakeParameterName(name));
+            sqlBuf.Append("UPDATE ");
+            sqlBuf.Append(BuildWrappedTableName(dialect));
+            sqlBuf.Append(" SET ");
+            sqlBuf.Append(setClause);
+            sqlBuf.Append(" WHERE ");
+            sqlBuf.Append(where.AsSpan());
+
+            if (_versionColumn != null)
+            {
+                var vv = _versionColumn.MakeParameterValueFromField(updated);
+                var name = counters.NextVer();
+                var p = dialect.CreateDbParameter(name, _versionColumn.DbType, vv);
+                parameters.Add(p);
+                sqlBuf.Append(" AND ");
+                sqlBuf.Append(dialect.WrapSimpleName(_versionColumn.Name));
+                sqlBuf.Append(" = ");
+                sqlBuf.Append(dialect.MakeParameterName(name));
+            }
+
+            return (sqlBuf.ToString(), parameters);
         }
-
-        var sqlBuf = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
-        sqlBuf.Append("UPDATE ");
-        sqlBuf.Append(BuildWrappedTableName(dialect));
-        sqlBuf.Append(" SET ");
-        sqlBuf.Append(setClause);
-        sqlBuf.Append(" WHERE ");
-        sqlBuf.Append(where.AsSpan());
-
-        if (_versionColumn != null)
+        finally
         {
-            var vv = _versionColumn.MakeParameterValueFromField(updated);
-            var name = counters.NextVer();
-            var p = dialect.CreateDbParameter(name, _versionColumn.DbType, vv);
-            parameters.Add(p);
-            sqlBuf.Append(" AND ");
-            sqlBuf.Append(dialect.WrapSimpleName(_versionColumn.Name));
-            sqlBuf.Append(" = ");
-            sqlBuf.Append(dialect.MakeParameterName(name));
+            where.Dispose();
+            sqlBuf.Dispose();
         }
-
-        return (sqlBuf.ToString(), parameters);
     }
 
 
@@ -1560,6 +1620,12 @@ public partial class TableGateway<TEntity, TRowID> :
     }
 
 
+    private string GetSequenceName()
+    {
+        // Simple heuristic: [table_name]_seq
+        return string.Concat(_tableInfo.Name, "_seq");
+    }
+
     private string BuildWrappedTableName(ISqlDialect dialect)
     {
         // Cache wrapped table names per dialect since table/schema never change
@@ -1571,10 +1637,17 @@ public partial class TableGateway<TEntity, TRowID> :
             }
 
             var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
-            sb.Append(d.WrapSimpleName(_tableInfo.Schema));
-            sb.Append(d.CompositeIdentifierSeparator);
-            sb.Append(d.WrapSimpleName(_tableInfo.Name));
-            return sb.ToString();
+            try
+            {
+                sb.Append(d.WrapSimpleName(_tableInfo.Schema));
+                sb.Append(d.CompositeIdentifierSeparator);
+                sb.Append(d.WrapSimpleName(_tableInfo.Name));
+                return sb.ToString();
+            }
+            finally
+            {
+                sb.Dispose();
+            }
         });
     }
 

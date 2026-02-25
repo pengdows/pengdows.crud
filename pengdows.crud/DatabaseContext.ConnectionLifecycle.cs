@@ -18,7 +18,7 @@
 // - Internal helpers for strategy implementations:
 //   * PersistentConnection - The pinned connection (if any)
 //   * GetStandardConnection() - Creates new pooled connection
-//   * AcquirePermit() - Gets pool permit with backpressure
+//   * AcquireSlot() - Gets pool slot with backpressure
 // =============================================================================
 
 using System.Data;
@@ -102,17 +102,17 @@ public partial class DatabaseContext
     internal ITrackedConnection GetStandardConnectionWithExecutionType(ExecutionType executionType,
         bool isShared = false, bool readOnly = false)
     {
-        var permit = AcquirePermit(executionType);
+        var slot = AcquireSlot(executionType);
         try
         {
             var useReader = ShouldUseReaderConnectionString(readOnly);
             var connectionString = useReader ? _readerConnectionString : _connectionString;
-            var conn = FactoryCreateConnection(executionType, connectionString, isShared, readOnly, null, permit);
+            var conn = FactoryCreateConnection(executionType, connectionString, isShared, readOnly, null, slot);
             return conn;
         }
         catch
         {
-            permit.Dispose();
+            slot.Dispose();
             throw;
         }
     }
@@ -161,7 +161,7 @@ public partial class DatabaseContext
             {
                 if (connection is ITrackedConnection tc)
                 {
-                    tc.LocalState.SessionSettingsApplied = true;
+                    tc.LocalState.MarkSessionSettingsApplied();
                 }
                 return;
             }
@@ -196,7 +196,7 @@ public partial class DatabaseContext
             _initializedConnections.AddOrUpdate(physicalConnection, settingsKey);
             if (connection is ITrackedConnection tc)
             {
-                tc.LocalState.SessionSettingsApplied = true;
+                tc.LocalState.MarkSessionSettingsApplied();
             }
         }
     }
@@ -239,7 +239,7 @@ public partial class DatabaseContext
         bool isSharedConnection = false,
         bool readOnly = false,
         Action<DbConnection>? onFirstOpen = null,
-        PoolPermit? permit = null)
+        PoolSlot? slot = null)
     {
         SanitizeConnectionString(connectionString);
 
@@ -360,7 +360,7 @@ public partial class DatabaseContext
             _modeContentionStats,
             ConnectionMode,
             _modeLockTimeout,
-            permit,
+            slot,
             namePrefix
         );
         trackedConnection = tracked;
@@ -396,7 +396,7 @@ public partial class DatabaseContext
         return _dataSource;
     }
 
-    private PoolPermit AcquirePermit(ExecutionType executionType)
+    private PoolSlot AcquireSlot(ExecutionType executionType)
     {
         if (!_effectivePoolGovernorEnabled)
         {

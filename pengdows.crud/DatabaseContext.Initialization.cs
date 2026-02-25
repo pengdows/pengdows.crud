@@ -129,6 +129,25 @@ public partial class DatabaseContext
     {
     }
 
+    internal DatabaseContext(
+        string connectionString,
+        DbProviderFactory factory,
+        ITypeMapRegistry typeMapRegistry,
+        ISqlDialect dialect)
+        : this(new DatabaseContextConfiguration
+            {
+                ConnectionString = connectionString,
+                DbMode = DbMode.Best,
+                ReadWriteMode = ReadWriteMode.ReadWrite
+            },
+            factory,
+            NullLoggerFactory.Instance,
+            typeMapRegistry,
+            null)
+    {
+        _dialect = (SqlDialect)dialect;
+    }
+
     private DatabaseContext(
         IDatabaseContextConfiguration configuration,
         DbProviderFactory factory,
@@ -608,7 +627,7 @@ public partial class DatabaseContext
             _metricsCollector != null,
             turnstile: turnstile,
             holdTurnstile: true,
-            ownsTurnstile: turnstile != null); // Writers hold turnstile until permit released
+            ownsTurnstile: turnstile != null); // Writers hold turnstile until slot released
 
         _readerGovernor = CreateGovernor(
             PoolLabel.Reader,
@@ -621,10 +640,10 @@ public partial class DatabaseContext
             holdTurnstile: false,
             ownsTurnstile: false); // Readers touch-and-release turnstile
 
-        // Attach permit for modes with persistent connections.
+        // Attach slot for modes with persistent connections.
         if (ConnectionMode == DbMode.KeepAlive)
         {
-            AttachPinnedPermitIfNeeded();
+            AttachPinnedSlotIfNeeded();
         }
     }
 
@@ -916,7 +935,7 @@ public partial class DatabaseContext
         return readOnly && HasDedicatedReadConnectionString();
     }
 
-    private void AttachPinnedPermitIfNeeded()
+    private void AttachPinnedSlotIfNeeded()
     {
         if (!_effectivePoolGovernorEnabled || _writerGovernor == null)
         {
@@ -925,15 +944,15 @@ public partial class DatabaseContext
 
         if (PersistentConnection is TrackedConnection tracked)
         {
-            var permit = _writerGovernor.Acquire();
-            tracked.AttachPermit(permit);
+            var slot = _writerGovernor.Acquire();
+            tracked.AttachSlot(slot);
         }
     }
 
     private PoolGovernor CreateGovernor(
         PoolLabel label,
         string poolKey,
-        int? maxPermits,
+        int? maxSlots,
         SemaphoreSlim? sharedSemaphore,
         bool disabled = false,
         bool trackMetrics = false,
@@ -941,15 +960,15 @@ public partial class DatabaseContext
         bool holdTurnstile = false,
         bool ownsTurnstile = false)
     {
-        if (disabled || !maxPermits.HasValue || maxPermits.Value <= 0)
+        if (disabled || !maxSlots.HasValue || maxSlots.Value <= 0)
         {
-            return new PoolGovernor(label, poolKey, maxPermits ?? 0, _poolAcquireTimeout, true, trackMetrics);
+            return new PoolGovernor(label, poolKey, maxSlots ?? 0, _poolAcquireTimeout, true, trackMetrics);
         }
 
         return new PoolGovernor(
             label,
             poolKey,
-            maxPermits.Value,
+            maxSlots.Value,
             _poolAcquireTimeout,
             false,
             trackMetrics,

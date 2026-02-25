@@ -64,7 +64,7 @@ internal class SqliteDialect : SqlDialect
     public override bool SupportsNamedParameters => true;
 
     // IMMUTABLE: SQLite SQLITE_MAX_VARIABLE_NUMBER default - do not change without extensive testing
-    public override int MaxParameterLimit => 999;
+    public override int MaxParameterLimit => IsVersionAtLeast(3, 32) ? 32766 : 999;
 
     // IMMUTABLE: SQLite identifier length limit - do not change without extensive testing
     public override int ParameterNameMaxLength => 255;

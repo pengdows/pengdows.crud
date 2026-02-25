@@ -85,7 +85,7 @@ public class SingleWriterReadOnlyConnectionTests
         // Read connection is the next one
         var read = ctx.GetConnection(ExecutionType.Read);
         await read.OpenAsync();
-        ctx.CloseAndDisposeConnection(read); // Must dispose to release permit
+        ctx.CloseAndDisposeConnection(read); // Must dispose to release slot
 
         // Find the read connection (last one with query_only)
         var readConn = factory.Connections.Find(c => c.Commands.Exists(cmd => cmd.Contains("query_only")));
@@ -102,7 +102,7 @@ public class SingleWriterReadOnlyConnectionTests
         var write = ctx.GetConnection(ExecutionType.Write);
         await write.OpenAsync();
         Assert.DoesNotContain(factory.Connections.Last().Commands, c => c.Contains("query_only"));
-        ctx.CloseAndDisposeConnection(write); // Must dispose to release permit + turnstile
+        ctx.CloseAndDisposeConnection(write); // Must dispose to release slot + turnstile
 
         // Now get read connection
         var read = ctx.GetConnection(ExecutionType.Read);

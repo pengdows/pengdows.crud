@@ -173,6 +173,7 @@ public sealed class TypeMapRegistry : ITypeMapRegistry
         var con = A<CreatedOnAttribute>(attrs);
         var lby = A<LastUpdatedByAttribute>(attrs);
         var lon = A<LastUpdatedOnAttribute>(attrs);
+        var ct = A<CorrelationTokenAttribute>(attrs);
 
         var isId = idAttr != null;
         var isIdWritable = idAttr?.Writable ?? true;
@@ -193,6 +194,7 @@ public sealed class TypeMapRegistry : ITypeMapRegistry
             IsPrimaryKey = pkAttr != null,
             PkOrder = pkAttr?.Order ?? 0,
             IsVersion = verAttr != null,
+            IsCorrelationToken = ct != null,
             IsCreatedBy = cby != null,
             IsCreatedOn = con != null,
             IsLastUpdatedBy = lby != null,
@@ -366,6 +368,16 @@ public sealed class TypeMapRegistry : ITypeMapRegistry
             }
 
             tableInfo.Version = ci;
+        }
+
+        if (ci.IsCorrelationToken)
+        {
+            if (tableInfo.CorrelationColumn != null)
+            {
+                throw new TooManyColumns($"Multiple [CorrelationToken] detected on {entityType.FullName}.");
+            }
+
+            tableInfo.CorrelationColumn = ci;
         }
     }
 

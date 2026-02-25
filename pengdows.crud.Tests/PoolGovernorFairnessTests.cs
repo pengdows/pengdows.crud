@@ -9,7 +9,7 @@ namespace pengdows.crud.Tests;
 
 /// <summary>
 /// Tests for PoolGovernor turnstile fairness mechanism.
-/// Writers hold the turnstile for the duration of their permit.  New readers
+/// Writers hold the turnstile for the duration of their slot.  New readers
 /// are gated at the turnstile while a writer slot is occupied, reducing — but
 /// not eliminating — writer starvation under sustained reader pressure.
 /// </summary>
@@ -23,7 +23,7 @@ public sealed class PoolGovernorFairnessTests
         var writerGovernor = new PoolGovernor(
             PoolLabel.Writer,
             "test-key",
-            maxPermits: 1,
+            maxSlots: 1,
             acquireTimeout: TimeSpan.FromSeconds(5),
             disabled: false,
             sharedSemaphore: null,
@@ -33,7 +33,7 @@ public sealed class PoolGovernorFairnessTests
         var readerGovernor = new PoolGovernor(
             PoolLabel.Reader,
             "test-key",
-            maxPermits: 10,
+            maxSlots: 10,
             acquireTimeout: TimeSpan.FromSeconds(5),
             disabled: false,
             sharedSemaphore: null,
@@ -41,16 +41,16 @@ public sealed class PoolGovernorFairnessTests
             holdTurnstile: false); // Readers touch-and-release
 
         // Act: Writer acquires (holds turnstile)
-        var writerPermit = await writerGovernor.AcquireAsync();
+        var writerSlot = await writerGovernor.AcquireAsync();
 
         // Reader tries to acquire - should remain blocked until cancellation
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
         await Assert.ThrowsAsync<OperationCanceledException>(() => readerGovernor.AcquireAsync(cts.Token));
 
         // Release writer - now reader should complete
-        await writerPermit.DisposeAsync();
-        var readerPermit = await readerGovernor.AcquireAsync();
-        await readerPermit.DisposeAsync();
+        await writerSlot.DisposeAsync();
+        var readerSlot = await readerGovernor.AcquireAsync();
+        await readerSlot.DisposeAsync();
     }
 
     [Fact]
@@ -61,7 +61,7 @@ public sealed class PoolGovernorFairnessTests
         var readerGovernor = new PoolGovernor(
             PoolLabel.Reader,
             "test-key",
-            maxPermits: 5,
+            maxSlots: 5,
             acquireTimeout: TimeSpan.FromSeconds(5),
             disabled: false,
             sharedSemaphore: null,
@@ -69,10 +69,10 @@ public sealed class PoolGovernorFairnessTests
             holdTurnstile: false);
 
         // Act: Multiple readers acquire concurrently
-        var permits = new List<PoolPermit>();
+        var slots = new List<PoolSlot>();
         for (var i = 0; i < 5; i++)
         {
-            permits.Add(await readerGovernor.AcquireAsync());
+            slots.Add(await readerGovernor.AcquireAsync());
         }
 
         // Assert: All readers acquired successfully
@@ -80,9 +80,9 @@ public sealed class PoolGovernorFairnessTests
         Assert.Equal(5, snapshot.InUse);
 
         // Cleanup
-        foreach (var permit in permits)
+        foreach (var slot in slots)
         {
-            await permit.DisposeAsync();
+            await slot.DisposeAsync();
         }
     }
 
@@ -94,7 +94,7 @@ public sealed class PoolGovernorFairnessTests
         var writerGovernor = new PoolGovernor(
             PoolLabel.Writer,
             "test-key",
-            maxPermits: 1,
+            maxSlots: 1,
             acquireTimeout: TimeSpan.FromSeconds(10),
             disabled: false,
             sharedSemaphore: null,
@@ -104,7 +104,7 @@ public sealed class PoolGovernorFairnessTests
         var readerGovernor = new PoolGovernor(
             PoolLabel.Reader,
             "test-key",
-            maxPermits: 5,
+            maxSlots: 5,
             acquireTimeout: TimeSpan.FromSeconds(10),
             disabled: false,
             sharedSemaphore: null,
@@ -125,7 +125,7 @@ public sealed class PoolGovernorFairnessTests
                 {
                     try
                     {
-                        await using var permit = await readerGovernor.AcquireAsync(cts.Token);
+                        await using var slot = await readerGovernor.AcquireAsync(cts.Token);
                         Interlocked.Increment(ref readerCount);
                         await Task.Delay(10, cts.Token); // Hold briefly
                     }
@@ -143,7 +143,7 @@ public sealed class PoolGovernorFairnessTests
         // Act: Writer tries to acquire
         var writerTask = Task.Run(async () =>
         {
-            await using var permit = await writerGovernor.AcquireAsync();
+            await using var slot = await writerGovernor.AcquireAsync();
             writerCompleted = true;
         });
 
@@ -166,7 +166,7 @@ public sealed class PoolGovernorFairnessTests
         var writerGovernor = new PoolGovernor(
             PoolLabel.Writer,
             "test-key",
-            maxPermits: 1,
+            maxSlots: 1,
             acquireTimeout: TimeSpan.FromSeconds(5),
             disabled: false,
             sharedSemaphore: null,
@@ -176,7 +176,7 @@ public sealed class PoolGovernorFairnessTests
         var readerGovernor = new PoolGovernor(
             PoolLabel.Reader,
             "test-key",
-            maxPermits: 5,
+            maxSlots: 5,
             acquireTimeout: TimeSpan.FromSeconds(5),
             disabled: false,
             sharedSemaphore: null,
@@ -190,10 +190,10 @@ public sealed class PoolGovernorFairnessTests
         }
 
         // After writer releases, readers should be able to acquire
-        var permits = new List<PoolPermit>();
+        var slots = new List<PoolSlot>();
         for (var i = 0; i < 3; i++)
         {
-            permits.Add(await readerGovernor.AcquireAsync());
+            slots.Add(await readerGovernor.AcquireAsync());
         }
 
         // Assert
@@ -201,9 +201,9 @@ public sealed class PoolGovernorFairnessTests
         Assert.Equal(3, snapshot.InUse);
 
         // Cleanup
-        foreach (var permit in permits)
+        foreach (var slot in slots)
         {
-            await permit.DisposeAsync();
+            await slot.DisposeAsync();
         }
     }
 
@@ -214,7 +214,7 @@ public sealed class PoolGovernorFairnessTests
         var governor = new PoolGovernor(
             PoolLabel.Writer,
             "test-key",
-            maxPermits: 2,
+            maxSlots: 2,
             acquireTimeout: TimeSpan.FromSeconds(5),
             disabled: false,
             sharedSemaphore: null,
@@ -222,15 +222,15 @@ public sealed class PoolGovernorFairnessTests
             holdTurnstile: true);
 
         // Act: Acquire normally
-        var permit1 = await governor.AcquireAsync();
-        var permit2 = await governor.AcquireAsync();
+        var slot1 = await governor.AcquireAsync();
+        var slot2 = await governor.AcquireAsync();
 
         // Assert
         var snapshot = governor.GetSnapshot();
         Assert.Equal(2, snapshot.InUse);
 
-        await permit1.DisposeAsync();
-        await permit2.DisposeAsync();
+        await slot1.DisposeAsync();
+        await slot2.DisposeAsync();
     }
 
     [Fact]
@@ -241,7 +241,7 @@ public sealed class PoolGovernorFairnessTests
         var governor = new PoolGovernor(
             PoolLabel.Writer,
             "test-key",
-            maxPermits: 1,
+            maxSlots: 1,
             acquireTimeout: TimeSpan.FromSeconds(5),
             disabled: false,
             sharedSemaphore: null,
@@ -249,7 +249,7 @@ public sealed class PoolGovernorFairnessTests
             holdTurnstile: true);
 
         // Act
-        using var permit = governor.Acquire();
+        using var slot = governor.Acquire();
 
         // Assert
         var snapshot = governor.GetSnapshot();
@@ -259,7 +259,7 @@ public sealed class PoolGovernorFairnessTests
     [Fact]
     public async Task ExceptionDuringAcquire_ReleasesTurnstile()
     {
-        // Arrange: Writer governor with 2 permits but we'll exhaust the semaphore
+        // Arrange: Writer governor with 2 slots but we'll exhaust the semaphore
         // separately to test turnstile cleanup on semaphore timeout
         var turnstile = new SemaphoreSlim(1, 1);
         var sharedSemaphore = new SemaphoreSlim(1, 1);
@@ -267,7 +267,7 @@ public sealed class PoolGovernorFairnessTests
         var governor = new PoolGovernor(
             PoolLabel.Writer,
             "test-key",
-            maxPermits: 1,
+            maxSlots: 1,
             acquireTimeout: TimeSpan.FromMilliseconds(50),
             disabled: false,
             sharedSemaphore: sharedSemaphore,
@@ -298,7 +298,7 @@ public sealed class PoolGovernorFairnessTests
         var governor = new PoolGovernor(
             PoolLabel.Writer,
             "test-key",
-            maxPermits: 1,
+            maxSlots: 1,
             acquireTimeout: TimeSpan.FromSeconds(30),
             disabled: false,
             sharedSemaphore: sharedSemaphore,

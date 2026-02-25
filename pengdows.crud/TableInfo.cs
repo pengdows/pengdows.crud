@@ -75,6 +75,11 @@ public class TableInfo : ITableInfo
     public IColumnInfo Version { get; set; } = null!;
 
     /// <summary>
+    /// Gets or sets the correlation token column.
+    /// </summary>
+    public IColumnInfo CorrelationColumn { get; set; } = null!;
+
+    /// <summary>
     /// Gets or sets the LastUpdatedBy audit column.
     /// </summary>
     public IColumnInfo LastUpdatedBy { get; set; } = null!;

@@ -8,5 +8,5 @@ public interface ISafeAsyncDisposableBase : IAsyncDisposable, IDisposable
     /// <summary>
     /// Indicates whether the instance has already been disposed.
     /// </summary>
-    public bool IsDisposed { get; }
+    bool IsDisposed { get; }
 }

@@ -82,13 +82,22 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
             }
             else if (fieldType == typeof(byte[]))
             {
-                var readBytesMethod = typeof(CompiledMapperFactory<TEntity>).GetMethod(nameof(ReadBytes), BindingFlags.NonPublic | BindingFlags.Static)!;
-                var call = Expression.Call(readBytesMethod, readerParam, ordinalExpr);
-                
-                // Use BuildConversionExpression to handle byte[] -> Guid and other coercions
-                var convertedValue = BuildConversionExpression(call, fieldType, targetType);
+                if (targetType == typeof(Guid) || targetType == typeof(Guid?))
+                {
+                    var readGuidMethod = typeof(TypeCoercionHelper).GetMethod(nameof(TypeCoercionHelper.ReadGuidFromBytes))!;
+                    valueReadExpr = Expression.Call(readGuidMethod, readerParam, ordinalExpr);
+                    if (targetType == typeof(Guid?))
+                    {
+                        valueReadExpr = Expression.Convert(valueReadExpr, typeof(Guid?));
+                    }
+                }
+                else
+                {
+                    var readBytesMethod = typeof(TypeCoercionHelper).GetMethod(nameof(TypeCoercionHelper.ReadBytes))!;
+                    var call = Expression.Call(readBytesMethod, readerParam, ordinalExpr);
+                    valueReadExpr = BuildConversionExpression(call, fieldType, targetType);
+                }
 
-                // ReadBytes is a helper that we want to wrap specifically to match expected exception type
                 var exParam = Expression.Parameter(typeof(Exception), "ex");
                 var catchBlock = Expression.Catch(exParam, 
                     Expression.Throw(
@@ -96,7 +105,7 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                         Expression.Constant($"Unable to set property from value that was stored in the database: {rawName}")),
                         targetType));
                 
-                valueReadExpr = Expression.TryCatch(convertedValue, catchBlock);
+                valueReadExpr = Expression.TryCatch(valueReadExpr, catchBlock);
             }
             else if (column.IsEnum)
             {
@@ -106,9 +115,9 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                 {
                     var getString = typeof(IDataRecord).GetMethod(nameof(IDataRecord.GetString))!;
                     var enumStr = Expression.Call(readerParam, getString, ordinalExpr);
-
-                    var parseMethod = ResolveEnumParseMethod(underlyingTarget);
-                    enumReadExpr = Expression.Call(parseMethod, enumStr, Expression.Constant(true));
+                    
+                    var mapperMethod = typeof(EnumMappingCache).GetMethod(nameof(EnumMappingCache.GetEnumFromString))!.MakeGenericMethod(underlyingTarget);
+                    enumReadExpr = Expression.Call(mapperMethod, enumStr);
                 }
                 else
                 {
@@ -116,14 +125,8 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                     var rawValue = Expression.Call(readerParam, getMethod, ordinalExpr);
                     var convertedValue = BuildConversionExpression(rawValue, fieldType, underlyingTarget);
                     
-                    var isDefinedMethod = typeof(Enum).GetMethod(nameof(Enum.IsDefined), new[] { typeof(Type), typeof(object) })!;
-                    var isDefinedCall = Expression.Call(isDefinedMethod, Expression.Constant(underlyingTarget), Expression.Convert(convertedValue, typeof(object)));
-                    
-                    enumReadExpr = Expression.Condition(
-                        isDefinedCall,
-                        convertedValue,
-                        Expression.Throw(Expression.New(typeof(ArgumentException).GetConstructor(new[] { typeof(string) })!, Expression.Constant($"Invalid enum value for property {property.Name}")), underlyingTarget)
-                    );
+                    var mapperMethod = typeof(EnumMappingCache).GetMethod(nameof(EnumMappingCache.ValidateEnumValue))!.MakeGenericMethod(underlyingTarget);
+                    enumReadExpr = Expression.Call(mapperMethod, convertedValue);
                 }
 
                 Expression finalEnumExpr = targetType != underlyingTarget 
@@ -145,7 +148,31 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
             {
                 var getMethod = GetReaderMethod(fieldType);
                 var rawValue = Expression.Call(readerParam, getMethod, ordinalExpr);
-                valueReadExpr = BuildConversionExpression(rawValue, fieldType, targetType);
+                
+                // OPTIMIZATION: For most common primitive types where source and target match,
+                // bypass BuildConversionExpression's potential boxing/Coerce paths.
+                var underlyingTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
+                if (fieldType == underlyingTarget)
+                {
+                    if (underlyingTarget == typeof(DateTime))
+                    {
+                        // Inlined NormalizeDateTime
+                        valueReadExpr = Expression.Call(NormalizeDateTimeMethod, rawValue);
+                    }
+                    else
+                    {
+                        valueReadExpr = rawValue;
+                    }
+
+                    if (targetType != underlyingTarget)
+                    {
+                        valueReadExpr = Expression.Convert(valueReadExpr, targetType);
+                    }
+                }
+                else
+                {
+                    valueReadExpr = BuildConversionExpression(rawValue, fieldType, targetType);
+                }
             }
 
             // Directly assign without per-column try-catch for maximum performance.
@@ -177,36 +204,6 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
             }
         }
         throw new InvalidOperationException("Could not find JsonSerializer.Deserialize<T>(string, options) overload.");
-    }
-
-    private static MethodInfo ResolveEnumParseMethod(Type enumType)
-    {
-        var methods = typeof(Enum).GetMethods();
-        foreach (var m in methods)
-        {
-            if (m.Name == nameof(Enum.Parse) && 
-                m.IsGenericMethod && 
-                m.GetParameters().Length == 2 &&
-                m.GetParameters()[0].ParameterType == typeof(string) &&
-                m.GetParameters()[1].ParameterType == typeof(bool))
-            {
-                return m.MakeGenericMethod(enumType);
-            }
-        }
-        throw new InvalidOperationException("Could not find Enum.Parse<T>(string, bool) overload.");
-    }
-
-    private static byte[] ReadBytes(IDataRecord reader, int ordinal)
-    {
-        var length = reader.GetBytes(ordinal, 0, null, 0, 0);
-        if (length <= 0)
-        {
-            return Array.Empty<byte>();
-        }
-
-        var buffer = new byte[length];
-        reader.GetBytes(ordinal, 0, buffer, 0, (int)length);
-        return buffer;
     }
 
     private static MethodInfo GetReaderMethod(Type fieldType)
@@ -303,5 +300,35 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
             TypeCode.Decimal => true,
             _ => false
         };
+    }
+}
+
+/// <summary>
+/// Global cache for enum parsing and validation to avoid reflection in the hot path.
+/// </summary>
+internal static class EnumMappingCache
+{
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, object> _stringMappers = new();
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, object> _numericValidators = new();
+
+    public static TEnum GetEnumFromString<TEnum>(string value) where TEnum : struct, Enum
+    {
+        var mapper = (System.Collections.Concurrent.ConcurrentDictionary<string, TEnum>)_stringMappers.GetOrAdd(
+            typeof(TEnum), _ => new System.Collections.Concurrent.ConcurrentDictionary<string, TEnum>(StringComparer.OrdinalIgnoreCase));
+        
+        return mapper.GetOrAdd(value, v => (TEnum)Enum.Parse(typeof(TEnum), v, true));
+    }
+
+    public static TEnum ValidateEnumValue<TEnum>(TEnum value) where TEnum : struct, Enum
+    {
+        var validator = (System.Collections.Concurrent.ConcurrentDictionary<TEnum, bool>)_numericValidators.GetOrAdd(
+            typeof(TEnum), _ => new System.Collections.Concurrent.ConcurrentDictionary<TEnum, bool>());
+
+        if (validator.GetOrAdd(value, v => Enum.IsDefined(typeof(TEnum), v)))
+        {
+            return value;
+        }
+
+        throw new ArgumentException($"Invalid enum value '{value}' for type {typeof(TEnum).Name}");
     }
 }

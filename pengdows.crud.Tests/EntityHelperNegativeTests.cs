@@ -77,8 +77,9 @@ public class TableGatewayNegativeTests : SqlLiteContextTestBase
         // Create a condition where we have more parameters than typical limits would allow
 
         var list = new List<TestEntity>();
-        // Create enough entities to exceed typical parameter limits
-        for (var i = 1; i <= 1000; i++)
+        // SQLite 3.32+ has a parameter limit of 32766. TestEntity has 1 primary key column,
+        // so we need more than 32766 entities to exceed the limit.
+        for (var i = 1; i <= 33000; i++)
         {
             list.Add(new TestEntity { Id = i, Name = $"Entity{i}" });
         }

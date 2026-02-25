@@ -81,71 +81,57 @@ internal static class DatabaseDetectionService
 
         try
         {
-            // Check if this is a fake connection (testing infrastructure)
-            if (connection.GetType().Name.Contains("fake", StringComparison.OrdinalIgnoreCase))
+            // Step 1: Schema-based detection — identifies the base product without SQL queries.
+            // For fakeDb, GetSchema() returns a DataTable based on EmulatedProduct.
+            var detected = SupportedDatabase.Unknown;
+            try
             {
-                var emulatedProductProperty = connection.GetType().GetProperty("EmulatedProduct");
-                if (emulatedProductProperty != null &&
-                    emulatedProductProperty.PropertyType == typeof(SupportedDatabase))
+                DataTable schema;
+                if (connection is DbConnection dbConn)
                 {
-                    var value = emulatedProductProperty.GetValue(connection);
-                    if (value is SupportedDatabase product && product != SupportedDatabase.Unknown)
-                    {
-                        return product;
-                    }
+                    schema = dbConn.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
                 }
-            }
-
-            // Normal schema-based detection
-            // GetSchema is available on DbConnection and ITrackedConnection
-            DataTable schema;
-            if (connection is DbConnection dbConn)
-            {
-                schema = dbConn.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
-            }
-            else if (connection is ITrackedConnection trackedConn)
-            {
-                schema = trackedConn.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
-            }
-            else
-            {
-                return SupportedDatabase.Unknown;
-            }
-
-            if (schema.Rows.Count > 0)
-            {
-                var productName = schema.Rows[0].Field<string>("DataSourceProductName");
-                var productVersion = schema.Rows[0].Field<string>("DataSourceProductVersion");
-
-                var sv = string.Empty;
-                if (connection is DbConnection dbc) sv = dbc.ServerVersion;
-                else if (connection is ITrackedConnection tc) sv = tc.ServerVersion;
-
-                var detected = Match(productName, SchemaProductTokens);
-
-                // If it's a generic protocol (Postgres/MySQL), check for flavors
-                if (detected == SupportedDatabase.MySql)
+                else if (connection is ITrackedConnection trackedConn)
                 {
+                    schema = trackedConn.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
+                }
+                else
+                {
+                    schema = new DataTable();
+                }
+
+                if (schema.Rows.Count > 0)
+                {
+                    var productName = schema.Rows[0].Field<string>("DataSourceProductName");
+                    var productVersion = schema.Rows[0].Field<string>("DataSourceProductVersion");
+
+                    detected = Match(productName, SchemaProductTokens);
+
                     // MariaDB reports DataSourceProductName = "MySQL" but its version contains "MariaDB"
-                    if (!string.IsNullOrEmpty(productVersion) &&
+                    if (detected == SupportedDatabase.MySql && !string.IsNullOrEmpty(productVersion) &&
                         productVersion.Contains("mariadb", StringComparison.OrdinalIgnoreCase))
                     {
                         return SupportedDatabase.MariaDb;
                     }
+                }
+            }
+            catch
+            {
+                // Schema unavailable — continue to flavor detection
+            }
 
-                    var flavor = DetectFlavor(connection);
-                    if (flavor != SupportedDatabase.Unknown) return flavor;
-                }
-                else if (detected == SupportedDatabase.PostgreSql)
-                {
-                    var flavor = DetectFlavor(connection);
-                    if (flavor != SupportedDatabase.Unknown) return flavor;
-                }
+            // Step 2: Flavor refinement — runs probes gated on the base product.
+            // Aurora MySQL probe only runs for MySql/Unknown base; Aurora PG only for PostgreSql/Unknown.
+            // This avoids unnecessary round-trips to SQLite, Oracle, SQL Server, etc.
+            var flavor = DetectFlavor(connection, detected);
+            if (flavor != SupportedDatabase.Unknown)
+            {
+                return flavor;
+            }
 
-                if (detected != SupportedDatabase.Unknown)
-                {
-                    return detected;
-                }
+            if (detected != SupportedDatabase.Unknown)
+            {
+                return detected;
             }
         }
         catch
@@ -153,15 +139,16 @@ internal static class DatabaseDetectionService
             // Fall back to other detection methods
         }
 
-        return DetectFlavor(connection);
+        return SupportedDatabase.Unknown;
     }
 
-    private static SupportedDatabase DetectFlavor(IDbConnection? connection)
+    private static SupportedDatabase DetectFlavor(IDbConnection? connection, SupportedDatabase detected)
     {
         if (connection == null) return SupportedDatabase.Unknown;
 
         try
         {
+            // ServerVersion-based checks (no query needed)
             var serverVersion = string.Empty;
             if (connection is DbConnection dbConn) serverVersion = dbConn.ServerVersion;
             else if (connection is ITrackedConnection tracked) serverVersion = tracked.ServerVersion;
@@ -178,15 +165,56 @@ internal static class DatabaseDetectionService
                     return SupportedDatabase.CockroachDb;
             }
 
-            // Deep check via query
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = "SELECT version()";
-            var version = cmd.ExecuteScalar()?.ToString() ?? string.Empty;
+            // Query-based flavor probes — gated on base product to avoid unnecessary round-trips
+            var isMySqlFamily = detected == SupportedDatabase.MySql || detected == SupportedDatabase.Unknown;
+            var isPgFamily = detected == SupportedDatabase.PostgreSql || detected == SupportedDatabase.Unknown;
 
-            if (version.Contains("TiDB", StringComparison.OrdinalIgnoreCase)) return SupportedDatabase.TiDb;
-            if (version.Contains("-YB-", StringComparison.OrdinalIgnoreCase) ||
-                version.Contains("Yugabyte", StringComparison.OrdinalIgnoreCase)) return SupportedDatabase.YugabyteDb;
-            if (version.Contains("Cockroach", StringComparison.OrdinalIgnoreCase)) return SupportedDatabase.CockroachDb;
+            using var cmd = connection.CreateCommand();
+
+            // Aurora MySQL: @@aurora_version returns a version string (e.g. "2.09.1") on Aurora,
+            // throws "Unknown system variable" on standard MySQL. Any non-string result (e.g. the
+            // fakeDb default of int 42) is treated as "not Aurora".
+            if (isMySqlFamily)
+            {
+                try
+                {
+                    cmd.CommandText = "SELECT @@aurora_version";
+                    if (cmd.ExecuteScalar() is string { Length: > 0 })
+                        return SupportedDatabase.AuroraMySql;
+                }
+                catch { /* not aurora mysql */ }
+            }
+
+            // Aurora PostgreSQL: aurora_version() returns a version string on Aurora,
+            // throws "function does not exist" on standard PostgreSQL.
+            if (isPgFamily)
+            {
+                try
+                {
+                    cmd.CommandText = "SELECT aurora_version()";
+                    if (cmd.ExecuteScalar() is string { Length: > 0 })
+                        return SupportedDatabase.AuroraPostgreSql;
+                }
+                catch { /* not aurora pg */ }
+            }
+
+            // SELECT version() — works on MySQL, PostgreSQL, CockroachDB, YugabyteDB, TiDB
+            if (isMySqlFamily || isPgFamily)
+            {
+                try
+                {
+                    cmd.CommandText = "SELECT version()";
+                    var version = cmd.ExecuteScalar()?.ToString() ?? string.Empty;
+
+                    if (version.Contains("TiDB", StringComparison.OrdinalIgnoreCase)) return SupportedDatabase.TiDb;
+                    if (version.Contains("-YB-", StringComparison.OrdinalIgnoreCase) ||
+                        version.Contains("Yugabyte", StringComparison.OrdinalIgnoreCase))
+                        return SupportedDatabase.YugabyteDb;
+                    if (version.Contains("Cockroach", StringComparison.OrdinalIgnoreCase))
+                        return SupportedDatabase.CockroachDb;
+                }
+                catch { /* version() not available */ }
+            }
         }
         catch
         {
@@ -307,7 +335,7 @@ internal static class DatabaseDetectionService
 
     private static SupportedDatabase Match(string? source, (SupportedDatabase Product, string[] Tokens)[] tokenSets)
     {
-        if (string.IsNullOrWhiteSpace(source))
+        if (string.IsNullOrWhiteSpace(source) || source == "UnknownDb")
         {
             return SupportedDatabase.Unknown;
         }

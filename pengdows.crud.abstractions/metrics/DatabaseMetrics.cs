@@ -29,7 +29,7 @@ namespace pengdows.crud.metrics;
 /// <param name="TransactionsActive">Current active transactions.</param>
 /// <param name="TransactionsMax">Historical max concurrent transactions.</param>
 /// <param name="AvgTransactionMs">Exponential weighted moving average of transaction duration in milliseconds.</param>
-public readonly record struct DatabaseMetrics(
+public sealed record DatabaseMetrics(
     DatabaseRoleMetrics Read,
     DatabaseRoleMetrics Write,
     int ConnectionsCurrent,

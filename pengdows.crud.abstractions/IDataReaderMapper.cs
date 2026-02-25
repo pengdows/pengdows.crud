@@ -1,8 +1,4 @@
-#region
-
 using System.Data;
-
-#endregion
 
 namespace pengdows.crud;
 
@@ -18,11 +14,11 @@ public interface IDataReaderMapper
     /// <param name="reader">Data reader containing the rows to map.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>List of hydrated objects.</returns>
-    Task<List<T>> LoadObjectsFromDataReaderAsync<T>(IDataReader reader, CancellationToken cancellationToken = default)
+    Task<List<T>> LoadAsync<T>(IDataReader reader, CancellationToken cancellationToken = default)
         where T : class, new();
 
     /// <summary>
-    /// Hydrates a list of objects from an <see cref="IDataReader"/> using the provided <see cref="MapperOptions"/>.
+    /// Hydrates a list of objects from an <see cref="IDataReader"/> using the provided <see cref="IMapperOptions"/>.
     /// </summary>
     /// <typeparam name="T">Type of object to hydrate.</typeparam>
     /// <param name="reader">Data reader containing the rows to map.</param>

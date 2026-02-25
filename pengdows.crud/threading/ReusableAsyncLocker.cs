@@ -49,21 +49,21 @@ internal sealed class ReusableAsyncLocker : SafeAsyncDisposableBase, ILockerAsyn
     }
 
     /// <inheritdoc />
-    public Task LockAsync(CancellationToken cancellationToken = default)
+    public ValueTask LockAsync(CancellationToken cancellationToken = default)
     {
         if (cancellationToken.IsCancellationRequested)
         {
-            return Task.FromCanceled(cancellationToken);
+            return ValueTask.FromCanceled(cancellationToken);
         }
 
         // Fast path: uncontended (common case for transaction serialization)
         if (_semaphore.Wait(0))
         {
             SetHeld();
-            return Task.CompletedTask;
+            return ValueTask.CompletedTask;
         }
 
-        return LockAsyncSlow(cancellationToken);
+        return new ValueTask(LockAsyncSlow(cancellationToken));
     }
 
     private async Task LockAsyncSlow(CancellationToken cancellationToken)
@@ -73,20 +73,20 @@ internal sealed class ReusableAsyncLocker : SafeAsyncDisposableBase, ILockerAsyn
     }
 
     /// <inheritdoc />
-    public Task<bool> TryLockAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+    public ValueTask<bool> TryLockAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
     {
         if (cancellationToken.IsCancellationRequested)
         {
-            return Task.FromCanceled<bool>(cancellationToken);
+            return ValueTask.FromCanceled<bool>(cancellationToken);
         }
 
         if (_semaphore.Wait(0))
         {
             SetHeld();
-            return Task.FromResult(true);
+            return ValueTask.FromResult(true);
         }
 
-        return TryLockAsyncSlow(timeout, cancellationToken);
+        return new ValueTask<bool>(TryLockAsyncSlow(timeout, cancellationToken));
     }
 
     private async Task<bool> TryLockAsyncSlow(TimeSpan timeout, CancellationToken cancellationToken)

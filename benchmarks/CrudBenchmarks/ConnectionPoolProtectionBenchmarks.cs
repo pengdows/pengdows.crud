@@ -241,7 +241,7 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
         var avgWaitMs = s.TotalAcquired == 0 ? 0 : (s.TotalWaitTicks * 1000.0 / Stopwatch.Frequency) / s.TotalAcquired;
         var avgHoldMs = s.TotalAcquired == 0 ? 0 : (s.TotalHoldTicks * 1000.0 / Stopwatch.Frequency) / s.TotalAcquired;
 
-        Console.WriteLine($"[METRICS] WriteStorm writer: peakInUse={s.PeakInUse} peakQueued={s.PeakQueued} peakTurnstileQueued={s.PeakTurnstileQueued} timeouts={s.TotalTimeouts}");
+        Console.WriteLine($"[METRICS] WriteStorm writer: peakInUse={s.PeakInUse} peakQueued={s.PeakQueued} peakTurnstileQueued={s.PeakTurnstileQueued} timeouts={s.TotalSlotTimeouts}");
         Console.WriteLine($"[METRICS] WriteStorm timing: avgWait={avgWaitMs:F2}ms avgHold={avgHoldMs:F2}ms totalAcquired={s.TotalAcquired}");
     }
 

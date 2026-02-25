@@ -1,10 +1,6 @@
-#region
-
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.configuration;
-
-#endregion
 
 namespace pengdows.crud;
 

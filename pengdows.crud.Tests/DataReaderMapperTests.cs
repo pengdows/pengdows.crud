@@ -70,7 +70,7 @@ public class DataReaderMapperTests
         });
 
         IDataReaderMapper mapper = new DataReaderMapper();
-        var result = await mapper.LoadObjectsFromDataReaderAsync<SampleEntity>(reader);
+        var result = await mapper.LoadAsync<SampleEntity>(reader);
 
         Assert.Single(result);
         Assert.Equal("John", result[0].Name);

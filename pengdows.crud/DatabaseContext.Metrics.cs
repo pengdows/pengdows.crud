@@ -144,7 +144,7 @@ public partial class DatabaseContext
             return new PoolStatisticsSnapshot(
                 label,
                 string.Empty,
-                0, // MaxPermits
+                0, // MaxSlots
                 0, // InUse
                 0, // PeakInUse
                 0, // Queued
@@ -154,7 +154,7 @@ public partial class DatabaseContext
                 0, // TotalAcquired
                 0, // TotalWaitTicks
                 0, // TotalHoldTicks
-                0, // TotalTimeouts
+                0, // TotalSlotTimeouts
                 0, // TotalTurnstileTimeouts
                 0, // TotalCanceledWaits
                 true); // Disabled
@@ -200,8 +200,8 @@ public partial class DatabaseContext
         if (_metricsCollector == null)
         {
             return new DatabaseMetrics(
-                default,
-                default,
+                DatabaseRoleMetrics.None,
+                DatabaseRoleMetrics.None,
                 SaturateToInt(NumberOfOpenConnections),
                 SaturateToInt(PeakOpenConnections),
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
@@ -211,8 +211,8 @@ public partial class DatabaseContext
         var readSnapshot = _readerMetricsCollector?.CreateSnapshot();
         var writeSnapshot = _writerMetricsCollector?.CreateSnapshot();
 
-        var readMetrics = readSnapshot.HasValue ? CreateRoleMetrics(readSnapshot.Value) : default;
-        var writeMetrics = writeSnapshot.HasValue ? CreateRoleMetrics(writeSnapshot.Value) : default;
+        var readMetrics = readSnapshot.HasValue ? CreateRoleMetrics(readSnapshot.Value) : DatabaseRoleMetrics.None;
+        var writeMetrics = writeSnapshot.HasValue ? CreateRoleMetrics(writeSnapshot.Value) : DatabaseRoleMetrics.None;
 
         return new DatabaseMetrics(
             readMetrics,
@@ -283,7 +283,7 @@ public partial class DatabaseContext
         var metrics = CreateMetricsSnapshot();
         if (Volatile.Read(ref _metricsHasActivity) == 0)
         {
-            if (!HasCommandActivity(in metrics))
+            if (!HasCommandActivity(metrics))
             {
                 return;
             }
@@ -294,7 +294,7 @@ public partial class DatabaseContext
         handler.Invoke(this, metrics);
     }
 
-    private static bool HasCommandActivity(in DatabaseMetrics metrics)
+    private static bool HasCommandActivity(DatabaseMetrics metrics)
     {
         return metrics.CommandsExecuted > 0
                || metrics.CommandsFailed > 0

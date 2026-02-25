@@ -1613,7 +1613,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         {
             cmd.Prepare();
             GetMetricsCollector(executionType)?.RecordPreparedStatement();
-            if (conn.LocalState.MarkShapePrepared(sqlText, out var evicted))
+            var (added, evicted) = conn.LocalState.MarkShapePrepared(sqlText);
+            if (added)
             {
                 GetMetricsCollector(executionType)?.RecordStatementCached();
                 if (evicted > 0)
@@ -1626,7 +1627,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         {
             if (_dialect.ShouldDisablePrepareOn(ex))
             {
-                conn.LocalState.PrepareDisabled = true;
+                conn.LocalState.DisablePrepare();
                 _logger?.LogDebug(ex,
                     "Disabled prepare for connection due to provider exception: {ExceptionType}",
                     ex.GetType().Name);

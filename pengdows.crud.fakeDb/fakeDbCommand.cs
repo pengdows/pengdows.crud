@@ -309,6 +309,15 @@ public class fakeDbCommand : DbCommand
             return new fakeDbDataReader(ConvertRows(queued));
         }
 
+        // Support for ExecuteScalarRequiredAsync which uses ExecuteReader:
+        // If we have ScalarResults but no ReaderResults, convert scalar to a single-row reader.
+        if (conn != null && conn.ScalarResults.Count > 0)
+        {
+            var scalar = conn.ScalarResults.Dequeue();
+            var row = new Dictionary<string, object> { ["Value"] = scalar! };
+            return new fakeDbDataReader(new[] { row });
+        }
+
         // Use data persistence if enabled
         if (conn != null && conn.EnableDataPersistence && !string.IsNullOrWhiteSpace(CommandText))
         {

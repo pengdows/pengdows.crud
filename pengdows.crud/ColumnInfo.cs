@@ -213,6 +213,11 @@ public class ColumnInfo : IColumnInfo
     public bool IsPrimaryKey { get; set; } = false;
 
     /// <summary>
+    /// Gets or sets whether this column is used as a correlation token for identity retrieval.
+    /// </summary>
+    public bool IsCorrelationToken { get; set; } = false;
+
+    /// <summary>
     /// Gets or sets the ordinal position in a composite primary key (1-based).
     /// </summary>
     public int PkOrder { get; set; }

@@ -13,7 +13,7 @@ public sealed class PoolGovernorCancellationTests
     {
         var governor = new PoolGovernor(PoolLabel.Reader, "cancel-sync", 1, TimeSpan.FromSeconds(5), trackMetrics: true);
 
-        using var permit = governor.Acquire();
+        using var slot = governor.Acquire();
 
         using var cts = new CancellationTokenSource();
 
@@ -47,7 +47,7 @@ public sealed class PoolGovernorCancellationTests
     {
         var governor = new PoolGovernor(PoolLabel.Reader, "cancel-test", 1, TimeSpan.FromSeconds(5), trackMetrics: true);
 
-        using var permit = governor.Acquire();
+        using var slot = governor.Acquire();
 
         using var cts = new CancellationTokenSource();
         var waitingTask = governor.AcquireAsync(cts.Token);

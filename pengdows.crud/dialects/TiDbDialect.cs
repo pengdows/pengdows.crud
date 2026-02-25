@@ -21,7 +21,7 @@ namespace pengdows.crud.dialects;
 internal class TiDbDialect : MySqlDialect
 {
     internal TiDbDialect(DbProviderFactory factory, ILogger logger)
-        : base(factory, logger)
+        : base(factory, logger, SupportedDatabase.TiDb)
     {
     }
 

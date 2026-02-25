@@ -333,6 +333,31 @@ internal abstract class SqlDialect : ISqlDialect
     /// </summary>
     public bool HasBasicCompatibility => MaxSupportedStandard >= SqlStandardLevel.Sql92;
 
+    public virtual string WrapSimpleName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return string.Empty;
+        }
+
+        var prefix = QuotePrefix;
+        var suffix = QuoteSuffix;
+        
+        // Fast path for clean identifiers: if it doesn't contain the quote char, simple concat.
+        // We only care about the suffix char (the closer), as that's the one that breaks the string.
+        var quoteChar = suffix.Length == 1 ? suffix[0] : (char)0;
+        if (quoteChar == 0 || name.IndexOf(quoteChar) < 0)
+        {
+            return prefix + name + suffix;
+        }
+
+        var builder = SbLite.Create(stackalloc char[name.Length + prefix.Length + suffix.Length + 4]);
+        builder.Append(prefix);
+        AppendWithEscaping(ref builder, name.AsSpan(), prefix.AsSpan(), suffix.AsSpan());
+        builder.Append(suffix);
+        return builder.ToString();
+    }
+
     public virtual string WrapObjectName(string name)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -1533,6 +1558,11 @@ internal abstract class SqlDialect : ISqlDialect
             return SupportedDatabase.MariaDb;
         }
 
+        if (combined.Contains("aurora") && combined.Contains("mysql"))
+        {
+            return SupportedDatabase.AuroraMySql;
+        }
+
         if (combined.Contains("mysql"))
         {
             return SupportedDatabase.MySql;
@@ -1541,6 +1571,11 @@ internal abstract class SqlDialect : ISqlDialect
         if (combined.Contains("cockroach"))
         {
             return SupportedDatabase.CockroachDb;
+        }
+
+        if (combined.Contains("aurora") && (combined.Contains("npgsql") || combined.Contains("postgres")))
+        {
+            return SupportedDatabase.AuroraPostgreSql;
         }
 
         if (combined.Contains("npgsql") || combined.Contains("postgres"))
@@ -1681,6 +1716,17 @@ internal abstract class SqlDialect : ISqlDialect
     {
         throw new NotSupportedException($"GetLastInsertedIdQuery not implemented for {DatabaseType}. " +
                                         $"Prefer using RETURNING/OUTPUT clauses, or implement parameter-based row lookup.");
+    }
+
+    /// <summary>
+    /// Gets the SQL query to retrieve the next value from a sequence.
+    /// Default implementation is for Oracle; override for other sequence-supporting databases.
+    /// </summary>
+    /// <param name="sequenceName">The name of the sequence.</param>
+    /// <returns>The SQL query text.</returns>
+    public virtual string GetSequenceNextValQuery(string sequenceName)
+    {
+        return $"SELECT {WrapObjectName(sequenceName)}.NEXTVAL FROM DUAL";
     }
 
     /// <summary>

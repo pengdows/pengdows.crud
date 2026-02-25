@@ -194,27 +194,34 @@ public partial class TableGateway<TEntity, TRowID>
         var parameters = new List<DbParameter>(listOfObjects.Count * keys.Count);
         var wrappedAlias = BuildAliasPrefix(alias, dialect);
         var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
-        var counters = new ClauseCounters();
-        var index = 0;
-
-        foreach (var entity in listOfObjects!)
+        try
         {
-            if (index++ > 0)
+            var counters = new ClauseCounters();
+            var index = 0;
+
+            foreach (var entity in listOfObjects!)
             {
-                sb.Append(SqlFragments.Or);
+                if (index++ > 0)
+                {
+                    sb.Append(SqlFragments.Or);
+                }
+
+                sb.Append(BuildPrimaryKeyClause(entity, keys, wrappedAlias, parameters, dialect, ref counters));
             }
 
-            sb.Append(BuildPrimaryKeyClause(entity, keys, wrappedAlias, parameters, dialect, ref counters));
-        }
+            if (sb.Length == 0)
+            {
+                return;
+            }
 
-        if (sb.Length == 0)
+            sc.AddParameters(parameters);
+            AppendWherePrefix(sc);
+            sc.Query.Append(sb.ToString());
+        }
+        finally
         {
-            return;
+            sb.Dispose();
         }
-
-        sc.AddParameters(parameters);
-        AppendWherePrefix(sc);
-        sc.Query.Append(sb.ToString());
     }
 
     private void ValidateWhereInputs(IReadOnlyCollection<TEntity>? listOfObjects, ISqlContainer _)
@@ -250,37 +257,44 @@ public partial class TableGateway<TEntity, TRowID>
         List<DbParameter> parameters, ISqlDialect dialect, ref ClauseCounters counters)
     {
         var clause = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
-        clause.Append('(');
-        for (var i = 0; i < keys.Count; i++)
+        try
         {
-            if (i > 0)
+            clause.Append('(');
+            for (var i = 0; i < keys.Count; i++)
             {
-                clause.Append(SqlFragments.And);
+                if (i > 0)
+                {
+                    clause.Append(SqlFragments.And);
+                }
+
+                var pk = keys[i];
+                var value = pk.MakeParameterValueFromField(entity);
+                var name = counters.NextKey();
+                var parameter = dialect.CreateDbParameter(name, pk.DbType, value);
+
+                clause.Append(alias);
+                clause.Append(dialect.WrapSimpleName(pk.Name));
+
+                if (Utils.IsNullOrDbNull(value))
+                {
+                    clause.Append(" IS NULL");
+                }
+                else
+                {
+                    clause.Append(" = ");
+                    clause.Append(dialect.MakeParameterName(name));
+
+                    parameters.Add(parameter);
+                }
             }
 
-            var pk = keys[i];
-            var value = pk.MakeParameterValueFromField(entity);
-            var name = counters.NextKey();
-            var parameter = dialect.CreateDbParameter(name, pk.DbType, value);
-
-            clause.Append(alias);
-            clause.Append(dialect.WrapSimpleName(pk.Name));
-
-            if (Utils.IsNullOrDbNull(value))
-            {
-                clause.Append(" IS NULL");
-            }
-            else
-            {
-                clause.Append(" = ");
-                clause.Append(dialect.MakeParameterName(name));
-
-                parameters.Add(parameter);
-            }
+            clause.Append(')');
+            return clause.ToString();
         }
-
-        clause.Append(')');
-        return clause.ToString();
+        finally
+        {
+            clause.Dispose();
+        }
     }
 
     private void AppendWherePrefix(ISqlContainer sc)
@@ -461,17 +475,24 @@ public partial class TableGateway<TEntity, TRowID>
         if (!inCache.TryGet(queryKey, out var inCore))
         {
             var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
-            sb.Append(wrappedColumnName);
-            sb.Append(SqlFragments.In);
-            for (var i = 0; i < names.Length; i++)
+            try
             {
-                if (i > 0) sb.Append(SqlFragments.Comma);
-                sb.Append(names[i]);
-            }
+                sb.Append(wrappedColumnName);
+                sb.Append(SqlFragments.In);
+                for (var i = 0; i < names.Length; i++)
+                {
+                    if (i > 0) sb.Append(SqlFragments.Comma);
+                    sb.Append(names[i]);
+                }
 
-            sb.Append(SqlFragments.CloseParen);
-            inCore = sb.ToString();
-            inCache.GetOrAdd(queryKey, _ => inCore);
+                sb.Append(SqlFragments.CloseParen);
+                inCore = sb.ToString();
+                inCache.GetOrAdd(queryKey, _ => inCore);
+            }
+            finally
+            {
+                sb.Dispose();
+            }
         }
 
         AppendWherePrefix(sqlContainer);

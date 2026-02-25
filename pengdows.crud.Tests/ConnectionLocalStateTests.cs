@@ -15,7 +15,8 @@ public class ConnectionLocalStateTests
 
         var sql = "SELECT 1";
         Assert.False(state.IsAlreadyPreparedForShape(sql));
-        Assert.True(state.MarkShapePrepared(sql, out var evicted));
+        var (added, evicted) = state.MarkShapePrepared(sql);
+        Assert.True(added);
         Assert.Equal(0, evicted);
         Assert.True(state.IsAlreadyPreparedForShape(sql));
 
@@ -29,10 +30,12 @@ public class ConnectionLocalStateTests
     public void MarkShapePrepared_ReturnsFalse_WhenShapeAlreadyTracked()
     {
         var state = new ConnectionLocalState();
-        Assert.True(state.MarkShapePrepared("SELECT 1", out var evictedFirst));
+        var (addedFirst, evictedFirst) = state.MarkShapePrepared("SELECT 1");
+        Assert.True(addedFirst);
         Assert.Equal(0, evictedFirst);
 
-        Assert.False(state.MarkShapePrepared("SELECT 1", out var evictedSecond));
+        var (addedSecond, evictedSecond) = state.MarkShapePrepared("SELECT 1");
+        Assert.False(addedSecond);
         Assert.Equal(0, evictedSecond);
     }
 }

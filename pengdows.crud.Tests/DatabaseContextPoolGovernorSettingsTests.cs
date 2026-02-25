@@ -26,8 +26,8 @@ public sealed class DatabaseContextPoolGovernorSettingsTests
 
         Assert.False(reader.Disabled);
         Assert.False(writer.Disabled);
-        Assert.Equal(SqlDialect.FallbackMaxPoolSize, reader.MaxPermits);
-        Assert.Equal(SqlDialect.FallbackMaxPoolSize, writer.MaxPermits);
+        Assert.Equal(SqlDialect.FallbackMaxPoolSize, reader.MaxSlots);
+        Assert.Equal(SqlDialect.FallbackMaxPoolSize, writer.MaxSlots);
     }
 
     [Fact]
@@ -50,8 +50,8 @@ public sealed class DatabaseContextPoolGovernorSettingsTests
         Assert.False(reader.Disabled);
         Assert.False(writer.Disabled);
         // Reader and writer have independent governors with their own configured limits
-        Assert.Equal(3, reader.MaxPermits);
-        Assert.Equal(4, writer.MaxPermits);
+        Assert.Equal(3, reader.MaxSlots);
+        Assert.Equal(4, writer.MaxSlots);
     }
 
     [Fact]
@@ -74,8 +74,8 @@ public sealed class DatabaseContextPoolGovernorSettingsTests
         Assert.False(reader.Disabled);
         Assert.False(writer.Disabled);
         // Reader and writer have independent governors with their own configured limits
-        Assert.Equal(5, reader.MaxPermits);
-        Assert.Equal(10, writer.MaxPermits);
+        Assert.Equal(5, reader.MaxSlots);
+        Assert.Equal(10, writer.MaxSlots);
     }
 
     [Fact]
@@ -95,8 +95,8 @@ public sealed class DatabaseContextPoolGovernorSettingsTests
         var reader = ctx.GetPoolStatisticsSnapshot(PoolLabel.Reader);
         var writer = ctx.GetPoolStatisticsSnapshot(PoolLabel.Writer);
 
-        Assert.Equal(7, reader.MaxPermits);
-        Assert.Equal(3, writer.MaxPermits);
+        Assert.Equal(7, reader.MaxSlots);
+        Assert.Equal(3, writer.MaxSlots);
     }
 
     [Fact]
@@ -118,8 +118,8 @@ public sealed class DatabaseContextPoolGovernorSettingsTests
 
         Assert.False(reader.Disabled);
         Assert.False(writer.Disabled);
-        Assert.Equal(5, reader.MaxPermits);
-        Assert.Equal(1, writer.MaxPermits);
+        Assert.Equal(5, reader.MaxSlots);
+        Assert.Equal(1, writer.MaxSlots);
     }
 
     [Fact]
@@ -158,7 +158,7 @@ public sealed class DatabaseContextPoolGovernorSettingsTests
 
         var writer = ctx.GetPoolStatisticsSnapshot(PoolLabel.Writer);
         Assert.False(writer.Disabled);
-        Assert.Equal(1, writer.MaxPermits);
+        Assert.Equal(1, writer.MaxSlots);
     }
 
     [Fact]
