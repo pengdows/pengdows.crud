@@ -168,7 +168,9 @@ internal sealed class PoolGovernor : IDisposable
             throw new InvalidOperationException(NotInitializedMessage);
         }
 
-        var waitStart = _trackMetrics ? Stopwatch.GetTimestamp() : 0;
+        // Always capture start for both metrics and deadline computation.
+        var waitStart = Stopwatch.GetTimestamp();
+        var deadlineTicks = waitStart + (long)(_acquireTimeout.TotalSeconds * Stopwatch.Frequency);
 
         // Turnstile fairness: acquire turnstile first to reduce writer starvation risk.
         // Writers hold the turnstile for their entire slot lifetime; readers touch-and-release.
@@ -182,7 +184,9 @@ internal sealed class PoolGovernor : IDisposable
 
             try
             {
-                if (!_turnstile.Wait(_acquireTimeout, cancellationToken))
+                var turnstileRemaining = GetRemainingTimeout(deadlineTicks);
+                if (turnstileRemaining == TimeSpan.Zero
+                    || !_turnstile.Wait(turnstileRemaining, cancellationToken))
                 {
                     Interlocked.Increment(ref _totalTurnstileTimeouts);
                     throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
@@ -217,7 +221,14 @@ internal sealed class PoolGovernor : IDisposable
             {
                 try
                 {
-                    var acquired = _semaphore.Wait(_acquireTimeout, cancellationToken);
+                    var semRemaining = GetRemainingTimeout(deadlineTicks);
+                    if (semRemaining == TimeSpan.Zero)
+                    {
+                        Interlocked.Increment(ref _totalSlotTimeouts);
+                        throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
+                    }
+
+                    var acquired = _semaphore.Wait(semRemaining, cancellationToken);
                     if (!acquired)
                     {
                         Interlocked.Increment(ref _totalSlotTimeouts);
@@ -320,7 +331,9 @@ internal sealed class PoolGovernor : IDisposable
             throw new InvalidOperationException(NotInitializedMessage);
         }
 
-        var waitStart = _trackMetrics ? Stopwatch.GetTimestamp() : 0;
+        // Always capture start for both metrics and deadline computation.
+        var waitStart = Stopwatch.GetTimestamp();
+        var deadlineTicks = waitStart + (long)(_acquireTimeout.TotalSeconds * Stopwatch.Frequency);
 
         // Turnstile fairness: acquire turnstile first to reduce writer starvation risk.
         // Writers hold the turnstile for their entire slot lifetime; readers touch-and-release.
@@ -334,7 +347,9 @@ internal sealed class PoolGovernor : IDisposable
 
             try
             {
-                if (!await _turnstile.WaitAsync(_acquireTimeout, cancellationToken).ConfigureAwait(false))
+                var turnstileRemaining = GetRemainingTimeout(deadlineTicks);
+                if (turnstileRemaining == TimeSpan.Zero
+                    || !await _turnstile.WaitAsync(turnstileRemaining, cancellationToken).ConfigureAwait(false))
                 {
                     Interlocked.Increment(ref _totalTurnstileTimeouts);
                     throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
@@ -371,7 +386,14 @@ internal sealed class PoolGovernor : IDisposable
             {
                 try
                 {
-                    var acquired = await _semaphore.WaitAsync(_acquireTimeout, cancellationToken).ConfigureAwait(false);
+                    var semRemaining = GetRemainingTimeout(deadlineTicks);
+                    if (semRemaining == TimeSpan.Zero)
+                    {
+                        Interlocked.Increment(ref _totalSlotTimeouts);
+                        throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
+                    }
+
+                    var acquired = await _semaphore.WaitAsync(semRemaining, cancellationToken).ConfigureAwait(false);
                     if (!acquired)
                     {
                         Interlocked.Increment(ref _totalSlotTimeouts);
@@ -513,11 +535,23 @@ internal sealed class PoolGovernor : IDisposable
 
     private void RecordWaitAndHold(long waitStart, long acquiredAt, long releasedAt)
     {
+        if (!_trackMetrics) return;
         var waitTicks = acquiredAt - waitStart;
         var holdTicks = releasedAt - acquiredAt;
 
         if (waitTicks > 0) Interlocked.Add(ref _totalWaitTicks, waitTicks);
         if (holdTicks > 0) Interlocked.Add(ref _totalHoldTicks, holdTicks);
+    }
+
+    /// <summary>
+    /// Returns the time remaining before the acquisition deadline expires.
+    /// Never returns negative — returns <see cref="TimeSpan.Zero"/> once the deadline has passed.
+    /// </summary>
+    private static TimeSpan GetRemainingTimeout(long deadlineTicks)
+    {
+        var remainingTicks = deadlineTicks - Stopwatch.GetTimestamp();
+        if (remainingTicks <= 0) return TimeSpan.Zero;
+        return TimeSpan.FromSeconds((double)remainingTicks / Stopwatch.Frequency);
     }
 
     private PoolSlot OnAcquired(long waitStart)
