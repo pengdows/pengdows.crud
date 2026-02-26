@@ -94,7 +94,7 @@ internal class SqliteDialect : SqlDialect
 
     public override string GetBaseSessionSettings()
     {
-        return "PRAGMA foreign_keys = ON;";
+        return "PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;";
     }
 
     public override string GetReadOnlySessionSettings()

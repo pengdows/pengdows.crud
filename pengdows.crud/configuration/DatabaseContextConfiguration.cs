@@ -111,11 +111,11 @@ public class DatabaseContextConfiguration : IDatabaseContextConfiguration
         get => _maxConcurrentWrites;
         set
         {
-            if (value is <= 0)
+            if (value is < 0)
             {
                 throw new ArgumentOutOfRangeException(nameof(value),
-                    $"MaxConcurrentWrites must be a positive integer (got {value}). " +
-                    "Zero or negative values would grant no slots, causing a permanent deadlock.");
+                    $"MaxConcurrentWrites must be >= 0 (got {value}). " +
+                    "Use 0 to forbid write connections; use null to let the driver manage pool size.");
             }
 
             _maxConcurrentWrites = value;
@@ -128,11 +128,11 @@ public class DatabaseContextConfiguration : IDatabaseContextConfiguration
         get => _maxConcurrentReads;
         set
         {
-            if (value is <= 0)
+            if (value is < 0)
             {
                 throw new ArgumentOutOfRangeException(nameof(value),
-                    $"MaxConcurrentReads must be a positive integer (got {value}). " +
-                    "Zero or negative values would grant no slots, causing a permanent deadlock.");
+                    $"MaxConcurrentReads must be >= 0 (got {value}). " +
+                    "Use 0 to forbid read connections; use null to let the driver manage pool size.");
             }
 
             _maxConcurrentReads = value;

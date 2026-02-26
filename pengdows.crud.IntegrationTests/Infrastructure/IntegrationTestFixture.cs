@@ -93,7 +93,7 @@ public class IntegrationTestFixture : IAsyncLifetime
     public IntegrationTestFixture()
     {
         var builder = Host.CreateApplicationBuilder();
-        builder.Services.AddScoped<IAuditValueResolver, StringAuditContextProvider>();
+        builder.Services.AddSingleton<IAuditValueResolver, StringAuditContextProvider>();
         _host = builder.Build();
     }
 

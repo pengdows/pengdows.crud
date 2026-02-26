@@ -159,7 +159,8 @@ public partial class DatabaseContext
                 0, // TotalSlotTimeouts
                 0, // TotalTurnstileTimeouts
                 0, // TotalCanceledWaits
-                true); // Disabled
+                true,  // Disabled
+                false); // Forbidden
         }
 
         return governor.GetSnapshot();

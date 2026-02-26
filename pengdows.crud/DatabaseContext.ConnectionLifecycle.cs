@@ -29,8 +29,6 @@ using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.@internal;
-using pengdows.crud.enums;
-using pengdows.crud.infrastructure;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
 

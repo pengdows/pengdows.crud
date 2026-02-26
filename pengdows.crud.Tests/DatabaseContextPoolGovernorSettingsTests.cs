@@ -1,3 +1,4 @@
+using System;
 using System.Data.Common;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
@@ -10,7 +11,7 @@ namespace pengdows.crud.Tests;
 public sealed class DatabaseContextPoolGovernorSettingsTests
 {
     [Fact]
-    public void PoolingDisabled_WithoutOverrides_UsesDefaults()
+    public void PoolingDisabled_Standard_ThrowsInvalidOperationException()
     {
         var config = new DatabaseContextConfiguration
         {
@@ -19,39 +20,8 @@ public sealed class DatabaseContextPoolGovernorSettingsTests
             DbMode = DbMode.Standard
         };
 
-        using var ctx = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.SqlServer));
-
-        var reader = ctx.GetPoolStatisticsSnapshot(PoolLabel.Reader);
-        var writer = ctx.GetPoolStatisticsSnapshot(PoolLabel.Writer);
-
-        Assert.False(reader.Disabled);
-        Assert.False(writer.Disabled);
-        Assert.Equal(SqlDialect.FallbackMaxPoolSize, reader.MaxSlots);
-        Assert.Equal(SqlDialect.FallbackMaxPoolSize, writer.MaxSlots);
-    }
-
-    [Fact]
-    public void PoolingDisabled_WithOverrides_UsesConfiguredLimits()
-    {
-        var config = new DatabaseContextConfiguration
-        {
-            ConnectionString = "Data Source=test;EmulatedProduct=SqlServer;Pooling=false",
-            ProviderName = SupportedDatabase.SqlServer.ToString(),
-            DbMode = DbMode.Standard,
-            MaxConcurrentReads = 3,
-            MaxConcurrentWrites = 4
-        };
-
-        using var ctx = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.SqlServer));
-
-        var reader = ctx.GetPoolStatisticsSnapshot(PoolLabel.Reader);
-        var writer = ctx.GetPoolStatisticsSnapshot(PoolLabel.Writer);
-
-        Assert.False(reader.Disabled);
-        Assert.False(writer.Disabled);
-        // Reader and writer have independent governors with their own configured limits
-        Assert.Equal(3, reader.MaxSlots);
-        Assert.Equal(4, writer.MaxSlots);
+        Assert.Throws<InvalidOperationException>(() =>
+            new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.SqlServer)));
     }
 
     [Fact]
@@ -142,28 +112,24 @@ public sealed class DatabaseContextPoolGovernorSettingsTests
     }
 
     [Fact]
-    public void SingleWriter_PoolingFalse_IsIgnoredAndRemoved()
+    public void SingleWriter_PoolingFalse_Throws()
     {
         var config = new DatabaseContextConfiguration
         {
-            ConnectionString = "Data Source=test.db;EmulatedProduct=Sqlite;Pooling=false",
-            ProviderName = SupportedDatabase.Sqlite.ToString(),
+            ConnectionString = "Data Source=test;Pooling=false",
+            ProviderName = SupportedDatabase.SqlServer.ToString(),
             DbMode = DbMode.SingleWriter
         };
 
-        using var ctx = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.Sqlite));
-
-        var builder = new DbConnectionStringBuilder { ConnectionString = ctx.ConnectionString };
-        Assert.False(builder.ContainsKey("Pooling"));
-
-        var writer = ctx.GetPoolStatisticsSnapshot(PoolLabel.Writer);
-        Assert.False(writer.Disabled);
-        Assert.Equal(1, writer.MaxSlots);
+        Assert.Throws<InvalidOperationException>(() =>
+            new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.SqlServer)));
     }
 
     [Fact]
     public void SingleConnection_PoolingFalse_IsIgnoredAndRemoved()
     {
+        // SingleConnection returns early from ApplyPoolingDefaults — Pooling=false is stripped,
+        // not rejected. No throw expected for this mode.
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = "Data Source=test.db;EmulatedProduct=Sqlite;Pooling=false",

@@ -5,9 +5,9 @@ using Xunit;
 namespace pengdows.crud.Tests;
 
 /// <summary>
-/// Validates that MaxConcurrentWrites/Reads reject zero and negative values,
-/// which would cause permanent deadlock (0 slots never granted) or undefined
-/// behavior.
+/// Validates that MaxConcurrentWrites/Reads reject negative values.
+/// Zero is valid — it creates a forbidden governor that throws on any acquire attempt,
+/// which is used to disable writes on a ReadOnly context or reads on a WriteOnly context.
 /// </summary>
 public class DatabaseContextConfigurationValidationTests
 {
@@ -16,11 +16,12 @@ public class DatabaseContextConfigurationValidationTests
     // -------------------------------------------------------------------------
 
     [Fact]
-    public void MaxConcurrentWrites_Zero_ThrowsArgumentOutOfRangeException()
+    public void MaxConcurrentWrites_Zero_SetsValue()
     {
+        // 0 is valid — means "forbidden pool" (no write connections permitted)
         var config = new DatabaseContextConfiguration();
-        var ex = Assert.Throws<ArgumentOutOfRangeException>(() => config.MaxConcurrentWrites = 0);
-        Assert.Equal("value", ex.ParamName);
+        config.MaxConcurrentWrites = 0;
+        Assert.Equal(0, config.MaxConcurrentWrites);
     }
 
     [Theory]
@@ -58,11 +59,12 @@ public class DatabaseContextConfigurationValidationTests
     // -------------------------------------------------------------------------
 
     [Fact]
-    public void MaxConcurrentReads_Zero_ThrowsArgumentOutOfRangeException()
+    public void MaxConcurrentReads_Zero_SetsValue()
     {
+        // 0 is valid — means "forbidden pool" (no read connections permitted)
         var config = new DatabaseContextConfiguration();
-        var ex = Assert.Throws<ArgumentOutOfRangeException>(() => config.MaxConcurrentReads = 0);
-        Assert.Equal("value", ex.ParamName);
+        config.MaxConcurrentReads = 0;
+        Assert.Equal(0, config.MaxConcurrentReads);
     }
 
     [Theory]

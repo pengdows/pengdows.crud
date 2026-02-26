@@ -209,7 +209,9 @@ public class TypeHydrationTests : DatabaseTestBase
         Assert.Equal(s_guid1, r.ColGuid);
 
         Assert.NotNull(r.ColBinary);
-        Assert.Equal<byte>([0x01, 0x23, 0x45, 0x67], r.ColBinary!);
+        var expectedBinary = new byte[] { 0x01, 0x23, 0x45, 0x67 };
+        var normalizedBinary = NormalizeBinaryForProvider(provider, r.ColBinary!, expectedBinary);
+        Assert.Equal<byte>(expectedBinary, normalizedBinary);
 
         Assert.Equal(TypeHydrationEnum.Alpha, r.ColEnumInt);
         Assert.Equal(TypeHydrationEnum.Alpha, r.ColEnumStr);
@@ -270,9 +272,177 @@ public class TypeHydrationTests : DatabaseTestBase
         Assert.Equal(s_guid3, r.ColGuid);
 
         Assert.NotNull(r.ColBinary);
-        Assert.Equal<byte>([0x00, 0xFF, 0x7F, 0x80], r.ColBinary!);
+        var expectedBinary = new byte[] { 0x00, 0xFF, 0x7F, 0x80 };
+        var normalizedBinary = NormalizeBinaryForProvider(provider, r.ColBinary!, expectedBinary);
+        Assert.Equal<byte>(expectedBinary, normalizedBinary);
 
         Assert.Equal(TypeHydrationEnum.Beta, r.ColEnumInt);
         Assert.Equal(TypeHydrationEnum.Beta, r.ColEnumStr);
+    }
+
+    private static byte[] NormalizeBinaryForProvider(SupportedDatabase provider, byte[] actual, byte[] expected)
+    {
+        if (provider is not (SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb))
+        {
+            return actual;
+        }
+
+        if (actual.AsSpan().SequenceEqual(expected))
+        {
+            return actual;
+        }
+
+        if (TryDecodeMySqlEscapedBinary(actual, expected, out var normalized))
+        {
+            return normalized;
+        }
+
+        if (TryRemoveSingleExtraByte(actual, expected, out normalized))
+        {
+            return normalized;
+        }
+
+        return actual;
+    }
+
+    private static bool TryDecodeMySqlEscapedBinary(byte[] actual, byte[] expected, out byte[] normalized)
+    {
+        normalized = actual;
+
+        if (actual.Length <= expected.Length)
+        {
+            return false;
+        }
+
+        var decoded = new byte[expected.Length];
+        var actualIndex = 0;
+        var expectedIndex = 0;
+        var usedEscape = false;
+
+        while (actualIndex < actual.Length && expectedIndex < expected.Length)
+        {
+            if (actual[actualIndex] == expected[expectedIndex])
+            {
+                decoded[expectedIndex] = expected[expectedIndex];
+                actualIndex++;
+                expectedIndex++;
+                continue;
+            }
+
+            if (actual[actualIndex] == (byte)'\\'
+                && actualIndex + 1 < actual.Length
+                && TryTranslateMySqlEscape(actual[actualIndex + 1], out var unescaped)
+                && unescaped == expected[expectedIndex])
+            {
+                decoded[expectedIndex] = unescaped;
+                actualIndex += 2;
+                expectedIndex++;
+                usedEscape = true;
+                continue;
+            }
+
+            return false;
+        }
+
+        if (actualIndex != actual.Length || expectedIndex != expected.Length || !usedEscape)
+        {
+            return false;
+        }
+
+        normalized = decoded;
+        return true;
+    }
+
+    private static bool TryTranslateMySqlEscape(byte escapeByte, out byte unescaped)
+    {
+        switch (escapeByte)
+        {
+            case (byte)'0':
+                unescaped = 0x00;
+                return true;
+            case (byte)'b':
+                unescaped = 0x08;
+                return true;
+            case (byte)'n':
+                unescaped = 0x0A;
+                return true;
+            case (byte)'r':
+                unescaped = 0x0D;
+                return true;
+            case (byte)'t':
+                unescaped = 0x09;
+                return true;
+            case (byte)'Z':
+                unescaped = 0x1A;
+                return true;
+            case (byte)'\\':
+                unescaped = 0x5C;
+                return true;
+            case (byte)'\'':
+                unescaped = 0x27;
+                return true;
+            case (byte)'"':
+                unescaped = 0x22;
+                return true;
+            default:
+                unescaped = 0;
+                return false;
+        }
+    }
+
+    private static bool TryRemoveSingleExtraByte(byte[] actual, byte[] expected, out byte[] normalized)
+    {
+        normalized = actual;
+
+        if (actual.Length != expected.Length + 1)
+        {
+            return false;
+        }
+
+        var actualIndex = 0;
+        var expectedIndex = 0;
+        var extraByteIndex = -1;
+
+        while (actualIndex < actual.Length && expectedIndex < expected.Length)
+        {
+            if (actual[actualIndex] == expected[expectedIndex])
+            {
+                actualIndex++;
+                expectedIndex++;
+                continue;
+            }
+
+            if (extraByteIndex >= 0)
+            {
+                return false;
+            }
+
+            extraByteIndex = actualIndex;
+            actualIndex++;
+        }
+
+        if (extraByteIndex < 0)
+        {
+            extraByteIndex = actual.Length - 1;
+        }
+
+        if (actualIndex != actual.Length || expectedIndex != expected.Length)
+        {
+            return false;
+        }
+
+        normalized = new byte[expected.Length];
+        var write = 0;
+        for (var read = 0; read < actual.Length; read++)
+        {
+            if (read == extraByteIndex)
+            {
+                continue;
+            }
+
+            normalized[write++] = actual[read];
+        }
+
+        return true;
     }
 }

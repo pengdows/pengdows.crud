@@ -587,14 +587,35 @@ public partial class DatabaseContext
         var rawWriterMax = ResolveGovernorMax(_configuredWritePoolSize, writerConfig);
         var rawReaderMax = ResolveGovernorMax(_configuredReadPoolSize, readerConfig);
 
-        if (writerConfig.PoolingEnabled == false)
+        // Validate explicit pool sizes — negative values are always invalid.
+        if (rawWriterMax.HasValue && rawWriterMax.Value < 0)
         {
-            rawWriterMax ??= Math.Max(1, writerConfig.MinPoolSize ?? 1);
+            throw new ArgumentOutOfRangeException(
+                nameof(rawWriterMax), rawWriterMax.Value,
+                "Write pool MaxPoolSize must be >= 0. Use 0 to forbid write connections.");
         }
 
-        if (readerConfig.PoolingEnabled == false)
+        if (rawReaderMax.HasValue && rawReaderMax.Value < 0)
         {
-            rawReaderMax ??= Math.Max(1, readerConfig.MinPoolSize ?? 1);
+            throw new ArgumentOutOfRangeException(
+                nameof(rawReaderMax), rawReaderMax.Value,
+                "Read pool MaxPoolSize must be >= 0. Use 0 to forbid read connections.");
+        }
+
+        // Silently clamp MinPoolSize to [0, MaxPoolSize] so the driver receives valid values.
+        var minPoolSizeKey = _dialect?.MinPoolSizeSettingName;
+        _connectionString = ConnectionPoolingConfiguration.ClampMinPoolSize(
+            _connectionString, minPoolSizeKey, writerConfig.MinPoolSize, rawWriterMax);
+        if (!string.IsNullOrWhiteSpace(_readerConnectionString))
+        {
+            _readerConnectionString = ConnectionPoolingConfiguration.ClampMinPoolSize(
+                _readerConnectionString, minPoolSizeKey, readerConfig.MinPoolSize, rawReaderMax);
+        }
+
+        // ReadOnly context: the write pool is forbidden — no write connections permitted.
+        if (!_isWriteConnection)
+        {
+            rawWriterMax = 0;
         }
 
         var writerKey = ComputePoolKeyHash(writerConnectionString);
@@ -602,7 +623,12 @@ public partial class DatabaseContext
 
         var writerLabelMax = rawWriterMax;
         var readerLabelMax = rawReaderMax;
-        if (ConnectionMode == DbMode.SingleWriter)
+
+        // SingleWriter limits the write governor to 1 concurrent slot to serialize writes
+        // (prevents SQLite file locking errors). Skip this override when the write pool is
+        // forbidden (rawWriterMax=0) — overriding 0→1 would incorrectly allow writes on a
+        // ReadOnly context or an explicitly disabled write pool.
+        if (ConnectionMode == DbMode.SingleWriter && rawWriterMax != 0)
         {
             writerLabelMax = 1;
         }
@@ -612,10 +638,12 @@ public partial class DatabaseContext
         // When a dedicated read-only connection string points to a different server (e.g. a
         // read replica), sharing the turnstile would incorrectly gate replica reads behind
         // primary writes — those operations are independent and should not compete.
+        // Also skip when writes are forbidden — no writes means no turnstile needed.
         var sharesTurnstile = string.Equals(writerKey, readerKey, StringComparison.Ordinal);
 
         SemaphoreSlim? turnstile = null;
-        if (ConnectionMode == DbMode.SingleWriter && _enableSingleWriterFairness && sharesTurnstile)
+        if (ConnectionMode == DbMode.SingleWriter && _enableSingleWriterFairness && sharesTurnstile
+            && _isWriteConnection)
         {
             turnstile = new SemaphoreSlim(1, 1);
         }
@@ -798,20 +826,20 @@ public partial class DatabaseContext
                 "PoolAcquireTimeout must be greater than zero.");
         }
 
-        if (config.MaxConcurrentReads.HasValue && config.MaxConcurrentReads.Value <= 0)
+        if (config.MaxConcurrentReads.HasValue && config.MaxConcurrentReads.Value < 0)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(config.MaxConcurrentReads),
                 config.MaxConcurrentReads.Value,
-                "MaxConcurrentReads must be greater than zero when specified.");
+                "MaxConcurrentReads must be >= 0 when specified. Use 0 to forbid read connections.");
         }
 
-        if (config.MaxConcurrentWrites.HasValue && config.MaxConcurrentWrites.Value <= 0)
+        if (config.MaxConcurrentWrites.HasValue && config.MaxConcurrentWrites.Value < 0)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(config.MaxConcurrentWrites),
                 config.MaxConcurrentWrites.Value,
-                "MaxConcurrentWrites must be greater than zero when specified.");
+                "MaxConcurrentWrites must be >= 0 when specified. Use 0 to forbid write connections.");
         }
 
         if (config.ModeLockTimeout.HasValue && config.ModeLockTimeout.Value <= TimeSpan.Zero)
@@ -939,7 +967,7 @@ public partial class DatabaseContext
 
     private void AttachPinnedSlotIfNeeded()
     {
-        if (!_effectivePoolGovernorEnabled || _writerGovernor == null)
+        if (!_effectivePoolGovernorEnabled || _writerGovernor == null || _writerGovernor.Forbidden)
         {
             return;
         }
@@ -962,9 +990,17 @@ public partial class DatabaseContext
         bool holdTurnstile = false,
         bool ownsTurnstile = false)
     {
-        if (disabled || !maxSlots.HasValue || maxSlots.Value <= 0)
+        if (disabled || !maxSlots.HasValue)
         {
-            return new PoolGovernor(label, poolKey, maxSlots ?? 0, _poolAcquireTimeout, true, trackMetrics);
+            return new PoolGovernor(label, poolKey, 0, _poolAcquireTimeout,
+                disabled: true, trackMetrics: trackMetrics);
+        }
+
+        if (maxSlots.Value == 0)
+        {
+            // MaxPoolSize=0 means this pool is explicitly forbidden — any Acquire throws.
+            return new PoolGovernor(label, poolKey, 0, _poolAcquireTimeout,
+                forbidden: true, trackMetrics: trackMetrics);
         }
 
         return new PoolGovernor(
@@ -972,12 +1008,12 @@ public partial class DatabaseContext
             poolKey,
             maxSlots.Value,
             _poolAcquireTimeout,
-            false,
-            trackMetrics,
-            sharedSemaphore,
-            turnstile,
-            holdTurnstile,
-            ownsTurnstile);
+            disabled: false,
+            trackMetrics: trackMetrics,
+            sharedSemaphore: sharedSemaphore,
+            turnstile: turnstile,
+            holdTurnstile: holdTurnstile,
+            ownsTurnstile: ownsTurnstile);
     }
 
     private static int? ResolveSharedMax(int? writerMax, int? readerMax)
@@ -1008,6 +1044,7 @@ public partial class DatabaseContext
             _ => null
         };
     }
+
 
     private static bool AreConnectionStringsEquivalentIgnoringCredentials(
         string primary,

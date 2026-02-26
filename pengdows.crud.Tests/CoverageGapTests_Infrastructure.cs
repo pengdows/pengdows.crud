@@ -543,11 +543,12 @@ public class CoverageGapTests_Infrastructure
     }
 
     [Fact]
-    public void DatabaseContext_ZeroMaxConcurrentReads_Throws()
+    public void DatabaseContext_ZeroMaxConcurrentReads_CreatesForbiddenGovernor()
     {
-        // Validation now happens at the setter (fail-fast) rather than at DatabaseContext construction.
+        // 0 is now valid — means "forbidden pool". Only negative values are rejected.
         var config = new DatabaseContextConfiguration();
-        Assert.Throws<ArgumentOutOfRangeException>(() => config.MaxConcurrentReads = 0);
+        config.MaxConcurrentReads = 0;
+        Assert.Equal(0, config.MaxConcurrentReads);
     }
 
     [Fact]

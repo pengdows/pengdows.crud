@@ -1,6 +1,9 @@
 using System.Data;
 using System.Threading;
 using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Configs;
+using BenchmarkDotNet.Jobs;
+using BenchmarkDotNet.Toolchains.InProcess.NoEmit;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using MySql.Data.MySqlClient;
@@ -12,9 +15,28 @@ namespace CrudBenchmarks;
 
 [OptInBenchmark]
 [MemoryDiagnoser]
-[SimpleJob(warmupCount: 1, iterationCount: 3, invocationCount: 1)]
+// Must run in-process: DatabaseContext is a singleton and cannot be shared across processes.
+// BenchmarkDotNet's default out-of-process toolchain spawns a subprocess per benchmark case,
+// which would create isolated ADO.NET connection pools that cannot coordinate with each other.
+[Config(typeof(MySqlConcurrencyConfig))]
 public class MySqlDefaultConcurrencyBenchmarks : IAsyncDisposable
 {
+    // Embedded config forces in-process execution with the same iteration shape as the
+    // removed [SimpleJob] attribute. The global BenchmarkConfig has no jobs of its own,
+    // so this is the only job that runs (no duplication).
+    private sealed class MySqlConcurrencyConfig : ManualConfig
+    {
+        public MySqlConcurrencyConfig()
+        {
+            AddJob(Job.Default
+                .WithToolchain(InProcessNoEmitToolchain.Instance)
+                .WithWarmupCount(1)
+                .WithIterationCount(3)
+                .WithInvocationCount(1)
+                .WithUnrollFactor(1));
+        }
+    }
+
     private const string MySqlImage = "mysql:8.0";
     private const int SeedRows = 2000;
     private const string RootPassword = "rootpassword";
@@ -38,19 +60,26 @@ public class MySqlDefaultConcurrencyBenchmarks : IAsyncDisposable
     [GlobalSetup]
     public async Task GlobalSetup()
     {
+        // Scale max_connections to 3x parallelism so the server never becomes the bottleneck.
+        // The semaphore caps in-flight operations at Parallelism; the pool is sized to
+        // Parallelism + 20 so the semaphore is always the limiting factor, not the pool.
         _container = new ContainerBuilder()
             .WithImage(MySqlImage)
             .WithEnvironment("MYSQL_ROOT_PASSWORD", RootPassword)
             .WithEnvironment("MYSQL_DATABASE", DatabaseName)
             .WithPortBinding(0, 3306)
             .WithWaitStrategy(Wait.ForUnixContainer().UntilPortIsAvailable(3306))
+            .WithCommand($"--max_connections={Parallelism * 3}")
             .Build();
 
         await _container.StartAsync();
 
         var mappedPort = _container.GetMappedPublicPort(3306);
+        // Pool sized to exactly Parallelism: the semaphore is the admission controller,
+        // the pool is sized to match it. Every in-flight operation has a guaranteed slot;
+        // there is no pool queuing or timeout — only the semaphore provides backpressure.
         _connectionString =
-            $"Server=localhost;Port={mappedPort};Database={DatabaseName};User Id={UserName};Password={RootPassword};";
+            $"Server=localhost;Port={mappedPort};Database={DatabaseName};User Id={UserName};Password={RootPassword};Max Pool Size={Parallelism};";
 
         await WaitForReadyAsync();
         await CreateSchemaAsync();

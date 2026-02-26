@@ -135,6 +135,11 @@ Benchmark results are saved to `BenchmarkDotNet.Artifacts/results/` with multipl
 - `.md` - Markdown tables
 - `.html` - HTML reports
 - `.csv` - CSV data for analysis
+- `-cross-framework-ratios.md` - Derived cross-framework ratios (`P÷D`, `EF÷P`) computed from Mean values
+
+Notes on ratios:
+- BenchmarkDotNet `Ratio` is baseline-relative within each benchmark group.
+- Cross-framework ratios are emitted in the `-cross-framework-ratios.md` sidecar file.
 
 ## Notes
 

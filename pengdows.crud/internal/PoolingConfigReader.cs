@@ -22,8 +22,7 @@ namespace pengdows.crud.@internal;
 internal enum PoolConfigSource
 {
     ConnectionString,
-    DialectDefault,
-    PoolingDisabled
+    DialectDefault
 }
 
 internal sealed record PoolConfig(bool? PoolingEnabled, int? MinPoolSize, int? MaxPoolSize, PoolConfigSource Source);
@@ -34,9 +33,8 @@ internal static class PoolingConfigReader
     {
         ArgumentNullException.ThrowIfNull(dialect);
 
-        // Dialect-level suggestion defaults.
+        // Dialect-level max-pool default.
         var defaultMax = dialect.DefaultMaxPoolSize;
-        var defaultMin = dialect.DefaultMinPoolSize;
 
         if (!dialect.SupportsExternalPooling ||
             string.IsNullOrWhiteSpace(dialect.PoolingSettingName) ||
@@ -44,7 +42,7 @@ internal static class PoolingConfigReader
         {
             return new PoolConfig(
                 null,
-                defaultMin,
+                null,
                 defaultMax,
                 PoolConfigSource.DialectDefault);
         }
@@ -53,7 +51,7 @@ internal static class PoolingConfigReader
         {
             return new PoolConfig(
                 null,
-                defaultMin,
+                null,
                 defaultMax,
                 PoolConfigSource.DialectDefault);
         }
@@ -67,7 +65,7 @@ internal static class PoolingConfigReader
         {
             return new PoolConfig(
                 null,
-                defaultMin,
+                null,
                 defaultMax,
                 PoolConfigSource.DialectDefault);
         }
@@ -80,13 +78,11 @@ internal static class PoolingConfigReader
 
         // If pooling is explicitly disabled, retain explicit max/min if provided but do not
         // fall back to dialect defaults (callers use null to mean "no pool size constraint").
+        // Note: ApplyPoolingDefaults will have already thrown for Standard/KeepAlive/SingleWriter
+        // modes, so this path is reached only for informational reads or SingleConnection mode.
         if (poolingEnabled == false)
         {
-            return new PoolConfig(
-                false,
-                minPool ?? defaultMin,
-                maxPool,
-                PoolConfigSource.ConnectionString);
+            return new PoolConfig(false, null, maxPool, PoolConfigSource.ConnectionString);
         }
 
         // Prefer explicit connection string values.
@@ -94,14 +90,14 @@ internal static class PoolingConfigReader
         {
             return new PoolConfig(
                 poolingEnabled,
-                minPool ?? defaultMin,
+                minPool,
                 maxPool ?? defaultMax,
                 PoolConfigSource.ConnectionString);
         }
 
         return new PoolConfig(
             null,
-            defaultMin,
+            null,
             defaultMax,
             PoolConfigSource.DialectDefault);
     }

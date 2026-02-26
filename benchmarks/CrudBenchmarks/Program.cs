@@ -25,7 +25,8 @@ public class Program
             : new BenchmarkConfig();
 
         var benchmarkTypes = GetBenchmarkTypes(includeOptInBenchmarks);
-        BenchmarkSwitcher.FromTypes(benchmarkTypes).Run(switcherArgs, config);
+        var summaries = BenchmarkSwitcher.FromTypes(benchmarkTypes).Run(switcherArgs, config);
+        CrossFrameworkRatioWriter.Write(summaries);
     }
 
     private static Type[] GetBenchmarkTypes(bool includeOptInBenchmarks)

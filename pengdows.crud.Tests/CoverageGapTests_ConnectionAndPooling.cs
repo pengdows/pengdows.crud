@@ -179,7 +179,7 @@ public sealed class CoverageGapTests_ConnectionAndPooling
 
         Assert.Equal(PoolConfigSource.ConnectionString, cfg.Source);
         Assert.True(cfg.PoolingEnabled);
-        Assert.Equal(dialect.DefaultMinPoolSize, cfg.MinPoolSize);
+        Assert.Null(cfg.MinPoolSize);
         Assert.Equal(dialect.DefaultMaxPoolSize, cfg.MaxPoolSize);
     }
 
@@ -211,8 +211,8 @@ public sealed class CoverageGapTests_ConnectionAndPooling
         Assert.Equal(PoolConfigSource.ConnectionString, cfg.Source);
         Assert.True(cfg.PoolingEnabled);
         Assert.Equal(50, cfg.MaxPoolSize);
-        // MinPoolSize should fall through to dialect default since setting name is null
-        Assert.Equal(dialect.DefaultMinPoolSize, cfg.MinPoolSize);
+        // MinPoolSize is null when no explicit value and setting name is null
+        Assert.Null(cfg.MinPoolSize);
     }
 
     [Fact]
@@ -290,7 +290,7 @@ public sealed class CoverageGapTests_ConnectionAndPooling
 
         Assert.Equal(PoolConfigSource.DialectDefault, cfg.Source);
         Assert.Null(cfg.PoolingEnabled);
-        Assert.Equal(dialect.DefaultMinPoolSize, cfg.MinPoolSize);
+        Assert.Null(cfg.MinPoolSize);
         Assert.Equal(dialect.DefaultMaxPoolSize, cfg.MaxPoolSize);
     }
 

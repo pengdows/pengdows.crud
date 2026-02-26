@@ -36,7 +36,7 @@ public class YugabyteTestContainer : TestContainer
         var hostPort = _container.GetMappedPublicPort(_port);
         // Yugabyte default has no password for yugabyte user in insecure mode
         _connectionString =
-            $@"Host=localhost;Port={hostPort};Username={_username};Database={_database};Pooling=false;Timeout=30;CommandTimeout=60;";
+            $@"Host=localhost;Port={hostPort};Username={_username};Database={_database};Pooling=true;Minimum Pool Size=1;Maximum Pool Size=100;Timeout=30;CommandTimeout=60;";
         await WaitForDbToStart(NpgsqlFactory.Instance, _connectionString, _container);
 
         // Poll until YSQL catalogs are fully initialized

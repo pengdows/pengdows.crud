@@ -49,6 +49,7 @@ internal sealed class PoolGovernor : IDisposable
     private readonly TimeSpan _acquireTimeout;
     private readonly int _maxSlots;
     private readonly bool _disabled;
+    private readonly bool _forbidden;
     private readonly bool _trackMetrics;
     private readonly bool _ownsSemaphore;
     private readonly bool _ownsTurnstile;
@@ -78,6 +79,7 @@ internal sealed class PoolGovernor : IDisposable
         int maxSlots,
         TimeSpan acquireTimeout,
         bool disabled = false,
+        bool forbidden = false,
         bool trackMetrics = false,
         SemaphoreSlim? sharedSemaphore = null,
         SemaphoreSlim? turnstile = null,
@@ -87,7 +89,6 @@ internal sealed class PoolGovernor : IDisposable
         _label = label;
         _poolKeyHash = poolKeyHash;
         _acquireTimeout = acquireTimeout;
-        _disabled = disabled;
         _trackMetrics = trackMetrics;
         _turnstile = turnstile;
         _holdTurnstile = holdTurnstile;
@@ -96,6 +97,16 @@ internal sealed class PoolGovernor : IDisposable
 
         if (disabled)
         {
+            _disabled = true;
+            _maxSlots = 0;
+            _semaphore = null;
+            _ownsSemaphore = false;
+            return;
+        }
+
+        if (forbidden)
+        {
+            _forbidden = true;
             _maxSlots = 0;
             _semaphore = null;
             _ownsSemaphore = false;
@@ -131,11 +142,22 @@ internal sealed class PoolGovernor : IDisposable
     /// </summary>
     internal bool OwnsSemaphore => _ownsSemaphore;
 
+    /// <summary>
+    /// Whether this governor is forbidden (MaxPoolSize=0).
+    /// Forbidden governors throw <see cref="PoolForbiddenException"/> on every acquire attempt.
+    /// </summary>
+    internal bool Forbidden => _forbidden;
+
     public PoolLabel Label => _label;
     public string PoolKeyHash => _poolKeyHash;
 
     public PoolSlot Acquire(CancellationToken cancellationToken = default)
     {
+        if (_forbidden)
+        {
+            throw new PoolForbiddenException(_label, _poolKeyHash);
+        }
+
         if (_disabled)
         {
             return default;
@@ -229,6 +251,11 @@ internal sealed class PoolGovernor : IDisposable
 
     public bool TryAcquire(out PoolSlot slot, CancellationToken cancellationToken = default)
     {
+        if (_forbidden)
+        {
+            throw new PoolForbiddenException(_label, _poolKeyHash);
+        }
+
         if (_disabled)
         {
             slot = default;
@@ -278,6 +305,11 @@ internal sealed class PoolGovernor : IDisposable
 
     public async Task<PoolSlot> AcquireAsync(CancellationToken cancellationToken = default)
     {
+        if (_forbidden)
+        {
+            throw new PoolForbiddenException(_label, _poolKeyHash);
+        }
+
         if (_disabled)
         {
             return default;
@@ -373,6 +405,11 @@ internal sealed class PoolGovernor : IDisposable
 
     public async Task<(bool Success, PoolSlot Permit)> TryAcquireAsync(CancellationToken cancellationToken = default)
     {
+        if (_forbidden)
+        {
+            throw new PoolForbiddenException(_label, _poolKeyHash);
+        }
+
         if (_disabled)
         {
             return (true, default);
@@ -423,7 +460,7 @@ internal sealed class PoolGovernor : IDisposable
 
     public async Task WaitForDrainAsync(TimeSpan? timeout, CancellationToken cancellationToken = default)
     {
-        if (_disabled)
+        if (_disabled || _forbidden)
         {
             return;
         }
@@ -538,7 +575,8 @@ internal sealed class PoolGovernor : IDisposable
             Interlocked.Read(ref _totalSlotTimeouts),
             Interlocked.Read(ref _totalTurnstileTimeouts),
             Interlocked.Read(ref _totalCanceledWaits),
-            _disabled);
+            _disabled,
+            _forbidden);
     }
 
     private static void UpdatePeak(ref long peak, long current)

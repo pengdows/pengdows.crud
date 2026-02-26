@@ -544,40 +544,6 @@ public sealed class ConnectionPoolingConfigurationCoverageTests
         Assert.False(ConnectionPoolingConfiguration.HasMinPoolSize(builder));
     }
 
-    // ── TrySetMinPoolSize ──────────────────────────────────────────────────
-
-    [Fact]
-    public void TrySetMinPoolSize_NullBuilder_ReturnsFalse()
-    {
-        Assert.False(ConnectionPoolingConfiguration.TrySetMinPoolSize(null, 5));
-    }
-
-    [Fact]
-    public void TrySetMinPoolSize_PoolingDisabled_ReturnsFalse()
-    {
-        var builder = new DbConnectionStringBuilder();
-        builder["Pooling"] = "false";
-        Assert.False(ConnectionPoolingConfiguration.TrySetMinPoolSize(builder, 5));
-    }
-
-    [Fact]
-    public void TrySetMinPoolSize_AlreadySet_ReturnsFalse()
-    {
-        var builder = new DbConnectionStringBuilder();
-        builder["Min Pool Size"] = "10";
-        Assert.False(ConnectionPoolingConfiguration.TrySetMinPoolSize(builder, 5));
-    }
-
-    [Fact]
-    public void TrySetMinPoolSize_ValidBuilder_SetsAndReturnsTrue()
-    {
-        var builder = new DbConnectionStringBuilder();
-        builder["Server"] = "localhost";
-        // Generic builder supports arbitrary keys via indexer
-        var result = ConnectionPoolingConfiguration.TrySetMinPoolSize(builder, 3);
-        Assert.True(result);
-    }
-
     // ── ApplyPoolingDefaults with SingleWriter mode ───────────────────────
 
     [Fact]

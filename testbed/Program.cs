@@ -27,10 +27,11 @@ var host = builder.Build();
 Console.WriteLine($"Starting parallel database testing at {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
 Console.WriteLine();
 
-// Use the new parallel orchestrator (Oracle can be enabled via INCLUDE_ORACLE=true)
+// Use the new parallel orchestrator (optional providers can be enabled via INCLUDE_* env vars)
 var includeOracle = Environment.GetEnvironmentVariable("INCLUDE_ORACLE")?.ToLower() == "true";
 var includeSnowflake = Environment.GetEnvironmentVariable("INCLUDE_SNOWFLAKE")?.ToLower() == "true";
-var orchestrator = new ParallelTestOrchestrator(host.Services, includeOracle, includeSnowflake);
+var includeYugabyte = Environment.GetEnvironmentVariable("INCLUDE_YUGABYTE")?.ToLower() == "true";
+var orchestrator = new ParallelTestOrchestrator(host.Services, includeOracle, includeSnowflake, includeYugabyte);
 
 // Optional filtering: --only A,B or --exclude X,Y or env TESTBED_ONLY/TESTBED_EXCLUDE
 static ISet<string> ParseList(string? csv)

@@ -1,3 +1,4 @@
+using System;
 using System.Data.Common;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
@@ -106,49 +107,6 @@ public class ConnectionPoolingConfigurationTests
 
     #endregion
 
-    #region TrySetMinPoolSize Tests
-
-    [Fact]
-    public void TrySetMinPoolSize_ValidBuilder_ReturnsTrue()
-    {
-        var builder = new DbConnectionStringBuilder();
-
-        var result = ConnectionPoolingConfiguration.TrySetMinPoolSize(builder, 5);
-        Assert.True(result);
-        Assert.True(ConnectionPoolingConfiguration.HasMinPoolSize(builder));
-    }
-
-    [Fact]
-    public void TrySetMinPoolSize_NullBuilder_ReturnsFalse()
-    {
-        var result = ConnectionPoolingConfiguration.TrySetMinPoolSize(null, 5);
-        Assert.False(result);
-    }
-
-    [Fact]
-    public void TrySetMinPoolSize_PoolingDisabled_ReturnsFalse()
-    {
-        var builder = new DbConnectionStringBuilder();
-        builder["Pooling"] = false;
-
-        var result = ConnectionPoolingConfiguration.TrySetMinPoolSize(builder, 5);
-        Assert.False(result);
-    }
-
-    [Fact]
-    public void TrySetMinPoolSize_AlreadyHasMinPool_ReturnsFalse()
-    {
-        var builder = new DbConnectionStringBuilder();
-        builder["Min Pool Size"] = 10;
-
-        var result = ConnectionPoolingConfiguration.TrySetMinPoolSize(builder, 5);
-        Assert.False(result);
-        // Original value should be preserved
-        Assert.Equal("10", builder["Min Pool Size"].ToString());
-    }
-
-    #endregion
-
     #region ApplyPoolingDefaults Tests
 
     [Fact]
@@ -236,17 +194,33 @@ public class ConnectionPoolingConfigurationTests
     }
 
     [Fact]
-    public void ApplyPoolingDefaults_PoolingDisabled_NoMinPool()
+    public void ApplyPoolingDefaults_PoolingDisabledExplicitly_ThrowsInvalidOperationException()
     {
         var connectionString = "Server=localhost;Database=test;Pooling=false";
-        var product = SupportedDatabase.PostgreSql;
-        var mode = DbMode.Standard;
 
-        var result = ConnectionPoolingConfiguration.ApplyPoolingDefaults(
-            connectionString, product, mode, true);
+        Assert.Throws<InvalidOperationException>(() =>
+            ConnectionPoolingConfiguration.ApplyPoolingDefaults(
+                connectionString, SupportedDatabase.PostgreSql, DbMode.Standard, true));
+    }
 
-        var builder = new DbConnectionStringBuilder { ConnectionString = result };
-        Assert.False(ConnectionPoolingConfiguration.HasMinPoolSize(builder));
+    [Fact]
+    public void ApplyPoolingDefaults_PoolingDisabled_KeepAlive_ThrowsInvalidOperationException()
+    {
+        var connectionString = "Server=localhost;Database=test;Pooling=false";
+
+        Assert.Throws<InvalidOperationException>(() =>
+            ConnectionPoolingConfiguration.ApplyPoolingDefaults(
+                connectionString, SupportedDatabase.SqlServer, DbMode.KeepAlive, true));
+    }
+
+    [Fact]
+    public void ApplyPoolingDefaults_PoolingDisabled_SingleWriter_ThrowsInvalidOperationException()
+    {
+        var connectionString = "Server=localhost;Database=test;Pooling=false";
+
+        Assert.Throws<InvalidOperationException>(() =>
+            ConnectionPoolingConfiguration.ApplyPoolingDefaults(
+                connectionString, SupportedDatabase.SqlServer, DbMode.SingleWriter, true));
     }
 
     [Fact]
@@ -311,13 +285,78 @@ public class ConnectionPoolingConfigurationTests
 
     #endregion
 
-    #region GetDefaultMinPoolSize Tests
+    #region ClampMinPoolSize Tests
 
     [Fact]
-    public void GetDefaultMinPoolSize_ReturnsOne()
+    public void ClampMinPoolSize_Negative_ClampsToZero()
     {
-        var result = ConnectionPoolingConfiguration.DefaultMinPoolSize;
-        Assert.Equal(1, result);
+        var result = ConnectionPoolingConfiguration.ClampMinPoolSize(
+            "Server=localhost;Min Pool Size=-5;Max Pool Size=10",
+            "Min Pool Size", rawMin: -5, rawMax: 10);
+
+        var b = new DbConnectionStringBuilder { ConnectionString = result };
+        b.TryGetValue("Min Pool Size", out var v);
+        Assert.Equal("0", v?.ToString());
+    }
+
+    [Fact]
+    public void ClampMinPoolSize_ExceedsMax_ClampsToMax()
+    {
+        var result = ConnectionPoolingConfiguration.ClampMinPoolSize(
+            "Server=localhost;Min Pool Size=20;Max Pool Size=5",
+            "Min Pool Size", rawMin: 20, rawMax: 5);
+
+        var b = new DbConnectionStringBuilder { ConnectionString = result };
+        b.TryGetValue("Min Pool Size", out var v);
+        Assert.Equal("5", v?.ToString());
+    }
+
+    [Fact]
+    public void ClampMinPoolSize_AlreadyValid_ReturnsOriginal()
+    {
+        var original = "Server=localhost;Min Pool Size=3;Max Pool Size=10";
+
+        var result = ConnectionPoolingConfiguration.ClampMinPoolSize(
+            original, "Min Pool Size", rawMin: 3, rawMax: 10);
+
+        Assert.Same(original, result);
+    }
+
+    [Fact]
+    public void ClampMinPoolSize_NullMin_ReturnsOriginal()
+    {
+        var original = "Server=localhost;Max Pool Size=10";
+
+        var result = ConnectionPoolingConfiguration.ClampMinPoolSize(
+            original, "Min Pool Size", rawMin: null, rawMax: 10);
+
+        Assert.Same(original, result);
+    }
+
+    [Fact]
+    public void ClampMinPoolSize_NullMax_ClampsNegativeToZeroOnly()
+    {
+        // No max known → clamp to 0 but no upper bound
+        var result = ConnectionPoolingConfiguration.ClampMinPoolSize(
+            "Server=localhost;Min Pool Size=-3",
+            "Min Pool Size", rawMin: -3, rawMax: null);
+
+        var b = new DbConnectionStringBuilder { ConnectionString = result };
+        b.TryGetValue("Min Pool Size", out var v);
+        Assert.Equal("0", v?.ToString());
+    }
+
+    [Fact]
+    public void ClampMinPoolSize_ZeroMax_ClampsPositiveMinToZero()
+    {
+        // Forbidden pool (max=0): any positive min gets clamped to 0
+        var result = ConnectionPoolingConfiguration.ClampMinPoolSize(
+            "Server=localhost;Min Pool Size=5;Max Pool Size=0",
+            "Min Pool Size", rawMin: 5, rawMax: 0);
+
+        var b = new DbConnectionStringBuilder { ConnectionString = result };
+        b.TryGetValue("Min Pool Size", out var v);
+        Assert.Equal("0", v?.ToString());
     }
 
     #endregion

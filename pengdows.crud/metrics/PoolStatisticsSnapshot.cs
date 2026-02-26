@@ -15,7 +15,8 @@
 //   * TotalSlotTimeouts: Slot (semaphore) acquisition timeout count
 //   * TotalTurnstileTimeouts: Turnstile acquisition timeout count (separate from slot timeouts)
 //   * TotalCanceledWaits: Canceled acquisition count
-//   * Disabled: Whether governor is disabled
+//   * Disabled: Governor is disabled — returns default slot without contention management
+//   * Forbidden: Governor is forbidden (MaxPoolSize=0) — throws on any Acquire attempt
 // - Used by PoolSaturatedException for diagnostic context.
 // - Thread-safe: All values captured atomically from PoolGovernor.
 // - Distinguishes between two timeout sources:
@@ -44,4 +45,5 @@ public readonly record struct PoolStatisticsSnapshot(
     long TotalSlotTimeouts,
     long TotalTurnstileTimeouts,
     long TotalCanceledWaits,
-    bool Disabled);
+    bool Disabled,
+    bool Forbidden);

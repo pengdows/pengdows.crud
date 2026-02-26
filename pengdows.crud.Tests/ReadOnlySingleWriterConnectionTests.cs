@@ -6,6 +6,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using Xunit;
@@ -87,41 +88,37 @@ public class ReadOnlySingleWriterConnectionTests
     }
 
     [Fact]
-    public async Task ReadOnlySingleWriter_PersistentConnection_ShouldHaveReadOnlySettings()
+    public async Task ReadOnlySingleWriter_ReadConnection_ShouldHaveReadOnlySettings()
     {
         var factory = new RecordingFactory();
         await using var ctx = CreateReadOnlySingleWriterContext(factory);
 
-        // Get any connection to trigger persistent connection creation
-        var conn = ctx.GetConnection(ExecutionType.Write);
+        // ReadOnly context: all connections are read connections
+        var conn = ctx.GetConnection(ExecutionType.Read);
         await conn.OpenAsync();
         ctx.CloseAndDisposeConnection(conn);
 
         Assert.True(factory.Connections.Count >= 1);
-        var persistentConnection = factory.Connections.Last();
+        var operationalConnection = factory.Connections.Last();
 
-        // The persistent connection MUST have read-only settings applied even for ExecutionType.Write
-        // because the context itself is ReadOnly
-        Assert.Contains(persistentConnection.Commands, c => c.Contains("query_only"));
+        // The connection must have read-only settings applied (query_only pragma for SQLite)
+        Assert.Contains(operationalConnection.Commands, c => c.Contains("query_only"));
     }
 
     [Fact]
-    public async Task ReadOnlySingleWriter_AllConnections_ShouldBeReadOnly()
+    public async Task ReadOnlySingleWriter_ReadConnections_ShouldBeReadOnly()
     {
         var factory = new RecordingFactory();
         await using var ctx = CreateReadOnlySingleWriterContext(factory);
 
-        // Get write connection (should be the persistent connection)
-        var writeConn = ctx.GetConnection(ExecutionType.Write);
-        await writeConn.OpenAsync();
-        ctx.CloseAndDisposeConnection(writeConn);
+        // ReadOnly context: only read connections are permitted
+        var readConn1 = ctx.GetConnection(ExecutionType.Read);
+        await readConn1.OpenAsync();
+        ctx.CloseAndDisposeConnection(readConn1);
 
-        // Get read connection (should create a new read-only connection)
-        var readConn = ctx.GetConnection(ExecutionType.Read);
-        await readConn.OpenAsync();
-        ctx.CloseAndDisposeConnection(readConn);
-
-        Assert.True(factory.Connections.Count >= 2);
+        var readConn2 = ctx.GetConnection(ExecutionType.Read);
+        await readConn2.OpenAsync();
+        ctx.CloseAndDisposeConnection(readConn2);
 
         // Operational connections (those that received session settings) should be read-only.
         // Init connections used for dialect detection may have empty command lists because
@@ -151,19 +148,14 @@ public class ReadOnlySingleWriterConnectionTests
     }
 
     [Fact]
-    public async Task ReadOnlySingleWriter_WriteOperations_ShouldFail()
+    public void ReadOnlySingleWriter_GetWriteConnection_ThrowsPoolForbiddenException()
     {
+        // ReadOnly context: write pool is forbidden — GetConnection(Write) throws immediately
+        // rather than returning a connection that later fails at SQL execution time.
         var factory = new RecordingFactory();
-        await using var ctx = CreateReadOnlySingleWriterContext(factory);
+        using var ctx = CreateReadOnlySingleWriterContext(factory);
 
-        // Get connection and try to perform write operation
-        var conn = ctx.GetConnection(ExecutionType.Write);
-        await conn.OpenAsync();
-
-        await using var container = ctx.CreateSqlContainer("INSERT INTO t VALUES (1)");
-
-        // Should fail because context is read-only
-        await Assert.ThrowsAsync<NotSupportedException>(async () => await container.ExecuteNonQueryAsync());
+        Assert.Throws<PoolForbiddenException>(() => ctx.GetConnection(ExecutionType.Write));
     }
 
     [Theory]

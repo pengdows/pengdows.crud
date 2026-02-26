@@ -1943,7 +1943,6 @@ internal abstract class SqlDialect : ISqlDialect
 
     // Dialect defaults used when pool settings are not discoverable from the connection string.
     // These are intentionally internal (not part of the public API surface).
-    internal virtual int DefaultMinPoolSize => ConnectionPoolingConfiguration.DefaultMinPoolSize;
     internal const int FallbackMaxPoolSize = 100;
     internal virtual int DefaultMaxPoolSize => FallbackMaxPoolSize;
 

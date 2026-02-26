@@ -22,13 +22,15 @@ public class ParallelTestOrchestrator
     private readonly ConcurrentBag<TestResult> _results = new();
     private readonly bool _includeOracle;
     private readonly bool _includeSnowflake;
+    private readonly bool _includeYugabyte;
 
     public ParallelTestOrchestrator(IServiceProvider services, bool includeOracle = false,
-        bool includeSnowflake = false)
+        bool includeSnowflake = false, bool includeYugabyte = false)
     {
         _services = services;
         _includeOracle = includeOracle;
         _includeSnowflake = includeSnowflake;
+        _includeYugabyte = includeYugabyte;
     }
 
     /// <summary>
@@ -48,7 +50,7 @@ public class ParallelTestOrchestrator
             SupportedDatabase.Firebird => new FirebirdSqlTestContainer(),
             SupportedDatabase.CockroachDb => new CockroachDbTestContainer(),
             SupportedDatabase.DuckDB => new DuckDbTestContainer(),
-            SupportedDatabase.YugabyteDb => new YugabyteTestContainer(),
+            SupportedDatabase.YugabyteDb when _includeYugabyte => new YugabyteTestContainer(),
             SupportedDatabase.TiDb => new TiDBTestContainer(),
             SupportedDatabase.Snowflake when _includeSnowflake => new SnowflakeTestContainer(),
             _ => null
@@ -243,13 +245,6 @@ public class ParallelTestOrchestrator
             },
             new()
             {
-                ContainerName = "YugabyteDB",
-                DatabaseProvider = "YugabyteDB",
-                Container = new YugabyteTestContainer(),
-                TestProviderFactory = (db, sp) => new YugabyteTestProvider(db, sp)
-            },
-            new()
-            {
                 ContainerName = "TiDB",
                 DatabaseProvider = "TiDB",
                 Container = new TiDBTestContainer(),
@@ -267,6 +262,17 @@ public class ParallelTestOrchestrator
                 DatabaseProvider = "Snowflake",
                 Container = new SnowflakeTestContainer(),
                 TestProviderFactory = (db, sp) => new SnowflakeTestProvider(db, sp)
+            });
+        }
+
+        if (_includeYugabyte)
+        {
+            configurations.Add(new TestConfiguration
+            {
+                ContainerName = "YugabyteDB",
+                DatabaseProvider = "YugabyteDB",
+                Container = new YugabyteTestContainer(),
+                TestProviderFactory = (db, sp) => new YugabyteTestProvider(db, sp)
             });
         }
 

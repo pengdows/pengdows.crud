@@ -26,15 +26,6 @@ public class ConnectionPoolingConfigurationBranchTests
     }
 
     [Fact]
-    public void TrySetMinPoolSize_UsesProperty_WhenAvailable()
-    {
-        var builder = new BuilderWithMinPoolProperty();
-
-        Assert.True(ConnectionPoolingConfiguration.TrySetMinPoolSize(builder, 7));
-        Assert.Equal(7, builder.MinPoolSize);
-    }
-
-    [Fact]
     public void ApplyPoolingDefaults_RawConnectionString_ReturnsOriginal()
     {
         var builder = new DbConnectionStringBuilder();
@@ -48,26 +39,6 @@ public class ConnectionPoolingConfigurationBranchTests
             builder: builder);
 
         Assert.Equal(":memory:", result);
-    }
-
-    [Fact]
-    public void ApplyPoolingDefaults_PoolingDisabled_SkipsMinPool()
-    {
-        var builder = new DbConnectionStringBuilder
-        {
-            ConnectionString = "Server=localhost;Pooling=false"
-        };
-
-        var result = ConnectionPoolingConfiguration.ApplyPoolingDefaults(
-            builder.ConnectionString,
-            SupportedDatabase.SqlServer,
-            DbMode.Standard,
-            true,
-            builder: builder);
-
-        var parsed = new DbConnectionStringBuilder { ConnectionString = result };
-        Assert.True(parsed.ContainsKey("Pooling"));
-        Assert.False(ConnectionPoolingConfiguration.HasMinPoolSize(parsed));
     }
 
     [Fact]
@@ -88,8 +59,4 @@ public class ConnectionPoolingConfigurationBranchTests
         Assert.Equal(builder.ConnectionString, result);
     }
 
-    private sealed class BuilderWithMinPoolProperty : DbConnectionStringBuilder
-    {
-        public int MinPoolSize { get; set; }
-    }
 }

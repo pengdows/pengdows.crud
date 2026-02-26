@@ -1,3 +1,4 @@
+using System;
 using System.Data.Common;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
@@ -239,14 +240,14 @@ public class MinPoolSizeBehaviorTests
     }
 
     /// <summary>
-    /// Tests that pooling disabled in connection string prevents MinPoolSize from being set
+    /// Tests that setting Pooling=false in a Standard-mode connection string is rejected.
+    /// pengdows.crud requires connection pooling; Pooling=false is not allowed.
     /// </summary>
     [Theory]
     [InlineData(SupportedDatabase.SqlServer)]
     [InlineData(SupportedDatabase.PostgreSql)]
-    public void PoolingDisabled_PreventsMinPoolSizeConfiguration(SupportedDatabase database)
+    public void PoolingDisabled_InConnectionString_ThrowsInvalidOperationException(SupportedDatabase database)
     {
-        // Arrange
         var factory = new fakeDbFactory(database);
         var config = new DatabaseContextConfiguration
         {
@@ -254,27 +255,6 @@ public class MinPoolSizeBehaviorTests
             DbMode = DbMode.Standard
         };
 
-        // Act
-        using var context = new DatabaseContext(config, factory);
-        var connectionString = context.ConnectionString;
-
-        // Assert
-        var builder = factory.CreateConnectionStringBuilder() ?? new DbConnectionStringBuilder();
-        builder.ConnectionString = connectionString;
-
-        var dialect = context.Dialect;
-
-        // Pooling should be disabled
-        if (!string.IsNullOrEmpty(dialect.PoolingSettingName))
-        {
-            Assert.True(builder.ContainsKey(dialect.PoolingSettingName));
-            Assert.Equal("false", builder[dialect.PoolingSettingName]?.ToString(), true);
-        }
-
-        // MinPoolSize should not be set when pooling is disabled
-        if (!string.IsNullOrEmpty(dialect.MinPoolSizeSettingName))
-        {
-            Assert.False(builder.ContainsKey(dialect.MinPoolSizeSettingName));
-        }
+        Assert.Throws<InvalidOperationException>(() => new DatabaseContext(config, factory));
     }
 }

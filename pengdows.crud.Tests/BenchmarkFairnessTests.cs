@@ -180,6 +180,36 @@ public class BenchmarkFairnessTests
     }
 
     [Fact]
+    public void BenchmarkProgram_WritesCrossFrameworkRatioSidecar()
+    {
+        const string fileName = "Program.cs";
+        var text = LoadBenchmarkText(fileName);
+
+        AssertAllPresent(fileName, text, new[]
+        {
+            "CrossFrameworkRatioWriter",
+            "CrossFrameworkRatioWriter.Write"
+        });
+    }
+
+    [Fact]
+    public void CrossFrameworkRatioWriter_EmitsExplicitCrossFrameworkRatios()
+    {
+        const string fileName = "CrossFrameworkRatioWriter.cs";
+        var text = LoadBenchmarkText(fileName);
+
+        AssertAllPresent(fileName, text, new[]
+        {
+            "P÷D",
+            "EF÷P",
+            "_Pengdows",
+            "_Dapper",
+            "_EntityFramework",
+            "BenchmarkDotNet's built-in Ratio column"
+        });
+    }
+
+    [Fact]
     public void OptInBenchmarkAttribute_IsDefined()
     {
         const string fileName = "OptInBenchmarkAttribute.cs";

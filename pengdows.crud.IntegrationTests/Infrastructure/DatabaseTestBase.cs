@@ -16,6 +16,7 @@ public abstract class DatabaseTestBase : IAsyncLifetime
     protected readonly ITestOutputHelper Output;
     protected readonly IntegrationTestFixture Fixture;
     protected Dictionary<SupportedDatabase, IDatabaseContext> DatabaseContexts = new();
+    private IAuditValueResolver? _cachedAuditResolver;
 
     protected DatabaseTestBase(ITestOutputHelper output, IntegrationTestFixture fixture)
     {
@@ -200,8 +201,8 @@ public abstract class DatabaseTestBase : IAsyncLifetime
 
     protected IAuditValueResolver GetAuditResolver()
     {
-        return Fixture.Services.GetService<IAuditValueResolver>()
-               ?? new StringAuditContextProvider();
+        return _cachedAuditResolver ??= (Fixture.Services.GetService<IAuditValueResolver>()
+                                         ?? new StringAuditContextProvider());
     }
 
     protected static async Task DropTableIfExistsAsync(IDatabaseContext context, string tableName)

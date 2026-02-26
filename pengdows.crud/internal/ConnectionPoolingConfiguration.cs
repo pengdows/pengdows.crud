@@ -4,22 +4,19 @@
 //
 // AI SUMMARY:
 // - Manages connection pool settings for optimal performance.
-// - DefaultMinPoolSize (1): Default suggestion for internal pool configuration.
 // - Key methods:
 //   * IsPoolingDisabled(): Checks if Pooling=false in connection string
 //   * HasMinPoolSize(): Detects if min pool size is already configured
-//   * TrySetMinPoolSize(): Sets minimum pool size via property or indexer
-//   * ApplyPoolingDefaults(): Adds Pooling=true if not present
+//   * ApplyPoolingDefaults(): Adds Pooling=true if absent; throws if Pooling=false detected
 //   * ApplyApplicationName(): Adds application name to connection string
-// - Handles multiple provider-specific aliases (Min Pool Size, MinPoolSize, etc.).
+//   * ClampMinPoolSize(): Silently corrects Min Pool Size to [0, MaxPoolSize]
+// - Pooling=false is not allowed — throws InvalidOperationException.
 // - Only applies to Standard, KeepAlive, and SingleWriter modes with external pooling.
 // - Skips raw connection strings like ":memory:" or file paths.
-// - Uses reflection for strongly-typed builder properties as fallback.
 // =============================================================================
 
 using System.Data.Common;
 using System.Globalization;
-using System.Reflection;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 
@@ -31,11 +28,6 @@ namespace pengdows.crud.@internal;
 /// </summary>
 internal static class ConnectionPoolingConfiguration
 {
-    /// <summary>
-    /// Default minimum pool size used as an internal fallback.
-    /// </summary>
-    public const int DefaultMinPoolSize = 1;
-
     // Fallback connection-string key names when the dialect does not expose its own.
     private const string DefaultPoolingKey = "Pooling";
 
@@ -53,12 +45,6 @@ internal static class ConnectionPoolingConfiguration
         "MaxPoolSize",
         "Maximum Pool Size",
         "MaximumPoolSize"
-    };
-
-    private static readonly string[] MinPoolPropertyCandidates =
-    {
-        "MinPoolSize",
-        "MinimumPoolSize"
     };
 
     /// <summary>
@@ -121,37 +107,6 @@ internal static class ConnectionPoolingConfiguration
     }
 
     /// <summary>
-    /// Attempts to set minimum pool size on the connection string builder.
-    /// Returns false if pooling is disabled or min pool is already set.
-    /// </summary>
-    public static bool TrySetMinPoolSize(DbConnectionStringBuilder? builder, int minPoolSize)
-    {
-        if (builder == null)
-        {
-            return false;
-        }
-
-        if (IsPoolingDisabled(builder) || HasMinPoolSize(builder))
-        {
-            return false;
-        }
-
-        // Try via strongly-typed property first
-        if (TrySetMinPoolViaProperty(builder, minPoolSize))
-        {
-            return true;
-        }
-
-        // Fallback to generic indexer
-        if (TrySetMinPoolViaIndexer(builder, minPoolSize))
-        {
-            return true;
-        }
-
-        return false;
-    }
-
-    /// <summary>
     /// Applies default pooling settings to a connection string.
     /// Only modifies connection strings for Standard, KeepAlive, and SingleWriter modes with external pooling support.
     /// </summary>
@@ -196,6 +151,14 @@ internal static class ConnectionPoolingConfiguration
                 return connectionString;
             }
 
+            // Reject Pooling=false — pengdows.crud requires connection pooling
+            if (IsPoolingDisabled(builder))
+            {
+                throw new InvalidOperationException(
+                    $"Connection pooling must not be disabled ({poolingSettingName}=false detected). " +
+                    "pengdows.crud requires connection pooling for correct operation.");
+            }
+
             var modified = false;
 
             // Set Pooling=true if not present
@@ -222,7 +185,7 @@ internal static class ConnectionPoolingConfiguration
 
             return result;
         }
-        catch
+        catch (Exception ex) when (ex is not InvalidOperationException)
         {
             // If parsing fails, return original
             return connectionString;
@@ -427,6 +390,63 @@ internal static class ConnectionPoolingConfiguration
     }
 
     /// <summary>
+    /// Silently corrects Min Pool Size in the connection string to a valid range.
+    /// <list type="bullet">
+    /// <item>Step 1: clamp to &gt;= 0 (negative values become 0)</item>
+    /// <item>Step 2: clamp to &lt;= MaxPoolSize (when MaxPoolSize is known)</item>
+    /// </list>
+    /// Returns the original connection string when no correction is needed or when
+    /// the setting name is unknown / the string cannot be parsed.
+    /// </summary>
+    internal static string ClampMinPoolSize(
+        string connectionString,
+        string? minPoolSizeSettingName,
+        int? rawMin,
+        int? rawMax)
+    {
+        if (!rawMin.HasValue || string.IsNullOrWhiteSpace(minPoolSizeSettingName) ||
+            string.IsNullOrWhiteSpace(connectionString))
+        {
+            return connectionString;
+        }
+
+        var clamped = Math.Max(rawMin.Value, 0);
+        if (rawMax.HasValue)
+        {
+            clamped = Math.Min(clamped, rawMax.Value);
+        }
+
+        if (clamped == rawMin.Value)
+        {
+            return connectionString; // already valid — no write needed
+        }
+
+        try
+        {
+            var builder = new DbConnectionStringBuilder { ConnectionString = connectionString };
+
+            if (RepresentsRawConnectionString(builder, connectionString))
+            {
+                return connectionString;
+            }
+
+            builder[minPoolSizeSettingName] = clamped;
+            var result = builder.ConnectionString;
+
+            if (SensitiveValuesStripped(connectionString, result))
+            {
+                return ReapplyModifications(connectionString, builder);
+            }
+
+            return result;
+        }
+        catch
+        {
+            return connectionString;
+        }
+    }
+
+    /// <summary>
     /// Removes Max Pool Size settings when the provider does not support them.
     /// Intended for providers like SQLite (Microsoft.Data.Sqlite) and DuckDB.
     /// </summary>
@@ -476,51 +496,6 @@ internal static class ConnectionPoolingConfiguration
         {
             return connectionString;
         }
-    }
-
-    private static bool TrySetMinPoolViaProperty(DbConnectionStringBuilder builder, int minPoolSize)
-    {
-        foreach (var candidate in MinPoolPropertyCandidates)
-        {
-            var property = builder.GetType().GetProperty(candidate,
-                BindingFlags.Instance | BindingFlags.Public | BindingFlags.IgnoreCase);
-            if (property == null || !property.CanWrite)
-            {
-                continue;
-            }
-
-            var targetType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
-            try
-            {
-                var converted = TypeCoercionHelper.ConvertWithCache(minPoolSize, targetType);
-                property.SetValue(builder, converted);
-                return true;
-            }
-            catch
-            {
-                // Try next candidate
-            }
-        }
-
-        return false;
-    }
-
-    private static bool TrySetMinPoolViaIndexer(DbConnectionStringBuilder builder, int minPoolSize)
-    {
-        foreach (var key in MinPoolKeyCandidates)
-        {
-            try
-            {
-                builder[key] = minPoolSize;
-                return true;
-            }
-            catch
-            {
-                // Try next alias
-            }
-        }
-
-        return false;
     }
 
     private static bool RepresentsRawConnectionString(DbConnectionStringBuilder builder, string original)

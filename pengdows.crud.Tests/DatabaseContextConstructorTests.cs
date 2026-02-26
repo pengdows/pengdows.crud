@@ -454,9 +454,8 @@ public class DatabaseContextConstructorTests
     }
 
     [Fact]
-    public void Constructor_Skips_MinPoolSize_When_Pooling_Disabled()
+    public void Constructor_PoolingDisabled_ThrowsInvalidOperationException()
     {
-        // Arrange
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = "Server=test;Database=testdb;Pooling=false;",
@@ -466,12 +465,8 @@ public class DatabaseContextConstructorTests
 
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
 
-        // Act
-        var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
-
-        // Assert
-        var builder = new DbConnectionStringBuilder { ConnectionString = context.ConnectionString };
-        Assert.False(builder.ContainsKey("Min Pool Size"));
+        Assert.Throws<InvalidOperationException>(() =>
+            new DatabaseContext(config, factory, NullLoggerFactory.Instance));
     }
 
     private sealed class RejectingBuilderFactory : DbProviderFactory
