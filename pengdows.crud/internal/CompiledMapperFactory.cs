@@ -153,8 +153,9 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                 // OPTIMIZATION: For most common primitive types where source and target match,
                 // bypass BuildConversionExpression's potential boxing/Coerce paths.
                 var underlyingTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
-                if (fieldType == underlyingTarget)
+                if (fieldType == underlyingTarget && rawValue.Type == fieldType)
                 {
+                    // Fast path: reader returned the native type — no unboxing needed.
                     if (underlyingTarget == typeof(DateTime))
                     {
                         // Inlined NormalizeDateTime
@@ -172,6 +173,10 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                 }
                 else
                 {
+                    // Either the type doesn't match the target (needs coercion), or
+                    // GetReaderMethod fell back to GetValue() which returns System.Object
+                    // (e.g. DateTimeOffset — no IDataRecord.GetDateTimeOffset exists).
+                    // BuildConversionExpression handles the unboxing + any type conversion.
                     valueReadExpr = BuildConversionExpression(rawValue, fieldType, targetType);
                 }
             }
