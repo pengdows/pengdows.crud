@@ -182,8 +182,10 @@ public sealed class ConnectionPerformanceOptimizationTests
     }
 
     [Fact]
-    public void ConnectionString_Redaction_Skipped_WhenWarningDisabled()
+    public void ConnectionString_Redaction_NeverInvokedDuringAcquisition_WhenWarningDisabled()
     {
+        // Redaction happens once at initialization, never per-connection-acquisition.
+        // This test verifies the per-acquisition path is clean regardless of log level.
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}",
@@ -211,8 +213,11 @@ public sealed class ConnectionPerformanceOptimizationTests
     }
 
     [Fact]
-    public void ConnectionString_Redaction_Invoked_WhenWarningEnabled()
+    public void ConnectionString_Redaction_NeverInvokedDuringAcquisition_WhenWarningEnabled()
     {
+        // Redaction happens once at initialization, never per-connection-acquisition.
+        // Connection strings (even redacted) are no longer logged to prevent CodeQL
+        // taint-flow alerts; the warning still fires but without the string argument.
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}",
@@ -236,7 +241,7 @@ public sealed class ConnectionPerformanceOptimizationTests
             DatabaseContext.RedactionHook = null;
         }
 
-        Assert.Equal(1, calls);
+        Assert.Equal(0, calls);
     }
 
     [Fact]

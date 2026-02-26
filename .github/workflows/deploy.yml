@@ -29,14 +29,19 @@ jobs:
           base_ref="origin/${{ github.base_ref }}"
           git fetch origin "${{ github.base_ref }}"
 
-          changed_count=$(git diff --name-only "$base_ref...HEAD" -- coverage.runsettings | wc -l)
-          if [[ "$changed_count" -gt 0 ]]; then
-            echo "❌ coverage.runsettings changed. Coverage exclusion changes require explicit maintainer review."
-            git diff -- "$base_ref...HEAD" -- coverage.runsettings
+          # Only block changes to coverage exclusion/inclusion patterns.
+          # Timing settings (TestSessionTimeout) may legitimately differ between branches.
+          exclusion_changes=$(git diff "$base_ref...HEAD" -- coverage.runsettings \
+            | grep '^[+-]' | grep -v '^---' | grep -v '^+++' \
+            | grep -iE '<(Include|Exclude|ExcludeByFile|ExcludeByAttribute)' \
+            | wc -l)
+          if [[ "$exclusion_changes" -gt 0 ]]; then
+            echo "❌ coverage.runsettings coverage exclusions changed. Exclusion changes require explicit maintainer review."
+            git diff "$base_ref...HEAD" -- coverage.runsettings
             exit 1
           fi
 
-          echo "✅ coverage.runsettings unchanged."
+          echo "✅ coverage.runsettings exclusions unchanged."
 
       - name: Setup .NET SDKs
         # 8.0.x: primary target framework for all projects in this solution.

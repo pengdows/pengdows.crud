@@ -341,20 +341,14 @@ public partial class DatabaseContext
             !string.IsNullOrWhiteSpace(activeConnectionString) &&
             activeConnectionString.IndexOf("password", StringComparison.OrdinalIgnoreCase) < 0)
         {
-            var redacted = isCustomConnectionString
-                ? RedactConnectionString(activeConnectionString)
-                : (useReaderCS ? _redactedReaderConnectionString : _redactedConnectionString);
-
-            _logger.LogWarning("Connection string missing password for {Name}: {ConnectionString}", Name, redacted);
+            // Log only the context name — never log connection strings (even redacted)
+            // to avoid leaking sensitive data through incomplete redaction paths.
+            _logger.LogWarning("Connection string missing password for {Name}", Name);
         }
 
         if (_logger.IsEnabled(LogLevel.Debug))
         {
-            var redacted = isCustomConnectionString
-                ? RedactConnectionString(activeConnectionString)
-                : (useReaderCS ? _redactedReaderConnectionString : _redactedConnectionString);
-
-            _logger.LogDebug("Preparing connection for {ExecutionType} with string: {ConnectionString}", executionType, redacted);
+            _logger.LogDebug("Preparing connection for {ExecutionType}", executionType);
         }
 
         var dataSource = ResolveDataSource(readOnly);
