@@ -301,12 +301,12 @@ public class CustomerGateway : TableGateway<Customer, long>, ICustomerGateway
 
 ### IAuditValueResolver
 
-Register as **scoped** and pass to TableGateway for entities with audit fields:
+Register as **singleton** and pass to TableGateway for entities with audit fields:
 
 ```csharp
-// Register scoped resolver
+// Register singleton resolver
 services.AddHttpContextAccessor();
-services.AddScoped<IAuditValueResolver, OidcAuditContextProvider>();
+services.AddSingleton<IAuditValueResolver, OidcAuditContextProvider>();
 
 // OIDC/OAuth implementation
 public class OidcAuditContextProvider : IAuditValueResolver
