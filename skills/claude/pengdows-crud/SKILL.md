@@ -224,7 +224,7 @@ var clone = template.Clone(transactionContext);  // Different context (e.g., tra
 |-----------|----------|-----|
 | `DatabaseContext` | **Singleton** | Manages connection pool, metrics, DbMode state |
 | `TableGateway<T,TId>` | **Singleton** | Stateless, caches compiled accessors |
-| `IAuditValueResolver` | **Scoped** | Must resolve current user from request context |
+| `IAuditValueResolver` | **Singleton** | Must be thread-safe/AsyncLocal-based (e.g. `IHttpContextAccessor`) |
 
 ```csharp
 // Correct DI registration
@@ -233,10 +233,10 @@ services.AddSingleton<IDatabaseContext>(sp =>
 
 // Extended gateway as singleton
 services.AddSingleton<IOrderGateway>(sp =>
-    new OrderGateway(sp.GetRequiredService<IDatabaseContext>()));
+    new OrderGateway(sp.GetRequiredService<IDatabaseContext>(), sp.GetRequiredService<IAuditValueResolver>()));
 
-// AuditResolver is SCOPED - resolves current user per request
-services.AddScoped<IAuditValueResolver, OidcAuditContextProvider>();
+// AuditResolver is SINGLETON - must be thread-safe (e.g. uses IHttpContextAccessor)
+services.AddSingleton<IAuditValueResolver, OidcAuditContextProvider>();
 ```
 
 ## Extending TableGateway - THE CORRECT PATTERN
@@ -253,7 +253,7 @@ public interface ICustomerGateway : ITableGateway<Customer, long>
 
 public class CustomerGateway : TableGateway<Customer, long>, ICustomerGateway
 {
-    public CustomerGateway(IDatabaseContext context) : base(context)
+    public CustomerGateway(IDatabaseContext context, IAuditValueResolver resolver) : base(context, resolver)
     {
     }
 
@@ -691,7 +691,7 @@ Each uses optimal SQL syntax (MERGE vs ON CONFLICT vs ON DUPLICATE KEY UPDATE).
 1. **DatabaseContext is SINGLETON** - one per connection string
 2. **TableGateway is SINGLETON** - stateless, caches compiled accessors
 3. **Extend TableGateway** - put custom query methods in inherited class, not wrapper service
-4. **IAuditValueResolver is SCOPED** - must resolve current user per request
+4. **IAuditValueResolver is SINGLETON** - must be thread-safe/AsyncLocal-based to avoid captive dependencies in singleton gateways
 5. **TenantContextRegistry is SINGLETON** - manages per-tenant contexts
 6. **Transactions are operation-scoped** - create inside methods, never store as fields
 7. **ITrackedReader is a lease** - pins connection until disposed, dispose promptly

@@ -399,7 +399,7 @@ Always use `Context.BeginTransaction()` which pins the connection for the transa
 |-----------|----------|-----|
 | `DatabaseContext` | **Singleton** | Manages connection pool, metrics, DbMode state |
 | `TableGateway<T,TId>` | **Singleton** | Stateless, caches compiled accessors |
-| `IAuditValueResolver` | **Scoped** | Must resolve current user from request context |
+| `IAuditValueResolver` | **Singleton** | Must be thread-safe/AsyncLocal-based (e.g. `IHttpContextAccessor`) |
 | `ITenantContextRegistry` | **Singleton** | Manages per-tenant contexts |
 
 ## Extending TableGateway — The Correct Pattern
@@ -414,7 +414,7 @@ public interface IOrderGateway : ITableGateway<Order, long>
 
 public class OrderGateway : TableGateway<Order, long>, IOrderGateway
 {
-    public OrderGateway(IDatabaseContext context) : base(context) { }
+    public OrderGateway(IDatabaseContext context, IAuditValueResolver resolver) : base(context, resolver) { }
 
     public async Task<List<Order>> GetCustomerOrdersAsync(long customerId)
     {
@@ -494,7 +494,7 @@ var results = await helper.LoadListAsync(sc);
 1. **DatabaseContext is SINGLETON** — one per connection string
 2. **TableGateway is SINGLETON** — stateless, caches compiled accessors
 3. **Extend TableGateway** — put custom query methods in inherited class, not wrapper service
-4. **IAuditValueResolver is SCOPED** — must resolve current user per request
+4. **IAuditValueResolver is SINGLETON** — must be thread-safe/AsyncLocal-based to avoid captive dependencies in singleton gateways
 5. **TenantContextRegistry is SINGLETON** — manages per-tenant contexts
 6. **Transactions are operation-scoped** — create inside methods, never store as fields
 7. **ITrackedReader is a lease** — pins connection until disposed, dispose promptly

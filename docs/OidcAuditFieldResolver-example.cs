@@ -12,7 +12,7 @@
 // - To use this pattern:
 //   1. Add Microsoft.AspNetCore.Http.Abstractions package
 //   2. Uncomment and adapt this code
-//   3. Register in DI as scoped or transient
+//   3. Register in DI as SINGLETON (safe because IHttpContextAccessor uses AsyncLocal)
 //   4. Inject into TableGateway via constructor
 // - Falls back to "anonymous" if no user context is available.
 // =============================================================================
@@ -32,7 +32,7 @@
 // /// <code>
 // /// // In Startup.cs or Program.cs:
 // /// services.AddHttpContextAccessor();
-// /// services.AddScoped&lt;IAuditValueResolver, OidcAuditFieldResolver&gt;();
+// /// services.AddSingleton&lt;IAuditValueResolver, OidcAuditFieldResolver&gt;();
 // /// </code>
 // /// </example>
 // public class OidcAuditFieldResolver : AuditValueResolver
