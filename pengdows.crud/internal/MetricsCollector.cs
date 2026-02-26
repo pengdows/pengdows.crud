@@ -64,6 +64,9 @@ internal sealed class MetricsCollector
     private long _errorSerializationFailures;
     private long _errorConstraintViolations;
 
+    private long _sessionInitCount;
+    private readonly Ewma _sessionInitDuration = new(16);
+
     private int _transactionsActive;
     private int _transactionsMax;
     private long _transactionsCommitted;
@@ -259,6 +262,18 @@ internal sealed class MetricsCollector
         NotifyUpdated();
     }
 
+    internal void RecordSessionInitDuration(double durationMs)
+    {
+        _parent?.RecordSessionInitDuration(durationMs);
+        Interlocked.Increment(ref _sessionInitCount);
+        if (durationMs > 0d)
+        {
+            _sessionInitDuration.AddSample(durationMs);
+        }
+
+        NotifyUpdated();
+    }
+
     internal void RecordStatementEvicted(int count)
     {
         _parent?.RecordStatementEvicted(count);
@@ -343,7 +358,9 @@ internal sealed class MetricsCollector
             txnPercentiles.P99,
             Interlocked.Read(ref _errorDeadlocks),
             Interlocked.Read(ref _errorSerializationFailures),
-            Interlocked.Read(ref _errorConstraintViolations));
+            Interlocked.Read(ref _errorConstraintViolations),
+            Interlocked.Read(ref _sessionInitCount),
+            _sessionInitDuration.GetValue());
     }
 
     private static void AddHandler(ref Action? field, Action handler)
@@ -466,7 +483,9 @@ internal sealed class MetricsCollector
         double P99TransactionMs,
         long ErrorDeadlocks,
         long ErrorSerializationFailures,
-        long ErrorConstraintViolations)
+        long ErrorConstraintViolations,
+        long SessionInitCount,
+        double AvgSessionInitMs)
     {
         public int ConnectionsCurrent { get; } = ConnectionsCurrent;
         public int PeakOpenConnections { get; } = PeakOpenConnections;
@@ -500,6 +519,8 @@ internal sealed class MetricsCollector
         public long ErrorDeadlocks { get; } = ErrorDeadlocks;
         public long ErrorSerializationFailures { get; } = ErrorSerializationFailures;
         public long ErrorConstraintViolations { get; } = ErrorConstraintViolations;
+        public long SessionInitCount { get; } = SessionInitCount;
+        public double AvgSessionInitMs { get; } = AvgSessionInitMs;
     }
 
     private sealed class Ewma

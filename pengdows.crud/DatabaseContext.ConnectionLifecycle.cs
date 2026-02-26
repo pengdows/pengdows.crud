@@ -256,14 +256,18 @@ public partial class DatabaseContext
             if (sb.Length > 0)
             {
                 var settingsToApply = sb.ToString();
-                _logger.LogInformation("Applying session settings for {Name} (Baseline: {Baseline}, Intent: {Intent})", 
+                _logger.LogInformation("Applying session settings for {Name} (Baseline: {Baseline}, Intent: {Intent})",
                     Name, needsBaseline, needsIntent);
-                
+
+                var sessionInitStart = System.Diagnostics.Stopwatch.GetTimestamp();
                 try
                 {
                     using var cmd = connection.CreateCommand();
                     cmd.CommandText = settingsToApply;
                     cmd.ExecuteNonQuery();
+                    var sessionInitMs = MetricsCollector.ToMilliseconds(
+                        System.Diagnostics.Stopwatch.GetTimestamp() - sessionInitStart);
+                    _metricsCollector?.RecordSessionInitDuration(sessionInitMs);
                 }
                 catch (Exception ex)
                 {

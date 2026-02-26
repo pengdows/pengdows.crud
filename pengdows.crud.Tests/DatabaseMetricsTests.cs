@@ -395,7 +395,7 @@ public class DatabaseMetricsTests
             read, write,
             1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
             11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
-            21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32);
+            21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34d);
 
         Assert.Equal(read, metrics.Read);
         Assert.Equal(write, metrics.Write);
@@ -431,5 +431,7 @@ public class DatabaseMetricsTests
         Assert.Equal(30, metrics.ErrorDeadlocks);
         Assert.Equal(31, metrics.ErrorSerializationFailures);
         Assert.Equal(32, metrics.ErrorConstraintViolations);
+        Assert.Equal(33, metrics.SessionInitCount);
+        Assert.Equal(34d, metrics.AvgSessionInitMs);
     }
 }

@@ -86,6 +86,8 @@ internal static class BenchmarkMetricsWriter
         sb.AppendLine($"| Avg Connection Open | {m.AvgConnectionOpenMs:0.000} ms |");
         sb.AppendLine($"| Avg Connection Close | {m.AvgConnectionCloseMs:0.000} ms |");
         sb.AppendLine($"| Long-Lived Connections | {m.LongLivedConnections} |");
+        sb.AppendLine($"| Session Init Count | {m.SessionInitCount} |");
+        sb.AppendLine($"| Avg Session Init | {m.AvgSessionInitMs:0.000} ms |");
         sb.AppendLine($"| Commands Executed | {m.CommandsExecuted} |");
         sb.AppendLine($"| Commands Failed | {m.CommandsFailed} |");
         sb.AppendLine($"| Commands Timed Out | {m.CommandsTimedOut} |");

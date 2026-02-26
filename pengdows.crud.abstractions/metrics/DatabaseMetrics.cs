@@ -37,6 +37,10 @@ namespace pengdows.crud.metrics;
 /// <param name="ErrorDeadlocks">Total deadlock errors detected.</param>
 /// <param name="ErrorSerializationFailures">Total serialization failures (snapshot isolation conflicts).</param>
 /// <param name="ErrorConstraintViolations">Total constraint violation errors (unique, FK, not-null, check).</param>
+/// <param name="SessionInitCount">Number of physical connections on which session settings were applied.</param>
+/// <param name="AvgSessionInitMs">Exponential weighted moving average of session settings application time in milliseconds.
+/// This is the time spent executing dialect-specific SET statements (e.g. SET SESSION sql_mode, SET SEARCH_PATH).
+/// Combined with <see cref="AvgConnectionOpenMs"/> this allows isolating TCP/auth cost from session-settings RTT cost.</param>
 public sealed record DatabaseMetrics(
     DatabaseRoleMetrics Read,
     DatabaseRoleMetrics Write,
@@ -71,4 +75,6 @@ public sealed record DatabaseMetrics(
     double P99TransactionMs,
     long ErrorDeadlocks,
     long ErrorSerializationFailures,
-    long ErrorConstraintViolations);
+    long ErrorConstraintViolations,
+    long SessionInitCount,
+    double AvgSessionInitMs);
