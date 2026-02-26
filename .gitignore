@@ -20,6 +20,7 @@ riderModule.iml
 # Coverage
 TestResults/
 coverage-report/
+coverage-report-full/
 coveragereport*/
 coverage/
 

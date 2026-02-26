@@ -1134,7 +1134,8 @@ internal abstract class SqlDialect : ISqlDialect
             }
 
             using var sc = transaction.CreateSqlContainer(sql);
-            sc.ExecuteNonQueryAsync().GetAwaiter().GetResult();
+            Task.Run(async () => await sc.ExecuteNonQueryAsync().ConfigureAwait(false)).GetAwaiter()
+                .GetResult();
         }
         catch (Exception ex)
         {
