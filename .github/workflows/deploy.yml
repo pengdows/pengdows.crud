@@ -112,7 +112,7 @@ jobs:
             exit 1
           fi
 
-          rate=$(grep -oP 'line-rate="\K[0-9\.]+' "$xml_file" | head -n 1)
+          rate=$(grep -oP -m 1 'line-rate="\K[0-9\.]+' "$xml_file")
           if [[ -z "${rate}" ]]; then
             echo "❌ Could not parse line-rate from Cobertura XML"
             exit 1
