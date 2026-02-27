@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Linq;
 using System.Threading.Tasks;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
@@ -168,5 +169,106 @@ public class BeginTransactionAsyncTests
         Assert.False(tx.IsCompleted);
         await tx.CommitAsync();
         Assert.True(tx.WasCommitted);
+    }
+
+    /// <summary>
+    /// Sync BeginTransaction(readOnly: true) on DuckDB must execute the read-only session SQL
+    /// via TryEnterReadOnlyTransaction → TryExecuteReadOnlySql (sync path).
+    /// This verifies the sync-over-async path in TryExecuteReadOnlySql correctly sets
+    /// session state without unnecessary Task.Run overhead.
+    /// </summary>
+    [Fact]
+    public void BeginTransaction_Sync_ReadOnly_DuckDb_ExecutesReadOnlySessionSql()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.DuckDB);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test.db;EmulatedProduct=DuckDB",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        using var context = new DatabaseContext(config, factory);
+
+        using var tx = context.BeginTransaction(readOnly: true);
+        tx.Commit();
+
+        // The read-only session SQL must have been sent via ExecuteSessionNonQuery.
+        var allExecuted = factory.CreatedConnections
+            .SelectMany(c => c.ExecutedNonQueryTexts)
+            .ToList();
+
+        Assert.Contains(allExecuted,
+            c => c.Contains("access_mode", StringComparison.OrdinalIgnoreCase) &&
+                 c.Contains("read_only", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// BeginTransactionAsync on a TransactionContext must return a faulted Task,
+    /// NOT throw synchronously. A synchronous throw from a Task-returning method
+    /// bypasses async state-machine try/catch blocks in callers.
+    /// </summary>
+    [Fact]
+    public async Task BeginTransactionAsync_IsolationLevel_OnTransactionContext_ReturnsFaultedTask_NotSynchronousThrow()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test.db;EmulatedProduct=Sqlite",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        await using var context = new DatabaseContext(config, factory);
+        using var tx = context.BeginTransaction();
+
+        // Call WITHOUT awaiting — just capture the returned Task.
+        // A synchronous throw would be captured by Record.Exception.
+        Task<ITransactionContext>? task = null;
+        var syncEx = Record.Exception(() =>
+        {
+            task = ((IDatabaseContext)tx).BeginTransactionAsync();
+        });
+
+        // The exception must NOT have been thrown synchronously.
+        Assert.Null(syncEx);
+        Assert.NotNull(task);
+
+        // The exception must be embedded in the Task (faulted).
+        Assert.True(task!.IsFaulted, "Expected faulted Task, not synchronous throw");
+        Assert.IsType<InvalidOperationException>(task.Exception!.InnerException);
+
+        await tx.CommitAsync();
+    }
+
+    /// <summary>
+    /// Same as above but for the IsolationProfile overload of BeginTransactionAsync.
+    /// </summary>
+    [Fact]
+    public async Task BeginTransactionAsync_IsolationProfile_OnTransactionContext_ReturnsFaultedTask_NotSynchronousThrow()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test.db;EmulatedProduct=Sqlite",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        await using var context = new DatabaseContext(config, factory);
+        using var tx = context.BeginTransaction();
+
+        Task<ITransactionContext>? task = null;
+        var syncEx = Record.Exception(() =>
+        {
+            task = ((IDatabaseContext)tx).BeginTransactionAsync(IsolationProfile.SafeNonBlockingReads);
+        });
+
+        Assert.Null(syncEx);
+        Assert.NotNull(task);
+        Assert.True(task!.IsFaulted, "Expected faulted Task, not synchronous throw");
+        Assert.IsType<InvalidOperationException>(task.Exception!.InnerException);
+
+        await tx.CommitAsync();
     }
 }

@@ -1134,7 +1134,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }
         finally
         {
-            Cleanup(cmd, conn, ExecutionType.Write);
+            Cleanup(cmd, conn);
         }
     }
 
@@ -1421,7 +1421,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
             // On success (lockTransferred), TrackedReader owns the connection — pass null.
             // On failure, pass the actual connection so Cleanup can dispose it.
-            Cleanup(cmd, lockTransferred ? null : conn, executionType);
+            Cleanup(cmd, lockTransferred ? null : conn);
         }
     }
 
@@ -1748,7 +1748,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    private void Cleanup(DbCommand? cmd, ITrackedConnection? conn, ExecutionType executionType)
+    private void Cleanup(DbCommand? cmd, ITrackedConnection? conn)
     {
         if (cmd != null)
         {
@@ -1768,7 +1768,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             }
             catch (Exception ex)
             {
-                _logger.LogWarning($"Command disposal failed: {ex.Message}");
+                _logger.LogWarning(ex, "Command disposal failed");
                 // We're intentionally not retrying here anymore — disposal failure is generally harmless in this case
             }
         }

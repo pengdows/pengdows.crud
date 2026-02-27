@@ -170,7 +170,10 @@ internal sealed class PoolGovernor : IDisposable
 
         // Always capture start for both metrics and deadline computation.
         var waitStart = Stopwatch.GetTimestamp();
-        var deadlineTicks = waitStart + (long)(_acquireTimeout.TotalSeconds * Stopwatch.Frequency);
+        // Integer arithmetic avoids double-precision loss for large timeouts.
+        var deadlineTicks = waitStart
+            + _acquireTimeout.Ticks / TimeSpan.TicksPerSecond * Stopwatch.Frequency
+            + _acquireTimeout.Ticks % TimeSpan.TicksPerSecond * Stopwatch.Frequency / TimeSpan.TicksPerSecond;
 
         // Turnstile fairness: acquire turnstile first to reduce writer starvation risk.
         // Writers hold the turnstile for their entire slot lifetime; readers touch-and-release.
@@ -333,7 +336,10 @@ internal sealed class PoolGovernor : IDisposable
 
         // Always capture start for both metrics and deadline computation.
         var waitStart = Stopwatch.GetTimestamp();
-        var deadlineTicks = waitStart + (long)(_acquireTimeout.TotalSeconds * Stopwatch.Frequency);
+        // Integer arithmetic avoids double-precision loss for large timeouts.
+        var deadlineTicks = waitStart
+            + _acquireTimeout.Ticks / TimeSpan.TicksPerSecond * Stopwatch.Frequency
+            + _acquireTimeout.Ticks % TimeSpan.TicksPerSecond * Stopwatch.Frequency / TimeSpan.TicksPerSecond;
 
         // Turnstile fairness: acquire turnstile first to reduce writer starvation risk.
         // Writers hold the turnstile for their entire slot lifetime; readers touch-and-release.

@@ -1500,9 +1500,8 @@ public partial class DatabaseContext
 
                 if (requested == DbMode.Best)
                 {
-                    var target = kind == InMemoryKind.Shared ? DbMode.SingleWriter : DbMode.SingleWriter;
-                    LogModeOverride(requested, target, "SQLite/DuckDB: Best selects SingleWriter");
-                    return target;
+                    LogModeOverride(requested, DbMode.SingleWriter, "SQLite/DuckDB: Best selects SingleWriter");
+                    return DbMode.SingleWriter;
                 }
 
                 // Coerce UNSAFE modes (Standard, KeepAlive) to SingleWriter

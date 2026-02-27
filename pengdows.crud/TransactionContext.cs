@@ -491,13 +491,15 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     Task<ITransactionContext> IDatabaseContext.BeginTransactionAsync(IsolationLevel? isolationLevel,
         ExecutionType executionType, bool? readOnly, CancellationToken cancellationToken)
     {
-        throw new InvalidOperationException("Cannot begin a nested transaction from TransactionContext.");
+        return Task.FromException<ITransactionContext>(
+            new InvalidOperationException("Cannot begin a nested transaction from TransactionContext."));
     }
 
     Task<ITransactionContext> IDatabaseContext.BeginTransactionAsync(IsolationProfile isolationProfile,
         ExecutionType executionType, bool? readOnly, CancellationToken cancellationToken)
     {
-        throw new InvalidOperationException("Cannot begin a nested transaction from TransactionContext.");
+        return Task.FromException<ITransactionContext>(
+            new InvalidOperationException("Cannot begin a nested transaction from TransactionContext."));
     }
 
     /// <inheritdoc/>
@@ -635,7 +637,11 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         }
         finally
         {
-            _completionLock.Release();
+            // Guard against ObjectDisposedException: if Dispose() races with this Release()
+            // it may have already called _completionLock.Dispose(). Swallowing the exception
+            // here is safe — the connection was already closed in CompleteTransaction.finally.
+            try { _completionLock.Release(); }
+            catch (ObjectDisposedException) { }
         }
     }
 
@@ -654,7 +660,9 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         }
         finally
         {
-            _completionLock.Release();
+            // Guard against ObjectDisposedException: same race as the sync path.
+            try { _completionLock.Release(); }
+            catch (ObjectDisposedException) { }
         }
     }
 
@@ -754,11 +762,12 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
 
     protected override void DisposeManaged()
     {
+        var shouldDisposeLock = true;
         if (!IsCompleted)
         {
             try
             {
-                // Attempt immediate rollback using internal completion lock
+                // Attempt immediate rollback using internal completion lock.
                 if (_completionLock.Wait(0))
                 {
                     try
@@ -767,11 +776,17 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
                     }
                     finally
                     {
-                        _completionLock.Release();
+                        try { _completionLock.Release(); }
+                        catch (ObjectDisposedException) { shouldDisposeLock = false; }
                     }
                 }
                 else
                 {
+                    // Another thread is completing the transaction and still holds the lock.
+                    // It will close the connection via CompleteTransaction.finally.
+                    // Do NOT dispose _completionLock here — the other thread still holds it
+                    // and its Release() would throw ObjectDisposedException.
+                    shouldDisposeLock = false;
                     _logger.LogError("TransactionContext.Dispose could not acquire lock; skipping explicit rollback.");
                 }
             }
@@ -783,17 +798,21 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
 
         _transaction.Dispose();
         _userLock.Dispose();
-        _completionLock.Dispose();
+        if (shouldDisposeLock)
+        {
+            _completionLock.Dispose();
+        }
         CompleteTransactionMetrics();
     }
 
     protected override async ValueTask DisposeManagedAsync()
     {
+        var shouldDisposeLock = true;
         if (!IsCompleted)
         {
             try
             {
-                // Avoid any wait on disposal to prevent hangs; rely on provider dispose if busy
+                // Avoid any wait on disposal to prevent hangs; rely on provider dispose if busy.
                 var acquired = _completionLock.Wait(0);
                 if (acquired)
                 {
@@ -807,11 +826,17 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
                     }
                     finally
                     {
-                        _completionLock.Release();
+                        try { _completionLock.Release(); }
+                        catch (ObjectDisposedException) { shouldDisposeLock = false; }
                     }
                 }
                 else
                 {
+                    // Another thread is completing the transaction and still holds the lock.
+                    // It will close the connection via CompleteTransaction.finally.
+                    // Do NOT dispose _completionLock here — the other thread still holds it
+                    // and its Release() would throw ObjectDisposedException.
+                    shouldDisposeLock = false;
                     _logger.LogError(
                         "TransactionContext.DisposeAsync could not acquire lock; skipping explicit rollback.");
                 }
@@ -832,7 +857,10 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         }
 
         _userLock.Dispose();
-        _completionLock.Dispose();
+        if (shouldDisposeLock)
+        {
+            _completionLock.Dispose();
+        }
         CompleteTransactionMetrics();
     }
 

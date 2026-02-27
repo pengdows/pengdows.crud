@@ -33,7 +33,7 @@ jobs:
           # Timing settings (TestSessionTimeout) may legitimately differ between branches.
           exclusion_changes=$(git diff "$base_ref...HEAD" -- coverage.runsettings \
             | grep '^[+-]' | grep -v '^---' | grep -v '^+++' \
-            | grep -iE '<(Include|Exclude|ExcludeByFile|ExcludeByAttribute)' \
+            | { grep -iE '<(Include|Exclude|ExcludeByFile|ExcludeByAttribute)' || true; } \
             | wc -l)
           if [[ "$exclusion_changes" -gt 0 ]]; then
             echo "❌ coverage.runsettings coverage exclusions changed. Exclusion changes require explicit maintainer review."

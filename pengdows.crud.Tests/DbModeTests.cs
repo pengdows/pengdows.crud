@@ -114,6 +114,42 @@ public class DbModeTests
         }
     }
 
+    [Fact]
+    public async Task DbMode_Best_SharedSqliteMemory_SelectsSingleWriter()
+    {
+        var cfg = new DatabaseContextConfiguration
+        {
+            // Shared in-memory SQLite: previously hit the dead ternary arm
+            // "kind == Shared ? SingleWriter : SingleWriter" — should always be SingleWriter.
+            ConnectionString = "Data Source=file:best_shared_test?mode=memory&cache=shared",
+            DbMode = DbMode.Best,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+        await using var context = new DatabaseContext(cfg, SqliteFactory.Instance, NullLoggerFactory.Instance);
+        Assert.Equal(DbMode.SingleWriter, context.ConnectionMode);
+    }
+
+    [Fact]
+    public async Task DbMode_Best_FileSqlite_SelectsSingleWriter()
+    {
+        var dbFile = Path.Combine(Path.GetTempPath(), $"crud_best_{Guid.NewGuid():N}.db");
+        try
+        {
+            var cfg = new DatabaseContextConfiguration
+            {
+                ConnectionString = $"Data Source={dbFile}",
+                DbMode = DbMode.Best,
+                ReadWriteMode = ReadWriteMode.ReadWrite
+            };
+            await using var context = new DatabaseContext(cfg, SqliteFactory.Instance, NullLoggerFactory.Instance);
+            Assert.Equal(DbMode.SingleWriter, context.ConnectionMode);
+        }
+        finally
+        {
+            try { File.Delete(dbFile); } catch { }
+        }
+    }
+
     // Minimal entity definition to exercise helper
     [Table("Users")]
     private class User

@@ -75,7 +75,7 @@ public partial class TableGateway<TEntity, TRowID> :
     // Per-dialect templates are cached in _templatesByDialect
 
 
-    private static ILogger _logger = NullLogger.Instance;
+    private static volatile ILogger _logger = NullLogger.Instance;
 
     public static ILogger Logger
     {
@@ -419,7 +419,7 @@ public partial class TableGateway<TEntity, TRowID> :
             }
 
             // Fallback: PopulateGeneratedIdAsync for test/fake scenarios
-            await PopulateGeneratedIdAsync(entity, ctx).ConfigureAwait(false);
+            await PopulateGeneratedIdAsync(entity, ctx, cancellationToken).ConfigureAwait(false);
             return true;
         }
 
@@ -453,14 +453,15 @@ public partial class TableGateway<TEntity, TRowID> :
             var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
             if (rowsAffected == 1 && _idColumn != null && !_idColumn.IsIdIsWritable)
             {
-                await PopulateGeneratedIdAsync(entity, ctx).ConfigureAwait(false);
+                await PopulateGeneratedIdAsync(entity, ctx, cancellationToken).ConfigureAwait(false);
             }
 
             return rowsAffected == 1;
         }
     }
 
-    private async Task PopulateGeneratedIdAsync(TEntity entity, IDatabaseContext context)
+    private async Task PopulateGeneratedIdAsync(TEntity entity, IDatabaseContext context,
+        CancellationToken cancellationToken = default)
     {
         if (_idColumn == null)
         {
@@ -487,7 +488,7 @@ public partial class TableGateway<TEntity, TRowID> :
         }
 
         var sc = ctx.CreateSqlContainer(lastIdQuery);
-        var generatedId = await sc.ExecuteScalarOrNullAsync<object>();
+        var generatedId = await sc.ExecuteScalarOrNullAsync<object>(CommandType.Text, cancellationToken);
 
         if (generatedId != null && generatedId != DBNull.Value)
         {
