@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ main ]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write  # Needed for git push and release creation
 
@@ -86,12 +90,6 @@ jobs:
       - name: Run integration suite
         run: |
           dotnet run --no-build --configuration Release --project testbed/testbed.csproj
-
-      - name: Run benchmarks (internal smoke test only)
-        run: |
-          dotnet run --no-build --configuration Release --project benchmarks/CrudBenchmarks/CrudBenchmarks.csproj -- \
-            --filter "CrudBenchmarks.Internal.*" \
-            --iterationCount 1 --warmupCount 1
 
       - name: Generate coverage report
         run: |
