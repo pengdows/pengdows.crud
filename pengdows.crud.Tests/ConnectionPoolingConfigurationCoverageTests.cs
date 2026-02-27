@@ -112,17 +112,17 @@ public sealed class ConnectionPoolingConfigurationCoverageTests
     {
         var cs = "Server=localhost;Application Name=MyApp";
         var result = ConnectionPoolingConfiguration.ApplyApplicationNameSuffix(
-            cs, "Application Name", ":ro");
+            cs, "Application Name", "-ro");
 
-        Assert.Contains("MyApp:ro", result);
+        Assert.Contains("MyApp-ro", result);
     }
 
     [Fact]
     public void ApplyApplicationNameSuffix_AlreadySuffixed_NoChange()
     {
-        var cs = "Server=localhost;Application Name=MyApp:ro";
+        var cs = "Server=localhost;Application Name=MyApp-ro";
         var result = ConnectionPoolingConfiguration.ApplyApplicationNameSuffix(
-            cs, "Application Name", ":ro");
+            cs, "Application Name", "-ro");
 
         // Should NOT duplicate the suffix
         Assert.Equal(cs, result);
@@ -133,9 +133,9 @@ public sealed class ConnectionPoolingConfigurationCoverageTests
     {
         var cs = "Server=localhost;Database=test";
         var result = ConnectionPoolingConfiguration.ApplyApplicationNameSuffix(
-            cs, "Application Name", ":ro", fallbackApplicationName: "FallbackApp");
+            cs, "Application Name", "-ro", fallbackApplicationName: "FallbackApp");
 
-        Assert.Contains("FallbackApp:ro", result);
+        Assert.Contains("FallbackApp-ro", result);
     }
 
     [Fact]
@@ -143,7 +143,7 @@ public sealed class ConnectionPoolingConfigurationCoverageTests
     {
         var cs = "Server=localhost;Database=test";
         var result = ConnectionPoolingConfiguration.ApplyApplicationNameSuffix(
-            cs, "Application Name", ":ro");
+            cs, "Application Name", "-ro");
 
         Assert.Equal(cs, result);
     }
@@ -162,7 +162,7 @@ public sealed class ConnectionPoolingConfigurationCoverageTests
     {
         var cs = "Server=localhost;Application Name=MyApp";
         var result = ConnectionPoolingConfiguration.ApplyApplicationNameSuffix(
-            cs, null, ":ro");
+            cs, null, "-ro");
         Assert.Equal(cs, result);
     }
 
@@ -173,7 +173,7 @@ public sealed class ConnectionPoolingConfigurationCoverageTests
         builder["Data Source"] = ":memory:";
 
         var result = ConnectionPoolingConfiguration.ApplyApplicationNameSuffix(
-            ":memory:", "Application Name", ":ro", builder: builder);
+            ":memory:", "Application Name", "-ro", builder: builder);
 
         Assert.Equal(":memory:", result);
     }
@@ -337,10 +337,10 @@ public sealed class ConnectionPoolingConfigurationCoverageTests
         var builder = new PasswordStrippingBuilder(cs);
 
         var result = ConnectionPoolingConfiguration.ApplyApplicationNameSuffix(
-            cs, "Application Name", ":ro", builder: builder);
+            cs, "Application Name", "-ro", builder: builder);
 
         Assert.Contains("s3cret", result);
-        Assert.Contains("MyApp:ro", result);
+        Assert.Contains("MyApp-ro", result);
     }
 
     [Fact]
@@ -350,10 +350,10 @@ public sealed class ConnectionPoolingConfigurationCoverageTests
         var builder = new PasswordStrippingBuilder(cs);
 
         var result = ConnectionPoolingConfiguration.ApplyApplicationNameSuffix(
-            cs, "Application Name", ":ro", fallbackApplicationName: "FallbackApp", builder: builder);
+            cs, "Application Name", "-ro", fallbackApplicationName: "FallbackApp", builder: builder);
 
         Assert.Contains("s3cret", result);
-        Assert.Contains("FallbackApp:ro", result);
+        Assert.Contains("FallbackApp-ro", result);
     }
 
     [Fact]
@@ -481,10 +481,10 @@ public sealed class ConnectionPoolingConfigurationCoverageTests
     {
         var cs = "Server=localhost;Application Name=MyApp;User Id=admin;Password=s3cret";
         var result = ConnectionPoolingConfiguration.ApplyApplicationNameSuffix(
-            cs, "Application Name", ":ro");
+            cs, "Application Name", "-ro");
 
         Assert.Contains("s3cret", result);
-        Assert.Contains("MyApp:ro", result);
+        Assert.Contains("MyApp-ro", result);
     }
 
     [Fact]
@@ -492,10 +492,10 @@ public sealed class ConnectionPoolingConfigurationCoverageTests
     {
         var cs = "Server=localhost;User Id=admin;Password=s3cret";
         var result = ConnectionPoolingConfiguration.ApplyApplicationNameSuffix(
-            cs, "Application Name", ":ro", fallbackApplicationName: "FallbackApp");
+            cs, "Application Name", "-ro", fallbackApplicationName: "FallbackApp");
 
         Assert.Contains("s3cret", result);
-        Assert.Contains("FallbackApp:ro", result);
+        Assert.Contains("FallbackApp-ro", result);
     }
 
     [Fact]

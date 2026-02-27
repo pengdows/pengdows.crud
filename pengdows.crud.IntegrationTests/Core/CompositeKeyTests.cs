@@ -277,10 +277,7 @@ public class CompositeKeyTests : DatabaseTestBase
                 CreateOrderItem(500, 3, 3, 3m)
             };
 
-            foreach (var item in items)
-            {
-                await helper.CreateAsync(item, context);
-            }
+            await helper.CreateAsync(items, context);
 
             for (var i = 0; i < items.Length; i++)
             {
@@ -359,7 +356,7 @@ public class CompositeKeyTests : DatabaseTestBase
 
     private static string BuildOrderItemsTableSql(SupportedDatabase provider, IDatabaseContext context)
     {
-        var table = context.WrapObjectName("order_items");
+        var table = IntegrationObjectNameHelper.Table(context, "order_items");
         var idColumn = context.WrapObjectName("id");
         var orderIdColumn = context.WrapObjectName("order_id");
         var productIdColumn = context.WrapObjectName("product_id");
@@ -383,7 +380,7 @@ CREATE TABLE {table} (
 
     private static string BuildUserRolesTableSql(SupportedDatabase provider, IDatabaseContext context)
     {
-        var table = context.WrapObjectName("user_roles");
+        var table = IntegrationObjectNameHelper.Table(context, "user_roles");
         var idColumn = context.WrapObjectName("id");
         var tenantColumn = context.WrapObjectName("tenant_id");
         var userColumn = context.WrapObjectName("user_id");
@@ -464,7 +461,7 @@ CREATE TABLE {table} (
     private static async Task<int> DeleteOrderItemAsync(IDatabaseContext context, int orderId, int productId)
     {
         await using var container = context.CreateSqlContainer();
-        var table = context.WrapObjectName("order_items");
+        var table = IntegrationObjectNameHelper.Table(context, "order_items");
         container.Query.Append($"DELETE FROM {table} WHERE ");
         container.Query.Append($"{context.WrapObjectName("order_id")} = ");
         container.Query.Append(container.MakeParameterName("orderId"));
@@ -479,7 +476,7 @@ CREATE TABLE {table} (
     private static async Task<int> DeleteUserRoleAsync(IDatabaseContext context, int tenantId, int userId, int roleId)
     {
         await using var container = context.CreateSqlContainer();
-        var table = context.WrapObjectName("user_roles");
+        var table = IntegrationObjectNameHelper.Table(context, "user_roles");
         container.Query.Append($"DELETE FROM {table} WHERE ");
         container.Query.Append($"{context.WrapObjectName("tenant_id")} = ");
         container.Query.Append(container.MakeParameterName("tenantId"));

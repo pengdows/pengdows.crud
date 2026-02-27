@@ -20,8 +20,7 @@ public class PostgreSQLFeatureTests : DatabaseTestBase
 
     protected override IEnumerable<SupportedDatabase> GetSupportedProviders()
     {
-        // Only test against PostgreSQL and YugabyteDB (PG compatible)
-        return new[] { SupportedDatabase.PostgreSql, SupportedDatabase.YugabyteDb };
+        return new[] { SupportedDatabase.PostgreSql };
     }
 
     protected override async Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)

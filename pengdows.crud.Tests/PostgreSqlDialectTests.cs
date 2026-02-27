@@ -113,9 +113,9 @@ public class PostgreSqlDialectTests
         var result1 = _dialect.IsUniqueViolation(uniqueViolationException);
         var result2 = _dialect.IsUniqueViolation(otherException);
 
-        // Note: Actual implementation may vary, testing the method exists and handles exceptions
-        Assert.True(result1 || !result1); // Method should not throw
-        Assert.True(result2 || !result2); // Method should not throw
+        // InvalidOperationException is not a DbException → base class returns false for both
+        Assert.False(result1);
+        Assert.False(result2);
     }
 
     [Fact]

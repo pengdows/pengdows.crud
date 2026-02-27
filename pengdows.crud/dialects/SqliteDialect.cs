@@ -67,6 +67,9 @@ internal class SqliteDialect : SqlDialect
     // IMMUTABLE: SQLite SQLITE_MAX_VARIABLE_NUMBER default - do not change without extensive testing
     public override int MaxParameterLimit => IsVersionAtLeast(3, 32) ? 32766 : 999;
 
+    // SQLite has no server-side row-per-batch limit; only the parameter limit constrains chunk size
+    public override int MaxRowsPerBatch => int.MaxValue;
+
     // IMMUTABLE: SQLite identifier length limit - do not change without extensive testing
     public override int ParameterNameMaxLength => 255;
 

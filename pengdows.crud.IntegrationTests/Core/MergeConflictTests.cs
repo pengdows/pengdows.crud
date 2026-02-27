@@ -122,7 +122,7 @@ public class MergeConflictTests : DatabaseTestBase
 
     private static string BuildVersionedEntityTableSql(SupportedDatabase provider, IDatabaseContext context)
     {
-        var table = context.WrapObjectName("versioned_entities");
+        var table = IntegrationObjectNameHelper.Table(context, "versioned_entities");
         var idColumn = context.WrapObjectName("id");
         var nameColumn = context.WrapObjectName("name");
         var versionColumn = context.WrapObjectName("version");
@@ -148,7 +148,7 @@ CREATE TABLE {table} (
 
     private static string BuildMergeRecordTableSql(SupportedDatabase provider, IDatabaseContext context)
     {
-        var table = context.WrapObjectName("merge_records");
+        var table = IntegrationObjectNameHelper.Table(context, "merge_records");
         var idColumn = context.WrapObjectName("id");
         var keyColumn = context.WrapObjectName("record_key");
         var valueColumn = context.WrapObjectName("value");

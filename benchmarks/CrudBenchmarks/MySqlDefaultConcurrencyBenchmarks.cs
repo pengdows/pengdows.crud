@@ -1,4 +1,5 @@
 using System.Data;
+using System.Data.Common;
 using System.Threading;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
@@ -6,7 +7,6 @@ using BenchmarkDotNet.Jobs;
 using BenchmarkDotNet.Toolchains.InProcess.NoEmit;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
-using MySql.Data.MySqlClient;
 using pengdows.crud;
 using pengdows.crud.attributes;
 using pengdows.crud.infrastructure;
@@ -21,6 +21,12 @@ namespace CrudBenchmarks;
 [Config(typeof(MySqlConcurrencyConfig))]
 public class MySqlDefaultConcurrencyBenchmarks : IAsyncDisposable
 {
+    public enum MySqlBenchmarkProvider
+    {
+        MySqlData,
+        MySqlConnector
+    }
+
     // Embedded config forces in-process execution with the same iteration shape as the
     // removed [SimpleJob] attribute. The global BenchmarkConfig has no jobs of its own,
     // so this is the only job that runs (no duplication).
@@ -44,6 +50,7 @@ public class MySqlDefaultConcurrencyBenchmarks : IAsyncDisposable
     private const string UserName = "root";
 
     private IContainer? _container;
+    private DbProviderFactory _providerFactory = null!;
     private string _connectionString = string.Empty;
     private IDatabaseContext _context = null!;
     private TableGateway<MySqlBenchAccessRow, long> _gateway = null!;
@@ -56,10 +63,19 @@ public class MySqlDefaultConcurrencyBenchmarks : IAsyncDisposable
 
     [Params(2000)] public int OperationsPerRun;
     [Params(32, 64, 128, 256)] public int Parallelism;
+    [Params(MySqlBenchmarkProvider.MySqlData, MySqlBenchmarkProvider.MySqlConnector)]
+    public MySqlBenchmarkProvider Provider;
 
     [GlobalSetup]
     public async Task GlobalSetup()
     {
+        _providerFactory = Provider switch
+        {
+            MySqlBenchmarkProvider.MySqlData => MySql.Data.MySqlClient.MySqlClientFactory.Instance,
+            MySqlBenchmarkProvider.MySqlConnector => MySqlConnector.MySqlConnectorFactory.Instance,
+            _ => throw new InvalidOperationException($"Unsupported MySQL benchmark provider: {Provider}")
+        };
+
         // Scale max_connections to 3x parallelism so the server never becomes the bottleneck.
         // The semaphore caps in-flight operations at Parallelism; the pool is sized to
         // Parallelism + 20 so the semaphore is always the limiting factor, not the pool.
@@ -87,7 +103,7 @@ public class MySqlDefaultConcurrencyBenchmarks : IAsyncDisposable
 
         var map = new TypeMapRegistry();
         map.Register<MySqlBenchAccessRow>();
-        _context = new DatabaseContext(_connectionString, MySqlClientFactory.Instance, map);
+        _context = new DatabaseContext(_connectionString, _providerFactory, map);
         _gateway = new TableGateway<MySqlBenchAccessRow, long>(_context);
         _maxKnownId = SeedRows;
     }
@@ -122,7 +138,7 @@ public class MySqlDefaultConcurrencyBenchmarks : IAsyncDisposable
         var attempted = Math.Max(OperationsPerRun, 1);
         var errorRate = (_lastErrorCount * 100.0) / attempted;
         Console.WriteLine(
-            $"[MYSQL-CONCURRENCY] scenario={_currentScenario}, parallelism={Parallelism}, operations={OperationsPerRun}, success={_lastSuccessCount}, errors={_lastErrorCount}, errorRate={errorRate:F2}%");
+            $"[MYSQL-CONCURRENCY] Provider={Provider}, scenario={_currentScenario}, parallelism={Parallelism}, operations={OperationsPerRun}, success={_lastSuccessCount}, errors={_lastErrorCount}, errorRate={errorRate:F2}%");
     }
 
     [Benchmark]
@@ -242,7 +258,7 @@ public class MySqlDefaultConcurrencyBenchmarks : IAsyncDisposable
         {
             try
             {
-                await using var conn = new MySqlConnection(_connectionString);
+                await using var conn = CreateConnection();
                 await conn.OpenAsync();
                 await using var cmd = conn.CreateCommand();
                 cmd.CommandText = "SELECT 1;";
@@ -260,7 +276,7 @@ public class MySqlDefaultConcurrencyBenchmarks : IAsyncDisposable
 
     private async Task CreateSchemaAsync()
     {
-        await using var conn = new MySqlConnection(_connectionString);
+        await using var conn = CreateConnection();
         await conn.OpenAsync();
 
         await ExecuteSchemaCommandAsync(conn, "DROP TABLE IF EXISTS bench_access;");
@@ -275,7 +291,7 @@ public class MySqlDefaultConcurrencyBenchmarks : IAsyncDisposable
         await ExecuteSchemaCommandAsync(conn, "CREATE INDEX ix_bench_access_payload ON bench_access(payload);");
     }
 
-    private static async Task ExecuteSchemaCommandAsync(MySqlConnection conn, string sql)
+    private static async Task ExecuteSchemaCommandAsync(DbConnection conn, string sql)
     {
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = sql;
@@ -284,7 +300,7 @@ public class MySqlDefaultConcurrencyBenchmarks : IAsyncDisposable
 
     private async Task SeedDataAsync()
     {
-        await using var conn = new MySqlConnection(_connectionString);
+        await using var conn = CreateConnection();
         await conn.OpenAsync();
         await using var tx = await conn.BeginTransactionAsync();
         await using var cmd = conn.CreateCommand();
@@ -323,8 +339,16 @@ public class MySqlDefaultConcurrencyBenchmarks : IAsyncDisposable
         if (Interlocked.Increment(ref _errorLogCount) <= 5)
         {
             Console.WriteLine(
-                $"[MYSQL-CONCURRENCY][ERROR] scenario={_currentScenario}, parallelism={Parallelism}, exception={ex.GetType().Name}: {ex.Message}");
+                $"[MYSQL-CONCURRENCY][ERROR] Provider={Provider}, scenario={_currentScenario}, parallelism={Parallelism}, exception={ex.GetType().Name}: {ex.Message}");
         }
+    }
+
+    private DbConnection CreateConnection()
+    {
+        var conn = _providerFactory.CreateConnection()
+            ?? throw new InvalidOperationException($"Provider {Provider} did not create a connection.");
+        conn.ConnectionString = _connectionString;
+        return conn;
     }
 }
 

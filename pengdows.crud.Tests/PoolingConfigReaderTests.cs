@@ -1,5 +1,6 @@
 using System.Data.Common;
 using Microsoft.Extensions.Logging.Abstractions;
+using MySql.Data.MySqlClient;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
@@ -100,6 +101,52 @@ public sealed class PoolingConfigReaderTests
 
         Assert.Equal(PoolConfigSource.DialectDefault, cfg.Source);
         Assert.Null(cfg.PoolingEnabled);
+    }
+
+    [Fact]
+    public void GetEffectivePoolConfig_MySqlDataReadOnlySplit_PreservesConfiguredMaxPoolSize()
+    {
+        var dialect = new MySqlDialect(MySqlClientFactory.Instance, NullLogger.Instance);
+        const string writerConnectionString =
+            "Server=localhost;Database=test;User Id=root;Password=pass;Pooling=true;Max Pool Size=128;";
+
+        var readerConnectionString = dialect.GetReadOnlyConnectionString(writerConnectionString);
+
+        var writerConfig = PoolingConfigReader.GetEffectivePoolConfig(dialect, writerConnectionString);
+        var readerConfig = PoolingConfigReader.GetEffectivePoolConfig(dialect, readerConnectionString);
+
+        Assert.Equal(PoolConfigSource.ConnectionString, writerConfig.Source);
+        Assert.Equal(PoolConfigSource.ConnectionString, readerConfig.Source);
+        Assert.Equal(128, writerConfig.MaxPoolSize);
+        Assert.Equal(128, readerConfig.MaxPoolSize);
+    }
+
+    [Fact]
+    public void ConnectionStringHelper_MySqlDataReadOnlySplit_ExposesConfiguredMaxPoolSizeKey()
+    {
+        var dialect = new MySqlDialect(MySqlClientFactory.Instance, NullLogger.Instance);
+        const string writerConnectionString =
+            "Server=localhost;Database=test;User Id=root;Password=pass;Pooling=true;Max Pool Size=128;";
+
+        var readerConnectionString = dialect.GetReadOnlyConnectionString(writerConnectionString);
+        var builder = ConnectionStringHelper.Create(MySqlClientFactory.Instance, readerConnectionString);
+
+        Assert.True(builder.ContainsKey("Max Pool Size"));
+        Assert.Equal("128", builder["Max Pool Size"]?.ToString());
+        Assert.True(builder.ContainsKey("Connection Timeout"));
+    }
+
+    [Fact]
+    public void GetEffectivePoolConfig_MySql_CanonicalMaximumPoolSizeAlias_IsParsed()
+    {
+        var dialect = new MySqlDialect(MySqlClientFactory.Instance, NullLogger.Instance);
+        const string connectionString =
+            "Server=localhost;Database=test;User Id=root;Password=pass;Pooling=true;MaximumPoolSize=128;";
+
+        var config = PoolingConfigReader.GetEffectivePoolConfig(dialect, connectionString);
+
+        Assert.Equal(PoolConfigSource.ConnectionString, config.Source);
+        Assert.Equal(128, config.MaxPoolSize);
     }
 
     private sealed class PoolingDialectMissingKeys : SqlDialect

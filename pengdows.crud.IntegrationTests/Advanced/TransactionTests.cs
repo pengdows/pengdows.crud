@@ -3,6 +3,7 @@ using pengdows.crud.infrastructure;
 using pengdows.crud.IntegrationTests.Infrastructure;
 using pengdows.crud.exceptions;
 using System.Data;
+using System.Runtime.CompilerServices;
 using testbed;
 using Xunit.Abstractions;
 
@@ -16,6 +17,7 @@ namespace pengdows.crud.IntegrationTests.Advanced;
 public class TransactionTests : DatabaseTestBase
 {
     private static long _nextId;
+    private readonly ConditionalWeakTable<IDatabaseContext, TableGateway<TestTable, long>> _gatewayCache = new();
 
     public TransactionTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture)
     {
@@ -37,7 +39,7 @@ public class TransactionTests : DatabaseTestBase
 
             // Act
             await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
-            var helper = CreateTableGateway(transaction);
+            var helper = CreateTableGateway(context);
 
             await helper.CreateAsync(entity, transaction);
             transaction.Commit();
@@ -64,7 +66,7 @@ public class TransactionTests : DatabaseTestBase
 
             // Act
             await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
-            var helper = CreateTableGateway(transaction);
+            var helper = CreateTableGateway(context);
 
             await helper.CreateAsync(entity, transaction);
             transaction.Rollback();
@@ -91,7 +93,7 @@ public class TransactionTests : DatabaseTestBase
 
             // Act - Read within transaction
             await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
-            var helper = CreateTableGateway(transaction);
+            var helper = CreateTableGateway(context);
             var retrieved = await helper.RetrieveOneAsync(entity.Id, transaction);
 
             // Assert
@@ -128,7 +130,7 @@ public class TransactionTests : DatabaseTestBase
                 ExecutionType.Read,
                 true);
 
-            var helper = CreateTableGateway(readOnlyTransaction);
+            var helper = CreateTableGateway(context);
 
             // Assert - Reads should work
             var retrieved = await helper.RetrieveOneAsync(existingEntity.Id, readOnlyTransaction);
@@ -161,7 +163,7 @@ public class TransactionTests : DatabaseTestBase
 
             // Act
             await using var transaction = context.BeginTransaction(IsolationLevel.Serializable);
-            var helper = CreateTableGateway(transaction);
+            var helper = CreateTableGateway(context);
 
             var retrieved = await helper.RetrieveOneAsync(entity.Id, transaction);
             retrieved!.Value = 999;
@@ -194,7 +196,7 @@ public class TransactionTests : DatabaseTestBase
 
             // Act
             await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
-            var helper = CreateTableGateway(transaction);
+            var helper = CreateTableGateway(context);
 
             // Create first entity
             await helper.CreateAsync(entity1, transaction);
@@ -237,7 +239,7 @@ public class TransactionTests : DatabaseTestBase
 
             // Act
             await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
-            var helper = CreateTableGateway(transaction);
+            var helper = CreateTableGateway(context);
 
             await helper.CreateAsync(entity1, transaction);
             await transaction.SavepointAsync("sp1");
@@ -274,7 +276,7 @@ public class TransactionTests : DatabaseTestBase
             // Act
             {
                 await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
-                var helper = CreateTableGateway(transaction);
+                var helper = CreateTableGateway(context);
                 await helper.CreateAsync(entity, transaction);
                 // Dispose without commit
             }
@@ -300,7 +302,7 @@ public class TransactionTests : DatabaseTestBase
 
             // Act
             await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
-            var helper = CreateTableGateway(transaction);
+            var helper = CreateTableGateway(context);
 
             foreach (var entity in entities)
             {
@@ -331,7 +333,7 @@ public class TransactionTests : DatabaseTestBase
 
             // Act
             await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
-            var helper = CreateTableGateway(transaction);
+            var helper = CreateTableGateway(context);
 
             var retrieved = await helper.RetrieveOneAsync(entity.Id, transaction);
             retrieved!.Value = 2000;
@@ -361,7 +363,7 @@ public class TransactionTests : DatabaseTestBase
 
             // Act
             await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
-            var helper = CreateTableGateway(transaction);
+            var helper = CreateTableGateway(context);
 
             await helper.DeleteAsync(entity.Id, transaction);
             transaction.Rollback();
@@ -397,7 +399,7 @@ public class TransactionTests : DatabaseTestBase
                 IsolationProfile.SafeNonBlockingReads,
                 ExecutionType.Write);
 
-            var helper = CreateTableGateway(transaction);
+            var helper = CreateTableGateway(context);
             await helper.CreateAsync(entity, transaction);
             transaction.Commit();
 
@@ -409,8 +411,11 @@ public class TransactionTests : DatabaseTestBase
 
     private TableGateway<TestTable, long> CreateTableGateway(IDatabaseContext context)
     {
-        var auditResolver = GetAuditResolver();
-        return new TableGateway<TestTable, long>(context, auditResolver);
+        return _gatewayCache.GetValue(context, ctx =>
+        {
+            var auditResolver = GetAuditResolver();
+            return new TableGateway<TestTable, long>(ctx, auditResolver);
+        });
     }
 
     private static TestTable CreateTestEntity(NameEnum name, int value)
@@ -438,7 +443,7 @@ public class TransactionTests : DatabaseTestBase
     private static bool SupportsSerializableIsolation(SupportedDatabase provider)
     {
         // Most databases support serializable, but behavior varies
-        return provider is not SupportedDatabase.Sqlite; // SQLite has limited isolation
+        return provider is not (SupportedDatabase.Sqlite or SupportedDatabase.Snowflake);
     }
 
     private static bool SupportsSavepoints(SupportedDatabase provider)

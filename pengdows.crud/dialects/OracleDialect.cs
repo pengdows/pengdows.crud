@@ -75,6 +75,72 @@ internal class OracleDialect : SqlDialect
 
     public override bool SupportsNamespaces => true;
 
+    /// <inheritdoc />
+    public override void BuildBatchInsertSql(string tableName, IReadOnlyList<string> columnNames, int rowCount,
+        ISqlQueryBuilder query)
+    {
+        BuildBatchInsertSql(tableName, columnNames, rowCount, query, null);
+    }
+
+    /// <inheritdoc />
+    public override void BuildBatchInsertSql(string tableName, IReadOnlyList<string> columnNames, int rowCount,
+        ISqlQueryBuilder query, Func<int, int, object?>? getValue)
+    {
+        if (string.IsNullOrWhiteSpace(tableName))
+        {
+            throw new ArgumentException("Table name cannot be null or empty.", nameof(tableName));
+        }
+
+        if (columnNames == null || columnNames.Count == 0)
+        {
+            throw new ArgumentException("Column names cannot be null or empty.", nameof(columnNames));
+        }
+
+        if (rowCount <= 0)
+        {
+            throw new ArgumentException("Row count must be greater than zero.", nameof(rowCount));
+        }
+
+        // Oracle uses INSERT ALL INTO table (cols) VALUES (...) INTO table (cols) VALUES (...) SELECT 1 FROM DUAL
+        query.Append("INSERT ALL ");
+
+        var colList = string.Join(", ", columnNames);
+
+        var paramIdx = 0;
+        for (var row = 0; row < rowCount; row++)
+        {
+            query.Append("INTO ");
+            query.Append(tableName);
+            query.Append(" (");
+            query.Append(colList);
+            query.Append(") VALUES (");
+
+            for (var col = 0; col < columnNames.Count; col++)
+            {
+                if (col > 0)
+                {
+                    query.Append(", ");
+                }
+
+                var val = getValue?.Invoke(row, col);
+                if (val == null || val == DBNull.Value)
+                {
+                    query.Append("NULL");
+                }
+                else
+                {
+                    query.Append(ParameterMarker);
+                    query.Append('b');
+                    query.Append(paramIdx++.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                }
+            }
+
+            query.Append(") ");
+        }
+
+        query.Append("SELECT 1 FROM DUAL");
+    }
+
     public override bool SupportsMerge => true;
 
     // Oracle does not support DROP TABLE IF EXISTS — requires PL/SQL exception handling.

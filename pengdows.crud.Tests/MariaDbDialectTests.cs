@@ -109,9 +109,9 @@ public class MariaDbDialectTests
         var result1 = _dialect.IsUniqueViolation(duplicateKeyException);
         var result2 = _dialect.IsUniqueViolation(otherException);
 
-        // Assert - Method should handle exceptions gracefully
-        Assert.True(result1 || !result1); // Method should not throw
-        Assert.True(result2 || !result2); // Method should not throw
+        // InvalidOperationException is not a DbException → base class returns false for both
+        Assert.False(result1);
+        Assert.False(result2);
     }
 
     [Fact]

@@ -74,8 +74,8 @@ public class TypeHydrationTableCreator
     // Per-provider DDL
     // -------------------------------------------------------------------------
 
-    private string CreateSqliteSql() => @"
-CREATE TABLE IF NOT EXISTS type_hydration (
+    private string CreateSqliteSql() => $@"
+CREATE TABLE IF NOT EXISTS {IntegrationObjectNameHelper.Table(_context, "type_hydration")} (
     id                 INTEGER  NOT NULL PRIMARY KEY,
     col_string         TEXT     NOT NULL,
     col_string_null    TEXT,
@@ -97,8 +97,8 @@ CREATE TABLE IF NOT EXISTS type_hydration (
 )";
     // NOTE: SQLite REAL is IEEE 754 64-bit double — decimal round-trips with ~1e-7 relative error.
 
-    private string CreatePostgreSqlSql() => @"
-CREATE TABLE IF NOT EXISTS type_hydration (
+    private string CreatePostgreSqlSql() => $@"
+CREATE TABLE IF NOT EXISTS {IntegrationObjectNameHelper.Table(_context, "type_hydration")} (
     id                 BIGINT           NOT NULL PRIMARY KEY,
     col_string         VARCHAR(500)     NOT NULL,
     col_string_null    VARCHAR(500),
@@ -119,11 +119,11 @@ CREATE TABLE IF NOT EXISTS type_hydration (
     col_enum_str       VARCHAR(50)      NOT NULL
 )";
 
-    private string CreateSqlServerSql() => @"
+    private string CreateSqlServerSql() => $@"
 IF NOT EXISTS (
     SELECT * FROM sys.objects
-    WHERE object_id = OBJECT_ID(N'[dbo].[type_hydration]') AND type = N'U')
-CREATE TABLE [dbo].[type_hydration] (
+    WHERE object_id = OBJECT_ID(N'{IntegrationObjectNameHelper.Table(_context, "type_hydration")}') AND type = N'U')
+CREATE TABLE {IntegrationObjectNameHelper.Table(_context, "type_hydration")} (
     [id]                 BIGINT           NOT NULL PRIMARY KEY,
     [col_string]         NVARCHAR(500)    NOT NULL,
     [col_string_null]    NVARCHAR(500),
@@ -146,10 +146,11 @@ CREATE TABLE [dbo].[type_hydration] (
 
     private string CreateMySqlSql()
     {
+        var table = IntegrationObjectNameHelper.Table(_context, "type_hydration");
         var qp = _context.QuotePrefix;
         var qs = _context.QuoteSuffix;
         return string.Format(@"
-CREATE TABLE IF NOT EXISTS {0}type_hydration{1} (
+CREATE TABLE IF NOT EXISTS {2} (
     {0}id{1}                 BIGINT        NOT NULL PRIMARY KEY,
     {0}col_string{1}         VARCHAR(500)  NOT NULL,
     {0}col_string_null{1}    VARCHAR(500),
@@ -168,15 +169,16 @@ CREATE TABLE IF NOT EXISTS {0}type_hydration{1} (
     {0}col_binary{1}         VARBINARY(256),
     {0}col_enum_int{1}       INT           NOT NULL,
     {0}col_enum_str{1}       VARCHAR(50)   NOT NULL
-)", qp, qs);
+)", qp, qs, table);
     }
 
     private string CreateDuckDbSql()
     {
+        var table = IntegrationObjectNameHelper.Table(_context, "type_hydration");
         var qp = _context.QuotePrefix;
         var qs = _context.QuoteSuffix;
         return string.Format(@"
-CREATE TABLE IF NOT EXISTS {0}type_hydration{1} (
+CREATE TABLE IF NOT EXISTS {2} (
     {0}id{1}                 BIGINT           NOT NULL PRIMARY KEY,
     {0}col_string{1}         VARCHAR(500)     NOT NULL,
     {0}col_string_null{1}    VARCHAR(500),
@@ -195,7 +197,7 @@ CREATE TABLE IF NOT EXISTS {0}type_hydration{1} (
     {0}col_binary{1}         BLOB,
     {0}col_enum_int{1}       INTEGER          NOT NULL,
     {0}col_enum_str{1}       VARCHAR(50)      NOT NULL
-)", qp, qs);
+)", qp, qs, table);
     }
 
     private string CreateSnowflakeSql()
@@ -203,9 +205,10 @@ CREATE TABLE IF NOT EXISTS {0}type_hydration{1} (
         // Snowflake: FLOAT4 is declared but stored as 64-bit internally.
         // TIMESTAMP_NTZ for both DateTime and DateTimeOffset (offset discarded/UTC only).
         // Guid: VARCHAR(36). Binary: VARBINARY.
+        var table = IntegrationObjectNameHelper.Table(_context, "type_hydration");
         var w = (string name) => _context.WrapObjectName(name);
         return $@"
-CREATE TABLE IF NOT EXISTS {w("type_hydration")} (
+CREATE TABLE IF NOT EXISTS {table} (
     {w("id")}                 BIGINT        NOT NULL PRIMARY KEY,
     {w("col_string")}         VARCHAR(500)  NOT NULL,
     {w("col_string_null")}    VARCHAR(500),
@@ -235,6 +238,7 @@ CREATE TABLE IF NOT EXISTS {w("type_hydration")} (
         //   - NUMBER(5/10/19) for short/int/long; returned as decimal, coerced by Convert.ChangeType
         //   - Empty string coerced to NULL on VARCHAR2/NVARCHAR2 columns
         //   - No IF NOT EXISTS → PL/SQL conditional block
+        var table = IntegrationObjectNameHelper.Table(_context, "type_hydration");
         var qp = _context.QuotePrefix;
         var qs = _context.QuoteSuffix;
         return string.Format(@"DECLARE
@@ -243,7 +247,7 @@ BEGIN
     SELECT COUNT(*) INTO table_exists FROM user_tables WHERE table_name = 'TYPE_HYDRATION';
     IF table_exists = 0 THEN
         EXECUTE IMMEDIATE '
-            CREATE TABLE {0}type_hydration{1} (
+            CREATE TABLE {2} (
                 {0}id{1}                 NUMBER(19)               NOT NULL,
                 {0}col_string{1}         NVARCHAR2(500),
                 {0}col_string_null{1}    NVARCHAR2(500),
@@ -265,7 +269,7 @@ BEGIN
                 CONSTRAINT pk_type_hydration PRIMARY KEY ({0}id{1})
             )';
     END IF;
-END;", qp, qs);
+END;", qp, qs, table);
     }
 
     private string CreateFirebirdSql()
@@ -277,6 +281,7 @@ END;", qp, qs);
         //   - No TIMESTAMP WITH TIME ZONE → plain TIMESTAMP (UTC stored)
         //   - CHAR(36) for guid
         //   - No IF NOT EXISTS → caller catches "already exists"
+        var table = IntegrationObjectNameHelper.Table(_context, "type_hydration");
         var w = (string name) => _context.WrapObjectName(name);
         return $@"CREATE TABLE {w("type_hydration")} (
     {w("id")}                 BIGINT          NOT NULL PRIMARY KEY,

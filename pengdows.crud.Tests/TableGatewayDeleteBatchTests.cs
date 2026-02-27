@@ -64,6 +64,59 @@ public class TableGatewayDeleteBatchTests : IAsyncLifetime
         public int Key2 { get; set; }
     }
 
+    [Table("test_delete_id_only")]
+    public class TestDeleteIdOnlyEntity
+    {
+        [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
+    }
+
+    [Fact]
+    public async Task BatchDeleteAsync_NullIdList_Throws()
+    {
+        ResetFactory();
+        var gateway = new TableGateway<TestDeleteBatchEntity, int>(_sqliteContext);
+        await Assert.ThrowsAsync<ArgumentNullException>(async () =>
+            await gateway.BatchDeleteAsync((IEnumerable<int>)null!));
+    }
+
+    [Fact]
+    public async Task BatchDeleteAsync_NullEntityList_Throws()
+    {
+        ResetFactory();
+        var gateway = new TableGateway<TestDeleteBatchEntity, int>(_sqliteContext);
+        await Assert.ThrowsAsync<ArgumentNullException>(async () =>
+            await gateway.BatchDeleteAsync((IReadOnlyCollection<TestDeleteBatchEntity>)null!));
+    }
+
+    [Fact]
+    public async Task BatchDeleteAsync_EmptyEntityList_ReturnsZero()
+    {
+        // Entity-based overload: empty = no work, returns 0
+        ResetFactory();
+        var gateway = new TableGateway<TestDeleteBatchEntity, int>(_sqliteContext);
+        var result = await gateway.BatchDeleteAsync(Array.Empty<TestDeleteBatchEntity>());
+        Assert.Equal(0, result);
+    }
+
+    [Fact]
+    public async Task BatchDeleteAsync_EmptyIdList_Throws()
+    {
+        // ID-based overload: empty = likely caller bug, throws ArgumentException
+        ResetFactory();
+        var gateway = new TableGateway<TestDeleteBatchEntity, int>(_sqliteContext);
+        await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await gateway.BatchDeleteAsync(Array.Empty<int>()));
+    }
+
+    [Fact]
+    public void BuildBatchDelete_EmptyEntityList_ReturnsEmptyContainerList()
+    {
+        ResetFactory();
+        var gateway = new TableGateway<TestDeleteBatchEntity, int>(_sqliteContext);
+        var containers = gateway.BuildBatchDelete(Array.Empty<TestDeleteBatchEntity>());
+        Assert.Empty(containers);
+    }
+
     [Fact]
     public async Task DeleteAsync_LargeIdList_ChunksCorrectly()
     {
@@ -83,6 +136,56 @@ public class TableGatewayDeleteBatchTests : IAsyncLifetime
             .Count(text => text.StartsWith("DELETE", StringComparison.OrdinalIgnoreCase));
 
         Assert.Equal(2, totalCommands);
+    }
+
+    [Fact]
+    public async Task BatchDeleteAsync_LargeIdList_ChunksCorrectly()
+    {
+        // Arrange
+        ResetFactory();
+        var gateway = new TableGateway<TestDeleteBatchEntity, int>(_sqliteContext);
+        var ids = Enumerable.Range(1, 33000).ToList();
+
+        // Act
+        // SQLite 3.32+ MaxParameterLimit = 32766. Headroom 10% -> 29489.
+        // 33000 IDs should result in 2 chunks (29489 and 3511)
+        await gateway.BatchDeleteAsync(ids);
+
+        // Assert
+        var totalCommands = _sqliteFactory.CreatedConnections
+            .SelectMany(c => c.ExecutedNonQueryTexts)
+            .Count(text => text.StartsWith("DELETE", StringComparison.OrdinalIgnoreCase));
+
+        Assert.Equal(2, totalCommands);
+    }
+
+    [Fact]
+    public async Task BatchDeleteAsync_IdList_DoesNotRequirePrimaryKey()
+    {
+        // Arrange
+        ResetFactory();
+        var gateway = new TableGateway<TestDeleteIdOnlyEntity, int>(_sqliteContext);
+
+        // Act
+        var exception = await Record.ExceptionAsync(() => gateway.BatchDeleteAsync(new[] { 1, 2, 3 }));
+
+        // Assert
+        Assert.Null(exception);
+    }
+
+    [Fact]
+    public void BuildBatchDelete_IdList_ReturnsMultipleContainers()
+    {
+        // Arrange
+        ResetFactory();
+        var gateway = new TableGateway<TestDeleteBatchEntity, int>(_sqliteContext);
+        var ids = Enumerable.Range(1, 33000).ToList();
+
+        // Act
+        var containers = gateway.BuildBatchDelete(ids);
+
+        // Assert
+        Assert.Equal(2, containers.Count);
     }
 
     [Fact]
@@ -143,5 +246,40 @@ public class TableGatewayDeleteBatchTests : IAsyncLifetime
 
         // Assert
         Assert.Equal(2, containers.Count);
+    }
+
+    // =========================================================================
+    // DeleteAsync(IReadOnlyCollection<TEntity>) — entity list overload
+    // =========================================================================
+
+    [Fact]
+    public async Task DeleteAsync_EntityList_NullList_Throws()
+    {
+        var gateway = new TableGateway<TestDeleteBatchEntity, int>(_sqliteContext);
+        await Assert.ThrowsAsync<ArgumentNullException>(
+            async () => await gateway.DeleteAsync((IReadOnlyCollection<TestDeleteBatchEntity>)null!));
+    }
+
+    [Fact]
+    public async Task DeleteAsync_EntityList_EmptyList_ReturnsZero()
+    {
+        var gateway = new TableGateway<TestDeleteBatchEntity, int>(_sqliteContext);
+        var result = await gateway.DeleteAsync(Array.Empty<TestDeleteBatchEntity>());
+        Assert.Equal(0, result);
+    }
+
+    [Fact]
+    public void DeleteAsync_EntityList_ProducesDeleteSql()
+    {
+        var gateway = new TableGateway<TestDeleteBatchEntity, int>(_sqliteContext);
+        var entities = new[]
+        {
+            new TestDeleteBatchEntity { Id = 1 },
+            new TestDeleteBatchEntity { Id = 2 }
+        };
+        // Routes through BuildBatchDelete(entities) — verifies overload resolves
+        var containers = gateway.BuildBatchDelete((IReadOnlyCollection<TestDeleteBatchEntity>)entities);
+        Assert.Single(containers);
+        Assert.Contains("DELETE", containers[0].Query.ToString());
     }
 }

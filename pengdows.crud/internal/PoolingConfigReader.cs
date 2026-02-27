@@ -29,6 +29,22 @@ internal sealed record PoolConfig(bool? PoolingEnabled, int? MinPoolSize, int? M
 
 internal static class PoolingConfigReader
 {
+    private static readonly string[] MaxPoolSizeAliases =
+    {
+        "Max Pool Size",
+        "MaxPoolSize",
+        "Maximum Pool Size",
+        "MaximumPoolSize"
+    };
+
+    private static readonly string[] MinPoolSizeAliases =
+    {
+        "Min Pool Size",
+        "MinPoolSize",
+        "Minimum Pool Size",
+        "MinimumPoolSize"
+    };
+
     public static PoolConfig GetEffectivePoolConfig(SqlDialect dialect, string connectionString)
     {
         ArgumentNullException.ThrowIfNull(dialect);
@@ -104,12 +120,69 @@ internal static class PoolingConfigReader
 
     private static bool? TryGetBool(DbConnectionStringBuilder b, string key)
     {
-        return b.TryGetValue(key, out var v) ? ParseBool(v) : null;
+        foreach (var candidate in GetKeyCandidates(key))
+        {
+            if (b.TryGetValue(candidate, out var value))
+            {
+                return ParseBool(value);
+            }
+        }
+
+        return null;
     }
 
     private static int? TryGetInt(DbConnectionStringBuilder b, string key)
     {
-        return b.TryGetValue(key, out var v) ? ParseInt(v) : null;
+        foreach (var candidate in GetKeyCandidates(key))
+        {
+            if (b.TryGetValue(candidate, out var value))
+            {
+                return ParseInt(value);
+            }
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<string> GetKeyCandidates(string key)
+    {
+        yield return key;
+
+        foreach (var alias in GetAdditionalAliases(key))
+        {
+            if (!string.Equals(alias, key, StringComparison.OrdinalIgnoreCase))
+            {
+                yield return alias;
+            }
+        }
+    }
+
+    private static IEnumerable<string> GetAdditionalAliases(string key)
+    {
+        if (MatchesAliasFamily(key, MaxPoolSizeAliases))
+        {
+            return MaxPoolSizeAliases;
+        }
+
+        if (MatchesAliasFamily(key, MinPoolSizeAliases))
+        {
+            return MinPoolSizeAliases;
+        }
+
+        return Array.Empty<string>();
+    }
+
+    private static bool MatchesAliasFamily(string key, IEnumerable<string> aliases)
+    {
+        foreach (var alias in aliases)
+        {
+            if (string.Equals(alias, key, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool? ParseBool(object v)

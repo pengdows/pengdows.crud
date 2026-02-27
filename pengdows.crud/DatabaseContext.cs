@@ -38,8 +38,6 @@ using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.dialects;
 using pengdows.crud.@internal;
-using pengdows.crud.enums;
-using pengdows.crud.infrastructure;
 using pengdows.crud.isolation;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
@@ -178,8 +176,9 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private int? _configuredReadPoolSize;
     private int? _configuredWritePoolSize;
     private bool _explicitReadOnlyConnectionString;
-    private const string ReadOnlyApplicationNameSuffix = ":ro";
-    private const string WriteApplicationNameSuffix = ":rw";
+    private const string DefaultApplicationName = "pengdows.crud";
+    private const string ReadOnlyApplicationNameSuffix = "-ro";
+    private const string WriteApplicationNameSuffix = "-rw";
 
     /// <inheritdoc/>
     public Guid RootId { get; } = Guid.NewGuid();
@@ -423,7 +422,4 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     }
 
     protected override ISqlDialect DialectCore => _dialect;
-
-    /// <inheritdoc />
-    public TimeSpan? ModeLockTimeout => _modeLockTimeout;
 }

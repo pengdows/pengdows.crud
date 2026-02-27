@@ -131,6 +131,83 @@ internal class SqlServerDialect : SqlDialect
 
     public override bool SupportsNamespaces => true;
 
+    // IMMUTABLE: SQL Server VALUES clause limit - do not change without extensive testing
+    public override int MaxRowsPerBatch => 1000;
+
+    public override bool SupportsBatchUpdate => true;
+
+    /// <inheritdoc />
+    public override void BuildBatchUpdateSql(string tableName, IReadOnlyList<string> columnNames,
+        IReadOnlyList<string> keyColumns, int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue)
+    {
+        if (rowCount <= 0) return;
+
+        // SQL Server MERGE pattern:
+        // MERGE INTO target AS t
+        // USING (VALUES (@b0, @b1), (@b2, @b3)) AS s(pk, col1)
+        // ON t.pk = s.pk
+        // WHEN MATCHED THEN UPDATE SET col1 = s.col1, ...;
+
+        query.Append("MERGE INTO ");
+        query.Append(tableName);
+        query.Append(" AS t USING (VALUES ");
+
+        var allCols = new List<string>(keyColumns);
+        allCols.AddRange(columnNames);
+
+        var paramIdx = 0;
+        for (var row = 0; row < rowCount; row++)
+        {
+            if (row > 0) query.Append(", ");
+            query.Append('(');
+            for (var col = 0; col < allCols.Count; col++)
+            {
+                if (col > 0) query.Append(", ");
+                var val = getValue?.Invoke(row, col);
+                if (val == null || val == DBNull.Value)
+                {
+                    query.Append("NULL");
+                }
+                else
+                {
+                    query.Append(ParameterMarker);
+                    query.Append('b');
+                    query.Append(paramIdx++.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                }
+            }
+
+            query.Append(')');
+        }
+
+        query.Append(") AS s(");
+        for (var i = 0; i < allCols.Count; i++)
+        {
+            if (i > 0) query.Append(", ");
+            query.Append(allCols[i]);
+        }
+
+        query.Append(") ON (");
+        for (var i = 0; i < keyColumns.Count; i++)
+        {
+            if (i > 0) query.Append(" AND ");
+            query.Append("t.");
+            query.Append(keyColumns[i]);
+            query.Append(" = s.");
+            query.Append(keyColumns[i]);
+        }
+
+        query.Append(") WHEN MATCHED THEN UPDATE SET ");
+        for (var i = 0; i < columnNames.Count; i++)
+        {
+            if (i > 0) query.Append(", ");
+            query.Append(columnNames[i]);
+            query.Append(" = s.");
+            query.Append(columnNames[i]);
+        }
+
+        query.Append(';');
+    }
+
     // Version-specific overrides
     public override bool SupportsMerge => IsVersionAtLeast(10);
     public override bool SupportsJsonTypes => IsVersionAtLeast(13);

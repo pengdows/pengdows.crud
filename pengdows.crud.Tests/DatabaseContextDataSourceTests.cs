@@ -46,7 +46,7 @@ public class DatabaseContextDataSourceTests
         {
             var inner = GetInnerConnection(tracked);
             Assert.Contains("ApplicationIntent=ReadOnly", inner.ConnectionString, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("Application Name=Widget:ro", inner.ConnectionString, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Application Name=Widget-ro", inner.ConnectionString, StringComparison.OrdinalIgnoreCase);
         }
         finally
         {
@@ -72,7 +72,7 @@ public class DatabaseContextDataSourceTests
         {
             var inner = GetInnerConnection(tracked);
             Assert.Contains("ApplicationIntent=ReadOnly", inner.ConnectionString, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("Application Name=Widget:ro", inner.ConnectionString, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Application Name=Widget-ro", inner.ConnectionString, StringComparison.OrdinalIgnoreCase);
         }
         finally
         {
@@ -98,7 +98,7 @@ public class DatabaseContextDataSourceTests
         {
             var inner = GetInnerConnection(tracked);
             Assert.Contains("ApplicationIntent=ReadOnly", inner.ConnectionString, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("Application Name=Widget:ro", inner.ConnectionString, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Application Name=Widget-ro", inner.ConnectionString, StringComparison.OrdinalIgnoreCase);
         }
         finally
         {

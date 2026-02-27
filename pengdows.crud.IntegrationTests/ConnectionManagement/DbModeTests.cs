@@ -3,6 +3,7 @@ using pengdows.crud.infrastructure;
 using pengdows.crud.IntegrationTests.Infrastructure;
 using pengdows.crud.wrappers;
 using System.Data;
+using System.Runtime.CompilerServices;
 using testbed;
 using Xunit.Abstractions;
 
@@ -16,6 +17,7 @@ namespace pengdows.crud.IntegrationTests.ConnectionManagement;
 public class DbModeTests : DatabaseTestBase
 {
     private static long _nextId;
+    private readonly ConditionalWeakTable<IDatabaseContext, TableGateway<TestTable, long>> _gatewayCache = new();
 
     public DbModeTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture)
     {
@@ -92,7 +94,7 @@ public class DbModeTests : DatabaseTestBase
 
             // Act - Within transaction, connection should stay open
             await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
-            var helper = CreateTableGateway(transaction);
+            var helper = CreateTableGateway(context);
 
             var connCountInTransaction = transaction.NumberOfOpenConnections;
             if (provider == SupportedDatabase.Snowflake)
@@ -165,7 +167,7 @@ public class DbModeTests : DatabaseTestBase
             await CreateTableGateway(context).CreateAsync(entity, context);
 
             // Act - Use ExecuteReaderAsync which uses ExecutionType.Read
-            var tableName = context.WrapObjectName("test_table");
+            var tableName = IntegrationObjectNameHelper.Table(context, "test_table");
             var idColumn = context.WrapObjectName("id");
             var nameColumn = context.WrapObjectName("name");
             var valueColumn = context.WrapObjectName("value");
@@ -206,7 +208,7 @@ public class DbModeTests : DatabaseTestBase
                     await writeConnection.OpenAsync();
                 }
 
-                var tableName = context.WrapObjectName("test_table");
+                var tableName = IntegrationObjectNameHelper.Table(context, "test_table");
                 var idColumn = context.WrapObjectName("id");
                 var nameColumn = context.WrapObjectName("name");
                 var valueColumn = context.WrapObjectName("value");
@@ -268,7 +270,7 @@ public class DbModeTests : DatabaseTestBase
                 ExecutionType.Read,
                 true);
 
-            var helper = CreateTableGateway(readTransaction);
+            var helper = CreateTableGateway(context);
 
             // Assert - Reads should work
             var retrieved = await helper.RetrieveOneAsync(entity.Id, readTransaction);
@@ -352,7 +354,7 @@ public class DbModeTests : DatabaseTestBase
             foreach (var entity in entities)
             {
                 await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
-                var helper = CreateTableGateway(transaction);
+                var helper = CreateTableGateway(context);
 
                 await helper.CreateAsync(entity, transaction);
                 transaction.Commit();
@@ -426,14 +428,14 @@ public class DbModeTests : DatabaseTestBase
 
             // Act - Transaction 1: Read the entity
             await using var tx1 = context.BeginTransaction(IsolationLevel.ReadCommitted);
-            var helper1 = CreateTableGateway(tx1);
+            var helper1 = CreateTableGateway(context);
             var read1 = await helper1.RetrieveOneAsync(entity.Id, tx1);
             Assert.NotNull(read1);
             Assert.Equal(entity.Value, read1!.Value);
 
             // Transaction 2: Update but don't commit
             await using var tx2 = context.BeginTransaction(IsolationLevel.ReadCommitted);
-            var helper2 = CreateTableGateway(tx2);
+            var helper2 = CreateTableGateway(context);
             var read2 = await helper2.RetrieveOneAsync(entity.Id, tx2);
             read2!.Value = 2000;
             await helper2.UpdateAsync(read2, tx2);
@@ -455,8 +457,11 @@ public class DbModeTests : DatabaseTestBase
 
     private TableGateway<TestTable, long> CreateTableGateway(IDatabaseContext context)
     {
-        var auditResolver = GetAuditResolver();
-        return new TableGateway<TestTable, long>(context, auditResolver);
+        return _gatewayCache.GetValue(context, ctx =>
+        {
+            var auditResolver = GetAuditResolver();
+            return new TableGateway<TestTable, long>(ctx, auditResolver);
+        });
     }
 
     private static TestTable CreateTestEntity(NameEnum name, int value)

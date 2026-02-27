@@ -39,7 +39,9 @@ namespace pengdows.crud.dialects;
 /// </para>
 /// <para>
 /// <strong>Providers:</strong> Supports both MySqlConnector (recommended)
-/// and Oracle's MySql.Data.
+/// and Oracle's MySql.Data. MySqlConnector is the preferred provider for
+/// new deployments because it supports cleaner pool separation and has shown
+/// better behavior under high-concurrency workloads.
 /// </para>
 /// </remarks>
 internal class MySqlDialect : SqlDialect
@@ -61,6 +63,9 @@ internal class MySqlDialect : SqlDialect
     private static readonly Version UpsertAliasVersionThreshold = new(8, 0, 20);
     private const int MaxPreparedStatementCountErrorCode = 1461;
     private const string MaxPreparedStatementCountToken = "max_prepared_stmt_count";
+    private const string PreferredProviderWarning =
+        "MySql.Data is supported, but MySqlConnector is the preferred MySQL provider for pengdows.crud. " +
+        "MySqlConnector provides better read/write pool separation support and has shown better behavior under high concurrency.";
 
     private const int DefaultMySqlConnectionTimeout = 15;
 
@@ -87,6 +92,11 @@ internal class MySqlDialect : SqlDialect
     {
         _isMySqlConnector = isMySqlConnector;
         _flavor = flavor;
+
+        if (ShouldWarnAboutMySqlDataProvider(factory))
+        {
+            Logger.LogWarning(PreferredProviderWarning);
+        }
     }
 
     public override SupportedDatabase DatabaseType => _flavor;
@@ -325,6 +335,16 @@ internal class MySqlDialect : SqlDialect
 
     public override string? ApplicationNameSettingName =>
         _isMySqlConnector ? "Application Name" : null;
+
+    private static bool ShouldWarnAboutMySqlDataProvider(DbProviderFactory factory)
+    {
+        var factoryType = factory.GetType();
+        var typeNamespace = factoryType.Namespace ?? string.Empty;
+        var assemblyName = factoryType.Assembly.GetName().Name ?? string.Empty;
+
+        return typeNamespace.Contains("MySql.Data", StringComparison.OrdinalIgnoreCase) ||
+               assemblyName.Equals("MySql.Data", StringComparison.OrdinalIgnoreCase);
+    }
 
     internal override string GetReadOnlyConnectionString(string connectionString)
     {

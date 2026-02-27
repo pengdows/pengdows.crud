@@ -26,8 +26,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.exceptions;
-using pengdows.crud.enums;
-using pengdows.crud.infrastructure;
 using pengdows.crud.metrics;
 
 namespace pengdows.crud.threading;

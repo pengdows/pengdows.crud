@@ -11,7 +11,7 @@ namespace pengdows.crud.Tests.dialects;
 /// Tests for MySQL/MariaDB provider-aware pool splitting behavior.
 /// Oracle's MySql.Data does not support Application Name in connection strings,
 /// so pool separation uses a Connection Timeout delta instead.
-/// MySqlConnector supports Application Name and uses the standard :ro/:rw suffix.
+/// MySqlConnector supports Application Name and uses the standard -ro/-rw suffix.
 /// </summary>
 public class MySqlDialectPoolSplittingTests
 {

@@ -79,10 +79,8 @@ public class KeepAliveConnectionStrategyTests
 
         var connection = await strategy.GetConnectionAsync(context, ExecutionType.Read, false);
 
-        // Act & Assert - Should not throw
+        // Act - should not throw
         await strategy.CloseConnectionAsync(connection, context);
-
-        Assert.True(true); // Verify no exceptions
     }
 
     [Fact]
@@ -93,10 +91,8 @@ public class KeepAliveConnectionStrategyTests
         var context = new DatabaseContext("test", factory);
         var strategy = new KeepAliveConnectionStrategy();
 
-        // Act & Assert - Should not throw
+        // Act - should not throw
         await strategy.CloseConnectionAsync(null, context);
-
-        Assert.True(true); // Verify no exceptions
     }
 
     [Fact]
@@ -105,10 +101,8 @@ public class KeepAliveConnectionStrategyTests
         // Arrange
         var strategy = new KeepAliveConnectionStrategy();
 
-        // Act & Assert - Should not throw
+        // Act - should not throw
         strategy.Dispose();
-
-        Assert.True(true); // Verify no exceptions
     }
 
     [Fact]
@@ -117,10 +111,8 @@ public class KeepAliveConnectionStrategyTests
         // Arrange
         var strategy = new KeepAliveConnectionStrategy();
 
-        // Act & Assert - Should not throw
+        // Act - should not throw
         await strategy.DisposeAsync();
-
-        Assert.True(true); // Verify no exceptions
     }
 
     [Fact]
@@ -154,17 +146,10 @@ public class KeepAliveConnectionStrategyTests
         // Simulate connection close failure
         factory.SetException(new InvalidOperationException("Failed to close connection"));
 
-        // Act & Assert - Should handle gracefully
-        try
-        {
-            await strategy.CloseConnectionAsync(connection, context);
-            Assert.True(true); // Success
-        }
-        catch (InvalidOperationException)
-        {
-            // Also acceptable - depends on implementation
-            Assert.True(true);
-        }
+        // Act - either succeeds silently or propagates InvalidOperationException; must not throw anything else
+        var ex = await Record.ExceptionAsync(() => strategy.CloseConnectionAsync(connection, context));
+        Assert.True(ex == null || ex is InvalidOperationException,
+            $"Expected no exception or InvalidOperationException, got: {ex?.GetType().Name}");
     }
 
     [Fact]
@@ -237,10 +222,8 @@ public class KeepAliveConnectionStrategyTests
         // Close connection first time
         await strategy.CloseConnectionAsync(connection, context);
 
-        // Act & Assert - Second close should not throw
+        // Act - second close should not throw
         await strategy.CloseConnectionAsync(connection, context);
-
-        Assert.True(true); // Verify no exceptions
     }
 
     [Fact]
@@ -273,16 +256,9 @@ public class KeepAliveConnectionStrategyTests
         // Now simulate factory failure
         factory.SetConnectionException(new InvalidOperationException("Sentinel connection lost"));
 
-        // Act & Assert - Should handle sentinel connection failure gracefully
-        try
-        {
-            var connection2 = await strategy.GetConnectionAsync(context, ExecutionType.Write, false);
-            Assert.NotNull(connection2); // May succeed if sentinel is maintained
-        }
-        catch (InvalidOperationException)
-        {
-            // Also acceptable - depends on implementation details
-            Assert.True(true);
-        }
+        // Act - either recovers (returns connection) or propagates InvalidOperationException; must not throw anything else
+        var ex = await Record.ExceptionAsync(() => strategy.GetConnectionAsync(context, ExecutionType.Write, false));
+        Assert.True(ex == null || ex is InvalidOperationException,
+            $"Expected no exception or InvalidOperationException, got: {ex?.GetType().Name}");
     }
 }

@@ -3,6 +3,7 @@ using pengdows.crud.infrastructure;
 using pengdows.crud.IntegrationTests.Infrastructure;
 using System.Collections.Concurrent;
 using System.Data;
+using System.Runtime.CompilerServices;
 using testbed;
 using Xunit.Abstractions;
 
@@ -16,6 +17,7 @@ namespace pengdows.crud.IntegrationTests.Advanced;
 public class ConcurrencyTests : DatabaseTestBase
 {
     private static long _nextId;
+    private readonly ConditionalWeakTable<IDatabaseContext, TableGateway<TestTable, long>> _gatewayCache = new();
 
     public ConcurrencyTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture)
     {
@@ -95,10 +97,7 @@ public class ConcurrencyTests : DatabaseTestBase
                 .ToList();
 
             var helper = CreateTableGateway(context);
-            foreach (var entity in entities)
-            {
-                await helper.CreateAsync(entity, context);
-            }
+            await helper.CreateAsync(entities, context);
 
             // Act - Update them all in parallel with different values
             var tasks = entities.Select(async (entity, index) =>
@@ -134,10 +133,7 @@ public class ConcurrencyTests : DatabaseTestBase
                 .ToList();
 
             var helper = CreateTableGateway(context);
-            foreach (var entity in entities)
-            {
-                await helper.CreateAsync(entity, context);
-            }
+            await helper.CreateAsync(entities, context);
 
             // Act - Delete in parallel
             var tasks = entities.Select(async entity =>
@@ -171,7 +167,7 @@ public class ConcurrencyTests : DatabaseTestBase
             var tasks = entities.Select(async entity =>
             {
                 await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
-                var helper = CreateTableGateway(transaction);
+                var helper = CreateTableGateway(context);
 
                 await helper.CreateAsync(entity, transaction);
                 transaction.Commit();
@@ -202,10 +198,7 @@ public class ConcurrencyTests : DatabaseTestBase
                 .ToArray();
 
             var helper = CreateTableGateway(context);
-            foreach (var e in entities)
-            {
-                await helper.CreateAsync(e, context);
-            }
+            await helper.CreateAsync(entities, context);
 
             var readResults = new ConcurrentBag<TestTable?>();
             var updateCount = 0;
@@ -302,10 +295,7 @@ public class ConcurrencyTests : DatabaseTestBase
                 .ToList();
 
             var gateway = CreateTableGateway(context);
-            foreach (var entity in existingEntities)
-            {
-                await gateway.CreateAsync(entity, context);
-            }
+            await gateway.CreateAsync(existingEntities, context);
 
             // Act - Concurrent bulk operations
             var readTask = Task.Run(async () =>
@@ -374,7 +364,7 @@ public class ConcurrencyTests : DatabaseTestBase
                 try
                 {
                     await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
-                    var helper = CreateTableGateway(transaction);
+                    var helper = CreateTableGateway(context);
 
                     var retrieved = await helper.RetrieveOneAsync(entity.Id, transaction);
                     if (retrieved != null)
@@ -421,7 +411,7 @@ public class ConcurrencyTests : DatabaseTestBase
                 var entity = CreateTestEntity(NameEnum.Test, 1000 + i);
 
                 await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
-                var helper = CreateTableGateway(transaction);
+                var helper = CreateTableGateway(context);
 
                 await helper.CreateAsync(entity, transaction);
                 transaction.Commit();
@@ -444,8 +434,11 @@ public class ConcurrencyTests : DatabaseTestBase
 
     private TableGateway<TestTable, long> CreateTableGateway(IDatabaseContext context)
     {
-        var auditResolver = GetAuditResolver();
-        return new TableGateway<TestTable, long>(context, auditResolver);
+        return _gatewayCache.GetValue(context, ctx =>
+        {
+            var auditResolver = GetAuditResolver();
+            return new TableGateway<TestTable, long>(ctx, auditResolver);
+        });
     }
 
     private static TestTable CreateTestEntity(NameEnum name, int value)

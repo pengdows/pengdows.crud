@@ -253,6 +253,22 @@ public class BenchmarkFairnessTests
         });
     }
 
+    [Fact]
+    public void MySqlDefaultConcurrencyBenchmarks_SupportsBothMySqlProviders()
+    {
+        const string fileName = "MySqlDefaultConcurrencyBenchmarks.cs";
+        var text = LoadBenchmarkText(fileName);
+
+        AssertAllPresent(fileName, text, new[]
+        {
+            "enum MySqlBenchmarkProvider",
+            "[Params(MySqlBenchmarkProvider.MySqlData, MySqlBenchmarkProvider.MySqlConnector)]",
+            "MySqlConnectorFactory.Instance",
+            "MySql.Data.MySqlClient.MySqlClientFactory.Instance",
+            "Provider={Provider}"
+        });
+    }
+
     private static List<string> FindOffenders(IEnumerable<string> tokens, HashSet<string> excludedFiles)
     {
         var benchmarksDir = GetBenchmarksDirectory();

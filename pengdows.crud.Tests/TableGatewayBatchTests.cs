@@ -22,6 +22,7 @@ public class TableGatewayBatchTests : IAsyncLifetime
     private readonly IDatabaseContext _pgContext;
     private readonly IDatabaseContext _mysqlContext;
     private readonly IDatabaseContext _sqlServerContext;
+    private readonly IDatabaseContext _snowflakeContext;
     private readonly TypeMapRegistry _typeMap;
     private readonly IAuditValueResolver _audit;
 
@@ -46,13 +47,18 @@ public class TableGatewayBatchTests : IAsyncLifetime
         sqlServerFactory.EnableDataPersistence = true;
         _sqlServerContext =
             new DatabaseContext("Server=localhost;EmulatedProduct=SqlServer", sqlServerFactory, _typeMap);
+
+        var snowflakeFactory = new fakeDbFactory(SupportedDatabase.Snowflake);
+        snowflakeFactory.EnableDataPersistence = true;
+        _snowflakeContext =
+            new DatabaseContext("Account=xyz;EmulatedProduct=Snowflake", snowflakeFactory, _typeMap);
     }
 
     public Task InitializeAsync() => Task.CompletedTask;
 
     public async Task DisposeAsync()
     {
-        foreach (var ctx in new[] { _sqliteContext, _pgContext, _mysqlContext, _sqlServerContext })
+        foreach (var ctx in new[] { _sqliteContext, _pgContext, _mysqlContext, _sqlServerContext, _snowflakeContext })
         {
             if (ctx is IAsyncDisposable asyncDisp)
                 await asyncDisp.DisposeAsync();
@@ -293,6 +299,62 @@ public class TableGatewayBatchTests : IAsyncLifetime
     }
 
     [Fact]
+    public void BuildBatchUpdate_Snowflake_UsesUpdateFromValues()
+    {
+        // Arrange
+        var helper = new TableGateway<TestEntitySimple, int>(_snowflakeContext);
+        var entities = new List<TestEntitySimple>
+        {
+            new() { Id = 1, Name = "updated1" },
+            new() { Id = 2, Name = "updated2" }
+        };
+
+        // Act
+        var containers = helper.BuildBatchUpdate(entities);
+        var sql = containers[0].Query.ToString();
+
+        // Assert - Snowflake optimization: UPDATE FROM VALUES
+        Assert.Contains("UPDATE", sql);
+        Assert.Contains("FROM (VALUES", sql);
+        Assert.Contains("(:b0, :b1), (:b2, :b3)", sql);
+        Assert.Contains("WHERE", sql);
+    }
+
+    [Fact]
+    public void BuildBatchUpdate_PostgreSql_UsesUpdateFromValues()
+    {
+        // Arrange
+        var helper = new TableGateway<TestEntitySimple, int>(_pgContext);
+        var entities = new List<TestEntitySimple> { new() { Id = 1, Name = "upd" } };
+
+        // Act
+        var containers = helper.BuildBatchUpdate(entities);
+        var sql = containers[0].Query.ToString();
+
+        // Assert
+        Assert.Contains("UPDATE", sql);
+        Assert.Contains("FROM (VALUES", sql);
+        Assert.Contains("AS t", sql);
+    }
+
+    [Fact]
+    public void BuildBatchUpdate_SqlServer_UsesMerge()
+    {
+        // Arrange
+        var helper = new TableGateway<TestEntitySimple, int>(_sqlServerContext);
+        var entities = new List<TestEntitySimple> { new() { Id = 1, Name = "upd" } };
+
+        // Act
+        var containers = helper.BuildBatchUpdate(entities);
+        var sql = containers[0].Query.ToString();
+
+        // Assert
+        Assert.Contains("MERGE INTO", sql);
+        Assert.Contains("USING (VALUES", sql);
+        Assert.Contains("WHEN MATCHED THEN UPDATE", sql);
+    }
+
+    [Fact]
     public void BuildBatchUpsert_MySql_OnDuplicateKey()
     {
         var helper = new TableGateway<TestEntity, int>(_mysqlContext, _audit);
@@ -408,6 +470,183 @@ public class TableGatewayBatchTests : IAsyncLifetime
             new[] { new TestEntity { Name = "test" } },
             null,
             cts.Token));
+    }
+
+    // =========================================================================
+    // BatchUpdateAsync — Empty, Null, Cancellation
+    // =========================================================================
+
+    [Fact]
+    public async Task BatchUpdateAsync_EmptyList_ReturnsZero()
+    {
+        var helper = new TableGateway<TestEntitySimple, int>(_sqliteContext);
+        var result = await helper.BatchUpdateAsync(Array.Empty<TestEntitySimple>());
+        Assert.Equal(0, result);
+    }
+
+    [Fact]
+    public async Task BatchUpdateAsync_NullList_Throws()
+    {
+        var helper = new TableGateway<TestEntitySimple, int>(_sqliteContext);
+        await Assert.ThrowsAsync<ArgumentNullException>(async () => await helper.BatchUpdateAsync(null!));
+    }
+
+    [Fact]
+    public async Task BatchUpdateAsync_SupportsCancellation()
+    {
+        var helper = new TableGateway<TestEntitySimple, int>(_sqliteContext);
+        var cts = new CancellationTokenSource();
+        cts.Cancel();
+        await Assert.ThrowsAsync<OperationCanceledException>(async () => await helper.BatchUpdateAsync(
+            new[] { new TestEntitySimple { Id = 1, Name = "test" } },
+            null,
+            cts.Token));
+    }
+
+    // =========================================================================
+    // BuildBatchUpdate — Empty, Null, Fallback Dialects
+    // =========================================================================
+
+    [Fact]
+    public void BuildBatchUpdate_EmptyList_ReturnsEmptyContainerList()
+    {
+        var helper = new TableGateway<TestEntitySimple, int>(_sqliteContext);
+        var containers = helper.BuildBatchUpdate(Array.Empty<TestEntitySimple>());
+        Assert.Empty(containers);
+    }
+
+    [Fact]
+    public void BuildBatchUpdate_NullList_Throws()
+    {
+        var helper = new TableGateway<TestEntitySimple, int>(_sqliteContext);
+        Assert.Throws<ArgumentNullException>(() => helper.BuildBatchUpdate(null!));
+    }
+
+    [Fact]
+    public void BuildBatchUpdate_MySQL_FallsBackToIndividualUpdates()
+    {
+        // MySQL SupportsBatchUpdate=false — falls back to one container per entity, each an UPDATE statement
+        var helper = new TableGateway<TestEntitySimple, int>(_mysqlContext);
+        var entities = new List<TestEntitySimple>
+        {
+            new() { Id = 1, Name = "first" },
+            new() { Id = 2, Name = "second" },
+            new() { Id = 3, Name = "third" }
+        };
+
+        var containers = helper.BuildBatchUpdate(entities);
+
+        // Should produce one container per entity
+        Assert.Equal(3, containers.Count);
+        foreach (var container in containers)
+        {
+            var sql = container.Query.ToString();
+            Assert.Contains("UPDATE", sql);
+        }
+    }
+
+    // =========================================================================
+    // CreateAsync(IReadOnlyList) — list overload delegates to BatchCreateAsync
+    // =========================================================================
+
+    [Fact]
+    public async Task CreateAsync_List_NullList_Throws()
+    {
+        var helper = new TableGateway<TestEntitySimple, int>(_sqliteContext);
+        await Assert.ThrowsAsync<ArgumentNullException>(
+            async () => await helper.CreateAsync((IReadOnlyList<TestEntitySimple>)null!));
+    }
+
+    [Fact]
+    public async Task CreateAsync_List_EmptyList_ReturnsZero()
+    {
+        var helper = new TableGateway<TestEntitySimple, int>(_sqliteContext);
+        var result = await helper.CreateAsync(Array.Empty<TestEntitySimple>());
+        Assert.Equal(0, result);
+    }
+
+    [Fact]
+    public async Task CreateAsync_List_MultipleEntities_ProducesInsertSql()
+    {
+        var helper = new TableGateway<TestEntitySimple, int>(_sqliteContext);
+        var entities = new[]
+        {
+            new TestEntitySimple { Name = "a" },
+            new TestEntitySimple { Name = "b" }
+        };
+        // Should route through BatchCreateAsync — verifies overload resolves and executes
+        var result = await helper.CreateAsync((IReadOnlyList<TestEntitySimple>)entities);
+        Assert.True(result >= 0);
+    }
+
+    // =========================================================================
+    // UpdateAsync(IReadOnlyList) — list overload delegates to BatchUpdateAsync
+    // =========================================================================
+
+    [Fact]
+    public async Task UpdateAsync_List_NullList_Throws()
+    {
+        var helper = new TableGateway<TestEntitySimple, int>(_sqliteContext);
+        await Assert.ThrowsAsync<ArgumentNullException>(
+            async () => await helper.UpdateAsync((IReadOnlyList<TestEntitySimple>)null!));
+    }
+
+    [Fact]
+    public async Task UpdateAsync_List_EmptyList_ReturnsZero()
+    {
+        var helper = new TableGateway<TestEntitySimple, int>(_sqliteContext);
+        var result = await helper.UpdateAsync(Array.Empty<TestEntitySimple>());
+        Assert.Equal(0, result);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_List_MultipleEntities_ProducesUpdateSql()
+    {
+        var helper = new TableGateway<TestEntitySimple, int>(_sqliteContext);
+        var entities = new[]
+        {
+            new TestEntitySimple { Id = 1, Name = "x" },
+            new TestEntitySimple { Id = 2, Name = "y" }
+        };
+        // Routes through BatchUpdateAsync (SQLite has no SupportsBatchUpdate → individual UPDATEs)
+        var containers = helper.BuildBatchUpdate((IReadOnlyList<TestEntitySimple>)entities);
+        Assert.Equal(2, containers.Count);
+        Assert.All(containers, c => Assert.Contains("UPDATE", c.Query.ToString()));
+    }
+
+    // =========================================================================
+    // UpsertAsync(IReadOnlyList) — list overload delegates to BatchUpsertAsync
+    // =========================================================================
+
+    [Fact]
+    public async Task UpsertAsync_List_NullList_Throws()
+    {
+        var helper = new TableGateway<TestEntity, int>(_pgContext, _audit);
+        await Assert.ThrowsAsync<ArgumentNullException>(
+            async () => await helper.UpsertAsync((IReadOnlyList<TestEntity>)null!));
+    }
+
+    [Fact]
+    public async Task UpsertAsync_List_EmptyList_ReturnsZero()
+    {
+        var helper = new TableGateway<TestEntity, int>(_pgContext, _audit);
+        var result = await helper.UpsertAsync(Array.Empty<TestEntity>());
+        Assert.Equal(0, result);
+    }
+
+    [Fact]
+    public async Task UpsertAsync_List_MultipleEntities_ProducesUpsertSql()
+    {
+        var helper = new TableGateway<TestEntity, int>(_pgContext, _audit);
+        var entities = new[]
+        {
+            new TestEntity { Name = "p" },
+            new TestEntity { Name = "q" }
+        };
+        var containers = helper.BuildBatchUpsert((IReadOnlyList<TestEntity>)entities);
+        Assert.NotEmpty(containers);
+        var sql = containers[0].Query.ToString();
+        Assert.Contains("ON CONFLICT", sql);
     }
 
     // =========================================================================

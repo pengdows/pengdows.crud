@@ -43,6 +43,19 @@ public partial class TableGateway<TEntity, TRowID>
 
         var ctx = context ?? _context;
         var dialect = GetDialect(ctx);
+
+        // Fallback for dialects that cannot execute EXECUTE BLOCK / multi-row INSERT with ADO.NET parameters
+        if (!dialect.SupportsBatchInsert)
+        {
+            var fallback = new List<ISqlContainer>(entities.Count);
+            foreach (var entity in entities)
+            {
+                fallback.Add(BuildCreate(entity, ctx));
+            }
+
+            return fallback;
+        }
+
         var insertableColumns = GetCachedInsertableColumns();
 
         // Resolve audit values once for the whole batch (not once per entity)
@@ -60,7 +73,7 @@ public partial class TableGateway<TEntity, TRowID>
             PrepareVersionForCreate(entity);
         }
 
-        var chunks = ChunkList(entities, insertableColumns.Count, ctx.MaxParameterLimit);
+        var chunks = ChunkList(entities, insertableColumns.Count, ctx.MaxParameterLimit, dialect.MaxRowsPerBatch);
         var result = new List<ISqlContainer>(chunks.Count);
 
         foreach (var chunk in chunks)
@@ -108,6 +121,183 @@ public partial class TableGateway<TEntity, TRowID>
         }
 
         return totalAffected;
+    }
+
+    /// <inheritdoc/>
+    public Task<int> CreateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
+        CancellationToken cancellationToken = default)
+        => BatchCreateAsync(entities, context, cancellationToken);
+
+    /// <inheritdoc/>
+    public Task<int> UpdateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
+        CancellationToken cancellationToken = default)
+        => BatchUpdateAsync(entities, context, cancellationToken);
+
+    /// <inheritdoc/>
+    public Task<int> UpsertAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
+        CancellationToken cancellationToken = default)
+        => BatchUpsertAsync(entities, context, cancellationToken);
+
+    /// <inheritdoc/>
+    public async Task<int> BatchUpdateAsync(
+        IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (entities == null)
+        {
+            throw new ArgumentNullException(nameof(entities));
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (entities.Count == 0)
+        {
+            return 0;
+        }
+
+        // Single entity fast path
+        if (entities.Count == 1)
+        {
+            return await UpdateAsync(entities[0], context, cancellationToken).ConfigureAwait(false);
+        }
+
+        var containers = BuildBatchUpdate(entities, context);
+        var totalAffected = 0;
+
+        foreach (var sc in containers)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            totalAffected += await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        return totalAffected;
+    }
+
+    /// <inheritdoc/>
+    public IReadOnlyList<ISqlContainer> BuildBatchUpdate(
+        IReadOnlyList<TEntity> entities, IDatabaseContext? context = null)
+    {
+        if (entities == null)
+        {
+            throw new ArgumentNullException(nameof(entities));
+        }
+
+        if (entities.Count == 0)
+        {
+            return Array.Empty<ISqlContainer>();
+        }
+
+        var ctx = context ?? _context;
+        var dialect = GetDialect(ctx);
+
+        if (!dialect.SupportsBatchUpdate)
+        {
+            // Fallback: one-by-one BuildUpdate per entity
+            var fallback = new List<ISqlContainer>(entities.Count);
+            foreach (var entity in entities)
+            {
+                // We assume sequential strategy here for fallback, skip original load (no change tracking)
+                fallback.Add(BuildUpdateAsync(entity, false, ctx).Result);
+            }
+
+            return fallback;
+        }
+
+        var updateableColumns = GetCachedUpdateableColumns();
+        var keyColumns = _tableInfo.PrimaryKeys.Count > 0 ? _tableInfo.PrimaryKeys : (_idColumn != null ? new List<IColumnInfo> { _idColumn } : throw new InvalidOperationException("Batch update requires an [Id] or [PrimaryKey]."));
+
+        // Resolve audit values once for the whole batch
+        var auditValues = _auditValueResolver != null && _hasAuditColumns
+            ? ResolveAuditValuesForBatch()
+            : null;
+
+        // Prepare all entities
+        foreach (var entity in entities)
+        {
+            if (_hasAuditColumns)
+            {
+                SetAuditFields(entity, true, auditValues);
+            }
+
+            // Version column increment is usually handled in the SET clause SQL
+        }
+
+        // Chunking calculation: keyCols + updateableCols
+        var totalParamsPerRow = keyColumns.Count + updateableColumns.Count;
+        var chunks = ChunkList(entities, totalParamsPerRow, ctx.MaxParameterLimit, dialect.MaxRowsPerBatch);
+        var result = new List<ISqlContainer>(chunks.Count);
+
+        foreach (var chunk in chunks)
+        {
+            var sc = ctx.CreateSqlContainer();
+            var counters = new ClauseCounters();
+
+            var wrappedTableName = BuildWrappedTableName(dialect);
+            var wrappedColNames = updateableColumns.Select(c => dialect.WrapSimpleName(c.Name)).ToList();
+            var wrappedKeyNames = keyColumns.Select(c => dialect.WrapSimpleName(c.Name)).ToList();
+
+            // Delegate structure to dialect
+            dialect.BuildBatchUpdateSql(wrappedTableName, wrappedColNames, wrappedKeyNames, chunk.Count, sc.Query,
+                (row, col) =>
+                {
+                    var entity = chunk[row];
+                    IColumnInfo colInfo;
+                    if (col < keyColumns.Count)
+                    {
+                        colInfo = keyColumns[col];
+                    }
+                    else
+                    {
+                        colInfo = updateableColumns[col - keyColumns.Count];
+                    }
+
+                    return colInfo.MakeParameterValueFromField(entity);
+                });
+
+            // Value binding
+            for (var row = 0; row < chunk.Count; row++)
+            {
+                var entity = chunk[row];
+                // Bind Keys first, then Updateable columns (matching the getValue order above)
+                foreach (var col in keyColumns)
+                {
+                    var val = col.MakeParameterValueFromField(entity);
+                    if (val == null || val == DBNull.Value) continue;
+                    sc.AddParameter(dialect.CreateDbParameter(counters.NextBatch(), col.DbType, val));
+                }
+
+                foreach (var col in updateableColumns)
+                {
+                    var val = col.MakeParameterValueFromField(entity);
+                    if (val == null || val == DBNull.Value) continue;
+                    sc.AddParameter(dialect.CreateDbParameter(counters.NextBatch(), col.DbType, val));
+                }
+            }
+
+            result.Add(sc);
+        }
+
+        return result;
+    }
+
+    private IReadOnlyList<IColumnInfo> GetCachedUpdateableColumns()
+    {
+        if (_columnListCache.TryGet("Updateable", out var cached))
+        {
+            return cached;
+        }
+
+        var updateable = new List<IColumnInfo>(_tableInfo.OrderedColumns.Count);
+        foreach (var c in _tableInfo.OrderedColumns)
+        {
+            if (!c.IsNonUpdateable && !c.IsId && !_tableInfo.PrimaryKeys.Contains(c))
+            {
+                updateable.Add(c);
+            }
+        }
+
+        return _columnListCache.GetOrAdd("Updateable", _ => updateable);
     }
 
     /// <inheritdoc/>
@@ -224,69 +414,42 @@ public partial class TableGateway<TEntity, TRowID>
         var sc = ctx.CreateSqlContainer();
         var counters = new ClauseCounters();
 
-        sc.Query.Append("INSERT INTO ")
-            .Append(BuildWrappedTableName(dialect))
-            .Append(" (");
-
-        // Column list (same for all rows)
-        for (var c = 0; c < insertableColumns.Count; c++)
+        var wrappedTableName = BuildWrappedTableName(dialect);
+        var wrappedColumnNames = new string[insertableColumns.Count];
+        for (var i = 0; i < insertableColumns.Count; i++)
         {
-            if (c > 0)
-            {
-                sc.Query.Append(", ");
-            }
-
-            sc.Query.Append(dialect.WrapSimpleName(insertableColumns[c].Name));
+            wrappedColumnNames[i] = dialect.WrapSimpleName(insertableColumns[i].Name);
         }
 
-        sc.Query.Append(") VALUES ");
+        // Delegate structure to dialect (ANSI VALUES, Oracle INSERT ALL, etc.)
+        dialect.BuildBatchInsertSql(wrappedTableName, wrappedColumnNames, chunk.Count, sc.Query, 
+            (row, col) => insertableColumns[col].MakeParameterValueFromField(chunk[row]));
 
-        // Value tuples for each entity
+        // Value binding for each entity
         for (var row = 0; row < chunk.Count; row++)
         {
-            if (row > 0)
-            {
-                sc.Query.Append(", ");
-            }
-
-            sc.Query.Append('(');
             var entity = chunk[row];
 
             for (var c = 0; c < insertableColumns.Count; c++)
             {
-                if (c > 0)
-                {
-                    sc.Query.Append(", ");
-                }
-
                 var column = insertableColumns[c];
                 var value = column.MakeParameterValueFromField(entity);
 
-                if (Utils.IsNullOrDbNull(value))
+                // Skip parameter creation if it was inlined as NULL literal
+                if (value == null || value == DBNull.Value)
                 {
-                    sc.Query.Append("NULL");
+                    continue;
                 }
-                else
+
+                var name = counters.NextBatch();
+                var p = dialect.CreateDbParameter(name, column.DbType, value);
+                if (column.IsJsonType)
                 {
-                    var name = counters.NextBatch();
-                    var p = dialect.CreateDbParameter(name, column.DbType, value);
-                    if (column.IsJsonType)
-                    {
-                        dialect.TryMarkJsonParameter(p, column);
-                    }
-
-                    sc.AddParameter(p);
-                    var marker = dialect.MakeParameterName(p);
-                    if (column.IsJsonType)
-                    {
-                        marker = dialect.RenderJsonArgument(marker, column);
-                    }
-
-                    sc.Query.Append(marker);
+                    dialect.TryMarkJsonParameter(p, column);
                 }
+
+                sc.AddParameter(p);
             }
-
-            sc.Query.Append(')');
         }
 
         return sc;
@@ -320,7 +483,7 @@ public partial class TableGateway<TEntity, TRowID>
 
         var conflictCols = keys.Count > 0 ? keys : new List<IColumnInfo> { _idColumn! };
 
-        var chunks = ChunkList(entities, insertableColumns.Count, ctx.MaxParameterLimit);
+        var chunks = ChunkList(entities, insertableColumns.Count, ctx.MaxParameterLimit, dialect.MaxRowsPerBatch);
         var result = new List<ISqlContainer>(chunks.Count);
 
         foreach (var chunk in chunks)
@@ -365,12 +528,19 @@ public partial class TableGateway<TEntity, TRowID>
             PrepareForInsertOrUpsert(entity, auditValues);
         }
 
-        var chunks = ChunkList(entities, insertableColumns.Count, ctx.MaxParameterLimit);
+        var chunks = ChunkList(entities, insertableColumns.Count, ctx.MaxParameterLimit, dialect.MaxRowsPerBatch);
         var result = new List<ISqlContainer>(chunks.Count);
 
         foreach (var chunk in chunks)
         {
             var sc = BuildBatchInsertContainer(chunk, insertableColumns, ctx, dialect);
+
+            // MySQL 8.0.20+: declare the row alias (AS incoming) between VALUES and ON DUPLICATE KEY UPDATE
+            var incomingAlias = dialect.UpsertIncomingAlias;
+            if (!string.IsNullOrEmpty(incomingAlias))
+            {
+                sc.Query.Append(" AS ").Append(incomingAlias);
+            }
 
             // Append ON DUPLICATE KEY UPDATE clause
             sc.Query.Append(" ON DUPLICATE KEY UPDATE ").Append(template.UpsertUpdateFragment);

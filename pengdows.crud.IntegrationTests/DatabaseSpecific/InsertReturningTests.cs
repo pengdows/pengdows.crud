@@ -104,6 +104,8 @@ public class InsertReturningTests : DatabaseTestBase
             // Only test non-RETURNING providers
             if (!NonReturningProviders.Contains(provider))
             {
+                Output.WriteLine(
+                    $"[{provider}] Skipping: {provider} supports RETURNING/OUTPUT clause — identity population via RETURNING is covered in CreateAsync_ReturningClause_PopulatesIdentityAcrossProviders");
                 return;
             }
 
@@ -267,6 +269,8 @@ WHERE {nameColumn} = ");
         {
             if (provider != SupportedDatabase.Snowflake)
             {
+                Output.WriteLine(
+                    $"[{provider}] Skipping: Snowflake-specific AUTOINCREMENT test — {provider} uses RETURNING/OUTPUT for reliable identity retrieval; see CreateAsync_ReturningClause_PopulatesIdentityAcrossProviders");
                 return;
             }
 

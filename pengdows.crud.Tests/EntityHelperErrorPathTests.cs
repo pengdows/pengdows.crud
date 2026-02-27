@@ -77,7 +77,7 @@ public class TableGatewayErrorPathTests : IAsyncLifetime
     {
         var helper = new TableGateway<TestEntity, long>(Context);
 
-        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.UpdateAsync(null!));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.UpdateAsync((TestEntity)null!));
     }
 
     [Fact]
@@ -91,7 +91,7 @@ public class TableGatewayErrorPathTests : IAsyncLifetime
     {
         var helper = new TableGateway<TestEntity, long>(Context);
 
-        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.UpsertAsync(null!));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.UpsertAsync((TestEntity)null!));
     }
 
     [Fact]
@@ -113,7 +113,7 @@ public class TableGatewayErrorPathTests : IAsyncLifetime
     {
         var helper = new TableGateway<TestEntity, long>(Context);
 
-        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.DeleteAsync(null!));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.DeleteAsync((IEnumerable<long>)null!));
     }
 
     [Fact]
@@ -229,23 +229,11 @@ public class TableGatewayErrorPathTests : IAsyncLifetime
     }
 
     [Fact]
-    public void ClearCaches_ClearsAllInternalCaches()
-    {
-        var helper = new TableGateway<TestEntity, long>(Context);
-
-        helper.ClearCaches();
-
-        Assert.True(true);
-    }
-
-    [Fact]
     public void ClearCaches_ExecutesSuccessfully()
     {
         var helper = new TableGateway<TestEntity, long>(Context);
 
-        helper.ClearCaches();
-
-        Assert.True(true);
+        helper.ClearCaches(); // should not throw
     }
 
     [Fact]

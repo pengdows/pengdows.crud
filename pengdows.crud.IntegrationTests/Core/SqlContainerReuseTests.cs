@@ -8,12 +8,13 @@ using Xunit.Abstractions;
 namespace pengdows.crud.IntegrationTests.Core;
 
 /// <summary>
-/// Verifies batch-like behavior: multiple commands in sequence and command object reuse.
+/// Verifies SQL container reuse: executing the same container multiple times with updated parameters,
+/// and sequential commands on the same connection within a transaction.
 /// </summary>
 [Collection("IntegrationTests")]
-public class BatchTests : DatabaseTestBase
+public class SqlContainerReuseTests : DatabaseTestBase
 {
-    public BatchTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture)
+    public SqlContainerReuseTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture)
     {
     }
 
@@ -39,7 +40,7 @@ public class BatchTests : DatabaseTestBase
             await using var container = context.CreateSqlContainer();
             // We use the helper to build the insert SQL for us to ensure quoting is perfect
             // Note: TableGateway doesn't have a public "BuildInsertSql" but we can build it from attributes
-            var table = context.WrapObjectName("test_table");
+            var table = IntegrationObjectNameHelper.Table(context, "test_table");
             var idCol = context.WrapObjectName("id");
             var nameCol = context.WrapObjectName("name");
             var valCol = context.WrapObjectName("value");
@@ -90,7 +91,7 @@ public class BatchTests : DatabaseTestBase
             // Use a transaction to force same connection
             await using var tx = context.BeginTransaction();
 
-            var table = context.WrapObjectName("test_table");
+            var table = IntegrationObjectNameHelper.Table(context, "test_table");
             var idCol = context.WrapObjectName("id");
             var valCol = context.WrapObjectName("value");
             var pId = tx.MakeParameterName("id");

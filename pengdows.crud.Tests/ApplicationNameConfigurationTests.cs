@@ -154,10 +154,10 @@ public class ApplicationNameConfigurationTests
         var result = ConnectionPoolingConfiguration.ApplyApplicationNameSuffix(
             connectionString,
             "Application Name",
-            ":ro");
+            "-ro");
 
         var builder = new DbConnectionStringBuilder { ConnectionString = result };
-        Assert.Equal("MyApp:ro", builder["Application Name"]);
+        Assert.Equal("MyApp-ro", builder["Application Name"]);
     }
 
     [Fact]
@@ -168,11 +168,11 @@ public class ApplicationNameConfigurationTests
         var result = ConnectionPoolingConfiguration.ApplyApplicationNameSuffix(
             connectionString,
             "Application Name",
-            ":ro",
+            "-ro",
             "MyApp");
 
         var builder = new DbConnectionStringBuilder { ConnectionString = result };
-        Assert.Equal("MyApp:ro", builder["Application Name"]);
+        Assert.Equal("MyApp-ro", builder["Application Name"]);
     }
 
     [Fact]
@@ -183,7 +183,7 @@ public class ApplicationNameConfigurationTests
         var result = ConnectionPoolingConfiguration.ApplyApplicationNameSuffix(
             connectionString,
             "Application Name",
-            ":ro",
+            "-ro",
             "MyApp");
 
         Assert.Equal(connectionString, result);

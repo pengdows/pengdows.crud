@@ -25,6 +25,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
+[Collection("PoolGovernorDeadlineSerial")]
 public sealed class PoolGovernorDeadlineTests
 {
     // ── AcquireAsync deadline ─────────────────────────────────────────────────
@@ -55,7 +56,7 @@ public sealed class PoolGovernorDeadlineTests
             holdTurnstile: true);
 
         await turnstile.WaitAsync(); // hold it externally
-        _ = Task.Delay(turnstileHoldMs).ContinueWith(_ => turnstile.Release());
+        using var releaser = StartDelayedReleaseThread(turnstile, turnstileHoldMs);
 
         var sw = Stopwatch.StartNew();
         await Assert.ThrowsAsync<PoolSaturatedException>(() => gov.AcquireAsync());
@@ -88,7 +89,7 @@ public sealed class PoolGovernorDeadlineTests
             holdTurnstile: true);
 
         turnstile.Wait(); // hold it externally
-        _ = Task.Delay(turnstileHoldMs).ContinueWith(_ => turnstile.Release());
+        using var releaser = StartDelayedReleaseThread(turnstile, turnstileHoldMs);
 
         var sw = Stopwatch.StartNew();
         Assert.Throws<PoolSaturatedException>(() => gov.Acquire());
@@ -220,5 +221,28 @@ public sealed class PoolGovernorDeadlineTests
         Assert.Equal(0, gov.GetSnapshot().TotalSlotTimeouts);
 
         turnstile.Release(); // cleanup
+    }
+
+    private static IDisposable StartDelayedReleaseThread(SemaphoreSlim turnstile, int delayMs)
+    {
+        var thread = new Thread(() =>
+        {
+            Thread.Sleep(delayMs);
+            turnstile.Release();
+        })
+        {
+            IsBackground = true
+        };
+
+        thread.Start();
+        return new JoinThreadOnDispose(thread);
+    }
+
+    private sealed class JoinThreadOnDispose(Thread thread) : IDisposable
+    {
+        public void Dispose()
+        {
+            thread.Join(TimeSpan.FromSeconds(5));
+        }
     }
 }

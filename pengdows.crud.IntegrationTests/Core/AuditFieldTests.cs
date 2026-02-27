@@ -251,7 +251,7 @@ public class AuditFieldTests : DatabaseTestBase
 
     private static string BuildAuditTableSql(SupportedDatabase provider, IDatabaseContext context)
     {
-        var table = context.WrapObjectName("audited_entity");
+        var table = IntegrationObjectNameHelper.Table(context, "audited_entity");
         var idColumn = context.WrapObjectName("id");
         var nameColumn = context.WrapObjectName("name");
         var createdAtColumn = context.WrapObjectName("created_at");
@@ -311,7 +311,7 @@ CREATE TABLE {table} (
     private static async Task EnsureFirebirdAuditTableAsync(IDatabaseContext context)
     {
         var tableName = "audited_entity";
-        var wrappedTable = context.WrapObjectName(tableName);
+        var wrappedTable = IntegrationObjectNameHelper.Table(context, tableName);
         if (!await FirebirdAuditTableExistsAsync(context))
         {
             var createSql = BuildAuditTableSql(SupportedDatabase.Firebird, context);

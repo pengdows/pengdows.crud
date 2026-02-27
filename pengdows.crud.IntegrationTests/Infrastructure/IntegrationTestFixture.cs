@@ -88,6 +88,7 @@ public class IntegrationTestFixture : IAsyncLifetime
     private readonly IHost _host;
     private readonly Dictionary<SupportedDatabase, ITestContainer> _containers = new();
     private readonly Dictionary<SupportedDatabase, IDatabaseContext> _contexts = new();
+    private readonly Dictionary<SupportedDatabase, string> _startupFailures = new();
     private readonly object _contextLock = new();
 
     public IntegrationTestFixture()
@@ -122,6 +123,7 @@ public class IntegrationTestFixture : IAsyncLifetime
             }
             catch (Exception ex)
             {
+                _startupFailures[provider] = ex.ToString();
                 Console.WriteLine($"Warning: Failed to initialize {provider} container: {ex.Message}");
             }
         }
@@ -155,6 +157,12 @@ public class IntegrationTestFixture : IAsyncLifetime
     {
         if (!_containers.TryGetValue(provider, out var container))
         {
+            if (_startupFailures.TryGetValue(provider, out var reason))
+            {
+                throw new InvalidOperationException(
+                    $"Provider {provider} container failed to start during fixture initialization: {reason}");
+            }
+
             throw new InvalidOperationException($"Provider {provider} is not available for testing.");
         }
 

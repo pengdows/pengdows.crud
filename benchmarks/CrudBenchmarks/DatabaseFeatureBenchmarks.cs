@@ -93,6 +93,8 @@ public class DatabaseFeatureBenchmarks : IAsyncDisposable
     private NpgsqlDataSource _dapperDataSource = null!;
     private DbContextOptions<EfBrokenDbContext> _efOptions = null!;
     private EfBrokenDbContext _efContext = null!;
+    private TableGateway<TransactionRow, long> _transactionGateway = null!;
+    private TableGateway<FullTextSearchRow, string> _fullTextGateway = null!;
 
     private readonly List<long> _transactionIds = new();
 
@@ -136,6 +138,8 @@ public class DatabaseFeatureBenchmarks : IAsyncDisposable
             DbMode = DbMode.Standard
         };
         _pengdowsContext = new DatabaseContext(cfg, _pengdowsDataSource, NpgsqlFactory.Instance);
+        _transactionGateway = new TableGateway<TransactionRow, long>(_pengdowsContext);
+        _fullTextGateway = new TableGateway<FullTextSearchRow, string>(_pengdowsContext);
 
         // Setup Dapper with NpgsqlDataSource and separate Application Name
         var dapperConnStr = _baseConnStr + ";Application Name=dapper_bench";
@@ -274,8 +278,7 @@ public class DatabaseFeatureBenchmarks : IAsyncDisposable
         container.AddParameterWithValue("status", DbType.String, "completed");
         container.AddParameterWithValue("tag", DbType.String, "high-value");
 
-        var helper = new TableGateway<TransactionRow, long>(_pengdowsContext);
-        return await helper.LoadListAsync(container);
+        return await _transactionGateway.LoadListAsync(container);
     }
 
     [Benchmark]
@@ -322,8 +325,7 @@ public class DatabaseFeatureBenchmarks : IAsyncDisposable
         container.AddParameterWithValue("searchTerm", DbType.String, "transaction");
         container.AddParameterWithValue("searchTerm2", DbType.String, "transaction");
 
-        var helper = new TableGateway<FullTextSearchRow, string>(_pengdowsContext);
-        return await helper.LoadListAsync(container);
+        return await _fullTextGateway.LoadListAsync(container);
     }
 
     [Benchmark]
@@ -453,8 +455,7 @@ public class DatabaseFeatureBenchmarks : IAsyncDisposable
         container.Query.Append(sql);
         container.AddParameterWithValue("minScore", DbType.Int32, 80);
 
-        var helper = new TableGateway<TransactionRow, long>(_pengdowsContext);
-        return await helper.LoadListAsync(container);
+        return await _transactionGateway.LoadListAsync(container);
     }
 
     [Benchmark]
@@ -497,8 +498,7 @@ public class DatabaseFeatureBenchmarks : IAsyncDisposable
         container.Query.Append(sql);
         container.AddParameterWithValue("tag", DbType.String, "flagged");
 
-        var helper = new TableGateway<TransactionRow, long>(_pengdowsContext);
-        return await helper.LoadListAsync(container);
+        return await _transactionGateway.LoadListAsync(container);
     }
 
     [Benchmark]
@@ -543,8 +543,7 @@ public class DatabaseFeatureBenchmarks : IAsyncDisposable
             container.Query.Append(sql);
             container.AddParameterWithValue("status", DbType.String, "completed");
             container.AddParameterWithValue("tag", DbType.String, "high-value");
-            var helper = new TableGateway<TransactionRow, long>(_pengdowsContext);
-            await helper.LoadListAsync(container);
+            await _transactionGateway.LoadListAsync(container);
         });
     }
 
@@ -591,8 +590,7 @@ public class DatabaseFeatureBenchmarks : IAsyncDisposable
             container.Query.Append(sql);
             container.AddParameterWithValue("searchTerm", DbType.String, "transaction");
             container.AddParameterWithValue("searchTerm2", DbType.String, "transaction");
-            var helper = new TableGateway<FullTextSearchRow, string>(_pengdowsContext);
-            await helper.LoadListAsync(container);
+            await _fullTextGateway.LoadListAsync(container);
         });
     }
 

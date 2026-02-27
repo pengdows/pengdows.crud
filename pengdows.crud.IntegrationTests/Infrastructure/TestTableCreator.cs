@@ -45,7 +45,7 @@ public class TestTableCreator
 
     public async Task CreateRoundTripTableAsync()
     {
-        var table = _context.WrapObjectName("round_trip_entity");
+        var table = IntegrationObjectNameHelper.Table(_context, "round_trip_entity");
         var idCol = _context.WrapObjectName("id");
         var textCol = _context.WrapObjectName("text_value");
         var unicodeCol = _context.WrapObjectName("text_unicode");
@@ -207,7 +207,7 @@ public class TestTableCreator
 
     public async Task CreateTortureTableAsync()
     {
-        var table = _context.WrapObjectName("Default Order");
+        var table = IntegrationObjectNameHelper.Table(_context, "Default Order");
         var idCol = _context.WrapObjectName("Group By");
         var selectCol = _context.WrapObjectName("Select");
         var fromCol = _context.WrapObjectName("From");
@@ -322,39 +322,40 @@ public class TestTableCreator
     {
         var qp = _context.QuotePrefix;
         var qs = _context.QuoteSuffix;
+        var table = IntegrationObjectNameHelper.Table(_context, "accounts");
         var sql = _context.Product switch
         {
             SupportedDatabase.Sqlite => string.Format(@"
-                CREATE TABLE IF NOT EXISTS {0}accounts{1} (
+                CREATE TABLE IF NOT EXISTS {2} (
                     {0}id{1} INTEGER PRIMARY KEY,
                     {0}name{1} TEXT NOT NULL,
                     {0}balance{1} DECIMAL(18,2) NOT NULL DEFAULT 0.00
-                )", qp, qs),
+                )", qp, qs, table),
             SupportedDatabase.PostgreSql => string.Format(@"
-                CREATE TABLE IF NOT EXISTS {0}accounts{1} (
+                CREATE TABLE IF NOT EXISTS {2} (
                     {0}id{1} BIGINT PRIMARY KEY,
                     {0}name{1} VARCHAR(255) NOT NULL,
                     {0}balance{1} DECIMAL(18,2) NOT NULL DEFAULT 0.00
-                )", qp, qs),
+                )", qp, qs, table),
             SupportedDatabase.Snowflake => string.Format(@"
-                CREATE TABLE IF NOT EXISTS {0}accounts{1} (
+                CREATE TABLE IF NOT EXISTS {2} (
                     {0}id{1} BIGINT PRIMARY KEY,
                     {0}name{1} VARCHAR(255) NOT NULL,
                     {0}balance{1} DECIMAL(18,2) NOT NULL DEFAULT 0.00
-                )", qp, qs),
+                )", qp, qs, table),
             SupportedDatabase.SqlServer => string.Format(@"
-                IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'{0}dbo{1}.{0}accounts{1}') AND type in (N'U'))
-                CREATE TABLE {0}dbo{1}.{0}accounts{1} (
+                IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'{2}') AND type in (N'U'))
+                CREATE TABLE {2} (
                     {0}id{1} BIGINT PRIMARY KEY,
                     {0}name{1} NVARCHAR(255) NOT NULL,
                     {0}balance{1} DECIMAL(18,2) NOT NULL DEFAULT 0.00
-                )", qp, qs),
+                )", qp, qs, table),
             SupportedDatabase.MySql or SupportedDatabase.MariaDb => string.Format(@"
-                CREATE TABLE IF NOT EXISTS {0}accounts{1} (
+                CREATE TABLE IF NOT EXISTS {2} (
                     {0}id{1} BIGINT PRIMARY KEY,
                     {0}name{1} VARCHAR(255) NOT NULL,
                     {0}balance{1} DECIMAL(18,2) NOT NULL DEFAULT 0.00
-                )", qp, qs),
+                )", qp, qs, table),
             SupportedDatabase.Oracle => string.Format(@"
                 DECLARE
                     table_exists NUMBER;
@@ -362,13 +363,13 @@ public class TestTableCreator
                     SELECT COUNT(*) INTO table_exists FROM user_tables WHERE table_name = 'ACCOUNTS';
                     IF table_exists = 0 THEN
                         EXECUTE IMMEDIATE '
-                            CREATE TABLE {0}accounts{1} (
+                            CREATE TABLE {2} (
                                 {0}id{1} NUMBER PRIMARY KEY,
                                 {0}name{1} VARCHAR2(255) NOT NULL,
                                 {0}balance{1} DECIMAL(18,2) DEFAULT 0.00 NOT NULL
                             )';
                     END IF;
-                END;", qp, qs),
+                END;", qp, qs, table),
             _ => throw new NotSupportedException($"Database {_context.Product} not supported")
         };
 
@@ -378,8 +379,9 @@ public class TestTableCreator
 
     private string CreateSqliteTableSql()
     {
-        return @"
-        CREATE TABLE IF NOT EXISTS test_table (
+        var table = IntegrationObjectNameHelper.Table(_context, "test_table");
+        return $@"
+        CREATE TABLE IF NOT EXISTS {table} (
             id BIGINT PRIMARY KEY,
             name TEXT NOT NULL,
             value INTEGER NOT NULL,
@@ -394,8 +396,9 @@ public class TestTableCreator
 
     private string CreatePostgreSqlTableSql()
     {
-        return @"
-        CREATE TABLE IF NOT EXISTS test_table (
+        var table = IntegrationObjectNameHelper.Table(_context, "test_table");
+        return $@"
+        CREATE TABLE IF NOT EXISTS {table} (
             id BIGINT PRIMARY KEY,
             name VARCHAR(255) NOT NULL,
             value INTEGER NOT NULL,
@@ -410,9 +413,10 @@ public class TestTableCreator
 
     private string CreateSqlServerTableSql()
     {
-        return @"
-        IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[test_table]') AND type in (N'U'))
-        CREATE TABLE [dbo].[test_table] (
+        var table = IntegrationObjectNameHelper.Table(_context, "test_table");
+        return $@"
+        IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'{table}') AND type in (N'U'))
+        CREATE TABLE {table} (
             [id] BIGINT PRIMARY KEY,
             [name] NVARCHAR(255) NOT NULL,
             [value] INT NOT NULL,
@@ -427,8 +431,9 @@ public class TestTableCreator
 
     private string CreateMySqlTableSql()
     {
-        return @"
-        CREATE TABLE IF NOT EXISTS test_table (
+        var table = IntegrationObjectNameHelper.Table(_context, "test_table");
+        return $@"
+        CREATE TABLE IF NOT EXISTS {table} (
             id BIGINT PRIMARY KEY,
             name VARCHAR(255) NOT NULL,
             value INT NOT NULL,
@@ -449,7 +454,7 @@ public class TestTableCreator
 
     private string CreateSnowflakeTableSql()
     {
-        var table = _context.WrapObjectName("test_table");
+        var table = IntegrationObjectNameHelper.Table(_context, "test_table");
         var idColumn = _context.WrapObjectName("id");
         var nameColumn = _context.WrapObjectName("name");
         var valueColumn = _context.WrapObjectName("value");
@@ -476,7 +481,7 @@ public class TestTableCreator
 
     private string CreateFirebirdTableSql()
     {
-        var table = _context.WrapObjectName("test_table");
+        var table = IntegrationObjectNameHelper.Table(_context, "test_table");
         var idColumn = _context.WrapObjectName("id");
         var nameColumn = _context.WrapObjectName("name");
         var valueColumn = _context.WrapObjectName("value");
@@ -503,7 +508,7 @@ public class TestTableCreator
 
     private string CreateFirebirdDropBlockSql()
     {
-        var table = _context.WrapObjectName("test_table");
+        var table = IntegrationObjectNameHelper.Table(_context, "test_table");
         var target = "test_table".ToUpperInvariant();
         return $@"
         EXECUTE BLOCK AS
@@ -523,10 +528,11 @@ public class TestTableCreator
 
     private string CreateDuckDbTableSql()
     {
+        var table = IntegrationObjectNameHelper.Table(_context, "test_table");
         var qp = _context.QuotePrefix;
         var qs = _context.QuoteSuffix;
         return string.Format(@"
-        CREATE TABLE IF NOT EXISTS {0}test_table{1} (
+        CREATE TABLE IF NOT EXISTS {2} (
             {0}id{1} BIGINT PRIMARY KEY,
             {0}name{1} VARCHAR(255) NOT NULL,
             {0}value{1} INTEGER NOT NULL,
@@ -536,11 +542,12 @@ public class TestTableCreator
             {0}created_by{1} VARCHAR(100),
             {0}updated_at{1} TIMESTAMP,
             {0}updated_by{1} VARCHAR(100)
-        )", qp, qs);
+        )", qp, qs, table);
     }
 
     private string CreateOracleTableSql()
     {
+        var table = IntegrationObjectNameHelper.Table(_context, "test_table");
         var qp = _context.QuotePrefix;
         var qs = _context.QuoteSuffix;
         return string.Format(@"
@@ -550,7 +557,7 @@ public class TestTableCreator
             SELECT COUNT(*) INTO table_exists FROM user_tables WHERE table_name = 'TEST_TABLE';
             IF table_exists = 0 THEN
                 EXECUTE IMMEDIATE '
-                    CREATE TABLE {0}test_table{1} (
+                    CREATE TABLE {2} (
                         {0}id{1} NUMBER PRIMARY KEY,
                         {0}name{1} VARCHAR2(255) NOT NULL,
                         {0}value{1} NUMBER NOT NULL,
@@ -562,6 +569,6 @@ public class TestTableCreator
                         {0}updated_by{1} VARCHAR2(100)
                     )';
             END IF;
-        END;", qp, qs);
+        END;", qp, qs, table);
     }
 }

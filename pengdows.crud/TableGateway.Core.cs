@@ -998,8 +998,7 @@ public partial class TableGateway<TEntity, TRowID> :
     }
 
     /// <inheritdoc/>
-    public async Task<int> DeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null,
-        CancellationToken cancellationToken = default)
+    public IReadOnlyList<ISqlContainer> BuildBatchDelete(IEnumerable<TRowID> ids, IDatabaseContext? context = null)
     {
         if (ids == null)
         {
@@ -1023,20 +1022,46 @@ public partial class TableGateway<TEntity, TRowID> :
         var wrappedIdColumnName = dialect.WrapSimpleName(_idColumn.Name);
 
         // Chunk by max parameter limit (with 10% headroom, similar to BatchCreate)
-        var chunks = ChunkList(list, 1, ctx.MaxParameterLimit);
-        var totalAffected = 0;
+        var chunks = ChunkList(list, 1, ctx.MaxParameterLimit, dialect.MaxRowsPerBatch);
+        var result = new List<ISqlContainer>(chunks.Count);
 
         foreach (var chunk in chunks)
         {
-            cancellationToken.ThrowIfCancellationRequested();
             var sc = ctx.CreateSqlContainer();
             sc.Query.Append("DELETE FROM ").Append(BuildWrappedTableName(dialect));
             BuildWhere(wrappedIdColumnName, chunk, sc);
+            result.Add(sc);
+        }
+
+        return result;
+    }
+
+    /// <inheritdoc/>
+    /// <inheritdoc/>
+    public async Task<int> BatchDeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null,
+        CancellationToken cancellationToken = default)
+    {
+        var containers = BuildBatchDelete(ids, context);
+        var totalAffected = 0;
+
+        foreach (var sc in containers)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
             totalAffected += await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
         }
 
         return totalAffected;
     }
+
+    /// <inheritdoc/>
+    public Task<int> DeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null,
+        CancellationToken cancellationToken = default)
+        => BatchDeleteAsync(ids, context, cancellationToken);
+
+    /// <inheritdoc/>
+    public Task<int> DeleteAsync(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context = null,
+        CancellationToken cancellationToken = default)
+        => BatchDeleteAsync(entities, context, cancellationToken);
 
     /// <inheritdoc/>
     public IReadOnlyList<ISqlContainer> BuildBatchDelete(IReadOnlyCollection<TEntity> entities,
@@ -1057,7 +1082,7 @@ public partial class TableGateway<TEntity, TRowID> :
         var keys = GetPrimaryKeys();
 
         // Chunk by Math.Floor(maxParameterLimit / numberOfPrimaryKeys) with 10% headroom
-        var chunks = ChunkList(entities.ToList(), keys.Count, ctx.MaxParameterLimit);
+        var chunks = ChunkList(entities.ToList(), keys.Count, ctx.MaxParameterLimit, dialect.MaxRowsPerBatch);
         var result = new List<ISqlContainer>(chunks.Count);
 
         foreach (var chunk in chunks)
@@ -1098,7 +1123,7 @@ public partial class TableGateway<TEntity, TRowID> :
     }
 
     private static IReadOnlyList<IReadOnlyList<T>> ChunkList<T>(
-        IReadOnlyList<T> list, int paramsPerRow, int maxParameterLimit)
+        IReadOnlyList<T> list, int paramsPerRow, int maxParameterLimit, int maxRowsPerBatch)
     {
         if (maxParameterLimit <= 0 || paramsPerRow <= 0)
         {
@@ -1107,7 +1132,10 @@ public partial class TableGateway<TEntity, TRowID> :
 
         // 10% headroom to be safe
         var usableParams = (int)(maxParameterLimit * 0.9);
-        var rowsPerChunk = Math.Max(1, usableParams / Math.Max(1, paramsPerRow));
+        var rowsPerChunkByParams = Math.Max(1, usableParams / Math.Max(1, paramsPerRow));
+        
+        // Take the smaller of the two limits
+        var rowsPerChunk = Math.Min(rowsPerChunkByParams, maxRowsPerBatch > 0 ? maxRowsPerBatch : int.MaxValue);
 
         if (list.Count <= rowsPerChunk)
         {

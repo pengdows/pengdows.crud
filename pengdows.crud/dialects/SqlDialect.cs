@@ -189,6 +189,100 @@ internal abstract class SqlDialect : ISqlDialect
 
     public virtual bool SupportsSetValuedParameters => false;
     public virtual int MaxParameterLimit => 2000;
+
+    /// <inheritdoc />
+    public virtual int MaxRowsPerBatch => 1000;
+
+    /// <inheritdoc />
+    public virtual bool SupportsBatchInsert => true;
+
+    /// <inheritdoc />
+    public virtual bool SupportsBatchUpdate => false;
+
+    /// <inheritdoc />
+    public virtual void BuildBatchUpdateSql(string tableName, IReadOnlyList<string> columnNames,
+        IReadOnlyList<string> keyColumns, int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue)
+    {
+        throw new NotSupportedException($"{DatabaseType} does not support optimized batch updates.");
+    }
+
+    /// <inheritdoc />
+    public virtual void BuildBatchInsertSql(string tableName, IReadOnlyList<string> columnNames, int rowCount,
+        ISqlQueryBuilder query)
+    {
+        BuildBatchInsertSql(tableName, columnNames, rowCount, query, null);
+    }
+
+    /// <summary>
+    /// Specialized multi-row insert with optional value inspection for NULL inlining.
+    /// </summary>
+    public virtual void BuildBatchInsertSql(string tableName, IReadOnlyList<string> columnNames, int rowCount,
+        ISqlQueryBuilder query, Func<int, int, object?>? getValue)
+    {
+        if (string.IsNullOrWhiteSpace(tableName))
+        {
+            throw new ArgumentException("Table name cannot be null or empty.", nameof(tableName));
+        }
+
+        if (columnNames == null || columnNames.Count == 0)
+        {
+            throw new ArgumentException("Column names cannot be null or empty.", nameof(columnNames));
+        }
+
+        if (rowCount <= 0)
+        {
+            throw new ArgumentException("Row count must be greater than zero.", nameof(rowCount));
+        }
+
+        query.Append("INSERT INTO ");
+        query.Append(tableName);
+        query.Append(" (");
+
+        for (var i = 0; i < columnNames.Count; i++)
+        {
+            if (i > 0)
+            {
+                query.Append(", ");
+            }
+
+            query.Append(columnNames[i]);
+        }
+
+        query.Append(") VALUES ");
+
+        var paramIdx = 0;
+        for (var row = 0; row < rowCount; row++)
+        {
+            if (row > 0)
+            {
+                query.Append(", ");
+            }
+
+            query.Append('(');
+            for (var col = 0; col < columnNames.Count; col++)
+            {
+                if (col > 0)
+                {
+                    query.Append(", ");
+                }
+
+                var val = getValue?.Invoke(row, col);
+                if (val == null || val == DBNull.Value)
+                {
+                    query.Append("NULL");
+                }
+                else
+                {
+                    query.Append(ParameterMarker);
+                    query.Append('b');
+                    query.Append(paramIdx++.ToString(CultureInfo.InvariantCulture));
+                }
+            }
+
+            query.Append(')');
+        }
+    }
+
     public virtual int MaxOutputParameters => 0;
     public virtual int ParameterNameMaxLength => 128;
     public virtual ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.None;

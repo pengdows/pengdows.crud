@@ -40,7 +40,7 @@ public class TransactionResilienceTests : DatabaseTestBase
                 // Verify row exists inside transaction
                 var countInside = await tx
                     .CreateSqlContainer(
-                        $"SELECT COUNT(*) FROM {context.WrapObjectName("test_table")} WHERE {context.WrapObjectName("id")} = {id}")
+                        $"SELECT COUNT(*) FROM {IntegrationObjectNameHelper.Table(context, "test_table")} WHERE {context.WrapObjectName("id")} = {id}")
                     .ExecuteScalarRequiredAsync<long>();
                 Assert.Equal(1, countInside);
 
@@ -51,7 +51,7 @@ public class TransactionResilienceTests : DatabaseTestBase
             // 3. Assert rollback: row should NOT exist in the main context
             var countAfter = await context
                 .CreateSqlContainer(
-                    $"SELECT COUNT(*) FROM {context.WrapObjectName("test_table")} WHERE {context.WrapObjectName("id")} = {id}")
+                    $"SELECT COUNT(*) FROM {IntegrationObjectNameHelper.Table(context, "test_table")} WHERE {context.WrapObjectName("id")} = {id}")
                 .ExecuteScalarRequiredAsync<long>();
             Assert.Equal(0, countAfter);
 

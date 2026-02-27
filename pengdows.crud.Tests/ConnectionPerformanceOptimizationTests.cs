@@ -129,7 +129,7 @@ public sealed class ConnectionPerformanceOptimizationTests
         Assert.NotNull(nameMethod);
 
         var name = (string)nameMethod!.Invoke(conn, null)!;
-        Assert.StartsWith("perfapp:rw", name, StringComparison.Ordinal);
+        Assert.StartsWith("perfapp-rw", name, StringComparison.Ordinal);
     }
 
     [Fact]

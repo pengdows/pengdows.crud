@@ -264,7 +264,7 @@ internal static class ConnectionPoolingConfiguration
     /// </summary>
     /// <param name="connectionString">The connection string to modify.</param>
     /// <param name="applicationNameSettingName">The provider-specific setting name (e.g., "Application Name").</param>
-    /// <param name="suffix">Suffix to append (e.g., ":ro").</param>
+    /// <param name="suffix">Suffix to append (e.g., "-ro").</param>
     /// <param name="fallbackApplicationName">Fallback application name if none exists in the connection string.</param>
     /// <param name="builder">Optional pre-existing connection string builder to reuse.</param>
     /// <returns>The modified connection string, or the original if no changes were made.</returns>

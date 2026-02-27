@@ -33,32 +33,50 @@ public abstract class DatabaseTestBase : IAsyncLifetime
         Output.WriteLine(
             $"[{DateTime.UtcNow:HH:mm:ss.fff}] Testing against {requestedProviders.Count} providers: {string.Join(", ", requestedProviders)}");
 
+        var enabledProviders = IntegrationTestConfiguration.EnabledProviders;
         var contexts = new Dictionary<SupportedDatabase, IDatabaseContext>();
+        var skipReasons = new List<string>();
 
         foreach (var provider in requestedProviders)
         {
+            // Log and skip providers that were filtered out before containers were started
+            if (!enabledProviders.Contains(provider))
+            {
+                var exclusionReason = BuildExclusionReason(provider);
+                Output.WriteLine(
+                    $"[{DateTime.UtcNow:HH:mm:ss.fff}] ⚠️ {provider} excluded from this test run: {exclusionReason}");
+                skipReasons.Add($"{provider}: {exclusionReason}");
+                continue;
+            }
+
             try
             {
+                IntegrationTraceLog.Write(provider, "context acquisition start", Output);
                 var context = await Fixture.CreateDatabaseContextAsync(provider);
                 Output.WriteLine(
                     $"[{DateTime.UtcNow:HH:mm:ss.fff}] {provider} connection string: {context.ConnectionString}");
+                IntegrationTraceLog.Write(provider, "context acquisition done", Output);
                 contexts[provider] = context;
             }
             catch (Exception ex)
             {
                 Output.WriteLine(
                     $"[{DateTime.UtcNow:HH:mm:ss.fff}] ⚠️ {provider} is not available for testing: {ex.Message}");
+                skipReasons.Add($"{provider}: {ex.Message}");
             }
         }
 
         if (!contexts.Any())
         {
+            var testClass = GetType().Name;
             var requested = requestedProviders.Count == 0
                 ? "none (check INTEGRATION_ONLY env var or GetSupportedProviders override)"
                 : string.Join(", ", requestedProviders);
+            var reasonDetail = skipReasons.Count > 0
+                ? $" Skipped because: {string.Join("; ", skipReasons)}."
+                : string.Empty;
             throw new Xunit.SkipException(
-                $"No database providers could be initialized for testing. Requested: {requested}. " +
-                "Ensure the required containers are running (Docker) or the databases are accessible.");
+                $"{testClass} requires [{requested}] but none could be initialized.{reasonDetail}");
         }
 
         DatabaseContexts = contexts;
@@ -67,10 +85,16 @@ public abstract class DatabaseTestBase : IAsyncLifetime
         {
             var setupStart = DateTime.UtcNow;
             Output.WriteLine($"[{setupStart:HH:mm:ss.fff}] Resetting {provider} database...");
+            IntegrationTraceLog.Write(provider, "cleanup start", Output);
             await CleanupDatabaseAsync(provider, context);
+            IntegrationTraceLog.Write(provider,
+                $"cleanup done elapsedMs={(DateTime.UtcNow - setupStart).TotalMilliseconds:F0}", Output);
             Output.WriteLine(
                 $"[{DateTime.UtcNow:HH:mm:ss.fff}] {provider} cleanup complete, running SetupDatabaseAsync...");
+            IntegrationTraceLog.Write(provider, "setup start", Output);
             await SetupDatabaseAsync(provider, context);
+            IntegrationTraceLog.Write(provider,
+                $"setup done elapsedMs={(DateTime.UtcNow - setupStart).TotalMilliseconds:F0}", Output);
             Output.WriteLine(
                 $"[{DateTime.UtcNow:HH:mm:ss.fff}] {provider} setup completed (took {(DateTime.UtcNow - setupStart).TotalMilliseconds:F0}ms)");
         }
@@ -144,7 +168,7 @@ public abstract class DatabaseTestBase : IAsyncLifetime
             try
             {
                 var providerStart = DateTime.UtcNow;
-                SnowflakeDebug(provider, $"[Snowflake][Test] {testName ?? "<unknown>"} start");
+                IntegrationTraceLog.Write(provider, $"test start name={testName ?? "<unknown>"}", Output);
                 Output.WriteLine($"[{providerStart:HH:mm:ss.fff}] ▶️ {provider} test starting");
                 Output.WriteLine($"[{providerStart:HH:mm:ss.fff}] Running test against {provider}...");
                 Output.WriteLine(
@@ -155,15 +179,18 @@ public abstract class DatabaseTestBase : IAsyncLifetime
                     $"[{DateTime.UtcNow:HH:mm:ss.fff}] {provider} connections after test: {context.NumberOfOpenConnections} open, peak {context.PeakOpenConnections}");
                 Output.WriteLine(
                     $"[{DateTime.UtcNow:HH:mm:ss.fff}] ✅ {provider} test completed successfully (took {(DateTime.UtcNow - providerStart).TotalMilliseconds:F0}ms)");
-                SnowflakeDebug(provider,
-                    $"[Snowflake][Test] {testName ?? "<unknown>"} done in {(DateTime.UtcNow - providerStart).TotalMilliseconds:F0}ms");
+                IntegrationTraceLog.Write(provider,
+                    $"test done name={testName ?? "<unknown>"} elapsedMs={(DateTime.UtcNow - providerStart).TotalMilliseconds:F0}",
+                    Output);
             }
             catch (Exception ex)
             {
                 Output.WriteLine($"[{DateTime.UtcNow:HH:mm:ss.fff}] ❌ {provider} test failed: {ex.Message}");
                 Output.WriteLine(
                     $"[{DateTime.UtcNow:HH:mm:ss.fff}] {provider} connections at failure: {context.NumberOfOpenConnections} open, peak {context.PeakOpenConnections}");
-                SnowflakeDebug(provider, $"[Snowflake][Test] {testName ?? "<unknown>"} failed: {ex.Message}");
+                IntegrationTraceLog.Write(provider,
+                    $"test fail name={testName ?? "<unknown>"} error={ex.Message}",
+                    Output);
                 failures.Add((provider, ex));
             }
         }
@@ -193,10 +220,11 @@ public abstract class DatabaseTestBase : IAsyncLifetime
         }
 
         var start = DateTime.UtcNow;
-        SnowflakeDebug(provider, $"[Snowflake][Test] {testName ?? "<unknown>"} start");
+        IntegrationTraceLog.Write(provider, $"test start name={testName ?? "<unknown>"}", Output);
         await testAction(context);
-        SnowflakeDebug(provider,
-            $"[Snowflake][Test] {testName ?? "<unknown>"} done in {(DateTime.UtcNow - start).TotalMilliseconds:F0}ms");
+        IntegrationTraceLog.Write(provider,
+            $"test done name={testName ?? "<unknown>"} elapsedMs={(DateTime.UtcNow - start).TotalMilliseconds:F0}",
+            Output);
     }
 
     protected IAuditValueResolver GetAuditResolver()
@@ -207,7 +235,7 @@ public abstract class DatabaseTestBase : IAsyncLifetime
 
     protected static async Task DropTableIfExistsAsync(IDatabaseContext context, string tableName)
     {
-        var wrappedTable = context.WrapObjectName(tableName);
+        var wrappedTable = IntegrationObjectNameHelper.Table(context, tableName);
         await using var container = context.CreateSqlContainer($"DROP TABLE {wrappedTable}");
         try
         {
@@ -239,32 +267,25 @@ public abstract class DatabaseTestBase : IAsyncLifetime
                || message.Contains("ora-00942");
     }
 
-    private static bool IsSnowflakeDebugEnabled =>
-        string.Equals(Environment.GetEnvironmentVariable("SNOWFLAKE_DEBUG"), "true",
-            StringComparison.OrdinalIgnoreCase);
-
-    private static readonly object SnowflakeLogGate = new();
-
-    private static void SnowflakeDebug(SupportedDatabase provider, string message)
+    private static string BuildExclusionReason(SupportedDatabase provider)
     {
-        if (provider != SupportedDatabase.Snowflake || !IsSnowflakeDebugEnabled)
+        var integrationOnly = Environment.GetEnvironmentVariable("INTEGRATION_ONLY");
+        if (!string.IsNullOrWhiteSpace(integrationOnly))
         {
-            return;
+            return $"INTEGRATION_ONLY={integrationOnly} is set; this provider is not included in the filter";
         }
 
-        var line = $"[{DateTime.UtcNow:O}] {message}";
-        try
+        if (provider == SupportedDatabase.Oracle && !IntegrationTestConfiguration.ShouldIncludeOracle)
         {
-            lock (SnowflakeLogGate)
-            {
-                File.AppendAllText("/tmp/snowflake-debug.log", line + Environment.NewLine);
-            }
-        }
-        catch
-        {
-            // Ignore logging failures.
+            return "requires INCLUDE_ORACLE=true to enable Oracle tests";
         }
 
-        Console.WriteLine(line);
+        if (provider == SupportedDatabase.Snowflake && !IntegrationTestConfiguration.ShouldIncludeSnowflake)
+        {
+            return "requires INCLUDE_SNOWFLAKE=true to enable Snowflake tests";
+        }
+
+        return "provider is not in the enabled list for this test run";
     }
+
 }

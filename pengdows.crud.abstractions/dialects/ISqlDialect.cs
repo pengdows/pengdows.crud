@@ -79,6 +79,51 @@ public interface ISqlDialect
     int MaxParameterLimit { get; }
 
     /// <summary>
+    /// Maximum number of rows allowed in a single multi-row INSERT statement.
+    /// SQL Server: 1000; most others: no specific row limit beyond parameter count.
+    /// </summary>
+    int MaxRowsPerBatch { get; }
+
+    /// <summary>
+    /// Whether this dialect supports multi-row INSERT via VALUES (..., ...), (..., ...) syntax.
+    /// </summary>
+    bool SupportsBatchInsert { get; }
+
+    /// <summary>
+    /// Builds a multi-row INSERT statement structure for the dialect.
+    /// </summary>
+    /// <param name="tableName">Wrapped table name.</param>
+    /// <param name="columnNames">List of wrapped column names.</param>
+    /// <param name="rowCount">Number of rows in the batch.</param>
+    /// <param name="query">Target query builder to write the SQL structure into.</param>
+    /// <remarks>
+    /// Use this to generate the dialect-specific "shape" (e.g. INSERT ALL for Oracle).
+    /// The TableGateway will handle the actual parameter binding.
+    /// </remarks>
+    void BuildBatchInsertSql(string tableName, IReadOnlyList<string> columnNames, int rowCount, ISqlQueryBuilder query);
+
+    /// <summary>
+    /// Builds a multi-row INSERT statement structure with optional value inspection (for NULL inlining).
+    /// </summary>
+    void BuildBatchInsertSql(string tableName, IReadOnlyList<string> columnNames, int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue);
+
+    /// <summary>
+    /// Whether this dialect supports multi-row UPDATE via optimized strategy (e.g. UPDATE FROM VALUES or MERGE).
+    /// </summary>
+    bool SupportsBatchUpdate { get; }
+
+    /// <summary>
+    /// Builds an optimized batch UPDATE statement structure for the dialect.
+    /// </summary>
+    /// <param name="tableName">Wrapped table name.</param>
+    /// <param name="columnNames">List of wrapped column names (all columns to update).</param>
+    /// <param name="keyColumns">List of wrapped primary key column names.</param>
+    /// <param name="rowCount">Number of rows in the batch.</param>
+    /// <param name="query">Target query builder to write the SQL structure into.</param>
+    /// <param name="getValue">Function to get the value for a specific row and column index.</param>
+    void BuildBatchUpdateSql(string tableName, IReadOnlyList<string> columnNames, IReadOnlyList<string> keyColumns, int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue);
+
+    /// <summary>
     /// Maximum permitted length for parameter names.
     /// </summary>
     int ParameterNameMaxLength { get; }

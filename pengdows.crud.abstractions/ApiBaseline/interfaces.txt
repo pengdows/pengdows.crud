@@ -115,11 +115,15 @@ method pengdows.crud.ISqlQueryBuilder::Clear() -> pengdows.crud.ISqlQueryBuilder
 method pengdows.crud.ISqlQueryBuilder::Replace(string, string) -> pengdows.crud.ISqlQueryBuilder
 method pengdows.crud.ISqlQueryBuilder::ToString() -> string
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BatchCreateAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BatchDeleteAsync(System.Collections.Generic.IEnumerable`1<TRowID>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BatchDeleteAsync(System.Collections.Generic.IReadOnlyCollection`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BatchUpdateAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BatchUpsertAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BuildBaseRetrieve(string, pengdows.crud.IDatabaseContext) -> pengdows.crud.ISqlContainer
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BuildBatchCreate(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext) -> System.Collections.Generic.IReadOnlyList`1<pengdows.crud.ISqlContainer>
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BuildBatchDelete(System.Collections.Generic.IEnumerable`1<TRowID>, pengdows.crud.IDatabaseContext) -> System.Collections.Generic.IReadOnlyList`1<pengdows.crud.ISqlContainer>
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BuildBatchDelete(System.Collections.Generic.IReadOnlyCollection`1<TEntity>, pengdows.crud.IDatabaseContext) -> System.Collections.Generic.IReadOnlyList`1<pengdows.crud.ISqlContainer>
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BuildBatchUpdate(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext) -> System.Collections.Generic.IReadOnlyList`1<pengdows.crud.ISqlContainer>
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BuildBatchUpsert(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext) -> System.Collections.Generic.IReadOnlyList`1<pengdows.crud.ISqlContainer>
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BuildCreate(TEntity, pengdows.crud.IDatabaseContext) -> pengdows.crud.ISqlContainer
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BuildDelete(TRowID, pengdows.crud.IDatabaseContext) -> pengdows.crud.ISqlContainer
@@ -132,9 +136,11 @@ method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BuildUpdateAsync(TEntity,
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BuildUpsert(TEntity, pengdows.crud.IDatabaseContext) -> pengdows.crud.ISqlContainer
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BuildWhere(string, System.Collections.Generic.IEnumerable`1<TRowID>, pengdows.crud.ISqlContainer) -> pengdows.crud.ISqlContainer
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BuildWhereByPrimaryKey(System.Collections.Generic.IReadOnlyCollection`1<TEntity>, pengdows.crud.ISqlContainer, string) -> void
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::CreateAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::CreateAsync(TEntity) -> System.Threading.Tasks.Task`1<bool>
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::CreateAsync(TEntity, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<bool>
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::DeleteAsync(System.Collections.Generic.IEnumerable`1<TRowID>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::DeleteAsync(System.Collections.Generic.IReadOnlyCollection`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::DeleteAsync(TRowID, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::GetOrCreateSetter(System.Reflection.PropertyInfo) -> System.Action`2<object, object>
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::LoadListAsync(pengdows.crud.ISqlContainer) -> System.Threading.Tasks.Task`1<System.Collections.Generic.List`1<TEntity>>
@@ -148,8 +154,10 @@ method pengdows.crud.ITableGateway`2<TEntity, TRowID>::RetrieveAsync(System.Coll
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::RetrieveOneAsync(TEntity, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<TEntity>
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::RetrieveOneAsync(TRowID, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<TEntity>
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::RetrieveStreamAsync(System.Collections.Generic.IEnumerable`1<TRowID>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Collections.Generic.IAsyncEnumerable`1<TEntity>
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::UpdateAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::UpdateAsync(TEntity, bool, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::UpdateAsync(TEntity, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::UpsertAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::UpsertAsync(TEntity, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
 method pengdows.crud.ITransactionContext::Commit() -> void
 method pengdows.crud.ITransactionContext::CommitAsync(System.Threading.CancellationToken) -> System.Threading.Tasks.Task
@@ -165,6 +173,9 @@ method pengdows.crud.connection.IConnectionLocalState::MarkSessionSettingsApplie
 method pengdows.crud.connection.IConnectionLocalState::MarkShapePrepared(string) -> System.ValueTuple`2<bool, int>
 method pengdows.crud.connection.IConnectionLocalState::Reset() -> void
 method pengdows.crud.dialects.ISqlDialect::ApplyConnectionSettings(System.Data.IDbConnection, pengdows.crud.IDatabaseContext, bool) -> void
+method pengdows.crud.dialects.ISqlDialect::BuildBatchInsertSql(string, System.Collections.Generic.IReadOnlyList`1<string>, int, pengdows.crud.ISqlQueryBuilder) -> void
+method pengdows.crud.dialects.ISqlDialect::BuildBatchInsertSql(string, System.Collections.Generic.IReadOnlyList`1<string>, int, pengdows.crud.ISqlQueryBuilder, System.Func`3<int, int, object>) -> void
+method pengdows.crud.dialects.ISqlDialect::BuildBatchUpdateSql(string, System.Collections.Generic.IReadOnlyList`1<string>, System.Collections.Generic.IReadOnlyList`1<string>, int, pengdows.crud.ISqlQueryBuilder, System.Func`3<int, int, object>) -> void
 method pengdows.crud.dialects.ISqlDialect::ClassifyException(System.Exception) -> pengdows.crud.enums.DbErrorCategory
 method pengdows.crud.dialects.ISqlDialect::CreateDbParameter<T>(System.Data.DbType, T) -> System.Data.Common.DbParameter
 method pengdows.crud.dialects.ISqlDialect::CreateDbParameter<T>(string, System.Data.DbType, T) -> System.Data.Common.DbParameter
@@ -382,6 +393,7 @@ property pengdows.crud.dialects.ISqlDialect::IsPrepareExhausted : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::MaxOutputParameters : int { get; }
 property pengdows.crud.dialects.ISqlDialect::MaxParameterLimit : int { get; }
 property pengdows.crud.dialects.ISqlDialect::MaxPoolSizeSettingName : string { get; }
+property pengdows.crud.dialects.ISqlDialect::MaxRowsPerBatch : int { get; }
 property pengdows.crud.dialects.ISqlDialect::MaxSupportedStandard : pengdows.crud.enums.SqlStandardLevel { get; }
 property pengdows.crud.dialects.ISqlDialect::MergeUpdateRequiresTargetAlias : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::MinPoolSizeSettingName : string { get; }
@@ -396,6 +408,8 @@ property pengdows.crud.dialects.ISqlDialect::QuotePrefix : string { get; }
 property pengdows.crud.dialects.ISqlDialect::QuoteSuffix : string { get; }
 property pengdows.crud.dialects.ISqlDialect::RequiresStoredProcParameterNameMatch : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsArrayTypes : bool { get; }
+property pengdows.crud.dialects.ISqlDialect::SupportsBatchInsert : bool { get; }
+property pengdows.crud.dialects.ISqlDialect::SupportsBatchUpdate : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsCommonTableExpressions : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsDropTableIfExists : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsEnhancedWindowFunctions : bool { get; }

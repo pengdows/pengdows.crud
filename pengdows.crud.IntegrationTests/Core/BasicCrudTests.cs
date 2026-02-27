@@ -1,6 +1,7 @@
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.IntegrationTests.Infrastructure;
+using System.Runtime.CompilerServices;
 using testbed;
 using Xunit.Abstractions;
 
@@ -14,6 +15,7 @@ namespace pengdows.crud.IntegrationTests.Core;
 public class BasicCrudTests : DatabaseTestBase
 {
     private static long _nextId;
+    private readonly ConditionalWeakTable<IDatabaseContext, TableGateway<TestTable, long>> _gatewayCache = new();
 
     public BasicCrudTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture)
     {
@@ -103,10 +105,7 @@ public class BasicCrudTests : DatabaseTestBase
             };
 
             // Insert test data
-            foreach (var entity in entities)
-            {
-                await helper.CreateAsync(entity, context);
-            }
+            await helper.CreateAsync(entities, context);
 
             var idsToRetrieve = entities.Take(2).Select(e => e.Id).ToList();
 
@@ -199,10 +198,7 @@ public class BasicCrudTests : DatabaseTestBase
                 CreateTestEntity(NameEnum.Test, 303)
             };
 
-            foreach (var entity in entities)
-            {
-                await helper.CreateAsync(entity, context);
-            }
+            await helper.CreateAsync(entities, context);
 
             var idsToDelete = entities.Select(e => e.Id).ToList();
 
@@ -276,8 +272,11 @@ public class BasicCrudTests : DatabaseTestBase
 
     private TableGateway<TestTable, long> CreateTableGateway(IDatabaseContext context)
     {
-        var auditResolver = GetAuditResolver();
-        return new TableGateway<TestTable, long>(context, auditResolver);
+        return _gatewayCache.GetValue(context, ctx =>
+        {
+            var auditResolver = GetAuditResolver();
+            return new TableGateway<TestTable, long>(ctx, auditResolver);
+        });
     }
 
     private static TestTable CreateTestEntity(NameEnum name, int value)

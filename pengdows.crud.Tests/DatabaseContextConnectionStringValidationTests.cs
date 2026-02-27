@@ -12,7 +12,7 @@ public sealed class DatabaseContextConnectionStringValidationTests
         var primary = "Data Source=server;Database=app;User Id=writer;Password=secret;";
         var secondary = "Data Source=server;Database=app;User Id=reader;Password=other;";
 
-        var result = InvokeComparison(primary, secondary, null, null, ":ro");
+        var result = InvokeComparison(primary, secondary, null, null, "-ro");
 
         Assert.True(result);
     }
@@ -23,7 +23,7 @@ public sealed class DatabaseContextConnectionStringValidationTests
         var primary = "Data Source=server;Database=app;User Id=writer;Password=secret;";
         var secondary = "Data Source=server;Database=app_ro;User Id=reader;Password=other;";
 
-        var result = InvokeComparison(primary, secondary, null, null, ":ro");
+        var result = InvokeComparison(primary, secondary, null, null, "-ro");
 
         Assert.False(result);
     }
@@ -33,9 +33,9 @@ public sealed class DatabaseContextConnectionStringValidationTests
     {
         var primary = "Data Source=server;Database=app;Application Name=Widget;User Id=writer;Password=secret;";
         var secondary =
-            "Data Source=server;Database=app;Application Name=Widget:ro;ApplicationIntent=ReadOnly;User Id=reader;Password=other;";
+            "Data Source=server;Database=app;Application Name=Widget-ro;ApplicationIntent=ReadOnly;User Id=reader;Password=other;";
 
-        var result = InvokeComparison(primary, secondary, "ApplicationIntent=ReadOnly", "Application Name", ":ro");
+        var result = InvokeComparison(primary, secondary, "ApplicationIntent=ReadOnly", "Application Name", "-ro");
 
         Assert.True(result);
     }

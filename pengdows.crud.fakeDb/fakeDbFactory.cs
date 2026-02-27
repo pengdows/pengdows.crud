@@ -165,7 +165,8 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
     public void EnqueueReaderResult(IEnumerable<Dictionary<string, object>> rows)
     {
         var conn = (fakeDbConnection)CreateConnection();
-        conn.ReaderResults.Enqueue(rows);
+        conn.ReaderResults.Enqueue(rows.Select(static row =>
+            row.ToDictionary(static pair => pair.Key, static pair => (object?)pair.Value)));
         _connections.Insert(0, conn);
     }
 

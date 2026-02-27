@@ -3,6 +3,7 @@ using pengdows.crud.infrastructure;
 using pengdows.crud.IntegrationTests.Infrastructure;
 using System.Data;
 using System.Data.Common;
+using System.Runtime.CompilerServices;
 using testbed;
 using Xunit.Abstractions;
 
@@ -16,6 +17,7 @@ namespace pengdows.crud.IntegrationTests.ErrorHandling;
 public class ConstraintViolationTests : DatabaseTestBase
 {
     private static long _nextId;
+    private readonly ConditionalWeakTable<IDatabaseContext, TableGateway<TestTable, long>> _gatewayCache = new();
 
     public ConstraintViolationTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture)
     {
@@ -88,7 +90,7 @@ public class ConstraintViolationTests : DatabaseTestBase
 
             // Arrange
             var id = Interlocked.Increment(ref _nextId);
-            var tableName = context.WrapObjectName("test_table");
+            var tableName = IntegrationObjectNameHelper.Table(context, "test_table");
             var idColumn = context.WrapObjectName("id");
             var nameColumn = context.WrapObjectName("name");
             var valueColumn = context.WrapObjectName("value");
@@ -255,7 +257,7 @@ public class ConstraintViolationTests : DatabaseTestBase
                 return;
             }
 
-            var tableName = context.WrapObjectName("test_table");
+            var tableName = IntegrationObjectNameHelper.Table(context, "test_table");
             var idColumn = context.WrapObjectName("id");
             var nameColumn = context.WrapObjectName("name");
             var valueColumn = context.WrapObjectName("value");
@@ -311,7 +313,7 @@ public class ConstraintViolationTests : DatabaseTestBase
             // Arrange - Add CHECK constraint
             await AddCheckConstraintAsync(provider, context);
 
-            var tableName = context.WrapObjectName("test_table");
+            var tableName = IntegrationObjectNameHelper.Table(context, "test_table");
             var idColumn = context.WrapObjectName("id");
             var nameColumn = context.WrapObjectName("name");
             var valueColumn = context.WrapObjectName("value");
@@ -364,7 +366,7 @@ public class ConstraintViolationTests : DatabaseTestBase
             try
             {
                 await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
-                var txHelper = CreateTableGateway(transaction);
+                var txHelper = CreateTableGateway(context);
 
                 // Insert valid entity
                 await txHelper.CreateAsync(validEntity, transaction);
@@ -444,8 +446,11 @@ public class ConstraintViolationTests : DatabaseTestBase
 
     private TableGateway<TestTable, long> CreateTableGateway(IDatabaseContext context)
     {
-        var auditResolver = GetAuditResolver();
-        return new TableGateway<TestTable, long>(context, auditResolver);
+        return _gatewayCache.GetValue(context, ctx =>
+        {
+            var auditResolver = GetAuditResolver();
+            return new TableGateway<TestTable, long>(ctx, auditResolver);
+        });
     }
 
     private static TestTable CreateTestEntity(NameEnum name, int value)

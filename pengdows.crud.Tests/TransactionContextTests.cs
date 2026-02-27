@@ -1027,6 +1027,8 @@ public class TransactionContextTests
 #pragma warning disable CS0618
         Assert.Equal(context.SessionSettingsPreamble, tx.SessionSettingsPreamble);
 #pragma warning restore CS0618
+        Assert.Equal(context.GetBaseSessionSettings(), tx.GetBaseSessionSettings());
+        Assert.Equal(context.GetReadOnlySessionSettings(), tx.GetReadOnlySessionSettings());
         Assert.Equal(identity.RootId, tx.RootId);
         Assert.NotEqual(Guid.Empty, tx.TransactionId);
     }

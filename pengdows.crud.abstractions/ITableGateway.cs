@@ -63,6 +63,19 @@ public interface ITableGateway<TEntity, TRowID>
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Inserts a list of entities using the most efficient path for the current dialect.
+    /// Delegates to <see cref="BatchCreateAsync"/> — the dialect automatically handles
+    /// multi-row VALUES, EXECUTE BLOCK, or per-row fallback as appropriate.
+    /// </summary>
+    /// <param name="entities">Entities to insert. Empty list returns 0.</param>
+    /// <param name="context">Optional context override for transaction scenarios.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>Total number of rows inserted.</returns>
+    Task<int> CreateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
+        CancellationToken cancellationToken = default)
+        => BatchCreateAsync(entities, context, cancellationToken);
+
+    /// <summary>
     /// Returns a SELECT clause with no WHERE clause.
     /// </summary>
     /// <remarks>
@@ -295,11 +308,24 @@ public interface ITableGateway<TEntity, TRowID>
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Executes a DELETE for all provided row IDs (pseudo keys) and returns the number of affected rows.
+    /// Executes a batch DELETE for row IDs (pseudo keys) and returns the number of affected rows.
+    /// Automatically chunks requests that exceed the dialect's parameter limit.
     /// </summary>
-    /// <remarks>
-    /// Allows batch deletion of multiple rows in a single statement.
-    /// </remarks>
+    /// <param name="ids">The row IDs to delete.</param>
+    /// <param name="context">Optional context override for transaction scenarios.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <example>
+    /// <code>
+    /// var rows = await helper.BatchDeleteAsync(new[] { 1, 2, 3 });
+    /// </code>
+    /// </example>
+    Task<int> BatchDeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Executes a DELETE for all provided row IDs (pseudo keys) and returns the number of affected rows.
+    /// Delegates to <see cref="BatchDeleteAsync(IEnumerable{TRowID}, IDatabaseContext?, CancellationToken)"/>.
+    /// </summary>
     /// <param name="ids">The row IDs to delete.</param>
     /// <param name="context">Optional context override for transaction scenarios.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
@@ -309,17 +335,24 @@ public interface ITableGateway<TEntity, TRowID>
     /// </code>
     /// </example>
     Task<int> DeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default)
+        => BatchDeleteAsync(ids, context, cancellationToken);
+
+    /// <summary>
+    /// Builds one or more SQL DELETE statements for row IDs (pseudo keys).
+    /// Chunking follows the same parameter-limit rules as execution.
+    /// </summary>
+    /// <param name="ids">The row IDs to delete.</param>
+    /// <param name="context">Optional database context override for transaction scenarios.</param>
+    /// <returns>One or more SQL containers, each representing a chunk of the batch.</returns>
+    IReadOnlyList<ISqlContainer> BuildBatchDelete(IEnumerable<TRowID> ids, IDatabaseContext? context = null);
 
     /// <summary>
     /// Builds one or more SQL DELETE statements for a list of object identities (primary keys).
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// Generates <c>DELETE FROM t WHERE (k1 = @p1 AND k2 = @p2) OR (k1 = @p3 AND k2 = @p4) ...</c> statements.
-    /// When the number of entities exceeds the dialect's parameter limit, the result
-    /// is automatically chunked into multiple containers.
-    /// </para>
+    /// Generates <c>DELETE FROM t WHERE (k1 = @p1 AND k2 = @p2) OR (k1 = @p3 AND k2 = @p4) ...</c>.
+    /// Automatically chunked to respect parameter limits.
     /// </remarks>
     /// <param name="entities">The entities to delete. Must not be null.</param>
     /// <param name="context">Optional database context override for transaction scenarios.</param>
@@ -330,16 +363,26 @@ public interface ITableGateway<TEntity, TRowID>
 
     /// <summary>
     /// Executes a DELETE for all provided object identities (primary keys) and returns the total number of affected rows.
+    /// Empty lists return 0. Automatically chunked to respect parameter limits.
     /// </summary>
-    /// <remarks>
-    /// Empty lists return 0. Multiple entities are chunked and executed sequentially to respect parameter limits.
-    /// </remarks>
     /// <param name="entities">The entities to delete. Must not be null.</param>
     /// <param name="context">Optional context override for transaction scenarios.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <returns>Total number of affected rows across all chunks.</returns>
     Task<int> BatchDeleteAsync(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes all provided entities (by primary key) and returns the total number of affected rows.
+    /// Delegates to <see cref="BatchDeleteAsync(IReadOnlyCollection{TEntity}, IDatabaseContext?, CancellationToken)"/>.
+    /// </summary>
+    /// <param name="entities">The entities to delete. Must not be null.</param>
+    /// <param name="context">Optional context override for transaction scenarios.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>Total number of affected rows across all chunks.</returns>
+    Task<int> DeleteAsync(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context = null,
+        CancellationToken cancellationToken = default)
+        => BatchDeleteAsync(entities, context, cancellationToken);
 
     /// <summary>
     /// Executes an UPDATE for the given object and returns the number of affected rows.
@@ -359,6 +402,20 @@ public interface ITableGateway<TEntity, TRowID>
     /// </example>
     Task<int> UpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Updates a list of entities using the most efficient path for the current dialect.
+    /// Delegates to <see cref="BatchUpdateAsync"/> — dialects that support native batch UPDATE
+    /// (PostgreSQL, SQL Server, Snowflake) use a single multi-row statement; others fall back
+    /// to individual UPDATE statements automatically.
+    /// </summary>
+    /// <param name="entities">Entities to update. Empty list returns 0.</param>
+    /// <param name="context">Optional context override for transaction scenarios.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>Total number of rows affected.</returns>
+    Task<int> UpdateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
+        CancellationToken cancellationToken = default)
+        => BatchUpdateAsync(entities, context, cancellationToken);
 
     /// <summary>
     /// Executes an UPDATE for the given object, optionally reloading the original,
@@ -405,6 +462,20 @@ public interface ITableGateway<TEntity, TRowID>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
     Task<int> UpsertAsync(TEntity entity, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Upserts a list of entities using the most efficient path for the current dialect.
+    /// Delegates to <see cref="BatchUpsertAsync"/> — PostgreSQL/CockroachDB/SQLite/DuckDB use
+    /// <c>INSERT … ON CONFLICT DO UPDATE</c>, MySQL/MariaDB use <c>ON DUPLICATE KEY UPDATE</c>,
+    /// and other dialects fall back to individual MERGE/UPSERT per entity.
+    /// </summary>
+    /// <param name="entities">Entities to upsert. Empty list returns 0.</param>
+    /// <param name="context">Optional context override for transaction scenarios.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>Total number of rows affected.</returns>
+    Task<int> UpsertAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
+        CancellationToken cancellationToken = default)
+        => BatchUpsertAsync(entities, context, cancellationToken);
 
     /// <summary>
     /// Loads a single object from the database using its <c>[PrimaryKey]</c> column values.
@@ -595,6 +666,33 @@ public interface ITableGateway<TEntity, TRowID>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <returns>Total number of affected rows across all chunks.</returns>
     Task<int> BatchCreateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Builds one or more optimized statements for the given entities to perform a batch UPDATE.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Uses the most efficient dialect-specific strategy (e.g. UPDATE FROM VALUES for Snowflake/Postgres,
+    /// MERGE for SQL Server).
+    /// </para>
+    /// <para>
+    /// All columns are updated; change tracking is not used for batch updates.
+    /// </para>
+    /// </remarks>
+    /// <param name="entities">The entities to update. Must not be null.</param>
+    /// <param name="context">Optional database context override for transaction scenarios.</param>
+    /// <returns>One or more SQL containers, each representing a chunk of the batch.</returns>
+    IReadOnlyList<ISqlContainer> BuildBatchUpdate(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null);
+
+    /// <summary>
+    /// Executes a batch UPDATE for the given entities and returns the total affected rows.
+    /// </summary>
+    /// <param name="entities">The entities to update. Must not be null.</param>
+    /// <param name="context">Optional database context override for transaction scenarios.</param>
+    /// <param name="cancellationToken">Optional token to cancel the operation.</param>
+    /// <returns>A Task representing the total number of rows affected across all chunks.</returns>
+    Task<int> BatchUpdateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

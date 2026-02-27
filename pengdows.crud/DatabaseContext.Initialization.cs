@@ -24,6 +24,8 @@
 
 using System;
 using System.Data.Common;
+using System.Diagnostics;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
@@ -34,8 +36,6 @@ using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.exceptions;
-using pengdows.crud.enums;
-using pengdows.crud.infrastructure;
 using pengdows.crud.@internal;
 using pengdows.crud.isolation;
 using pengdows.crud.metrics;
@@ -253,10 +253,12 @@ public partial class DatabaseContext
                 _dialect?.PoolingSettingName,
                 builder);
 
-            // Apply application name if configured
+            var effectiveApplicationName = ResolveApplicationName(configuration.ApplicationName);
+
+            // Apply application name if configured or required for read/write pool splitting
             _connectionString = ConnectionPoolingConfiguration.ApplyApplicationName(
                 _connectionString,
-                configuration.ApplicationName,
+                effectiveApplicationName,
                 _dialect?.ApplicationNameSettingName,
                 builder);
 
@@ -267,7 +269,7 @@ public partial class DatabaseContext
                     _dialect?.PoolingSettingName);
             }
 
-            InitializeReadOnlyConnectionResources(configuration);
+            InitializeReadOnlyConnectionResources(configuration, effectiveApplicationName);
 
             // Validate read-only connection if an explicit RO connection string was provided
             if (!string.IsNullOrWhiteSpace(configuration.ReadOnlyConnectionString) &&
@@ -697,12 +699,13 @@ public partial class DatabaseContext
         }
     }
 
-    private void InitializeReadOnlyConnectionResources(IDatabaseContextConfiguration configuration)
+    private void InitializeReadOnlyConnectionResources(IDatabaseContextConfiguration configuration,
+        string effectiveApplicationName)
     {
         _explicitReadOnlyConnectionString = !string.IsNullOrWhiteSpace(configuration.ReadOnlyConnectionString);
-        // 1. Derive reader connection string BEFORE adding :rw to writer so the reader
+        // 1. Derive reader connection string BEFORE adding -rw to writer so the reader
         //    does not inherit the write suffix.
-        _readerConnectionString = BuildReaderConnectionString(configuration);
+        _readerConnectionString = BuildReaderConnectionString(configuration, effectiveApplicationName);
 
         if (ConnectionMode is DbMode.SingleWriter or DbMode.SingleConnection)
         {
@@ -727,14 +730,14 @@ public partial class DatabaseContext
             _readerConnectionString = _dialect.PrepareConnectionStringForDataSource(_readerConnectionString);
         }
 
-        // 3. Finalize writer connection string: :rw suffix → MaxPoolSize → provider
+        // 3. Finalize writer connection string: -rw suffix → MaxPoolSize → provider
         //    DataSource settings.  Must happen AFTER reader derivation so the reader
-        //    is not polluted with :rw.
+        //    is not polluted with -rw.
         _connectionString = ConnectionPoolingConfiguration.ApplyApplicationNameSuffix(
             _connectionString,
             _dialect?.ApplicationNameSettingName,
             WriteApplicationNameSuffix,
-            configuration.ApplicationName);
+            effectiveApplicationName);
 
         var writeMaxPoolSize = ResolveEffectiveMaxPoolSize(_configuredWritePoolSize, _connectionString);
         if (ConnectionMode == DbMode.SingleWriter)
@@ -894,7 +897,8 @@ public partial class DatabaseContext
         return _dialect?.DefaultMaxPoolSize ?? SqlDialect.FallbackMaxPoolSize;
     }
 
-    private string BuildReaderConnectionString(IDatabaseContextConfiguration configuration)
+    private string BuildReaderConnectionString(IDatabaseContextConfiguration configuration,
+        string effectiveApplicationName)
     {
         if (_dialect == null)
         {
@@ -921,7 +925,95 @@ public partial class DatabaseContext
             baseReaderConnectionString,
             _dialect.ApplicationNameSettingName,
             ReadOnlyApplicationNameSuffix,
-            configuration.ApplicationName);
+            effectiveApplicationName);
+    }
+
+    private string ResolveApplicationName(string? configuredApplicationName)
+    {
+        var configured = configuredApplicationName?.Trim();
+        if (!string.IsNullOrWhiteSpace(configured))
+        {
+            return configured;
+        }
+
+        var existing = ExtractApplicationName(_connectionString);
+        if (!string.IsNullOrWhiteSpace(existing))
+        {
+            return existing;
+        }
+
+        return CanAutoGenerateApplicationName(_connectionString)
+            ? ResolveDefaultApplicationName()
+            : string.Empty;
+    }
+
+    private static string ResolveDefaultApplicationName()
+    {
+        var entryAssemblyName = Assembly.GetEntryAssembly()?.GetName().Name?.Trim();
+        if (!string.IsNullOrWhiteSpace(entryAssemblyName))
+        {
+            return entryAssemblyName;
+        }
+
+        try
+        {
+            using var process = Process.GetCurrentProcess();
+            var processName = process.ProcessName?.Trim();
+            if (!string.IsNullOrWhiteSpace(processName))
+            {
+                return processName;
+            }
+        }
+        catch
+        {
+            // ignore process inspection failures and fall back to the library name
+        }
+
+        return DefaultApplicationName;
+    }
+
+    private bool CanAutoGenerateApplicationName(string connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(_dialect?.ApplicationNameSettingName) ||
+            string.IsNullOrWhiteSpace(connectionString))
+        {
+            return false;
+        }
+
+        try
+        {
+            if (_factory?.CreateConnectionStringBuilder() is { } providerBuilder)
+            {
+                providerBuilder.ConnectionString = connectionString;
+                return CanUseForApplicationName(providerBuilder, connectionString);
+            }
+        }
+        catch
+        {
+            return false;
+        }
+
+        try
+        {
+            var genericBuilder = new DbConnectionStringBuilder { ConnectionString = connectionString };
+            return CanUseForApplicationName(genericBuilder, connectionString);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool CanUseForApplicationName(DbConnectionStringBuilder builder, string connectionString)
+    {
+        if (RepresentsRawConnectionString(builder, connectionString))
+        {
+            return false;
+        }
+
+        var normalized = builder.ConnectionString;
+        return !string.IsNullOrWhiteSpace(normalized) &&
+               !SensitiveValuesStripped(connectionString, normalized);
     }
 
     private string? ExtractApplicationName(string connectionString)
@@ -1693,6 +1785,9 @@ public partial class DatabaseContext
         _logger.LogDebug("Creating GenericDbDataSource wrapper for {FactoryType}", factory.GetType().FullName);
         return new GenericDbDataSource(factory, connectionString);
     }
+
+    /// <inheritdoc />
+    public TimeSpan? ModeLockTimeout => _modeLockTimeout;
 
     #endregion
 }

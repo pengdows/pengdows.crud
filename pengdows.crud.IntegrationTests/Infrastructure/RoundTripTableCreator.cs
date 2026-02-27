@@ -76,8 +76,8 @@ public class RoundTripTableCreator
     // Per-provider DDL
     // -------------------------------------------------------------------------
 
-    private string CreateSqliteSql() => @"
-CREATE TABLE IF NOT EXISTS round_trip_entity (
+    private string CreateSqliteSql() => $@"
+CREATE TABLE IF NOT EXISTS {IntegrationObjectNameHelper.Table(_context, "round_trip_entity")} (
     id                   INTEGER      NOT NULL PRIMARY KEY,
     text_value           TEXT         NOT NULL,
     text_unicode         TEXT         NOT NULL,
@@ -94,8 +94,8 @@ CREATE TABLE IF NOT EXISTS round_trip_entity (
     // NOTE: decimal_value uses REAL in SQLite because SQLite has no fixed-
     // precision decimal storage. Tests must assert within ~1e-7 tolerance.
 
-    private string CreatePostgreSqlSql() => @"
-CREATE TABLE IF NOT EXISTS round_trip_entity (
+    private string CreatePostgreSqlSql() => $@"
+CREATE TABLE IF NOT EXISTS {IntegrationObjectNameHelper.Table(_context, "round_trip_entity")} (
     id                   BIGINT        NOT NULL PRIMARY KEY,
     text_value           VARCHAR(500)  NOT NULL,
     text_unicode         VARCHAR(500)  NOT NULL,
@@ -109,8 +109,8 @@ CREATE TABLE IF NOT EXISTS round_trip_entity (
     binary_value         BYTEA         NOT NULL
 )";
 
-    private string CreateCockroachDbSql() => @"
-CREATE TABLE IF NOT EXISTS round_trip_entity (
+    private string CreateCockroachDbSql() => $@"
+CREATE TABLE IF NOT EXISTS {IntegrationObjectNameHelper.Table(_context, "round_trip_entity")} (
     id                   BIGINT        NOT NULL PRIMARY KEY,
     text_value           VARCHAR(500)  NOT NULL,
     text_unicode         VARCHAR(500)  NOT NULL,
@@ -124,11 +124,11 @@ CREATE TABLE IF NOT EXISTS round_trip_entity (
     binary_value         BYTES         NOT NULL
 )";
 
-    private string CreateSqlServerSql() => @"
+    private string CreateSqlServerSql() => $@"
 IF NOT EXISTS (
     SELECT * FROM sys.objects
-    WHERE object_id = OBJECT_ID(N'[dbo].[round_trip_entity]') AND type = N'U')
-CREATE TABLE [dbo].[round_trip_entity] (
+    WHERE object_id = OBJECT_ID(N'{IntegrationObjectNameHelper.Table(_context, "round_trip_entity")}') AND type = N'U')
+CREATE TABLE {IntegrationObjectNameHelper.Table(_context, "round_trip_entity")} (
     [id]                   BIGINT           NOT NULL PRIMARY KEY,
     [text_value]           NVARCHAR(500)    NOT NULL,
     [text_unicode]         NVARCHAR(500)    NOT NULL,
@@ -148,10 +148,11 @@ CREATE TABLE [dbo].[round_trip_entity] (
         // datetimeoffset_value: no tz-aware type; UTC DATETIME(6) is used.
         //   The library normalises DateTimeOffset to UTC before storage.
         // guid_value: stored as 36-char string.
+        var table = IntegrationObjectNameHelper.Table(_context, "round_trip_entity");
         var qp = _context.QuotePrefix;
         var qs = _context.QuoteSuffix;
         return string.Format(@"
-CREATE TABLE IF NOT EXISTS {0}round_trip_entity{1} (
+CREATE TABLE IF NOT EXISTS {2} (
     {0}id{1}                   BIGINT                   NOT NULL PRIMARY KEY,
     {0}text_value{1}           VARCHAR(500)             NOT NULL,
     {0}text_unicode{1}         VARCHAR(500) CHARACTER SET utf8mb4 NOT NULL,
@@ -163,15 +164,16 @@ CREATE TABLE IF NOT EXISTS {0}round_trip_entity{1} (
     {0}datetimeoffset_value{1} DATETIME(6)              NOT NULL,
     {0}guid_value{1}           CHAR(36)                 NOT NULL,
     {0}binary_value{1}         VARBINARY(256)           NOT NULL
-)", qp, qs);
+)", qp, qs, table);
     }
 
     private string CreateDuckDbSql()
     {
+        var table = IntegrationObjectNameHelper.Table(_context, "round_trip_entity");
         var qp = _context.QuotePrefix;
         var qs = _context.QuoteSuffix;
         return string.Format(@"
-CREATE TABLE IF NOT EXISTS {0}round_trip_entity{1} (
+CREATE TABLE IF NOT EXISTS {2} (
     {0}id{1}                   BIGINT        NOT NULL PRIMARY KEY,
     {0}text_value{1}           VARCHAR(500)  NOT NULL,
     {0}text_unicode{1}         VARCHAR(500)  NOT NULL,
@@ -183,7 +185,7 @@ CREATE TABLE IF NOT EXISTS {0}round_trip_entity{1} (
     {0}datetimeoffset_value{1} TIMESTAMPTZ   NOT NULL,
     {0}guid_value{1}           UUID          NOT NULL,
     {0}binary_value{1}         BLOB          NOT NULL
-)", qp, qs);
+)", qp, qs, table);
     }
 
     private string CreateOracleSql()
@@ -193,6 +195,7 @@ CREATE TABLE IF NOT EXISTS {0}round_trip_entity{1} (
         // binary_value: RAW(256) — sufficient for small test payloads.
         // datetimeoffset_value: TIMESTAMP WITH TIME ZONE — Oracle 9i+.
         // Oracle coerces '' to NULL for VARCHAR2 — tests must account for this.
+        var table = IntegrationObjectNameHelper.Table(_context, "round_trip_entity");
         var qp = _context.QuotePrefix;
         var qs = _context.QuoteSuffix;
         return string.Format(@"
@@ -202,7 +205,7 @@ BEGIN
     SELECT COUNT(*) INTO table_exists FROM user_tables WHERE table_name = 'ROUND_TRIP_ENTITY';
     IF table_exists = 0 THEN
         EXECUTE IMMEDIATE '
-            CREATE TABLE {0}round_trip_entity{1} (
+            CREATE TABLE {2} (
                 {0}id{1}                   NUMBER(19)               NOT NULL,
                 {0}text_value{1}           NVARCHAR2(500),
                 {0}text_unicode{1}         NVARCHAR2(500),
@@ -217,7 +220,7 @@ BEGIN
                 CONSTRAINT pk_round_trip_entity PRIMARY KEY ({0}id{1})
             )';
     END IF;
-END;", qp, qs);
+END;", qp, qs, table);
     }
 
     private string CreateFirebirdSql()
@@ -225,7 +228,7 @@ END;", qp, qs);
         // Firebird 3.x has no TIMESTAMP WITH TIME ZONE — plain TIMESTAMP (UTC stored).
         // guid_value: CHAR(36) — string representation.
         // Firebird does not support IF NOT EXISTS; the caller swallows "already exists".
-        var t = _context.WrapObjectName("round_trip_entity");
+        var t = IntegrationObjectNameHelper.Table(_context, "round_trip_entity");
         return $@"
 CREATE TABLE {t} (
     {_context.WrapObjectName("id")}                   BIGINT         NOT NULL PRIMARY KEY,

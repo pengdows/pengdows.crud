@@ -12,23 +12,31 @@ dotnet test "${root}/pengdows.crud.Tests/pengdows.crud.Tests.csproj" \
   --collect "XPlat Code Coverage" \
   --settings "${root}/coverage.runsettings"
 
-coverage_file="$(
+coverage_file=""
+line_rate=""
+
+while IFS= read -r candidate; do
+  package_line="$(grep -m1 '<package name="pengdows.crud"' "${candidate}" || true)"
+  if [[ -n "${package_line}" ]]; then
+    candidate_rate="$(sed -E -n 's/.*line-rate="([0-9.]+)".*/\1/p' <<< "${package_line}")"
+  else
+    candidate_rate="$(grep -m1 -o 'line-rate="[^"]*"' "${candidate}" | head -n 1 | cut -d'"' -f2)"
+  fi
+
+  if [[ -n "${candidate_rate}" ]]; then
+    coverage_file="${candidate}"
+    line_rate="${candidate_rate}"
+    break
+  fi
+done < <(
   find "${results}" -type f -name "coverage.cobertura.xml" -printf "%T@ %p\n" \
     | sort -nr \
-    | head -n 1 \
     | cut -d' ' -f2-
-)"
+)
 
 if [[ -z "${coverage_file}" ]]; then
   echo "Coverage file not found under ${results}" >&2
   exit 1
-fi
-
-package_line="$(grep -m1 '<package name="pengdows.crud"' "${coverage_file}" || true)"
-if [[ -n "${package_line}" ]]; then
-  line_rate="$(sed -n 's/.*line-rate="\\([0-9.]*\\)".*/\\1/p' <<< "${package_line}")"
-else
-  line_rate="$(grep -m1 -o 'line-rate="[^"]*"' "${coverage_file}" | head -n 1 | cut -d'"' -f2)"
 fi
 
 if [[ -z "${line_rate}" ]]; then

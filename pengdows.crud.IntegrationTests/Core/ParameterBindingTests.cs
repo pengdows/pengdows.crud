@@ -47,7 +47,7 @@ public class ParameterBindingTests : DatabaseTestBase
             // Safer way: just use the context to format names
             var p0 = context.MakeParameterName("p0");
             var sql =
-                $"SELECT COUNT(*) FROM {context.WrapObjectName("round_trip_entity")} WHERE {context.WrapObjectName("id")} = {p0} OR {context.WrapObjectName("id")} = {p0}";
+                $"SELECT COUNT(*) FROM {IntegrationObjectNameHelper.Table(context, "round_trip_entity")} WHERE {context.WrapObjectName("id")} = {p0} OR {context.WrapObjectName("id")} = {p0}";
 
             // Act
             await using var container = context.CreateSqlContainer(sql);
@@ -72,7 +72,7 @@ public class ParameterBindingTests : DatabaseTestBase
                 context);
 
             var p0 = context.MakeParameterName("p0");
-            var table = context.WrapObjectName("round_trip_entity");
+            var table = IntegrationObjectNameHelper.Table(context, "round_trip_entity");
             var col = context.WrapObjectName("text_nullable");
 
             // Standard SQL: col = NULL is UNKNOWN (false), should return 0
